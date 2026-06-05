@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Import Results - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <span>Import</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.imp-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:768px){.imp-grid{grid-template-columns:1fr 1fr}}
+.imp-card .hint{font-size:.82rem;color:var(--text-muted);line-height:1.5}
+code{background:var(--gray-50);padding:.05rem .3rem;border-radius:4px;font-size:.8rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div><h1>Import Results</h1><p class="text-muted text-sm">Bulk-load WAEC/JAMB results from Excel or CSV. Students are matched by ID or full name.</p></div>
+</div>
+
+<div class="imp-grid">
+    <div class="card imp-card">
+        <div class="card-header"><h3><span class="badge badge-info">WAEC</span> Import</h3></div>
+        <div class="card-body">
+            <p class="hint">One row per subject. Columns: <code>student_id, exam_year, subject, grade</code>.</p>
+            <a href="{{ url_for('results.import_template', exam='waec') }}" class="btn btn-secondary btn-sm mb-3"><i class="fas fa-download"></i> Download template</a>
+            <form method="POST" action="{{ url_for('results.import_results_run', exam='waec') }}" enctype="multipart/form-data">
+                <input type="file" name="file" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
+                <button class="btn btn-primary" type="submit"><i class="fas fa-upload"></i> Import WAEC</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card imp-card">
+        <div class="card-header"><h3><span class="badge badge-primary">JAMB</span> Import</h3></div>
+        <div class="card-body">
+            <p class="hint">One row per student. Columns: <code>student_id, exam_year, total_score, subject1, subject1_score, …</code></p>
+            <a href="{{ url_for('results.import_template', exam='jamb') }}" class="btn btn-secondary btn-sm mb-3"><i class="fas fa-download"></i> Download template</a>
+            <form method="POST" action="{{ url_for('results.import_results_run', exam='jamb') }}" enctype="multipart/form-data">
+                <input type="file" name="file" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
+                <button class="btn btn-primary" type="submit"><i class="fas fa-upload"></i> Import JAMB</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

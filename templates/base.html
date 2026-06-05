@@ -194,6 +194,16 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('results.readiness') }}" class="nav-link {% if request.endpoint == 'results.readiness' %}active{% endif %}">
+                            <i class="fas fa-clipboard-check"></i><span>Exam Readiness</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('results.import_results') }}" class="nav-link {% if 'import_results' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-file-import"></i><span>Import Results</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('results.subject_enrolment') }}" class="nav-link {% if request.endpoint == 'results.subject_enrolment' %}active{% endif %}">
                             <i class="fas fa-list-check"></i><span>Subject Enrolment</span>
                         </a>
