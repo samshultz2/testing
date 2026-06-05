@@ -74,15 +74,31 @@ def tesseract_available():
         return False
 
 
+def _auto_orient(img, pytesseract):
+    """Use Tesseract OSD to fix a sideways/upside-down photo (best effort)."""
+    try:
+        osd = pytesseract.image_to_osd(img)
+        m = re.search(r'Rotate:\s*(\d+)', osd)
+        if m:
+            angle = int(m.group(1))
+            if angle:
+                # OSD reports the rotation needed to make text upright.
+                img = img.rotate(-angle, expand=True)
+    except Exception:
+        pass
+    return img
+
+
 def extract_text(image_bytes):
     """Run Tesseract over the image bytes and return the raw text."""
     import pytesseract
     from PIL import Image, ImageOps
 
     img = Image.open(io.BytesIO(image_bytes))
-    # Preprocess: orient via EXIF, grayscale, autocontrast and upscale a little
-    # — this noticeably improves OCR on photographed slips.
+    # Preprocess: orient via EXIF + OSD, grayscale, autocontrast and upscale a
+    # little — this noticeably improves OCR on photographed slips.
     img = ImageOps.exif_transpose(img)
+    img = _auto_orient(img, pytesseract)
     img = ImageOps.grayscale(img)
     img = ImageOps.autocontrast(img)
     if max(img.size) < 1600:
@@ -428,6 +444,92 @@ def parse_jamb_result(text):
         'total_score': _extract_total(text, lines, results),
         'subjects': results,
     }
+
+
+def vision_available():
+    """True if the optional Claude-vision fallback is configured and usable."""
+    import os
+    from config import Config
+    if not getattr(Config, 'OCR_VISION_FALLBACK', False):
+        return False
+    if not os.environ.get('ANTHROPIC_API_KEY'):
+        return False
+    try:
+        import anthropic  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def vision_extract(image_bytes, exam='waec', media_type='image/png'):
+    """
+    Use Claude vision to read a result image into structured data. Returns the
+    same dict shape as parse_waec_result / parse_jamb_result, or None on any
+    failure (so callers can fall back to Tesseract).
+    """
+    if not vision_available():
+        return None
+    try:
+        import base64
+        import json
+        import anthropic
+        from config import Config
+
+        client = anthropic.Anthropic()
+        data = base64.standard_b64encode(image_bytes).decode('utf-8')
+
+        if exam == 'jamb':
+            instruction = (
+                "This is a Nigerian JAMB/UTME result (slip or SMS text). Extract the "
+                "candidate name, exam year, total/aggregate score (0-400), and each "
+                "subject with its score over 100. Map abbreviations (ENG->English "
+                "Language, MAT->Mathematics, PHY->Physics, CHE->Chemistry, etc.). "
+                'Return ONLY JSON: {"name": str, "year": int|null, "total_score": '
+                'int|null, "subjects": [{"subject": str, "score": int}]}.'
+            )
+        else:
+            instruction = (
+                "This is a Nigerian WAEC/SSCE result. Extract the candidate name, "
+                "exam year, and each subject with its grade (A1,B2,B3,C4,C5,C6,D7,"
+                "E8,F9). Use full subject names. "
+                'Return ONLY JSON: {"name": str, "year": int|null, "subjects": '
+                '[{"subject": str, "grade": str}]}.'
+            )
+
+        message = client.messages.create(
+            model=getattr(Config, 'OCR_VISION_MODEL', 'claude-opus-4-8'),
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}},
+                    {"type": "text", "text": instruction},
+                ],
+            }],
+        )
+        text = next((b.text for b in message.content if b.type == "text"), "")
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text[text.find("{"):text.rfind("}") + 1]
+        parsed = json.loads(text)
+
+        # Normalise into our standard shape.
+        if exam == 'jamb':
+            subjects = [{'subject': s.get('subject'), 'score': s.get('score'), 'raw': ''}
+                        for s in parsed.get('subjects', []) if s.get('subject')][:4]
+            total = parsed.get('total_score')
+            if total is None and subjects:
+                total = sum(s['score'] for s in subjects if isinstance(s.get('score'), int))
+            return {'name': parsed.get('name') or '', 'year': parsed.get('year'),
+                    'total_score': total, 'subjects': subjects}
+        else:
+            subjects = [{'subject': s.get('subject'), 'grade': s.get('grade'), 'raw': ''}
+                        for s in parsed.get('subjects', []) if s.get('subject') and s.get('grade')]
+            return {'name': parsed.get('name') or '', 'year': parsed.get('year'),
+                    'subjects': subjects}
+    except Exception:
+        return None
 
 
 def match_student(name, students):

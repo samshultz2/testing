@@ -287,6 +287,7 @@ def scan_waec():
     from utils.waec_ocr import (
         tesseract_available, extract_text, parse_waec_result, match_student,
         pdf_available, extract_text_from_pdf, pdf_first_page_png,
+        vision_available, vision_extract,
     )
     import base64
 
@@ -325,7 +326,14 @@ def scan_waec():
             flash(f'Could not read the file: {e}', 'error')
             return redirect(url_for('results.scan_waec'))
 
-        parsed = parse_waec_result(text)
+        # Prefer the Claude-vision reading when enabled; fall back to Tesseract.
+        parsed = None
+        if not is_pdf and vision_available():
+            parsed = vision_extract(file_bytes, 'waec', file.mimetype or 'image/png')
+            if parsed:
+                text = '(read by Claude vision)\n' + text
+        if not parsed:
+            parsed = parse_waec_result(text)
         matched, score = match_student(parsed['name'], students)
 
         return render_template('results/waec_scan_review.html',
@@ -670,6 +678,7 @@ def scan_jamb():
     from utils.waec_ocr import (
         tesseract_available, extract_text, parse_jamb_result, match_student,
         pdf_available, extract_text_from_pdf, pdf_first_page_png,
+        vision_available, vision_extract,
     )
     import base64
 
@@ -707,7 +716,13 @@ def scan_jamb():
             flash(f'Could not read the file: {e}', 'error')
             return redirect(url_for('results.scan_jamb'))
 
-        parsed = parse_jamb_result(text)
+        parsed = None
+        if not is_pdf and vision_available():
+            parsed = vision_extract(file_bytes, 'jamb', file.mimetype or 'image/png')
+            if parsed:
+                text = '(read by Claude vision)\n' + text
+        if not parsed:
+            parsed = parse_jamb_result(text)
         matched, score = match_student(parsed['name'], students)
 
         return render_template('results/jamb_scan_review.html',
@@ -1047,6 +1062,7 @@ def readiness():
     total = len(students)
 
     no_stream, no_jamb, no_waec, no_jamb_subjects, no_waec_subjects = [], [], [], [], []
+    below_target = []
     for s in students:
         if not s.stream:
             no_stream.append(s)
@@ -1058,10 +1074,16 @@ def readiness():
             no_jamb_subjects.append(s)
         if not s.waec_subject_list:
             no_waec_subjects.append(s)
+        if s.jamb_target:
+            mocks = [m.total_score for m in s.mock_jamb_results.all()]
+            best = max(mocks) if mocks else 0
+            if best < s.jamb_target:
+                below_target.append(s)
 
     groups = [
         {'key': 'no_jamb', 'title': 'No JAMB result entered', 'icon': 'fa-file-contract', 'students': no_jamb},
         {'key': 'no_waec', 'title': 'No WAEC result entered', 'icon': 'fa-file-alt', 'students': no_waec},
+        {'key': 'below_target', 'title': 'Below their JAMB target', 'icon': 'fa-bullseye', 'students': below_target},
         {'key': 'no_stream', 'title': 'No stream / track set', 'icon': 'fa-route', 'students': no_stream},
         {'key': 'no_jamb_subjects', 'title': 'No JAMB subjects on profile', 'icon': 'fa-list', 'students': no_jamb_subjects},
         {'key': 'no_waec_subjects', 'title': 'No WAEC subjects on profile', 'icon': 'fa-list-check', 'students': no_waec_subjects},

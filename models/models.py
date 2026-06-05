@@ -39,6 +39,8 @@ class Student(db.Model):
     jamb_subjects = db.Column(db.Text)
     # Academic stream / track: 'Science', 'Arts' or 'Commercial'.
     stream = db.Column(db.String(20))
+    # Target JAMB score the student is aiming for (0-400).
+    jamb_target = db.Column(db.Integer)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
@@ -1005,6 +1007,8 @@ def _ensure_student_exam_columns():
         statements.append('ALTER TABLE students ADD COLUMN jamb_subjects TEXT')
     if 'stream' not in existing:
         statements.append('ALTER TABLE students ADD COLUMN stream VARCHAR(20)')
+    if 'jamb_target' not in existing:
+        statements.append('ALTER TABLE students ADD COLUMN jamb_target INTEGER')
     if statements:
         with db.engine.begin() as conn:
             for stmt in statements:

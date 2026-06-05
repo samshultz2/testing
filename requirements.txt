@@ -17,3 +17,7 @@ python-dotenv==1.0.1
 
 # Dev/test
 pytest==8.3.3
+
+# Optional: enables the Claude-vision OCR fallback (set OCR_VISION_FALLBACK=1 and
+# ANTHROPIC_API_KEY). Not required for the default Tesseract OCR.
+# anthropic==0.69.0

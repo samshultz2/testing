@@ -80,6 +80,11 @@
                     <span class="form-hint">Science, Arts or Commercial — drives WAEC subject defaults</span>
                 </div>
             </div>
+            <div class="form-group">
+                <label class="form-label">JAMB Target Score</label>
+                <input type="number" name="jamb_target" class="form-control" min="0" max="400" value="{{ student.jamb_target or '' }}" placeholder="e.g. 250">
+                <span class="form-hint">Optional — used to track Mock JAMB progress against a goal</span>
+            </div>
             
             <div class="form-group">
                 <label class="form-label">Home Address</label>

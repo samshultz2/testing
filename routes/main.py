@@ -389,7 +389,8 @@ def add_student():
                 hobbies=request.form.get('hobbies', '').strip() or None,
                 waec_subjects=', '.join(request.form.getlist('waec_subjects[]')) or None,
                 jamb_subjects=', '.join(request.form.getlist('jamb_subjects[]')) or None,
-                stream=request.form.get('stream') or None
+                stream=request.form.get('stream') or None,
+                jamb_target=request.form.get('jamb_target', type=int)
             )
 
             db.session.add(student)
@@ -484,6 +485,8 @@ def edit_student(student_id):
                 student.hobbies = form.get('hobbies', '').strip() or None
             if has('stream'):
                 student.stream = form.get('stream') or None
+            if has('jamb_target'):
+                student.jamb_target = form.get('jamb_target', type=int)
             if complete or 'waec_subjects[]' in form:
                 student.waec_subjects = ', '.join(form.getlist('waec_subjects[]')) or None
             if complete or 'jamb_subjects[]' in form:

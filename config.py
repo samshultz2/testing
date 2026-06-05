@@ -77,6 +77,11 @@ class Config:
     # Backups
     BACKUP_RETENTION = int(os.environ.get('BACKUP_RETENTION', '10'))
 
+    # Optional Claude-vision OCR fallback (needs ANTHROPIC_API_KEY + the
+    # `anthropic` package). Off by default — Tesseract is the default engine.
+    OCR_VISION_FALLBACK = _as_bool(os.environ.get('OCR_VISION_FALLBACK'), default=False)
+    OCR_VISION_MODEL = os.environ.get('OCR_VISION_MODEL', 'claude-opus-4-8')
+
     # Session
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
     SESSION_COOKIE_HTTPONLY = True
