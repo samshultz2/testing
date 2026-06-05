@@ -13,11 +13,13 @@ from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES
 
 # Valid WAEC grade tokens.
 _GRADE_SET = set(WAEC_GRADES)
-# Tokens that look like a grade: a letter A-F followed by a digit OR a character
-# Tesseract commonly confuses with a digit (l/I/| -> 1, o -> 0, s -> 5, etc.).
-_GRADE_TOKEN_RE = re.compile(r'\b([A-Fa-f])\s?([0-9OoIl|SsZzBbGgTt])\b')
-_DIGIT_FIX = {'l': '1', 'i': '1', '|': '1', 'o': '0', 's': '5',
-              'z': '2', 'b': '8', 'g': '9', 't': '7'}
+# A clean, unambiguous grade (used first so correct text never gets mangled).
+_STRICT_GRADE_RE = re.compile(r'\b([A-F][1-9])\b')
+# A grade-like token allowing characters Tesseract confuses with a digit
+# (l/I/| -> 1, o -> 0, s -> 5). Only used as a fallback when no strict grade is
+# found on the line, so clean PDF text is never affected.
+_GRADE_TOKEN_RE = re.compile(r'\b([A-Fa-f])\s?([0-9OoIl|Ss])\b')
+_DIGIT_FIX = {'l': '1', 'i': '1', '|': '1', 'o': '0', 's': '5'}
 
 
 def _normalize_grade(letter, second):
@@ -29,13 +31,20 @@ def _normalize_grade(letter, second):
 
 
 def _grades_in(line):
-    """All valid WAEC grades found in a line, with their position."""
-    found = []
+    """
+    Valid WAEC grades found in a line as (position, grade), preferring exact
+    matches and only falling back to OCR-confusion matching when none exist.
+    """
+    strict = [(m.start(), m.group(1)) for m in _STRICT_GRADE_RE.finditer(line)
+              if m.group(1) in _GRADE_SET]
+    if strict:
+        return strict
+    lenient = []
     for m in _GRADE_TOKEN_RE.finditer(line):
         g = _normalize_grade(m.group(1), m.group(2))
         if g:
-            found.append((m.start(), g))
-    return found
+            lenient.append((m.start(), g))
+    return lenient
 
 # Lower-cased subject lookups for fuzzy matching.
 _SUBJECTS_LOWER = {s.lower(): s for s in WAEC_SUBJECTS}
@@ -119,18 +128,24 @@ def _match_subject(text):
     """Fuzzy-match a fragment of OCR text to a known WAEC subject name."""
     cleaned = re.sub(r'[^A-Za-z ]', ' ', text).strip().lower()
     cleaned = re.sub(r'\s+', ' ', cleaned)
-    if not cleaned:
+    # Too short to be a subject (e.g. a stray "b" left from a "B3" grade).
+    if len(cleaned) < 3:
         return None
 
-    # 1) direct containment (handles trailing/leading noise)
+    # 1) the full subject name appears in the line text
     for low, original in _SUBJECTS_LOWER.items():
-        if low in cleaned or cleaned in low:
+        if low in cleaned:
             return original
 
-    # 2) difflib close match on the whole fragment
-    close = difflib.get_close_matches(cleaned, list(_SUBJECTS_LOWER.keys()), n=1, cutoff=0.62)
-    if close:
-        return _SUBJECTS_LOWER[close[0]]
+    # 2) a reasonably long fragment / fuzzy match (guarded by length so short
+    #    noise like a grade token can never masquerade as a subject)
+    if len(cleaned) >= 4:
+        for low, original in _SUBJECTS_LOWER.items():
+            if cleaned in low:
+                return original
+        close = difflib.get_close_matches(cleaned, list(_SUBJECTS_LOWER.keys()), n=1, cutoff=0.7)
+        if close:
+            return _SUBJECTS_LOWER[close[0]]
     return None
 
 
@@ -169,27 +184,49 @@ def parse_waec_result(text):
     """
     Parse OCR text into a structured result:
     {'name': str, 'year': int|None, 'subjects': [{'subject', 'grade', 'raw'}]}.
+
+    Handles the common WAEC layouts: subject and grade on the same line, and
+    subject/grade split across separate lines or columns.
     """
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-    subjects = []
-    seen = set()
+    # Classify each line: which known subject (if any) and which grade (if any).
+    classified = []
     for line in lines:
         grades = _grades_in(line)
-        if not grades:
-            continue
-        pos, grade = grades[-1]  # last grade token on the line
-        # subject text is whatever precedes the grade token
-        before = line[:pos]
+        grade = grades[-1][1] if grades else None       # right-most = grade column
+        before = line[:grades[-1][0]] if grades else line
         subject = _match_subject(before) or _match_subject(line)
-        if subject and subject not in seen:
+        classified.append({'subject': subject, 'grade': grade, 'line': line})
+
+    results = []
+    seen = set()
+    pending_subjects = []   # subject lines still missing a grade (in order)
+    pending_grades = []     # grade lines still missing a subject (in order)
+
+    def add(subject, grade, raw):
+        if subject and grade and subject not in seen:
             seen.add(subject)
-            subjects.append({'subject': subject, 'grade': grade, 'raw': line})
+            results.append({'subject': subject, 'grade': grade, 'raw': raw})
+
+    # Pass 1 — same-line pairs; stash the leftovers.
+    for c in classified:
+        if c['subject'] and c['grade']:
+            add(c['subject'], c['grade'], c['line'])
+        elif c['subject']:
+            pending_subjects.append(c)
+        elif c['grade']:
+            pending_grades.append(c)
+
+    # Pass 2 — pair leftover subjects with leftover grades in document order
+    # (covers column layouts and grade-on-the-next-line layouts).
+    for subj_c, grade_c in zip(pending_subjects, pending_grades):
+        add(subj_c['subject'], grade_c['grade'], f"{subj_c['line']} | {grade_c['line']}")
 
     return {
         'name': _extract_name(lines),
         'year': _extract_year(text),
-        'subjects': subjects,
+        'subjects': results,
     }
 
 
