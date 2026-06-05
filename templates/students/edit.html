@@ -143,6 +143,24 @@
 
     {{ exam_subjects_card(waec_subjects, student.waec_subject_list, student.jamb_subject_list) }}
 
+    <script>
+    (function () {
+        const STREAM_WAEC = {{ stream_waec | tojson }};
+        const streamSel = document.querySelector('select[name="stream"]');
+        const waecBoxes = document.querySelectorAll('.subject-checks[data-group="waec"] input');
+        if (!streamSel || !waecBoxes.length) return;
+        function apply(subs) { waecBoxes.forEach(cb => { cb.checked = subs.includes(cb.value); }); }
+        streamSel.addEventListener('change', function () {
+            const subs = STREAM_WAEC[this.value];
+            if (subs) apply(subs);
+        });
+        // Pre-fill on load if a stream is set but no WAEC subjects saved yet.
+        const anyChecked = Array.from(waecBoxes).some(cb => cb.checked);
+        const subs = STREAM_WAEC[streamSel.value];
+        if (subs && !anyChecked) apply(subs);
+    })();
+    </script>
+
     <div class="page-header-actions">
         <button type="submit" class="btn btn-primary btn-lg">
             <i class="fas fa-save"></i> Save Changes

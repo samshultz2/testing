@@ -11,7 +11,7 @@ from utils.access_control import (
     login_required, is_admin, can_access_class, 
     get_accessible_class_ids, filter_classes_for_user
 )
-from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS
+from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
 from sqlalchemy import extract, func
 
 main_bp = Blueprint('main', __name__)
@@ -400,7 +400,8 @@ def add_student():
             db.session.rollback()
             flash(f'Error creating student: {str(e)}', 'error')
 
-    return render_template('students/add.html', religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS, streams=STREAMS)
+    return render_template('students/add.html', religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS,
+                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS)
 
 
 @main_bp.route('/students/<int:student_id>')
@@ -474,7 +475,8 @@ def edit_student(student_id):
             db.session.rollback()
             flash(f'Error updating student: {str(e)}', 'error')
 
-    return render_template('students/edit.html', student=student, religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS, streams=STREAMS)
+    return render_template('students/edit.html', student=student, religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS,
+                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS)
 
 
 @main_bp.route('/students/<int:student_id>/delete', methods=['POST'])
