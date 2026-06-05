@@ -164,10 +164,12 @@ def _extract_name(lines):
                 return candidate.title()
 
     # Fallback: first line that looks like a person's name (2+ alpha words,
-    # not a header).
+    # not a header and not a subject name).
     for line in lines:
         low = line.lower()
         if any(s in low for s in skip):
+            continue
+        if _match_subject(line) or _grades_in(line):
             continue
         words = re.findall(r"[A-Za-z][A-Za-z'\-]+", line)
         if 2 <= len(words) <= 5 and sum(len(w) for w in words) >= 6:
