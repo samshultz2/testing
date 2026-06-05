@@ -51,7 +51,7 @@
                 <tbody>
                 {% for subject, count in waec_rows %}
                 <tr>
-                    <td>{{ subject }}
+                    <td><a href="{{ url_for('results.subject_enrolment_detail', exam='waec', subject=subject, scope='sss3' if only_sss3 else 'all') }}">{{ subject }}</a>
                         <div class="bar"><span style="width: {{ (count / waec_enrolled * 100) if waec_enrolled else 0 }}%"></span></div>
                     </td>
                     <td class="num"><strong>{{ count }}</strong></td>
@@ -76,7 +76,7 @@
                 <tbody>
                 {% for subject, count in jamb_rows %}
                 <tr>
-                    <td>{{ subject }}
+                    <td><a href="{{ url_for('results.subject_enrolment_detail', exam='jamb', subject=subject, scope='sss3' if only_sss3 else 'all') }}">{{ subject }}</a>
                         <div class="bar jamb"><span style="width: {{ (count / jamb_enrolled * 100) if jamb_enrolled else 0 }}%"></span></div>
                     </td>
                     <td class="num"><strong>{{ count }}</strong></td>

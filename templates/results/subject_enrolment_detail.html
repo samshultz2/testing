@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ subject }} ({{ exam_label }}) - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.subject_enrolment') }}">Subject Enrolment</a> / <span>{{ subject }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ subject }}</h1>
+        <p class="text-muted text-sm">
+            <span class="badge {% if exam == 'jamb' %}badge-primary{% else %}badge-info{% endif %}">{{ exam_label }}</span>
+            {{ students|length }} student{{ '' if students|length == 1 else 's' }} enrolled
+            &middot; {{ 'SSS3 / exam candidates' if only_sss3 else 'all active students' }}
+        </p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.subject_enrolment', scope='sss3' if only_sss3 else 'all') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-users"></i> Enrolled Students ({{ students|length }})</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if students %}
+        <div class="data-cards" style="padding:1rem;">
+            {% for s in students %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ s.full_name }}
+                        {% if s.is_graduated %}<span class="badge badge-success" title="Graduate"><i class="fas fa-user-graduate"></i></span>{% endif %}
+                    </div>
+                    <span class="badge {% if s.gender == 'Male' %}badge-male{% else %}badge-female{% endif %}">{{ s.gender }}</span>
+                </div>
+                <div class="data-card-row"><span class="data-card-label">ID</span><span>{{ s.student_id }}</span></div>
+                <div class="data-card-actions">
+                    <a href="{{ url_for('main.view_student', student_id=s.id) }}" class="btn btn-secondary btn-sm w-100"><i class="fas fa-eye"></i> View Profile</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-user-slash"></i><p>No students enrolled for {{ subject }} in this scope.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

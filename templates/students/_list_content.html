@@ -9,7 +9,9 @@
         </div>
         <div class="student-card-content">
             <div class="student-card-header">
-                <span class="student-name">{{ student.full_name }}</span>
+                <span class="student-name">{{ student.full_name }}
+                    {% if student.is_graduated %}<span class="badge badge-success" title="Graduate"><i class="fas fa-user-graduate"></i></span>{% endif %}
+                </span>
                 <span class="student-id-badge">{{ student.student_id }}</span>
             </div>
             <div class="student-card-details">
@@ -37,6 +39,15 @@
                 <a href="{{ url_for('main.edit_student', student_id=student.id) }}" class="btn btn-secondary btn-sm">
                     <i class="fas fa-edit"></i> Edit
                 </a>
+                {% if student.is_graduated %}
+                <form action="{{ url_for('promotion.unmark_graduate', student_id=student.id) }}" method="POST" data-confirm="Undo graduation for {{ student.full_name }}?">
+                    <button type="submit" class="btn btn-warning btn-sm" title="Undo Graduate"><i class="fas fa-rotate-left"></i></button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('promotion.mark_graduate', student_id=student.id) }}" method="POST" data-confirm="Mark {{ student.full_name }} as a graduate?">
+                    <button type="submit" class="btn btn-success btn-sm" title="Mark as Graduate"><i class="fas fa-user-graduate"></i></button>
+                </form>
+                {% endif %}
                 <form action="{{ url_for('main.delete_student', student_id=student.id) }}" method="POST" style="flex: 1;" data-confirm="Delete {{ student.full_name }}?">
                     <button type="submit" class="btn btn-danger btn-sm" style="width: 100%;">
                         <i class="fas fa-trash"></i>

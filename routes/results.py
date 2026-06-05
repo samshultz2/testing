@@ -11,6 +11,7 @@ from utils.helpers import (
     get_sss3_students, student_subject_map,
 )
 from datetime import date as _date
+from sqlalchemy import func
 from utils.analytics_service import AcademicAnalytics
 
 results_bp = Blueprint('results', __name__, url_prefix='/results')
@@ -643,6 +644,113 @@ def subject_enrolment():
         waec_enrolled=waec_enrolled,
         jamb_enrolled=jamb_enrolled,
         student_count=len(students),
+        only_sss3=only_sss3
+    )
+
+
+@results_bp.route('/analytics')
+@login_required
+def analytics_hub():
+    """One-stop analytics hub: every WAEC/JAMB stat, correlation and projection."""
+    waec_years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().all()]
+    jamb_years = [y[0] for y in db.session.query(JAMBResult.exam_year).distinct().all()]
+    years = sorted(set(waec_years + jamb_years), reverse=True)
+
+    year = request.args.get('year', type=int)
+    if not year and years:
+        year = years[0]
+
+    waec_stats = AcademicAnalytics.get_waec_school_statistics(year) if year else None
+    jamb_stats = AcademicAnalytics.get_jamb_school_statistics(year) if year else None
+    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year) if year else None
+    yoy = AcademicAnalytics.get_year_over_year_comparison()
+
+    # Gender breakdowns for the selected year.
+    def gender_split(model):
+        rows = db.session.query(Student.gender, func.count(func.distinct(Student.id))).join(
+            model, Student.id == model.student_id
+        ).filter(model.exam_year == year).group_by(Student.gender).all()
+        return {g or 'Unknown': c for g, c in rows}
+
+    waec_gender = gender_split(WAECResult) if (year and waec_stats) else {}
+    jamb_gender = gender_split(JAMBResult) if (year and jamb_stats) else {}
+
+    # JAMB mean projection (simple linear fit) computed directly from JAMB years.
+    projection = None
+    jamb_means = []
+    for jy in sorted(set(jamb_years)):
+        rs = JAMBResult.query.filter_by(exam_year=jy).all()
+        if rs:
+            jamb_means.append({'year': jy, 'mean_score': round(sum(r.total_score for r in rs) / len(rs), 1)})
+    if len(jamb_means) >= 2:
+        xs = [t['year'] for t in jamb_means]
+        ys = [t['mean_score'] for t in jamb_means]
+        n = len(xs)
+        mean_x = sum(xs) / n
+        mean_y = sum(ys) / n
+        denom = sum((x - mean_x) ** 2 for x in xs)
+        slope = (sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n)) / denom) if denom else 0
+        next_year = max(xs) + 1
+        projected = round(mean_y + slope * (next_year - mean_x), 1)
+        projected = max(0, min(400, projected))
+        projection = {
+            'next_year': next_year,
+            'projected_mean': projected,
+            'direction': 'up' if slope > 0.5 else 'down' if slope < -0.5 else 'flat',
+            'slope_per_year': round(slope, 1),
+            'latest_mean': ys[-1],
+        }
+
+    # University-cutoff readiness (JAMB >= 200) for the selected year.
+    cutoff = None
+    if year and jamb_stats:
+        total = jamb_stats['total_students']
+        cutoff = {
+            'eligible_200': jamb_stats['above_200'],
+            'eligible_200_pct': round(jamb_stats['above_200'] / total * 100, 1) if total else 0,
+            'competitive_250': jamb_stats['above_250'],
+            'competitive_250_pct': round(jamb_stats['above_250'] / total * 100, 1) if total else 0,
+            'elite_300': jamb_stats['above_300'],
+            'elite_300_pct': round(jamb_stats['above_300'] / total * 100, 1) if total else 0,
+        }
+
+    return render_template('results/analytics_hub.html',
+        years=years,
+        selected_year=year,
+        waec_stats=waec_stats,
+        jamb_stats=jamb_stats,
+        correlation=correlation,
+        yoy=yoy,
+        waec_gender=waec_gender,
+        jamb_gender=jamb_gender,
+        projection=projection,
+        cutoff=cutoff
+    )
+
+
+@results_bp.route('/subject-enrolment/<exam>/<path:subject>')
+@login_required
+def subject_enrolment_detail(exam, subject):
+    """List the students enrolled for a particular WAEC/JAMB subject."""
+    exam = 'jamb' if exam.lower() == 'jamb' else 'waec'
+    only_sss3 = request.args.get('scope', 'sss3') != 'all'
+    if only_sss3:
+        students = get_sss3_students()
+    else:
+        students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+
+    matched = []
+    for s in students:
+        enrolled = s.jamb_subject_list if exam == 'jamb' else s.waec_subject_list
+        if subject in enrolled:
+            matched.append(s)
+    matched.sort(key=lambda s: (s.surname or '', s.first_name or ''))
+
+    return render_template('results/subject_enrolment_detail.html',
+        exam=exam,
+        exam_label='JAMB' if exam == 'jamb' else 'WAEC',
+        subject=subject,
+        students=matched,
         only_sss3=only_sss3
     )
 
