@@ -167,6 +167,14 @@ def _match_subject(text):
 
 def _extract_name(lines):
     """Best-effort extraction of the candidate name from the slip."""
+    joined = ' '.join(lines)
+    # SMS results greet the candidate: "Dear <Name>,"
+    mdear = re.search(r"\bdear\s+([A-Za-z][A-Za-z .'\-]{2,60})", joined, re.I)
+    if mdear:
+        cand = re.split(r'[,\.]', mdear.group(1))[0].strip()
+        if len(cand) >= 3:
+            return cand.title()
+
     label_re = re.compile(r'(candidate\s*name|name\s*of\s*candidate|name)\s*[:\-]\s*(.+)', re.I)
     skip = ('west african', 'examination', 'council', 'result', 'statement',
             'waec', 'subject', 'grade', 'candidate no', 'exam', 'year')
@@ -251,6 +259,55 @@ def parse_waec_result(text):
 _SCORE_RE = re.compile(r'\b(\d{1,3})\b')
 _PURE_NUMBER_RE = re.compile(r'^\d{1,3}$')
 
+# JAMB SMS / abbreviation codes -> canonical subject names.
+_JAMB_CODES = {
+    'ENG': 'English Language', 'ENGLISH': 'English Language', 'USEOFENGLISH': 'English Language',
+    'MAT': 'Mathematics', 'MATH': 'Mathematics', 'MATHS': 'Mathematics', 'MTH': 'Mathematics',
+    'PHY': 'Physics', 'PHYS': 'Physics',
+    'CHE': 'Chemistry', 'CHEM': 'Chemistry',
+    'BIO': 'Biology', 'BIOL': 'Biology',
+    'ECO': 'Economics', 'ECON': 'Economics', 'ECONS': 'Economics',
+    'GOV': 'Government', 'GOVT': 'Government',
+    'LIT': 'Literature in English', 'LITERATURE': 'Literature in English',
+    'CRS': 'Christian Religious Studies', 'CRK': 'Christian Religious Studies',
+    'IRS': 'Islamic Religious Studies', 'IRK': 'Islamic Religious Studies',
+    'COM': 'Commerce', 'COMM': 'Commerce', 'COMMERCE': 'Commerce',
+    'GEO': 'Geography', 'GEOG': 'Geography',
+    'AGR': 'Agricultural Science', 'AGRIC': 'Agricultural Science',
+    'ACC': 'Accounting', 'ACCT': 'Accounting', 'ACCOUNTING': 'Accounting',
+    'FMT': 'Further Mathematics', 'FME': 'Further Mathematics', 'FMATHS': 'Further Mathematics',
+    'CIV': 'Civic Education', 'CIVIC': 'Civic Education',
+    'FRE': 'French', 'FRENCH': 'French',
+    'HIS': 'History', 'HIST': 'History',
+    'DATA': 'Data Processing', 'DPR': 'Data Processing',
+}
+_CODE_SCORE_RE = re.compile(r'([A-Za-z]{2,15})\s*[:=]\s*(\d{1,3})\b')
+
+
+def _parse_jamb_sms(text):
+    """
+    Parse the JAMB SMS / inline format, e.g.
+    "...ENG: 56, MAT: 49, PHY: 55, CHE: 40, Aggregate: 200".
+    Returns (subjects, total) or (None, None) if it doesn't look like SMS.
+    """
+    subjects = []
+    seen = set()
+    total = None
+    for word, num in _CODE_SCORE_RE.findall(text):
+        key = re.sub(r'[^A-Za-z]', '', word).upper()
+        value = int(num)
+        if 'AGGREG' in key or key in ('TOTAL', 'SCORE'):
+            if 0 <= value <= 400:
+                total = value
+        elif key in _JAMB_CODES and 0 <= value <= 100:
+            subject = _JAMB_CODES[key]
+            if subject not in seen:
+                seen.add(subject)
+                subjects.append({'subject': subject, 'score': value, 'raw': f'{word}: {num}'})
+    if len(subjects) >= 2:
+        return subjects, total
+    return None, None
+
 
 def _scores_in(line):
     """Subject-score candidates (0-100) on a line as (position, value)."""
@@ -288,6 +345,20 @@ def parse_jamb_result(text):
     Handles same-line "Subject 75" and split "Subject\\n75" / column layouts.
     """
     lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+    # JAMB SMS / inline "ENG: 56, MAT: 49 ..." format first.
+    sms_subjects, sms_total = _parse_jamb_sms(text)
+    if sms_subjects:
+        sms_subjects = sms_subjects[:4]
+        if sms_total is None:
+            s = sum(r['score'] for r in sms_subjects)
+            sms_total = s if 0 < s <= 400 else None
+        return {
+            'name': _extract_name(lines),
+            'year': _extract_year(text),
+            'total_score': sms_total,
+            'subjects': sms_subjects,
+        }
 
     classified = []
     for line in lines:
