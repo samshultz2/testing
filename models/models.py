@@ -516,9 +516,12 @@ class Subject(db.Model):
     name = db.Column(db.String(100), nullable=False)
     short_name = db.Column(db.String(20))  # e.g., "ENG" for English
     category = db.Column(db.String(50))  # Science, Arts, Commercial, General
+    # Whether this subject has a Midterm/Practical (P/ME). When false the
+    # Midterm column is dropped and the Theory paper is worth 50 instead of 40.
+    has_practical = db.Column(db.Boolean, default=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
-    
+
     # Relationships
     class_subjects = db.relationship('ClassSubject', backref='subject', lazy='dynamic', cascade='all, delete-orphan')
     
@@ -1009,6 +1012,13 @@ def _ensure_student_exam_columns():
         statements.append('ALTER TABLE students ADD COLUMN stream VARCHAR(20)')
     if 'jamb_target' not in existing:
         statements.append('ALTER TABLE students ADD COLUMN jamb_target INTEGER')
+    try:
+        subj_cols = {c['name'] for c in inspect(db.engine).get_columns('subjects')}
+        if 'has_practical' not in subj_cols:
+            statements.append('ALTER TABLE subjects ADD COLUMN has_practical BOOLEAN DEFAULT 1')
+    except Exception:
+        pass
+
     if statements:
         with db.engine.begin() as conn:
             for stmt in statements:

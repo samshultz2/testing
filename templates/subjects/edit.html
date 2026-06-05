@@ -25,6 +25,11 @@
                     </select>
                 </div>
             </div>
+            <div class="form-check mb-3">
+                <input type="checkbox" name="has_practical" id="has_practical" class="form-check-input" {% if subject.has_practical %}checked{% endif %}>
+                <label for="has_practical" class="form-check-label">Has Midterm / Practical (P/ME)</label>
+                <span class="form-hint d-block">If unchecked, the Midterm column is dropped and the Theory paper is worth 50 (instead of 40).</span>
+            </div>
             <div class="page-header-actions">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
                 <a href="{{ url_for('subjects.subjects_list') }}" class="btn btn-secondary">Cancel</a>

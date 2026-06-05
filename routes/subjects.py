@@ -59,11 +59,15 @@ def add_subject():
             subject = Subject(
                 name=name,
                 short_name=short_name or name[:3].upper(),
-                category=category or 'General'
+                category=category or 'General',
+                has_practical=bool(request.form.get('has_practical'))
             )
             db.session.add(subject)
+            db.session.flush()
+            from utils.assessments import apply_practical
+            apply_practical(db, subject)
             db.session.commit()
-            
+
             flash(f'Subject "{name}" added!', 'success')
             return redirect(url_for('subjects.subjects_list'))
         except Exception as e:
@@ -85,7 +89,10 @@ def edit_subject(subject_id):
             subject.name = request.form.get('name', '').strip()
             subject.short_name = request.form.get('short_name', '').strip().upper()
             subject.category = request.form.get('category', '').strip()
-            
+            subject.has_practical = bool(request.form.get('has_practical'))
+
+            from utils.assessments import apply_practical
+            apply_practical(db, subject)
             db.session.commit()
             flash('Subject updated!', 'success')
             return redirect(url_for('subjects.subjects_list'))
