@@ -322,19 +322,19 @@ def students_list():
     # Paginate
     students = query.paginate(page=page, per_page=per_page, error_out=False)
     
-    # Add current class info to each student
+    # Add current class info to each student (single query for the whole page)
     active_term = Term.query.filter_by(is_active=True).first()
+    class_map = {}
+    page_ids = [s.id for s in students.items]
+    if active_term and page_ids:
+        enrollments = StudentEnrollment.query.join(ClassArmAssignment).filter(
+            StudentEnrollment.student_id.in_(page_ids),
+            ClassArmAssignment.term_id == active_term.id
+        ).all()
+        for enrollment in enrollments:
+            class_map.setdefault(enrollment.student_id, enrollment.class_arm_assignment.display_name)
     for student in students.items:
-        student.current_class = None
-        if active_term:
-            enrollment = StudentEnrollment.query.join(
-                ClassArmAssignment
-            ).filter(
-                StudentEnrollment.student_id == student.id,
-                ClassArmAssignment.term_id == active_term.id
-            ).first()
-            if enrollment:
-                student.current_class = enrollment.class_arm_assignment.display_name
+        student.current_class = class_map.get(student.id)
 
     # Get filter options
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
@@ -455,19 +455,46 @@ def edit_student(student_id):
 
     if request.method == 'POST':
         try:
-            student.first_name = request.form.get('first_name', '').strip()
-            student.middle_name = request.form.get('middle_name', '').strip() or None
-            student.surname = request.form.get('surname', '').strip()
-            student.gender = request.form.get('gender')
-            student.date_of_birth = parse_date(request.form.get('date_of_birth'))
-            student.religion = request.form.get('religion')
-            student.home_address = request.form.get('home_address', '').strip() or None
-            student.hobbies = request.form.get('hobbies', '').strip() or None
-            student.waec_subjects = ', '.join(request.form.getlist('waec_subjects[]')) or None
-            student.jamb_subjects = ', '.join(request.form.getlist('jamb_subjects[]')) or None
-            student.stream = request.form.get('stream') or None
+            # When the full edit form is submitted, fields absent from the POST
+            # mean "cleared"; for any other (partial/programmatic) POST we only
+            # touch fields that are actually present, so nothing gets blanked
+            # accidentally.
+            complete = request.form.get('form_complete') == '1'
+            form = request.form
 
-            # Update contacts - delete existing and add new
+            def has(key):
+                return complete or key in form
+
+            if has('first_name'):
+                student.first_name = form.get('first_name', '').strip()
+            if has('surname'):
+                student.surname = form.get('surname', '').strip()
+            if has('middle_name'):
+                student.middle_name = form.get('middle_name', '').strip() or None
+            if has('gender'):
+                student.gender = form.get('gender')
+            if has('date_of_birth'):
+                student.date_of_birth = parse_date(form.get('date_of_birth'))
+            if has('religion'):
+                student.religion = form.get('religion')
+            if has('home_address'):
+                student.home_address = form.get('home_address', '').strip() or None
+            if has('hobbies'):
+                student.hobbies = form.get('hobbies', '').strip() or None
+            if has('stream'):
+                student.stream = form.get('stream') or None
+            if complete or 'waec_subjects[]' in form:
+                student.waec_subjects = ', '.join(form.getlist('waec_subjects[]')) or None
+            if complete or 'jamb_subjects[]' in form:
+                student.jamb_subjects = ', '.join(form.getlist('jamb_subjects[]')) or None
+
+            # Update contacts only when the contacts section was submitted
+            if not (complete or 'phone_number[]' in form):
+                db.session.commit()
+                flash(FlashMessages.STUDENT_UPDATED, 'success')
+                return redirect(_safe_next(form.get('return_to'),
+                                           url_for('main.view_student', student_id=student.id)))
+
             ParentContact.query.filter_by(student_id=student.id).delete()
 
             phone_numbers = request.form.getlist('phone_number[]')
@@ -545,6 +572,58 @@ def bulk_set_stream():
     label = stream if stream else 'cleared'
     flash(f'Stream set to {label} for {updated} student(s).', 'success')
     return jsonify({'updated': updated, 'stream': stream})
+
+
+@main_bp.route('/students/apply-stream-waec', methods=['POST'])
+@login_required
+def apply_stream_waec():
+    """Fill WAEC subjects from each student's stream where not already set."""
+    updated = 0
+    for student in Student.query.filter_by(is_active=True).all():
+        defaults = STREAM_WAEC_SUBJECTS.get(student.stream)
+        if defaults and not student.waec_subject_list:
+            student.waec_subjects = ', '.join(defaults)
+            updated += 1
+    db.session.commit()
+    flash(f'WAEC subjects filled from stream for {updated} student(s).', 'success')
+    return redirect(request.referrer or url_for('main.students_list'))
+
+
+@main_bp.route('/students/trash')
+@login_required
+def students_trash():
+    """List soft-deleted students with restore / permanent-delete options."""
+    students = Student.query.filter_by(is_active=False).order_by(Student.surname, Student.first_name).all()
+    return render_template('students/trash.html', students=students)
+
+
+@main_bp.route('/students/<int:student_id>/restore', methods=['POST'])
+@login_required
+def restore_student(student_id):
+    student = Student.query.get_or_404(student_id)
+    student.is_active = True
+    db.session.commit()
+    flash(f'{student.full_name} restored.', 'success')
+    return redirect(url_for('main.students_trash'))
+
+
+@main_bp.route('/students/<int:student_id>/purge', methods=['POST'])
+@login_required
+def purge_student(student_id):
+    """Permanently delete a soft-deleted student and their related records."""
+    student = Student.query.get_or_404(student_id)
+    if student.is_active:
+        flash('Only deleted students can be permanently removed.', 'error')
+        return redirect(url_for('main.students_trash'))
+    name = student.full_name
+    try:
+        db.session.delete(student)
+        db.session.commit()
+        flash(f'{name} permanently deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('main.students_trash'))
 
 
 # ============================================================================

@@ -446,6 +446,11 @@
         <a href="{{ url_for('main.add_student') }}" class="btn btn-primary">
             <i class="fas fa-plus"></i> Add
         </a>
+        <form method="POST" action="{{ url_for('main.apply_stream_waec') }}" style="display:inline;"
+              data-confirm="Fill WAEC subjects from stream for students who don't have them set?">
+            <button type="submit" class="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"><i class="fas fa-wand-magic-sparkles"></i> WAEC by stream</button>
+        </form>
+        <a href="{{ url_for('main.students_trash') }}" class="btn btn-secondary btn-sm" title="Deleted students"><i class="fas fa-trash"></i></a>
     </div>
 </div>
 
