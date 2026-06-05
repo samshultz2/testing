@@ -47,6 +47,7 @@
                 {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
             </select>
         </form>
+        <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
         {% if selected_year %}
         <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>
         <button type="button" onclick="exportAnalyticsImage()" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>

@@ -4,7 +4,8 @@ Comprehensive academic performance tracking and analysis
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from collections import defaultdict
-from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm, AcademicSession
+from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm, AcademicSession, UniversityCutoff, SchoolSettings
+import json as _json
 from utils.access_control import login_required
 from utils.helpers import (
     WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, FlashMessages,
@@ -1151,6 +1152,86 @@ def analytics_export():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': f'attachment; filename=exam_analytics_{year}.xlsx'}
     )
+
+
+@results_bp.route('/cutoffs')
+@login_required
+def cutoffs_list():
+    """Manage university/course admission cut-offs used by the advisor."""
+    universities = [u[0] for u in db.session.query(UniversityCutoff.university_name)
+                    .distinct().order_by(UniversityCutoff.university_name).all()]
+    if 'General Requirements' not in universities:
+        universities.insert(0, 'General Requirements')
+    selected = request.args.get('university') or universities[0]
+    rows = UniversityCutoff.query.filter_by(university_name=selected).order_by(
+        UniversityCutoff.faculty, UniversityCutoff.course_name).all()
+
+    edit_id = request.args.get('edit', type=int)
+    editing = db.session.get(UniversityCutoff, edit_id) if edit_id else None
+    editing_subjects = _json.loads(editing.required_subjects or '[]') if editing else []
+    reference = SchoolSettings.get('admission_reference', 'General Requirements')
+
+    return render_template('results/cutoffs.html',
+        universities=universities, selected=selected, rows=rows,
+        editing=editing, editing_subjects=editing_subjects,
+        reference=reference, subjects=WAEC_SUBJECTS)
+
+
+@results_bp.route('/cutoffs/save', methods=['POST'])
+@login_required
+def cutoffs_save():
+    cid = request.form.get('id', type=int)
+    uni = (request.form.get('university_name') or '').strip() or 'General Requirements'
+    course = (request.form.get('course_name') or '').strip()
+    if not course:
+        flash('Course name is required.', 'error')
+        return redirect(url_for('results.cutoffs_list', university=uni))
+
+    year = request.form.get('exam_year', type=int) or 0
+    obj = db.session.get(UniversityCutoff, cid) if cid else None
+    if not obj:
+        obj = UniversityCutoff.query.filter_by(university_name=uni, course_name=course, exam_year=year).first()
+    if not obj:
+        obj = UniversityCutoff(university_name=uni, course_name=course, exam_year=year)
+        db.session.add(obj)
+
+    obj.university_name = uni
+    obj.course_name = course
+    obj.exam_year = year
+    obj.faculty = (request.form.get('faculty') or '').strip() or None
+    obj.jamb_cutoff = request.form.get('jamb_cutoff', type=int)
+    obj.min_credits = request.form.get('min_credits', type=int) or 5
+    obj.required_subjects = _json.dumps(request.form.getlist('required_subjects[]'))
+    try:
+        db.session.commit()
+        flash(f'Saved cut-off for {course}.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('results.cutoffs_list', university=uni))
+
+
+@results_bp.route('/cutoffs/<int:cid>/delete', methods=['POST'])
+@login_required
+def cutoffs_delete(cid):
+    obj = db.session.get(UniversityCutoff, cid)
+    if obj:
+        uni = obj.university_name
+        db.session.delete(obj)
+        db.session.commit()
+        flash('Cut-off deleted.', 'success')
+        return redirect(url_for('results.cutoffs_list', university=uni))
+    return redirect(url_for('results.cutoffs_list'))
+
+
+@results_bp.route('/cutoffs/reference', methods=['POST'])
+@login_required
+def cutoffs_reference():
+    ref = (request.form.get('reference') or 'General Requirements').strip()
+    SchoolSettings.set('admission_reference', ref, 'string',
+                       'University reference used by the admission advisor')
+    flash(f'Admission advisor now uses "{ref}" cut-offs.', 'success')
+    return redirect(url_for('results.cutoffs_list', university=ref))
 
 
 @results_bp.route('/subject-enrolment/<exam>/<path:subject>')

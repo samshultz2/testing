@@ -118,6 +118,14 @@ def create_app(config_class=Config):
             return value.strftime(format)
         return ''
     
+    @app.template_filter('fromjson')
+    def fromjson_filter(value):
+        import json
+        try:
+            return json.loads(value) if value else []
+        except (ValueError, TypeError):
+            return []
+
     @app.template_filter('format_phone')
     def format_phone_filter(value):
         if value and len(value) == 11:

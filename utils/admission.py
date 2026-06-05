@@ -71,10 +71,15 @@ def assess_admission(student):
 
     # Course-specific evaluation from the seeded requirements table.
     courses = []
+    reference = 'General Requirements'
     try:
         import json
-        from models import UniversityCutoff
-        rows = UniversityCutoff.query.filter_by(university_name='General Requirements').all()
+        from models import UniversityCutoff, SchoolSettings
+        reference = SchoolSettings.get('admission_reference', 'General Requirements')
+        rows = UniversityCutoff.query.filter_by(university_name=reference).all()
+        if not rows and reference != 'General Requirements':
+            reference = 'General Requirements'
+            rows = UniversityCutoff.query.filter_by(university_name=reference).all()
         for cu in rows:
             required = json.loads(cu.required_subjects or '[]')
             missing = [s for s in required if s not in best_credits]
@@ -121,4 +126,5 @@ def assess_admission(student):
         'courses': courses,
         'eligible_courses': eligible_courses,
         'eligible_course_count': len(eligible_courses),
+        'reference': reference,
     }

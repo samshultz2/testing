@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Admission Cut-offs - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Cut-offs</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.cut-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:992px){.cut-grid{grid-template-columns:360px 1fr}}
+.ctable{width:100%;border-collapse:collapse;font-size:.83rem}
+.ctable th,.ctable td{padding:.4rem .5rem;border-bottom:1px solid var(--border-light);text-align:left}
+.ctable th{background:var(--gray-50)}
+.subject-checks{display:grid;grid-template-columns:1fr 1fr;gap:.35rem;max-height:240px;overflow:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:.5rem}
+.subject-check{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
+.toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Admission Cut-offs</h1>
+        <p class="text-muted text-sm">Manage course requirements used by the admission advisor.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="toolbar">
+    <form method="GET" class="d-flex gap-2 align-center">
+        <label class="form-label mb-0">University</label>
+        <select name="university" class="form-control" style="max-width:240px;" onchange="this.form.submit()">
+            {% for u in universities %}<option value="{{ u }}" {% if u == selected %}selected{% endif %}>{{ u }}</option>{% endfor %}
+        </select>
+    </form>
+    <form method="POST" action="{{ url_for('results.cutoffs_reference') }}" class="d-flex gap-2 align-center" style="margin-left:auto;">
+        <label class="form-label mb-0" title="Which set the advisor uses">Advisor uses</label>
+        <select name="reference" class="form-control" style="max-width:240px;">
+            {% for u in universities %}<option value="{{ u }}" {% if u == reference %}selected{% endif %}>{{ u }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-primary btn-sm" type="submit">Set</button>
+    </form>
+</div>
+
+<div class="cut-grid">
+    <!-- Add / edit form -->
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-pen"></i> {{ 'Edit' if editing else 'Add' }} Cut-off</h3></div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('results.cutoffs_save') }}">
+                {% if editing %}<input type="hidden" name="id" value="{{ editing.id }}">{% endif %}
+                <div class="form-group">
+                    <label class="form-label">University</label>
+                    <input type="text" name="university_name" class="form-control" list="unis"
+                           value="{{ editing.university_name if editing else selected }}" required>
+                    <datalist id="unis">{% for u in universities %}<option value="{{ u }}">{% endfor %}</datalist>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Course <span class="text-danger">*</span></label>
+                    <input type="text" name="course_name" class="form-control" value="{{ editing.course_name if editing else '' }}" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Faculty</label>
+                        <input type="text" name="faculty" class="form-control" value="{{ editing.faculty if editing else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">JAMB cut-off</label>
+                        <input type="number" name="jamb_cutoff" class="form-control" min="0" max="400" value="{{ editing.jamb_cutoff if editing else '' }}">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Min credits</label>
+                        <input type="number" name="min_credits" class="form-control" min="1" max="9" value="{{ editing.min_credits if editing else 5 }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Exam year <span class="text-muted">(0 = generic)</span></label>
+                        <input type="number" name="exam_year" class="form-control" min="0" max="2100" value="{{ editing.exam_year if editing else 0 }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Required O'level credits</label>
+                    <div class="subject-checks">
+                        {% for s in subjects %}
+                        <label class="subject-check"><input type="checkbox" name="required_subjects[]" value="{{ s }}" {% if s in editing_subjects %}checked{% endif %}> {{ s }}</label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> {{ 'Update' if editing else 'Add' }}</button>
+                    {% if editing %}<a href="{{ url_for('results.cutoffs_list', university=selected) }}" class="btn btn-secondary">Cancel</a>{% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- List -->
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-list"></i> {{ selected }} ({{ rows|length }})</h3></div>
+        <div class="card-body" style="padding:0;overflow-x:auto;">
+            {% if rows %}
+            <table class="ctable">
+                <thead><tr><th>Course</th><th>Faculty</th><th>JAMB</th><th>Credits</th><th>Required</th><th></th></tr></thead>
+                <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td>{{ r.course_name }}</td>
+                    <td class="text-muted">{{ r.faculty or '' }}</td>
+                    <td>{{ r.jamb_cutoff or '—' }}</td>
+                    <td>{{ r.min_credits }}</td>
+                    <td style="font-size:.72rem;color:var(--text-muted);">{{ (r.required_subjects|fromjson if r.required_subjects else [])|join(', ') }}</td>
+                    <td style="white-space:nowrap;">
+                        <a href="{{ url_for('results.cutoffs_list', university=selected, edit=r.id) }}" class="btn btn-warning btn-sm"><i class="fas fa-edit"></i></a>
+                        <form method="POST" action="{{ url_for('results.cutoffs_delete', cid=r.id) }}" style="display:inline;" data-confirm="Delete {{ r.course_name }}?">
+                            <button class="btn btn-danger btn-sm" type="submit"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state" style="padding:1.5rem;"><i class="fas fa-inbox"></i><p>No cut-offs for {{ selected }}. Add one on the left.</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
