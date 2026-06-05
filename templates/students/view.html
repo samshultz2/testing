@@ -71,6 +71,10 @@
                 <strong>{{ student.hobbies or 'Not set' }}</strong>
             </div>
             <div class="info-row">
+                <span class="text-muted">Stream</span>
+                <strong>{% if student.stream %}<span class="badge badge-info">{{ student.stream }}</span>{% else %}Not set{% endif %}</strong>
+            </div>
+            <div class="info-row">
                 <span class="text-muted">WAEC Subjects</span>
                 <strong>{{ student.waec_subject_list|join(', ') if student.waec_subject_list else 'Not set' }}</strong>
             </div>

@@ -85,20 +85,30 @@
 (function () {
     const SUBJECT_MAP = {{ subject_map | tojson }};
     const DEFAULTS = {{ default_subjects | tojson }};
+    const STREAM_DEFAULTS = {{ stream_defaults | tojson }};
     const subjectSelects = Array.from(document.querySelectorAll('.waec-subject'));
 
     function applySubjects(list) {
+        // Grow the number of subject rows if a stream needs more than exist.
         subjectSelects.forEach(function (sel, idx) {
             sel.value = (list && list[idx]) ? list[idx] : '';
         });
     }
 
+    function subjectsForStudent(entry) {
+        if (!entry) return DEFAULTS;
+        // 1) explicit saved WAEC subjects win
+        if (entry.waec && entry.waec.length) return entry.waec;
+        // 2) otherwise fall back to the student's stream defaults
+        if (entry.stream && STREAM_DEFAULTS[entry.stream]) return STREAM_DEFAULTS[entry.stream];
+        // 3) otherwise the generic common subjects
+        return DEFAULTS;
+    }
+
     const studentSelect = document.getElementById('studentSelect');
     if (studentSelect) {
         studentSelect.addEventListener('change', function () {
-            const entry = SUBJECT_MAP[this.value];
-            const saved = entry && entry.waec ? entry.waec : [];
-            applySubjects(saved.length ? saved : DEFAULTS);
+            applySubjects(subjectsForStudent(SUBJECT_MAP[this.value]));
         });
     }
 

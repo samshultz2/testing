@@ -239,6 +239,47 @@ WAEC_DEFAULT_SUBJECTS = [
     'Civic Education',
 ]
 
+# Academic streams / tracks.
+STREAMS = ['Science', 'Arts', 'Commercial']
+
+# Compulsory WAEC subjects per stream (pre-selected on the WAEC entry page).
+STREAM_WAEC_SUBJECTS = {
+    'Science': [
+        'Mathematics', 'English Language', 'Civic Education', 'Livestock Farming',
+        'Physics', 'Chemistry', 'Biology',
+    ],
+    'Arts': [
+        'Mathematics', 'English Language', 'Civic Education', 'Livestock Farming',
+        'Literature in English', 'Christian Religious Studies', 'Government', 'Economics',
+    ],
+    'Commercial': [
+        'Mathematics', 'English Language', 'Civic Education', 'Livestock Farming',
+        'Commerce', 'Christian Religious Studies', 'Digital Technologies',
+        'Government', 'Economics',
+    ],
+}
+
+
+def infer_stream_from_jamb(student):
+    """
+    Infer a student's stream from the subjects they sat for JAMB:
+    Physics -> Science, Literature in English -> Arts, Commerce -> Commercial.
+    Returns None when none of the marker subjects are present.
+    """
+    from models import JAMBResult
+    subjects = set()
+    for r in JAMBResult.query.filter_by(student_id=student.id).all():
+        for v in (r.subject1, r.subject2, r.subject3, r.subject4):
+            if v:
+                subjects.add(v)
+    if 'Physics' in subjects:
+        return 'Science'
+    if 'Literature in English' in subjects:
+        return 'Arts'
+    if 'Commerce' in subjects:
+        return 'Commercial'
+    return None
+
 
 def _sss3_enrolled_map():
     """Return {id: Student} for active SSS3 students enrolled in the active term."""
@@ -312,6 +353,7 @@ def student_subject_map(students):
         s.id: {
             'waec': s.waec_subject_list,
             'jamb': s.jamb_subject_list,
+            'stream': s.stream,
         }
         for s in students
     }

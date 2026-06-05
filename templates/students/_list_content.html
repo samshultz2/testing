@@ -23,6 +23,12 @@
                     <span class="detail-label">Gender:</span>
                     <span class="detail-value badge {% if student.gender == 'Male' %}badge-male{% else %}badge-female{% endif %}">{{ student.gender }}</span>
                 </div>
+                {% if student.stream %}
+                <div class="detail-item">
+                    <span class="detail-label">Stream:</span>
+                    <span class="detail-value badge badge-info">{{ student.stream }}</span>
+                </div>
+                {% endif %}
                 <div class="detail-item">
                     <span class="detail-label">Age:</span>
                     <span class="detail-value">{{ student.age or '-' }}</span>

@@ -47,14 +47,26 @@
                 </div>
             </div>
             
-            <div class="form-group">
-                <label class="form-label">Religion</label>
-                <select name="religion" class="form-control">
-                    <option value="">Select</option>
-                    {% for r in religions %}
-                    <option value="{{ r }}" {% if student.religion == r %}selected{% endif %}>{{ r }}</option>
-                    {% endfor %}
-                </select>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Religion</label>
+                    <select name="religion" class="form-control">
+                        <option value="">Select</option>
+                        {% for r in religions %}
+                        <option value="{{ r }}" {% if student.religion == r %}selected{% endif %}>{{ r }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Stream / Track</label>
+                    <select name="stream" class="form-control">
+                        <option value="">Select Stream</option>
+                        {% for st in streams %}
+                        <option value="{{ st }}" {% if student.stream == st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="form-hint">Science, Arts or Commercial — drives WAEC subject defaults</span>
+                </div>
             </div>
             
             <div class="form-group">

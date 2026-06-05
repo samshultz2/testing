@@ -37,6 +37,8 @@ class Student(db.Model):
     # Used to auto-populate the WAEC / JAMB result-entry subject fields.
     waec_subjects = db.Column(db.Text)
     jamb_subjects = db.Column(db.Text)
+    # Academic stream / track: 'Science', 'Arts' or 'Commercial'.
+    stream = db.Column(db.String(20))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
@@ -985,6 +987,8 @@ def _ensure_student_exam_columns():
         statements.append('ALTER TABLE students ADD COLUMN waec_subjects TEXT')
     if 'jamb_subjects' not in existing:
         statements.append('ALTER TABLE students ADD COLUMN jamb_subjects TEXT')
+    if 'stream' not in existing:
+        statements.append('ALTER TABLE students ADD COLUMN stream VARCHAR(20)')
     if statements:
         with db.engine.begin() as conn:
             for stmt in statements:

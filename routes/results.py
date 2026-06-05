@@ -7,7 +7,7 @@ from collections import defaultdict
 from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm
 from utils.access_control import login_required
 from utils.helpers import (
-    WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, FlashMessages,
+    WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, FlashMessages,
     get_sss3_students, student_subject_map,
 )
 from datetime import date as _date
@@ -272,6 +272,7 @@ def add_waec():
         subjects=WAEC_SUBJECTS,
         grades=WAEC_GRADES,
         default_subjects=WAEC_DEFAULT_SUBJECTS,
+        stream_defaults=STREAM_WAEC_SUBJECTS,
         subject_map=student_subject_map(students),
         current_year=_date.today().year
     )
