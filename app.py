@@ -127,8 +127,10 @@ def create_app(config_class=Config):
     return app
 
 
-# Create application instance
-app = create_app()
+# Create application instance (skipped under the test harness, which builds its
+# own app against a temporary database).
+if os.environ.get('POSYHUB_TESTING') != '1':
+    app = create_app()
 
 
 if __name__ == '__main__':

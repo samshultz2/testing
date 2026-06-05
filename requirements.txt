@@ -13,3 +13,6 @@ PyMuPDF==1.24.10
 # (e.g. `apt-get install tesseract-ocr` or `brew install tesseract`).
 # PyMuPDF (fitz) reads PDFs and renders scanned pages for OCR (pure pip, no
 # system deps).
+
+# Dev/test
+pytest==8.3.3
