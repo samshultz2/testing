@@ -130,27 +130,52 @@
             <span class="chip">Maths: {{ 'Yes' if admission.has_maths else 'No' }}</span>
             <span class="chip">{{ 'Meets 5-credit baseline' if admission.meets_ssc else 'Baseline not met' }}</span>
         </div>
+        {% if admission.courses %}
+        <p style="margin:.25rem 0 .5rem;font-size:.9rem;">
+            Currently qualifies for <strong>{{ admission.eligible_course_count }}</strong> of {{ admission.courses|length }} listed courses.
+        </p>
+        {% if admission.eligible_courses %}
+        <div style="margin-bottom:.5rem;">
+            {% for c in admission.eligible_courses %}
+            <span class="pill g-dist" style="margin:2px;display:inline-block;">{{ c.course }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <details>
+            <summary class="muted" style="cursor:pointer;font-size:.85rem;">Show all {{ admission.courses|length }} courses &amp; requirements</summary>
+            <table class="rtable" style="margin-top:.5rem;">
+                <thead><tr><th>Course</th><th>Faculty</th><th style="width:70px;">JAMB ≥</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for c in admission.courses %}
+                <tr>
+                    <td>{{ c.course }}</td>
+                    <td class="muted">{{ c.faculty }}</td>
+                    <td>{{ c.jamb_required }}</td>
+                    <td>
+                        {% if c.eligible %}<span class="pill g-dist">Eligible</span>
+                        {% else %}<span class="pill g-fail">Not yet</span>
+                        <span class="muted" style="font-size:.72rem;">
+                        {%- if not admission.meets_ssc %} 5 credits incl. Eng & Maths{% elif c.missing %} need {{ c.missing|join(', ') }}{% elif not c.jamb_ok %} JAMB &lt; {{ c.jamb_required }}{% endif -%}
+                        </span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% else %}
         <table class="rtable">
             <thead><tr><th>Course category</th><th style="width:110px;">JAMB ≥</th><th>Status</th></tr></thead>
             <tbody>
             {% for c in admission.categories %}
             <tr>
-                <td>{{ c.name }}</td>
-                <td>{{ c.jamb_required }}</td>
-                <td>
-                    {% if c.eligible %}
-                        <span class="pill g-dist">Eligible</span>
-                    {% else %}
-                        <span class="pill g-fail">Not yet</span>
-                        <span class="muted" style="font-size:.72rem;">
-                        {%- if not admission.meets_ssc %} need 5 credits incl. Eng & Maths{% elif c.missing %} need credit in {{ c.missing|join(', ') }}{% elif not c.jamb_ok %} JAMB below {{ c.jamb_required }}{% endif -%}
-                        </span>
-                    {% endif %}
-                </td>
+                <td>{{ c.name }}</td><td>{{ c.jamb_required }}</td>
+                <td>{% if c.eligible %}<span class="pill g-dist">Eligible</span>{% else %}<span class="pill g-fail">Not yet</span>{% endif %}</td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

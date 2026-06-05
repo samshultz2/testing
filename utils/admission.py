@@ -69,6 +69,34 @@ def assess_admission(student):
 
     categories.sort(key=lambda c: (not c['eligible'], c['jamb_required']))
 
+    # Course-specific evaluation from the seeded requirements table.
+    courses = []
+    try:
+        import json
+        from models import UniversityCutoff
+        rows = UniversityCutoff.query.filter_by(university_name='General Requirements').all()
+        for cu in rows:
+            required = json.loads(cu.required_subjects or '[]')
+            missing = [s for s in required if s not in best_credits]
+            min_credits = cu.min_credits or 5
+            credit_ok = (not missing) and len(best_credits) >= min_credits
+            jamb_ok = jamb_best >= (cu.jamb_cutoff or 0)
+            courses.append({
+                'course': cu.course_name,
+                'faculty': cu.faculty,
+                'jamb_required': cu.jamb_cutoff or 0,
+                'required': required,
+                'missing': missing,
+                'credit_ok': credit_ok,
+                'jamb_ok': jamb_ok,
+                'eligible': meets_ssc and credit_ok and jamb_ok,
+            })
+        courses.sort(key=lambda c: (not c['eligible'], c['jamb_required'], c['course']))
+    except Exception:
+        courses = []
+
+    eligible_courses = [c for c in courses if c['eligible']]
+
     if jamb_best >= 250:
         band = 'Highly competitive'
     elif jamb_best >= 200:
@@ -90,4 +118,7 @@ def assess_admission(student):
         'jamb_band': band,
         'categories': categories,
         'eligible_count': sum(1 for c in categories if c['eligible']),
+        'courses': courses,
+        'eligible_courses': eligible_courses,
+        'eligible_course_count': len(eligible_courses),
     }

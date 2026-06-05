@@ -1001,6 +1001,14 @@ def init_db(app):
         db.create_all()
         _ensure_student_exam_columns()
 
+        # Seed standard course admission requirements (idempotent).
+        try:
+            from models.analytics_models import UniversityCutoff
+            from utils.cutoff_seed import seed_cutoffs
+            seed_cutoffs(db, UniversityCutoff)
+        except Exception:
+            db.session.rollback()
+
         # Create default classes if none exist
         if SchoolClass.query.count() == 0:
             default_classes = [
