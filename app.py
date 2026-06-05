@@ -44,6 +44,14 @@ def create_app(config_class=Config):
     # Initialize database
     with app.app_context():
         init_db(app)
+
+    # Enable CSRF protection for all state-changing requests
+    from utils.csrf import init_csrf
+    init_csrf(app)
+
+    # Keep a rolling daily backup of the database
+    from utils.backup import auto_backup
+    auto_backup(app)
     
     # Template context processors
     @app.context_processor

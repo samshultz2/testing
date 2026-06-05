@@ -15,6 +15,8 @@ ENV/
 # Flask / instance data (the seeded instance/school.db is kept tracked on purpose)
 instance/*.db.backup
 instance/*.sqlite
+instance/backups/
+instance/.secret_key
 /school.db
 
 # Uploads (user-generated)

@@ -3,11 +3,34 @@ Enhanced Authentication routes for PosyHub
 Supports both legacy password login and user-based login
 """
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
 from config import Config
 from models import db, User
 
 auth_bp = Blueprint('auth', __name__)
+
+# Simple in-memory login throttling (per client address).
+_login_failures = defaultdict(list)
+
+
+def _client_key():
+    return request.remote_addr or 'unknown'
+
+
+def _login_locked():
+    cutoff = datetime.now() - timedelta(minutes=Config.LOGIN_LOCKOUT_MINUTES)
+    recent = [t for t in _login_failures[_client_key()] if t > cutoff]
+    _login_failures[_client_key()] = recent
+    return len(recent) >= Config.LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_failure():
+    _login_failures[_client_key()].append(datetime.now())
+
+
+def _clear_login_failures():
+    _login_failures.pop(_client_key(), None)
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -17,14 +40,19 @@ def login():
         return redirect(url_for('main.dashboard'))
     
     if request.method == 'POST':
+        if _login_locked():
+            flash(f'Too many failed attempts. Try again in {Config.LOGIN_LOCKOUT_MINUTES} minutes.', 'error')
+            return redirect(url_for('auth.login'))
+
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        
+
         # Try user-based login first
         if username:
             user = User.query.filter_by(username=username).first()
-            
+
             if user and user.check_password(password):
+                _clear_login_failures()
                 if not user.is_active:
                     flash('Your account has been deactivated. Contact administrator.', 'error')
                     return redirect(url_for('auth.login'))
@@ -44,20 +72,23 @@ def login():
                 return redirect(url_for('main.dashboard'))
             
             elif user:
+                _record_login_failure()
                 flash('Invalid password.', 'error')
                 return redirect(url_for('auth.login'))
-        
-        # Legacy admin password login (for backwards compatibility)
-        if password == Config.ADMIN_PASSWORD:
+
+        # Legacy admin password login (only when explicitly enabled)
+        if Config.ENABLE_LEGACY_LOGIN and password and password == Config.ADMIN_PASSWORD:
+            _clear_login_failures()
             session['logged_in'] = True
             session['user'] = 'Admin'
             session['role'] = 'admin'
             session.permanent = True
             flash('Welcome back, Admin!', 'success')
             return redirect(url_for('main.dashboard'))
-        
+
+        _record_login_failure()
         flash('Invalid credentials. Please try again.', 'error')
-    
+
     return render_template('auth/login.html')
 
 

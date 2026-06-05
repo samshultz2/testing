@@ -165,7 +165,7 @@
 
 {# CSRF Input - outputs hidden input with CSRF token #}
 {% macro csrf_input() %}
-<!-- CSRF disabled -->
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 {% endmacro %}
 
 {# Optional WAEC / JAMB exam enrolment picker for the student add/edit forms.

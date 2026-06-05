@@ -2,29 +2,82 @@
 Configuration settings for PosyHub Student Management System
 """
 import os
+import secrets
 from datetime import timedelta
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+
+def _load_secret_key():
+    """
+    Use SECRET_KEY from the environment when set; otherwise persist a random key
+    in the instance folder so sessions survive restarts without shipping a
+    hard-coded secret in source.
+    """
+    env_key = os.environ.get('SECRET_KEY')
+    if env_key:
+        return env_key
+    key_path = os.path.join(BASE_DIR, 'instance', '.secret_key')
+    try:
+        if os.path.exists(key_path):
+            with open(key_path) as f:
+                saved = f.read().strip()
+                if saved:
+                    return saved
+        os.makedirs(os.path.dirname(key_path), exist_ok=True)
+        new_key = secrets.token_hex(32)
+        with open(key_path, 'w') as f:
+            f.write(new_key)
+        try:
+            os.chmod(key_path, 0o600)
+        except Exception:
+            pass
+        return new_key
+    except Exception:
+        # Last resort for read-only environments — still random per process.
+        return secrets.token_hex(32)
+
+
+def _as_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 class Config:
     """Base configuration class"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'posyhub-student-management-secret-key-2024'
-    
+    SECRET_KEY = _load_secret_key()
+
     # Database configuration
-    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    BASE_DIR = BASE_DIR
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         'sqlite:///' + os.path.join(BASE_DIR, 'instance', 'school.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
+
     # Application settings
     APP_NAME = "PosyHub Student Manager"
+    # Legacy shared-password login (kept for backwards compatibility). Set
+    # ADMIN_PASSWORD via the environment in production and disable legacy login
+    # once real user accounts exist (ENABLE_LEGACY_LOGIN=0).
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or "posyhubcomng"
-    
+    ENABLE_LEGACY_LOGIN = _as_bool(os.environ.get('ENABLE_LEGACY_LOGIN'), default=True)
+
+    # Login throttling
+    LOGIN_MAX_ATTEMPTS = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '8'))
+    LOGIN_LOCKOUT_MINUTES = int(os.environ.get('LOGIN_LOCKOUT_MINUTES', '15'))
+
+    # Backups
+    BACKUP_RETENTION = int(os.environ.get('BACKUP_RETENTION', '10'))
+
     # Session
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
-    
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = _as_bool(os.environ.get('SESSION_COOKIE_SECURE'), default=False)
+
     # Pagination
     STUDENTS_PER_PAGE = 20
-    
+
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')

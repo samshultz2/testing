@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <meta name="theme-color" content="#1a5f4a">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -365,6 +366,39 @@
     }
     </style>
     
+    <script>
+    // CSRF: attach the session token to every form submit and same-origin fetch.
+    (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        var token = meta ? meta.getAttribute('content') : '';
+        if (!token) return;
+
+        document.addEventListener('submit', function (e) {
+            var form = e.target;
+            if (!form || form.method && form.method.toLowerCase() === 'get') return;
+            if (!form.querySelector('input[name="_csrf_token"]')) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = '_csrf_token';
+                input.value = token;
+                form.appendChild(input);
+            }
+        }, true);
+
+        var origFetch = window.fetch;
+        window.fetch = function (input, init) {
+            init = init || {};
+            var method = (init.method || (typeof input !== 'string' && input && input.method) || 'GET').toUpperCase();
+            var url = typeof input === 'string' ? input : (input && input.url) || '';
+            var sameOrigin = !/^https?:\/\//i.test(url) || url.indexOf(window.location.origin) === 0;
+            if (method !== 'GET' && method !== 'HEAD' && sameOrigin) {
+                init.headers = new Headers(init.headers || {});
+                if (!init.headers.has('X-CSRFToken')) init.headers.set('X-CSRFToken', token);
+            }
+            return origFetch(input, init);
+        };
+    })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block extra_js %}{% endblock %}
