@@ -282,35 +282,49 @@ def add_waec():
 @login_required
 def scan_waec():
     """Upload a WAEC result image, OCR it, and review before saving."""
-    from utils.waec_ocr import tesseract_available, extract_text, parse_waec_result, match_student
+    from utils.waec_ocr import (
+        tesseract_available, extract_text, parse_waec_result, match_student,
+        pdf_available, extract_text_from_pdf, pdf_first_page_png,
+    )
     import base64
 
     students = get_sss3_students()
 
     if request.method == 'POST':
-        if not tesseract_available():
-            flash('OCR engine (Tesseract) is not installed on the server. '
-                  'Install "tesseract-ocr" to use image scanning.', 'error')
-            return redirect(url_for('results.scan_waec'))
-
         file = request.files.get('result_image')
         if not file or not file.filename:
-            flash('Please choose an image to upload.', 'error')
+            flash('Please choose a file to upload.', 'error')
             return redirect(url_for('results.scan_waec'))
 
-        image_bytes = file.read()
+        filename = (file.filename or '').lower()
+        is_pdf = (file.mimetype == 'application/pdf') or filename.endswith('.pdf')
+        file_bytes = file.read()
+
         try:
-            text = extract_text(image_bytes)
+            if is_pdf:
+                if not pdf_available():
+                    flash('PDF support (PyMuPDF) is not installed on the server.', 'error')
+                    return redirect(url_for('results.scan_waec'))
+                text = extract_text_from_pdf(file_bytes)
+                try:
+                    preview_bytes = pdf_first_page_png(file_bytes)
+                    preview = 'data:image/png;base64,' + base64.b64encode(preview_bytes).decode()
+                except Exception:
+                    preview = ''
+            else:
+                if not tesseract_available():
+                    flash('OCR engine (Tesseract) is not installed on the server. '
+                          'Install "tesseract-ocr" to scan images.', 'error')
+                    return redirect(url_for('results.scan_waec'))
+                text = extract_text(file_bytes)
+                mime = file.mimetype or 'image/png'
+                preview = f"data:{mime};base64,{base64.b64encode(file_bytes).decode()}"
         except Exception as e:
-            flash(f'Could not read the image: {e}', 'error')
+            flash(f'Could not read the file: {e}', 'error')
             return redirect(url_for('results.scan_waec'))
 
         parsed = parse_waec_result(text)
         matched, score = match_student(parsed['name'], students)
-
-        # Embed the uploaded image so the user can compare while reviewing.
-        mime = file.mimetype or 'image/png'
-        preview = f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
 
         return render_template('results/waec_scan_review.html',
             students=students,
@@ -325,7 +339,8 @@ def scan_waec():
         )
 
     return render_template('results/waec_scan.html',
-        ocr_ready=tesseract_available()
+        ocr_ready=tesseract_available(),
+        pdf_ready=pdf_available()
     )
 
 

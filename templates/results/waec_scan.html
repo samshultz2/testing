@@ -46,16 +46,19 @@
         <form method="POST" enctype="multipart/form-data" id="scanForm">
             <label class="dropzone" id="dropzone" for="resultImage">
                 <i class="fas fa-cloud-arrow-up"></i>
-                <div><strong>Tap to choose</strong> or drag a result image here</div>
-                <div class="hint">JPG or PNG · a clear, straight, well-lit photo reads best</div>
+                <div><strong>Tap to choose</strong> from gallery/files, or drag a result here</div>
+                <div class="hint">Image (JPG/PNG){% if pdf_ready %} or PDF{% endif %} · a clear, straight, well-lit scan reads best</div>
                 <img id="preview" alt="preview">
+                <div id="fileName" class="hint" style="display:none;font-weight:600;color:var(--primary)"></div>
             </label>
-            <input type="file" name="result_image" id="resultImage" accept="image/*" capture="environment" hidden required>
+            <input type="file" name="result_image" id="resultImage"
+                   accept="image/*{% if pdf_ready %},application/pdf{% endif %}" hidden required>
 
             <div class="d-flex gap-2 mt-3">
                 <button type="submit" class="btn btn-primary btn-lg" id="scanBtn"><i class="fas fa-magnifying-glass"></i> Read Result</button>
                 <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
             </div>
+            <p class="text-muted text-sm mt-2"><i class="fas fa-circle-info"></i> To pick from your gallery, tap the box and choose your Files/Photos app{% if pdf_ready %}; PDFs are supported too{% endif %}.</p>
         </form>
     </div>
 </div>
@@ -66,13 +69,21 @@
     const input = document.getElementById('resultImage');
     const dz = document.getElementById('dropzone');
     const preview = document.getElementById('preview');
+    const fileName = document.getElementById('fileName');
     const form = document.getElementById('scanForm');
     if (!input) return;
 
     function show(file) {
         if (!file) return;
-        const url = URL.createObjectURL(file);
-        preview.src = url; preview.style.display = 'block';
+        if (file.type === 'application/pdf') {
+            preview.style.display = 'none';
+            fileName.style.display = 'block';
+            fileName.innerHTML = '<i class="fas fa-file-pdf"></i> ' + file.name;
+        } else {
+            fileName.style.display = 'none';
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
+        }
     }
     input.addEventListener('change', () => show(input.files[0]));
     ['dragover', 'dragenter'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('drag'); }));

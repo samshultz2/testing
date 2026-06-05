@@ -69,6 +69,52 @@ def extract_text(image_bytes):
     return pytesseract.image_to_string(img)
 
 
+def pdf_available():
+    """True if PyMuPDF is installed (needed to read PDF results)."""
+    try:
+        import fitz  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def extract_text_from_pdf(pdf_bytes):
+    """
+    Read text from a result PDF. Uses the embedded text layer when present
+    (digital PDFs); falls back to rendering each page and OCR'ing it for
+    scanned/image-only PDFs.
+    """
+    import fitz
+
+    doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    try:
+        parts = [page.get_text().strip() for page in doc]
+        combined = '\n'.join(p for p in parts if p).strip()
+
+        # Sparse/empty text layer -> the PDF is almost certainly scanned images.
+        if len(combined) < 40 and tesseract_available():
+            ocr_parts = []
+            for page in doc:
+                pix = page.get_pixmap(dpi=200)
+                ocr_parts.append(extract_text(pix.tobytes('png')))
+            combined = '\n'.join(ocr_parts).strip()
+        return combined
+    finally:
+        doc.close()
+
+
+def pdf_first_page_png(pdf_bytes):
+    """Render the first PDF page to PNG bytes (used as a review preview)."""
+    import fitz
+
+    doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    try:
+        pix = doc[0].get_pixmap(dpi=150)
+        return pix.tobytes('png')
+    finally:
+        doc.close()
+
+
 def _match_subject(text):
     """Fuzzy-match a fragment of OCR text to a known WAEC subject name."""
     cleaned = re.sub(r'[^A-Za-z ]', ' ', text).strip().lower()
