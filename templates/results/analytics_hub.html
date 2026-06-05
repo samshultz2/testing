@@ -25,6 +25,12 @@
 .insight{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;line-height:1.45;margin-bottom:.6rem}
 .proj-card{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:var(--radius-lg);padding:1.25rem;text-align:center}
 .proj-card .big{font-size:2.5rem;font-weight:700}
+@media print{
+    .no-print{display:none !important}
+    .two-col{grid-template-columns:1fr 1fr !important}
+    .card,.kpi,.proj-card{break-inside:avoid}
+    .chart-wrap{height:200px}
+}
 </style>
 {% endblock %}
 
@@ -34,15 +40,22 @@
         <h1>Exam Analytics</h1>
         <p class="text-muted text-sm">Every WAEC &amp; JAMB stat, correlation and projection in one place</p>
     </div>
-    <div class="page-header-actions">
+    <div class="page-header-actions no-print">
         <form method="GET" class="d-flex gap-2 align-center">
             <label class="form-label mb-0">Year</label>
             <select name="year" class="form-control" style="max-width:140px;" onchange="this.form.submit()">
                 {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
             </select>
         </form>
+        {% if selected_year %}
+        <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>
+        <button type="button" onclick="exportAnalyticsImage()" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>
+        <button type="button" onclick="window.print()" class="btn btn-secondary btn-sm" title="Print / Save as PDF"><i class="fas fa-file-pdf"></i></button>
+        {% endif %}
     </div>
 </div>
+
+<div id="analyticsContent">
 
 {% if not years %}
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-pie"></i><h3>No exam data yet</h3><p>Enter WAEC or JAMB results to unlock analytics.</p></div></div></div>
@@ -163,6 +176,45 @@
 <div class="card"><div class="card-body text-muted">No WAEC results for {{ selected_year }}.</div></div>
 {% endif %}
 
+<!-- ============ GENDER COMPARISON ============ -->
+{% if jamb_gender_stats or waec_gender_stats %}
+<div class="section-title"><i class="fas fa-venus-mars"></i> Gender Comparison &mdash; {{ selected_year }}</div>
+<div class="two-col mb-3">
+    {% if jamb_gender_stats %}
+    <div class="card">
+        <div class="card-header"><h3><span class="tag jamb">JAMB</span> Mean Score &amp; ≥200 by Gender</h3></div>
+        <div class="chart-wrap"><canvas id="jambGenderCmp"></canvas></div>
+        <div class="card-body" style="padding:0;">
+            <table class="mini-table">
+                <thead><tr><th>Gender</th><th class="num">Candidates</th><th class="num">Mean</th><th class="num">≥200</th><th class="num">≥200 %</th><th class="num">Top</th></tr></thead>
+                <tbody>
+                {% for g in jamb_gender_stats %}
+                <tr><td>{{ g.gender }}</td><td class="num">{{ g.candidates }}</td><td class="num"><strong>{{ g.mean_score }}</strong></td><td class="num">{{ g.above_200 }}</td><td class="num">{{ g.above_200_rate }}%</td><td class="num">{{ g.max_score }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    {% if waec_gender_stats %}
+    <div class="card">
+        <div class="card-header"><h3><span class="tag waec">WAEC</span> Pass &amp; Distinction by Gender</h3></div>
+        <div class="chart-wrap"><canvas id="waecGenderCmp"></canvas></div>
+        <div class="card-body" style="padding:0;">
+            <table class="mini-table">
+                <thead><tr><th>Gender</th><th class="num">Entries</th><th class="num">Pass %</th><th class="num">Distinction %</th><th class="num">Mean Pts</th></tr></thead>
+                <tbody>
+                {% for g in waec_gender_stats %}
+                <tr><td>{{ g.gender }}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.pass_rate }}%</strong></td><td class="num">{{ g.distinction_rate }}%</td><td class="num">{{ g.mean_points }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- ============ CORRELATION ============ -->
 <div class="section-title"><i class="fas fa-link"></i> WAEC ↔ JAMB Correlation</div>
 <div class="card mb-3"><div class="card-body">
@@ -202,8 +254,10 @@
 </div>
 
 {% endif %}
+</div><!-- /#analyticsContent -->
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 const baseOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} };
 
@@ -258,6 +312,43 @@ if (document.getElementById('yoyChart')) {
         ]},
         options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
             scales:{ y:{ position:'left', title:{display:true,text:'JAMB'} }, y1:{ position:'right', max:100, grid:{drawOnChartArea:false}, title:{display:true,text:'WAEC %'} } } }
+    });
+}
+
+// Gender comparison charts
+{% if jamb_gender_stats %}
+const jgc = {{ jamb_gender_stats | tojson }};
+new Chart(document.getElementById('jambGenderCmp'), {
+    type:'bar',
+    data:{ labels:jgc.map(g=>g.gender), datasets:[
+        { label:'Mean score', data:jgc.map(g=>g.mean_score), backgroundColor:'#667eea', borderRadius:5, yAxisID:'y' },
+        { label:'≥200 %', data:jgc.map(g=>g.above_200_rate), backgroundColor:'#38ef7d', borderRadius:5, yAxisID:'y1' }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+        scales:{ y:{ position:'left', beginAtZero:true, title:{display:true,text:'Mean'} }, y1:{ position:'right', max:100, beginAtZero:true, grid:{drawOnChartArea:false}, title:{display:true,text:'%'} } } }
+});
+{% endif %}
+{% if waec_gender_stats %}
+const wgc = {{ waec_gender_stats | tojson }};
+new Chart(document.getElementById('waecGenderCmp'), {
+    type:'bar',
+    data:{ labels:wgc.map(g=>g.gender), datasets:[
+        { label:'Pass %', data:wgc.map(g=>g.pass_rate), backgroundColor:'#0891b2', borderRadius:5 },
+        { label:'Distinction %', data:wgc.map(g=>g.distinction_rate), backgroundColor:'#28a745', borderRadius:5 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+        scales:{ y:{ beginAtZero:true, max:100 } } }
+});
+{% endif %}
+
+// Export the whole hub as a PNG image
+function exportAnalyticsImage() {
+    const node = document.getElementById('analyticsContent');
+    html2canvas(node, { scale: 2, backgroundColor: getComputedStyle(document.body).backgroundColor || '#ffffff', useCORS: true }).then(function (canvas) {
+        const link = document.createElement('a');
+        link.download = 'exam_analytics_{{ selected_year }}.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
     });
 }
 </script>

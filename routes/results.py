@@ -675,6 +675,50 @@ def analytics_hub():
     waec_gender = gender_split(WAECResult) if (year and waec_stats) else {}
     jamb_gender = gender_split(JAMBResult) if (year and jamb_stats) else {}
 
+    # Gender-comparison breakdown: pass/distinction rates (WAEC) and mean score
+    # / >=200 rate (JAMB) split by gender for the selected year.
+    waec_gender_stats = []
+    if year and waec_stats:
+        rows = db.session.query(Student.gender, WAECResult.grade).join(
+            WAECResult, Student.id == WAECResult.student_id
+        ).filter(WAECResult.exam_year == year).all()
+        by_gender = defaultdict(list)
+        for g, grade in rows:
+            by_gender[g or 'Unknown'].append(grade)
+        for g, grades in by_gender.items():
+            total = len(grades)
+            passes = sum(1 for x in grades if x in AcademicAnalytics.PASS_GRADES)
+            dist = sum(1 for x in grades if x in AcademicAnalytics.DISTINCTION_GRADES)
+            pts = [AcademicAnalytics.GRADE_POINTS.get(x, 9) for x in grades]
+            waec_gender_stats.append({
+                'gender': g,
+                'entries': total,
+                'pass_rate': round(passes / total * 100, 1) if total else 0,
+                'distinction_rate': round(dist / total * 100, 1) if total else 0,
+                'mean_points': round(sum(pts) / len(pts), 2) if pts else 0,
+            })
+        waec_gender_stats.sort(key=lambda x: x['gender'])
+
+    jamb_gender_stats = []
+    if year and jamb_stats:
+        rows = db.session.query(Student.gender, JAMBResult.total_score).join(
+            JAMBResult, Student.id == JAMBResult.student_id
+        ).filter(JAMBResult.exam_year == year).all()
+        by_gender = defaultdict(list)
+        for g, score in rows:
+            by_gender[g or 'Unknown'].append(score)
+        for g, scores in by_gender.items():
+            total = len(scores)
+            jamb_gender_stats.append({
+                'gender': g,
+                'candidates': total,
+                'mean_score': round(sum(scores) / total, 1) if total else 0,
+                'above_200': sum(1 for s in scores if s >= 200),
+                'above_200_rate': round(sum(1 for s in scores if s >= 200) / total * 100, 1) if total else 0,
+                'max_score': max(scores) if scores else 0,
+            })
+        jamb_gender_stats.sort(key=lambda x: x['gender'])
+
     # JAMB mean projection (simple linear fit) computed directly from JAMB years.
     projection = None
     jamb_means = []
@@ -723,8 +767,109 @@ def analytics_hub():
         yoy=yoy,
         waec_gender=waec_gender,
         jamb_gender=jamb_gender,
+        waec_gender_stats=waec_gender_stats,
+        jamb_gender_stats=jamb_gender_stats,
         projection=projection,
         cutoff=cutoff
+    )
+
+
+@results_bp.route('/analytics/export')
+@login_required
+def analytics_export():
+    """Export the analytics hub for a year to a multi-sheet Excel workbook."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+
+    year = request.args.get('year', type=int)
+    if not year:
+        flash('Select a year to export.', 'error')
+        return redirect(url_for('results.analytics_hub'))
+
+    waec_stats = AcademicAnalytics.get_waec_school_statistics(year)
+    jamb_stats = AcademicAnalytics.get_jamb_school_statistics(year)
+    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year)
+
+    wb = Workbook()
+    head_font = Font(bold=True, color='FFFFFF')
+    head_fill = PatternFill(start_color='1a5f4a', end_color='1a5f4a', fill_type='solid')
+    title_font = Font(bold=True, size=13)
+
+    def style_header(ws, row=1):
+        for cell in ws[row]:
+            cell.font = head_font
+            cell.fill = head_fill
+            cell.alignment = Alignment(horizontal='center')
+
+    # --- Overview sheet ---
+    ws = wb.active
+    ws.title = 'Overview'
+    ws['A1'] = f'Exam Analytics — {year}'
+    ws['A1'].font = title_font
+    r = 3
+    ws.cell(row=r, column=1, value='JAMB'); ws.cell(row=r, column=1).font = Font(bold=True); r += 1
+    if jamb_stats:
+        for label, key in [('Candidates', 'total_students'), ('Mean', 'mean_score'),
+                           ('Median', 'median_score'), ('Highest', 'max_score'),
+                           ('Lowest', 'min_score'), ('Std Dev', 'std_deviation'),
+                           ('>=200', 'above_200'), ('>=250', 'above_250'), ('>=300', 'above_300')]:
+            ws.cell(row=r, column=1, value=label); ws.cell(row=r, column=2, value=jamb_stats[key]); r += 1
+    else:
+        ws.cell(row=r, column=1, value='No JAMB data'); r += 1
+    r += 1
+    ws.cell(row=r, column=1, value='WAEC'); ws.cell(row=r, column=1).font = Font(bold=True); r += 1
+    if waec_stats:
+        for label, key in [('Students', 'unique_students'), ('Subject Entries', 'total_results'),
+                           ('Pass Rate %', 'overall_pass_rate'), ('Distinction Rate %', 'overall_distinction_rate')]:
+            ws.cell(row=r, column=1, value=label); ws.cell(row=r, column=2, value=waec_stats[key]); r += 1
+    else:
+        ws.cell(row=r, column=1, value='No WAEC data'); r += 1
+    r += 1
+    ws.cell(row=r, column=1, value='WAEC↔JAMB Correlation'); ws.cell(row=r, column=1).font = Font(bold=True); r += 1
+    if correlation and not correlation.get('error'):
+        for label, key in [('Pearson r', 'correlation_coefficient'), ('Predictive Power', 'predictive_power'),
+                           ('Paired Students', 'sample_size')]:
+            ws.cell(row=r, column=1, value=label); ws.cell(row=r, column=2, value=correlation[key]); r += 1
+    else:
+        ws.cell(row=r, column=1, value='Insufficient paired data'); r += 1
+    ws.column_dimensions['A'].width = 22
+    ws.column_dimensions['B'].width = 16
+
+    # --- JAMB subjects ---
+    if jamb_stats and jamb_stats['subject_analysis']:
+        ws = wb.create_sheet('JAMB Subjects')
+        ws.append(['Subject', 'Count', 'Mean', 'Max', 'Min', '>=50', '>=70'])
+        style_header(ws)
+        for s in jamb_stats['subject_analysis']:
+            ws.append([s['subject'], s['count'], s['mean_score'], s['max_score'], s['min_score'], s['above_50'], s['above_70']])
+        ws.column_dimensions['A'].width = 24
+
+    # --- JAMB top 10 ---
+    if jamb_stats and jamb_stats['top_10']:
+        ws = wb.create_sheet('JAMB Top 10')
+        ws.append(['Rank', 'Student', 'Score'])
+        style_header(ws)
+        for i, t in enumerate(jamb_stats['top_10'], 1):
+            ws.append([i, t['student_name'], t['score']])
+        ws.column_dimensions['B'].width = 28
+
+    # --- WAEC subjects ---
+    if waec_stats and waec_stats['subject_analysis']:
+        ws = wb.create_sheet('WAEC Subjects')
+        ws.append(['Subject', 'Entries', 'A1 %', 'Pass %', 'Fail %'])
+        style_header(ws)
+        for s in sorted(waec_stats['subject_analysis'], key=lambda x: x['pass_rate'], reverse=True):
+            ws.append([s['subject'], s['total_entries'], s['a1_rate'], s['pass_rate'], s['fail_rate']])
+        ws.column_dimensions['A'].width = 24
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename=exam_analytics_{year}.xlsx'}
     )
 
 
