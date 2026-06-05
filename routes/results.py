@@ -661,6 +661,70 @@ def add_jamb():
     )
 
 
+@results_bp.route('/jamb/scan', methods=['GET', 'POST'])
+@login_required
+def scan_jamb():
+    """Upload a JAMB result image/PDF, OCR it, and review before saving."""
+    from utils.waec_ocr import (
+        tesseract_available, extract_text, parse_jamb_result, match_student,
+        pdf_available, extract_text_from_pdf, pdf_first_page_png,
+    )
+    import base64
+
+    students = get_sss3_students()
+
+    if request.method == 'POST':
+        file = request.files.get('result_image')
+        if not file or not file.filename:
+            flash('Please choose a file to upload.', 'error')
+            return redirect(url_for('results.scan_jamb'))
+
+        filename = (file.filename or '').lower()
+        is_pdf = (file.mimetype == 'application/pdf') or filename.endswith('.pdf')
+        file_bytes = file.read()
+
+        try:
+            if is_pdf:
+                if not pdf_available():
+                    flash('PDF support (PyMuPDF) is not installed on the server.', 'error')
+                    return redirect(url_for('results.scan_jamb'))
+                text = extract_text_from_pdf(file_bytes)
+                try:
+                    preview = 'data:image/png;base64,' + base64.b64encode(pdf_first_page_png(file_bytes)).decode()
+                except Exception:
+                    preview = ''
+            else:
+                if not tesseract_available():
+                    flash('OCR engine (Tesseract) is not installed on the server. '
+                          'Install "tesseract-ocr" to scan images.', 'error')
+                    return redirect(url_for('results.scan_jamb'))
+                text = extract_text(file_bytes)
+                mime = file.mimetype or 'image/png'
+                preview = f"data:{mime};base64,{base64.b64encode(file_bytes).decode()}"
+        except Exception as e:
+            flash(f'Could not read the file: {e}', 'error')
+            return redirect(url_for('results.scan_jamb'))
+
+        parsed = parse_jamb_result(text)
+        matched, score = match_student(parsed['name'], students)
+
+        return render_template('results/jamb_scan_review.html',
+            students=students,
+            subjects=WAEC_SUBJECTS,
+            parsed=parsed,
+            matched=matched,
+            match_score=score,
+            preview=preview,
+            current_year=parsed.get('year') or _date.today().year,
+            raw_text=text
+        )
+
+    return render_template('results/jamb_scan.html',
+        ocr_ready=tesseract_available(),
+        pdf_ready=pdf_available()
+    )
+
+
 @results_bp.route('/jamb/student/<int:student_id>')
 @login_required
 def view_jamb_student(student_id):

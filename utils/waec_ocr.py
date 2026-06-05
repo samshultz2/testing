@@ -49,6 +49,19 @@ def _grades_in(line):
 # Lower-cased subject lookups for fuzzy matching.
 _SUBJECTS_LOWER = {s.lower(): s for s in WAEC_SUBJECTS}
 
+# Common alternate spellings seen on slips (esp. JAMB) mapped to canonical names.
+_ALIASES = {
+    'use of english': 'English Language',
+    'english': 'English Language',
+    'maths': 'Mathematics',
+    'further maths': 'Further Mathematics',
+    'crs': 'Christian Religious Studies',
+    'irs': 'Islamic Religious Studies',
+    'lit in english': 'Literature in English',
+    'literature': 'Literature in English',
+    'govt': 'Government',
+}
+
 
 def tesseract_available():
     """True if the Tesseract engine and Python bindings are usable."""
@@ -143,6 +156,9 @@ def _match_subject(text):
         for low, original in _SUBJECTS_LOWER.items():
             if cleaned in low:
                 return original
+        for alias, original in _ALIASES.items():
+            if alias in cleaned:
+                return original
         close = difflib.get_close_matches(cleaned, list(_SUBJECTS_LOWER.keys()), n=1, cutoff=0.7)
         if close:
             return _SUBJECTS_LOWER[close[0]]
@@ -228,6 +244,92 @@ def parse_waec_result(text):
     return {
         'name': _extract_name(lines),
         'year': _extract_year(text),
+        'subjects': results,
+    }
+
+
+_SCORE_RE = re.compile(r'\b(\d{1,3})\b')
+_PURE_NUMBER_RE = re.compile(r'^\d{1,3}$')
+
+
+def _scores_in(line):
+    """Subject-score candidates (0-100) on a line as (position, value)."""
+    return [(m.start(), int(m.group(1))) for m in _SCORE_RE.finditer(line)
+            if 0 <= int(m.group(1)) <= 100]
+
+
+def _extract_total(text, lines, subjects):
+    """Find the JAMB total score (0-400)."""
+    # 1) a line explicitly labelled total/aggregate
+    for line in lines:
+        low = line.lower()
+        if 'total' in low or 'aggregate' in low:
+            cand = [int(n) for n in re.findall(r'\d{1,3}', line) if 0 <= int(n) <= 400]
+            if cand:
+                return max(cand)
+    # 2) sum of the extracted subject scores
+    if subjects:
+        s = sum(r['score'] for r in subjects)
+        if 0 < s <= 400:
+            return s
+    # 3) any standalone 3-digit number in range
+    for line in lines:
+        for n in re.findall(r'\b(\d{3})\b', line):
+            if 101 <= int(n) <= 400:
+                return int(n)
+    return None
+
+
+def parse_jamb_result(text):
+    """
+    Parse OCR text from a JAMB result into:
+    {'name', 'year', 'total_score', 'subjects': [{'subject','score','raw'}]}.
+
+    Handles same-line "Subject 75" and split "Subject\\n75" / column layouts.
+    """
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+    classified = []
+    for line in lines:
+        scores = _scores_in(line)
+        score = scores[-1][1] if scores else None
+        before = line[:scores[-1][0]] if scores else line
+        subject = _match_subject(before) or _match_subject(line)
+        classified.append({
+            'subject': subject,
+            'score': score,
+            'pure_number': bool(_PURE_NUMBER_RE.match(line)),
+            'line': line,
+        })
+
+    results = []
+    seen = set()
+    pending_subjects = []
+    pending_scores = []
+
+    def add(subject, score, raw):
+        if subject and score is not None and subject not in seen:
+            seen.add(subject)
+            results.append({'subject': subject, 'score': score, 'raw': raw})
+
+    for c in classified:
+        if c['subject'] and c['score'] is not None:
+            add(c['subject'], c['score'], c['line'])
+        elif c['subject']:
+            pending_subjects.append(c)
+        elif c['score'] is not None and c['pure_number']:
+            # only a line that is *just* a number counts as a lone score, so
+            # dates / reg numbers / centre codes don't get mis-paired
+            pending_scores.append(c)
+
+    for subj_c, score_c in zip(pending_subjects, pending_scores):
+        add(subj_c['subject'], score_c['score'], f"{subj_c['line']} | {score_c['line']}")
+
+    results = results[:4]  # JAMB is four subjects
+    return {
+        'name': _extract_name(lines),
+        'year': _extract_year(text),
+        'total_score': _extract_total(text, lines, results),
         'subjects': results,
     }
 

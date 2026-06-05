@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Scan JAMB Result - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.jamb_list') }}">JAMB</a> / <span>Scan</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.scan-card{max-width:640px}
+.dropzone{border:2px dashed var(--border-color);border-radius:var(--radius-lg);padding:2rem 1rem;text-align:center;cursor:pointer;transition:border-color var(--transition),background var(--transition)}
+.dropzone:hover,.dropzone.drag{border-color:var(--primary);background:var(--primary-light)}
+.dropzone i{font-size:2.5rem;color:var(--primary);margin-bottom:.5rem}
+.dropzone .hint{font-size:.8rem;color:var(--text-muted);margin-top:.35rem}
+#preview{max-width:100%;margin-top:1rem;border-radius:var(--radius-md);display:none}
+.steps{display:flex;gap:.5rem;font-size:.8rem;color:var(--text-muted);margin-bottom:1rem;flex-wrap:wrap}
+.steps span{background:var(--gray-50);border:1px solid var(--border-color);border-radius:var(--radius-full);padding:.2rem .7rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Scan JAMB Result</h1>
+        <p class="text-muted text-sm">Upload a photo/scan/PDF of a JAMB result — we read the name, subjects, scores and total for you to review.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.add_jamb') }}" class="btn btn-secondary btn-sm"><i class="fas fa-keyboard"></i> Enter manually</a>
+    </div>
+</div>
+
+<div class="steps">
+    <span>1 · Upload</span><span>2 · Review &amp; correct</span><span>3 · Confirm student</span><span>4 · Save</span>
+</div>
+
+{% if not ocr_ready and not pdf_ready %}
+<div class="card"><div class="card-body">
+    <div style="background:var(--danger-light);color:var(--danger);display:flex;gap:.6rem;padding:.85rem 1rem;border-radius:var(--radius-md);">
+        <i class="fas fa-triangle-exclamation"></i>
+        <span>Neither the OCR engine (<strong>Tesseract</strong>) nor PDF support is available. Install <code>tesseract-ocr</code> and/or PyMuPDF, or <a href="{{ url_for('results.add_jamb') }}">enter results manually</a>.</span>
+    </div>
+</div></div>
+{% else %}
+<div class="card scan-card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" id="scanForm">
+            <label class="dropzone" id="dropzone" for="resultImage">
+                <i class="fas fa-cloud-arrow-up"></i>
+                <div><strong>Tap to choose</strong> from gallery/files, or drag a result here</div>
+                <div class="hint">Image (JPG/PNG){% if pdf_ready %} or PDF{% endif %} · a clear, straight scan reads best</div>
+                <img id="preview" alt="preview">
+                <div id="fileName" class="hint" style="display:none;font-weight:600;color:var(--primary)"></div>
+            </label>
+            <input type="file" name="result_image" id="resultImage"
+                   accept="image/*{% if pdf_ready %},application/pdf{% endif %}" hidden required>
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary btn-lg" id="scanBtn"><i class="fas fa-magnifying-glass"></i> Read Result</button>
+                <a href="{{ url_for('results.jamb_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
+            </div>
+            <p class="text-muted text-sm mt-2"><i class="fas fa-circle-info"></i> To pick from your gallery, tap the box and choose your Files/Photos app{% if pdf_ready %}; PDFs are supported too{% endif %}.</p>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+    const input = document.getElementById('resultImage');
+    const dz = document.getElementById('dropzone');
+    const preview = document.getElementById('preview');
+    const fileName = document.getElementById('fileName');
+    const form = document.getElementById('scanForm');
+    if (!input) return;
+
+    function show(file) {
+        if (!file) return;
+        if (file.type === 'application/pdf') {
+            preview.style.display = 'none';
+            fileName.style.display = 'block';
+            fileName.innerHTML = '<i class="fas fa-file-pdf"></i> ' + file.name;
+        } else {
+            fileName.style.display = 'none';
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
+        }
+    }
+    input.addEventListener('change', () => show(input.files[0]));
+    ['dragover', 'dragenter'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('drag'); }));
+    dz.addEventListener('drop', ev => { if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; show(input.files[0]); } });
+    form.addEventListener('submit', () => {
+        const btn = document.getElementById('scanBtn');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reading…';
+    });
+})();
+</script>
+{% endblock %}
