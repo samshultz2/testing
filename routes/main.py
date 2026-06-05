@@ -13,6 +13,16 @@ from utils.access_control import (
 )
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
 from sqlalchemy import extract, func
+from urllib.parse import urlparse
+
+
+def _safe_next(target, fallback):
+    """Return target only if it is a same-site relative path, else fallback."""
+    if target:
+        parsed = urlparse(target)
+        if not parsed.scheme and not parsed.netloc and target.startswith('/'):
+            return target
+    return fallback
 
 main_bp = Blueprint('main', __name__)
 
@@ -231,6 +241,7 @@ def students_list():
     search = request.args.get('search', '')
     gender = request.args.get('gender', '')
     religion = request.args.get('religion', '')
+    stream = request.args.get('stream', '')
     class_id = request.args.get('class_id', '', type=int) or None
     arm_id = request.args.get('arm_id', '', type=int) or None
     sort_by = request.args.get('sort', 'surname')
@@ -277,6 +288,10 @@ def students_list():
     # Apply religion filter
     if religion:
         query = query.filter(Student.religion == religion)
+
+    # Apply stream filter
+    if stream:
+        query = query.filter(Student.stream == stream)
 
     # Apply class/arm filter - need to join with enrollments (only if admin since teacher already filtered)
     if (class_id or arm_id) and is_admin():
@@ -332,6 +347,7 @@ def students_list():
             search=search,
             gender=gender,
             religion=religion,
+            stream=stream,
             class_id=class_id,
             arm_id=arm_id
         )
@@ -341,13 +357,15 @@ def students_list():
         search=search,
         gender=gender,
         religion=religion,
+        stream=stream,
         class_id=class_id,
         arm_id=arm_id,
         sort_by=sort_by,
         order=order,
         religions=RELIGIONS,
         classes=classes,
-        arms=arms
+        arms=arms,
+        streams=STREAMS
     )
 
 
@@ -469,14 +487,20 @@ def edit_student(student_id):
 
             db.session.commit()
             flash(FlashMessages.STUDENT_UPDATED, 'success')
-            return redirect(url_for('main.view_student', student_id=student.id))
+            return redirect(_safe_next(
+                request.form.get('return_to'),
+                url_for('main.view_student', student_id=student.id)
+            ))
 
         except Exception as e:
             db.session.rollback()
             flash(f'Error updating student: {str(e)}', 'error')
 
+    # Remember where the user came from so we can return there after saving.
+    return_to = _safe_next(
+        request.form.get('return_to') or request.args.get('return_to') or request.referrer, '')
     return render_template('students/edit.html', student=student, religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS,
-                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS)
+                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS, return_to=return_to)
 
 
 @main_bp.route('/students/<int:student_id>/delete', methods=['POST'])
@@ -494,6 +518,33 @@ def delete_student(student_id):
         flash(f'Error deleting student: {str(e)}', 'error')
 
     return redirect(url_for('main.students_list'))
+
+
+@main_bp.route('/students/bulk-stream', methods=['POST'])
+@login_required
+def bulk_set_stream():
+    """Set the stream/track for several students at once."""
+    stream = request.form.get('stream') or None
+    student_ids = request.form.getlist('student_ids')
+
+    if stream is not None and stream not in STREAMS:
+        return jsonify({'error': 'Invalid stream'}), 400
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+
+    updated = Student.query.filter(Student.id.in_(ids)).update(
+        {Student.stream: stream}, synchronize_session=False
+    )
+    db.session.commit()
+
+    label = stream if stream else 'cleared'
+    flash(f'Stream set to {label} for {updated} student(s).', 'success')
+    return jsonify({'updated': updated, 'stream': stream})
 
 
 # ============================================================================

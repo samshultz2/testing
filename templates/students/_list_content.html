@@ -68,14 +68,14 @@
 {% if students.pages > 1 %}
 <div class="pagination">
     {% if students.has_prev %}
-    <a href="{{ url_for('main.students_list', page=students.prev_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion) }}">
+    <a href="{{ url_for('main.students_list', page=students.prev_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion, stream=stream) }}">
         <i class="fas fa-chevron-left"></i>
     </a>
     {% endif %}
     
     {% for page_num in students.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=1) %}
         {% if page_num %}
-        <a href="{{ url_for('main.students_list', page=page_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion) }}" 
+        <a href="{{ url_for('main.students_list', page=page_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion, stream=stream) }}" 
            class="{% if page_num == students.page %}active{% endif %}">{{ page_num }}</a>
         {% else %}
         <span>...</span>
@@ -83,7 +83,7 @@
     {% endfor %}
     
     {% if students.has_next %}
-    <a href="{{ url_for('main.students_list', page=students.next_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion) }}">
+    <a href="{{ url_for('main.students_list', page=students.next_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion, stream=stream) }}">
         <i class="fas fa-chevron-right"></i>
     </a>
     {% endif %}
