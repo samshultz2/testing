@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline — PosyHub</title>
+    <style>
+        body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+               font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+               background:linear-gradient(135deg,#0d6a4e,#064e36); color:#fff; padding:1.5rem; text-align:center; }
+        .box { max-width:360px; }
+        .icon { font-size:3rem; margin-bottom:.5rem; }
+        h1 { font-size:1.3rem; margin:.25rem 0; }
+        p { opacity:.9; line-height:1.5; font-size:.95rem; }
+        button { margin-top:1rem; padding:.6rem 1.4rem; border:none; border-radius:8px; font-weight:600;
+                 background:#fff; color:#0d6a4e; cursor:pointer; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <div class="icon">📡</div>
+        <h1>You're offline</h1>
+        <p>This page hasn't been opened on this device yet, so there's no cached copy to show. Pages you've already visited remain available offline. Reconnect to load fresh data.</p>
+        <button onclick="location.reload()">Try again</button>
+    </div>
+</body>
+</html>

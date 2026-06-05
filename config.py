@@ -7,6 +7,14 @@ from datetime import timedelta
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
+# Load settings from a .env file in the project root (if python-dotenv is
+# installed). Real OS environment variables still take precedence.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(BASE_DIR, '.env'))
+except Exception:
+    pass
+
 
 def _load_secret_key():
     """

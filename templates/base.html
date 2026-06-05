@@ -403,10 +403,17 @@
     })();
     </script>
     <script>
-    // Register the PWA service worker (installable + cached static assets).
+    // Register the PWA service worker (installable + offline page caching).
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
             navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+        // Clear cached pages on logout so they aren't left on the device.
+        document.addEventListener('click', function (e) {
+            var link = e.target.closest && e.target.closest('a.header-logout-btn');
+            if (link && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage('clear-runtime');
+            }
         });
     }
     </script>

@@ -35,3 +35,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Local environment overrides
+.env

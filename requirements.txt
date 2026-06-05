@@ -9,6 +9,7 @@ python-dateutil==2.8.2
 Pillow==10.4.0
 pytesseract==0.3.13
 PyMuPDF==1.24.10
+python-dotenv==1.0.1
 # pytesseract needs the Tesseract OCR engine installed on the system
 # (e.g. `apt-get install tesseract-ocr` or `brew install tesseract`).
 # PyMuPDF (fitz) reads PDFs and renders scanned pages for OCR (pure pip, no
