@@ -206,6 +206,84 @@ def dashboard():
     total_subjects = Subject.query.filter_by(is_active=True).count()
     total_school_classes = SchoolClass.query.filter_by(is_active=True).count()
 
+    # --- Richer dashboard widgets ---
+    from models import WAECResult, JAMBResult, AuditLog
+    from models.mock_jamb import MockJAMBResult, MockJAMBExam
+    from collections import defaultdict as _dd
+
+    # Stream distribution (active students)
+    stream_rows = db.session.query(Student.stream, func.count(Student.id)).filter(
+        Student.is_active == True).group_by(Student.stream).all()
+    stream_dist = {(s or 'Unset'): c for s, c in stream_rows}
+
+    graduates_count = Student.query.filter_by(is_active=True, is_graduated=True).count()
+
+    # JAMB snapshot (latest year)
+    jamb_snapshot = None
+    jy = db.session.query(JAMBResult.exam_year).order_by(JAMBResult.exam_year.desc()).first()
+    if jy:
+        scores = [r.total_score for r in JAMBResult.query.filter_by(exam_year=jy[0]).all()]
+        if scores:
+            top = JAMBResult.query.filter_by(exam_year=jy[0]).order_by(
+                JAMBResult.total_score.desc()).limit(5).all()
+            jamb_snapshot = {
+                'year': jy[0], 'count': len(scores),
+                'mean': round(sum(scores) / len(scores), 1),
+                'max': max(scores),
+                'above_200': sum(1 for s in scores if s >= 200),
+                'above_200_pct': round(sum(1 for s in scores if s >= 200) / len(scores) * 100),
+                'distribution': {
+                    '0-149': sum(1 for s in scores if s < 150),
+                    '150-199': sum(1 for s in scores if 150 <= s < 200),
+                    '200-249': sum(1 for s in scores if 200 <= s < 250),
+                    '250-299': sum(1 for s in scores if 250 <= s < 300),
+                    '300+': sum(1 for s in scores if s >= 300),
+                },
+                'top': [{'name': r.student.full_name, 'score': r.total_score} for r in top],
+            }
+
+    # WAEC snapshot (latest year)
+    waec_snapshot = None
+    wy = db.session.query(WAECResult.exam_year).order_by(WAECResult.exam_year.desc()).first()
+    if wy:
+        rows = WAECResult.query.filter_by(exam_year=wy[0]).all()
+        if rows:
+            credit = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
+            passes = sum(1 for r in rows if r.grade in credit)
+            waec_snapshot = {
+                'year': wy[0], 'entries': len(rows),
+                'students': len({r.student_id for r in rows}),
+                'pass_rate': round(passes / len(rows) * 100, 1),
+            }
+
+    # Mock JAMB latest exam average
+    mock_snapshot = None
+    last_mock = MockJAMBExam.query.order_by(MockJAMBExam.exam_date.desc()).first()
+    if last_mock:
+        ms = [r.total_score for r in last_mock.results.all()]
+        if ms:
+            mock_snapshot = {'name': last_mock.display_name, 'count': len(ms),
+                             'mean': round(sum(ms) / len(ms), 1), 'max': max(ms)}
+
+    # Attendance trend — average % for the last 8 weeks of the active term
+    attendance_trend = []
+    if active_term:
+        weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.start_date).all()[-8:]
+        for w in weeks:
+            recs = Attendance.query.filter_by(week_id=w.id).all()
+            if recs:
+                marks = sum((1 if a.morning_present else 0) + (1 if a.afternoon_present else 0) for a in recs)
+                pct = round(marks / (len(recs) * 2) * 100, 1)
+            else:
+                pct = 0
+            attendance_trend.append({'label': getattr(w, 'week_number', None) or w.start_date.strftime('%d %b'),
+                                     'pct': pct})
+
+    # Recent admin activity (admins only)
+    recent_activity = []
+    if is_admin():
+        recent_activity = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(6).all()
+
     return render_template('dashboard.html',
         total_students=total_students,
         male_students=male_students,
@@ -222,7 +300,14 @@ def dashboard():
         age_distribution=age_distribution,
         religion_stats=religion_stats,
         total_subjects=total_subjects,
-        total_school_classes=total_school_classes
+        total_school_classes=total_school_classes,
+        stream_dist=stream_dist,
+        graduates_count=graduates_count,
+        jamb_snapshot=jamb_snapshot,
+        waec_snapshot=waec_snapshot,
+        mock_snapshot=mock_snapshot,
+        attendance_trend=attendance_trend,
+        recent_activity=recent_activity
     )
 
 
@@ -1248,190 +1333,137 @@ def export_students_pdf(student_data, fields):
 
 
 def export_students_image(student_data, fields):
-    """Export students to PNG image format with selected fields - wraps text and adjusts row heights"""
+    """Render the students list to a modern, high-resolution PNG."""
     from PIL import Image, ImageDraw, ImageFont
     from io import BytesIO
     from flask import Response
-    
-    if not student_data:
-        img = Image.new('RGB', (400, 100), 'white')
-        draw = ImageDraw.Draw(img)
-        draw.text((50, 40), "No students to export", fill='black')
-        output = BytesIO()
-        img.save(output, format='PNG')
-        output.seek(0)
-        return Response(output.getvalue(), mimetype='image/png',
-            headers={'Content-Disposition': 'attachment; filename=students_export.png'})
-    
-    # Load fonts
+    from datetime import datetime
+
+    S = 3  # supersampling for a crisp, high-DPI image
+
+    def fnt(size, bold=False):
+        path = "/usr/share/fonts/truetype/dejavu/DejaVuSans%s.ttf" % ("-Bold" if bold else "")
+        try:
+            return ImageFont.truetype(path, size * S)
+        except Exception:
+            return ImageFont.load_default()
+
+    body = fnt(12)
+    body_b = fnt(12, True)
+    head_f = fnt(12, True)
+    title_f = fnt(22, True)
+    sub_f = fnt(11)
+    foot_f = fnt(10)
+
+    # Brand colours
+    GREEN = (13, 106, 78)
+    GREEN_DK = (6, 78, 54)
+    HEAD = (10, 86, 64)
+    TEXT = (31, 41, 55)
+    MUTED = (107, 114, 128)
+    ZEBRA = (249, 250, 251)
+    LINE = (229, 231, 235)
+    WHITE = (255, 255, 255)
+
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 11)
-        font_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 11)
-        title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
-    except:
-        font = ImageFont.load_default()
-        font_bold = font
-        title_font = font
-    
-    # Create a temporary image to measure text
-    temp_img = Image.new('RGB', (1, 1), 'white')
-    temp_draw = ImageDraw.Draw(temp_img)
-    
-    # Get line height
-    line_bbox = temp_draw.textbbox((0, 0), "Ay", font=font)
-    line_height = line_bbox[3] - line_bbox[1] + 4  # Add some spacing
-    
-    # Settings
-    padding = 20
-    cell_padding_x = 8
-    cell_padding_y = 6
-    min_row_height = 28
-    header_height = 32
-    
-    # Headers with S/N
+        from models import SchoolSettings
+        school_name = SchoolSettings.get('school_name', 'PosyHub') or 'PosyHub'
+    except Exception:
+        school_name = 'PosyHub'
+
+    tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+
+    if not student_data:
+        img = Image.new('RGB', (560 * S, 160 * S), WHITE)
+        d = ImageDraw.Draw(img)
+        d.text((40 * S, 60 * S), "No students to export", fill=TEXT, font=title_f)
+        out = BytesIO(); img.save(out, format='PNG'); out.seek(0)
+        return Response(out.getvalue(), mimetype='image/png',
+                        headers={'Content-Disposition': 'attachment; filename=students_export.png'})
+
+    pad = 26 * S
+    cpx = 12 * S
+    cpy = 9 * S
+    header_h = 42 * S
+    min_row_h = 38 * S
+    line_bbox = tmp.textbbox((0, 0), "Ay", font=body)
+    line_h = (line_bbox[3] - line_bbox[1]) + 6 * S
+
     all_headers = ['S/N'] + fields
-    
-    # Define column widths based on field type
-    col_widths = []
-    for i, header in enumerate(all_headers):
-        if header == 'S/N':
-            col_widths.append(45)
-        elif header in ['Student ID']:
-            col_widths.append(100)
-        elif header in ['Surname', 'First Name', 'Middle Name']:
-            col_widths.append(120)
-        elif header in ['Gender', 'Age']:
-            col_widths.append(70)
-        elif header in ['Class', 'Religion']:
-            col_widths.append(100)
-        elif header in ['Date of Birth']:
-            col_widths.append(100)
-        elif header in ['Home Address', 'Hobbies']:
-            col_widths.append(180)
-        elif header in ['Parent Phone']:
-            col_widths.append(110)
-        else:
-            col_widths.append(120)
-    
-    # Calculate wrapped text and row heights for each data row
-    wrapped_data = []  # List of rows, each row is list of (wrapped_lines, max_lines_in_row)
-    row_heights = []
-    
+    width_map = {'S/N': 56, 'Student ID': 130, 'Surname': 150, 'First Name': 150,
+                 'Middle Name': 150, 'Gender': 86, 'Age': 70, 'Class': 130,
+                 'Religion': 120, 'Date of Birth': 130, 'Stream': 120,
+                 'Home Address': 230, 'Hobbies': 210, 'Parent Phone': 140}
+    col_widths = [width_map.get(h, 150) * S for h in all_headers]
+
+    # Wrap + measure rows
+    wrapped_data, row_heights = [], []
     for idx, student in enumerate(student_data):
-        row_wrapped = []
-        max_lines = 1
-        
+        row, max_lines = [], 1
         for i, header in enumerate(all_headers):
-            if i == 0:  # S/N column
-                value = str(idx + 1)
-            else:
-                value = str(student.get(fields[i - 1], '') or '')
-            
-            # Wrap text to fit column width
-            available_width = col_widths[i] - cell_padding_x * 2
-            wrapped_lines = wrap_text(temp_draw, value, available_width, font)
-            row_wrapped.append(wrapped_lines)
-            max_lines = max(max_lines, len(wrapped_lines))
-        
-        wrapped_data.append(row_wrapped)
-        # Calculate row height based on number of lines
-        row_height = max(min_row_height, max_lines * line_height + cell_padding_y * 2)
-        row_heights.append(row_height)
-    
-    # Calculate total dimensions
-    total_width = sum(col_widths) + padding * 2
-    title_height = 50
-    footer_height = 40
-    total_data_height = sum(row_heights)
-    total_height = title_height + header_height + total_data_height + footer_height + padding
-    
-    # Ensure minimum width
-    total_width = max(total_width, 500)
-    
-    # Create final image
-    img = Image.new('RGB', (total_width, int(total_height)), 'white')
-    draw = ImageDraw.Draw(img)
-    
-    # Draw title
-    title = "STUDENTS LIST"
-    title_bbox = draw.textbbox((0, 0), title, font=title_font)
-    title_width = title_bbox[2] - title_bbox[0]
-    draw.text(((total_width - title_width) // 2, padding), title, fill='#333333', font=title_font)
-    
-    # Starting Y position for table
-    table_top = title_height
-    y = table_top
-    
-    # Draw header row background
-    draw.rectangle([padding, y, total_width - padding, y + header_height], fill='#4472C4')
-    
-    # Draw header text (centered)
-    x = padding
+            value = str(idx + 1) if i == 0 else str(student.get(fields[i - 1], '') or '')
+            lines = wrap_text(tmp, value, col_widths[i] - cpx * 2, body)
+            row.append(lines)
+            max_lines = max(max_lines, len(lines))
+        wrapped_data.append(row)
+        row_heights.append(max(min_row_h, max_lines * line_h + cpy * 2))
+
+    table_w = sum(col_widths)
+    band_h = 88 * S
+    total_w = table_w + pad * 2
+    total_h = band_h + header_h + sum(row_heights) + 56 * S
+
+    img = Image.new('RGB', (int(total_w), int(total_h)), WHITE)
+    d = ImageDraw.Draw(img)
+
+    # Header band with a vertical gradient
+    for yy in range(band_h):
+        t = yy / band_h
+        col = tuple(int(GREEN[k] + (GREEN_DK[k] - GREEN[k]) * t) for k in range(3))
+        d.line([(0, yy), (total_w, yy)], fill=col)
+    d.text((pad, 20 * S), school_name, fill=WHITE, font=title_f)
+    d.text((pad, 56 * S),
+           "Students List  ·  %d student%s  ·  %s" % (
+               len(student_data), '' if len(student_data) == 1 else 's',
+               datetime.now().strftime('%d %b %Y')),
+           fill=(220, 240, 232), font=sub_f)
+
+    # Column header row
+    y = band_h
+    d.rectangle([0, y, total_w, y + header_h], fill=HEAD)
+    x = pad
     for i, header in enumerate(all_headers):
-        text_bbox = draw.textbbox((0, 0), header, font=font_bold)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        text_x = x + (col_widths[i] - text_width) // 2
-        text_y = y + (header_height - text_height) // 2
-        draw.text((text_x, text_y), header, fill='white', font=font_bold)
+        bb = d.textbbox((0, 0), header, font=head_f)
+        d.text((x + cpx, y + (header_h - (bb[3] - bb[1])) // 2 - bb[1]), header, fill=WHITE, font=head_f)
         x += col_widths[i]
-    
-    y += header_height
-    
-    # Draw data rows
-    for idx, (row_wrapped, row_height) in enumerate(zip(wrapped_data, row_heights)):
-        # Alternate row background
+    y += header_h
+
+    # Data rows (zebra + subtle separators)
+    for idx, (row, rh) in enumerate(zip(wrapped_data, row_heights)):
         if idx % 2 == 1:
-            draw.rectangle([padding, y, total_width - padding, y + row_height], fill='#F5F5F5')
-        
-        x = padding
-        for i, wrapped_lines in enumerate(row_wrapped):
-            # Draw each line of wrapped text
-            text_y = y + cell_padding_y
-            for line in wrapped_lines:
-                draw.text((x + cell_padding_x, text_y), line, fill='#333333', font=font)
-                text_y += line_height
+            d.rectangle([pad, y, pad + table_w, y + rh], fill=ZEBRA)
+        x = pad
+        for i, lines in enumerate(row):
+            ty = y + cpy
+            f = body_b if i == 0 else body
+            fill = GREEN if i == 0 else TEXT
+            for ln in lines:
+                d.text((x + cpx, ty), ln, fill=fill, font=f)
+                ty += line_h
             x += col_widths[i]
-        
-        y += row_height
-    
-    table_bottom = y
-    
-    # Draw grid lines
-    # Vertical lines
-    x = padding
-    for width in col_widths:
-        draw.line([(x, table_top), (x, table_bottom)], fill='#CCCCCC', width=1)
-        x += width
-    draw.line([(x, table_top), (x, table_bottom)], fill='#CCCCCC', width=1)
-    
-    # Horizontal lines
-    y = table_top
-    draw.line([(padding, y), (total_width - padding, y)], fill='#4472C4', width=2)
-    y += header_height
-    draw.line([(padding, y), (total_width - padding, y)], fill='#4472C4', width=2)
-    
-    for row_height in row_heights:
-        y += row_height
-        draw.line([(padding, y), (total_width - padding, y)], fill='#CCCCCC', width=1)
-    
-    # Draw outer border
-    draw.rectangle([padding, table_top, total_width - padding, table_bottom], outline='#4472C4', width=2)
-    
-    # Draw footer
-    footer_text = f'Total: {len(student_data)} student{"s" if len(student_data) != 1 else ""}'
-    draw.text((padding, table_bottom + 12), footer_text, fill='#666666', font=font_bold)
-    
-    # Save to BytesIO
-    output = BytesIO()
-    img.save(output, format='PNG', quality=95)
-    output.seek(0)
-    
-    return Response(
-        output.getvalue(),
-        mimetype='image/png',
-        headers={'Content-Disposition': 'attachment; filename=students_export.png'}
-    )
+        d.line([(pad, y + rh), (pad + table_w, y + rh)], fill=LINE, width=max(1, S // 2))
+        y += rh
+
+    # Footer
+    d.text((pad, y + 16 * S),
+           "Generated by %s · %s" % (school_name, datetime.now().strftime('%d %b %Y %H:%M')),
+           fill=MUTED, font=foot_f)
+
+    out = BytesIO()
+    img.save(out, format='PNG')
+    out.seek(0)
+    return Response(out.getvalue(), mimetype='image/png',
+                    headers={'Content-Disposition': 'attachment; filename=students_export.png'})
 
 
 def wrap_text(draw, text, max_width, font):
