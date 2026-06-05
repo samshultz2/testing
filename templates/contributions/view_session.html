@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}{{ session.name }} - Contributions{% endblock %}
+{% block title %}{{ contrib_session.name }} - Contributions{% endblock %}
 {% block breadcrumb %}
 <a href="{{ url_for('main.dashboard') }}">Home</a> / 
 <a href="{{ url_for('contributions.dashboard') }}">Contributions</a> / 
 <a href="{{ url_for('contributions.session_history') }}">History</a> /
-<span>{{ session.name }}</span>
+<span>{{ contrib_session.name }}</span>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1><i class="fas fa-calendar-alt"></i> {{ session.name }}</h1>
+    <h1><i class="fas fa-calendar-alt"></i> {{ contrib_session.name }}</h1>
     <div class="header-actions">
-        {% if session.is_active %}
+        {% if contrib_session.is_active %}
         <span class="badge badge-success" style="font-size: 1rem; padding: 0.5rem 1rem;"><i class="fas fa-check"></i> Active Session</span>
         {% else %}
         <span class="badge badge-secondary" style="font-size: 1rem; padding: 0.5rem 1rem;">Closed Session</span>

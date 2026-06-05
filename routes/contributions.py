@@ -964,7 +964,7 @@ def view_session(session_id):
     total_expenses = sum(e.amount for e in expenses)
     
     return render_template('contributions/view_session.html',
-        session=session,
+        contrib_session=session,
         payments=payments,
         expenses=expenses,
         student_totals=sorted(student_totals.values(), key=lambda x: x['total'], reverse=True),

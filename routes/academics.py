@@ -127,7 +127,7 @@ def edit_session(session_id):
             db.session.rollback()
             flash(f'Error updating session: {str(e)}', 'error')
     
-    return render_template('academics/edit_session.html', session=session)
+    return render_template('academics/edit_session.html', academic_session=session)
 
 
 # ============================================================================
