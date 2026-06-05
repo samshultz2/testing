@@ -278,6 +278,57 @@ def add_waec():
     )
 
 
+@results_bp.route('/waec/scan', methods=['GET', 'POST'])
+@login_required
+def scan_waec():
+    """Upload a WAEC result image, OCR it, and review before saving."""
+    from utils.waec_ocr import tesseract_available, extract_text, parse_waec_result, match_student
+    import base64
+
+    students = get_sss3_students()
+
+    if request.method == 'POST':
+        if not tesseract_available():
+            flash('OCR engine (Tesseract) is not installed on the server. '
+                  'Install "tesseract-ocr" to use image scanning.', 'error')
+            return redirect(url_for('results.scan_waec'))
+
+        file = request.files.get('result_image')
+        if not file or not file.filename:
+            flash('Please choose an image to upload.', 'error')
+            return redirect(url_for('results.scan_waec'))
+
+        image_bytes = file.read()
+        try:
+            text = extract_text(image_bytes)
+        except Exception as e:
+            flash(f'Could not read the image: {e}', 'error')
+            return redirect(url_for('results.scan_waec'))
+
+        parsed = parse_waec_result(text)
+        matched, score = match_student(parsed['name'], students)
+
+        # Embed the uploaded image so the user can compare while reviewing.
+        mime = file.mimetype or 'image/png'
+        preview = f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
+
+        return render_template('results/waec_scan_review.html',
+            students=students,
+            subjects=WAEC_SUBJECTS,
+            grades=WAEC_GRADES,
+            parsed=parsed,
+            matched=matched,
+            match_score=score,
+            preview=preview,
+            current_year=parsed.get('year') or _date.today().year,
+            raw_text=text
+        )
+
+    return render_template('results/waec_scan.html',
+        ocr_ready=tesseract_available()
+    )
+
+
 @results_bp.route('/waec/student/<int:student_id>')
 @login_required
 def view_waec_student(student_id):

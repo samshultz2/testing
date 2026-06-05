@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Review Scanned Result - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <a href="{{ url_for('results.scan_waec') }}">Scan</a> / <span>Review</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.review-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:992px){.review-grid{grid-template-columns:320px 1fr}}
+.scan-preview img{width:100%;border-radius:var(--radius-md);border:1px solid var(--border-color)}
+.match-note{display:flex;gap:.5rem;align-items:flex-start;border-radius:var(--radius-md);padding:.7rem .85rem;font-size:.85rem;margin-bottom:1rem;line-height:1.4}
+.match-ok{background:var(--success-light);color:#0f5132}
+.match-warn{background:var(--warning-light);color:#664d03}
+.subject-grade-row{display:grid;grid-template-columns:1fr 110px;gap:.6rem;margin-bottom:.6rem}
+details.raw{margin-top:1rem;font-size:.8rem;color:var(--text-muted)}
+details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;border-radius:var(--radius-md);max-height:240px;overflow:auto}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Review Scanned Result</h1>
+        <p class="text-muted text-sm">Check what we read against the image, fix anything, confirm the student, then save.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.scan_waec') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Rescan</a>
+    </div>
+</div>
+
+<div class="review-grid">
+    <div class="scan-preview">
+        <div class="card"><div class="card-body">
+            <img src="{{ preview }}" alt="Uploaded result">
+            <details class="raw"><summary>Raw OCR text</summary><pre>{{ raw_text }}</pre></details>
+        </div></div>
+    </div>
+
+    <div class="card"><div class="card-body">
+        {% if matched %}
+        <div class="match-note match-ok">
+            <i class="fas fa-circle-check"></i>
+            <span>Read name: <strong>{{ parsed.name or '—' }}</strong>. Best match: <strong>{{ matched.full_name }}</strong> ({{ (match_score*100)|round|int }}% confidence) — confirm or change below.</span>
+        </div>
+        {% else %}
+        <div class="match-note match-warn">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>Read name: <strong>{{ parsed.name or '—' }}</strong>. No confident student match{% if match_score %} (best {{ (match_score*100)|round|int }}%){% endif %} — please pick the student manually.</span>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('results.add_waec') }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Student <span class="required">*</span></label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">Select Student</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {% if matched and s.id == matched.id %}selected{% endif %}>{{ s.full_name }} ({{ s.student_id }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Year <span class="required">*</span></label>
+                    <input type="number" name="exam_year" class="form-control" min="2000" max="2100" value="{{ current_year }}" required>
+                </div>
+            </div>
+
+            <hr class="my-3">
+            <h3 class="mb-2">Subjects &amp; Grades <span class="text-muted" style="font-size:.8rem;font-weight:400;">({{ parsed.subjects|length }} read)</span></h3>
+
+            {% set rows = parsed.subjects %}
+            {% for i in range(9) %}
+            {% set row = rows[i] if i < rows|length else None %}
+            <div class="subject-grade-row">
+                <select name="subject[]" class="form-control">
+                    <option value="">Select Subject</option>
+                    {% for subj in subjects %}
+                    <option value="{{ subj }}" {% if row and row.subject == subj %}selected{% endif %}>{{ subj }}</option>
+                    {% endfor %}
+                </select>
+                <select name="grade[]" class="form-control">
+                    <option value="">Grade</option>
+                    {% for g in grades %}
+                    <option value="{{ g }}" {% if row and row.grade == g %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+
+            <div class="page-header-actions mt-3">
+                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Result</button>
+                <a href="{{ url_for('results.scan_waec') }}" class="btn btn-secondary btn-lg">Cancel</a>
+            </div>
+        </form>
+    </div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Scan WAEC Result - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Scan Image</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.scan-card{max-width:640px}
+.dropzone{border:2px dashed var(--border-color);border-radius:var(--radius-lg);padding:2rem 1rem;text-align:center;cursor:pointer;transition:border-color var(--transition),background var(--transition)}
+.dropzone:hover,.dropzone.drag{border-color:var(--primary);background:var(--primary-light)}
+.dropzone i{font-size:2.5rem;color:var(--primary);margin-bottom:.5rem}
+.dropzone .hint{font-size:.8rem;color:var(--text-muted);margin-top:.35rem}
+#preview{max-width:100%;margin-top:1rem;border-radius:var(--radius-md);display:none}
+.steps{display:flex;gap:.5rem;font-size:.8rem;color:var(--text-muted);margin-bottom:1rem;flex-wrap:wrap}
+.steps span{background:var(--gray-50);border:1px solid var(--border-color);border-radius:var(--radius-full);padding:.2rem .7rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Scan WAEC Result</h1>
+        <p class="text-muted text-sm">Upload a photo/scan of a result slip — we read the name, subjects and grades for you to review.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.add_waec') }}" class="btn btn-secondary btn-sm"><i class="fas fa-keyboard"></i> Enter manually</a>
+    </div>
+</div>
+
+<div class="steps">
+    <span>1 · Upload image</span>
+    <span>2 · Review &amp; correct</span>
+    <span>3 · Confirm student</span>
+    <span>4 · Save</span>
+</div>
+
+{% if not ocr_ready %}
+<div class="card"><div class="card-body">
+    <div class="insight" style="background:var(--danger-light);color:var(--danger);display:flex;gap:.6rem;padding:.85rem 1rem;border-radius:var(--radius-md);">
+        <i class="fas fa-triangle-exclamation"></i>
+        <span>The OCR engine (<strong>Tesseract</strong>) isn't installed on this server, so scanning is unavailable. Install the <code>tesseract-ocr</code> package, then reload. You can still <a href="{{ url_for('results.add_waec') }}">enter results manually</a>.</span>
+    </div>
+</div></div>
+{% else %}
+<div class="card scan-card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" id="scanForm">
+            <label class="dropzone" id="dropzone" for="resultImage">
+                <i class="fas fa-cloud-arrow-up"></i>
+                <div><strong>Tap to choose</strong> or drag a result image here</div>
+                <div class="hint">JPG or PNG · a clear, straight, well-lit photo reads best</div>
+                <img id="preview" alt="preview">
+            </label>
+            <input type="file" name="result_image" id="resultImage" accept="image/*" capture="environment" hidden required>
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary btn-lg" id="scanBtn"><i class="fas fa-magnifying-glass"></i> Read Result</button>
+                <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+    const input = document.getElementById('resultImage');
+    const dz = document.getElementById('dropzone');
+    const preview = document.getElementById('preview');
+    const form = document.getElementById('scanForm');
+    if (!input) return;
+
+    function show(file) {
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        preview.src = url; preview.style.display = 'block';
+    }
+    input.addEventListener('change', () => show(input.files[0]));
+    ['dragover', 'dragenter'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('drag'); }));
+    dz.addEventListener('drop', ev => { if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; show(input.files[0]); } });
+
+    form.addEventListener('submit', () => {
+        const btn = document.getElementById('scanBtn');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reading…';
+    });
+})();
+</script>
+{% endblock %}
