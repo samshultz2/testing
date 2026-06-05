@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Teacher Assignments - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teacher Assignments</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Teacher Assignments</h1>
+</div>
+
+<p class="text-muted mb-3">Assign which teacher teaches which subject to which class. This determines who appears on the timetable.</p>
+
+<!-- Add Assignment Form -->
+<div class="card mb-3">
+    <div class="card-header"><h3>Add Assignment</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.add_teacher_assignment') }}" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Teacher</label>
+                <select name="teacher_id" id="teacherSelect" class="form-control" required>
+                    <option value="">Select Teacher</option>
+                    {% for teacher in teachers %}
+                    <option value="{{ teacher.id }}">{{ teacher.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Subject</label>
+                <select name="subject_id" id="subjectSelect" class="form-control" required>
+                    <option value="">Select Subject</option>
+                    {% for subject in subjects %}
+                    <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="class_config_id" id="classSelect" class="form-control" required>
+                    <option value="">Select Class</option>
+                    {% for class_config in classes %}
+                    <option value="{{ class_config.id }}">{{ class_config.class_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Specific Arm (optional)</label>
+                <select name="arm_name" id="armSelect" class="form-control">
+                    <option value="">All Arms</option>
+                </select>
+                <span class="form-hint">Leave as "All Arms" if teacher teaches all arms of this class</span>
+            </div>
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Existing Assignments by Class -->
+{% for class_config in classes %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3>{{ class_config.class_name }}</h3>
+        <span class="badge badge-primary">{{ assignments_by_class[class_config.id]|length }} assignments</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if assignments_by_class[class_config.id] %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Teacher</th>
+                    <th>Arm</th>
+                    <th style="width: 80px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for assignment in assignments_by_class[class_config.id] %}
+                <tr>
+                    <td>{{ assignment.subject.name }}</td>
+                    <td>{{ assignment.teacher.name }}</td>
+                    <td>{{ assignment.arm_name or 'All Arms' }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('generator.delete_teacher_assignment', assignment_id=assignment.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-danger btn-sm" title="Remove"><i class="fas fa-times"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" style="padding: 2rem;">
+            <p class="text-muted">No assignments for this class yet</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+{% if not classes %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-school"></i>
+            <h3>No Classes Configured</h3>
+            <p>Add classes first before assigning teachers</p>
+            <a href="{{ url_for('generator.classes_config') }}" class="btn btn-primary">Configure Classes</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.getElementById('classSelect').addEventListener('change', function() {
+    const classId = this.value;
+    const armSelect = document.getElementById('armSelect');
+    
+    // Clear existing options except first
+    armSelect.innerHTML = '<option value="">All Arms</option>';
+    
+    if (classId) {
+        // Fetch arms for this class
+        fetch(`/generator/api/class/${classId}/arms`)
+            .then(response => response.json())
+            .then(arms => {
+                arms.forEach(arm => {
+                    const option = document.createElement('option');
+                    option.value = arm;
+                    option.textContent = arm;
+                    armSelect.appendChild(option);
+                });
+            });
+    }
+});
+</script>
+{% endblock %}

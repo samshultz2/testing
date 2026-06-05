@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Print Report Cards - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Print All</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .no-print { display: none !important; }
+    .report-card { page-break-after: always; border: 1px solid #000 !important; margin-bottom: 0 !important; }
+    .report-card:last-child { page-break-after: avoid; }
+    body { font-size: 10pt; }
+    .card { box-shadow: none !important; }
+}
+.report-card { margin-bottom: 2rem; }
+.report-header { text-align: center; padding: 1rem; border-bottom: 2px solid var(--primary); }
+.report-header h2 { margin: 0; color: var(--primary); font-size: 1.25rem; }
+.student-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; padding: 0.75rem; background: var(--bg-tertiary); }
+.student-info-item { display: flex; justify-content: space-between; font-size: 0.875rem; }
+.scores-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.scores-table th, .scores-table td { border: 1px solid var(--border-color); padding: 0.35rem; text-align: center; }
+.scores-table th { background: var(--bg-tertiary); }
+.scores-table .subject-name { text-align: left; }
+.summary-row { display: flex; justify-content: space-around; padding: 0.5rem; background: var(--bg-tertiary); font-size: 0.875rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+    <h1>Print All Report Cards</h1>
+    {% if all_reports %}
+    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print All ({{ all_reports|length }})</button>
+    {% endif %}
+</div>
+
+<div class="card mb-3 no-print">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}
+                    <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if all_reports %}
+{% for report in all_reports %}
+<div class="card report-card">
+    <div class="card-body" style="padding: 1rem;">
+        <div class="report-header">
+            <h2>{{ school_name }}</h2>
+            <p style="margin: 0.25rem 0;">{{ selected_term.full_name }} Report Card</p>
+        </div>
+        
+        <div class="student-info">
+            <div class="student-info-item"><span>Name:</span><strong>{{ report.student.full_name }}</strong></div>
+            <div class="student-info-item"><span>ID:</span><strong>{{ report.student.student_id }}</strong></div>
+            <div class="student-info-item"><span>Class:</span><strong>{{ selected_assignment.display_name }}</strong></div>
+        </div>
+        
+        <table class="scores-table" style="margin-top: 0.75rem;">
+            <thead>
+                <tr>
+                    <th class="subject-name">Subject</th>
+                    {% for at in report.assessment_types %}
+                    <th style="font-size: 0.7rem;">{{ at.short_name or at.name[:3] }}</th>
+                    {% endfor %}
+                    <th>Total</th>
+                    <th>Grade</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for subj in report.subjects %}
+                <tr>
+                    <td class="subject-name">{{ subj.subject.name }}</td>
+                    {% for at in report.assessment_types %}
+                    <td>{{ subj.assessments.get(at.id, '-') if subj.assessments.get(at.id) else '-' }}</td>
+                    {% endfor %}
+                    <td><strong>{{ subj.total if subj.total else '-' }}</strong></td>
+                    <td>{{ subj.grade }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div class="summary-row" style="margin-top: 0.75rem;">
+            <span>Subjects: {{ report.total_subjects }}</span>
+            <span>Passed: {{ report.subjects_passed }}</span>
+            <span>Failed: {{ report.subjects_failed }}</span>
+            <span>Average: <strong>{{ report.average }}%</strong></span>
+            <span>Grade: <strong>{{ report.overall_grade }}</strong></span>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% elif selected_assignment %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-file-alt"></i>
+            <h3>No Data</h3>
+            <p>No scores found for this class</p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select Options</h3>
+            <p>Choose term and class to print report cards</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

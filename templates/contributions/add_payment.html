@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Add Payment - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('contributions.dashboard') }}">Contributions</a> / <span>Add Payment</span>{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-plus-circle"></i> Add Payment</h1></div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="form-group">
+                <label class="form-label">Student *</label>
+                <select name="student_id" class="form-control" required id="studentSelect">
+                    <option value="">Select Student</option>
+                    {% for student in students %}<option value="{{ student.id }}">{{ student.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div id="studentInfo" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                <div class="info-grid">
+                    <div class="info-row"><span>Total Paid:</span> <strong id="infoPaid">-</strong></div>
+                    <div class="info-row"><span>Remaining:</span> <strong id="infoRemaining">-</strong></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Amount (₦) *</label>
+                <input type="number" name="amount" class="form-control" required min="1" step="1" placeholder="Enter amount">
+                <div class="quick-amounts" style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelector('input[name=amount]').value=100">₦100</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelector('input[name=amount]').value=200">₦200</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelector('input[name=amount]').value=500">₦500</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelector('input[name=amount]').value=1000">₦1,000</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelector('input[name=amount]').value=2000">₦2,000</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelector('input[name=amount]').value=5000">₦5,000</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Payment Date *</label>
+                <input type="date" name="payment_date" class="form-control" value="{{ today }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Received By</label>
+                <input type="text" name="received_by" class="form-control" placeholder="Name of person who received payment">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea name="notes" class="form-control" rows="2" placeholder="Any additional notes"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Payment</button>
+                <a href="{{ url_for('contributions.dashboard') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.getElementById('studentSelect').addEventListener('change', function() {
+    const studentId = this.value;
+    const infoDiv = document.getElementById('studentInfo');
+    if (studentId) {
+        fetch('/contributions/api/student/' + studentId + '/info')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('infoPaid').textContent = '₦' + data.total_paid.toLocaleString();
+                document.getElementById('infoRemaining').textContent = '₦' + data.remaining.toLocaleString();
+                infoDiv.style.display = 'block';
+            });
+    } else { infoDiv.style.display = 'none'; }
+});
+</script>
+{% endblock %}

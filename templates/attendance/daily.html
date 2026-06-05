@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Daily Attendance - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Daily</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Daily Summary</h1></div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group"><label class="form-label">Class</label><select name="assignment_id" class="form-control" onchange="this.form.submit()"><option value="">Select</option>{% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id == selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.submit()"></div>
+        </form>
+    </div>
+</div>
+
+{% if summary %}
+<div class="stats-grid mb-3">
+    <div class="stat-card"><div class="stat-icon primary"><i class="fas fa-users"></i></div><div class="stat-content"><h3>{{ summary.total_students }}</h3><p>Total</p></div></div>
+    <div class="stat-card"><div class="stat-icon success"><i class="fas fa-sun"></i></div><div class="stat-content"><h3>{{ summary.morning_present }}</h3><p>AM</p></div></div>
+    <div class="stat-card"><div class="stat-icon info"><i class="fas fa-moon"></i></div><div class="stat-content"><h3>{{ summary.afternoon_present }}</h3><p>PM</p></div></div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ target_date.strftime('%A, %d %B %Y') }}</h3></div>
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for s in summary.students %}
+            <div class="data-card">
+                <div class="data-card-header"><div class="data-card-title">{{ s.student_name }}</div><span class="badge {% if s.gender == 'Male' %}badge-info{% else %}badge-warning{% endif %}">{{ s.gender }}</span></div>
+                <div class="data-card-row"><span class="data-card-label">Morning</span><span>{% if s.morning_present %}<i class="fas fa-check text-success"></i>{% elif s.morning_present == False %}<i class="fas fa-times text-danger"></i>{% else %}-{% endif %}</span></div>
+                <div class="data-card-row"><span class="data-card-label">Afternoon</span><span>{% if s.afternoon_present %}<i class="fas fa-check text-success"></i>{% elif s.afternoon_present == False %}<i class="fas fa-times text-danger"></i>{% else %}-{% endif %}</span></div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

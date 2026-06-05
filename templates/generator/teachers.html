@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Teachers - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teachers</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Teachers</h1>
+    <a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>
+</div>
+
+{% if teachers %}
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for teacher in teachers %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ teacher.name }}</div>
+                    {% if teacher.staff_id %}<span class="badge badge-secondary">{{ teacher.staff_id }}</span>{% endif %}
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Subjects</span>
+                    <span>{{ teacher.subjects.count() }}</span>
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Max/Day</span>
+                    <span>{{ teacher.max_periods_per_day }} periods</span>
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Max/Week</span>
+                    <span>{{ teacher.max_periods_per_week }} periods</span>
+                </div>
+                <div class="data-card-actions">
+                    <a href="{{ url_for('generator.edit_teacher', teacher_id=teacher.id) }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <h3>No Teachers</h3>
+            <p>Add teachers who will be assigned to the timetable</p>
+            <a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

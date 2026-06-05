@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% from "components/macros.html" import button %}
+
+{% block title %}Add Result - {{ exam.display_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Add Result</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.jamb-form{max-width:760px}
+.entry-hint{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;margin-bottom:1.25rem;line-height:1.4}
+.entry-hint i{margin-top:.15rem}
+.subject-row{display:grid;grid-template-columns:1fr;gap:.6rem;padding:.85rem;border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.75rem;background:var(--gray-50);transition:border-color var(--transition)}
+.subject-row:focus-within{border-color:var(--primary)}
+@media(min-width:640px){.subject-row{grid-template-columns:1fr 130px 110px;align-items:end}}
+.subject-row .field label{display:block;font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:.3rem}
+.subject-row .field .qcount{font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)}
+.converted{display:flex;align-items:center;justify-content:center;height:42px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px dashed var(--border-color);font-weight:700;font-size:1.1rem;color:var(--primary)}
+.converted.empty{color:var(--text-muted);font-weight:500;font-size:.85rem}
+.total-box{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#11998e,#38ef7d);color:#fff;border-radius:var(--radius-md);padding:1rem 1.25rem;margin:1.25rem 0}
+.total-box .total-label{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;opacity:.9}
+.total-box .total-value{font-size:2.25rem;font-weight:700;line-height:1}
+.total-box .total-max{font-size:.9rem;opacity:.85}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Add Result</h1>
+        <p class="text-muted text-sm">{{ exam.display_name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') }}</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="card jamb-form">
+    <div class="card-body">
+        {% if students %}
+        <form method="POST" id="resultForm">
+            <div class="form-group">
+                <label class="form-label">Student <span class="text-danger">*</span></label>
+                <select name="student_id" class="form-control" required>
+                    <option value="">Select Student</option>
+                    {% for student in students %}
+                    <option value="{{ student.id }}">{{ student.full_name }} ({{ student.student_id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <hr class="my-4">
+            <h4 class="mb-2">Subject Scores</h4>
+            <div class="entry-hint">
+                <i class="fas fa-circle-info"></i>
+                <span>Enter the number of <strong>correct answers</strong> for each subject. We convert it to a score over 100 automatically &mdash; English is marked over 60 questions, every other subject over 40.</span>
+            </div>
+
+            {% for n in [1, 2, 3, 4] %}
+            {% set preselect = compulsory_subject if n == 1 else '' %}
+            <div class="subject-row" data-row="{{ n }}">
+                <div class="field">
+                    <label>Subject {{ n }}{% if n == 1 %} <span class="text-danger">*</span>{% endif %}</label>
+                    <select name="subject{{ n }}" class="form-control subject-select" data-row="{{ n }}" {% if n == 1 %}required{% endif %}>
+                        <option value="">Select Subject</option>
+                        {% for subject in subjects %}
+                        <option value="{{ subject }}" data-questions="{{ question_counts[subject] }}" {% if subject == preselect %}selected{% endif %}>{{ subject }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Correct <span class="qcount" data-qlabel="{{ n }}">(/{{ question_counts[compulsory_subject] if n == 1 else 40 }})</span></label>
+                    <input type="number" class="form-control correct-input" data-row="{{ n }}"
+                           name="subject{{ n }}_correct" min="0" max="{{ question_counts[compulsory_subject] if n == 1 else 40 }}" placeholder="0">
+                </div>
+                <div class="field">
+                    <label>Score /100</label>
+                    <div class="converted empty" data-score="{{ n }}">&mdash;</div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="total-box">
+                <div>
+                    <div class="total-label">Total Score</div>
+                    <div><span class="total-value" id="totalDisplay">0</span> <span class="total-max">/ 400</span></div>
+                </div>
+                <i class="fas fa-calculator" style="font-size:1.75rem;opacity:.6"></i>
+            </div>
+            <input type="hidden" name="total_score" id="total_score" value="0">
+
+            <div class="form-check mb-4">
+                <input type="checkbox" name="add_another" id="add_another" class="form-check-input">
+                <label for="add_another" class="form-check-label">Add another result after saving</label>
+            </div>
+
+            <div class="d-flex gap-2">
+                {{ button('Save Result', icon='fas fa-save') }}
+                <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-user-slash"></i>
+            <p>All students already have results for this exam</p>
+            <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-primary">View Results</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function () {
+    const DEFAULT_Q = 40;
+
+    function questionsForRow(row) {
+        const select = document.querySelector(`.subject-select[data-row="${row}"]`);
+        const opt = select && select.options[select.selectedIndex];
+        const q = opt && opt.dataset.questions ? parseInt(opt.dataset.questions, 10) : DEFAULT_Q;
+        return q || DEFAULT_Q;
+    }
+
+    function convertRow(row) {
+        const questions = questionsForRow(row);
+        const input = document.querySelector(`.correct-input[data-row="${row}"]`);
+        const display = document.querySelector(`.converted[data-score="${row}"]`);
+        const qlabel = document.querySelector(`.qcount[data-qlabel="${row}"]`);
+
+        // Keep the "correct" cap and label in sync with the chosen subject.
+        input.max = questions;
+        if (qlabel) qlabel.textContent = `(/${questions})`;
+        if (parseInt(input.value, 10) > questions) input.value = questions;
+
+        const raw = input.value;
+        if (raw === '' || raw === null) {
+            display.textContent = '—';
+            display.classList.add('empty');
+            return null;
+        }
+        let correct = Math.max(0, Math.min(parseInt(raw, 10) || 0, questions));
+        const score = Math.round((correct / questions) * 100);
+        display.textContent = score;
+        display.classList.remove('empty');
+        return score;
+    }
+
+    function recalcTotal() {
+        let total = 0;
+        for (let row = 1; row <= 4; row++) {
+            const score = convertRow(row);
+            if (score !== null) total += score;
+        }
+        document.getElementById('totalDisplay').textContent = total;
+        document.getElementById('total_score').value = total;
+    }
+
+    document.querySelectorAll('.subject-select, .correct-input').forEach(el => {
+        el.addEventListener('input', recalcTotal);
+        el.addEventListener('change', recalcTotal);
+    });
+
+    recalcTotal();
+})();
+</script>
+{% endblock %}

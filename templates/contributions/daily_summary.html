@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Daily Summary - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+<a href="{{ url_for('main.dashboard') }}">Home</a> / 
+<a href="{{ url_for('contributions.dashboard') }}">Contributions</a> / 
+<span>Daily Summary</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-calendar-alt"></i> Daily Collection Summary</h1>
+    <a href="{{ url_for('contributions.dashboard') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+</div>
+
+<div class="stats-grid mb-3">
+    <div class="stat-card">
+        <div class="stat-icon primary"><i class="fas fa-calendar-check"></i></div>
+        <div class="stat-content">
+            <h3>{{ daily_data|length }}</h3>
+            <p>Collection Days</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon success"><i class="fas fa-chart-line"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(avg_daily) }}</h3>
+            <p>Avg. Daily Collection</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon info"><i class="fas fa-arrow-up"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(best_day.amount if best_day else 0) }}</h3>
+            <p>Best Day{% if best_day %} ({{ best_day.date.strftime('%d %b') }}){% endif %}</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Collections by Date</h3></div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Day</th>
+                    <th>Transactions</th>
+                    <th>Amount</th>
+                    <th>Collectors</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for day in daily_data %}
+                <tr>
+                    <td><strong>{{ day.date.strftime('%d %b %Y') }}</strong></td>
+                    <td>{{ day.date.strftime('%A') }}</td>
+                    <td>{{ day.count }}</td>
+                    <td><strong class="text-success">₦{{ "{:,.0f}".format(day.amount) }}</strong></td>
+                    <td><small>{{ day.collectors|join(', ') if day.collectors else '-' }}</small></td>
+                    <td>
+                        <a href="{{ url_for('contributions.payments_list') }}?date={{ day.date.strftime('%Y-%m-%d') }}" class="btn btn-sm btn-info"><i class="fas fa-eye"></i> View</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted">No collections recorded yet</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('contributions.dashboard') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+</div>
+{% endblock %}

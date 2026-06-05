@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Termly Summary - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('attendance.index') }}">Attendance</a> / <span>Termly</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.summary-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1rem}
+@media(min-width:768px){.summary-cards{grid-template-columns:repeat(4,1fr)}}
+.summary-card{background:var(--bg-card);border-radius:var(--radius-md);padding:1rem;text-align:center;border:1px solid var(--border-color)}
+.summary-card.primary{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none}
+.summary-card .value{font-size:1.75rem;font-weight:700;line-height:1.2}
+.summary-card .label{font-size:.75rem;color:var(--text-muted);margin-top:.25rem}
+.summary-card.primary .label{color:rgba(255,255,255,.9)}
+.table-wrapper{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0}
+.table-wrapper table{width:100%;min-width:400px;border-collapse:collapse;font-size:.8rem}
+.table-wrapper th,.table-wrapper td{padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border-color);white-space:nowrap}
+.table-wrapper th{background:var(--gray-100);font-weight:600;color:var(--text-primary)}
+.table-wrapper tbody tr:hover{background:var(--gray-50)}
+.table-wrapper tfoot{font-weight:600;background:var(--gray-100)}
+[data-theme=dark] .table-wrapper th,[data-theme=dark] .table-wrapper tfoot{background:var(--gray-700);color:var(--text-primary)}
+[data-theme=dark] .table-wrapper tbody tr:hover{background:var(--gray-700)}
+.term-info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+@media(min-width:768px){.term-info-grid{grid-template-columns:repeat(4,1fr)}}
+.term-info-card{padding:.75rem;border-radius:var(--radius-md);text-align:center}
+.term-info-card.blue{background:rgba(33,150,243,.15);color:#1976d2}
+.term-info-card.green{background:rgba(76,175,80,.15);color:#388e3c}
+.term-info-card.orange{background:rgba(255,152,0,.15);color:#f57c00}
+.term-info-card.pink{background:rgba(233,30,99,.15);color:#c2185b}
+[data-theme=dark] .term-info-card.blue{background:rgba(33,150,243,.25);color:#64b5f6}
+[data-theme=dark] .term-info-card.green{background:rgba(76,175,80,.25);color:#81c784}
+[data-theme=dark] .term-info-card.orange{background:rgba(255,152,0,.25);color:#ffb74d}
+[data-theme=dark] .term-info-card.pink{background:rgba(233,30,99,.25);color:#f48fb1}
+.term-info-card .value{font-size:1.5rem;font-weight:700}
+.term-info-card .label{font-size:.7rem;margin-top:.25rem}
+.perf-grid{display:grid;grid-template-columns:1fr;gap:.75rem}
+@media(min-width:576px){.perf-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:992px){.perf-grid{grid-template-columns:repeat(4,1fr)}}
+.perf-card{padding:1rem;border-radius:var(--radius-md);border-left:4px solid}
+.perf-card.excellent{background:rgba(76,175,80,.1);border-color:#4caf50}
+.perf-card.good{background:rgba(33,150,243,.1);border-color:#2196f3}
+.perf-card.fair{background:rgba(255,193,7,.1);border-color:#ffc107}
+.perf-card.poor{background:rgba(244,67,54,.1);border-color:#f44336}
+.perf-card .title{font-weight:600;font-size:.9rem;margin-bottom:.5rem}
+.perf-card .count{font-size:1.5rem;font-weight:700}
+.perf-card .range{font-size:.75rem;color:var(--text-muted)}
+.cards-row{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:768px){.cards-row{grid-template-columns:repeat(2,1fr)}}
+.student-table{width:100%;min-width:700px;border-collapse:collapse;font-size:.8rem}
+.student-table th,.student-table td{padding:.5rem;text-align:center;border:1px solid var(--border-color)}
+.student-table th{background:var(--primary);color:#fff;font-weight:600}
+.student-table th:first-child,.student-table td:first-child{position:sticky;left:0;text-align:left;z-index:1}
+.student-table th:first-child{background:var(--primary);z-index:2}
+.student-table td:first-child{background:var(--bg-card)}
+.student-table tbody tr:nth-child(even) td{background:var(--gray-50)}
+.student-table tbody tr:nth-child(even) td:first-child{background:var(--gray-50)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-chart-bar"></i> Termly Summary</h1></div>
+<div class="card mb-3"><div class="card-body">
+<form method="GET" class="filter-form">
+<div class="form-group"><label class="form-label">Term</label><select name="term_id" class="form-control" onchange="this.form.submit()"><option value="">Select Term</option>{% for t in terms %}<option value="{{ t.id }}" {% if selected_term and t.id == selected_term.id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}</select></div>
+<div class="form-group"><label class="form-label">Class</label><select name="assignment_id" class="form-control" onchange="this.form.submit()"><option value="">Select Class</option>{% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id == selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}</select></div>
+</form>
+</div></div>
+
+{% if summary %}
+<div class="summary-cards">
+<div class="summary-card primary"><div class="value">{{ summary.class_totals.termly_percentage }}%</div><div class="label">Attendance Rate</div></div>
+<div class="summary-card"><div class="value">{{ summary.total_students }}</div><div class="label">Students</div></div>
+<div class="summary-card"><div class="value">{{ summary.term_info.total_times_opened }}</div><div class="label">Times Opened</div></div>
+<div class="summary-card"><div class="value">{{ summary.term_info.total_school_days }}</div><div class="label">School Days</div></div>
+</div>
+
+<div class="cards-row">
+<div class="card"><div class="card-header"><h3><i class="fas fa-venus-mars"></i> Gender</h3></div><div class="card-body" style="padding:0"><div class="table-wrapper"><table>
+<thead><tr><th>Gender</th><th>Count</th><th>Attendance</th><th>Avg</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-info"><i class="fas fa-male"></i> Male</span></td><td>{{ summary.total_male_students }}</td><td>{{ summary.class_totals.male_attendance }}</td><td>{% if summary.total_male_students > 0 %}{{ (summary.class_totals.male_attendance / summary.total_male_students)|round(1) }}{% else %}0{% endif %}</td></tr>
+<tr><td><span class="badge badge-warning"><i class="fas fa-female"></i> Female</span></td><td>{{ summary.total_female_students }}</td><td>{{ summary.class_totals.female_attendance }}</td><td>{% if summary.total_female_students > 0 %}{{ (summary.class_totals.female_attendance / summary.total_female_students)|round(1) }}{% else %}0{% endif %}</td></tr>
+</tbody>
+<tfoot><tr><td>Total</td><td>{{ summary.total_students }}</td><td>{{ summary.class_totals.total_attendance }}</td><td>{{ summary.class_totals.termly_average }}</td></tr></tfoot>
+</table></div></div></div>
+
+<div class="card"><div class="card-header"><h3><i class="fas fa-clock"></i> Session</h3></div><div class="card-body" style="padding:0"><div class="table-wrapper">{% set max_sess = summary.term_info.total_school_days * summary.total_students %}<table>
+<thead><tr><th>Session</th><th>Total</th><th>Max</th><th>%</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-primary"><i class="fas fa-sun"></i> AM</span></td><td>{{ summary.class_totals.total_morning }}</td><td>{{ max_sess }}</td><td>{% if max_sess > 0 %}{{ ((summary.class_totals.total_morning / max_sess) * 100)|round(1) }}%{% else %}0%{% endif %}</td></tr>
+<tr><td><span class="badge badge-secondary"><i class="fas fa-moon"></i> PM</span></td><td>{{ summary.class_totals.total_afternoon }}</td><td>{{ max_sess }}</td><td>{% if max_sess > 0 %}{{ ((summary.class_totals.total_afternoon / max_sess) * 100)|round(1) }}%{% else %}0%{% endif %}</td></tr>
+</tbody>
+<tfoot><tr><td>Both</td><td>{{ summary.class_totals.total_attendance }}</td><td>{{ max_sess * 2 }}</td><td>{{ summary.class_totals.termly_percentage }}%</td></tr></tfoot>
+</table></div></div></div>
+</div>
+
+<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-info-circle"></i> Term Info</h3></div><div class="card-body">
+<div class="term-info-grid">
+<div class="term-info-card blue"><div class="value">{{ summary.term_info.total_weeks }}</div><div class="label">Weeks</div></div>
+<div class="term-info-card green"><div class="value">{{ summary.term_info.total_school_days }}</div><div class="label">Days</div></div>
+<div class="term-info-card orange"><div class="value">{{ summary.term_info.total_times_opened }}</div><div class="label">Roll Calls</div></div>
+<div class="term-info-card pink"><div class="value">{{ summary.class_totals.termly_average }}</div><div class="label">Daily Avg</div></div>
+</div>
+</div></div>
+
+<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-medal"></i> Performance</h3></div><div class="card-body">
+{% set times = summary.term_info.total_times_opened %}
+{% set exc_t = (times * 0.9)|int %}{% set good_t = (times * 0.75)|int %}{% set fair_t = (times * 0.5)|int %}
+{% set exc = namespace(c=0) %}{% set gd = namespace(c=0) %}{% set fr = namespace(c=0) %}{% set pr = namespace(c=0) %}
+{% for s in summary.students %}{% if s.termly_total >= exc_t %}{% set exc.c = exc.c + 1 %}{% elif s.termly_total >= good_t %}{% set gd.c = gd.c + 1 %}{% elif s.termly_total >= fair_t %}{% set fr.c = fr.c + 1 %}{% else %}{% set pr.c = pr.c + 1 %}{% endif %}{% endfor %}
+<div class="perf-grid">
+<div class="perf-card excellent"><div class="title"><i class="fas fa-star text-success"></i> Excellent</div><div class="count">{{ exc.c }}</div><div class="range">≥90% ({{ exc_t }}+)</div></div>
+<div class="perf-card good"><div class="title"><i class="fas fa-thumbs-up text-info"></i> Good</div><div class="count">{{ gd.c }}</div><div class="range">75-89%</div></div>
+<div class="perf-card fair"><div class="title"><i class="fas fa-exclamation-circle text-warning"></i> Fair</div><div class="count">{{ fr.c }}</div><div class="range">50-74%</div></div>
+<div class="perf-card poor"><div class="title"><i class="fas fa-times-circle text-danger"></i> Poor</div><div class="count">{{ pr.c }}</div><div class="range">&lt;50%</div></div>
+</div>
+</div></div>
+
+<div class="card"><div class="card-header"><h3><i class="fas fa-users"></i> Students</h3><a href="{{ url_for('attendance.export_termly', term_id=selected_term.id, assignment_id=selected_assignment.id) }}" class="btn btn-success btn-sm"><i class="fas fa-download"></i></a></div>
+<div class="card-body" style="padding:.5rem"><div class="table-wrapper">
+<table class="student-table">
+<thead><tr><th style="min-width:150px">Student</th>{% for w in summary.weeks %}<th>W{{ w.week_number }}</th>{% endfor %}<th>AM</th><th>PM</th><th>Total</th><th>%</th></tr></thead>
+<tbody>{% for s in summary.students %}<tr><td>{{ s.student_name }}<br><small class="text-muted">{{ s.gender }}</small></td>{% for w in s.weekly %}<td>{{ w.total }}</td>{% endfor %}<td>{{ s.termly_morning }}</td><td>{{ s.termly_afternoon }}</td><td><strong>{{ s.termly_total }}</strong></td><td>{{ s.termly_percentage }}%</td></tr>{% endfor %}</tbody>
+<tfoot><tr><td>Total</td>{% for w in summary.weekly_totals %}<td>{{ w }}</td>{% endfor %}<td>{{ summary.class_totals.total_morning }}</td><td>{{ summary.class_totals.total_afternoon }}</td><td>{{ summary.class_totals.total_attendance }}</td><td>{{ summary.class_totals.termly_percentage }}%</td></tr></tfoot>
+</table>
+</div></div></div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-bar"></i><h3>Select Term & Class</h3><p>Choose term and class above</p></div></div></div>
+{% endif %}
+{% endblock %}

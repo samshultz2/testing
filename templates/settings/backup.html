@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Backup & Restore - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Backup</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Backup & Restore</h1></div>
+
+<div class="stats-grid mb-3">
+    <div class="stat-card"><div class="stat-icon primary"><i class="fas fa-database"></i></div><div class="stat-content"><h3>{{ "%.2f"|format(db_size / 1024) }} KB</h3><p>Database Size</p></div></div>
+    <div class="stat-card"><div class="stat-icon info"><i class="fas fa-users"></i></div><div class="stat-content"><h3>{{ counts.students }}</h3><p>Students</p></div></div>
+    <div class="stat-card"><div class="stat-icon success"><i class="fas fa-calendar"></i></div><div class="stat-content"><h3>{{ counts.sessions }}</h3><p>Sessions</p></div></div>
+    <div class="stat-card"><div class="stat-icon secondary"><i class="fas fa-user-shield"></i></div><div class="stat-content"><h3>{{ counts.users }}</h3><p>Users</p></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-download"></i> Download Backup</h3></div>
+    <div class="card-body">
+        <p>Download a complete backup of your database. Keep this file safe!</p>
+        <div class="page-header-actions">
+            <a href="{{ url_for('settings.download_backup') }}" class="btn btn-primary"><i class="fas fa-download"></i> Download Database (.db)</a>
+            <a href="{{ url_for('settings.export_json') }}" class="btn btn-secondary"><i class="fas fa-file-code"></i> Export JSON</a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-upload"></i> Restore Backup</h3></div>
+    <div class="card-body">
+        <div class="flash-message flash-warning mb-3">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span><strong>Warning:</strong> Restoring will replace ALL current data. A backup of current data will be created automatically.</span>
+        </div>
+        <form method="POST" action="{{ url_for('settings.restore_backup') }}" enctype="multipart/form-data" data-confirm="Are you sure? This will replace all current data!">
+            <div class="form-group">
+                <label class="form-label">Select Backup File (.db)</label>
+                <input type="file" name="file" class="form-control" accept=".db" required>
+            </div>
+            <button type="submit" class="btn btn-danger"><i class="fas fa-upload"></i> Restore Backup</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

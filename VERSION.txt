@@ -1,0 +1,75 @@
+PosyHub Timetable Generator
+Version: V30 (OR-Tools Solver V10)
+Last Updated: 2026-01-18
+
+SOLVER CONSTRAINTS:
+==================
+1.  Maths not P1 (SSS1/SSS2/SSS3) - hardcoded in CLASS_SPECIFIC_RESTRICTIONS
+2.  Chemistry not P1 (SSS1/SSS2) - from GenSubjectConfig.not_first_period
+3.  No subject spanning break - prevents same subject before AND after break
+4.  Teacher max 2 consecutive - rest required after every 2 periods
+5.  Teacher unavailability - from GenTeacherAvailability table
+6.  Teacher clashes - no double-booking same slot
+7.  Teacher daily limits - from GenTeacher.max_periods_per_day
+8.  No back-to-back diff subjects - same teacher/class can't have different subjects consecutively
+9.  Double periods - from database (GenClassStreamSubject, GenSubjectConfig)
+10. Subject clash avoidance - DATABASE DRIVEN (GenSubjectClashRule)
+    Prevents specified subjects from being scheduled at the same time
+    Used for combined classes (e.g., Geography SSS3 Iris vs Literature)
+11. Combined class teacher consecutive - DATABASE DRIVEN (GenCombinedClassRule)
+    Ensures teachers shadowing other subjects don't get 3 consecutive periods
+
+NEW DATABASE TABLES:
+====================
+- GenSubjectClashRule: Defines which subjects must NOT be scheduled at same time
+- GenCombinedClassRule: Defines teacher shadowing for combined classes
+
+WEB INTERFACE:
+==============
+- /generator/clash-rules - View/manage all clash rules
+- /generator/clash-rules/add - Add new subject clash rule
+- /generator/combined-rules/add - Add new combined class rule
+- Toggle and delete functionality for both rule types
+
+DEFAULT RULES (auto-created):
+=============================
+Subject Clash Rules:
+1. Geo SSS3 Iris vs Lit SSS1
+2. Geo SSS3 Iris vs Lit SSS2
+3. Geo SSS3 Iris vs Lit SSS3
+4. Geo SSS3 Iris vs Phonics SSS1
+5. Geo SSS3 Iris vs Phonics SSS2
+
+Combined Class Rules:
+1. Literature teacher shadows Geography SSS3 Iris
+
+FEATURES:
+=========
+- Randomization: Different valid solution each generation (~90% variation)
+- High-resolution image export (4x scale for WhatsApp sharing)
+- JPG format with school name watermark
+- Excel export by day and by class
+- Teacher timetable views and printable sheets
+- All constraints now database-driven with web UI
+
+SCALABILITY:
+============
+Fully dynamic for:
+- Number of classes, arms, streams
+- Number of teachers and their assignments
+- Periods per day, break position
+- Subject periods per week
+- Double period requirements
+- Teacher unavailability
+- Subject clash rules (new!)
+- Combined class teacher rules (new!)
+
+FILES:
+======
+- routes/generator_ortools.py - Main OR-Tools solver (V10)
+- routes/generator_image.py - Image generation (V3)
+- routes/generator.py - Web interface routes (includes clash rules)
+- models/models.py - Database models (includes GenSubjectClashRule, GenCombinedClassRule)
+- templates/generator/clash_rules.html - List/manage rules
+- templates/generator/add_clash_rule.html - Add clash rule form
+- templates/generator/add_combined_rule.html - Add combined rule form

@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}{{ student.full_name }} - Graduate Profile{% endblock %}
+{% block breadcrumb %}<span>Graduate Profile</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    border-radius: var(--border-radius);
+    margin-bottom: 1.5rem;
+}
+.profile-avatar {
+    width: 80px;
+    height: 80px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+}
+.profile-info h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+.profile-info p { margin: 0; opacity: 0.9; }
+.result-card { margin-bottom: 1rem; }
+.result-card .card-header { display: flex; justify-content: space-between; align-items: center; }
+.subjects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
+.subject-item { display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); }
+.grade-badge { font-weight: bold; padding: 0.25rem 0.5rem; border-radius: 4px; }
+.grade-A1, .grade-B2, .grade-B3 { background: #c8e6c9; color: #2e7d32; }
+.grade-C4, .grade-C5, .grade-C6 { background: #fff9c4; color: #f57f17; }
+.grade-D7, .grade-E8, .grade-F9 { background: #ffcdd2; color: #c62828; }
+.jamb-subjects { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+@media (max-width: 600px) { .jamb-subjects { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-header">
+    <div class="profile-avatar"><i class="fas fa-user-graduate"></i></div>
+    <div class="profile-info">
+        <h1>{{ student.full_name }}</h1>
+        <p>{{ student.student_id }} • {{ student.gender }}</p>
+        {% if graduation_session %}
+        <p><i class="fas fa-graduation-cap"></i> Class of {{ graduation_session.name }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="page-header-actions mb-3">
+    <a href="{{ url_for('promotion.graduates_list') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Graduates</a>
+    <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-primary"><i class="fas fa-user"></i> Full Profile</a>
+</div>
+
+<!-- Graduation Info -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-graduation-cap"></i> Graduation Info</h3></div>
+    <div class="card-body">
+        <div class="info-grid">
+            <div class="info-row"><span class="text-muted">Status</span><strong><span class="badge badge-success">Graduated</span></strong></div>
+            {% if student.graduation_date %}
+            <div class="info-row"><span class="text-muted">Graduation Date</span><strong>{{ student.graduation_date.strftime('%d %B %Y') }}</strong></div>
+            {% endif %}
+            {% if graduation_session %}
+            <div class="info-row"><span class="text-muted">Session</span><strong>{{ graduation_session.name }}</strong></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- WAEC Results -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-file-alt"></i> WAEC Results</h3>
+        <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
+    </div>
+    <div class="card-body">
+        {% if waec_by_year %}
+            {% for key, data in waec_by_year.items() %}
+            <div class="result-card">
+                <div class="card" style="margin-bottom: 1rem;">
+                    <div class="card-header">
+                        <span><strong>{{ data.exam_year }}</strong></span>
+                        {% if data.exam_number %}<span class="text-muted">Exam No: {{ data.exam_number }}</span>{% endif %}
+                    </div>
+                    <div class="card-body">
+                        <div class="subjects-grid">
+                            {% for result in data.subjects %}
+                            <div class="subject-item">
+                                <span>{{ result.subject }}</span>
+                                <span class="grade-badge grade-{{ result.grade }}">{{ result.grade }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-file-alt"></i>
+            <p>No WAEC results recorded</p>
+            <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add WAEC Result</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- JAMB Results -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-file-contract"></i> JAMB Results</h3>
+        <a href="{{ url_for('results.add_jamb') }}?student_id={{ student.id }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
+    </div>
+    <div class="card-body">
+        {% if jamb_results %}
+            {% for jamb in jamb_results %}
+            <div class="result-card">
+                <div class="card" style="margin-bottom: 1rem;">
+                    <div class="card-header">
+                        <span><strong>{{ jamb.exam_year }}</strong></span>
+                        <span class="badge badge-primary" style="font-size: 1rem;">{{ jamb.total_score }}</span>
+                    </div>
+                    <div class="card-body">
+                        {% if jamb.registration_number %}
+                        <p class="text-muted mb-2">Reg No: {{ jamb.registration_number }}</p>
+                        {% endif %}
+                        <div class="jamb-subjects">
+                            <div class="subject-item"><span>{{ jamb.subject1 }}</span><strong>{{ jamb.subject1_score }}</strong></div>
+                            <div class="subject-item"><span>{{ jamb.subject2 }}</span><strong>{{ jamb.subject2_score }}</strong></div>
+                            <div class="subject-item"><span>{{ jamb.subject3 }}</span><strong>{{ jamb.subject3_score }}</strong></div>
+                            <div class="subject-item"><span>{{ jamb.subject4 }}</span><strong>{{ jamb.subject4_score }}</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-file-contract"></i>
+            <p>No JAMB results recorded</p>
+            <a href="{{ url_for('results.add_jamb') }}?student_id={{ student.id }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add JAMB Result</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Contact Info -->
+{% if student.parent_contacts.count() > 0 %}
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-phone"></i> Contact Information</h3></div>
+    <div class="card-body">
+        <div class="data-cards" style="padding: 0;">
+            {% for contact in student.parent_contacts %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ contact.contact_name or contact.relationship }}</div>
+                    <span class="badge badge-secondary">{{ contact.relationship }}</span>
+                </div>
+                <div class="data-card-row"><span class="data-card-label">Phone</span><span>{{ contact.phone_number }}</span></div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

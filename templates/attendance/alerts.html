@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Attendance Alerts - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Alerts</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Attendance Alerts</h1>
+    {% if alerts %}
+    <a href="{{ url_for('attendance.export_alerts', term_id=term_id, threshold=threshold) }}" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+    {% endif %}
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Threshold (%)</label>
+                <input type="number" name="threshold" class="form-control" value="{{ threshold }}" min="0" max="100" step="5" style="width: 100px;">
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if alerts %}
+<div class="stats-grid mb-3">
+    <div class="stat-card">
+        <div class="stat-icon danger"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="stat-content"><h3>{{ alerts|length }}</h3><p>Students Below {{ threshold }}%</p></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon warning"><i class="fas fa-user-times"></i></div>
+        <div class="stat-content"><h3>{{ alerts|selectattr('status', 'equalto', 'critical')|list|length }}</h3><p>Critical (&lt;50%)</p></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Students with Poor Attendance</h3></div>
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for alert in alerts %}
+            <div class="data-card" style="{% if alert.status == 'critical' %}border-left: 4px solid var(--danger);{% else %}border-left: 4px solid var(--warning);{% endif %}">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ alert.student.full_name }}</div>
+                    <span class="badge {% if alert.status == 'critical' %}badge-danger{% else %}badge-warning{% endif %}">{{ alert.percentage }}%</span>
+                </div>
+                <div class="data-card-row"><span class="data-card-label">ID</span><span>{{ alert.student.student_id }}</span></div>
+                <div class="data-card-row"><span class="data-card-label">Class</span><span>{{ alert.class }}</span></div>
+                <div class="data-card-row"><span class="data-card-label">Present</span><span>{{ alert.present }} / {{ alert.total }}</span></div>
+                {% if alert.student.parent_contacts.first() %}
+                <div class="data-card-row"><span class="data-card-label">Contact</span><span>{{ alert.student.parent_contacts.first().phone_number }}</span></div>
+                {% endif %}
+                <div class="data-card-actions">
+                    <a href="{{ url_for('main.view_student', student_id=alert.student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i> View</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% elif selected_term %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-check-circle text-success"></i>
+            <h3>No Alerts</h3>
+            <p>All students have attendance above {{ threshold }}%</p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select a Term</h3>
+            <p>Choose a term to view attendance alerts</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

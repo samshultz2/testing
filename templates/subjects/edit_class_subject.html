@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Edit Class Subject - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Edit</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Edit: {{ cs.subject.name }}</h1></div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="info-grid mb-3">
+            <div class="info-row"><span class="text-muted">Subject</span><strong>{{ cs.subject.name }}</strong></div>
+            <div class="info-row"><span class="text-muted">Class</span><strong>{{ cs.school_class.name }}</strong></div>
+            <div class="info-row"><span class="text-muted">Arm</span><strong>{{ cs.arm.name if cs.arm else 'All Arms' }}</strong></div>
+            <div class="info-row"><span class="text-muted">Term</span><strong>{{ cs.term.full_name }}</strong></div>
+        </div>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label class="form-label">Teacher Name</label>
+                <input type="text" name="teacher_name" class="form-control" value="{{ cs.teacher_name or '' }}" placeholder="Enter teacher name">
+            </div>
+            <div class="page-header-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
+                <a href="{{ url_for('subjects.class_subjects_list', term_id=cs.term_id, class_id=cs.class_id) }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

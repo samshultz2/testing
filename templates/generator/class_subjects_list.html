@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Per-Class Subject Config - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Class Subject Config</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Per-Class Subject Configuration</h1>
+</div>
+
+<p class="text-muted mb-3">Set different periods per week for each subject in each class. For example, SSS1 Agric = 2 periods, SSS2 Agric = 4 periods.</p>
+
+{% if classes %}
+<div class="card">
+    <div class="card-body">
+        <div class="data-cards" style="padding: 0;">
+            {% for class_config in classes %}
+            <a href="{{ url_for('generator.class_subjects_config', class_id=class_config.id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+                <div class="data-card-header">
+                    <div class="data-card-title"><i class="fas fa-school"></i> {{ class_config.class_name }}</div>
+                    {% if class_config.subject_configs|length > 0 %}
+                    <span class="badge badge-info">{{ class_config.subject_configs|length }} overrides</span>
+                    {% endif %}
+                </div>
+                <div class="data-card-row">
+                    {{ class_config.num_arms }} arm(s)
+                    {% if class_config.has_streams %} • Has Streams{% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-school"></i>
+            <h3>No Classes</h3>
+            <p>Add classes first before configuring subjects per class</p>
+            <a href="{{ url_for('generator.classes_config') }}" class="btn btn-primary">Add Classes</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mt-3">
+    <div class="card-header"><h3>How It Works</h3></div>
+    <div class="card-body">
+        <ol>
+            <li><strong>Global Defaults</strong> - Set in <a href="{{ url_for('generator.subjects_config') }}">Subject Settings</a></li>
+            <li><strong>Per-Class Overrides</strong> - Set here to override specific classes</li>
+            <li>During generation, class-specific settings take priority over global defaults</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}

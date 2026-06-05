@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Subjects - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Subjects</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Subjects</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('subjects.bulk_add_subjects') }}" class="btn btn-secondary"><i class="fas fa-list"></i> Bulk Add</a>
+        <a href="{{ url_for('subjects.add_subject') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add</a>
+    </div>
+</div>
+
+{% for category, cat_subjects in categories.items() %}
+<div class="card mb-3">
+    <div class="card-header"><h3>{{ category }} ({{ cat_subjects|length }})</h3></div>
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for subject in cat_subjects %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ subject.name }}</div>
+                    <span class="badge badge-secondary">{{ subject.short_name }}</span>
+                </div>
+                <div class="data-card-actions">
+                    <a href="{{ url_for('subjects.edit_subject', subject_id=subject.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                    <form action="{{ url_for('subjects.delete_subject', subject_id=subject.id) }}" method="POST" style="flex:1;" data-confirm="Delete {{ subject.name }}?">
+                        <button type="submit" class="btn btn-danger btn-sm w-100"><i class="fas fa-trash"></i></button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-book"></i>
+            <h3>No Subjects</h3>
+            <p>Add your first subject</p>
+            <a href="{{ url_for('subjects.add_subject') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Subject</a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

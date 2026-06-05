@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Process Promotions - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Process</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Process Promotions</h1></div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">From Session</label>
+                <select name="from_session_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Session</option>
+                    {% for session in sessions %}
+                    <option value="{{ session.id }}" {% if from_session_id == session.id %}selected{% endif %}>{{ session.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">To Session</label>
+                <select name="to_session_id" class="form-control">
+                    <option value="">Select Session</option>
+                    {% for session in sessions %}
+                    <option value="{{ session.id }}" {% if to_session_id == session.id %}selected{% endif %}>{{ session.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="class_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for cls in classes %}
+                    <option value="{{ cls.id }}" {% if class_id == cls.id %}selected{% endif %}>{{ cls.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if students_data %}
+<div class="card mb-3">
+    <div class="card-body">
+        <p><strong>Promotion Threshold:</strong> {{ promotion_threshold }}%</p>
+        <p class="text-muted">Students are evaluated based on their Third Term average scores.</p>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('promotion.execute_promotion') }}">
+    <input type="hidden" name="from_session_id" value="{{ from_session_id }}">
+    <input type="hidden" name="to_session_id" value="{{ to_session_id }}">
+    
+    <div class="card">
+        <div class="card-header">
+            <h3>{{ selected_class.name }} Students ({{ students_data|length }})</h3>
+        </div>
+        <div class="card-body" style="padding: 0;">
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Average</th>
+                            <th>Recommendation</th>
+                            <th>Action</th>
+                            <th>Promote To</th>
+                            <th>Stream</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in students_data %}
+                        <tr>
+                            <td>
+                                {{ item.student.full_name }}
+                                <input type="hidden" name="student_id[]" value="{{ item.student.id }}">
+                                <input type="hidden" name="average[]" value="{{ item.average or '' }}">
+                                <br><small class="text-muted">{{ item.assignment.display_name }}</small>
+                            </td>
+                            <td>
+                                {% if item.average %}
+                                <span class="badge {% if item.average >= promotion_threshold %}badge-success{% else %}badge-warning{% endif %}">{{ item.average }}%</span>
+                                {% else %}
+                                <span class="text-muted">No scores</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.existing_promotion %}
+                                <span class="badge badge-info">{{ item.existing_promotion.status }}</span>
+                                {% else %}
+                                {{ item.recommendation.message }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <select name="action[]" class="form-control" style="width: 120px;">
+                                    <option value="skip">Skip</option>
+                                    {% if item.recommendation.status == 'graduated' %}
+                                    {# SSS3 students can only graduate #}
+                                    <option value="graduated" selected>Graduate</option>
+                                    {% else %}
+                                    <option value="promoted" {% if item.recommendation.status == 'promote' %}selected{% endif %}>Promote</option>
+                                    <option value="repeated" {% if item.recommendation.status == 'repeat' %}selected{% endif %}>Repeat</option>
+                                    {% endif %}
+                                </select>
+                            </td>
+                            <td>
+                                {% if item.recommendation.status == 'graduated' %}
+                                <span class="text-muted">N/A</span>
+                                <input type="hidden" name="to_class_id[]" value="">
+                                {% else %}
+                                <select name="to_class_id[]" class="form-control" style="width: 100px;">
+                                    {% for cls in classes %}
+                                    <option value="{{ cls.id }}" {% if item.recommendation.to_class == cls.id %}selected{% endif %}>{{ cls.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <input type="text" name="stream[]" class="form-control" value="{{ item.recommendation.stream or '' }}" placeholder="Stream" style="width: 100px;">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="page-header-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Promotions</button>
+            </div>
+        </div>
+    </div>
+</form>
+{% elif from_session_id and class_id %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-users"></i>
+            <h3>No Students</h3>
+            <p>No students found for this class in the selected session's Third Term</p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select Options</h3>
+            <p>Choose session and class to process promotions</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

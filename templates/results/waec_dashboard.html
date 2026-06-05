@@ -1,0 +1,1231 @@
+{% extends "base.html" %}
+{% block title %}WAEC Results - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> <span>WAEC</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===== MOBILE FIRST ===== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.page-header h1 {
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem;
+    border: 1px solid #e0e0e0;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 0.25rem;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tab {
+    padding: 0.5rem 0.75rem;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    text-decoration: none;
+    color: #333;
+}
+
+.tab.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+/* Cards */
+.card {
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.card-body {
+    padding: 0.75rem;
+}
+
+/* Filters */
+.filters-card {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 1rem;
+}
+
+.filter-search { margin-bottom: 0.6rem; }
+.filter-search input {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    width: 100%;
+}
+.filters-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.filter-group label {
+    font-size: 0.7rem;
+    color: #666;
+    display: block;
+    margin-bottom: 0.2rem;
+}
+
+.filter-group select,
+.filter-group input {
+    padding: 0.4rem;
+    font-size: 0.8rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.filter-btn {
+    grid-column: span 2;
+    margin-top: 0.5rem;
+}
+
+/* Chart */
+.chart-body {
+    padding: 0.5rem;
+    height: 200px;
+    position: relative;
+}
+
+/* Grade Badges */
+.grade-badge {
+    display: inline-block;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin: 1px;
+}
+
+.grade-a1 { background: #d4edda; color: #155724; }
+.grade-b2, .grade-b3 { background: #cce5ff; color: #004085; }
+.grade-c4, .grade-c5, .grade-c6 { background: #fff3cd; color: #856404; }
+.grade-d7, .grade-e8 { background: #f8d7da; color: #721c24; }
+.grade-f9 { background: #721c24; color: white; }
+
+/* Top Performers List */
+.top-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.top-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.top-item:last-child { border-bottom: none; }
+
+.top-rank {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #007bff;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.top-rank.gold { background: linear-gradient(135deg, #f5af19, #f12711); }
+.top-rank.silver { background: linear-gradient(135deg, #bdc3c7, #606060); }
+.top-rank.bronze { background: linear-gradient(135deg, #cd7f32, #8b4513); }
+
+.top-name {
+    flex: 1;
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.top-value {
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+/* Subject Analysis Table */
+.subject-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.subject-table th,
+.subject-table td {
+    padding: 0.4rem;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+}
+
+.subject-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+
+.subject-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+.subject-table .sortable {
+    cursor: pointer;
+}
+
+.subject-table .sortable:hover {
+    background: #e9ecef;
+}
+
+/* Student Cards (Mobile) */
+.students-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.student-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 0.75rem;
+}
+
+.student-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.student-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.student-id {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.student-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.35rem;
+    text-align: center;
+    padding: 0.5rem 0;
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+    margin: 0.5rem 0;
+}
+
+.student-stat-value {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.student-stat-label {
+    font-size: 0.6rem;
+    color: #666;
+}
+
+.student-grades {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+.student-actions {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #eee;
+}
+
+/* Desktop Table */
+.desktop-table { display: none; }
+
+/* Sort Buttons */
+.sort-btns {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.sort-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    text-decoration: none;
+    background: #f8f9fa;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+.sort-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+/* ===== TABLET+ ===== */
+@media (min-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+    
+    .stat-value { font-size: 2rem; }
+    .stat-label { font-size: 0.8rem; }
+    
+    .filters-grid { grid-template-columns: repeat(6, 1fr); }
+    .filter-btn { grid-column: span 1; margin-top: 0; }
+    
+    .chart-body { height: 250px; }
+    
+    .charts-row {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .charts-row .card { margin-bottom: 0; }
+    
+    .content-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 1rem;
+    }
+    
+    .students-list { display: none; }
+    
+    .desktop-table {
+        display: block;
+        overflow-x: auto;
+    }
+    
+    .desktop-table table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+    }
+    
+    .desktop-table th,
+    .desktop-table td {
+        padding: 0.5rem;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .desktop-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+    }
+    
+    .desktop-table tbody tr:hover { background: #f8f9fa; }
+    
+    .subject-table { font-size: 0.8rem; }
+    .subject-table th, .subject-table td { padding: 0.5rem; }
+}
+
+@media (min-width: 1024px) {
+    .chart-body { height: 300px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header">
+    <h1>WAEC Results</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('results.waec_analytics') }}" class="btn btn-info btn-sm" title="Analytics"><i class="fas fa-chart-bar"></i></a>
+        <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
+        {% if selected_year %}
+        <a href="{{ url_for('results.export_waec', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
+        <button type="button" onclick="openExportModal()" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- View Tabs -->
+<div class="tabs">
+    <a href="{{ url_for('results.waec_list', year=selected_year, view='students', search=search) }}" class="tab {% if view_mode == 'students' %}active{% endif %}">
+        <i class="fas fa-users"></i> Students
+    </a>
+    <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects', search=search) }}" class="tab {% if view_mode == 'subjects' %}active{% endif %}">
+        <i class="fas fa-book"></i> Subjects
+    </a>
+    <a href="{{ url_for('results.waec_list', year=selected_year, view='top', search=search) }}" class="tab {% if view_mode == 'top' %}active{% endif %}">
+        <i class="fas fa-trophy"></i> Top Performers
+    </a>
+</div>
+
+<!-- Stats Cards -->
+{% if school_stats %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ school_stats.unique_students }}</div>
+        <div class="stat-label">Students</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #28a745;">{{ school_stats.overall_pass_rate }}%</div>
+        <div class="stat-label">Pass Rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #007bff;">{{ school_stats.overall_distinction_rate }}%</div>
+        <div class="stat-label">Distinction</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #6f42c1;">{{ grade_distribution.get('A1', 0) }}</div>
+        <div class="stat-label">Total A1s</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="filters-card">
+    <form method="GET" action="{{ url_for('results.waec_list', search=search) }}">
+        <input type="hidden" name="view" value="{{ view_mode }}">
+        <div class="filter-group filter-search">
+            <label>Search by name or ID</label>
+            <input type="text" name="search" value="{{ search or '' }}" placeholder="Type a student name or ID...">
+        </div>
+        <div class="filters-grid">
+            <div class="filter-group">
+                <label>Year</label>
+                <select name="year" onchange="this.form.submit()">
+                    {% for year in years %}
+                    <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Subject</label>
+                <select name="subject">
+                    <option value="">All</option>
+                    {% for subj in subjects %}
+                    <option value="{{ subj }}" {% if subj == subject_filter %}selected{% endif %}>{{ subj[:12] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Grade</label>
+                <select name="grade">
+                    <option value="">All</option>
+                    {% for g in grades %}
+                    <option value="{{ g }}" {% if g == grade_filter %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Min A1s</label>
+                <input type="number" name="min_a1" min="0" max="9" value="{{ min_a1 or '' }}" placeholder="0">
+            </div>
+            <div class="filter-group">
+                <label>Min Credits</label>
+                <input type="number" name="min_credits" min="0" max="9" value="{{ min_credits or '' }}" placeholder="0">
+            </div>
+            <div class="filter-group filter-btn">
+                <label style="visibility: hidden;">Filter</label>
+                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-filter"></i> Filter</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if view_mode == 'top' %}
+<!-- TOP PERFORMERS VIEW -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Top Performers by Grade</h3>
+    </div>
+    <div class="card-body">
+        <!-- Grade Tabs -->
+        <div class="tabs" style="margin-bottom: 1rem;">
+            {% for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6'] %}
+            <a href="#grade-{{ g }}" class="tab" onclick="showGradeTab('{{ g }}')">{{ g }} ({{ grade_distribution.get(g, 0) }})</a>
+            {% endfor %}
+        </div>
+        
+        {% for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6'] %}
+        <div id="grade-{{ g }}" class="grade-tab-content" style="{% if g != 'A1' %}display: none;{% endif %}">
+            <h4 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Students with Most {{ g }}s</h4>
+            {% if top_by_grade[g] %}
+            <ul class="top-list">
+                {% for student in top_by_grade[g] %}
+                <li class="top-item">
+                    <span class="top-rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">{{ loop.index }}</span>
+                    <span class="top-name">{{ student.name }}</span>
+                    <span class="top-value">
+                        <span class="grade-badge grade-{{ g|lower }}">{{ student.grade_counts[g] }} {{ g }}</span>
+                    </span>
+                    <a href="{{ url_for('results.view_waec_student', student_id=student.id) }}" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.4rem;">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="color: #666; font-size: 0.85rem; text-align: center; padding: 1rem;">No students with {{ g }} grades</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Subjects by Grade -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Subjects by Grade Count</h3>
+        <div class="sort-btns">
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_a1' %}active{% endif %}">A1</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_b2', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_b2' %}active{% endif %}">B2</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_credits', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_credits' %}active{% endif %}">Credits</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">Pass%</a>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="subject-table">
+            <thead>
+                <tr>
+                    <th style="text-align: left;">Subject</th>
+                    <th>A1</th>
+                    <th>B2</th>
+                    <th>B3</th>
+                    <th>C4-6</th>
+                    <th>D7-F9</th>
+                    <th>Total</th>
+                    <th>Pass%</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for subj in subjects_by_grade %}
+                <tr>
+                    <td>{{ subj.subject[:15] }}</td>
+                    <td><span class="grade-badge grade-a1">{{ subj.grades.A1 }}</span></td>
+                    <td><span class="grade-badge grade-b2">{{ subj.grades.B2 }}</span></td>
+                    <td><span class="grade-badge grade-b3">{{ subj.grades.B3 }}</span></td>
+                    <td>{{ subj.grades.C4 + subj.grades.C5 + subj.grades.C6 }}</td>
+                    <td style="color: #dc3545;">{{ subj.grades.D7 + subj.grades.E8 + subj.grades.F9 }}</td>
+                    <td><strong>{{ subj.total }}</strong></td>
+                    <td style="color: {% if subj.pass_rate >= 70 %}#28a745{% elif subj.pass_rate >= 50 %}#ffc107{% else %}#dc3545{% endif %}">
+                        <strong>{{ subj.pass_rate }}%</strong>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% elif view_mode == 'subjects' %}
+<!-- SUBJECTS VIEW -->
+<div class="charts-row">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Grade Distribution</span>
+        </div>
+        <div class="chart-body"><canvas id="gradeChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Subject Pass Rates</span>
+        </div>
+        <div class="chart-body"><canvas id="subjectChart"></canvas></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Subject Analysis</h3>
+        <div class="sort-btns">
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects', sort='subject_a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_a1' %}active{% endif %}">By A1</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">By Pass%</a>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="subject-table">
+            <thead>
+                <tr>
+                    <th style="text-align: left;">Subject</th>
+                    <th>A1</th>
+                    <th>B2</th>
+                    <th>B3</th>
+                    <th>C4</th>
+                    <th>C5</th>
+                    <th>C6</th>
+                    <th>D7</th>
+                    <th>E8</th>
+                    <th>F9</th>
+                    <th>Pass%</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for subj in subjects_by_grade %}
+                <tr>
+                    <td>{{ subj.subject[:15] }}</td>
+                    {% for g in grades %}
+                    <td><span class="grade-badge grade-{{ g|lower }}">{{ subj.grades[g] }}</span></td>
+                    {% endfor %}
+                    <td style="color: {% if subj.pass_rate >= 70 %}#28a745{% elif subj.pass_rate >= 50 %}#ffc107{% else %}#dc3545{% endif %}">
+                        <strong>{{ subj.pass_rate }}%</strong>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<!-- STUDENTS VIEW (Default) -->
+<div class="charts-row">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Grade Distribution</span>
+        </div>
+        <div class="chart-body"><canvas id="gradeChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Subject Pass Rates</span>
+        </div>
+        <div class="chart-body"><canvas id="subjectChart"></canvas></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Students ({{ students|length }})</span>
+        <div class="sort-btns">
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'a1' %}active{% endif %}">A1</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='b2', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'b2' %}active{% endif %}">B2</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='credits', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'credits' %}active{% endif %}">Credits</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='points', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'points' %}active{% endif %}">Avg</a>
+            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='name', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'name' %}active{% endif %}">Name</a>
+        </div>
+    </div>
+    
+    {% if students %}
+    <!-- Mobile: Card View -->
+    <div class="students-list" style="padding: 0.5rem;">
+        {% for s in students %}
+        <div class="student-card">
+            <div class="student-card-header">
+                <div>
+                    <div class="student-name">{{ s.name }}</div>
+                    <div class="student-id">{{ s.student_id }}</div>
+                </div>
+            </div>
+            <div class="student-stats">
+                <div>
+                    <div class="student-stat-value" style="color: #28a745;">{{ s.a1_count }}</div>
+                    <div class="student-stat-label">A1</div>
+                </div>
+                <div>
+                    <div class="student-stat-value" style="color: #17a2b8;">{{ s.b2_count }}</div>
+                    <div class="student-stat-label">B2</div>
+                </div>
+                <div>
+                    <div class="student-stat-value" style="color: #007bff;">{{ s.credit_count }}</div>
+                    <div class="student-stat-label">Credits</div>
+                </div>
+                <div>
+                    <div class="student-stat-value">{{ s.avg_points }}</div>
+                    <div class="student-stat-label">Avg</div>
+                </div>
+            </div>
+            <div class="student-grades">
+                {% for r in s.results %}<span class="grade-badge grade-{{ r.grade|lower }}" title="{{ r.subject }}">{{ r.grade }}</span>{% endfor %}
+            </div>
+            <div class="student-actions">
+                <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
+                <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete all WAEC results for {{ s.name }}?');">
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Desktop: Table View -->
+    <div class="desktop-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Student</th>
+                    <th>A1</th>
+                    <th>B2</th>
+                    <th>B3</th>
+                    <th>Credits</th>
+                    <th>Avg</th>
+                    <th>Grades</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
+                    <td><span class="grade-badge grade-a1">{{ s.a1_count }}</span></td>
+                    <td><span class="grade-badge grade-b2">{{ s.b2_count }}</span></td>
+                    <td><span class="grade-badge grade-b3">{{ s.b3_count }}</span></td>
+                    <td>{{ s.credit_count }}</td>
+                    <td>{{ s.avg_points }}</td>
+                    <td>{% for r in s.results %}<span class="grade-badge grade-{{ r.grade|lower }}" title="{{ r.subject }}">{{ r.grade }}</span>{% endfor %}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
+                            <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                            <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete?');">
+                                <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 2rem; color: #666;">
+        <i class="fas fa-file-alt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+        <p>No results found</p>
+        <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary btn-sm">Add Results</a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Hidden Export Container - Compact Mobile-Friendly -->
+<div id="exportContainer" style="position: absolute; left: -9999px; width: 600px;">
+    <div id="exportContent" style="padding: 12px; background: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <h2 style="color: #28a745; text-align: center; margin: 0 0 8px 0; font-size: 18px;">WAEC Results {{ selected_year }}</h2>
+        <p id="exportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
+        <table id="exportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+            <thead id="exportTableHead"></thead>
+            <tbody id="exportTableBody"></tbody>
+        </table>
+        <div id="exportGradeSummary" style="margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 6px; text-align: center;"></div>
+        <p style="text-align: center; margin: 8px 0 0 0; color: #999; font-size: 9px;" id="exportFooter"></p>
+    </div>
+</div>
+
+<!-- Export Options Modal -->
+<div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 0.5rem; overflow-y: auto;">
+    <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
+        <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1;">
+            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-image"></i> Export WAEC as Image</h3>
+            <button onclick="closeExportModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        <div style="padding: 1rem;">
+            <!-- Export Type -->
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Export Type:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportType" value="students" checked onchange="toggleExportOptions()">
+                        <span style="font-size: 0.85rem; font-weight: 500;">Students List</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportType" value="subjects" onchange="toggleExportOptions()">
+                        <span style="font-size: 0.85rem; font-weight: 500;">Subjects Analysis</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Student Columns -->
+            <div id="studentOptions">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Student Columns:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-bottom: 1rem;">
+                    <label class="exp-check"><input type="checkbox" id="expRank" checked><span>Rank</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expName" checked disabled><span>Name (required)</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expStudentId" checked><span>Student ID</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expA1" checked><span>A1 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expB2"><span>B2 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expB3"><span>B3 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expCredits" checked><span>Credits (A1-C6)</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expAvgPts" checked><span>Avg Points</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expAllGrades"><span>All Grades (A1-F9)</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjectGrades" checked><span>Subject Grades</span></label>
+                </div>
+            </div>
+            
+            <!-- Subject Options -->
+            <div id="subjectOptions" style="display: none;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Subject Columns:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-bottom: 1rem;">
+                    <label class="exp-check"><input type="checkbox" id="expSubjName" checked disabled><span>Subject (required)</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjTotal" checked><span>Total Students</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjA1" checked><span>A1 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjB2" checked><span>B2 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjB3" checked><span>B3 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjC456"><span>C4-C6 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjD7F9"><span>D7-F9 Count</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expSubjPassRate" checked><span>Pass Rate %</span></label>
+                </div>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Include Summary:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem;">
+                    <label class="exp-check"><input type="checkbox" id="expSummary" checked><span>Overall Stats</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expGradeCount" checked><span>Grade Totals</span></label>
+                    <label class="exp-check"><input type="checkbox" id="expTimestamp" checked><span>Timestamp</span></label>
+                </div>
+            </div>
+            
+            <!-- Quality -->
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Image Quality:</label>
+                <select id="expQuality" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.9rem;">
+                    <option value="2">Standard (2x)</option>
+                    <option value="3" selected>HD (3x)</option>
+                    <option value="4">Ultra HD (4x)</option>
+                </select>
+            </div>
+            
+            <!-- Buttons -->
+            <div style="display: flex; gap: 0.5rem;">
+                <button onclick="closeExportModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+                <button onclick="generateWAECExport()" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.exp-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+.exp-check:hover { background: #e9ecef; }
+.exp-check input { margin: 0; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// Data for export
+var studentsData = [];
+var subjectsByGrade = [];
+var gradeDistribution = {};
+var schoolStats = null;
+var selectedYear = 2024;
+var allGrades = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6', 'D7', 'E8', 'F9'];
+
+try {
+    studentsData = {{ students|tojson }};
+} catch(e) { console.log('students error', e); }
+
+try {
+    subjectsByGrade = {{ subjects_by_grade|tojson }};
+} catch(e) { console.log('subjects error', e); }
+
+try {
+    gradeDistribution = {{ grade_distribution|tojson }};
+} catch(e) { console.log('grade dist error', e); }
+
+try {
+    schoolStats = {{ school_stats|tojson if school_stats else 'null' }};
+} catch(e) { console.log('stats error', e); }
+
+try {
+    selectedYear = {{ selected_year|tojson }};
+} catch(e) { console.log('year error', e); }
+
+// Modal functions
+function openExportModal() {
+    document.getElementById('exportModal').style.display = 'block';
+}
+
+function closeExportModal() {
+    document.getElementById('exportModal').style.display = 'none';
+}
+
+function toggleExportOptions() {
+    var t = document.querySelector('input[name="exportType"]:checked').value;
+    document.getElementById('studentOptions').style.display = t === 'students' ? 'block' : 'none';
+    document.getElementById('subjectOptions').style.display = t === 'subjects' ? 'block' : 'none';
+}
+
+// Close on outside click
+document.getElementById('exportModal').onclick = function(e) {
+    if (e.target === this) closeExportModal();
+};
+
+function generateWAECExport() {
+    var exportType = document.querySelector('input[name="exportType"]:checked').value;
+    var quality = parseInt(document.getElementById('expQuality').value);
+    var showSummary = document.getElementById('expSummary').checked;
+    var showGradeCount = document.getElementById('expGradeCount').checked;
+    var showTimestamp = document.getElementById('expTimestamp').checked;
+    
+    if (exportType === 'students') {
+        generateStudentsExport();
+    } else {
+        generateSubjectsExport();
+    }
+    
+    // Summary
+    if (showSummary && schoolStats) {
+        document.getElementById('exportSummary').innerHTML = 
+            'Total Students: <strong>' + (schoolStats.unique_students || 0) + '</strong> | ' +
+            'Pass Rate: <strong>' + (schoolStats.overall_pass_rate || 0) + '%</strong> | ' +
+            'Distinction Rate: <strong>' + (schoolStats.overall_distinction_rate || 0) + '%</strong>';
+        document.getElementById('exportSummary').style.display = 'block';
+    } else {
+        document.getElementById('exportSummary').style.display = 'none';
+    }
+    
+    // Grade count summary
+    if (showGradeCount) {
+        var gradeHtml = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">';
+        allGrades.forEach(function(g) {
+            var count = gradeDistribution[g] || 0;
+            var color = g === 'A1' ? '#28a745' : (g === 'B2' || g === 'B3') ? '#17a2b8' : (g === 'C4' || g === 'C5' || g === 'C6') ? '#ffc107' : '#dc3545';
+            gradeHtml += '<span style="padding: 0.25rem 0.5rem; background: ' + color + '20; color: ' + color + '; border-radius: 4px; font-weight: 600; font-size: 11px;">' + g + ': ' + count + '</span>';
+        });
+        gradeHtml += '</div>';
+        document.getElementById('exportGradeSummary').innerHTML = gradeHtml;
+        document.getElementById('exportGradeSummary').style.display = 'block';
+    } else {
+        document.getElementById('exportGradeSummary').style.display = 'none';
+    }
+    
+    // Timestamp
+    if (showTimestamp) {
+        var now = new Date();
+        document.getElementById('exportFooter').innerHTML = 'Generated on ' + now.toLocaleDateString() + ' ' + now.toLocaleTimeString() + ' | School Management System';
+        document.getElementById('exportFooter').style.display = 'block';
+    } else {
+        document.getElementById('exportFooter').style.display = 'none';
+    }
+    
+    closeExportModal();
+    
+    // Show loading indicator
+    var loadingDiv = document.createElement('div');
+    loadingDiv.id = 'exportLoading';
+    loadingDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;';
+    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating image...</div><div style="font-size:14px;">Please wait</div>';
+    document.body.appendChild(loadingDiv);
+    
+    // Generate image - compact width for mobile viewing
+    var container = document.getElementById('exportContainer');
+    container.style.position = 'fixed';
+    container.style.left = '0';
+    container.style.top = '0';
+    container.style.zIndex = '9999';
+    container.style.background = 'white';
+    
+    setTimeout(function() {
+        html2canvas(container, {
+            scale: quality,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            width: 600,
+            windowWidth: 600
+        }).then(function(canvas) {
+            container.style.position = 'absolute';
+            container.style.left = '-9999px';
+            
+            // Remove loading
+            document.getElementById('exportLoading').remove();
+            
+            // Create modal to show image for manual save (mobile-friendly)
+            var imgData = canvas.toDataURL('image/png', 1.0);
+            var saveModal = document.createElement('div');
+            saveModal.id = 'saveImageModal';
+            saveModal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:99999;padding:10px;overflow:auto;';
+            saveModal.innerHTML = 
+                '<div style="text-align:center;margin-bottom:10px;">' +
+                '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
+                '<button onclick="document.getElementById(\'saveImageModal\').remove()" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
+                '</div>' +
+                '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="WAEC Results Export">';
+            document.body.appendChild(saveModal);
+            
+        }).catch(function(err) {
+            container.style.position = 'absolute';
+            container.style.left = '-9999px';
+            document.getElementById('exportLoading').remove();
+            alert('Error generating image: ' + err.message);
+        });
+    }, 100);
+}
+
+function generateStudentsExport() {
+    var showRank = document.getElementById('expRank').checked;
+    var showStudentId = document.getElementById('expStudentId').checked;
+    var showA1 = document.getElementById('expA1').checked;
+    var showB2 = document.getElementById('expB2').checked;
+    var showB3 = document.getElementById('expB3').checked;
+    var showCredits = document.getElementById('expCredits').checked;
+    var showAvgPts = document.getElementById('expAvgPts').checked;
+    var showAllGrades = document.getElementById('expAllGrades').checked;
+    var showSubjectGrades = document.getElementById('expSubjectGrades').checked;
+    
+    // Compact header style
+    var thStyle = 'padding:4px 6px;background:#28a745;color:white;border:1px solid #1e7e34;font-size:10px;white-space:nowrap;';
+    var tdStyle = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
+    
+    // Build header
+    var headerHtml = '<tr>';
+    if (showRank) headerHtml += '<th style="' + thStyle + '">#</th>';
+    headerHtml += '<th style="' + thStyle + 'text-align:left;">Name</th>';
+    if (showStudentId) headerHtml += '<th style="' + thStyle + '">ID</th>';
+    if (showA1) headerHtml += '<th style="' + thStyle + '">A1</th>';
+    if (showB2) headerHtml += '<th style="' + thStyle + '">B2</th>';
+    if (showB3) headerHtml += '<th style="' + thStyle + '">B3</th>';
+    if (showAllGrades) {
+        for (var i = 0; i < allGrades.length; i++) {
+            headerHtml += '<th style="' + thStyle + '">' + allGrades[i] + '</th>';
+        }
+    }
+    if (showCredits) headerHtml += '<th style="' + thStyle + '">Cr</th>';
+    if (showAvgPts) headerHtml += '<th style="' + thStyle + '">Avg</th>';
+    if (showSubjectGrades) headerHtml += '<th style="' + thStyle + 'text-align:left;">Grades</th>';
+    headerHtml += '</tr>';
+    document.getElementById('exportTableHead').innerHTML = headerHtml;
+    
+    // Build body
+    var bodyHtml = '';
+    for (var idx = 0; idx < studentsData.length; idx++) {
+        var s = studentsData[idx];
+        var rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
+        bodyHtml += '<tr style="background:' + rowBg + '">';
+        if (showRank) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + (idx + 1) + '</td>';
+        bodyHtml += '<td style="' + tdStyle + '">' + s.name + '</td>';
+        if (showStudentId) bodyHtml += '<td style="' + tdStyle + 'font-size:9px;">' + s.student_id + '</td>';
+        if (showA1) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#28a745;font-weight:600;">' + s.a1_count + '</td>';
+        if (showB2) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;font-weight:600;">' + s.b2_count + '</td>';
+        if (showB3) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + s.b3_count + '</td>';
+        if (showAllGrades) {
+            for (var j = 0; j < allGrades.length; j++) {
+                var count = s.grade_counts ? (s.grade_counts[allGrades[j]] || 0) : 0;
+                bodyHtml += '<td style="' + tdStyle + 'text-align:center;">' + count + '</td>';
+            }
+        }
+        if (showCredits) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + s.credit_count + '</td>';
+        if (showAvgPts) {
+            var color = s.avg_points <= 3 ? '#28a745' : s.avg_points <= 5 ? '#ffc107' : '#dc3545';
+            bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:' + color + ';font-weight:600;">' + s.avg_points + '</td>';
+        }
+        if (showSubjectGrades && s.results) {
+            var grades = '';
+            for (var k = 0; k < s.results.length; k++) {
+                var r = s.results[k];
+                grades += r.subject.substring(0, 3) + ':' + r.grade + ' ';
+            }
+            bodyHtml += '<td style="' + tdStyle + 'font-size:8px;">' + grades + '</td>';
+        }
+        bodyHtml += '</tr>';
+    }
+    document.getElementById('exportTableBody').innerHTML = bodyHtml;
+}
+
+function generateSubjectsExport() {
+    var showTotal = document.getElementById('expSubjTotal').checked;
+    var showA1 = document.getElementById('expSubjA1').checked;
+    var showB2 = document.getElementById('expSubjB2').checked;
+    var showB3 = document.getElementById('expSubjB3').checked;
+    var showC456 = document.getElementById('expSubjC456').checked;
+    var showD7F9 = document.getElementById('expSubjD7F9').checked;
+    var showPassRate = document.getElementById('expSubjPassRate').checked;
+    
+    // Compact styles
+    var thStyle = 'padding:4px 6px;background:#28a745;color:white;border:1px solid #1e7e34;font-size:10px;white-space:nowrap;';
+    var tdStyle = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
+    
+    // Build header
+    var headerHtml = '<tr>';
+    headerHtml += '<th style="' + thStyle + 'text-align:left;">Subject</th>';
+    if (showTotal) headerHtml += '<th style="' + thStyle + '">N</th>';
+    if (showA1) headerHtml += '<th style="' + thStyle + '">A1</th>';
+    if (showB2) headerHtml += '<th style="' + thStyle + '">B2</th>';
+    if (showB3) headerHtml += '<th style="' + thStyle + '">B3</th>';
+    if (showC456) headerHtml += '<th style="' + thStyle + '">C4-6</th>';
+    if (showD7F9) headerHtml += '<th style="' + thStyle + '">D7-F9</th>';
+    if (showPassRate) headerHtml += '<th style="' + thStyle + '">Pass%</th>';
+    headerHtml += '</tr>';
+    document.getElementById('exportTableHead').innerHTML = headerHtml;
+    
+    // Build body
+    var bodyHtml = '';
+    for (var idx = 0; idx < subjectsByGrade.length; idx++) {
+        var subj = subjectsByGrade[idx];
+        var rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
+        var c456 = (subj.grades.C4 || 0) + (subj.grades.C5 || 0) + (subj.grades.C6 || 0);
+        var d7f9 = (subj.grades.D7 || 0) + (subj.grades.E8 || 0) + (subj.grades.F9 || 0);
+        var passColor = subj.pass_rate >= 70 ? '#28a745' : subj.pass_rate >= 50 ? '#ffc107' : '#dc3545';
+        
+        bodyHtml += '<tr style="background:' + rowBg + '">';
+        bodyHtml += '<td style="' + tdStyle + 'font-weight:500;">' + subj.subject + '</td>';
+        if (showTotal) bodyHtml += '<td style="' + tdStyle + 'text-align:center;">' + subj.total + '</td>';
+        if (showA1) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#28a745;font-weight:600;">' + (subj.grades.A1 || 0) + '</td>';
+        if (showB2) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + (subj.grades.B2 || 0) + '</td>';
+        if (showB3) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + (subj.grades.B3 || 0) + '</td>';
+        if (showC456) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#856404;">' + c456 + '</td>';
+        if (showD7F9) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#dc3545;">' + d7f9 + '</td>';
+        if (showPassRate) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:' + passColor + ';font-weight:600;">' + subj.pass_rate + '%</td>';
+        bodyHtml += '</tr>';
+    }
+    document.getElementById('exportTableBody').innerHTML = bodyHtml;
+}
+
+// Grade tab switching
+function showGradeTab(grade) {
+    var contents = document.querySelectorAll('.grade-tab-content');
+    for (var i = 0; i < contents.length; i++) {
+        contents[i].style.display = 'none';
+    }
+    document.getElementById('grade-' + grade).style.display = 'block';
+    var tabs = document.querySelectorAll('.tabs .tab');
+    for (var j = 0; j < tabs.length; j++) {
+        tabs[j].classList.remove('active');
+    }
+    event.target.classList.add('active');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+    
+    // Grade Distribution Chart
+    var gradeCtx = document.getElementById('gradeChart');
+    if (gradeCtx && gradeDistribution) {
+        new Chart(gradeCtx, {
+            type: 'bar',
+            data: { 
+                labels: Object.keys(gradeDistribution), 
+                datasets: [{ 
+                    data: Object.values(gradeDistribution), 
+                    backgroundColor: ['#28a745','#17a2b8','#5bc0de','#ffc107','#f0ad4e','#ffcc00','#fd7e14','#dc3545','#721c24'],
+                    borderRadius: 4
+                }] 
+            },
+            options: Object.assign({}, opts, { scales: { y: { beginAtZero: true } } })
+        });
+    }
+    
+    // Subject Pass Rates Chart
+    var subjectCtx = document.getElementById('subjectChart');
+    if (subjectCtx && subjectsByGrade && subjectsByGrade.length > 0) {
+        var top8 = subjectsByGrade.slice(0, 8);
+        var labels = [];
+        var data = [];
+        var colors = [];
+        for (var i = 0; i < top8.length; i++) {
+            labels.push(top8[i].subject.substring(0, 10));
+            data.push(top8[i].pass_rate);
+            colors.push(top8[i].pass_rate >= 70 ? '#28a745' : top8[i].pass_rate >= 50 ? '#ffc107' : '#dc3545');
+        }
+        new Chart(subjectCtx, {
+            type: 'bar',
+            data: { 
+                labels: labels, 
+                datasets: [{ 
+                    data: data, 
+                    backgroundColor: colors,
+                    borderRadius: 4
+                }] 
+            },
+            options: Object.assign({}, opts, { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } } })
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}{{ student.full_name }} - {{ app_name }}{% endblock %}
+
+{% block breadcrumb %}<span>{{ student.first_name }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ student.full_name }}</h1>
+        <div class="d-flex gap-1 flex-wrap mt-1">
+            <span class="badge badge-primary">{{ student.student_id }}</span>
+            <span class="badge badge-{% if student.gender == 'Male' %}info{% else %}warning{% endif %}">{{ student.gender }}</span>
+        </div>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('subjects.student_report_card', student_id=student.id) }}" class="btn btn-success"><i class="fas fa-file-invoice"></i> Report</a>
+        <a href="{{ url_for('main.edit_student', student_id=student.id) }}" class="btn btn-primary"><i class="fas fa-edit"></i> Edit</a>
+        <a href="{{ url_for('main.students_list') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i></a>
+    </div>
+</div>
+
+<!-- Personal Information -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-user"></i> Personal Information</h3></div>
+    <div class="card-body">
+        <div class="student-profile">
+            <div class="student-avatar {% if student.gender == 'Male' %}male{% else %}female{% endif %}">
+                <i class="fas fa-{% if student.gender == 'Male' %}male{% else %}female{% endif %}"></i>
+            </div>
+            <div class="student-details">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Full Name</span>
+                        <span class="info-value">{{ student.full_name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Student ID</span>
+                        <span class="info-value">{{ student.student_id }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Gender</span>
+                        <span class="info-value">{{ student.gender }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Date of Birth</span>
+                        <span class="info-value">{{ student.date_of_birth|format_date if student.date_of_birth else 'Not set' }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Age</span>
+                        <span class="info-value">{{ student.age or 'N/A' }} years</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Religion</span>
+                        <span class="info-value">{{ student.religion or 'Not set' }}</span>
+                    </div>
+                </div>
+                {% if student.home_address %}
+                <div class="info-item mt-2" style="width: 100%;">
+                    <span class="info-label">Address</span>
+                    <span class="info-value">{{ student.home_address }}</span>
+                </div>
+                {% endif %}
+                {% if student.hobbies %}
+                <div class="info-item mt-2" style="width: 100%;">
+                    <span class="info-label">Hobbies</span>
+                    <span class="info-value">{{ student.hobbies }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contacts -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-phone"></i> Contacts</h3></div>
+    <div class="card-body">
+        {% set contacts = student.parent_contacts.all() %}
+        {% if contacts %}
+        <div class="data-cards">
+            {% for contact in contacts %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title"><i class="fas fa-user-circle"></i> {{ contact.name or 'Contact' }}</div>
+                    {% if contact.is_primary %}<span class="badge badge-success">Primary</span>{% endif %}
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Phone</span>
+                    <a href="tel:{{ contact.phone_number }}" class="text-primary">{{ contact.phone_number }}</a>
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Relationship</span>
+                    <span>{{ contact.relationship }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state small"><i class="fas fa-phone-slash"></i><p>No contacts</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Class History -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-school"></i> Class History</h3></div>
+    <div class="card-body" style="padding: 0;">
+        {% if enrollments %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead><tr><th>Session</th><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
+                <tbody>
+                    {% for e in enrollments %}
+                    <tr>
+                        <td>{{ e.class_arm_assignment.term.session.name if e.class_arm_assignment.term.session else '-' }}</td>
+                        <td>{{ e.class_arm_assignment.term.name }}</td>
+                        <td><strong>{{ e.class_arm_assignment.school_class.name }}</strong></td>
+                        <td>{{ e.class_arm_assignment.arm.name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state small"><i class="fas fa-user-graduate"></i><p>Not enrolled</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Exam Results Row -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card h-100 mb-3">
+            <div class="card-header">
+                <h3><i class="fas fa-file-alt"></i> WAEC</h3>
+                <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i></a>
+            </div>
+            <div class="card-body">
+                {% if waec_results %}
+                <p class="mb-2"><strong>{{ waec_results|length }}</strong> subjects recorded</p>
+                <div class="d-flex flex-wrap gap-1 mb-2">
+                    {% for r in waec_results[:9] %}
+                    <span class="badge badge-{% if r.grade in ['A1'] %}success{% elif r.grade in ['B2','B3'] %}info{% elif r.grade in ['C4','C5','C6'] %}warning{% else %}danger{% endif %}">{{ r.subject[:3] }}:{{ r.grade }}</span>
+                    {% endfor %}
+                </div>
+                <a href="{{ url_for('results.view_waec_student', student_id=student.id) }}" class="btn btn-sm btn-info"><i class="fas fa-eye"></i> View All</a>
+                {% else %}
+                <div class="empty-state small"><i class="fas fa-file-alt"></i><p>No WAEC results</p></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100 mb-3">
+            <div class="card-header">
+                <h3><i class="fas fa-file-contract"></i> JAMB</h3>
+                <a href="{{ url_for('results.add_jamb') }}?student_id={{ student.id }}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i></a>
+            </div>
+            <div class="card-body">
+                {% if jamb_results %}
+                {% set latest = jamb_results[0] %}
+                <div class="text-center">
+                    <div class="text-muted text-sm">{{ latest.exam_year }}</div>
+                    <div style="font-size: 2.5rem; font-weight: 700; color: var(--primary);">{{ latest.total_score }}</div>
+                    <div class="text-muted">out of 400</div>
+                </div>
+                {% else %}
+                <div class="empty-state small"><i class="fas fa-file-contract"></i><p>No JAMB results</p></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.student-profile { display: flex; flex-direction: column; gap: 1rem; }
+@media (min-width: 768px) { .student-profile { flex-direction: row; align-items: flex-start; } }
+.student-avatar {
+    width: 100px; height: 100px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.5rem; color: white; flex-shrink: 0; margin: 0 auto;
+}
+@media (min-width: 768px) { .student-avatar { margin: 0; } }
+.student-avatar.male { background: linear-gradient(135deg, #4e73df, #224abe); }
+.student-avatar.female { background: linear-gradient(135deg, #e74a3b, #be2617); }
+.student-details { flex: 1; }
+.info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+@media (min-width: 768px) { .info-grid { grid-template-columns: repeat(3, 1fr); } }
+.info-item { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem; background: var(--gray-50); border-radius: var(--radius-md); }
+.info-item .info-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
+.info-item .info-value { font-weight: 600; }
+</style>
+{% endblock %}

@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}{{ student.full_name }} - {{ app_name }}{% endblock %}
+
+{% block breadcrumb %}
+<span>{{ student.first_name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ student.full_name }}</h1>
+        <span class="badge badge-primary">{{ student.student_id }}</span>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.student_predictions', student_id=student.id) }}" class="btn btn-info">
+            <i class="fas fa-chart-line"></i> Predictions
+        </a>
+        <a href="{{ url_for('subjects.student_report_card', student_id=student.id) }}" class="btn btn-success">
+            <i class="fas fa-file-invoice"></i> Report Card
+        </a>
+        <a href="{{ url_for('main.edit_student', student_id=student.id) }}" class="btn btn-primary">
+            <i class="fas fa-edit"></i> Edit
+        </a>
+        <a href="{{ url_for('main.students_list') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-user"></i> Personal Info</h3></div>
+    <div class="card-body">
+        <div class="info-grid">
+            <div class="info-row">
+                <span class="text-muted">Full Name</span>
+                <strong>{{ student.full_name }}</strong>
+            </div>
+            <div class="info-row">
+                <span class="text-muted">Gender</span>
+                <span class="badge {% if student.gender == 'Male' %}badge-info{% else %}badge-warning{% endif %}">{{ student.gender }}</span>
+            </div>
+            <div class="info-row">
+                <span class="text-muted">Date of Birth</span>
+                <strong>{{ student.date_of_birth|format_date if student.date_of_birth else 'Not set' }}</strong>
+            </div>
+            <div class="info-row">
+                <span class="text-muted">Age</span>
+                <strong>{{ student.age or 'N/A' }} years</strong>
+            </div>
+            <div class="info-row">
+                <span class="text-muted">Religion</span>
+                <strong>{{ student.religion or 'Not set' }}</strong>
+            </div>
+            <div class="info-row">
+                <span class="text-muted">Address</span>
+                <strong>{{ student.home_address or 'Not set' }}</strong>
+            </div>
+            <div class="info-row">
+                <span class="text-muted">Hobbies</span>
+                <strong>{{ student.hobbies or 'Not set' }}</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-phone"></i> Contacts</h3></div>
+    <div class="card-body">
+        {% set contacts = student.parent_contacts.all() %}
+        {% if contacts %}
+        <div class="data-cards">
+            {% for contact in contacts %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ contact.name or 'Contact' }}</div>
+                    {% if contact.is_primary %}<span class="badge badge-success">Primary</span>{% endif %}
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Phone</span>
+                    <span>{{ contact.phone_number }}</span>
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Relationship</span>
+                    <span>{{ contact.relationship }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">No contacts added</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-school"></i> Class History</h3></div>
+    <div class="card-body" style="padding: 0;">
+        {% if enrollments %}
+        <div class="table-container" style="border: none; border-radius: 0;">
+            <table class="data-table">
+                <thead><tr><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
+                <tbody>
+                    {% for e in enrollments %}
+                    <tr>
+                        <td>{{ e.class_arm_assignment.term.name }}</td>
+                        <td>{{ e.class_arm_assignment.school_class.name }}</td>
+                        <td>{{ e.class_arm_assignment.arm.name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><p>Not enrolled yet</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-file-alt"></i> WAEC</h3>
+        <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add</a>
+    </div>
+    <div class="card-body">
+        {% if waec_results %}
+        <p>{{ waec_results|length }} subjects recorded</p>
+        <a href="{{ url_for('results.view_waec_student', student_id=student.id) }}" class="btn btn-primary btn-sm">View Details</a>
+        {% else %}
+        <p class="text-muted">No WAEC results</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-file-contract"></i> JAMB</h3>
+        <a href="{{ url_for('results.add_jamb') }}?student_id={{ student.id }}" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add</a>
+    </div>
+    <div class="card-body">
+        {% if jamb_results %}
+        {% set latest = jamb_results[0] %}
+        <div class="info-grid">
+            <div class="info-row"><span class="text-muted">Year</span><strong>{{ latest.exam_year }}</strong></div>
+            <div class="info-row"><span class="text-muted">Score</span><strong style="font-size: 1.25rem;">{{ latest.total_score }}/400</strong></div>
+        </div>
+        {% else %}
+        <p class="text-muted">No JAMB results</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

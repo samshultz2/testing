@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Flask / instance data (the seeded instance/school.db is kept tracked on purpose)
+instance/*.db.backup
+instance/*.sqlite
+/school.db
+
+# Uploads (user-generated)
+uploads/*
+!uploads/.gitkeep
+
+# Backups & scratch files
+*.bak
+*.v25.bak
+*.tmp
+*.orig
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

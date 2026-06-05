@@ -1,0 +1,169 @@
+{# PosyHub Reusable Template Components #}
+
+{# Form Input Field #}
+{% macro form_input(name, label, type='text', value='', placeholder='', required=false, readonly=false, help_text='', min='', max='') %}
+<div class="form-group">
+    <label for="{{ name }}" class="form-label">
+        {{ label }}
+        {% if required %}<span class="text-danger">*</span>{% endif %}
+    </label>
+    <input 
+        type="{{ type }}" 
+        id="{{ name }}" 
+        name="{{ name }}" 
+        class="form-control"
+        value="{{ value }}"
+        placeholder="{{ placeholder }}"
+        {% if required %}required{% endif %}
+        {% if readonly %}readonly{% endif %}
+        {% if min %}min="{{ min }}"{% endif %}
+        {% if max %}max="{{ max }}"{% endif %}
+    >
+    {% if help_text %}
+    <small class="text-muted">{{ help_text }}</small>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Form Select Field #}
+{% macro form_select(name, label, options, selected='', required=false, placeholder='Select...') %}
+<div class="form-group">
+    <label for="{{ name }}" class="form-label">
+        {{ label }}
+        {% if required %}<span class="text-danger">*</span>{% endif %}
+    </label>
+    <select id="{{ name }}" name="{{ name }}" class="form-control" {% if required %}required{% endif %}>
+        {% if placeholder %}
+        <option value="">{{ placeholder }}</option>
+        {% endif %}
+        {% for option in options %}
+            {% if option is mapping %}
+            <option value="{{ option.value }}" {% if option.value|string == selected|string %}selected{% endif %}>
+                {{ option.label }}
+            </option>
+            {% else %}
+            <option value="{{ option }}" {% if option|string == selected|string %}selected{% endif %}>
+                {{ option }}
+            </option>
+            {% endif %}
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}
+
+{# Form Textarea #}
+{% macro form_textarea(name, label, value='', placeholder='', required=false, rows=4) %}
+<div class="form-group">
+    <label for="{{ name }}" class="form-label">
+        {{ label }}
+        {% if required %}<span class="text-danger">*</span>{% endif %}
+    </label>
+    <textarea 
+        id="{{ name }}" 
+        name="{{ name }}" 
+        class="form-control"
+        rows="{{ rows }}"
+        placeholder="{{ placeholder }}"
+        {% if required %}required{% endif %}
+    >{{ value }}</textarea>
+</div>
+{% endmacro %}
+
+{# Button #}
+{% macro button(text, type='submit', style='primary', icon='', size='') %}
+<button type="{{ type }}" class="btn btn-{{ style }} {% if size %}btn-{{ size }}{% endif %}">
+    {% if icon %}<i class="{{ icon }}"></i>{% endif %}
+    {{ text }}
+</button>
+{% endmacro %}
+
+{# Link Button #}
+{% macro link_button(text, href, style='primary', icon='', size='') %}
+<a href="{{ href }}" class="btn btn-{{ style }} {% if size %}btn-{{ size }}{% endif %}">
+    {% if icon %}<i class="{{ icon }}"></i>{% endif %}
+    {{ text }}
+</a>
+{% endmacro %}
+
+{# Stat Card #}
+{% macro stat_card(value, label, icon='fas fa-chart-bar', color='primary') %}
+<div class="stat-card">
+    <div class="stat-icon {{ color }}">
+        <i class="{{ icon }}"></i>
+    </div>
+    <div class="stat-value">{{ value }}</div>
+    <div class="stat-label">{{ label }}</div>
+</div>
+{% endmacro %}
+
+{# Badge #}
+{% macro badge(text, style='primary') %}
+<span class="badge badge-{{ style }}">{{ text }}</span>
+{% endmacro %}
+
+{# Empty State #}
+{% macro empty_state(message, icon='fas fa-inbox', action_text='', action_url='') %}
+<div class="empty-state">
+    <i class="{{ icon }}"></i>
+    <p>{{ message }}</p>
+    {% if action_text and action_url %}
+    <a href="{{ action_url }}" class="btn btn-primary">{{ action_text }}</a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Performance Badge for Mock JAMB #}
+{% macro performance_badge(level) %}
+{% if level == 'Excellent' %}
+<span class="badge badge-success">{{ level }}</span>
+{% elif level == 'Very Good' %}
+<span class="badge badge-info">{{ level }}</span>
+{% elif level == 'Good' %}
+<span class="badge badge-primary">{{ level }}</span>
+{% elif level == 'Fair' %}
+<span class="badge badge-warning">{{ level }}</span>
+{% else %}
+<span class="badge badge-danger">{{ level }}</span>
+{% endif %}
+{% endmacro %}
+
+{# Subject Score Input for JAMB #}
+{% macro subject_score_input(num, subjects, current_subject='', current_score='') %}
+<div class="grid grid-2 gap-2">
+    <div class="form-group">
+        <label class="form-label">Subject {{ num }}</label>
+        <select name="subject{{ num }}" class="form-control">
+            <option value="">Select Subject</option>
+            {% for subject in subjects %}
+            <option value="{{ subject }}" {% if subject == current_subject %}selected{% endif %}>
+                {{ subject }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Score</label>
+        <input type="number" name="subject{{ num }}_score" class="form-control" 
+               min="0" max="100" value="{{ current_score or '' }}" placeholder="0-100">
+    </div>
+</div>
+{% endmacro %}
+
+{# Card Component #}
+{% macro card(title='') %}
+<div class="card">
+    {% if title %}
+    <div class="card-header">
+        <h3 class="card-title">{{ title }}</h3>
+    </div>
+    {% endif %}
+    <div class="card-body">
+        {{ caller() }}
+    </div>
+</div>
+{% endmacro %}
+
+{# CSRF Input - outputs hidden input with CSRF token #}
+{% macro csrf_input() %}
+<!-- CSRF disabled -->
+{% endmacro %}

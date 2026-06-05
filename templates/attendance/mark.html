@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Mark Attendance - {{ app_name }}{% endblock %}
+
+{% block breadcrumb %}
+<span>Attendance</span> / <span>Mark</span>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.auto-copy-option {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    border: 1px solid #28a745;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+.auto-copy-option .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    color: #155724;
+    cursor: pointer;
+    margin: 0;
+}
+.auto-copy-option .checkbox-label input {
+    width: 1.25rem;
+    height: 1.25rem;
+    accent-color: #28a745;
+}
+.auto-copy-option small {
+    display: block;
+    margin-top: 0.25rem;
+    margin-left: 1.75rem;
+}
+.attendance-grid { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
+@media (min-width: 576px) { .attendance-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 992px) { .attendance-grid { grid-template-columns: repeat(3, 1fr); } }
+.attendance-row { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; }
+.attendance-row:hover { border-color: var(--primary); }
+.attendance-row .student-name { font-weight: 500; font-size: 0.875rem; }
+.attendance-row .student-id { font-size: 0.75rem; color: var(--text-muted); }
+.attendance-checkbox { width: 1.5rem; height: 1.5rem; accent-color: var(--success); }
+.attendance-summary { display: flex; gap: 1rem; padding: 0.75rem; background: var(--gray-50); border-radius: 8px; margin-bottom: 1rem; }
+.attendance-summary-item { display: flex; align-items: center; gap: 0.5rem; }
+.attendance-summary-item .count { font-size: 1.25rem; font-weight: 700; }
+.attendance-summary-item .label { font-size: 0.8rem; color: var(--text-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-clipboard-check"></i> Mark Attendance</h1>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-filter"></i> Select Class & Date</h3></div>
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('attendance.mark_attendance_page') }}" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if selected_term and term.id == selected_term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for assignment in assignments %}
+                    <option value="{{ assignment.id }}" {% if selected_assignment and assignment.id == selected_assignment.id %}selected{% endif %}>{{ assignment.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.submit()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Session</label>
+                <select name="session" class="form-control" onchange="this.form.submit()">
+                    <option value="morning" {% if session_type == 'morning' %}selected{% endif %}>Morning</option>
+                    <option value="afternoon" {% if session_type == 'afternoon' %}selected{% endif %}>Afternoon</option>
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_assignment and enrollments %}
+    {% if not is_valid_school_day %}
+    <div class="card"><div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-calendar-times text-warning"></i>
+            <h3>Not a School Day</h3>
+            <p>{{ target_date.strftime('%A, %d %B %Y') }} is a weekend or holiday.</p>
+        </div>
+    </div></div>
+    {% else %}
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-users"></i> {{ selected_assignment.display_name }}</h3>
+            <span class="badge badge-{% if session_type == 'morning' %}info{% else %}warning{% endif %}">{{ session_type|capitalize }}</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <form method="POST" action="{{ url_for('attendance.copy_previous_attendance') }}" style="display: inline;">
+                    <input type="hidden" name="term_id" value="{{ selected_term.id }}">
+                    <input type="hidden" name="assignment_id" value="{{ selected_assignment.id }}">
+                    <input type="hidden" name="date" value="{{ target_date.strftime('%Y-%m-%d') }}">
+                    <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-copy"></i> Copy Previous</button>
+                </form>
+                <button type="button" class="btn btn-success btn-sm" onclick="markAllPresent()"><i class="fas fa-check-double"></i> All Present</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="markAllAbsent()"><i class="fas fa-times"></i> All Absent</button>
+            </div>
+            
+            <div class="attendance-summary">
+                <div class="attendance-summary-item">
+                    <span class="count text-primary">{{ enrollments|length }}</span>
+                    <span class="label">Total</span>
+                </div>
+                <div class="attendance-summary-item">
+                    <span class="count text-success" id="attendanceCount">0/0</span>
+                    <span class="label">Present</span>
+                </div>
+            </div>
+            
+            <form method="POST" action="{{ url_for('attendance.save_attendance') }}">
+                <input type="hidden" name="term_id" value="{{ selected_term.id }}">
+                <input type="hidden" name="assignment_id" value="{{ selected_assignment.id }}">
+                <input type="hidden" name="date" value="{{ target_date.strftime('%Y-%m-%d') }}">
+                <input type="hidden" name="session_type" value="{{ session_type }}">
+                <input type="hidden" name="week_id" value="{{ current_week.id if current_week else '' }}">
+                
+                {% if session_type == 'morning' %}
+                <div class="auto-copy-option">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="auto_copy_afternoon" checked>
+                        <span><i class="fas fa-copy"></i> Also mark Afternoon (same as Morning)</span>
+                    </label>
+                    <small class="text-muted">Uncheck to mark morning only</small>
+                </div>
+                {% endif %}
+                
+                <div class="attendance-grid">
+                    {% for enrollment in enrollments %}
+                    {% set att = existing_attendance.get(enrollment.id, {}) %}
+                    {% set is_present = att.get(session_type, True) if att else True %}
+                    <div class="attendance-row">
+                        <div class="student-info">
+                            <div class="student-name">{{ enrollment.student.full_name }}</div>
+                            <div class="student-id">{{ enrollment.student.student_id }} <span class="badge badge-{% if enrollment.student.gender == 'Male' %}info{% else %}warning{% endif %}" style="font-size:0.6rem;">{{ enrollment.student.gender[0] }}</span></div>
+                        </div>
+                        <input type="checkbox" name="present[]" value="{{ enrollment.id }}" class="attendance-checkbox" {% if is_present %}checked{% endif %}>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-lg btn-block mt-3"><i class="fas fa-save"></i> Save Attendance</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+{% elif selected_assignment %}
+<div class="card"><div class="card-body">
+    <div class="empty-state"><i class="fas fa-users"></i><h3>No Students</h3><p>No students enrolled</p></div>
+</div></div>
+{% else %}
+<div class="card"><div class="card-body">
+    <div class="empty-state"><i class="fas fa-hand-pointer"></i><h3>Select a Class</h3><p>Choose term and class above</p></div>
+</div></div>
+{% endif %}
+
+<script>
+function markAllPresent() { document.querySelectorAll('input[name="present[]"]').forEach(cb => cb.checked = true); updateCount(); }
+function markAllAbsent() { document.querySelectorAll('input[name="present[]"]').forEach(cb => cb.checked = false); updateCount(); }
+function updateCount() {
+    const total = document.querySelectorAll('input[name="present[]"]').length;
+    const present = document.querySelectorAll('input[name="present[]"]:checked').length;
+    document.getElementById('attendanceCount').textContent = present + '/' + total;
+}
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[name="present[]"]').forEach(cb => cb.addEventListener('change', updateCount));
+    updateCount();
+});
+</script>
+{% endblock %}

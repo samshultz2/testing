@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Timetable Rules - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Rules</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Timetable Rules</h1>
+</div>
+
+<p class="text-muted mb-3">Configure constraints and rules for timetable generation.</p>
+
+<form method="POST" action="{{ url_for('generator.save_rules') }}">
+    <div class="card mb-3">
+        <div class="card-header"><h3>General Settings</h3></div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Periods Per Day</label>
+                    <input type="number" name="periods_per_day" class="form-control" 
+                           value="{{ rules.get('periods_per_day', '8') }}" 
+                           min="4" max="12">
+                    <span class="form-hint">Total number of periods in a school day</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Break After Period</label>
+                    <input type="number" name="break_after_period" class="form-control" 
+                           value="{{ rules.get('break_after_period', '4') }}" 
+                           min="2" max="6">
+                    <span class="form-hint">Break/recess comes after this period number</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-3">
+        <div class="card-header"><h3>Scheduling Constraints</h3></div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="no_repeat_same_day" 
+                           {% if rules.get('no_repeat_same_day', 'true') == 'true' %}checked{% endif %}>
+                    <span>No subject repeat on same day</span>
+                </label>
+                <span class="form-hint">A subject should not appear twice on the same day for a class</span>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="distribute_evenly" 
+                           {% if rules.get('distribute_evenly', 'true') == 'true' %}checked{% endif %}>
+                    <span>Distribute subjects evenly across week</span>
+                </label>
+                <span class="form-hint">Try to spread each subject across different days</span>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Max Consecutive Periods (per teacher)</label>
+                <input type="number" name="max_consecutive" class="form-control" style="width: 100px;"
+                       value="{{ rules.get('max_consecutive', '3') }}" 
+                       min="1" max="6">
+                <span class="form-hint">Maximum consecutive periods a teacher can take without a break</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-3">
+        <div class="card-header"><h3>Period Restrictions</h3></div>
+        <div class="card-body">
+            <p class="text-muted mb-3">These are configured per subject in Subject Settings:</p>
+            <ul>
+                <li><strong>Not First Period</strong> - Subject won't be scheduled as the first period</li>
+                <li><strong>Not Last Period</strong> - Subject won't be scheduled as the last period</li>
+                <li><strong>Preferred Time</strong> - Morning, Afternoon, or Any</li>
+            </ul>
+            <a href="{{ url_for('generator.subjects_config') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-cog"></i> Go to Subject Settings
+            </a>
+        </div>
+    </div>
+    
+    <div class="page-header-actions">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Rules</button>
+        <a href="{{ url_for('generator.index') }}" class="btn btn-secondary">Back</a>
+    </div>
+</form>
+{% endblock %}

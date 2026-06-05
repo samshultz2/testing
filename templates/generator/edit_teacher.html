@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}{{ teacher.name }} - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.teachers_list') }}">Teachers</a> / <span>{{ teacher.name }}</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ teacher.name }}</h1>
+</div>
+
+<!-- Teacher Details -->
+<div class="card mb-3">
+    <div class="card-header"><h3>Teacher Details</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.update_teacher', teacher_id=teacher.id) }}">
+            <div class="form-group">
+                <label class="form-label">Name <span class="required">*</span></label>
+                <input type="text" name="name" class="form-control" required value="{{ teacher.name }}">
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Staff ID</label>
+                    <input type="text" name="staff_id" class="form-control" value="{{ teacher.staff_id or '' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input type="text" name="phone" class="form-control" value="{{ teacher.phone or '' }}">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-control" value="{{ teacher.email or '' }}">
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Max Periods Per Day</label>
+                    <input type="number" name="max_periods_per_day" class="form-control" value="{{ teacher.max_periods_per_day }}" min="1" max="10">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Periods Per Week</label>
+                    <input type="number" name="max_periods_per_week" class="form-control" value="{{ teacher.max_periods_per_week }}" min="1" max="50">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Preferred Time</label>
+                    <select name="preferred_time" class="form-control">
+                        <option value="any" {% if teacher.preferred_time == 'any' %}selected{% endif %}>Any</option>
+                        <option value="morning" {% if teacher.preferred_time == 'morning' %}selected{% endif %}>Morning</option>
+                        <option value="afternoon" {% if teacher.preferred_time == 'afternoon' %}selected{% endif %}>Afternoon</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Part-time</label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_part_time" {% if teacher.is_part_time %}checked{% endif %}>
+                        <span>This is a part-time teacher</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Available Days</label>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    {% for day in days %}
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="available_days[]" value="{{ loop.index0 }}" {% if loop.index0 in teacher.available_days_list %}checked{% endif %}>
+                        <span>{{ day }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Details</button>
+        </form>
+    </div>
+</div>
+
+<!-- Subjects -->
+<div class="card mb-3">
+    <div class="card-header"><h3>Subjects {{ teacher.name }} Can Teach</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.update_teacher_subjects', teacher_id=teacher.id) }}">
+            <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
+                {% for subject in all_subjects %}
+                <label class="checkbox-label" style="padding: 0.5rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                    <input type="checkbox" name="subject_ids[]" value="{{ subject.id }}" {% if subject.id in assigned_ids %}checked{% endif %}>
+                    <span>{{ subject.name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="page-header-actions mt-3">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Subjects</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Availability Grid -->
+<div class="card mb-3">
+    <div class="card-header"><h3>Period Availability</h3></div>
+    <div class="card-body">
+        <p class="text-muted mb-3">Uncheck periods when this teacher is NOT available:</p>
+        <form method="POST" action="{{ url_for('generator.update_teacher_availability', teacher_id=teacher.id) }}">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        {% for day in days %}
+                        <th style="text-align: center;">{{ day[:3] }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for period in range(1, periods_per_day + 1) %}
+                    <tr>
+                        <td>{{ period }}</td>
+                        {% for day_idx in range(5) %}
+                        <td style="text-align: center;">
+                            <input type="checkbox" name="unavailable[]" value="{{ day_idx }}_{{ period }}"
+                                   {% if day_idx|string + '_' + period|string in unavailable %}checked{% endif %}>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p class="text-muted mt-2"><small>Check = Unavailable for that period</small></p>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Availability</button>
+        </form>
+    </div>
+</div>
+
+<!-- Delete -->
+<div class="card">
+    <div class="card-header"><h3>Danger Zone</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.delete_teacher', teacher_id=teacher.id) }}" data-confirm="Remove this teacher?">
+            <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Remove Teacher</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

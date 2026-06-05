@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Reports - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Reports</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Timetable Reports</h1>
+</div>
+
+{% if latest_batch %}
+<p class="text-muted mb-3">Reports for latest batch: #{{ latest_batch.batch_id }}</p>
+
+<div class="card">
+    <div class="card-body">
+        <div class="data-cards" style="padding: 0;">
+            <a href="{{ url_for('generator.period_count_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+                <div class="data-card-header">
+                    <div class="data-card-title"><i class="fas fa-calculator"></i> Period Count</div>
+                </div>
+                <div class="data-card-row">Verify periods assigned vs required per subject</div>
+            </a>
+            
+            <a href="{{ url_for('generator.teacher_workload_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+                <div class="data-card-header">
+                    <div class="data-card-title"><i class="fas fa-user-clock"></i> Teacher Workload</div>
+                </div>
+                <div class="data-card-row">Total periods per teacher, per day breakdown</div>
+            </a>
+            
+            <a href="{{ url_for('generator.clash_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+                <div class="data-card-header">
+                    <div class="data-card-title"><i class="fas fa-exclamation-triangle"></i> Clash Report</div>
+                </div>
+                <div class="data-card-row">Teachers assigned to multiple classes same time</div>
+            </a>
+            
+            <a href="{{ url_for('generator.unassigned_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+                <div class="data-card-header">
+                    <div class="data-card-title"><i class="fas fa-calendar-times"></i> Empty Slots</div>
+                </div>
+                <div class="data-card-row">Periods with no subject assigned</div>
+            </a>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-chart-bar"></i>
+            <h3>No Timetables Generated</h3>
+            <p>Generate timetables first to view reports</p>
+            <a href="{{ url_for('generator.generate_page') }}" class="btn btn-primary">Generate</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

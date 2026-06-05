@@ -1,0 +1,505 @@
+{% extends "base.html" %}
+{% block title %}{{ student.full_name }} - WAEC Results{% endblock %}
+{% block breadcrumb %}
+<a href="{{ url_for('results.index') }}">Results</a>
+<a href="{{ url_for('results.waec_list') }}">WAEC</a>
+<span>{{ student.full_name }}</span>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===== MOBILE FIRST ===== */
+.profile-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.profile-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.profile-id {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+.risk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+.risk-green { background: rgba(255,255,255,0.2); color: #d4edda; }
+.risk-amber { background: rgba(255,255,255,0.2); color: #fff3cd; }
+.risk-red { background: rgba(255,255,255,0.2); color: #f8d7da; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem;
+    border: 1px solid #e0e0e0;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 0.25rem;
+}
+
+.card {
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-header h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.card-body {
+    padding: 0.75rem;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.results-table th,
+.results-table td {
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.results-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+}
+
+.grade-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.grade-a1 { background: #d4edda; color: #155724; }
+.grade-b2, .grade-b3 { background: #cce5ff; color: #004085; }
+.grade-c4, .grade-c5, .grade-c6 { background: #fff3cd; color: #856404; }
+.grade-d7, .grade-e8 { background: #f8d7da; color: #721c24; }
+.grade-f9 { background: #721c24; color: white; }
+
+.prediction-card {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.prediction-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.prediction-range {
+    font-size: 0.85rem;
+    opacity: 0.9;
+    margin-top: 0.25rem;
+}
+
+.prediction-confidence {
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    opacity: 0.9;
+}
+
+.recommendation-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.recommendation-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+}
+
+.recommendation-icon.strength { background: #d4edda; color: #155724; }
+.recommendation-icon.weakness { background: #f8d7da; color: #721c24; }
+.recommendation-icon.suggestion { background: #cce5ff; color: #004085; }
+
+.chart-container {
+    position: relative;
+    height: 200px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+}
+
+.empty-state i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+/* ===== TABLET+ ===== */
+@media (min-width: 768px) {
+    .profile-header {
+        padding: 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .profile-name { font-size: 1.5rem; }
+    .risk-badge { margin-top: 0; }
+    
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+    
+    .stat-value { font-size: 2rem; }
+    .stat-label { font-size: 0.8rem; }
+    
+    .content-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    
+    .content-grid .card { margin-bottom: 0; }
+    
+    .chart-container { height: 250px; }
+    
+    .prediction-value { font-size: 3rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Profile Header -->
+<div class="profile-header">
+    <div>
+        <div class="profile-name">{{ student.full_name }}</div>
+        <div class="profile-id">{{ student.student_id }}</div>
+        {% if risk_assessment and risk_assessment.risk_level %}
+        <div class="risk-badge risk-{{ risk_assessment.risk_level|lower }}">
+            <i class="fas fa-{% if risk_assessment.risk_level == 'GREEN' %}check-circle{% elif risk_assessment.risk_level == 'AMBER' %}exclamation-triangle{% else %}times-circle{% endif %}"></i>
+            {{ risk_assessment.risk_level }} Risk
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if waec_summary %}
+{% set years_list = waec_summary.keys()|list|sort(reverse=true) %}
+{% set latest_year = years_list[0] %}
+{% set summary = waec_summary[latest_year] %}
+
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" style="color: #28a745;">{{ summary.a1_count }}</div>
+        <div class="stat-label">A1 Grades</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #007bff;">{{ summary.credit_count }}</div>
+        <div class="stat-label">Credits (A1-C6)</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.total_subjects }}</div>
+        <div class="stat-label">Subjects</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.average_points }}</div>
+        <div class="stat-label">Avg Points</div>
+    </div>
+</div>
+
+<!-- Results & Prediction -->
+<div class="content-grid">
+    <!-- Results Table -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Results ({{ latest_year }})</h3>
+            <a href="{{ url_for('results.edit_waec', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-edit"></i>
+            </a>
+        </div>
+        <div class="card-body" style="padding: 0;">
+            <table class="results-table">
+                <thead>
+                    <tr><th>Subject</th><th>Grade</th><th>Pts</th></tr>
+                </thead>
+                <tbody>
+                    {% for result in summary.results %}
+                    <tr>
+                        <td>{{ result.subject[:20] }}</td>
+                        <td><span class="grade-badge grade-{{ result.grade|lower }}">{{ result.grade }}</span></td>
+                        <td>{{ {'A1':1,'B2':2,'B3':3,'C4':4,'C5':5,'C6':6,'D7':7,'E8':8,'F9':9}.get(result.grade, 9) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- JAMB Prediction -->
+    <div class="card">
+        <div class="card-header">
+            <h3>JAMB Prediction</h3>
+        </div>
+        <div class="card-body">
+            {% if jamb_prediction and not jamb_prediction.get('error') and jamb_prediction.get('predicted_score') %}
+            <div class="prediction-card">
+                <div class="prediction-value">{{ jamb_prediction.predicted_score }}</div>
+                <div class="prediction-range">Range: {{ jamb_prediction.score_range[0] }} - {{ jamb_prediction.score_range[1] }}</div>
+                <div class="prediction-confidence">
+                    <i class="fas fa-chart-line"></i> {{ (jamb_prediction.confidence * 100)|round(0) }}% confidence
+                </div>
+            </div>
+            {% if jamb_prediction.explanation %}
+            <div style="margin-top: 0.75rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; font-size: 0.8rem;">
+                <strong>How calculated:</strong><br>
+                {{ jamb_prediction.explanation }}
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-calculator"></i>
+                <p>Unable to predict. Need more WAEC data.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Grade Chart & Risk Assessment -->
+<div class="content-grid">
+    <!-- Grade Distribution -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Grade Distribution</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="gradeChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Risk Assessment -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Analysis</h3>
+        </div>
+        <div class="card-body">
+            {% if risk_assessment %}
+            <div style="margin-bottom: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                    <span>Risk Score</span>
+                    <strong>{{ risk_assessment.overall_risk_score }}/100</strong>
+                </div>
+                <div style="background: #e9ecef; border-radius: 4px; height: 8px;">
+                    <div style="width: {{ risk_assessment.overall_risk_score }}%; height: 100%; border-radius: 4px; background: {% if risk_assessment.risk_level == 'GREEN' %}#28a745{% elif risk_assessment.risk_level == 'AMBER' %}#ffc107{% else %}#dc3545{% endif %};"></div>
+                </div>
+            </div>
+            
+            {% if risk_assessment.risk_factors %}
+            <div style="margin-bottom: 0.75rem;">
+                <strong style="font-size: 0.85rem;">Risk Factors:</strong>
+                <ul style="margin: 0.25rem 0 0 1.25rem; padding: 0; font-size: 0.8rem;">
+                    {% for factor in risk_assessment.risk_factors %}
+                    <li style="color: #dc3545;">{{ factor }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            
+            {% if risk_assessment.recommendations %}
+            <strong style="font-size: 0.85rem;">Recommendations:</strong>
+            {% for rec in risk_assessment.recommendations[:3] %}
+            <div class="recommendation-item">
+                <div class="recommendation-icon suggestion"><i class="fas fa-lightbulb"></i></div>
+                <div>{{ rec }}</div>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% else %}
+            <p style="color: #666; font-size: 0.85rem;">No risk assessment available.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Strengths & Weaknesses -->
+{% if recommendations %}
+<div class="content-grid">
+    <!-- Strengths -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-star" style="color: #28a745;"></i> Strengths</h3>
+        </div>
+        <div class="card-body">
+            {% if recommendations.strengths %}
+            {% for item in recommendations.strengths[:4] %}
+            <div class="recommendation-item">
+                <div class="recommendation-icon strength"><i class="fas fa-check"></i></div>
+                <div>
+                    <strong>{{ item.subject }}</strong> ({{ item.grade }})<br>
+                    <small style="color: #666;">{{ item.message }}</small>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p style="color: #666; font-size: 0.85rem;">No outstanding strengths identified.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Weaknesses -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Needs Work</h3>
+        </div>
+        <div class="card-body">
+            {% if recommendations.needs_improvement %}
+            {% for item in recommendations.needs_improvement[:4] %}
+            <div class="recommendation-item">
+                <div class="recommendation-icon weakness"><i class="fas fa-arrow-up"></i></div>
+                <div>
+                    <strong>{{ item.subject }}</strong> ({{ item.grade }})<br>
+                    <small style="color: #666;">{{ item.message }}</small>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p style="color: #666; font-size: 0.85rem;">Great job! No major weaknesses.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Career Suggestions -->
+{% if recommendations.career_suggestions %}
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-briefcase"></i> Career Suggestions</h3>
+    </div>
+    <div class="card-body">
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            {% for suggestion in recommendations.career_suggestions %}
+            <span style="padding: 0.35rem 0.75rem; background: #e3f2fd; color: #1565c0; border-radius: 50px; font-size: 0.8rem;">
+                {{ suggestion }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% else %}
+<!-- No WAEC Results -->
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-file-alt"></i>
+            <h3>No WAEC Results</h3>
+            <p>No WAEC results have been recorded for this student.</p>
+            <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Add Results
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+{% if waec_summary %}
+{% set years_list = waec_summary.keys()|list|sort(reverse=true) %}
+{% set latest_year = years_list[0] %}
+{% set summary = waec_summary[latest_year] %}
+document.addEventListener('DOMContentLoaded', function() {
+    const gradeDistribution = {{ summary.grade_distribution|tojson }};
+    const ctx = document.getElementById('gradeChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(gradeDistribution),
+                datasets: [{
+                    data: Object.values(gradeDistribution),
+                    backgroundColor: ['#28a745','#17a2b8','#5bc0de','#ffc107','#f0ad4e','#ffcc00','#fd7e14','#dc3545','#721c24']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }
+                }
+            }
+        });
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

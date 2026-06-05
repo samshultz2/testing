@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Timetable - {{ assignment.display_name }}{% endblock %}
+{% block breadcrumb %}<span>Print Timetable</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .sidebar, .top-header, .page-header-actions, .no-print { display: none !important; }
+    .main-content { margin: 0 !important; padding: 0 !important; }
+    .card { border: 2px solid #000 !important; }
+    body { font-size: 11px; }
+    .timetable-header { text-align: center; margin-bottom: 1rem; }
+}
+.timetable-header { text-align: center; padding: 1rem; border-bottom: 2px solid var(--primary); }
+.timetable-header h2 { margin: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+    <h1>Print Timetable</h1>
+    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="timetable-header">
+            <h2>{{ assignment.display_name }} - Timetable</h2>
+            <p>{{ assignment.term.full_name }}</p>
+        </div>
+        
+        <table class="data-table" style="width: 100%; margin-top: 1rem;">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Time</th>
+                    {% for day_num, day_name in days %}
+                    <th style="text-align: center;">{{ day_name }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for slot in slots %}
+                <tr style="{% if slot.is_break %}background: #e3f2fd;{% endif %}">
+                    <td style="font-size: 0.75rem; padding: 0.5rem;">
+                        <strong>{{ slot.name }}</strong><br>
+                        {{ slot.start_time.strftime('%H:%M') }}-{{ slot.end_time.strftime('%H:%M') }}
+                    </td>
+                    {% for day_num, day_name in days %}
+                    <td style="text-align: center; padding: 0.5rem; border: 1px solid #ddd;">
+                        {% if slot.is_break %}
+                        <em>BREAK</em>
+                        {% else %}
+                        {% set entry = timetable_grid.get(day_num, {}).get(slot.id) %}
+                        {% if entry and entry.subject %}
+                        <strong>{{ entry.subject.name }}</strong>
+                        {% if entry.teacher_name %}<br><small>{{ entry.teacher_name }}</small>{% endif %}
+                        {% else %}
+                        -
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

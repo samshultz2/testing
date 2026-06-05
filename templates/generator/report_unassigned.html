@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Empty Slots - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index') }}">Reports</a> / <span>Empty Slots</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Empty/Unassigned Slots</h1>
+</div>
+
+{% if empty_slots %}
+<div class="card">
+    <div class="card-header" style="background: #fff3cd;"><h3><i class="fas fa-calendar-times"></i> {{ empty_slots|length }} Empty Slot(s)</h3></div>
+    <div class="card-body" style="padding: 0;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Class</th>
+                    <th>Arm</th>
+                    <th>Day</th>
+                    <th>Period</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for slot in empty_slots %}
+                <tr>
+                    <td>{{ slot.class }}</td>
+                    <td>{{ slot.arm }}</td>
+                    <td>{{ slot.day }}</td>
+                    <td>{{ slot.period }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-check-circle" style="color: var(--success);"></i>
+            <h3>All Slots Filled!</h3>
+            <p>Every period has a subject assigned</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

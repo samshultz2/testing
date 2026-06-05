@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Generated Timetables - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Results</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Generated Timetables</h1>
+    <a href="{{ url_for('generator.generate_page') }}" class="btn btn-primary"><i class="fas fa-magic"></i> Generate New</a>
+</div>
+
+{% if batches %}
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for batch in batches %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">Batch #{{ batch.batch_id }}</div>
+                    <span class="badge badge-primary">{{ batch.class_count }} classes</span>
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Generated</span>
+                    <span>{{ batch.generated_at.strftime('%d %b %Y %H:%M') }}</span>
+                </div>
+                <div class="data-card-actions">
+                    <a href="{{ url_for('generator.view_results', batch_id=batch.batch_id) }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-eye"></i> View
+                    </a>
+                    <a href="{{ url_for('generator.print_results', batch_id=batch.batch_id) }}" class="btn btn-success btn-sm">
+                        <i class="fas fa-print"></i> Print All
+                    </a>
+                    <a href="{{ url_for('generator.export_results', batch_id=batch.batch_id) }}" class="btn btn-info btn-sm">
+                        <i class="fas fa-download"></i> Excel
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-calendar-alt"></i>
+            <h3>No Timetables Generated</h3>
+            <p>Generate timetables to see them here</p>
+            <a href="{{ url_for('generator.generate_page') }}" class="btn btn-primary"><i class="fas fa-magic"></i> Generate</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

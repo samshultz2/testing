@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Add Expense - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('contributions.dashboard') }}">Contributions</a> / <a href="{{ url_for('contributions.expenses_list') }}">Expenses</a> / <span>Add</span>{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-plus-circle"></i> Add Expense</h1></div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="form-group"><label class="form-label">Date *</label><input type="date" name="expense_date" class="form-control" value="{{ today }}" required></div>
+            <div class="form-group"><label class="form-label">Description *</label><input type="text" name="description" class="form-control" required placeholder="What was this expense for?"></div>
+            <div class="form-group"><label class="form-label">Amount (₦) *</label><input type="number" name="amount" class="form-control" required min="1" step="1" placeholder="Enter amount"></div>
+            <div class="form-group"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2" placeholder="Any additional details"></textarea></div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Expense</button>
+                <a href="{{ url_for('contributions.expenses_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Print Timetables{% endblock %}
+{% block breadcrumb %}<span>Print Timetables</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .sidebar, .topbar, .page-header-actions, .btn, .breadcrumb { display: none !important; }
+    .page-content { margin: 0 !important; padding: 0 !important; }
+    .card { box-shadow: none !important; border: 1px solid #000 !important; margin-bottom: 20px !important; page-break-inside: avoid; }
+    .timetable-print { page-break-after: always; }
+    .timetable-print:last-child { page-break-after: avoid; }
+}
+.timetable-print { margin-bottom: 2rem; }
+.timetable-header { text-align: center; padding: 1rem; border-bottom: 2px solid #333; }
+.timetable-header h2 { margin: 0; font-size: 1.5rem; }
+.timetable-header p { margin: 0.25rem 0 0; color: #666; }
+.timetable-table { width: 100%; border-collapse: collapse; }
+.timetable-table th, .timetable-table td { border: 1px solid #333; padding: 8px; text-align: center; }
+.timetable-table th { background: #4472C4; color: white; }
+.timetable-table .break-row { background: #d9d9d9; font-style: italic; }
+.timetable-table .period-col { background: #f0f0f0; font-weight: bold; width: 80px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Print All Timetables</h1>
+</div>
+
+<div class="page-header-actions mb-3">
+    <button onclick="window.print()" class="btn btn-primary btn-lg"><i class="fas fa-print"></i> Print</button>
+    <a href="{{ url_for('generator.view_results', batch_id=batch_id) }}" class="btn btn-secondary">Back</a>
+</div>
+
+{% for key, tt in timetables.items() %}
+<div class="timetable-print">
+    <div class="timetable-header">
+        <h2>{{ tt.class_name }} {{ tt.arm_name }}</h2>
+        <p>Weekly Timetable</p>
+    </div>
+    <table class="timetable-table">
+        <thead>
+            <tr>
+                <th>Period</th>
+                {% for day in days %}
+                <th>{{ day }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for period in range(1, periods_per_day + 1) %}
+            <tr>
+                <td class="period-col">{{ period }}</td>
+                {% for day_idx in range(5) %}
+                {% set entry = tt.grid[day_idx].get(period) %}
+                <td>
+                    {% if entry and entry.subject %}
+                    <strong>{{ entry.subject.name }}</strong>
+                    {% if entry.teacher %}
+                    <br><small>{{ entry.teacher.name }}</small>
+                    {% endif %}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% if period == break_after_period %}
+            <tr class="break-row">
+                <td class="period-col">-</td>
+                {% for day in days %}
+                <td>BREAK</td>
+                {% endfor %}
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+{% endblock %}

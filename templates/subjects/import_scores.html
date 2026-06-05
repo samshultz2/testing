@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Import Scores - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Import Scores</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Import Scores from Excel</h1></div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 1: Select Class & Subject</h3></div>
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}
+                    <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Subject</label>
+                <select name="class_subject_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Subject</option>
+                    {% for cs in class_subjects %}
+                    <option value="{{ cs.id }}" {% if class_subject_id == cs.id %}selected{% endif %}>{{ cs.subject.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if assignment_id and class_subject_id %}
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 2: Download Template</h3></div>
+    <div class="card-body">
+        <p>Download the template, fill in scores, then upload.</p>
+        <a href="{{ url_for('subjects.score_import_template', assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary">
+            <i class="fas fa-download"></i> Download Template
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Step 3: Upload Completed File</h3></div>
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="term_id" value="{{ term_id }}">
+            <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+            <input type="hidden" name="class_subject_id" value="{{ class_subject_id }}">
+            
+            <div class="form-group">
+                <label class="form-label">Excel File <span class="required">*</span></label>
+                <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Import Scores</button>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select Options Above</h3>
+            <p>Choose term, class, and subject to import scores</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mt-3">
+    <div class="card-header"><h3>Template Format</h3></div>
+    <div class="card-body">
+        <p>The Excel template will have these columns:</p>
+        <ul>
+            <li><strong>Student ID</strong> - Don't change this</li>
+            <li><strong>Student Name</strong> - For reference only (not imported)</li>
+            <li><strong>Assessment columns</strong> - Enter scores for each CA/exam type</li>
+        </ul>
+        <p class="text-muted">Leave cells blank if no score. Existing scores will be overwritten.</p>
+    </div>
+</div>
+{% endblock %}

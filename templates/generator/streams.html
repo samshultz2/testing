@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Streams - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Streams</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Streams</h1>
+    <a href="{{ url_for('generator.add_stream') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Stream</a>
+</div>
+
+<p class="text-muted mb-3">Define streams like Science, Arts, Commercial. Each stream has different subjects.</p>
+
+{% if streams %}
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for stream in streams %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ stream.name }}</div>
+                    {% if stream.short_name %}<span class="badge badge-info">{{ stream.short_name }}</span>{% endif %}
+                </div>
+                {% if stream.description %}
+                <div class="data-card-row">{{ stream.description }}</div>
+                {% endif %}
+                <div class="data-card-row">
+                    <span class="data-card-label">Subjects</span>
+                    <span>{{ stream.subjects.count() }}</span>
+                </div>
+                <div class="data-card-actions">
+                    <a href="{{ url_for('generator.edit_stream', stream_id=stream.id) }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-layer-group"></i>
+            <h3>No Streams</h3>
+            <p>Add streams like Science, Arts, Commercial if your school has them</p>
+            <a href="{{ url_for('generator.add_stream') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Stream</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

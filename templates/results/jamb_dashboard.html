@@ -1,0 +1,1052 @@
+{% extends "base.html" %}
+{% block title %}JAMB Results - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> <span>JAMB</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===== MOBILE FIRST ===== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.page-header h1 {
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem;
+    border: 1px solid #e0e0e0;
+    text-align: center;
+}
+
+.stat-card.highlight {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    border: none;
+}
+
+.stat-card.highlight .stat-value,
+.stat-card.highlight .stat-label { color: white; }
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 0.25rem;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tab {
+    padding: 0.5rem 0.75rem;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    text-decoration: none;
+    color: #333;
+}
+
+.tab.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+/* Cards */
+.card {
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.card-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.card-body {
+    padding: 0.75rem;
+}
+
+/* Filters */
+.filters-card {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 1rem;
+}
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.filter-search { margin-bottom: 0.6rem; }
+.filter-search input {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    width: 100%;
+}
+
+.filter-group label {
+    font-size: 0.7rem;
+    color: #666;
+    display: block;
+    margin-bottom: 0.2rem;
+}
+
+.filter-group select,
+.filter-group input {
+    padding: 0.4rem;
+    font-size: 0.8rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.filter-btn {
+    grid-column: span 2;
+    margin-top: 0.5rem;
+}
+
+/* Chart */
+.chart-body {
+    padding: 0.5rem;
+    height: 200px;
+    position: relative;
+}
+
+/* Score Badge */
+.score-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.score-excellent { background: #d4edda; color: #155724; }
+.score-very_good { background: #cce5ff; color: #004085; }
+.score-good { background: #fff3cd; color: #856404; }
+.score-average { background: #ffeeba; color: #856404; }
+.score-below_average { background: #f8d7da; color: #721c24; }
+.score-poor { background: #721c24; color: white; }
+
+/* Sort Buttons */
+.sort-btns {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.sort-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    text-decoration: none;
+    background: #f8f9fa;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+.sort-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+/* Student Cards (Mobile) */
+.students-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+}
+
+.student-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 0.75rem;
+}
+
+.student-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.student-rank {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #007bff;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.student-rank.gold { background: linear-gradient(135deg, #f5af19, #f12711); }
+.student-rank.silver { background: linear-gradient(135deg, #bdc3c7, #606060); }
+.student-rank.bronze { background: linear-gradient(135deg, #cd7f32, #8b4513); }
+
+.student-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.student-id {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.student-score {
+    font-size: 2rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.student-subjects {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.student-subject {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0.5rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.student-actions {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #eee;
+}
+
+/* Subject Table */
+.subject-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.subject-table th,
+.subject-table td {
+    padding: 0.4rem;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+}
+
+.subject-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+}
+
+.subject-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+/* Desktop Table */
+.desktop-table { display: none; }
+
+/* Export Container */
+#exportContainer {
+    background: white;
+    padding: 1.5rem;
+}
+
+#exportContainer h2 {
+    text-align: center;
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+#exportContainer .export-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+#exportContainer .export-table th,
+#exportContainer .export-table td {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+#exportContainer .export-table th {
+    background: #007bff;
+    color: white;
+    font-weight: 600;
+}
+
+#exportContainer .export-table tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+/* ===== TABLET+ ===== */
+@media (min-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+    
+    .stat-value { font-size: 2rem; }
+    .stat-label { font-size: 0.8rem; }
+    
+    .filters-grid { grid-template-columns: repeat(5, 1fr); }
+    .filter-btn { grid-column: span 1; margin-top: 0; }
+    
+    .chart-body { height: 250px; }
+    
+    .charts-row {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .charts-row .card { margin-bottom: 0; }
+    
+    .students-list { display: none; }
+    
+    .desktop-table {
+        display: block;
+        overflow-x: auto;
+    }
+    
+    .desktop-table table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+    }
+    
+    .desktop-table th,
+    .desktop-table td {
+        padding: 0.5rem;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .desktop-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+    }
+    
+    .desktop-table tbody tr:hover { background: #f8f9fa; }
+    
+    .subject-table { font-size: 0.8rem; }
+    .subject-table th, .subject-table td { padding: 0.5rem; }
+}
+
+@media (min-width: 1024px) {
+    .chart-body { height: 300px; }
+}
+
+/* Print/Export Styles */
+@media print {
+    .no-print { display: none !important; }
+    .card { break-inside: avoid; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header no-print">
+    <h1>JAMB Results</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('results.add_jamb') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
+        {% if selected_year %}
+        <a href="{{ url_for('results.export_jamb', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
+        <button onclick="exportAsImage()" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- View Tabs -->
+<div class="tabs no-print">
+    <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', search=search) }}" class="tab {% if view_mode == 'students' %}active{% endif %}">
+        <i class="fas fa-users"></i> Students
+    </a>
+    <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', search=search) }}" class="tab {% if view_mode == 'subjects' %}active{% endif %}">
+        <i class="fas fa-book"></i> Subjects
+    </a>
+    <a href="{{ url_for('results.jamb_list', year=selected_year, view='rankings', search=search) }}" class="tab {% if view_mode == 'rankings' %}active{% endif %}">
+        <i class="fas fa-trophy"></i> Rankings
+    </a>
+</div>
+
+<!-- Stats Cards -->
+{% if school_stats %}
+<div class="stats-grid">
+    <div class="stat-card highlight">
+        <div class="stat-value">{{ school_stats.mean_score }}</div>
+        <div class="stat-label">Average Score</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ school_stats.total_students }}</div>
+        <div class="stat-label">Students</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #28a745;">{{ school_stats.max_score }}</div>
+        <div class="stat-label">Highest</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #dc3545;">{{ school_stats.min_score }}</div>
+        <div class="stat-label">Lowest</div>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" style="color: #6f42c1;">{{ school_stats.above_300 }}</div>
+        <div class="stat-label">Above 300</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #007bff;">{{ school_stats.above_250 }}</div>
+        <div class="stat-label">Above 250</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #17a2b8;">{{ school_stats.above_200 }}</div>
+        <div class="stat-label">Above 200</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ school_stats.median_score }}</div>
+        <div class="stat-label">Median</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="filters-card no-print">
+    <form method="GET" action="{{ url_for('results.jamb_list', search=search) }}">
+        <input type="hidden" name="view" value="{{ view_mode }}">
+        <div class="filter-group filter-search">
+            <label>Search by name or ID</label>
+            <input type="text" name="search" value="{{ search or '' }}" placeholder="Type a student name or ID...">
+        </div>
+        <div class="filters-grid">
+            <div class="filter-group">
+                <label>Year</label>
+                <select name="year" onchange="this.form.submit()">
+                    {% for year in years %}
+                    <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Min Score</label>
+                <input type="number" name="min_score" min="0" max="400" value="{{ min_score or '' }}" placeholder="0">
+            </div>
+            <div class="filter-group">
+                <label>Max Score</label>
+                <input type="number" name="max_score" min="0" max="400" value="{{ max_score or '' }}" placeholder="400">
+            </div>
+            <div class="filter-group">
+                <label>Sort</label>
+                <select name="sort">
+                    <option value="score" {% if sort_by == 'score' %}selected{% endif %}>Score</option>
+                    <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
+                </select>
+            </div>
+            <div class="filter-group filter-btn">
+                <label style="visibility: hidden;">Filter</label>
+                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-filter"></i> Filter</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if view_mode == 'subjects' %}
+<!-- SUBJECTS VIEW -->
+<div class="charts-row">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Score Distribution</span>
+        </div>
+        <div class="chart-body"><canvas id="scoreChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Subject Averages</span>
+        </div>
+        <div class="chart-body"><canvas id="subjectAvgChart"></canvas></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Subject Performance Analysis</h3>
+        <div class="sort-btns">
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', sort='subject_avg', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_avg' %}active{% endif %}">Avg Score</a>
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', sort='subject_above70', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_above70' %}active{% endif %}">Above 70</a>
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', sort='subject_above50', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_above50' %}active{% endif %}">Above 50</a>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="subject-table">
+            <thead>
+                <tr>
+                    <th style="text-align: left;">Subject</th>
+                    <th>Students</th>
+                    <th>Avg</th>
+                    <th>Max</th>
+                    <th>Min</th>
+                    <th>≥70</th>
+                    <th>≥50</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for subj in subject_performance %}
+                <tr>
+                    <td>{{ subj.subject[:18] }}</td>
+                    <td>{{ subj.count }}</td>
+                    <td style="color: {% if subj.avg_score >= 70 %}#28a745{% elif subj.avg_score >= 50 %}#ffc107{% else %}#dc3545{% endif %}">
+                        <strong>{{ subj.avg_score }}</strong>
+                    </td>
+                    <td style="color: #28a745;">{{ subj.max_score }}</td>
+                    <td style="color: #dc3545;">{{ subj.min_score }}</td>
+                    <td>{{ subj.above_70 }} <small>({{ subj.above_70_pct }}%)</small></td>
+                    <td>{{ subj.above_50 }} <small>({{ subj.above_50_pct }}%)</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% elif view_mode == 'rankings' %}
+<!-- RANKINGS VIEW -->
+<div class="card" id="rankingsCard">
+    <div class="card-header">
+        <h3 class="card-title">🏆 JAMB Rankings {{ selected_year }}</h3>
+        <div class="sort-btns">
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='rankings', sort='score', order='desc', search=search) }}" class="sort-btn {% if sort_order == 'desc' %}active{% endif %}">Highest First</a>
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='rankings', sort='score', order='asc', search=search) }}" class="sort-btn {% if sort_order == 'asc' %}active{% endif %}">Lowest First</a>
+        </div>
+    </div>
+    
+    {% if students %}
+    <!-- Mobile: Card View -->
+    <div class="students-list">
+        {% for s in students %}
+        <div class="student-card">
+            <div class="student-card-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}">{{ s.rank }}</span>
+                    <div>
+                        <div class="student-name">{{ s.name }}</div>
+                        <div class="student-id">{{ s.student_id }}</div>
+                    </div>
+                </div>
+                <span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span>
+            </div>
+            <div class="student-score" style="color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">
+                {{ s.total_score }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Desktop: Table View -->
+    <div class="desktop-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Student</th>
+                    <th>Score</th>
+                    <th>Level</th>
+                    <th>Subject 1</th>
+                    <th>Subject 2</th>
+                    <th>Subject 3</th>
+                    <th>Subject 4</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr>
+                    <td>
+                        <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}" style="width: 24px; height: 24px; font-size: 0.7rem;">{{ s.rank }}</span>
+                    </td>
+                    <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
+                    <td><strong style="font-size: 1.1rem; color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">{{ s.total_score }}</strong></td>
+                    <td><span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span></td>
+                    {% for subj in s.subjects %}
+                    <td><small>{{ subj.name[:8] }}</small><br><strong>{{ subj.score }}</strong></td>
+                    {% endfor %}
+                    {% for _ in range(4 - s.subjects|length) %}<td>-</td>{% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% else %}
+<!-- STUDENTS VIEW (Default) -->
+<div class="charts-row">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Score Distribution</span>
+        </div>
+        <div class="chart-body"><canvas id="scoreChart"></canvas></div>
+    </div>
+    {% if subject_performance %}
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Subject Averages</span>
+        </div>
+        <div class="chart-body"><canvas id="subjectAvgChart"></canvas></div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Students ({{ students|length }})</span>
+        <div class="sort-btns">
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', sort='score', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'score' and sort_order == 'desc' %}active{% endif %}">High→Low</a>
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', sort='score', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'score' and sort_order == 'asc' %}active{% endif %}">Low→High</a>
+            <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', sort='name', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'name' %}active{% endif %}">A-Z</a>
+        </div>
+    </div>
+    
+    {% if students %}
+    <!-- Mobile: Card View -->
+    <div class="students-list">
+        {% for s in students %}
+        <div class="student-card">
+            <div class="student-card-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}">{{ s.rank }}</span>
+                    <div>
+                        <div class="student-name">{{ s.name }}</div>
+                        <div class="student-id">{{ s.student_id }}</div>
+                    </div>
+                </div>
+                <span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span>
+            </div>
+            <div class="student-score" style="color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">
+                {{ s.total_score }}
+            </div>
+            <div class="student-subjects">
+                {% for subj in s.subjects %}
+                <div class="student-subject">
+                    <span>{{ subj.name[:10] }}</span>
+                    <strong>{{ subj.score }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="student-actions">
+                <a href="{{ url_for('results.view_jamb_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
+                <a href="{{ url_for('results.edit_jamb', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete JAMB result for {{ s.name }}?');">
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Desktop: Table View -->
+    <div class="desktop-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Student</th>
+                    <th>Score</th>
+                    <th>Sub 1</th>
+                    <th>Sub 2</th>
+                    <th>Sub 3</th>
+                    <th>Sub 4</th>
+                    <th>Level</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr>
+                    <td>
+                        <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}" style="width: 24px; height: 24px; font-size: 0.7rem;">{{ s.rank }}</span>
+                    </td>
+                    <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
+                    <td><strong style="font-size: 1.1rem; color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">{{ s.total_score }}</strong></td>
+                    {% for subj in s.subjects %}
+                    <td><small>{{ subj.name[:8] }}</small><br><strong>{{ subj.score }}</strong></td>
+                    {% endfor %}
+                    {% for _ in range(4 - s.subjects|length) %}<td>-</td>{% endfor %}
+                    <td><span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span></td>
+                    <td>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <a href="{{ url_for('results.view_jamb_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
+                            <a href="{{ url_for('results.edit_jamb', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                            <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete?');">
+                                <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 2rem; color: #666;">
+        <i class="fas fa-file-alt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+        <p>No results found</p>
+        <a href="{{ url_for('results.add_jamb') }}" class="btn btn-primary btn-sm">Add Results</a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Hidden Export Container - Compact Mobile-Friendly -->
+<div id="exportContainer" style="position: absolute; left: -9999px; width: 500px;">
+    <div id="exportContent" style="padding: 12px; background: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <h2 style="color: #007bff; text-align: center; margin: 0 0 8px 0; font-size: 18px;">JAMB Results {{ selected_year }}</h2>
+        <p id="exportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
+        <table id="exportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+            <thead id="exportTableHead"></thead>
+            <tbody id="exportTableBody"></tbody>
+        </table>
+        <p style="text-align: center; margin: 8px 0 0 0; color: #999; font-size: 9px;" id="exportFooter"></p>
+    </div>
+</div>
+
+<!-- Export Options Modal -->
+<div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 1rem;">
+    <div style="background: white; border-radius: 12px; max-width: 400px; margin: 2rem auto; max-height: 90vh; overflow-y: auto;">
+        <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.1rem;"><i class="fas fa-image"></i> Export as Image</h3>
+            <button onclick="closeExportModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        <div style="padding: 1rem;">
+            <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">Select what to include in the exported image:</p>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expRank" checked>
+                    <span style="font-size: 0.9rem;">Rank</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expName" checked disabled>
+                    <span style="font-size: 0.9rem;">Student Name (required)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expStudentId" checked>
+                    <span style="font-size: 0.9rem;">Student ID</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expScore" checked disabled>
+                    <span style="font-size: 0.9rem;">Total Score (required)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expSubjects" checked>
+                    <span style="font-size: 0.9rem;">Subject Scores</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expLevel">
+                    <span style="font-size: 0.9rem;">Performance Level</span>
+                </label>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 0.5rem;">Include Summary Stats:</label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expSummary" checked>
+                    <span style="font-size: 0.9rem;">Show summary (Total, Average, Highest)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="expTimestamp" checked>
+                    <span style="font-size: 0.9rem;">Show timestamp</span>
+                </label>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 0.5rem;">Image Quality:</label>
+                <select id="expQuality" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+                    <option value="2">Standard (2x)</option>
+                    <option value="3" selected>HD (3x)</option>
+                    <option value="4">Ultra HD (4x)</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem;">
+                <button onclick="closeExportModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+                <button onclick="generateExport()" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// Student data for export
+const studentsData = {{ students|tojson }};
+const selectedYear = {{ selected_year|tojson }};
+const schoolStats = {{ school_stats|tojson if school_stats else 'null' }};
+
+// Show export modal
+function exportAsImage() {
+    document.getElementById('exportModal').style.display = 'block';
+}
+
+// Close export modal
+function closeExportModal() {
+    document.getElementById('exportModal').style.display = 'none';
+}
+
+// Generate export based on selected options
+function generateExport() {
+    const showRank = document.getElementById('expRank').checked;
+    const showStudentId = document.getElementById('expStudentId').checked;
+    const showSubjects = document.getElementById('expSubjects').checked;
+    const showLevel = document.getElementById('expLevel').checked;
+    const showSummary = document.getElementById('expSummary').checked;
+    const showTimestamp = document.getElementById('expTimestamp').checked;
+    const quality = parseInt(document.getElementById('expQuality').value);
+    
+    // Compact styles
+    const thStyle = 'padding:4px 6px;background:#007bff;color:white;border:1px solid #0056b3;font-size:10px;white-space:nowrap;';
+    const tdStyle = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
+    
+    // Build table header
+    let headerHtml = '<tr>';
+    if (showRank) headerHtml += `<th style="${thStyle}">#</th>`;
+    headerHtml += `<th style="${thStyle}text-align:left;">Name</th>`;
+    if (showStudentId) headerHtml += `<th style="${thStyle}">ID</th>`;
+    headerHtml += `<th style="${thStyle}">Score</th>`;
+    if (showSubjects) {
+        headerHtml += `<th style="${thStyle}">S1</th>`;
+        headerHtml += `<th style="${thStyle}">S2</th>`;
+        headerHtml += `<th style="${thStyle}">S3</th>`;
+        headerHtml += `<th style="${thStyle}">S4</th>`;
+    }
+    if (showLevel) headerHtml += `<th style="${thStyle}">Level</th>`;
+    headerHtml += '</tr>';
+    document.getElementById('exportTableHead').innerHTML = headerHtml;
+    
+    // Build table body
+    let bodyHtml = '';
+    studentsData.forEach((s, idx) => {
+        const scoreColor = s.total_score >= 300 ? '#28a745' : s.total_score >= 250 ? '#17a2b8' : s.total_score >= 200 ? '#856404' : '#dc3545';
+        const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
+        
+        bodyHtml += `<tr style="background:${rowBg}">`;
+        if (showRank) bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;">${s.rank}</td>`;
+        bodyHtml += `<td style="${tdStyle}">${s.name}</td>`;
+        if (showStudentId) bodyHtml += `<td style="${tdStyle}font-size:9px;">${s.student_id}</td>`;
+        bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;color:${scoreColor};">${s.total_score}</td>`;
+        
+        if (showSubjects) {
+            for (let i = 0; i < 4; i++) {
+                if (s.subjects[i]) {
+                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:8px;color:#666;">${s.subjects[i].name.substring(0,6)}</span><br><strong>${s.subjects[i].score}</strong></td>`;
+                } else {
+                    bodyHtml += `<td style="${tdStyle}text-align:center;">-</td>`;
+                }
+            }
+        }
+        if (showLevel) bodyHtml += `<td style="${tdStyle}font-size:9px;">${s.performance_level.replace('_', ' ')}</td>`;
+        bodyHtml += '</tr>';
+    });
+    document.getElementById('exportTableBody').innerHTML = bodyHtml;
+    
+    // Summary
+    if (showSummary && schoolStats) {
+        document.getElementById('exportSummary').innerHTML = `Students: <strong>${studentsData.length}</strong> | Avg: <strong>${schoolStats.mean_score}</strong> | High: <strong>${schoolStats.max_score}</strong> | Low: <strong>${schoolStats.min_score}</strong>`;
+        document.getElementById('exportSummary').style.display = 'block';
+    } else {
+        document.getElementById('exportSummary').style.display = 'none';
+    }
+    
+    // Timestamp
+    if (showTimestamp) {
+        const now = new Date();
+        document.getElementById('exportFooter').innerHTML = `Generated ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+        document.getElementById('exportFooter').style.display = 'block';
+    } else {
+        document.getElementById('exportFooter').style.display = 'none';
+    }
+    
+    // Close modal
+    closeExportModal();
+    
+    // Show loading indicator
+    var loadingDiv = document.createElement('div');
+    loadingDiv.id = 'exportLoading';
+    loadingDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;';
+    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating image...</div><div style="font-size:14px;">Please wait</div>';
+    document.body.appendChild(loadingDiv);
+    
+    // Generate image - compact width for mobile viewing
+    var container = document.getElementById('exportContainer');
+    container.style.position = 'fixed';
+    container.style.left = '0';
+    container.style.top = '0';
+    container.style.zIndex = '9999';
+    container.style.background = 'white';
+    
+    setTimeout(function() {
+        html2canvas(container, {
+            scale: quality,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            width: 500,
+            windowWidth: 500
+        }).then(function(canvas) {
+            container.style.position = 'absolute';
+            container.style.left = '-9999px';
+            
+            // Remove loading
+            document.getElementById('exportLoading').remove();
+            
+            // Create modal to show image for manual save (mobile-friendly)
+            var imgData = canvas.toDataURL('image/png', 1.0);
+            var saveModal = document.createElement('div');
+            saveModal.id = 'saveImageModal';
+            saveModal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:99999;padding:10px;overflow:auto;';
+            saveModal.innerHTML = 
+                '<div style="text-align:center;margin-bottom:10px;">' +
+                '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
+                '<button onclick="document.getElementById(\'saveImageModal\').remove()" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
+                '</div>' +
+                '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="JAMB Results Export">';
+            document.body.appendChild(saveModal);
+            
+        }).catch(function(err) {
+            container.style.position = 'absolute';
+            container.style.left = '-9999px';
+            document.getElementById('exportLoading').remove();
+            alert('Error generating image: ' + err.message);
+        });
+    }, 100);
+}
+
+// Close modal on outside click
+document.getElementById('exportModal').addEventListener('click', function(e) {
+    if (e.target === this) closeExportModal();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+    
+    // Score Distribution Chart
+    {% if school_stats and school_stats.distribution %}
+    const distribution = {{ school_stats.distribution|tojson }};
+    const scoreCtx = document.getElementById('scoreChart');
+    if (scoreCtx) {
+        new Chart(scoreCtx, {
+            type: 'bar',
+            data: { 
+                labels: Object.keys(distribution), 
+                datasets: [{ 
+                    data: Object.values(distribution), 
+                    backgroundColor: ['#dc3545','#fd7e14','#ffc107','#20c997','#17a2b8','#007bff','#28a745'],
+                    borderRadius: 4
+                }] 
+            },
+            options: { ...opts, scales: { y: { beginAtZero: true } } }
+        });
+    }
+    {% endif %}
+    
+    // Subject Averages Chart
+    {% if subject_performance %}
+    const subjectPerf = {{ subject_performance|tojson }};
+    const subjectCtx = document.getElementById('subjectAvgChart');
+    if (subjectCtx && subjectPerf.length > 0) {
+        const sorted = [...subjectPerf].sort((a, b) => b.avg_score - a.avg_score).slice(0, 10);
+        new Chart(subjectCtx, {
+            type: 'bar',
+            data: { 
+                labels: sorted.map(s => s.subject.substring(0, 10)), 
+                datasets: [{ 
+                    data: sorted.map(s => s.avg_score), 
+                    backgroundColor: sorted.map(s => s.avg_score >= 70 ? '#28a745' : s.avg_score >= 50 ? '#ffc107' : '#dc3545'),
+                    borderRadius: 4
+                }] 
+            },
+            options: { ...opts, indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } } }
+        });
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

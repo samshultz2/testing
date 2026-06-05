@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Assessment Types - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Assessments</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Assessment Types</h1></div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <p><strong>Total Maximum Score:</strong> <span id="totalMax" class="badge badge-primary">{{ total_max }}</span></p>
+        <small class="text-muted">The sum of all max scores should equal 100 for standard percentage grading.</small>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('settings.save_assessments') }}">
+            <div class="table-container">
+                <table class="data-table" id="assessmentsTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Short</th>
+                            <th>Max Score</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in assessments %}
+                        <tr>
+                            <td><input type="text" name="name[]" class="form-control" value="{{ a.name }}"></td>
+                            <td><input type="text" name="short_name[]" class="form-control" value="{{ a.short_name }}" style="width: 80px;"></td>
+                            <td><input type="number" name="max_score[]" class="form-control score-input" value="{{ a.max_score }}" style="width: 80px;" min="1" max="100"></td>
+                            <td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('tr').remove(); updateTotal();"><i class="fas fa-times"></i></button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="page-header-actions mt-3">
+                <button type="button" class="btn btn-secondary" onclick="addAssessmentRow()"><i class="fas fa-plus"></i> Add</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
+                <a href="{{ url_for('settings.index') }}" class="btn btn-secondary">Back</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function addAssessmentRow() {
+    const tbody = document.querySelector('#assessmentsTable tbody');
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td><input type="text" name="name[]" class="form-control" placeholder="Assessment Name"></td>
+        <td><input type="text" name="short_name[]" class="form-control" placeholder="CA1" style="width: 80px;"></td>
+        <td><input type="number" name="max_score[]" class="form-control score-input" placeholder="10" style="width: 80px;" min="1" max="100"></td>
+        <td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('tr').remove(); updateTotal();"><i class="fas fa-times"></i></button></td>
+    `;
+    tbody.appendChild(row);
+    updateTotal();
+}
+
+function updateTotal() {
+    const inputs = document.querySelectorAll('.score-input');
+    let total = 0;
+    inputs.forEach(input => {
+        total += parseInt(input.value) || 0;
+    });
+    document.getElementById('totalMax').textContent = total;
+    document.getElementById('totalMax').className = total === 100 ? 'badge badge-success' : 'badge badge-warning';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.score-input').forEach(input => {
+        input.addEventListener('input', updateTotal);
+    });
+});
+</script>
+{% endblock %}

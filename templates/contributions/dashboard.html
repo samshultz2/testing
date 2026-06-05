@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+{% block title %}SSS3 Contributions - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}">Home</a> / <span>SSS3 Contributions</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-hand-holding-usd"></i> SSS3 Contributions</h1>
+    <div class="header-actions">
+        <a href="{{ url_for('contributions.quick_entry') }}" class="btn btn-success"><i class="fas fa-bolt"></i> Quick Entry</a>
+        <a href="{{ url_for('contributions.add_payment') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Payment</a>
+        <a href="{{ url_for('contributions.import_excel') }}" class="btn btn-warning"><i class="fas fa-file-import"></i> Import</a>
+        <a href="{{ url_for('contributions.export_excel') }}" class="btn btn-info"><i class="fas fa-file-excel"></i> Export</a>
+        <a href="{{ url_for('contributions.logout_contributions') }}" class="btn btn-secondary"><i class="fas fa-sign-out-alt"></i> Exit</a>
+    </div>
+</div>
+
+<!-- Main Summary Cards -->
+<div class="stats-grid mb-3">
+    <div class="stat-card">
+        <div class="stat-icon primary"><i class="fas fa-users"></i></div>
+        <div class="stat-content">
+            <h3>{{ total_students }}</h3>
+            <p>Total Students</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon info"><i class="fas fa-coins"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(total_expected) }}</h3>
+            <p>Expected</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon success"><i class="fas fa-hand-holding-usd"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(total_received) }}</h3>
+            <p>Received</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon warning"><i class="fas fa-receipt"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(total_expenses) }}</h3>
+            <p>Expenses</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon {% if net_balance >= 0 %}success{% else %}danger{% endif %}"><i class="fas fa-wallet"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(net_balance) }}</h3>
+            <p>Net Balance</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon success"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-content">
+            <h3>{{ fully_paid_count }}/{{ total_students }}</h3>
+            <p>Fully Paid</p>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Stats Row -->
+<div class="stats-grid mb-3">
+    <div class="stat-card">
+        <div class="stat-icon danger"><i class="fas fa-exclamation-circle"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(total_outstanding) }}</h3>
+            <p>Outstanding</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon info"><i class="fas fa-calculator"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(avg_paid) }}</h3>
+            <p>Avg. Paid/Student</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon primary"><i class="fas fa-clipboard-list"></i></div>
+        <div class="stat-content">
+            <h3>{{ total_payments }}</h3>
+            <p>Total Transactions</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon warning"><i class="fas fa-calendar-day"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(today_collections) }}</h3>
+            <p>Today's Collection</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon info"><i class="fas fa-calendar-week"></i></div>
+        <div class="stat-content">
+            <h3>₦{{ "{:,.0f}".format(week_collections) }}</h3>
+            <p>This Week</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon primary"><i class="fas fa-percentage"></i></div>
+        <div class="stat-content">
+            <h3>{{ "{:.1f}".format(collection_rate) }}%</h3>
+            <p>Collection Rate</p>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Bar -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span><strong>Collection Progress</strong></span>
+            <strong>₦{{ "{:,.0f}".format(total_received) }} / ₦{{ "{:,.0f}".format(total_expected) }}</strong>
+        </div>
+        <div style="background: #e9ecef; border-radius: 10px; height: 24px; overflow: hidden; position: relative;">
+            <div style="background: linear-gradient(90deg, #1a5f4a, #28a745); height: 100%; width: {{ collection_rate }}%; transition: width 0.5s;"></div>
+            <span style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: bold; color: {% if collection_rate > 50 %}white{% else %}#333{% endif %};">{{ "{:.1f}".format(collection_rate) }}%</span>
+        </div>
+    </div>
+</div>
+
+<!-- Financial Summary Card -->
+<div class="card mb-3" style="border-left: 4px solid {% if net_balance >= 0 %}#28a745{% else %}#dc3545{% endif %};">
+    <div class="card-header"><h3><i class="fas fa-calculator"></i> Financial Summary</h3></div>
+    <div class="card-body">
+        <div class="financial-grid">
+            <div class="financial-item">
+                <span class="financial-label">Total Collected</span>
+                <span class="financial-value text-success">₦{{ "{:,.0f}".format(total_received) }}</span>
+            </div>
+            <div class="financial-item">
+                <span class="financial-label">Total Expenses</span>
+                <span class="financial-value text-danger">- ₦{{ "{:,.0f}".format(total_expenses) }}</span>
+            </div>
+            <div class="financial-item financial-total">
+                <span class="financial-label">Available Balance</span>
+                <span class="financial-value {% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">₦{{ "{:,.0f}".format(net_balance) }}</span>
+            </div>
+        </div>
+        <div style="margin-top: 1rem;">
+            <a href="{{ url_for('contributions.expenses_list') }}" class="btn btn-sm btn-outline-danger"><i class="fas fa-receipt"></i> View All Expenses</a>
+            <a href="{{ url_for('contributions.add_expense') }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-plus"></i> Add Expense</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.financial-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.financial-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed #e9ecef;
+}
+.financial-item.financial-total {
+    border-bottom: none;
+    border-top: 2px solid #333;
+    padding-top: 0.75rem;
+    margin-top: 0.25rem;
+}
+.financial-label {
+    font-weight: 500;
+    color: #666;
+}
+.financial-value {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+.financial-total .financial-label {
+    font-weight: bold;
+    color: #333;
+}
+.financial-total .financial-value {
+    font-size: 1.5rem;
+}
+</style>
+
+<!-- Quick Navigation Cards -->
+<div class="data-cards mb-3">
+    <a href="{{ url_for('contributions.payments_list') }}" class="data-card" style="text-decoration: none; color: inherit;">
+        <div class="data-card-header">
+            <div class="data-card-title"><i class="fas fa-list"></i> All Payments</div>
+            <span class="badge badge-primary">{{ total_payments }}</span>
+        </div>
+        <div class="data-card-row">View and manage payment records</div>
+    </a>
+    <a href="{{ url_for('contributions.expenses_list') }}" class="data-card" style="text-decoration: none; color: inherit;">
+        <div class="data-card-header">
+            <div class="data-card-title"><i class="fas fa-receipt"></i> Expenses</div>
+            <span class="badge badge-warning">{{ expense_count }}</span>
+        </div>
+        <div class="data-card-row">Track fund expenses</div>
+    </a>
+    <a href="{{ url_for('contributions.report') }}" class="data-card" style="text-decoration: none; color: inherit;">
+        <div class="data-card-header">
+            <div class="data-card-title"><i class="fas fa-chart-bar"></i> Report by Arm</div>
+        </div>
+        <div class="data-card-row">Detailed breakdown by class arm</div>
+    </a>
+    <a href="{{ url_for('contributions.defaulters') }}" class="data-card" style="text-decoration: none; color: inherit;">
+        <div class="data-card-header">
+            <div class="data-card-title"><i class="fas fa-user-times"></i> Defaulters</div>
+            <span class="badge badge-danger">{{ total_students - fully_paid_count }}</span>
+        </div>
+        <div class="data-card-row">Students with outstanding balance</div>
+    </a>
+    <a href="{{ url_for('contributions.daily_summary') }}" class="data-card" style="text-decoration: none; color: inherit;">
+        <div class="data-card-header">
+            <div class="data-card-title"><i class="fas fa-calendar-alt"></i> Daily Summary</div>
+        </div>
+        <div class="data-card-row">Collections by date</div>
+    </a>
+    <a href="{{ url_for('contributions.session_history') }}" class="data-card" style="text-decoration: none; color: inherit;">
+        <div class="data-card-header">
+            <div class="data-card-title"><i class="fas fa-history"></i> Session History</div>
+        </div>
+        <div class="data-card-row">View past session records</div>
+    </a>
+    <a href="{{ url_for('contributions.settings') }}" class="data-card" style="text-decoration: none; color: inherit;">
+        <div class="data-card-header">
+            <div class="data-card-title"><i class="fas fa-cog"></i> Settings</div>
+        </div>
+        <div class="data-card-row">Configure max due, dates</div>
+    </a>
+</div>
+
+<!-- Arm Progress Section -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-layer-group"></i> Progress by Arm</h3></div>
+    <div class="card-body">
+        {% for arm_name, arm_data in arms_summary.items()|sort %}
+        <div class="arm-progress-row">
+            <div class="arm-info">
+                <span class="arm-name badge badge-{% if arm_name == 'Iris' %}primary{% elif arm_name == 'Rose' %}danger{% elif arm_name == 'Lily' %}warning{% else %}info{% endif %}">{{ arm_name }}</span>
+                <span class="arm-stats">{{ arm_data.paid }}/{{ arm_data.total }} paid</span>
+            </div>
+            <div class="arm-bar-container">
+                <div class="arm-bar" style="width: {{ arm_data.percentage }}%; background: {% if arm_data.percentage >= 75 %}#28a745{% elif arm_data.percentage >= 50 %}#ffc107{% else %}#dc3545{% endif %};"></div>
+            </div>
+            <div class="arm-amount">₦{{ "{:,.0f}".format(arm_data.collected) }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Recent Payments & Top Contributors Side by Side -->
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3><i class="fas fa-clock"></i> Recent Payments</h3>
+                <a href="{{ url_for('contributions.payments_list') }}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <table class="data-table">
+                    <tbody>
+                        {% for payment in recent_payments[:7] %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('contributions.student_detail', student_id=payment.student_id) }}">
+                                    {{ payment.student.full_name[:20] }}{% if payment.student.full_name|length > 20 %}...{% endif %}
+                                </a>
+                            </td>
+                            <td><strong>₦{{ "{:,.0f}".format(payment.amount) }}</strong></td>
+                            <td><small class="text-muted">{{ payment.payment_date.strftime('%d %b') }}</small></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-center text-muted">No payments yet</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3><i class="fas fa-trophy"></i> Top Contributors</h3>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <table class="data-table">
+                    <tbody>
+                        {% for student in top_contributors[:7] %}
+                        <tr>
+                            <td>
+                                <span class="rank-badge {% if loop.index <= 3 %}top-{{ loop.index }}{% endif %}">{{ loop.index }}</span>
+                                <a href="{{ url_for('contributions.student_detail', student_id=student.id) }}">
+                                    {{ student.name[:18] }}{% if student.name|length > 18 %}...{% endif %}
+                                </a>
+                            </td>
+                            <td><strong>₦{{ "{:,.0f}".format(student.total_paid) }}</strong></td>
+                            <td>
+                                {% if student.total_paid >= max_due %}
+                                <span class="badge badge-success"><i class="fas fa-check"></i></span>
+                                {% else %}
+                                <small class="text-muted">{{ "{:.0f}".format(student.total_paid / max_due * 100) }}%</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-center text-muted">No payments yet</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Students Table -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-users"></i> All Students ({{ students|length }})</h3>
+        <div class="filter-group">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search students..." style="width: 200px;">
+            <select id="armFilter" class="form-control" style="width: 120px;">
+                <option value="">All Arms</option>
+                <option value="Iris">Iris</option>
+                <option value="Rose">Rose</option>
+                <option value="Lily">Lily</option>
+                <option value="Daisy">Daisy</option>
+            </select>
+            <select id="statusFilter" class="form-control" style="width: 120px;">
+                <option value="">All Status</option>
+                <option value="Paid">Paid</option>
+                <option value="Ongoing">Ongoing</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="data-table" id="studentsTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Name</th>
+                    <th>Arm</th>
+                    <th>Paid</th>
+                    <th>Remaining</th>
+                    <th>Progress</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr data-arm="{{ student.arm }}" data-status="{{ student.status }}">
+                    <td>{{ loop.index }}</td>
+                    <td><strong>{{ student.name }}</strong></td>
+                    <td><span class="badge badge-{% if student.arm == 'Iris' %}primary{% elif student.arm == 'Rose' %}danger{% elif student.arm == 'Lily' %}warning{% else %}info{% endif %}">{{ student.arm }}</span></td>
+                    <td><strong>₦{{ "{:,.0f}".format(student.total_paid) }}</strong></td>
+                    <td>{% if student.remaining > 0 %}<span class="text-danger">₦{{ "{:,.0f}".format(student.remaining) }}</span>{% else %}<span class="text-success">-</span>{% endif %}</td>
+                    <td style="width: 100px;">
+                        <div style="background: #e9ecef; border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div style="background: {% if student.percentage >= 100 %}#28a745{% elif student.percentage >= 50 %}#ffc107{% else %}#dc3545{% endif %}; height: 100%; width: {{ student.percentage }}%;"></div>
+                        </div>
+                        <small class="text-muted">{{ "{:.0f}".format(student.percentage) }}%</small>
+                    </td>
+                    <td>
+                        {% if student.status == 'Paid' %}
+                        <span class="badge badge-success"><i class="fas fa-check"></i> Paid</span>
+                        {% else %}
+                        <span class="badge badge-warning">Owing</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('contributions.student_detail', student_id=student.id) }}" class="btn btn-sm btn-info" title="View"><i class="fas fa-eye"></i></a>
+                        <a href="{{ url_for('contributions.add_payment') }}?student_id={{ student.id }}" class="btn btn-sm btn-success" title="Add Payment"><i class="fas fa-plus"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
+.col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 0.5rem; margin-bottom: 1rem; }
+@media (max-width: 992px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
+.h-100 { height: 100%; }
+
+.filter-group { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+@media (max-width: 768px) {
+    .header-actions { margin-top: 1rem; }
+    .filter-group input, .filter-group select { width: 100% !important; }
+}
+
+.arm-progress-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    gap: 1rem;
+}
+.arm-info { width: 140px; display: flex; align-items: center; gap: 0.5rem; }
+.arm-name { min-width: 60px; text-align: center; }
+.arm-stats { font-size: 0.8rem; color: #666; }
+.arm-bar-container { flex: 1; background: #e9ecef; border-radius: 6px; height: 12px; overflow: hidden; }
+.arm-bar { height: 100%; border-radius: 6px; transition: width 0.3s; }
+.arm-amount { width: 100px; text-align: right; font-weight: bold; }
+
+.rank-badge {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    border-radius: 50%;
+    background: #e9ecef;
+    font-size: 0.75rem;
+    margin-right: 0.5rem;
+}
+.rank-badge.top-1 { background: #ffd700; color: #000; }
+.rank-badge.top-2 { background: #c0c0c0; color: #000; }
+.rank-badge.top-3 { background: #cd7f32; color: #fff; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const armFilter = document.getElementById('armFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const rows = document.querySelectorAll('#studentsTable tbody tr');
+    
+    function filterTable() {
+        const search = searchInput.value.toLowerCase();
+        const arm = armFilter.value;
+        const status = statusFilter.value;
+        
+        rows.forEach(row => {
+            const name = row.cells[1].textContent.toLowerCase();
+            const rowArm = row.dataset.arm;
+            const rowStatus = row.dataset.status;
+            
+            const matchSearch = name.includes(search);
+            const matchArm = !arm || rowArm === arm;
+            const matchStatus = !status || rowStatus === status;
+            
+            row.style.display = (matchSearch && matchArm && matchStatus) ? '' : 'none';
+        });
+    }
+    
+    searchInput.addEventListener('input', filterTable);
+    armFilter.addEventListener('change', filterTable);
+    statusFilter.addEventListener('change', filterTable);
+});
+</script>
+{% endblock %}

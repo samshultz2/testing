@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Export Class Students - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Export Class</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Export Class Students</h1></div>
+
+<div class="card">
+    <div class="card-header"><h3>Select Class to Export</h3></div>
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+        
+        {% if assignments %}
+        <h4 style="margin: 1.5rem 0 1rem;">Classes</h4>
+        <div class="data-cards">
+            {% for a in assignments %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ a.display_name }}</div>
+                </div>
+                <div class="data-card-row">
+                    <span class="data-card-label">Students</span>
+                    <span>{{ a.enrollments|selectattr('is_active')|list|length }}</span>
+                </div>
+                <div class="data-card-actions">
+                    <a href="{{ url_for('reports.export_class_students', assignment_id=a.id) }}" class="btn btn-success btn-sm w-100">
+                        <i class="fas fa-download"></i> Export
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% elif term_id %}
+        <div class="empty-state mt-3">
+            <i class="fas fa-school"></i>
+            <h3>No Classes</h3>
+            <p>No class assignments for this term</p>
+        </div>
+        {% else %}
+        <div class="empty-state mt-3">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select a Term</h3>
+            <p>Choose a term to see available classes</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

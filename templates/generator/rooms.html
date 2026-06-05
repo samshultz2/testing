@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Rooms - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Rooms</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Rooms & Venues</h1>
+    <a href="{{ url_for('generator.add_room') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Room</a>
+</div>
+
+{% if rooms %}
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Short</th>
+                    <th>Type</th>
+                    <th>Capacity</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for room in rooms %}
+                <tr>
+                    <td><strong>{{ room.name }}</strong></td>
+                    <td>{{ room.short_name or '-' }}</td>
+                    <td><span class="badge badge-info">{{ room.room_type }}</span></td>
+                    <td>{{ room.capacity or '-' }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('generator.delete_room', room_id=room.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-door-open"></i>
+            <h3>No Rooms</h3>
+            <p>Add rooms like labs, halls for special subjects</p>
+            <a href="{{ url_for('generator.add_room') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Room</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

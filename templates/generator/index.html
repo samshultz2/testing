@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Timetable Generator - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Timetable Generator</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.level-selector{display:grid;grid-template-columns:1fr;gap:1.5rem;max-width:900px;margin:0 auto}
+@media(min-width:768px){.level-selector{grid-template-columns:repeat(2,1fr)}}
+.level-card{background:var(--bg-card);border-radius:var(--radius-lg);border:2px solid var(--border-color);overflow:hidden;transition:all .3s ease;cursor:pointer;text-decoration:none;color:inherit}
+.level-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.15);border-color:var(--primary)}
+.level-card-header{padding:2rem;text-align:center;color:white}
+.level-card.jss .level-card-header{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)}
+.level-card.sss .level-card-header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+.level-icon{font-size:3rem;margin-bottom:1rem}
+.level-title{font-size:1.5rem;font-weight:700;margin:0}
+.level-subtitle{font-size:.9rem;opacity:.9;margin-top:.25rem}
+.level-card-body{padding:1.5rem}
+.level-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem}
+.level-stat{text-align:center;padding:.75rem;background:var(--gray-50);border-radius:var(--radius-md)}
+.level-stat-value{font-size:1.5rem;font-weight:700}
+.level-stat-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase}
+.level-status{margin-top:1rem;padding:.75rem;border-radius:var(--radius-md);text-align:center;font-weight:600}
+.level-status.ready{background:rgba(40,167,69,.1);color:#28a745}
+.level-status.not-ready{background:rgba(220,53,69,.1);color:#dc3545}
+.level-last-gen{margin-top:.75rem;font-size:.8rem;color:var(--text-muted);text-align:center}
+.page-intro{text-align:center;margin-bottom:2rem}
+.page-intro h1{font-size:1.75rem;margin-bottom:.5rem}
+.page-intro p{color:var(--text-muted);max-width:500px;margin:0 auto}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-intro">
+    <h1><i class="fas fa-calendar-alt"></i> Timetable Generator</h1>
+    <p>Select a school level to configure and generate timetables</p>
+</div>
+
+<div class="level-selector">
+    <!-- JSS Card -->
+    <a href="{{ url_for('generator.level_dashboard', level='jss') }}" class="level-card jss">
+        <div class="level-card-header">
+            <div class="level-icon"><i class="fas fa-school"></i></div>
+            <h2 class="level-title">JSS</h2>
+            <div class="level-subtitle">Junior Secondary School</div>
+        </div>
+        <div class="level-card-body">
+            <div class="level-stats">
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ jss_stats.teachers }}</div>
+                    <div class="level-stat-label">Teachers</div>
+                </div>
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ jss_stats.subjects }}</div>
+                    <div class="level-stat-label">Subjects</div>
+                </div>
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ jss_stats.classes }}</div>
+                    <div class="level-stat-label">Classes</div>
+                </div>
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ jss_stats.assignments }}</div>
+                    <div class="level-stat-label">Assignments</div>
+                </div>
+            </div>
+            {% if jss_stats.ready %}
+            <div class="level-status ready"><i class="fas fa-check-circle"></i> Ready to Generate</div>
+            {% else %}
+            <div class="level-status not-ready"><i class="fas fa-exclamation-circle"></i> Setup Required</div>
+            {% endif %}
+            {% if jss_stats.latest %}
+            <div class="level-last-gen">Last generated: {{ jss_stats.latest.generated_at.strftime('%d %b %Y %H:%M') }}</div>
+            {% endif %}
+        </div>
+    </a>
+    
+    <!-- SSS Card -->
+    <a href="{{ url_for('generator.level_dashboard', level='sss') }}" class="level-card sss">
+        <div class="level-card-header">
+            <div class="level-icon"><i class="fas fa-graduation-cap"></i></div>
+            <h2 class="level-title">SSS</h2>
+            <div class="level-subtitle">Senior Secondary School</div>
+        </div>
+        <div class="level-card-body">
+            <div class="level-stats">
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ sss_stats.teachers }}</div>
+                    <div class="level-stat-label">Teachers</div>
+                </div>
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ sss_stats.subjects }}</div>
+                    <div class="level-stat-label">Subjects</div>
+                </div>
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ sss_stats.classes }}</div>
+                    <div class="level-stat-label">Classes</div>
+                </div>
+                <div class="level-stat">
+                    <div class="level-stat-value">{{ sss_stats.assignments }}</div>
+                    <div class="level-stat-label">Assignments</div>
+                </div>
+            </div>
+            {% if sss_stats.ready %}
+            <div class="level-status ready"><i class="fas fa-check-circle"></i> Ready to Generate</div>
+            {% else %}
+            <div class="level-status not-ready"><i class="fas fa-exclamation-circle"></i> Setup Required</div>
+            {% endif %}
+            {% if sss_stats.latest %}
+            <div class="level-last-gen">Last generated: {{ sss_stats.latest.generated_at.strftime('%d %b %Y %H:%M') }}</div>
+            {% endif %}
+        </div>
+    </a>
+</div>
+
+<div class="text-center mt-4">
+    <p class="text-muted" style="font-size:.85rem">
+        <i class="fas fa-info-circle"></i> Each level has its own teachers, subjects, classes, and timetables.
+    </p>
+</div>
+{% endblock %}

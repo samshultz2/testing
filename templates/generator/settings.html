@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Generator Settings{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Settings</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Generator Settings</h1>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>School Information (for printing)</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.save_generator_settings') }}">
+            <div class="form-group">
+                <label class="form-label">School Name</label>
+                <input type="text" name="school_name" class="form-control" value="{{ school_name }}" placeholder="e.g., Greenfield Secondary School">
+            </div>
+            <div class="form-group">
+                <label class="form-label">School Address</label>
+                <input type="text" name="school_address" class="form-control" value="{{ school_address }}" placeholder="e.g., 123 Education Lane, Lagos">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Academic Year</label>
+                    <input type="text" name="academic_year" class="form-control" value="{{ academic_year }}" placeholder="e.g., 2024/2025">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Term</label>
+                    <input type="text" name="term_name" class="form-control" value="{{ term_name }}" placeholder="e.g., First Term">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Settings</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "components/macros.html" import form_input, button, subject_score_input, csrf_input %}
+
+{% block title %}Edit Result - {{ app_name }}{% endblock %}
+{% block breadcrumb %}Edit Result{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>Edit Result</h1>
+    <p class="text-muted">{{ result.student.full_name }} - {{ result.exam.display_name }}</p>
+</div>
+
+<div class="card" style="max-width: 700px;">
+    <div class="card-body">
+        <form method="POST">
+            
+            <div class="mb-3 p-3" style="background: var(--gray-100); border-radius: var(--radius-md);">
+                <strong>Student:</strong> {{ result.student.full_name }} ({{ result.student.student_id }})
+            </div>
+            
+            <h4 class="mb-3">Subject Scores</h4>
+            
+            {{ subject_score_input(1, subjects, result.subject1, result.subject1_score) }}
+            {{ subject_score_input(2, subjects, result.subject2, result.subject2_score) }}
+            {{ subject_score_input(3, subjects, result.subject3, result.subject3_score) }}
+            {{ subject_score_input(4, subjects, result.subject4, result.subject4_score) }}
+            
+            <hr class="my-4">
+            
+            <div class="form-group">
+                <label class="form-label">Total Score <span class="text-danger">*</span></label>
+                <input type="number" name="total_score" id="total_score" class="form-control" 
+                       min="0" max="400" required value="{{ result.total_score }}">
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                {{ button('Save Changes', icon='fas fa-save') }}
+                <a href="{{ url_for('mock_jamb.view_exam', exam_id=result.mock_exam_id) }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+        
+        <hr class="my-4">
+        
+        <form method="POST" action="{{ url_for('mock_jamb.delete_result', result_id=result.id) }}"
+              onsubmit="return confirm('Delete this result?');">
+            
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash"></i> Delete Result
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('input[name$="_score"]').forEach(input => {
+    if (input.name !== 'total_score') {
+        input.addEventListener('input', function() {
+            let total = 0;
+            for (let i = 1; i <= 4; i++) {
+                const score = parseInt(document.querySelector(`input[name="subject${i}_score"]`)?.value) || 0;
+                total += score;
+            }
+            document.getElementById('total_score').value = total;
+        });
+    }
+});
+</script>
+{% endblock %}

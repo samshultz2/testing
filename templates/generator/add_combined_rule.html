@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Add Combined Class Rule - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> / <span>Add Combined</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-plus"></i> Add Combined Class Teacher Rule</h1>
+</div>
+
+<p class="text-muted mb-3">This rule ensures that when a "shadow subject" is scheduled, the teacher who teaches the "teacher subject" to that class doesn't get 3 consecutive periods (counting both their own periods and the shadow periods).</p>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="form-group">
+                <label class="form-label">Rule Name *</label>
+                <input type="text" name="name" class="form-control" required placeholder="e.g., Literature teacher shadows Geography SSS3 Iris">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2" placeholder="Explain why this rule exists"></textarea>
+            </div>
+            
+            <fieldset style="border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
+                <legend style="width: auto; padding: 0 0.5rem; font-weight: bold;">Shadow Subject (the subject being "shadowed")</legend>
+                <p class="text-muted" style="font-size: 0.85rem;">When this subject is scheduled, the teacher below is also occupied (teaching a different group of students).</p>
+                
+                <div class="form-group">
+                    <label class="form-label">Subject *</label>
+                    <select name="shadow_subject_id" class="form-control" required>
+                        <option value="">Select Subject</option>
+                        {% for s in subjects %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Class *</label>
+                            <select name="shadow_class_name" class="form-control" required id="shadowClass">
+                                <option value="">Select Class</option>
+                                {% for c in classes %}
+                                <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Arm (leave empty for all)</label>
+                            <select name="shadow_arm_name" class="form-control" id="shadowArm">
+                                <option value="">All Arms</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+            
+            <fieldset style="border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
+                <legend style="width: auto; padding: 0 0.5rem; font-weight: bold;">Teacher's Subject (to find the teacher)</legend>
+                <p class="text-muted" style="font-size: 0.85rem;">The teacher assigned to this subject/class is the one who shadows during the above subject.</p>
+                
+                <div class="form-group">
+                    <label class="form-label">Subject *</label>
+                    <select name="teacher_subject_id" class="form-control" required>
+                        <option value="">Select Subject</option>
+                        {% for s in subjects %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Class *</label>
+                            <select name="teacher_class_name" class="form-control" required id="teacherClass">
+                                <option value="">Select Class</option>
+                                {% for c in classes %}
+                                <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Arm (leave empty for all)</label>
+                            <select name="teacher_arm_name" class="form-control" id="teacherArm">
+                                <option value="">All Arms</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>
+                <a href="{{ url_for('generator.clash_rules_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
+.col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 0.5rem; }
+@media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
+</style>
+
+<script>
+function setupClassArmSync(classId, armId) {
+    document.getElementById(classId).addEventListener('change', function() {
+        const arms = this.options[this.selectedIndex].dataset.arms;
+        const armSelect = document.getElementById(armId);
+        armSelect.innerHTML = '<option value="">All Arms</option>';
+        if (arms) {
+            arms.split(',').forEach(arm => {
+                armSelect.innerHTML += `<option value="${arm.trim()}">${arm.trim()}</option>`;
+            });
+        }
+    });
+}
+
+setupClassArmSync('shadowClass', 'shadowArm');
+setupClassArmSync('teacherClass', 'teacherArm');
+</script>
+{% endblock %}

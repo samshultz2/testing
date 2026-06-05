@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Edit Subject - {{ level|upper }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <a href="{{ url_for('generator.subjects_config') }}">Subjects</a> / <span>Edit</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-edit"></i> Edit {{ level|upper }} Subject</h1>
+</div>
+
+<div class="card" style="max-width: 500px;">
+    <div class="card-body">
+        <form method="POST">
+            <div class="form-group">
+                <label for="name">Subject Name *</label>
+                <input type="text" id="name" name="name" class="form-control" required 
+                    value="{{ subject.name }}"
+                    placeholder="e.g., Mathematics, Basic Science">
+            </div>
+            
+            <div class="form-group">
+                <label for="short_name">Short Name</label>
+                <input type="text" id="short_name" name="short_name" class="form-control" maxlength="10"
+                    value="{{ subject.short_name or '' }}"
+                    placeholder="e.g., MATH, B.SCI">
+                <small class="text-muted">Optional abbreviation (max 10 chars)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="category">Category</label>
+                <select id="category" name="category" class="form-control">
+                    <option value="core" {% if subject.category == 'core' %}selected{% endif %}>Core</option>
+                    <option value="science" {% if subject.category == 'science' %}selected{% endif %}>Science</option>
+                    <option value="arts" {% if subject.category == 'arts' %}selected{% endif %}>Arts</option>
+                    <option value="commercial" {% if subject.category == 'commercial' %}selected{% endif %}>Commercial</option>
+                    <option value="vocational" {% if subject.category == 'vocational' %}selected{% endif %}>Vocational</option>
+                </select>
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+                <a href="{{ url_for('generator.subjects_config') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

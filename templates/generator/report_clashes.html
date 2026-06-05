@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Clash Report - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index') }}">Reports</a> / <span>Clashes</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Teacher Clash Report</h1>
+</div>
+
+{% if clashes %}
+<div class="card">
+    <div class="card-header" style="background: #f8d7da;"><h3><i class="fas fa-exclamation-triangle"></i> {{ clashes|length }} Clash(es) Found</h3></div>
+    <div class="card-body" style="padding: 0;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Teacher</th>
+                    <th>Day</th>
+                    <th>Period</th>
+                    <th>Conflicting Classes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for clash in clashes %}
+                <tr>
+                    <td><strong>{{ clash.teacher.name }}</strong></td>
+                    <td>{{ clash.day }}</td>
+                    <td>{{ clash.period }}</td>
+                    <td>
+                        {% for e in clash.entries %}
+                        <span class="badge badge-danger">{{ e.class }} - {{ e.subject }}</span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <p><strong>How to fix:</strong></p>
+        <ol>
+            <li>Go to <a href="{{ url_for('generator.view_results', batch_id=batch_id) }}">View Results</a></li>
+            <li>Click "Edit" on one of the conflicting classes</li>
+            <li>Change the subject/teacher for that period</li>
+            <li>Or regenerate with different settings</li>
+        </ol>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-check-circle" style="color: var(--success);"></i>
+            <h3>No Clashes!</h3>
+            <p>All teachers are assigned to only one class at a time</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

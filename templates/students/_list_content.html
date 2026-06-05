@@ -1,0 +1,88 @@
+<div data-total="{{ students.total }}" data-page-count="{{ students.items|length }}">
+{% if students.items %}
+
+<div class="students-list">
+    {% for student in students.items %}
+    <div class="student-card">
+        <div class="student-card-checkbox">
+            <input type="checkbox" class="student-checkbox student-select" data-student-id="{{ student.id }}">
+        </div>
+        <div class="student-card-content">
+            <div class="student-card-header">
+                <span class="student-name">{{ student.full_name }}</span>
+                <span class="student-id-badge">{{ student.student_id }}</span>
+            </div>
+            <div class="student-card-details">
+                <div class="detail-item">
+                    <span class="detail-label">Class:</span>
+                    <span class="detail-value">{{ student.current_class or '-' }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Gender:</span>
+                    <span class="detail-value badge {% if student.gender == 'Male' %}badge-male{% else %}badge-female{% endif %}">{{ student.gender }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Age:</span>
+                    <span class="detail-value">{{ student.age or '-' }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Religion:</span>
+                    <span class="detail-value">{{ student.religion or '-' }}</span>
+                </div>
+            </div>
+            <div class="student-card-actions">
+                <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-eye"></i> View
+                </a>
+                <a href="{{ url_for('main.edit_student', student_id=student.id) }}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-edit"></i> Edit
+                </a>
+                <form action="{{ url_for('main.delete_student', student_id=student.id) }}" method="POST" style="flex: 1;" data-confirm="Delete {{ student.full_name }}?">
+                    <button type="submit" class="btn btn-danger btn-sm" style="width: 100%;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if students.pages > 1 %}
+<div class="pagination">
+    {% if students.has_prev %}
+    <a href="{{ url_for('main.students_list', page=students.prev_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion) }}">
+        <i class="fas fa-chevron-left"></i>
+    </a>
+    {% endif %}
+    
+    {% for page_num in students.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=1) %}
+        {% if page_num %}
+        <a href="{{ url_for('main.students_list', page=page_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion) }}" 
+           class="{% if page_num == students.page %}active{% endif %}">{{ page_num }}</a>
+        {% else %}
+        <span>...</span>
+        {% endif %}
+    {% endfor %}
+    
+    {% if students.has_next %}
+    <a href="{{ url_for('main.students_list', page=students.next_num, search=search, class_id=class_id, arm_id=arm_id, gender=gender, religion=religion) }}">
+        <i class="fas fa-chevron-right"></i>
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <i class="fas fa-users"></i>
+    <h3>No Students Found</h3>
+    <p>{% if search or gender or religion or class_id or arm_id %}Try adjusting your filters{% else %}Add your first student to get started{% endif %}</p>
+    {% if not search and not gender and not religion and not class_id and not arm_id %}
+    <a href="{{ url_for('main.add_student') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Add Student
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+</div>

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Broadsheet - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Broadsheet</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Broadsheet</h1></div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}
+                    <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if broadsheet_data %}
+<div class="card">
+    <div class="card-header">
+        <h3>{{ selected_assignment.display_name }}</h3>
+        <div class="page-header-actions">
+            <a href="{{ url_for('subjects.export_broadsheet', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-success btn-sm"><i class="fas fa-download"></i> Export</a>
+            <span class="badge badge-info">{{ broadsheet_data|length }} Students</span>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="data-table" style="min-width: 100%;">
+            <thead>
+                <tr>
+                    <th style="position: sticky; left: 0; background: var(--bg-secondary); z-index: 2;">Pos</th>
+                    <th style="position: sticky; left: 40px; background: var(--bg-secondary); z-index: 2;">Student</th>
+                    {% for cs in class_subjects %}
+                    <th style="text-align: center; font-size: 0.75rem;">{{ cs.subject.short_name or cs.subject.name[:3] }}</th>
+                    {% endfor %}
+                    <th style="text-align: center;">Total</th>
+                    <th style="text-align: center;">Avg</th>
+                    <th style="text-align: center;">P/F</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in broadsheet_data %}
+                <tr>
+                    <td style="position: sticky; left: 0; background: var(--bg-primary); font-weight: bold;">{{ row.position }}</td>
+                    <td style="position: sticky; left: 40px; background: var(--bg-primary); white-space: nowrap;">{{ row.student.full_name }}</td>
+                    {% for cs in class_subjects %}
+                    {% set subj = row.subjects.get(cs.id, {}) %}
+                    <td style="text-align: center;">
+                        {% if subj.total %}
+                        <span title="{{ subj.grade }}">{{ subj.total|round(1) }}</span>
+                        {% else %}-{% endif %}
+                    </td>
+                    {% endfor %}
+                    <td style="text-align: center; font-weight: bold;">{{ row.total|round(1) }}</td>
+                    <td style="text-align: center; font-weight: bold;">{{ row.average }}</td>
+                    <td style="text-align: center;">
+                        <span class="badge badge-success">{{ row.subjects_passed }}</span>
+                        <span class="badge badge-danger">{{ row.subjects_failed }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><h3>Legend</h3></div>
+    <div class="card-body">
+        <div class="filter-form">
+            {% for cs in class_subjects %}
+            <div style="margin-right: 1rem; margin-bottom: 0.5rem;">
+                <strong>{{ cs.subject.short_name or cs.subject.name[:3] }}</strong> = {{ cs.subject.name }}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% elif selected_assignment %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-table"></i>
+            <h3>No Data</h3>
+            <p>No scores entered for this class yet</p>
+            <a href="{{ url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-primary"><i class="fas fa-edit"></i> Enter Scores</a>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select Options</h3>
+            <p>Select term and class to view broadsheet</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}{{ level|upper }} Subjects - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Subjects</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.subject-actions{display:flex;gap:.25rem}
+.subject-actions .btn{padding:.25rem .5rem;font-size:.75rem}
+.badge-category{font-size:.7rem;padding:.25rem .5rem;border-radius:10px}
+.badge-core{background:#28a745;color:white}
+.badge-science{background:#17a2b8;color:white}
+.badge-arts{background:#6f42c1;color:white}
+.badge-commercial{background:#fd7e14;color:white}
+.badge-vocational{background:#20c997;color:white}
+.config-status{font-size:.75rem}
+.config-status.configured{color:#28a745}
+.config-status.not-configured{color:#6c757d}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-book"></i> {{ level|upper }} Subjects</h1>
+    <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Add Subject
+    </a>
+</div>
+
+<p class="text-muted mb-3">Manage {{ level|upper }} subjects. These are separate from {{ 'SSS' if level == 'jss' else 'JSS' }} subjects.</p>
+
+{% if subjects_data %}
+<!-- Subjects List -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-list"></i> Subject List ({{ subjects_data|length }})</h3>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Subject Name</th>
+                    <th>Short</th>
+                    <th>Category</th>
+                    <th>Config Status</th>
+                    <th style="width:120px">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in subjects_data %}
+                <tr>
+                    <td><strong>{{ item.subject.name }}</strong></td>
+                    <td>{{ item.subject.short_name or '-' }}</td>
+                    <td>
+                        <span class="badge-category badge-{{ item.subject.category or 'core' }}">
+                            {{ (item.subject.category or 'core')|capitalize }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if item.config %}
+                        <span class="config-status configured">
+                            <i class="fas fa-check-circle"></i> {{ item.config.periods_per_week }} periods/week
+                        </span>
+                        {% else %}
+                        <span class="config-status not-configured">
+                            <i class="fas fa-circle"></i> Not configured
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="subject-actions">
+                            <a href="{{ url_for('generator.edit_gen_subject', subject_id=item.subject.id) }}" 
+                               class="btn btn-sm btn-outline-primary" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('generator.delete_gen_subject', subject_id=item.subject.id) }}" 
+                                  style="display:inline" onsubmit="return confirm('Delete {{ item.subject.name }}?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Period Configuration -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-cog"></i> Period Configuration</h3>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">Configure how many periods each subject should have per week for timetable generation.</p>
+        
+        <form method="POST" action="{{ url_for('generator.save_subjects_config') }}">
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th style="width:80px">Periods/Week</th>
+                            <th style="width:80px">Double Period</th>
+                            <th style="width:60px"># Doubles</th>
+                            <th style="width:100px">Preferred Time</th>
+                            <th style="width:60px">Not 1st</th>
+                            <th style="width:60px">Not Last</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in subjects_data %}
+                        <tr>
+                            <td>
+                                {{ item.subject.name }}
+                                <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
+                            </td>
+                            <td>
+                                <input type="number" name="periods_{{ item.subject.id }}" 
+                                       class="form-control" style="width:70px" min="1" max="10"
+                                       value="{{ item.config.periods_per_week if item.config else 4 }}">
+                            </td>
+                            <td style="text-align:center">
+                                <input type="checkbox" name="double_{{ item.subject.id }}" 
+                                       {% if item.config and item.config.needs_double_period %}checked{% endif %}
+                                       onchange="toggleDouble({{ item.subject.id }}, this.checked)">
+                            </td>
+                            <td>
+                                <input type="number" name="double_count_{{ item.subject.id }}" 
+                                       id="dc_{{ item.subject.id }}"
+                                       class="form-control" style="width:50px" min="0" max="3"
+                                       value="{{ item.config.double_period_count if item.config else 0 }}"
+                                       {% if not item.config or not item.config.needs_double_period %}disabled{% endif %}>
+                            </td>
+                            <td>
+                                <select name="preferred_{{ item.subject.id }}" class="form-control" style="width:95px">
+                                    <option value="any" {% if not item.config or item.config.preferred_time == 'any' %}selected{% endif %}>Any</option>
+                                    <option value="morning" {% if item.config and item.config.preferred_time == 'morning' %}selected{% endif %}>Morning</option>
+                                    <option value="afternoon" {% if item.config and item.config.preferred_time == 'afternoon' %}selected{% endif %}>Afternoon</option>
+                                </select>
+                            </td>
+                            <td style="text-align:center">
+                                <input type="checkbox" name="not_first_{{ item.subject.id }}" 
+                                       {% if item.config and item.config.not_first_period %}checked{% endif %}>
+                            </td>
+                            <td style="text-align:center">
+                                <input type="checkbox" name="not_last_{{ item.subject.id }}" 
+                                       {% if item.config and item.config.not_last_period %}checked{% endif %}>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-save"></i> Save Configuration
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleDouble(id, enabled) {
+    var el = document.getElementById('dc_' + id);
+    el.disabled = !enabled;
+    el.value = enabled ? 1 : 0;
+}
+</script>
+
+{% else %}
+<!-- No subjects -->
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-book"></i>
+            <h3>No {{ level|upper }} Subjects</h3>
+            <p>Add subjects for {{ level|upper }} timetable generation.</p>
+            <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Add First Subject
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="mt-3">
+    <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Assign Subjects - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Assign Subjects</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Assign Subjects to Class</h1></div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Term <span class="required">*</span></label>
+                    <select name="term_id" class="form-control" required>
+                        <option value="">Select Term</option>
+                        {% for term in terms %}
+                        <option value="{{ term.id }}" {% if term.is_active %}selected{% endif %}>{{ term.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Class <span class="required">*</span></label>
+                    <select name="class_id" class="form-control" required>
+                        <option value="">Select Class</option>
+                        {% for cls in classes %}
+                        <option value="{{ cls.id }}">{{ cls.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Arm (optional)</label>
+                    <select name="arm_id" class="form-control">
+                        <option value="">All Arms</option>
+                        {% for arm in arms %}
+                        <option value="{{ arm.id }}">{{ arm.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Leave blank for all arms in class</small>
+                </div>
+            </div>
+            
+            <h4 style="margin: 1.5rem 0 1rem;">Select Subjects & Teachers</h4>
+            
+            <div class="table-container">
+                <table class="data-table" id="subjectsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleAll()"></th>
+                            <th>Subject</th>
+                            <th>Teacher Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subject in subjects %}
+                        <tr>
+                            <td><input type="checkbox" class="subject-checkbox" value="{{ subject.id }}" name="subject_ids[]"></td>
+                            <td>{{ subject.name }} <small class="text-muted">({{ subject.category }})</small></td>
+                            <td><input type="text" name="teacher_names[]" class="form-control" placeholder="Teacher name"></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="page-header-actions mt-3">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Assign Selected</button>
+                <a href="{{ url_for('subjects.class_subjects_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleAll() {
+    const selectAll = document.getElementById('selectAll');
+    document.querySelectorAll('.subject-checkbox').forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+}
+</script>
+{% endblock %}

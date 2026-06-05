@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Summary - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Summary</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Summary Report</h1></div>
+
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon primary"><i class="fas fa-users"></i></div><div class="stat-content"><h3>{{ total_students }}</h3><p>Total</p></div></div>
+    <div class="stat-card"><div class="stat-icon info"><i class="fas fa-male"></i></div><div class="stat-content"><h3>{{ male_students }}</h3><p>Male</p></div></div>
+    <div class="stat-card"><div class="stat-icon secondary"><i class="fas fa-female"></i></div><div class="stat-content"><h3>{{ female_students }}</h3><p>Female</p></div></div>
+    <div class="stat-card"><div class="stat-icon success"><i class="fas fa-user-check"></i></div><div class="stat-content"><h3>{{ active_enrollments }}</h3><p>Enrolled</p></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Gender Distribution</h3></div>
+    <div class="card-body"><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Attendance Trend</h3></div>
+    <div class="card-body"><div class="chart-container"><canvas id="attendanceTrendChart"></canvas></div></div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Quick Info</h3></div>
+    <div class="card-body">
+        <div class="info-grid">
+            <div class="info-row"><span class="text-muted">Active Session</span><strong>{{ active_session.name if active_session else 'Not Set' }}</strong></div>
+            <div class="info-row"><span class="text-muted">Active Term</span><strong>{{ active_term.name if active_term else 'Not Set' }}</strong></div>
+            <div class="info-row"><span class="text-muted">With WAEC</span><strong>{{ students_with_waec }}</strong></div>
+            <div class="info-row"><span class="text-muted">With JAMB</span><strong>{{ students_with_jamb }}</strong></div>
+        </div>
+    </div>
+</div>
+{% endblock %}

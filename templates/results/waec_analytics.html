@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}WAEC Analytics - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Analytics</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.5rem}
+@media(min-width:768px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:var(--bg-card);border-radius:var(--radius-md);padding:1rem;border:1px solid var(--border-color);text-align:center}
+.stat-card.highlight{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%);color:white;border:none}
+.stat-card.highlight .stat-value,.stat-card.highlight .stat-label{color:white}
+.stat-value{font-size:1.75rem;font-weight:700;line-height:1.2}
+.stat-label{font-size:.75rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase}
+.chart-container{height:300px;position:relative}
+.grade-bar{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
+.grade-bar-label{width:30px;font-weight:600;font-size:.85rem}
+.grade-bar-fill{height:24px;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:.5rem;color:white;font-size:.75rem;font-weight:600;min-width:30px}
+.grade-a1{background:linear-gradient(90deg,#28a745,#20c997)}
+.grade-b2,.grade-b3{background:linear-gradient(90deg,#17a2b8,#6f42c1)}
+.grade-c4,.grade-c5,.grade-c6{background:linear-gradient(90deg,#ffc107,#fd7e14)}
+.grade-d7,.grade-e8,.grade-f9{background:linear-gradient(90deg,#dc3545,#c82333)}
+.subject-row{display:grid;grid-template-columns:1fr auto;gap:1rem;padding:.75rem;border-bottom:1px solid var(--border-light);align-items:center}
+.subject-row:last-child{border-bottom:none}
+.subject-name{font-weight:600}
+.subject-stats{display:flex;gap:1rem;font-size:.85rem}
+.subject-stat{text-align:center}
+.subject-stat-value{font-weight:700;font-size:1rem}
+.subject-stat-label{font-size:.7rem;color:var(--text-muted)}
+.trend-chart{display:flex;align-items:flex-end;gap:.5rem;height:150px;padding:1rem 0}
+.trend-bar{flex:1;background:var(--primary);border-radius:4px 4px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:.5rem;min-height:20px}
+.trend-bar-label{font-size:.7rem;color:white;font-weight:600}
+.trend-year{font-size:.75rem;color:var(--text-muted);text-align:center;margin-top:.25rem}
+.top-performer{display:flex;align-items:center;gap:.75rem;padding:.5rem;border-radius:var(--radius-sm);background:var(--gray-50);margin-bottom:.5rem}
+.top-rank{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:white}
+.top-rank.gold{background:linear-gradient(135deg,#f5af19,#f12711)}
+.top-rank.silver{background:linear-gradient(135deg,#bdc3c7,#606060)}
+.top-rank.bronze{background:linear-gradient(135deg,#cd7f32,#8b4513)}
+.top-rank.other{background:var(--primary)}
+.top-info{flex:1}
+.top-name{font-weight:600;font-size:.9rem}
+.top-detail{font-size:.75rem;color:var(--text-muted)}
+.top-score{font-weight:700;font-size:1.1rem;color:var(--primary)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-chart-bar"></i> WAEC Analytics</h1>
+        <p class="text-muted">Comprehensive analysis of WAEC performance</p>
+    </div>
+    <form method="GET" class="d-flex gap-2">
+        <select name="year" class="form-control" onchange="this.form.submit()" style="width:auto">
+            {% for y in years %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if stats %}
+<!-- Overview Stats -->
+<div class="stats-grid">
+    <div class="stat-card highlight">
+        <div class="stat-value">{{ stats.total_students }}</div>
+        <div class="stat-label">Students</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.overall_credit_rate }}%</div>
+        <div class="stat-label">Credit Rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.overall_distinction_rate }}%</div>
+        <div class="stat-label">Distinction Rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.students_with_5_credits_with_english_maths }}</div>
+        <div class="stat-label">5+ Credits (Eng/Maths)</div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Grade Distribution -->
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3><i class="fas fa-chart-pie"></i> Grade Distribution</h3></div>
+            <div class="card-body">
+                {% set total = stats.grade_distribution.values()|sum %}
+                {% for grade in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6', 'D7', 'E8', 'F9'] %}
+                {% set count = stats.grade_distribution.get(grade, 0) %}
+                {% set pct = (count / total * 100)|round(1) if total else 0 %}
+                <div class="grade-bar">
+                    <span class="grade-bar-label">{{ grade }}</span>
+                    <div class="grade-bar-fill grade-{{ grade|lower }}" style="width:{{ pct }}%">{{ count }}</div>
+                    <span style="font-size:.75rem;color:var(--text-muted)">{{ pct }}%</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Year Comparison -->
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header"><h3><i class="fas fa-chart-line"></i> Year-over-Year</h3></div>
+            <div class="card-body">
+                {% if year_comparison and year_comparison|length > 1 %}
+                <div class="chart-container">
+                    <canvas id="yoyChart"></canvas>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">Need at least 2 years of data for comparison</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Performers -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-trophy"></i> Top Performers</h3></div>
+    <div class="card-body">
+        <div class="row">
+            {% for student in stats.top_performers[:6] %}
+            <div class="col-md-4 col-6">
+                <div class="top-performer">
+                    <span class="top-rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% else %}other{% endif %}">{{ loop.index }}</span>
+                    <div class="top-info">
+                        <div class="top-name">{{ student.name }}</div>
+                        <div class="top-detail">{{ student.credit_count }} credits</div>
+                    </div>
+                    <div class="top-score">{{ student.a1_count }} A1s</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Subject Analysis -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-book"></i> Subject Performance</h3></div>
+    <div class="card-body" style="padding:0">
+        <div style="overflow-x:auto">
+            <table class="table" style="margin:0">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">A1</th>
+                        <th class="text-center">A1 Rate</th>
+                        <th class="text-center">Credits</th>
+                        <th class="text-center">Credit Rate</th>
+                        <th class="text-center">Fails</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subj in stats.subject_analysis %}
+                    <tr>
+                        <td><strong>{{ subj.subject }}</strong></td>
+                        <td class="text-center">{{ subj.total }}</td>
+                        <td class="text-center" style="color:#28a745;font-weight:600">{{ subj.a1_count }}</td>
+                        <td class="text-center">{{ subj.a1_rate }}%</td>
+                        <td class="text-center" style="color:#17a2b8;font-weight:600">{{ subj.credit_count }}</td>
+                        <td class="text-center">
+                            <span class="badge badge-{% if subj.credit_rate >= 80 %}success{% elif subj.credit_rate >= 60 %}info{% elif subj.credit_rate >= 40 %}warning{% else %}danger{% endif %}">
+                                {{ subj.credit_rate }}%
+                            </span>
+                        </td>
+                        <td class="text-center" style="color:#dc3545">{{ subj.fail_count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+        <h3>No WAEC Data Available</h3>
+        <p class="text-muted">Add WAEC results to see analytics</p>
+        <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add WAEC Result</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% if year_comparison and year_comparison|length > 1 %}
+const yoyCtx = document.getElementById('yoyChart').getContext('2d');
+new Chart(yoyCtx, {
+    type: 'line',
+    data: {
+        labels: {{ year_comparison|map(attribute='year')|list|tojson }},
+        datasets: [{
+            label: 'Credit Rate %',
+            data: {{ year_comparison|map(attribute='credit_rate')|list|tojson }},
+            borderColor: '#28a745',
+            backgroundColor: 'rgba(40,167,69,0.1)',
+            fill: true,
+            tension: 0.3
+        }, {
+            label: '5+ Credits (Eng/Maths)',
+            data: {{ year_comparison|map(attribute='5_credits_eng_maths')|list|tojson }},
+            borderColor: '#17a2b8',
+            backgroundColor: 'transparent',
+            tension: 0.3,
+            yAxisID: 'y1'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+            y: { beginAtZero: true, max: 100, title: { display: true, text: 'Rate %' } },
+            y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Students' } }
+        }
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

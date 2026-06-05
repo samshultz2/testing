@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ class_config.class_name }} - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.classes_config') }}">Classes</a> / <span>{{ class_config.class_name }}</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ class_config.class_name }}</h1>
+</div>
+
+<!-- Class Details -->
+<div class="card mb-3">
+    <div class="card-header"><h3>Class Details</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.update_class_config', class_id=class_config.id) }}">
+            <div class="form-group">
+                <label class="form-label">Class Name <span class="required">*</span></label>
+                <input type="text" name="class_name" class="form-control" required value="{{ class_config.class_name }}">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Number of Arms</label>
+                <input type="number" name="num_arms" class="form-control" value="{{ class_config.num_arms }}" min="1" max="10">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Arm Names</label>
+                <input type="text" name="arm_names" class="form-control" value="{{ class_config.arm_names or '' }}">
+                <span class="form-hint">Comma-separated: e.g., Iris, Rose, Lily, Tulip</span>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="has_streams" {% if class_config.has_streams %}checked{% endif %}>
+                    <span>This class has streams</span>
+                </label>
+            </div>
+            
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Details</button>
+        </form>
+    </div>
+</div>
+
+<!-- Arm-Stream Assignments (only if has_streams) -->
+{% if class_config.has_streams and class_config.arm_list %}
+<div class="card mb-3">
+    <div class="card-header"><h3>Arm-Stream Assignments</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.update_arm_streams', class_id=class_config.id) }}">
+            <p class="text-muted mb-3">Assign each arm to a stream:</p>
+            
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Arm</th>
+                        <th>Stream</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for arm_name in class_config.arm_list %}
+                    {% set arm_stream = arm_streams.get(arm_name) %}
+                    <tr>
+                        <td><strong>{{ class_config.class_name }} {{ arm_name }}</strong></td>
+                        <td>
+                            <select name="stream_{{ arm_name }}" class="form-control" style="width: 200px;">
+                                <option value="">-- Select Stream --</option>
+                                {% for stream in streams %}
+                                <option value="{{ stream.id }}" {% if arm_stream and arm_stream.stream_id == stream.id %}selected{% endif %}>
+                                    {{ stream.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div class="page-header-actions mt-3">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Stream Assignments</button>
+                <a href="{{ url_for('generator.class_stream_subjects', class_id=class_config.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-cog"></i> Configure Stream Subject Periods
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% elif class_config.has_streams and not class_config.arm_list %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>No Arms Defined</h3>
+            <p>Add arm names above (comma-separated) to assign streams</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete -->
+<div class="card">
+    <div class="card-header"><h3>Danger Zone</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('generator.delete_class_config', class_id=class_config.id) }}" data-confirm="Are you sure you want to remove this class?">
+            <p class="text-muted">Remove this class from the timetable generator.</p>
+            <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Remove Class</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

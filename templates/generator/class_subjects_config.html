@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}{{ class_config.class_name }} Subjects - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.class_subjects_list') }}">Class Subjects</a> / <span>{{ class_config.class_name }}</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ class_config.class_name }} - Subjects</h1>
+</div>
+
+<p class="text-muted mb-3">Select which subjects {{ class_config.class_name }} takes and set periods per week for each.</p>
+
+<form method="POST" action="{{ url_for('generator.save_class_subjects_config', class_id=class_config.id) }}">
+    <div class="card">
+        <div class="card-header">
+            <h3>Core Subjects</h3>
+        </div>
+        <div class="card-body" style="padding: 0; overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">Takes</th>
+                        <th>Subject</th>
+                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
+                        <th style="text-align: center; width: 80px;">Double</th>
+                        <th style="text-align: center; width: 80px;"># Doubles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in subjects_data %}
+                    {% if item.category == 'core' %}
+                    <tr>
+                        <td style="text-align: center;">
+                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
+                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
+                                   {% if item.is_enabled %}checked{% endif %}
+                                   onchange="toggleRow(this, {{ item.subject.id }})">
+                        </td>
+                        <td>
+                            <strong>{{ item.subject.name }}</strong>
+                            {% if item.has_override %}<span class="badge badge-info" style="font-size: 0.7rem;">custom</span>{% endif %}
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="periods_{{ item.subject.id }}" 
+                                   value="{{ item.periods }}" min="1" max="10"
+                                   class="form-control" style="width: 70px; display: inline-block;"
+                                   id="periods_{{ item.subject.id }}">
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="checkbox" name="double_{{ item.subject.id }}"
+                                   {% if item.needs_double %}checked{% endif %}
+                                   id="double_{{ item.subject.id }}">
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="double_count_{{ item.subject.id }}"
+                                   value="{{ item.double_count }}" min="0" max="3"
+                                   class="form-control" style="width: 60px; display: inline-block;"
+                                   id="double_count_{{ item.subject.id }}">
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% set has_science = subjects_data|selectattr('category', 'equalto', 'science')|list|length > 0 %}
+    {% set has_arts = subjects_data|selectattr('category', 'equalto', 'arts')|list|length > 0 %}
+    {% set has_commercial = subjects_data|selectattr('category', 'equalto', 'commercial')|list|length > 0 %}
+    {% set has_vocational = subjects_data|selectattr('category', 'equalto', 'vocational')|list|length > 0 %}
+    
+    {% if has_science %}
+    <div class="card mt-3">
+        <div class="card-header" style="background: #d4edda;"><h3>Science Subjects</h3></div>
+        <div class="card-body" style="padding: 0; overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">Takes</th>
+                        <th>Subject</th>
+                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
+                        <th style="text-align: center; width: 80px;">Double</th>
+                        <th style="text-align: center; width: 80px;"># Doubles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in subjects_data %}
+                    {% if item.category == 'science' %}
+                    <tr>
+                        <td style="text-align: center;">
+                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
+                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
+                                   {% if item.is_enabled %}checked{% endif %}>
+                        </td>
+                        <td><strong>{{ item.subject.name }}</strong></td>
+                        <td style="text-align: center;">
+                            <input type="number" name="periods_{{ item.subject.id }}" 
+                                   value="{{ item.periods }}" min="1" max="10"
+                                   class="form-control" style="width: 70px; display: inline-block;">
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="checkbox" name="double_{{ item.subject.id }}"
+                                   {% if item.needs_double %}checked{% endif %}>
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="double_count_{{ item.subject.id }}"
+                                   value="{{ item.double_count }}" min="0" max="3"
+                                   class="form-control" style="width: 60px; display: inline-block;">
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if has_arts %}
+    <div class="card mt-3">
+        <div class="card-header" style="background: #fff3cd;"><h3>Arts Subjects</h3></div>
+        <div class="card-body" style="padding: 0; overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">Takes</th>
+                        <th>Subject</th>
+                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
+                        <th style="text-align: center; width: 80px;">Double</th>
+                        <th style="text-align: center; width: 80px;"># Doubles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in subjects_data %}
+                    {% if item.category == 'arts' %}
+                    <tr>
+                        <td style="text-align: center;">
+                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
+                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
+                                   {% if item.is_enabled %}checked{% endif %}>
+                        </td>
+                        <td><strong>{{ item.subject.name }}</strong></td>
+                        <td style="text-align: center;">
+                            <input type="number" name="periods_{{ item.subject.id }}" 
+                                   value="{{ item.periods }}" min="1" max="10"
+                                   class="form-control" style="width: 70px; display: inline-block;">
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="checkbox" name="double_{{ item.subject.id }}"
+                                   {% if item.needs_double %}checked{% endif %}>
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="double_count_{{ item.subject.id }}"
+                                   value="{{ item.double_count }}" min="0" max="3"
+                                   class="form-control" style="width: 60px; display: inline-block;">
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if has_commercial %}
+    <div class="card mt-3">
+        <div class="card-header" style="background: #cce5ff;"><h3>Commercial Subjects</h3></div>
+        <div class="card-body" style="padding: 0; overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">Takes</th>
+                        <th>Subject</th>
+                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
+                        <th style="text-align: center; width: 80px;">Double</th>
+                        <th style="text-align: center; width: 80px;"># Doubles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in subjects_data %}
+                    {% if item.category == 'commercial' %}
+                    <tr>
+                        <td style="text-align: center;">
+                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
+                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
+                                   {% if item.is_enabled %}checked{% endif %}>
+                        </td>
+                        <td><strong>{{ item.subject.name }}</strong></td>
+                        <td style="text-align: center;">
+                            <input type="number" name="periods_{{ item.subject.id }}" 
+                                   value="{{ item.periods }}" min="1" max="10"
+                                   class="form-control" style="width: 70px; display: inline-block;">
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="checkbox" name="double_{{ item.subject.id }}"
+                                   {% if item.needs_double %}checked{% endif %}>
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="double_count_{{ item.subject.id }}"
+                                   value="{{ item.double_count }}" min="0" max="3"
+                                   class="form-control" style="width: 60px; display: inline-block;">
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if has_vocational %}
+    <div class="card mt-3">
+        <div class="card-header" style="background: #e2d5f1;"><h3>Vocational Subjects</h3></div>
+        <div class="card-body" style="padding: 0; overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">Takes</th>
+                        <th>Subject</th>
+                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
+                        <th style="text-align: center; width: 80px;">Double</th>
+                        <th style="text-align: center; width: 80px;"># Doubles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in subjects_data %}
+                    {% if item.category == 'vocational' %}
+                    <tr>
+                        <td style="text-align: center;">
+                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
+                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
+                                   {% if item.is_enabled %}checked{% endif %}>
+                        </td>
+                        <td><strong>{{ item.subject.name }}</strong></td>
+                        <td style="text-align: center;">
+                            <input type="number" name="periods_{{ item.subject.id }}" 
+                                   value="{{ item.periods }}" min="1" max="10"
+                                   class="form-control" style="width: 70px; display: inline-block;">
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="checkbox" name="double_{{ item.subject.id }}"
+                                   {% if item.needs_double %}checked{% endif %}>
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="double_count_{{ item.subject.id }}"
+                                   value="{{ item.double_count }}" min="0" max="3"
+                                   class="form-control" style="width: 60px; display: inline-block;">
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="page-header-actions mt-3">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Configuration</button>
+        <a href="{{ url_for('generator.class_subjects_list') }}" class="btn btn-secondary">Back</a>
+    </div>
+</form>
+
+<div class="card mt-3">
+    <div class="card-header"><h3>Tips</h3></div>
+    <div class="card-body">
+        <ul>
+            <li><strong>Takes</strong> - Check if {{ class_config.class_name }} offers this subject</li>
+            <li><strong>Periods/Wk</strong> - How many periods per week for this class</li>
+            <li><strong>Double</strong> - Check if subject needs consecutive periods (labs, practicals)</li>
+            <li><strong># Doubles</strong> - How many double periods out of total</li>
+        </ul>
+        <p class="text-muted">Example: Physics with 6 periods and 1 double = 4 single periods + 1 double (2 periods)</p>
+    </div>
+</div>
+{% endblock %}

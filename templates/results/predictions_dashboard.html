@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Predictions Dashboard - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <span>Predictions</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.feature-cards{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1.5rem}
+@media(min-width:768px){.feature-cards{grid-template-columns:repeat(3,1fr)}}
+.feature-card{background:var(--bg-card);border-radius:var(--radius-lg);border:1px solid var(--border-color);padding:1.5rem;text-align:center;transition:transform .2s,box-shadow .2s}
+.feature-card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.feature-icon{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:1.5rem;color:white}
+.feature-icon.waec{background:linear-gradient(135deg,#11998e,#38ef7d)}
+.feature-icon.jamb{background:linear-gradient(135deg,#667eea,#764ba2)}
+.feature-icon.correlation{background:linear-gradient(135deg,#f093fb,#f5576c)}
+.feature-title{font-weight:700;margin-bottom:.5rem}
+.feature-desc{font-size:.85rem;color:var(--text-muted);margin-bottom:1rem}
+.search-section{margin-bottom:1.5rem}
+.search-box{display:flex;gap:.5rem;max-width:500px}
+.search-box input{flex:1}
+.correlation-table{font-size:.85rem}
+.correlation-table th{background:var(--gray-50)}
+.range-label{font-weight:600;white-space:nowrap}
+.grade-pill{display:inline-block;padding:.15rem .5rem;border-radius:10px;font-size:.75rem;font-weight:600}
+.grade-pill.a1{background:rgba(40,167,69,.15);color:#28a745}
+.grade-pill.b{background:rgba(23,162,184,.15);color:#17a2b8}
+.grade-pill.c{background:rgba(255,193,7,.15);color:#d39e00}
+.grade-pill.d,.grade-pill.e,.grade-pill.f{background:rgba(220,53,69,.15);color:#dc3545}
+.stat-highlight{display:flex;align-items:center;justify-content:center;gap:2rem;padding:1.5rem;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:var(--radius-lg);color:white;margin-bottom:1.5rem}
+.stat-highlight .stat{text-align:center}
+.stat-highlight .stat-value{font-size:2rem;font-weight:700}
+.stat-highlight .stat-label{font-size:.8rem;opacity:.8}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-crystal-ball"></i> Predictions Dashboard</h1>
+        <p class="text-muted">WAEC-JAMB correlation analysis and student predictions</p>
+    </div>
+</div>
+
+<!-- Feature Cards -->
+<div class="feature-cards">
+    <div class="feature-card">
+        <div class="feature-icon waec"><i class="fas fa-file-alt"></i></div>
+        <div class="feature-title">WAEC from Mock JAMB</div>
+        <div class="feature-desc">Predict likely WAEC grades based on Mock JAMB subject performance</div>
+        <a href="{{ url_for('results.waec_analytics') }}" class="btn btn-outline-primary btn-sm">View WAEC Analytics</a>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon jamb"><i class="fas fa-file-contract"></i></div>
+        <div class="feature-title">JAMB from Mock JAMB</div>
+        <div class="feature-desc">Predict real JAMB scores using weighted Mock JAMB performance</div>
+        <a href="{{ url_for('mock_jamb.analytics') }}" class="btn btn-outline-primary btn-sm">View Mock Analytics</a>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon correlation"><i class="fas fa-exchange-alt"></i></div>
+        <div class="feature-title">JAMB from WAEC</div>
+        <div class="feature-desc">Predict JAMB scores for students with existing WAEC results</div>
+        <a href="{{ url_for('results.jamb_list') }}" class="btn btn-outline-primary btn-sm">View JAMB Results</a>
+    </div>
+</div>
+
+<!-- Search Student -->
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-search"></i> Find Student Predictions</h3></div>
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('main.students_list') }}" class="search-box">
+            <input type="text" name="search" class="form-control" placeholder="Enter student name or ID...">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+        </form>
+        <p class="text-muted text-sm mt-2">Search for a student, then click "Predictions" from their profile to see detailed analysis.</p>
+    </div>
+</div>
+
+<!-- Correlation Analysis -->
+{% if correlation_data %}
+<div class="stat-highlight">
+    <div class="stat">
+        <div class="stat-value">{{ correlation_data.total_comparisons }}</div>
+        <div class="stat-label">Data Points</div>
+    </div>
+    <div class="stat">
+        <div class="stat-value">{{ correlation_data.unique_students }}</div>
+        <div class="stat-label">Students Analyzed</div>
+    </div>
+    <div class="stat">
+        <div class="stat-value">{{ correlation_data.range_analysis|length }}</div>
+        <div class="stat-label">Score Ranges</div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-chart-bar"></i> Mock JAMB → WAEC Correlation</h3></div>
+    <div class="card-body">
+        <p class="text-muted mb-3">Analysis of how Mock JAMB subject scores correlate with actual WAEC grades for students who have both.</p>
+        
+        <div style="overflow-x:auto">
+            <table class="table correlation-table">
+                <thead>
+                    <tr>
+                        <th>Mock Score Range</th>
+                        <th class="text-center">Sample Size</th>
+                        <th class="text-center">Avg WAEC Points</th>
+                        <th class="text-center">Most Common Grade</th>
+                        <th>Grade Distribution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for range in correlation_data.range_analysis %}
+                    <tr>
+                        <td class="range-label">{{ range.mock_range }}</td>
+                        <td class="text-center">{{ range.sample_size }}</td>
+                        <td class="text-center">{{ range.avg_waec_points }}</td>
+                        <td class="text-center">
+                            <span class="grade-pill {% if range.most_common_grade == 'A1' %}a1{% elif range.most_common_grade in ['B2','B3'] %}b{% elif range.most_common_grade in ['C4','C5','C6'] %}c{% else %}d{% endif %}">
+                                {{ range.most_common_grade }}
+                            </span>
+                        </td>
+                        <td>
+                            {% for grade, count in range.grade_distribution.items() %}
+                            <span class="grade-pill {% if grade == 'A1' %}a1{% elif grade in ['B2','B3'] %}b{% elif grade in ['C4','C5','C6'] %}c{% else %}d{% endif %}" style="margin-right:.25rem">
+                                {{ grade }}: {{ count }}
+                            </span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="alert alert-info mt-3" style="font-size:.85rem">
+            <i class="fas fa-info-circle"></i> <strong>How to interpret:</strong> A Mock JAMB score of 70-79 most commonly correlates with a WAEC grade of B2-B3. Higher mock scores generally predict better WAEC performance, though individual results may vary.
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-database fa-3x text-muted mb-3"></i>
+        <h3>Insufficient Data for Correlation</h3>
+        <p class="text-muted">Need students with both Mock JAMB and WAEC results to build correlation analysis.</p>
+        <div class="d-flex justify-content-center gap-2 mt-3">
+            <a href="{{ url_for('mock_jamb.index') }}" class="btn btn-primary"><i class="fas fa-clipboard-list"></i> Add Mock JAMB</a>
+            <a href="{{ url_for('results.add_waec') }}" class="btn btn-secondary"><i class="fas fa-file-alt"></i> Add WAEC</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- How Predictions Work -->
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-question-circle"></i> How Predictions Work</h3></div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h5><i class="fas fa-file-alt" style="color:#11998e"></i> WAEC from Mock JAMB</h5>
+                <p style="font-size:.85rem;color:var(--text-muted)">
+                    We analyze a student's Mock JAMB subject scores and map them to likely WAEC grades using historical correlation patterns. 
+                    Higher mock scores (70+) typically predict A1-B3 grades, while lower scores may indicate areas needing improvement.
+                </p>
+            </div>
+            <div class="col-md-4">
+                <h5><i class="fas fa-file-contract" style="color:#667eea"></i> JAMB from Mock JAMB</h5>
+                <p style="font-size:.85rem;color:var(--text-muted)">
+                    We use a weighted average of all Mock JAMB attempts, with more recent exams weighted higher. 
+                    The prediction includes a confidence range based on consistency across attempts.
+                </p>
+            </div>
+            <div class="col-md-4">
+                <h5><i class="fas fa-exchange-alt" style="color:#f093fb"></i> JAMB from WAEC</h5>
+                <p style="font-size:.85rem;color:var(--text-muted)">
+                    For students with WAEC results, we predict potential JAMB scores by mapping each WAEC grade 
+                    to an expected JAMB score range and selecting the best 4 subjects.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

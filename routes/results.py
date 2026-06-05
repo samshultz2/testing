@@ -1,0 +1,1064 @@
+"""
+Results management routes - WAEC, JAMB, and Analytics Dashboard
+Comprehensive academic performance tracking and analysis
+"""
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from collections import defaultdict
+from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm
+from utils.access_control import login_required
+from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES, FlashMessages
+from utils.analytics_service import AcademicAnalytics
+
+results_bp = Blueprint('results', __name__, url_prefix='/results')
+
+
+@results_bp.route('/')
+@login_required
+def index():
+    """Results main page with overview"""
+    waec_count = WAECResult.query.count()
+    jamb_count = JAMBResult.query.count()
+    
+    waec_years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
+    jamb_years = db.session.query(JAMBResult.exam_year).distinct().order_by(JAMBResult.exam_year.desc()).all()
+    
+    return render_template('results/index.html',
+        waec_count=waec_count,
+        jamb_count=jamb_count,
+        waec_years=[y[0] for y in waec_years],
+        jamb_years=[y[0] for y in jamb_years]
+    )
+
+
+# ============================================================================
+# WAEC RESULTS - COMPREHENSIVE DASHBOARD
+# ============================================================================
+
+@results_bp.route('/waec')
+@login_required
+def waec_list():
+    """Comprehensive WAEC dashboard with filtering and analytics"""
+    exam_year = request.args.get('year', type=int)
+    min_a1 = request.args.get('min_a1', type=int)
+    min_credits = request.args.get('min_credits', type=int)
+    subject_filter = request.args.get('subject', '')
+    grade_filter = request.args.get('grade', '')
+    search = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort', 'name')
+    sort_order = request.args.get('order', 'asc')
+    view_mode = request.args.get('view', 'students')
+    
+    years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
+    years = [y[0] for y in years]
+    
+    if not exam_year and years:
+        exam_year = years[0]
+    
+    students_data = []
+    subject_stats = []
+    school_stats = None
+    grade_distribution = {g: 0 for g in WAEC_GRADES}
+    top_by_grade = {g: [] for g in WAEC_GRADES}
+    subjects_by_grade = []
+    
+    if exam_year:
+        school_stats = AcademicAnalytics.get_waec_school_statistics(exam_year)
+        
+        if school_stats:
+            grade_distribution = school_stats['grade_distribution']
+            subject_stats = school_stats['subject_analysis']
+        
+        # Get all results for the year for detailed analysis
+        all_results = WAECResult.query.filter_by(exam_year=exam_year).all()
+        
+        # Build subject-grade matrix
+        subject_grade_counts = defaultdict(lambda: {g: 0 for g in WAEC_GRADES})
+        for r in all_results:
+            subject_grade_counts[r.subject][r.grade] += 1
+        
+        # Convert to list for template
+        subjects_by_grade = []
+        for subject, grades in subject_grade_counts.items():
+            total = sum(grades.values())
+            subjects_by_grade.append({
+                'subject': subject,
+                'grades': grades,
+                'total': total,
+                'a1_count': grades.get('A1', 0),
+                'b2_count': grades.get('B2', 0),
+                'b3_count': grades.get('B3', 0),
+                'credit_count': sum(grades.get(g, 0) for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']),
+                'pass_rate': round(sum(grades.get(g, 0) for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']) / total * 100, 1) if total > 0 else 0
+            })
+        
+        # Sort subjects based on parameters
+        if sort_by == 'subject_a1':
+            subjects_by_grade.sort(key=lambda x: x['a1_count'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_b2':
+            subjects_by_grade.sort(key=lambda x: x['b2_count'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_credits':
+            subjects_by_grade.sort(key=lambda x: x['credit_count'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_pass':
+            subjects_by_grade.sort(key=lambda x: x['pass_rate'], reverse=(sort_order == 'desc'))
+        else:
+            subjects_by_grade.sort(key=lambda x: x['a1_count'], reverse=True)
+        
+        base_query = db.session.query(Student).join(WAECResult).filter(
+            WAECResult.exam_year == exam_year
+        )
+
+        if search:
+            term = f"%{search}%"
+            base_query = base_query.filter(
+                db.or_(
+                    Student.first_name.ilike(term),
+                    Student.surname.ilike(term),
+                    Student.middle_name.ilike(term),
+                    Student.student_id.ilike(term),
+                )
+            )
+
+        if subject_filter and grade_filter:
+            base_query = base_query.filter(
+                WAECResult.subject == subject_filter,
+                WAECResult.grade == grade_filter
+            )
+        elif subject_filter:
+            base_query = base_query.filter(WAECResult.subject == subject_filter)
+        elif grade_filter:
+            base_query = base_query.filter(WAECResult.grade == grade_filter)
+        
+        students = base_query.distinct().all()
+        
+        for student in students:
+            results = WAECResult.query.filter_by(
+                student_id=student.id,
+                exam_year=exam_year
+            ).all()
+            
+            # Count each grade
+            grade_counts = {g: sum(1 for r in results if r.grade == g) for g in WAEC_GRADES}
+            a1_count = grade_counts['A1']
+            b2_count = grade_counts['B2']
+            b3_count = grade_counts['B3']
+            credit_count = sum(grade_counts[g] for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6'])
+            total_points = sum(WAECResult.grade_to_points(r.grade) for r in results)
+            
+            if min_a1 and a1_count < min_a1:
+                continue
+            if min_credits and credit_count < min_credits:
+                continue
+            
+            student_data = {
+                'id': student.id,
+                'student_id': student.student_id,
+                'name': student.full_name,
+                'total_subjects': len(results),
+                'a1_count': a1_count,
+                'b2_count': b2_count,
+                'b3_count': b3_count,
+                'grade_counts': grade_counts,
+                'credit_count': credit_count,
+                'total_points': total_points,
+                'avg_points': round(total_points / len(results), 2) if results else 0,
+                'results': [{'subject': r.subject, 'grade': r.grade} for r in results]
+            }
+            students_data.append(student_data)
+        
+        # Build top performers by each grade
+        for grade in WAEC_GRADES:
+            grade_key = f'{grade.lower()}_count'
+            sorted_students = sorted(
+                [s for s in students_data if s['grade_counts'].get(grade, 0) > 0],
+                key=lambda x: x['grade_counts'].get(grade, 0),
+                reverse=True
+            )[:10]
+            top_by_grade[grade] = sorted_students
+        
+        # Sort students based on parameters
+        if sort_by == 'a1':
+            students_data.sort(key=lambda x: x['a1_count'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'b2':
+            students_data.sort(key=lambda x: x['b2_count'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'b3':
+            students_data.sort(key=lambda x: x['b3_count'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'credits':
+            students_data.sort(key=lambda x: x['credit_count'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'points':
+            students_data.sort(key=lambda x: x['avg_points'], reverse=(sort_order != 'desc'))
+        else:
+            students_data.sort(key=lambda x: x['name'], reverse=(sort_order == 'desc'))
+    
+    yoy_data = AcademicAnalytics.get_year_over_year_comparison()
+    
+    return render_template('results/waec_dashboard.html',
+        students=students_data,
+        years=years,
+        selected_year=exam_year,
+        subjects=WAEC_SUBJECTS,
+        grades=WAEC_GRADES,
+        subject_filter=subject_filter,
+        grade_filter=grade_filter,
+        search=search,
+        min_a1=min_a1,
+        min_credits=min_credits,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        view_mode=view_mode,
+        school_stats=school_stats,
+        subject_stats=subject_stats,
+        grade_distribution=grade_distribution,
+        top_by_grade=top_by_grade,
+        subjects_by_grade=subjects_by_grade,
+        yoy_data=yoy_data
+    )
+
+
+@results_bp.route('/waec/add', methods=['GET', 'POST'])
+@login_required
+def add_waec():
+    """Add WAEC results for a student"""
+    students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+    
+    if request.method == 'POST':
+        try:
+            student_id = request.form.get('student_id', type=int)
+            exam_year = request.form.get('exam_year', type=int)
+            
+            if not student_id or not exam_year:
+                flash('Student and exam year are required.', 'error')
+                return redirect(url_for('results.add_waec'))
+            
+            subjects = request.form.getlist('subject[]')
+            grades = request.form.getlist('grade[]')
+            
+            results_added = 0
+            for i, subject in enumerate(subjects):
+                if subject and i < len(grades) and grades[i]:
+                    existing = WAECResult.query.filter_by(
+                        student_id=student_id,
+                        exam_year=exam_year,
+                        subject=subject
+                    ).first()
+                    
+                    if existing:
+                        existing.grade = grades[i]
+                    else:
+                        result = WAECResult(
+                            student_id=student_id,
+                            exam_year=exam_year,
+                            subject=subject,
+                            grade=grades[i]
+                        )
+                        db.session.add(result)
+                    
+                    results_added += 1
+            
+            db.session.commit()
+            flash(f'{results_added} WAEC results saved!', 'success')
+            return redirect(url_for('results.view_waec_student', student_id=student_id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error saving results: {str(e)}', 'error')
+    
+    return render_template('results/add_waec.html',
+        students=students,
+        subjects=WAEC_SUBJECTS,
+        grades=WAEC_GRADES
+    )
+
+
+@results_bp.route('/waec/student/<int:student_id>')
+@login_required
+def view_waec_student(student_id):
+    """View comprehensive WAEC profile for a student"""
+    student = Student.query.get_or_404(student_id)
+    waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
+    risk_assessment = AcademicAnalytics.calculate_student_risk_score(student_id)
+    jamb_prediction = AcademicAnalytics.predict_jamb_score(student_id)
+    recommendations = AcademicAnalytics.get_subject_recommendations(student_id)
+    
+    return render_template('results/view_waec_student.html',
+        student=student,
+        waec_summary=waec_summary,
+        risk_assessment=risk_assessment,
+        jamb_prediction=jamb_prediction,
+        recommendations=recommendations,
+        grades=WAEC_GRADES
+    )
+
+
+@results_bp.route('/waec/student/<int:student_id>/edit/<int:year>', methods=['GET', 'POST'])
+@login_required
+def edit_waec(student_id, year):
+    """Edit WAEC results for a student/year"""
+    student = Student.query.get_or_404(student_id)
+    
+    if request.method == 'POST':
+        try:
+            WAECResult.query.filter_by(student_id=student_id, exam_year=year).delete()
+            
+            subjects = request.form.getlist('subject[]')
+            grades = request.form.getlist('grade[]')
+            
+            for i, subject in enumerate(subjects):
+                if subject and i < len(grades) and grades[i]:
+                    result = WAECResult(
+                        student_id=student_id,
+                        exam_year=year,
+                        subject=subject,
+                        grade=grades[i]
+                    )
+                    db.session.add(result)
+            
+            db.session.commit()
+            flash('WAEC results updated!', 'success')
+            return redirect(url_for('results.view_waec_student', student_id=student_id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {str(e)}', 'error')
+    
+    results = WAECResult.query.filter_by(student_id=student_id, exam_year=year).all()
+    results_dict = {r.subject: r.grade for r in results}
+    
+    return render_template('results/edit_waec.html',
+        student=student,
+        year=year,
+        results_dict=results_dict,
+        subjects=WAEC_SUBJECTS,
+        grades=WAEC_GRADES
+    )
+
+
+# ============================================================================
+# WAEC DELETE ROUTES
+# ============================================================================
+
+@results_bp.route('/waec/student/<int:student_id>/delete/<int:year>', methods=['POST'])
+@login_required
+def delete_waec(student_id, year):
+    """Delete all WAEC results for a student in a given year"""
+    student = Student.query.get_or_404(student_id)
+    
+    try:
+        deleted = WAECResult.query.filter_by(student_id=student_id, exam_year=year).delete()
+        db.session.commit()
+        
+        if deleted:
+            flash(f'Deleted {deleted} WAEC results for {student.full_name} ({year}).', 'success')
+        else:
+            flash('No results found to delete.', 'warning')
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting results: {str(e)}', 'error')
+    
+    return redirect(url_for('results.waec_list', year=year))
+
+
+@results_bp.route('/waec/result/<int:result_id>/delete', methods=['POST'])
+@login_required
+def delete_waec_single(result_id):
+    """Delete a single WAEC result entry"""
+    result = WAECResult.query.get_or_404(result_id)
+    student_id = result.student_id
+    year = result.exam_year
+    subject = result.subject
+    
+    try:
+        db.session.delete(result)
+        db.session.commit()
+        flash(f'Deleted {subject} result.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    
+    return redirect(url_for('results.view_waec_student', student_id=student_id))
+
+
+# ============================================================================
+# JAMB RESULTS - COMPREHENSIVE DASHBOARD
+# ============================================================================
+
+@results_bp.route('/jamb')
+@login_required
+def jamb_list():
+    """Comprehensive JAMB dashboard with filtering and analytics"""
+    exam_year = request.args.get('year', type=int)
+    min_score = request.args.get('min_score', type=int)
+    max_score = request.args.get('max_score', type=int)
+    search = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort', 'score')
+    sort_order = request.args.get('order', 'desc')
+    view_mode = request.args.get('view', 'students')
+    
+    years = db.session.query(JAMBResult.exam_year).distinct().order_by(JAMBResult.exam_year.desc()).all()
+    years = [y[0] for y in years]
+    
+    if not exam_year and years:
+        exam_year = years[0]
+    
+    students_data = []
+    school_stats = None
+    correlation = None
+    subject_performance = []
+    
+    if exam_year:
+        school_stats = AcademicAnalytics.get_jamb_school_statistics(exam_year)
+        correlation = AcademicAnalytics.calculate_waec_jamb_correlation(exam_year)
+        
+        # Get all results for subject analysis
+        all_results = JAMBResult.query.filter_by(exam_year=exam_year).all()
+        
+        # Build subject performance data
+        subject_scores = defaultdict(list)
+        for r in all_results:
+            if r.subject1 and r.subject1_score:
+                subject_scores[r.subject1].append(r.subject1_score)
+            if r.subject2 and r.subject2_score:
+                subject_scores[r.subject2].append(r.subject2_score)
+            if r.subject3 and r.subject3_score:
+                subject_scores[r.subject3].append(r.subject3_score)
+            if r.subject4 and r.subject4_score:
+                subject_scores[r.subject4].append(r.subject4_score)
+        
+        # Calculate subject statistics
+        for subject, scores in subject_scores.items():
+            if scores:
+                avg_score = sum(scores) / len(scores)
+                above_50 = sum(1 for s in scores if s >= 50)
+                above_70 = sum(1 for s in scores if s >= 70)
+                subject_performance.append({
+                    'subject': subject,
+                    'count': len(scores),
+                    'avg_score': round(avg_score, 1),
+                    'max_score': max(scores),
+                    'min_score': min(scores),
+                    'above_50': above_50,
+                    'above_50_pct': round(above_50 / len(scores) * 100, 1),
+                    'above_70': above_70,
+                    'above_70_pct': round(above_70 / len(scores) * 100, 1)
+                })
+        
+        # Sort subjects by performance
+        if sort_by == 'subject_avg':
+            subject_performance.sort(key=lambda x: x['avg_score'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_above50':
+            subject_performance.sort(key=lambda x: x['above_50_pct'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_above70':
+            subject_performance.sort(key=lambda x: x['above_70_pct'], reverse=(sort_order == 'desc'))
+        else:
+            subject_performance.sort(key=lambda x: x['avg_score'], reverse=True)
+        
+        query = JAMBResult.query.filter_by(exam_year=exam_year).join(Student)
+
+        if search:
+            term = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    Student.first_name.ilike(term),
+                    Student.surname.ilike(term),
+                    Student.middle_name.ilike(term),
+                    Student.student_id.ilike(term),
+                )
+            )
+
+        if min_score:
+            query = query.filter(JAMBResult.total_score >= min_score)
+        if max_score:
+            query = query.filter(JAMBResult.total_score <= max_score)
+        
+        if sort_by == 'score':
+            if sort_order == 'desc':
+                query = query.order_by(JAMBResult.total_score.desc())
+            else:
+                query = query.order_by(JAMBResult.total_score.asc())
+        elif sort_by == 'name':
+            if sort_order == 'desc':
+                query = query.order_by(Student.surname.desc())
+            else:
+                query = query.order_by(Student.surname.asc())
+        else:
+            query = query.order_by(JAMBResult.total_score.desc())
+        
+        results = query.all()
+        
+        for idx, r in enumerate(results):
+            subjects = []
+            if r.subject1: subjects.append({'name': r.subject1, 'score': r.subject1_score or 0})
+            if r.subject2: subjects.append({'name': r.subject2, 'score': r.subject2_score or 0})
+            if r.subject3: subjects.append({'name': r.subject3, 'score': r.subject3_score or 0})
+            if r.subject4: subjects.append({'name': r.subject4, 'score': r.subject4_score or 0})
+            
+            students_data.append({
+                'id': r.student.id,
+                'jamb_id': r.id,
+                'student_id': r.student.student_id,
+                'name': r.student.full_name,
+                'total_score': r.total_score,
+                'rank': idx + 1,
+                'subjects': subjects,
+                'performance_level': AcademicAnalytics._jamb_performance_level(r.total_score)
+            })
+    
+    yoy_data = AcademicAnalytics.get_year_over_year_comparison()
+    
+    return render_template('results/jamb_dashboard.html',
+        students=students_data,
+        years=years,
+        selected_year=exam_year,
+        min_score=min_score,
+        max_score=max_score,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        view_mode=view_mode,
+        school_stats=school_stats,
+        correlation=correlation,
+        subject_performance=subject_performance,
+        yoy_data=yoy_data
+    )
+
+
+@results_bp.route('/jamb/add', methods=['GET', 'POST'])
+@login_required
+def add_jamb():
+    """Add JAMB results for a student"""
+    students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+    
+    if request.method == 'POST':
+        try:
+            student_id = request.form.get('student_id', type=int)
+            exam_year = request.form.get('exam_year', type=int)
+            total_score = request.form.get('total_score', type=int)
+            
+            if not student_id or not exam_year or total_score is None:
+                flash('All required fields must be filled.', 'error')
+                return redirect(url_for('results.add_jamb'))
+            
+            if total_score < 0 or total_score > 400:
+                flash('Total score must be between 0 and 400.', 'error')
+                return redirect(url_for('results.add_jamb'))
+            
+            existing = JAMBResult.query.filter_by(student_id=student_id, exam_year=exam_year).first()
+            
+            if existing:
+                existing.total_score = total_score
+                existing.subject1 = request.form.get('subject1')
+                existing.subject1_score = request.form.get('subject1_score', type=int)
+                existing.subject2 = request.form.get('subject2')
+                existing.subject2_score = request.form.get('subject2_score', type=int)
+                existing.subject3 = request.form.get('subject3')
+                existing.subject3_score = request.form.get('subject3_score', type=int)
+                existing.subject4 = request.form.get('subject4')
+                existing.subject4_score = request.form.get('subject4_score', type=int)
+            else:
+                result = JAMBResult(
+                    student_id=student_id,
+                    exam_year=exam_year,
+                    total_score=total_score,
+                    subject1=request.form.get('subject1'),
+                    subject1_score=request.form.get('subject1_score', type=int),
+                    subject2=request.form.get('subject2'),
+                    subject2_score=request.form.get('subject2_score', type=int),
+                    subject3=request.form.get('subject3'),
+                    subject3_score=request.form.get('subject3_score', type=int),
+                    subject4=request.form.get('subject4'),
+                    subject4_score=request.form.get('subject4_score', type=int)
+                )
+                db.session.add(result)
+            
+            db.session.commit()
+            flash('JAMB result saved!', 'success')
+            return redirect(url_for('results.jamb_list'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {str(e)}', 'error')
+    
+    return render_template('results/add_jamb.html',
+        students=students,
+        subjects=WAEC_SUBJECTS
+    )
+
+
+@results_bp.route('/jamb/student/<int:student_id>')
+@login_required
+def view_jamb_student(student_id):
+    """View JAMB results for a student"""
+    student = Student.query.get_or_404(student_id)
+    jamb_summary = AcademicAnalytics.get_student_jamb_summary(student_id)
+    waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
+    
+    return render_template('results/view_jamb_student.html',
+        student=student,
+        jamb_summary=jamb_summary,
+        waec_summary=waec_summary
+    )
+
+
+@results_bp.route('/jamb/student/<int:student_id>/edit/<int:year>', methods=['GET', 'POST'])
+@login_required
+def edit_jamb(student_id, year):
+    """Edit JAMB results for a student/year"""
+    student = Student.query.get_or_404(student_id)
+    result = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first_or_404()
+    
+    if request.method == 'POST':
+        try:
+            result.total_score = request.form.get('total_score', type=int)
+            result.subject1 = request.form.get('subject1')
+            result.subject1_score = request.form.get('subject1_score', type=int)
+            result.subject2 = request.form.get('subject2')
+            result.subject2_score = request.form.get('subject2_score', type=int)
+            result.subject3 = request.form.get('subject3')
+            result.subject3_score = request.form.get('subject3_score', type=int)
+            result.subject4 = request.form.get('subject4')
+            result.subject4_score = request.form.get('subject4_score', type=int)
+            
+            # Validate total score
+            if result.total_score < 0 or result.total_score > 400:
+                flash('Total score must be between 0 and 400.', 'error')
+                return redirect(url_for('results.edit_jamb', student_id=student_id, year=year))
+            
+            db.session.commit()
+            flash('JAMB result updated!', 'success')
+            return redirect(url_for('results.view_jamb_student', student_id=student_id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {str(e)}', 'error')
+    
+    return render_template('results/edit_jamb.html',
+        student=student,
+        result=result,
+        year=year,
+        subjects=WAEC_SUBJECTS
+    )
+
+
+@results_bp.route('/jamb/student/<int:student_id>/delete/<int:year>', methods=['POST'])
+@login_required
+def delete_jamb(student_id, year):
+    """Delete JAMB result for a student in a given year"""
+    student = Student.query.get_or_404(student_id)
+    
+    try:
+        result = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first()
+        
+        if result:
+            db.session.delete(result)
+            db.session.commit()
+            flash(f'Deleted JAMB result for {student.full_name} ({year}).', 'success')
+        else:
+            flash('No result found to delete.', 'warning')
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting result: {str(e)}', 'error')
+    
+    return redirect(url_for('results.jamb_list', year=year))
+
+
+# ============================================================================
+# ANALYTICS API ENDPOINTS
+# ============================================================================
+
+@results_bp.route('/api/waec/grade-distribution/<int:year>')
+@login_required
+def api_waec_grade_distribution(year):
+    """Get WAEC grade distribution for charts"""
+    results = WAECResult.query.filter_by(exam_year=year).all()
+    distribution = {g: sum(1 for r in results if r.grade == g) for g in WAEC_GRADES}
+    return jsonify(distribution)
+
+
+@results_bp.route('/api/waec/subject-stats/<int:year>')
+@login_required
+def api_waec_subject_stats(year):
+    """Get subject-level statistics"""
+    stats = AcademicAnalytics.get_waec_school_statistics(year)
+    if stats:
+        return jsonify(stats['subject_analysis'])
+    return jsonify([])
+
+
+@results_bp.route('/api/jamb/score-distribution/<int:year>')
+@login_required
+def api_jamb_score_distribution(year):
+    """Get JAMB score distribution for charts"""
+    results = JAMBResult.query.filter_by(exam_year=year).all()
+    scores = [r.total_score for r in results]
+    
+    distribution = {
+        '0-100': sum(1 for s in scores if s <= 100),
+        '101-150': sum(1 for s in scores if 101 <= s <= 150),
+        '151-200': sum(1 for s in scores if 151 <= s <= 200),
+        '201-250': sum(1 for s in scores if 201 <= s <= 250),
+        '251-300': sum(1 for s in scores if 251 <= s <= 300),
+        '301-350': sum(1 for s in scores if 301 <= s <= 350),
+        '351-400': sum(1 for s in scores if 351 <= s <= 400)
+    }
+    
+    return jsonify(distribution)
+
+
+@results_bp.route('/api/yoy-trends')
+@login_required
+def api_yoy_trends():
+    """Get year-over-year performance trends"""
+    data = AcademicAnalytics.get_year_over_year_comparison()
+    return jsonify(data)
+
+
+@results_bp.route('/api/student-risk/<int:student_id>')
+@login_required
+def api_student_risk(student_id):
+    """Get risk assessment for a student"""
+    risk = AcademicAnalytics.calculate_student_risk_score(student_id)
+    return jsonify(risk)
+
+
+@results_bp.route('/api/predict-jamb/<int:student_id>')
+@login_required
+def api_predict_jamb(student_id):
+    """Get JAMB prediction for a student"""
+    prediction = AcademicAnalytics.predict_jamb_score(student_id)
+    return jsonify(prediction)
+
+
+@results_bp.route('/api/waec-jamb-correlation/<int:year>')
+@login_required
+def api_waec_jamb_correlation(year):
+    """Get WAEC-JAMB correlation data"""
+    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year)
+    return jsonify(correlation)
+
+
+@results_bp.route('/api/top-performers/<int:year>')
+@login_required
+def api_top_performers(year):
+    """Get top performing students"""
+    waec_stats = AcademicAnalytics.get_waec_school_statistics(year)
+    
+    jamb_results = JAMBResult.query.filter_by(exam_year=year).order_by(
+        JAMBResult.total_score.desc()
+    ).limit(10).all()
+    
+    jamb_top = [{
+        'student_id': r.student_id,
+        'name': r.student.full_name,
+        'score': r.total_score
+    } for r in jamb_results]
+    
+    return jsonify({
+        'waec_top': waec_stats['top_performers'] if waec_stats else [],
+        'jamb_top': jamb_top
+    })
+
+
+# ============================================================================
+# EXPORT FUNCTIONALITY
+# ============================================================================
+
+@results_bp.route('/waec/export')
+@login_required
+def export_waec():
+    """Export WAEC results to Excel"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from io import BytesIO
+    
+    year = request.args.get('year', type=int)
+    if not year:
+        flash('Please select a year to export.', 'error')
+        return redirect(url_for('results.waec_list'))
+    
+    students_with_results = db.session.query(Student).join(WAECResult).filter(
+        WAECResult.exam_year == year
+    ).distinct().order_by(Student.surname).all()
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"WAEC {year}"
+    
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+    border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    
+    ws.merge_cells('A1:L1')
+    ws['A1'] = f'WAEC RESULTS - {year}'
+    ws['A1'].font = Font(bold=True, size=14)
+    ws['A1'].alignment = Alignment(horizontal='center')
+    
+    headers = ['S/N', 'Student ID', 'Name'] + WAEC_SUBJECTS[:9] + ['Total Points', 'Credits', 'A1s']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = border
+    
+    for idx, student in enumerate(students_with_results, 1):
+        row = idx + 3
+        results = {r.subject: r.grade for r in student.waec_results.filter_by(exam_year=year).all()}
+        
+        ws.cell(row=row, column=1, value=idx).border = border
+        ws.cell(row=row, column=2, value=student.student_id).border = border
+        ws.cell(row=row, column=3, value=student.full_name).border = border
+        
+        total_points = 0
+        credit_count = 0
+        a1_count = 0
+        
+        for col, subject in enumerate(WAEC_SUBJECTS[:9], 4):
+            grade = results.get(subject, '-')
+            cell = ws.cell(row=row, column=col, value=grade)
+            cell.border = border
+            
+            if grade != '-':
+                points = WAECResult.grade_to_points(grade)
+                total_points += points
+                if grade in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']:
+                    credit_count += 1
+                if grade == 'A1':
+                    a1_count += 1
+        
+        ws.cell(row=row, column=13, value=total_points).border = border
+        ws.cell(row=row, column=14, value=credit_count).border = border
+        ws.cell(row=row, column=15, value=a1_count).border = border
+    
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 12
+    ws.column_dimensions['C'].width = 25
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename=waec_results_{year}.xlsx'}
+    )
+
+
+@results_bp.route('/jamb/export')
+@login_required
+def export_jamb():
+    """Export JAMB results to Excel"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from io import BytesIO
+    
+    year = request.args.get('year', type=int)
+    if not year:
+        flash('Please select a year to export.', 'error')
+        return redirect(url_for('results.jamb_list'))
+    
+    results = JAMBResult.query.filter_by(exam_year=year).join(Student).order_by(
+        JAMBResult.total_score.desc()
+    ).all()
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"JAMB {year}"
+    
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+    border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    
+    ws.merge_cells('A1:L1')
+    ws['A1'] = f'JAMB RESULTS - {year}'
+    ws['A1'].font = Font(bold=True, size=14)
+    
+    headers = ['Rank', 'Student ID', 'Name', 'Total Score', 'Subject 1', 'Score', 'Subject 2', 'Score', 'Subject 3', 'Score', 'Subject 4', 'Score']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = border
+    
+    for idx, r in enumerate(results, 1):
+        row = idx + 3
+        ws.cell(row=row, column=1, value=idx).border = border
+        ws.cell(row=row, column=2, value=r.student.student_id).border = border
+        ws.cell(row=row, column=3, value=r.student.full_name).border = border
+        ws.cell(row=row, column=4, value=r.total_score).border = border
+        ws.cell(row=row, column=5, value=r.subject1 or '-').border = border
+        ws.cell(row=row, column=6, value=r.subject1_score or '-').border = border
+        ws.cell(row=row, column=7, value=r.subject2 or '-').border = border
+        ws.cell(row=row, column=8, value=r.subject2_score or '-').border = border
+        ws.cell(row=row, column=9, value=r.subject3 or '-').border = border
+        ws.cell(row=row, column=10, value=r.subject3_score or '-').border = border
+        ws.cell(row=row, column=11, value=r.subject4 or '-').border = border
+        ws.cell(row=row, column=12, value=r.subject4_score or '-').border = border
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename=jamb_results_{year}.xlsx'}
+    )
+
+
+# ============================================================================
+# ENHANCED WAEC ANALYTICS
+# ============================================================================
+
+@results_bp.route('/waec/analytics')
+@login_required
+def waec_analytics():
+    """Enhanced WAEC analytics dashboard"""
+    from utils.exam_analytics import WAECAnalytics
+    
+    year = request.args.get('year', type=int)
+    
+    years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
+    years = [y[0] for y in years]
+    
+    if not year and years:
+        year = years[0]
+    
+    stats = None
+    year_comparison = None
+    
+    if year:
+        stats = WAECAnalytics.get_year_statistics(year)
+        year_comparison = WAECAnalytics.compare_years()
+    
+    return render_template('results/waec_analytics.html',
+        years=years,
+        selected_year=year,
+        stats=stats,
+        year_comparison=year_comparison
+    )
+
+
+@results_bp.route('/waec/student/<int:student_id>')
+@login_required
+def waec_student_analysis(student_id):
+    """Detailed WAEC analysis for a specific student"""
+    from utils.exam_analytics import WAECAnalytics, WAECJAMBCorrelation
+    
+    student = Student.query.get_or_404(student_id)
+    year = request.args.get('year', type=int)
+    
+    waec_analysis = WAECAnalytics.get_student_waec_analysis(student_id, year)
+    jamb_prediction = WAECJAMBCorrelation.predict_jamb_from_waec(student_id, year)
+    
+    return render_template('results/waec_student.html',
+        student=student,
+        waec_analysis=waec_analysis,
+        jamb_prediction=jamb_prediction
+    )
+
+
+# ============================================================================
+# WAEC-JAMB CORRELATION & PREDICTIONS
+# ============================================================================
+
+@results_bp.route('/predictions')
+@login_required
+def predictions_dashboard():
+    """WAEC-JAMB correlation and predictions dashboard"""
+    from utils.exam_analytics import WAECJAMBCorrelation
+    
+    correlation_data = WAECJAMBCorrelation.get_correlation_analysis()
+    
+    return render_template('results/predictions_dashboard.html',
+        correlation_data=correlation_data
+    )
+
+
+@results_bp.route('/predictions/student/<int:student_id>')
+@login_required  
+def student_predictions(student_id):
+    """Comprehensive predictions for a specific student"""
+    from utils.exam_analytics import WAECJAMBCorrelation, MockJAMBAnalytics
+    from models.mock_jamb import MockJAMBResult
+    
+    student = Student.query.get_or_404(student_id)
+    
+    # Get mock exam history first to check data
+    mock_results = MockJAMBResult.query.filter_by(student_id=student_id).all()
+    
+    # Debug: Print mock results info
+    debug_info = []
+    for mr in mock_results:
+        debug_info.append({
+            'id': mr.id,
+            'total_score': mr.total_score,
+            'subject1': mr.subject1,
+            'subject1_score': mr.subject1_score,
+            'subject2': mr.subject2,
+            'subject2_score': mr.subject2_score,
+            'subject3': mr.subject3,
+            'subject3_score': mr.subject3_score,
+            'subject4': mr.subject4,
+            'subject4_score': mr.subject4_score,
+        })
+    
+    # Get all available predictions
+    waec_from_mock = None
+    jamb_prediction = None
+    
+    if mock_results:
+        try:
+            waec_from_mock = WAECJAMBCorrelation.predict_waec_from_mock_jamb(student_id)
+        except Exception as e:
+            print(f"WAEC prediction error: {e}")
+        
+        try:
+            jamb_prediction = MockJAMBAnalytics.predict_real_jamb(student_id)
+        except Exception as e:
+            print(f"JAMB prediction error: {e}")
+    
+    # Check if student has actual WAEC results
+    waec_years = db.session.query(WAECResult.exam_year).filter_by(student_id=student_id).distinct().all()
+    waec_years = [y[0] for y in waec_years]
+    
+    jamb_from_waec = None
+    if waec_years:
+        try:
+            jamb_from_waec = WAECJAMBCorrelation.predict_jamb_from_waec(student_id, waec_years[0])
+        except Exception as e:
+            print(f"JAMB from WAEC error: {e}")
+    
+    return render_template('results/student_predictions.html',
+        student=student,
+        waec_from_mock=waec_from_mock,
+        jamb_prediction=jamb_prediction,
+        jamb_from_waec=jamb_from_waec,
+        waec_years=waec_years,
+        has_mock_results=len(mock_results) > 0,
+        mock_count=len(mock_results),
+        debug_info=debug_info
+    )
+
+
+@results_bp.route('/api/predictions/<int:student_id>')
+@login_required
+def api_student_predictions(student_id):
+    """API endpoint for student predictions"""
+    from utils.exam_analytics import WAECJAMBCorrelation, MockJAMBAnalytics
+    
+    waec_from_mock = WAECJAMBCorrelation.predict_waec_from_mock_jamb(student_id)
+    jamb_prediction = MockJAMBAnalytics.predict_real_jamb(student_id)
+    
+    return jsonify({
+        'student_id': student_id,
+        'waec_prediction': waec_from_mock,
+        'jamb_prediction': jamb_prediction
+    })
+

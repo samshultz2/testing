@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Classes - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Classes</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ level|upper }} Class Configuration</h1>
+    <div class="d-flex gap-2">
+        {% if level == 'jss' %}
+        <a href="{{ url_for('generator.setup_jss') }}" class="btn btn-info"><i class="fas fa-magic"></i> Quick Setup JSS</a>
+        {% endif %}
+        <a href="{{ url_for('generator.add_class_config') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Class</a>
+    </div>
+</div>
+
+<p class="text-muted mb-3">Configure {{ level|upper }} classes, number of arms{% if level == 'sss' %}, and stream assignments (Science/Arts/Commercial){% endif %}.</p>
+
+{% if classes %}
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for class_config in classes %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ class_config.class_name }}</div>
+                    <span class="badge badge-primary">{{ class_config.num_arms }} arm{{ 's' if class_config.num_arms > 1 else '' }}</span>
+                </div>
+                {% if class_config.arm_names %}
+                <div class="data-card-row">
+                    <span class="data-card-label">Arms</span>
+                    <span>{{ class_config.arm_names }}</span>
+                </div>
+                {% endif %}
+                {% if level == 'sss' %}
+                <div class="data-card-row">
+                    <span class="data-card-label">Has Streams</span>
+                    <span>
+                        {% if class_config.has_streams %}
+                        <span class="badge badge-success">Yes</span>
+                        {% else %}
+                        <span class="badge badge-secondary">No</span>
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+                <div class="data-card-actions">
+                    <a href="{{ url_for('generator.edit_class_config', class_id=class_config.id) }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                    <a href="{{ url_for('generator.class_subjects_config', class_id=class_config.id) }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-book"></i> Subjects
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-school"></i>
+            <h3>No {{ level|upper }} Classes</h3>
+            <p>Add classes to generate timetables for (e.g., {{ 'JSS1, JSS2, JSS3' if level == 'jss' else 'SSS1, SSS2, SSS3' }})</p>
+            <div class="d-flex gap-2 justify-content-center mt-3">
+                {% if level == 'jss' %}
+                <a href="{{ url_for('generator.setup_jss') }}" class="btn btn-info"><i class="fas fa-magic"></i> Quick Setup JSS</a>
+                {% endif %}
+                <a href="{{ url_for('generator.add_class_config') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Class</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="mt-3">
+    <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard</a>
+</div>
+{% endblock %}

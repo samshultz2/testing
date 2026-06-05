@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Teacher Workload - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index') }}">Reports</a> / <span>Workload</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Teacher Workload Report</h1>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Teacher</th>
+                    {% for day in days %}
+                    <th style="text-align: center;">{{ day[:3] }}</th>
+                    {% endfor %}
+                    <th style="text-align: center;">Total</th>
+                    <th style="text-align: center;">Max</th>
+                    <th style="text-align: center;">Status</th>
+                    <th>Classes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tid, data in workload.items() %}
+                <tr>
+                    <td><strong>{{ data.teacher.name }}</strong></td>
+                    {% for d in range(5) %}
+                    <td style="text-align: center;">{{ data.per_day[d] }}</td>
+                    {% endfor %}
+                    <td style="text-align: center;"><strong>{{ data.total }}</strong></td>
+                    <td style="text-align: center;">{{ data.teacher.max_periods_per_week }}</td>
+                    <td style="text-align: center;">
+                        {% if data.total <= data.teacher.max_periods_per_week %}
+                        <span class="badge badge-success">OK</span>
+                        {% else %}
+                        <span class="badge badge-danger">Overload</span>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ data.classes|join(', ') }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if not workload %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-user-clock"></i>
+            <h3>No Data</h3>
+            <p>No teacher assignments in this batch</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

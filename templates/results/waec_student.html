@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}WAEC Analysis - {{ student.full_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>{{ student.first_name }}</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.student-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;background:var(--bg-card);border-radius:var(--radius-lg);border:1px solid var(--border-color)}
+.student-avatar{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#11998e,#38ef7d);display:flex;align-items:center;justify-content:center;color:white;font-size:1.5rem;font-weight:700}
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1rem}
+@media(min-width:768px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:var(--bg-card);border-radius:var(--radius-md);padding:1rem;border:1px solid var(--border-color);text-align:center}
+.stat-card.highlight{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;border:none}
+.stat-value{font-size:1.5rem;font-weight:700}
+.stat-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase}
+.stat-card.highlight .stat-label{color:rgba(255,255,255,.8)}
+.result-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+@media(min-width:768px){.result-grid{grid-template-columns:repeat(3,1fr)}}
+.result-item{display:flex;justify-content:space-between;padding:.6rem;background:var(--gray-50);border-radius:var(--radius-sm)}
+.result-grade{padding:.2rem .6rem;border-radius:15px;font-weight:700;font-size:.8rem}
+.grade-a1{background:rgba(40,167,69,.15);color:#28a745}
+.grade-b2,.grade-b3{background:rgba(23,162,184,.15);color:#17a2b8}
+.grade-c4,.grade-c5,.grade-c6{background:rgba(255,193,7,.15);color:#d39e00}
+.grade-d7,.grade-e8,.grade-f9{background:rgba(220,53,69,.15);color:#dc3545}
+.req-badge{padding:.4rem .8rem;border-radius:20px;font-weight:600;font-size:.85rem;display:inline-flex;align-items:center;gap:.5rem}
+.req-badge.met{background:rgba(40,167,69,.15);color:#28a745}
+.req-badge.not-met{background:rgba(220,53,69,.15);color:#dc3545}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="student-header">
+    <div class="student-avatar">{{ student.first_name[0] }}{{ student.surname[0] }}</div>
+    <div>
+        <h2 style="margin:0">{{ student.full_name }}</h2>
+        <p style="margin:0;color:var(--text-muted)">{{ student.student_id }}</p>
+    </div>
+    <div style="margin-left:auto">
+        <a href="{{ url_for('results.student_predictions', student_id=student.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-chart-line"></i> Predictions</a>
+    </div>
+</div>
+
+{% if waec_analysis %}
+{% for year, data in waec_analysis.years.items() %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-file-alt"></i> WAEC {{ year }}</h3>
+        {% if data.meets_university_requirement %}
+        <span class="req-badge met"><i class="fas fa-check"></i> Meets Requirement</span>
+        {% else %}
+        <span class="req-badge not-met"><i class="fas fa-times"></i> Doesn't Meet Requirement</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card highlight">
+                <div class="stat-value">{{ data.a1_count }}</div>
+                <div class="stat-label">A1s</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ data.credit_count }}</div>
+                <div class="stat-label">Credits</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ data.total_subjects }}</div>
+                <div class="stat-label">Subjects</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ data.avg_points }}</div>
+                <div class="stat-label">Avg Points</div>
+            </div>
+        </div>
+        
+        <div class="result-grid">
+            {% for r in data.results %}
+            <div class="result-item">
+                <span style="font-size:.85rem">{{ r.subject }}</span>
+                <span class="result-grade grade-{{ r.grade|lower }}">{{ r.grade }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="row mt-3">
+            <div class="col-6">
+                <small class="text-muted">Best Subjects:</small><br>
+                {% for s in data.best_subjects %}<span class="badge badge-success" style="margin:.1rem">{{ s }}</span>{% endfor %}
+            </div>
+            <div class="col-6">
+                <small class="text-muted">Needs Improvement:</small><br>
+                {% for s in data.weak_subjects %}<span class="badge badge-danger" style="margin:.1rem">{{ s }}</span>{% endfor %}
+                {% if not data.weak_subjects %}<span class="text-muted">None</span>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% if jamb_prediction %}
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-calculator"></i> Predicted JAMB Score</h3></div>
+    <div class="card-body">
+        <div class="text-center">
+            <div style="font-size:3rem;font-weight:700;color:var(--primary)">{{ jamb_prediction.jamb_prediction.predicted_score }}</div>
+            <div class="text-muted">Range: {{ jamb_prediction.jamb_prediction.score_range.low }} - {{ jamb_prediction.jamb_prediction.score_range.high }}</div>
+            <div style="margin-top:.5rem;font-weight:600">{{ jamb_prediction.jamb_prediction.performance_level }}</div>
+        </div>
+        <hr>
+        <small class="text-muted">Best 4 subjects: {{ jamb_prediction.jamb_prediction.top_4_subjects|join(', ') }}</small>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+        <h3>No WAEC Results Found</h3>
+        <p class="text-muted">This student doesn't have any WAEC results recorded.</p>
+        <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add WAEC Result</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

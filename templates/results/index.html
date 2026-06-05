@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Results Management - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Results</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.results-overview {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+@media (min-width: 768px) {
+    .results-overview { grid-template-columns: repeat(2, 1fr); }
+}
+
+.result-type-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.result-type-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.result-type-header {
+    padding: 1.5rem;
+    color: white;
+}
+.result-type-header.waec {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.result-type-header.jamb {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+.result-type-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+.result-type-subtitle {
+    opacity: 0.9;
+    font-size: 0.9rem;
+}
+
+.result-type-body {
+    padding: 1rem 1.5rem;
+}
+.result-stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+.result-stat:last-child { border-bottom: none; }
+.result-stat-label { color: #666; }
+.result-stat-value { font-weight: 600; }
+
+.result-type-actions {
+    padding: 1rem 1.5rem;
+    background: #f8f9fa;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+@media (min-width: 768px) {
+    .quick-actions { grid-template-columns: repeat(4, 1fr); }
+}
+.quick-action-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+}
+.quick-action-card:hover {
+    border-color: #007bff;
+    background: #f8f9fa;
+}
+.quick-action-icon {
+    font-size: 1.5rem;
+    color: #007bff;
+    margin-bottom: 0.5rem;
+}
+.quick-action-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Results Management</h1>
+</div>
+
+<!-- Results Overview Cards -->
+<div class="results-overview">
+    <!-- WAEC Card -->
+    <div class="result-type-card">
+        <div class="result-type-header waec">
+            <div class="result-type-title">WAEC Results</div>
+            <div class="result-type-subtitle">West African Examinations Council</div>
+        </div>
+        <div class="result-type-body">
+            <div class="result-stat">
+                <span class="result-stat-label">Total Results</span>
+                <span class="result-stat-value">{{ waec_count }}</span>
+            </div>
+            <div class="result-stat">
+                <span class="result-stat-label">Years with Data</span>
+                <span class="result-stat-value">{{ waec_years|length }}</span>
+            </div>
+            {% if waec_years %}
+            <div class="result-stat">
+                <span class="result-stat-label">Latest Year</span>
+                <span class="result-stat-value">{{ waec_years[0] }}</span>
+            </div>
+            {% endif %}
+        </div>
+        <div class="result-type-actions">
+            <a href="{{ url_for('results.waec_list') }}" class="btn btn-primary">
+                <i class="fas fa-chart-bar"></i> View Dashboard
+            </a>
+            <a href="{{ url_for('results.add_waec') }}" class="btn btn-secondary">
+                <i class="fas fa-plus"></i> Add Results
+            </a>
+        </div>
+    </div>
+    
+    <!-- JAMB Card -->
+    <div class="result-type-card">
+        <div class="result-type-header jamb">
+            <div class="result-type-title">JAMB Results</div>
+            <div class="result-type-subtitle">Joint Admissions and Matriculation Board</div>
+        </div>
+        <div class="result-type-body">
+            <div class="result-stat">
+                <span class="result-stat-label">Total Results</span>
+                <span class="result-stat-value">{{ jamb_count }}</span>
+            </div>
+            <div class="result-stat">
+                <span class="result-stat-label">Years with Data</span>
+                <span class="result-stat-value">{{ jamb_years|length }}</span>
+            </div>
+            {% if jamb_years %}
+            <div class="result-stat">
+                <span class="result-stat-label">Latest Year</span>
+                <span class="result-stat-value">{{ jamb_years[0] }}</span>
+            </div>
+            {% endif %}
+        </div>
+        <div class="result-type-actions">
+            <a href="{{ url_for('results.jamb_list') }}" class="btn btn-primary">
+                <i class="fas fa-chart-bar"></i> View Dashboard
+            </a>
+            <a href="{{ url_for('results.add_jamb') }}" class="btn btn-secondary">
+                <i class="fas fa-plus"></i> Add Results
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card">
+    <div class="card-header"><h3>Quick Actions</h3></div>
+    <div class="card-body">
+        <div class="quick-actions">
+            <a href="{{ url_for('results.add_waec') }}" class="quick-action-card">
+                <div class="quick-action-icon"><i class="fas fa-plus-circle"></i></div>
+                <div class="quick-action-label">Add WAEC Result</div>
+            </a>
+            <a href="{{ url_for('results.add_jamb') }}" class="quick-action-card">
+                <div class="quick-action-icon"><i class="fas fa-plus-circle"></i></div>
+                <div class="quick-action-label">Add JAMB Result</div>
+            </a>
+            {% if waec_years %}
+            <a href="{{ url_for('results.export_waec', year=waec_years[0]) }}" class="quick-action-card">
+                <div class="quick-action-icon"><i class="fas fa-file-excel"></i></div>
+                <div class="quick-action-label">Export WAEC {{ waec_years[0] }}</div>
+            </a>
+            {% endif %}
+            {% if jamb_years %}
+            <a href="{{ url_for('results.export_jamb', year=jamb_years[0]) }}" class="quick-action-card">
+                <div class="quick-action-icon"><i class="fas fa-file-excel"></i></div>
+                <div class="quick-action-label">Export JAMB {{ jamb_years[0] }}</div>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Features Overview -->
+<div class="card">
+    <div class="card-header"><h3>Analytics Features</h3></div>
+    <div class="card-body">
+        <div class="dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-chart-line" style="color: #007bff;"></i> Performance Trends</h4>
+                <p style="font-size: 0.85rem; color: #666; margin: 0;">Track year-over-year performance, pass rates, and grade distributions.</p>
+            </div>
+            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-user-graduate" style="color: #28a745;"></i> Student Profiles</h4>
+                <p style="font-size: 0.85rem; color: #666; margin: 0;">Individual student analytics with strengths, weaknesses, and predictions.</p>
+            </div>
+            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-calculator" style="color: #ffc107;"></i> JAMB Predictions</h4>
+                <p style="font-size: 0.85rem; color: #666; margin: 0;">ML-based JAMB score predictions from WAEC performance.</p>
+            </div>
+            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Risk Assessment</h4>
+                <p style="font-size: 0.85rem; color: #666; margin: 0;">Identify at-risk students with actionable recommendations.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

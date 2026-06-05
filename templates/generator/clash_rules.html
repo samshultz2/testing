@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Subject Clash Rules - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Clash Rules</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-ban"></i> Subject Clash Rules</h1>
+</div>
+
+<p class="text-muted mb-3">Configure rules for subjects that must NOT be scheduled at the same time (e.g., for combined classes where different student groups take different subjects simultaneously).</p>
+
+<!-- Subject Clash Rules -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-exchange-alt"></i> Subject Clash Rules</h3>
+        <a href="{{ url_for('generator.add_clash_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if clash_rules %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Source Subject</th>
+                    <th>Must Not Clash With</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in clash_rules %}
+                <tr>
+                    <td>
+                        <strong>{{ rule.name }}</strong>
+                        {% if rule.description %}
+                        <br><small class="text-muted">{{ rule.description[:50] }}{% if rule.description|length > 50 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-primary">{{ rule.source_subject.name }}</span><br>
+                        <small>{{ rule.source_class_name }} {{ rule.source_arm_name or '(All Arms)' }}</small>
+                    </td>
+                    <td>
+                        <span class="badge badge-secondary">{{ rule.target_subject.name }}</span><br>
+                        <small>{{ rule.target_class_name or '(All Classes)' }} {{ rule.target_arm_name or '(All Arms)' }}</small>
+                    </td>
+                    <td>
+                        {% if rule.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('generator.toggle_clash_rule', rule_id=rule.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('generator.delete_clash_rule', rule_id=rule.id) }}" style="display: inline;" onsubmit="return confirm('Delete this rule?');">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-exchange-alt"></i>
+            <p>No subject clash rules configured</p>
+            <a href="{{ url_for('generator.add_clash_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Combined Class Rules -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-users"></i> Combined Class Teacher Rules</h3>
+        <a href="{{ url_for('generator.add_combined_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if combined_rules %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Shadow Subject</th>
+                    <th>Teacher's Subject</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in combined_rules %}
+                <tr>
+                    <td>
+                        <strong>{{ rule.name }}</strong>
+                        {% if rule.description %}
+                        <br><small class="text-muted">{{ rule.description[:50] }}{% if rule.description|length > 50 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{ rule.shadow_subject.name }}</span><br>
+                        <small>{{ rule.shadow_class_name }} {{ rule.shadow_arm_name or '(All Arms)' }}</small>
+                    </td>
+                    <td>
+                        <span class="badge badge-warning">{{ rule.teacher_subject.name }}</span><br>
+                        <small>{{ rule.teacher_class_name }} {{ rule.teacher_arm_name or '(All Arms)' }}</small>
+                    </td>
+                    <td>
+                        {% if rule.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('generator.toggle_combined_rule', rule_id=rule.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('generator.delete_combined_rule', rule_id=rule.id) }}" style="display: inline;" onsubmit="return confirm('Delete this rule?');">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-users"></i>
+            <p>No combined class teacher rules configured</p>
+            <a href="{{ url_for('generator.add_combined_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-info-circle"></i> Help</h3></div>
+    <div class="card-body">
+        <h4>Subject Clash Rules</h4>
+        <p>Use these rules when two subjects must NEVER be scheduled at the same time. This is typically used for combined classes where different student groups take different subjects simultaneously.</p>
+        <p><strong>Example:</strong> If SSS3 Iris has both Arts and Commercial students, Geography (Commercial) and Literature (Arts) happen at the same time. Create a rule so they don't clash with Literature in other classes.</p>
+        
+        <h4 class="mt-3">Combined Class Teacher Rules</h4>
+        <p>Use these rules when a teacher is effectively teaching during another subject's time slot (shadowing). This ensures the teacher doesn't get 3 consecutive periods when counting both their own periods and the shadowed periods.</p>
+        <p><strong>Example:</strong> During Geography for SSS3 Iris, the Literature teacher is teaching Arts students. Add a rule so she doesn't get 3 consecutive periods.</p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Add Promotion Rule - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Add Rule</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Add Promotion Rule</h1></div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">From Class <span class="required">*</span></label>
+                    <select name="from_class_id" class="form-control" required>
+                        <option value="">Select</option>
+                        {% for cls in classes %}
+                        <option value="{{ cls.id }}">{{ cls.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">To Class <span class="required">*</span></label>
+                    <select name="to_class_id" class="form-control" required>
+                        <option value="">Select</option>
+                        {% for cls in classes %}
+                        <option value="{{ cls.id }}">{{ cls.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Stream Name (optional)</label>
+                    <input type="text" name="stream_name" class="form-control" placeholder="e.g., Science, Arts, Social Science">
+                    <small class="text-muted">Leave blank for basic promotion</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Minimum Average (%)</label>
+                    <input type="number" name="min_average" class="form-control" value="50" min="0" max="100" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <input type="number" name="priority" class="form-control" value="0" min="0" max="10">
+                    <small class="text-muted">Higher = checked first</small>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Required Subjects (for stream)</label>
+                <select name="required_subjects[]" class="form-control" multiple size="8">
+                    {% for subject in subjects %}
+                    <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Hold Ctrl/Cmd to select multiple. Average of these subjects must meet minimum.</small>
+            </div>
+            
+            <div class="page-header-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>
+                <a href="{{ url_for('promotion.rules_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

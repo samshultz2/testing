@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ term.full_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>{{ term.name }}</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>{{ term.full_name }}</h1>{% if term.is_active %}<span class="badge badge-success">Active</span>{% endif %}</div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('academics.edit_term', term_id=term.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit Dates</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="filter-form">
+            <div class="form-group"><label class="form-label">Start Date</label><div class="form-control" style="background: var(--bg-secondary);">{{ term.start_date|format_date if term.start_date else 'Not set' }}</div></div>
+            <div class="form-group"><label class="form-label">End Date</label><div class="form-control" style="background: var(--bg-secondary);">{{ term.end_date|format_date if term.end_date else 'Not set' }}</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h3>Weeks ({{ weeks|length }})</h3>
+        <div style="display: flex; gap: 0.5rem;">
+            <form action="{{ url_for('academics.add_next_week', term_id=term.id) }}" method="POST">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Week</button>
+            </form>
+            {% if weeks|length == 0 and term.start_date %}
+            <form action="{{ url_for('academics.generate_weeks', term_id=term.id) }}" method="POST">
+                <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Generate All</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if weeks %}
+        <div class="data-cards" style="padding: 1rem;">
+            {% for w in weeks %}
+            <div class="data-card">
+                <div class="data-card-header"><div class="data-card-title">Week {{ w.week_number }}</div></div>
+                <div class="data-card-row"><span class="data-card-label">Start</span><span>{{ w.start_date|format_date }}</span></div>
+                <div class="data-card-row"><span class="data-card-label">End</span><span>{{ w.end_date|format_date }}</span></div>
+                {% if loop.last %}
+                <div class="data-card-actions">
+                    <form action="{{ url_for('academics.delete_week', week_id=w.id) }}" method="POST" style="width:100%;" onsubmit="return confirm('Delete Week {{ w.week_number }}? This will also delete attendance records for this week.');">
+                        <button type="submit" class="btn btn-danger btn-sm w-100"><i class="fas fa-times"></i> Remove</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><p>No weeks added yet. Click "Add Week" to add Week 1.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Holidays ({{ holidays|length }})</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('academics.add_holiday', term_id=term.id) }}" class="filter-form mb-3">
+            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" required></div>
+            <div class="form-group"><label class="form-label">Reason</label><input type="text" name="reason" class="form-control" placeholder="e.g., Public Holiday" required></div>
+            <div class="filter-actions"><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</button></div>
+        </form>
+        {% if holidays %}
+        <div class="data-cards">
+            {% for h in holidays %}
+            <div class="data-card">
+                <div class="data-card-header"><div class="data-card-title">{{ h.date|format_date }}</div></div>
+                <div class="data-card-row"><span class="data-card-label">Reason</span><span>{{ h.reason }}</span></div>
+                <div class="data-card-actions">
+                    <form action="{{ url_for('academics.delete_holiday', holiday_id=h.id) }}" method="POST" style="width:100%;"><button type="submit" class="btn btn-danger btn-sm w-100"><i class="fas fa-times"></i> Remove</button></form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ user.username }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('users.index') }}">Users</a> / <a href="{{ url_for('users.view_user', user_id=user.id) }}">{{ user.username }}</a> / <span>Edit</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.form-row{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:576px){.form-row{grid-template-columns:repeat(2,1fr)}}
+.form-row .form-group{margin-bottom:0}
+.permission-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+@media(min-width:576px){.permission-grid{grid-template-columns:repeat(3,1fr)}}
+.permission-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--gray-50);border-radius:6px;cursor:pointer}
+.permission-item input{width:1.1rem;height:1.1rem}
+.toggle-label{display:flex;align-items:center;gap:.5rem;padding:.5rem 0;cursor:pointer}
+.toggle-label input{width:1.2rem;height:1.2rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-user-edit"></i> Edit User</h1></div>
+
+<form method="POST" action="{{ url_for('users.edit_user', user_id=user.id) }}">
+<div class="card mb-3">
+<div class="card-header"><h3><i class="fas fa-user"></i> Account Information</h3></div>
+<div class="card-body">
+<div class="form-row">
+<div class="form-group"><label class="form-label">Username</label><input type="text" class="form-control" value="{{ user.username }}" disabled></div>
+<div class="form-group"><label class="form-label">Email</label><input type="email" name="email" class="form-control" value="{{ user.email or '' }}" placeholder="email@example.com"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Full Name</label><input type="text" name="full_name" class="form-control" value="{{ user.full_name or '' }}" placeholder="John Doe"></div>
+<div class="form-group"><label class="form-label">Phone</label><input type="tel" name="phone" class="form-control" value="{{ user.phone or '' }}" placeholder="08012345678"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">New Password</label><input type="password" name="new_password" class="form-control" placeholder="Leave blank to keep current" minlength="6"></div>
+<div class="form-group"><label class="form-label">Role</label>
+<select name="role" class="form-control" id="roleSelect" onchange="toggleTeacherOptions()">
+<option value="teacher" {% if user.role == 'teacher' %}selected{% endif %}>Teacher</option>
+<option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+<option value="readonly" {% if user.role == 'readonly' %}selected{% endif %}>View Only</option>
+</select></div>
+</div>
+<div class="form-group"><label class="toggle-label"><input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}> <span>Account Active</span></label></div>
+</div>
+</div>
+
+<div class="card mb-3" id="teacherPermissions">
+<div class="card-header"><h3><i class="fas fa-key"></i> Teacher Permissions</h3></div>
+<div class="card-body">
+{% set t = user.teacher_profile %}
+<div class="permission-grid">
+<label class="permission-item"><input type="checkbox" name="can_mark_attendance" {% if t and t.can_mark_attendance %}checked{% endif %}> <span>Mark Attendance</span></label>
+<label class="permission-item"><input type="checkbox" name="can_view_student_details" {% if t and t.can_view_student_details %}checked{% endif %}> <span>View Students</span></label>
+<label class="permission-item"><input type="checkbox" name="can_print_reports" {% if t and t.can_print_reports %}checked{% endif %}> <span>Print Reports</span></label>
+<label class="permission-item"><input type="checkbox" name="can_enter_results" {% if t and t.can_enter_results %}checked{% endif %}> <span>Enter Results</span></label>
+<label class="permission-item"><input type="checkbox" name="can_edit_results" {% if t and t.can_edit_results %}checked{% endif %}> <span>Edit Results</span></label>
+</div>
+<p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Teachers can only access classes and subjects assigned to them.</p>
+</div>
+</div>
+
+<div class="d-flex gap-2">
+<button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Changes</button>
+<a href="{{ url_for('users.view_user', user_id=user.id) }}" class="btn btn-secondary btn-lg">Cancel</a>
+</div>
+</form>
+
+<script>
+function toggleTeacherOptions(){
+    const role = document.getElementById('roleSelect').value;
+    document.getElementById('teacherPermissions').style.display = role === 'teacher' ? 'block' : 'none';
+}
+toggleTeacherOptions();
+</script>
+{% endblock %}

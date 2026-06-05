@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}{{ teacher.name }} - Timetable{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}">Teacher Timetables</a> / <span>{{ teacher.name }}</span>{% endblock %}
+
+{% block content %}
+<style>
+@media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    body { font-size: 12pt; }
+    .timetable-container { page-break-inside: avoid; }
+}
+.print-only { display: none; }
+
+.teacher-header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: linear-gradient(135deg, #4472C4, #2E8B57);
+    color: white;
+    border-radius: 8px;
+}
+.teacher-header h2 { margin: 0 0 5px 0; }
+.teacher-header p { margin: 0; opacity: 0.9; }
+
+.timetable-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+.timetable-table th, .timetable-table td {
+    border: 1px solid #ccc;
+    padding: 10px;
+    text-align: center;
+    vertical-align: middle;
+}
+.timetable-table th {
+    background: #4472C4;
+    color: white;
+    font-weight: bold;
+}
+.timetable-table .day-cell {
+    background: #f0f0f0;
+    font-weight: bold;
+    width: 100px;
+}
+.timetable-table .period-cell {
+    min-width: 90px;
+    height: 60px;
+}
+.timetable-table .subject-name {
+    font-weight: bold;
+    color: #333;
+}
+.timetable-table .class-name {
+    font-size: 0.85em;
+    color: #666;
+    margin-top: 3px;
+}
+.timetable-table .empty-cell {
+    background: #fafafa;
+    color: #ccc;
+}
+.timetable-table .has-class {
+    background: #e8f4e8;
+}
+
+.action-buttons {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.stats-row {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+.stat-card {
+    background: #f8f9fa;
+    padding: 15px 25px;
+    border-radius: 8px;
+    text-align: center;
+}
+.stat-card .stat-value {
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #4472C4;
+}
+.stat-card .stat-label {
+    font-size: 0.9em;
+    color: #666;
+}
+</style>
+
+<div class="action-buttons no-print">
+    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    <a href="{{ url_for('generator.export_teacher_image', batch_id=batch_id, teacher_id=teacher.id) }}" class="btn btn-success"><i class="fas fa-image"></i> Download Image</a>
+    <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+</div>
+
+<div class="timetable-container">
+    <div class="teacher-header">
+        <h2>{{ teacher.name }}</h2>
+        <p>{{ teacher.short_name }} | Max {{ teacher.max_periods_per_day }} periods/day</p>
+    </div>
+    
+    <table class="timetable-table">
+        <thead>
+            <tr>
+                <th>Day / Period</th>
+                {% for p in periods %}
+                <th>P{{ p }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% set total_periods = [] %}
+            {% set classes_taught = [] %}
+            {% for d in range(5) %}
+            <tr>
+                <td class="day-cell">{{ days[d] }}</td>
+                {% for p in periods %}
+                {% set entry = timetable[d][p] %}
+                {% if entry %}
+                {% if total_periods.append(1) %}{% endif %}
+                {% set class_key = entry.class_name ~ ' ' ~ entry.arm_name %}
+                {% if class_key not in classes_taught %}
+                {% if classes_taught.append(class_key) %}{% endif %}
+                {% endif %}
+                <td class="period-cell has-class">
+                    <div class="subject-name">{{ entry.subject.name[:12] if entry.subject else '-' }}</div>
+                    <div class="class-name">{{ entry.class_name }} {{ entry.arm_name }}</div>
+                </td>
+                {% else %}
+                <td class="period-cell empty-cell">-</td>
+                {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value">{{ total_periods|length }}</div>
+            <div class="stat-label">Total Periods/Week</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ (total_periods|length / 5)|round(1) }}</div>
+            <div class="stat-label">Avg Periods/Day</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ classes_taught|length }}</div>
+            <div class="stat-label">Classes Taught</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

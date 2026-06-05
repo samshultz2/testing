@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Edit WAEC Results - {{ student.full_name }}{% endblock %}
+{% block breadcrumb %}
+<a href="{{ url_for('results.index') }}">Results</a>
+<a href="{{ url_for('results.waec_list') }}">WAEC</a>
+<a href="{{ url_for('results.view_waec_student', student_id=student.id) }}">{{ student.full_name }}</a>
+<span>Edit {{ year }}</span>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.subject-row {
+    display: grid;
+    grid-template-columns: 1fr 120px 40px;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+@media (min-width: 768px) {
+    .subject-row { grid-template-columns: 1fr 150px 50px; }
+}
+.subject-row:last-child { border-bottom: none; }
+.subject-name { font-weight: 500; }
+.grade-select {
+    padding: 0.4rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+.remove-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+.add-subject-btn {
+    margin-top: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Edit WAEC Results</h1>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>{{ student.full_name }} - {{ year }}</h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('results.edit_waec', student_id=student.id, year=year) }}" id="editForm">
+            <div id="subjectsContainer">
+                {% for subject in subjects %}
+                {% if subject in results_dict %}
+                <div class="subject-row">
+                    <div class="subject-name">
+                        <input type="hidden" name="subject[]" value="{{ subject }}">
+                        {{ subject }}
+                    </div>
+                    <select name="grade[]" class="grade-select">
+                        {% for g in grades %}
+                        <option value="{{ g }}" {% if results_dict.get(subject) == g %}selected{% endif %}>{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="remove-btn" onclick="removeSubject(this)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Add New Subject -->
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+                <h4>Add Subject</h4>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <select id="newSubject" style="flex: 1; min-width: 200px; padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Select subject...</option>
+                        {% for subject in subjects %}
+                        {% if subject not in results_dict %}
+                        <option value="{{ subject }}">{{ subject }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <select id="newGrade" style="width: 100px; padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px;">
+                        {% for g in grades %}
+                        <option value="{{ g }}">{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="addSubject()">
+                        <i class="fas fa-plus"></i> Add
+                    </button>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+                <a href="{{ url_for('results.view_waec_student', student_id=student.id) }}" class="btn btn-secondary">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Section -->
+<div style="margin-top: 2rem; padding: 1rem; background: #fff5f5; border: 1px solid #f8d7da; border-radius: 8px;">
+    <h4 style="color: #721c24; font-size: 0.9rem; margin-bottom: 0.5rem;">
+        <i class="fas fa-trash-alt"></i> Delete All Results
+    </h4>
+    <p style="font-size: 0.85rem; color: #856404; margin-bottom: 0.75rem;">
+        Permanently delete all WAEC results for {{ student.full_name }} ({{ year }}). This action cannot be undone.
+    </p>
+    <form method="POST" action="{{ url_for('results.delete_waec', student_id=student.id, year=year) }}" 
+          onsubmit="return confirm('Are you sure you want to delete ALL WAEC results for this student in {{ year }}? This cannot be undone.');">
+        <button type="submit" class="btn btn-danger btn-sm">
+            <i class="fas fa-trash"></i> Delete All Results ({{ year }})
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const allSubjects = {{ subjects|tojson }};
+const grades = {{ grades|tojson }};
+
+function addSubject() {
+    const subjectSelect = document.getElementById('newSubject');
+    const gradeSelect = document.getElementById('newGrade');
+    const subject = subjectSelect.value;
+    const grade = gradeSelect.value;
+    
+    if (!subject) {
+        alert('Please select a subject');
+        return;
+    }
+    
+    const container = document.getElementById('subjectsContainer');
+    const row = document.createElement('div');
+    row.className = 'subject-row';
+    row.innerHTML = `
+        <div class="subject-name">
+            <input type="hidden" name="subject[]" value="${subject}">
+            ${subject}
+        </div>
+        <select name="grade[]" class="grade-select">
+            ${grades.map(g => `<option value="${g}" ${g === grade ? 'selected' : ''}>${g}</option>`).join('')}
+        </select>
+        <button type="button" class="remove-btn" onclick="removeSubject(this)">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    container.appendChild(row);
+    
+    // Remove from dropdown
+    subjectSelect.querySelector(`option[value="${subject}"]`).remove();
+    subjectSelect.value = '';
+}
+
+function removeSubject(btn) {
+    const row = btn.closest('.subject-row');
+    const subject = row.querySelector('input[name="subject[]"]').value;
+    
+    // Add back to dropdown
+    const select = document.getElementById('newSubject');
+    const option = document.createElement('option');
+    option.value = subject;
+    option.textContent = subject;
+    select.appendChild(option);
+    
+    row.remove();
+}
+</script>
+{% endblock %}

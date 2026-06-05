@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Add Term - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Add Term</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Add Term</h1></div>
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="form-group"><label class="form-label">Session <span class="required">*</span></label><select name="session_id" class="form-control" required><option value="">Select</option>{% for s in sessions %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Term <span class="required">*</span></label><select name="term_number" class="form-control" required><option value="">Select</option><option value="1">First Term</option><option value="2">Second Term</option><option value="3">Third Term</option></select></div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Start Date</label><input type="date" name="start_date" class="form-control"></div>
+                <div class="form-group"><label class="form-label">End Date</label><input type="date" name="end_date" class="form-control"></div>
+            </div>
+            <div class="form-check mb-3"><input type="checkbox" name="is_active" id="is_active"><label for="is_active">Set as Active</label></div>
+            <div class="page-header-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Create</button>
+                <a href="{{ url_for('academics.terms_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

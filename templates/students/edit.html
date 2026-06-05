@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ student.full_name }} - {{ app_name }}{% endblock %}
+
+{% block breadcrumb %}
+<span>Edit {{ student.first_name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Edit Student</h1>
+    <span class="badge badge-primary">{{ student.student_id }}</span>
+</div>
+
+<form method="POST" action="{{ url_for('main.edit_student', student_id=student.id) }}" data-validate>
+    <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-user"></i> Personal Information</h3></div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Surname <span class="required">*</span></label>
+                    <input type="text" name="surname" class="form-control" required value="{{ student.surname }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">First Name <span class="required">*</span></label>
+                    <input type="text" name="first_name" class="form-control" required value="{{ student.first_name }}">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Middle Name</label>
+                <input type="text" name="middle_name" class="form-control" value="{{ student.middle_name or '' }}">
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Gender <span class="required">*</span></label>
+                    <select name="gender" class="form-control" required>
+                        <option value="Male" {% if student.gender == 'Male' %}selected{% endif %}>Male</option>
+                        <option value="Female" {% if student.gender == 'Female' %}selected{% endif %}>Female</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date of Birth</label>
+                    <input type="date" name="date_of_birth" class="form-control" value="{{ student.date_of_birth.strftime('%Y-%m-%d') if student.date_of_birth else '' }}">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Religion</label>
+                <select name="religion" class="form-control">
+                    <option value="">Select</option>
+                    {% for r in religions %}
+                    <option value="{{ r }}" {% if student.religion == r %}selected{% endif %}>{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Home Address</label>
+                <textarea name="home_address" class="form-control" rows="3">{{ student.home_address or '' }}</textarea>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Hobbies</label>
+                <input type="text" name="hobbies" class="form-control" value="{{ student.hobbies or '' }}">
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-phone"></i> Contacts</h3></div>
+        <div class="card-body">
+            <div id="contactsContainer">
+                {% set contacts = student.parent_contacts.all() %}
+                {% if contacts %}
+                    {% for contact in contacts %}
+                    <div class="contact-row">
+                        <div class="form-group">
+                            <label class="form-label">Name</label>
+                            <input type="text" name="contact_name[]" class="form-control" value="{{ contact.name or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Phone <span class="required">*</span></label>
+                            <input type="tel" name="phone_number[]" class="form-control" required value="{{ contact.phone_number }}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Relationship</label>
+                            <select name="relationship[]" class="form-control">
+                                <option value="Father" {% if contact.relationship == 'Father' %}selected{% endif %}>Father</option>
+                                <option value="Mother" {% if contact.relationship == 'Mother' %}selected{% endif %}>Mother</option>
+                                <option value="Guardian" {% if contact.relationship == 'Guardian' %}selected{% endif %}>Guardian</option>
+                                <option value="Sibling" {% if contact.relationship == 'Sibling' %}selected{% endif %}>Sibling</option>
+                                <option value="Other" {% if contact.relationship == 'Other' %}selected{% endif %}>Other</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.contact-row').remove()" style="align-self: flex-end;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="contact-row">
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="contact_name[]" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone <span class="required">*</span></label>
+                        <input type="tel" name="phone_number[]" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Relationship</label>
+                        <select name="relationship[]" class="form-control">
+                            <option value="Father">Father</option>
+                            <option value="Mother">Mother</option>
+                            <option value="Guardian">Guardian</option>
+                            <option value="Sibling">Sibling</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <button type="button" id="addContactBtn" class="btn btn-secondary btn-sm">
+                <i class="fas fa-plus"></i> Add Contact
+            </button>
+        </div>
+    </div>
+    
+    <div class="page-header-actions">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="fas fa-save"></i> Save Changes
+        </button>
+        <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-lg">
+            Cancel
+        </a>
+    </div>
+</form>
+{% endblock %}

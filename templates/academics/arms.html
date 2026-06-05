@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Arms - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Arms</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Class Arms</h1></div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Add New Arm</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('academics.add_arm') }}">
+            <div class="form-group"><label class="form-label">Arm Name</label><input type="text" name="name" class="form-control" placeholder="e.g., Rose, Lily" required></div>
+            <div class="form-group"><label class="form-label">Description</label><input type="text" name="description" class="form-control" placeholder="Optional"></div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Arm</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Existing Arms</h3></div>
+    <div class="card-body" style="padding: 0;">
+        {% if arms %}
+        <div class="data-cards" style="padding: 1rem;">
+            {% for a in arms %}
+            <div class="data-card">
+                <div class="data-card-header"><div class="data-card-title">{{ a.name }}</div></div>
+                <div class="data-card-row"><span class="data-card-label">Description</span><span>{{ a.description or '-' }}</span></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><p>No arms added yet</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

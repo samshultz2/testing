@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Users - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Users</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>User Management</h1>
+    <a href="{{ url_for('settings.add_user') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add User</a>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        {% if users %}
+        <div class="data-cards" style="padding: 1rem;">
+            {% for user in users %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ user.full_name or user.username }}</div>
+                    <span class="badge {% if user.role == 'admin' %}badge-danger{% else %}badge-info{% endif %}">{{ user.role }}</span>
+                </div>
+                <div class="data-card-row"><span class="data-card-label">Username</span><span>{{ user.username }}</span></div>
+                <div class="data-card-row"><span class="data-card-label">Email</span><span>{{ user.email or '-' }}</span></div>
+                <div class="data-card-row"><span class="data-card-label">Status</span><span class="badge {% if user.is_active %}badge-success{% else %}badge-secondary{% endif %}">{% if user.is_active %}Active{% else %}Inactive{% endif %}</span></div>
+                <div class="data-card-actions">
+                    <a href="{{ url_for('settings.edit_user', user_id=user.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i> Edit</a>
+                    <form action="{{ url_for('settings.delete_user', user_id=user.id) }}" method="POST" style="flex:1;" data-confirm="Delete user {{ user.username }}?">
+                        <button type="submit" class="btn btn-danger btn-sm w-100"><i class="fas fa-trash"></i></button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-users"></i>
+            <h3>No Users</h3>
+            <p>Add your first user</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Copy Term Setup - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Copy Setup</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Copy Term Setup</h1></div>
+
+<div class="card">
+    <div class="card-header"><h3>Copy Class Assignments & Enrollments</h3></div>
+    <div class="card-body">
+        <p class="text-muted mb-3">Copy class arm assignments (and optionally student enrollments) from one term to another. This saves time when setting up a new term.</p>
+        
+        <form method="POST">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">From Term (Source) <span class="required">*</span></label>
+                    <select name="from_term_id" class="form-control" required>
+                        <option value="">Select Source Term</option>
+                        {% for term in terms %}
+                        <option value="{{ term.id }}">{{ term.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">To Term (Destination) <span class="required">*</span></label>
+                    <select name="to_term_id" class="form-control" required>
+                        <option value="">Select Destination Term</option>
+                        {% for term in terms %}
+                        <option value="{{ term.id }}" {% if term.is_active %}selected{% endif %}>{{ term.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="copy_enrollments" checked>
+                    <span>Also copy student enrollments</span>
+                </label>
+                <small class="text-muted">If checked, students enrolled in source term classes will be enrolled in destination term classes too.</small>
+            </div>
+            
+            <div class="page-header-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-copy"></i> Copy Setup</button>
+                <a href="{{ url_for('academics.assignments_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><h3>What Gets Copied</h3></div>
+    <div class="card-body">
+        <ul>
+            <li><strong>Class Arm Assignments:</strong> Which classes and arms are set up (e.g., JSS1 Iris, SSS2 Rose)</li>
+            <li><strong>Student Enrollments:</strong> Which students are in which class (optional)</li>
+        </ul>
+        <p class="text-muted"><strong>Note:</strong> Attendance, scores, and other term-specific data are NOT copied.</p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Promotion History - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>History</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Promotion History</h1></div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Session</label>
+                <select name="session_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Session</option>
+                    {% for session in sessions %}
+                    <option value="{{ session.id }}" {% if session_id == session.id %}selected{% endif %}>{{ session.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if records %}
+<div class="stats-grid mb-3">
+    <div class="stat-card">
+        <div class="stat-icon success"><i class="fas fa-arrow-up"></i></div>
+        <div class="stat-content"><h3>{{ records|selectattr('status', 'equalto', 'promoted')|list|length }}</h3><p>Promoted</p></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon warning"><i class="fas fa-redo"></i></div>
+        <div class="stat-content"><h3>{{ records|selectattr('status', 'equalto', 'repeated')|list|length }}</h3><p>Repeated</p></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon primary"><i class="fas fa-graduation-cap"></i></div>
+        <div class="stat-content"><h3>{{ records|selectattr('status', 'equalto', 'graduated')|list|length }}</h3><p>Graduated</p></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Records ({{ records|length }})</h3></div>
+    <div class="card-body" style="padding: 0;">
+        <div class="data-cards" style="padding: 1rem;">
+            {% for record in records %}
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-title">{{ record.student.full_name }}</div>
+                    <span class="badge {% if record.status == 'promoted' %}badge-success{% elif record.status == 'graduated' %}badge-primary{% elif record.status == 'repeated' %}badge-warning{% else %}badge-secondary{% endif %}">{{ record.status }}</span>
+                </div>
+                <div class="data-card-row"><span class="data-card-label">From</span><span>{{ record.from_class.name }}</span></div>
+                <div class="data-card-row"><span class="data-card-label">To</span><span>{{ record.to_class.name if record.to_class else '-' }}</span></div>
+                {% if record.stream %}
+                <div class="data-card-row"><span class="data-card-label">Stream</span><span>{{ record.stream }}</span></div>
+                {% endif %}
+                {% if record.average_score %}
+                <div class="data-card-row"><span class="data-card-label">Average</span><span>{{ record.average_score }}%</span></div>
+                {% endif %}
+                {% if record.is_manual %}
+                <div class="data-card-row"><span class="data-card-label">Type</span><span class="badge badge-info">Manual</span></div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% elif session_id %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-history"></i>
+            <h3>No Records</h3>
+            <p>No promotion records for this session</p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select a Session</h3>
+            <p>Choose a session to view promotion history</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Weekly Summary - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('attendance.index') }}">Attendance</a> / <span>Weekly</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.weekly-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -0.5rem;
+    padding: 0 0.5rem;
+}
+.weekly-table {
+    width: 100%;
+    min-width: 600px;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+.weekly-table th, .weekly-table td {
+    padding: 0.5rem;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+.weekly-table th {
+    background: var(--primary);
+    color: white;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.weekly-table th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--primary);
+}
+.weekly-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--bg-card);
+    text-align: left;
+    font-weight: 500;
+    z-index: 2;
+    min-width: 150px;
+    max-width: 200px;
+}
+.weekly-table tbody tr:nth-child(even) { background: var(--gray-50); }
+.weekly-table tbody tr:nth-child(even) td:first-child { background: var(--gray-50); }
+.weekly-table tbody tr:hover { background: rgba(13, 106, 78, 0.1); }
+.weekly-table tbody tr:hover td:first-child { background: rgba(13, 106, 78, 0.1); }
+.weekly-table tfoot { font-weight: bold; background: var(--gray-100); }
+.weekly-table tfoot td:first-child { background: var(--gray-100); }
+.att-mark { display: inline-flex; gap: 2px; font-size: 0.75rem; }
+.att-mark .present { color: var(--success); }
+.att-mark .absent { color: var(--danger); }
+.day-header { font-size: 0.7rem; line-height: 1.2; }
+.day-header .day-name { font-weight: 600; }
+.day-header .day-date { opacity: 0.8; }
+.summary-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+@media (min-width: 768px) { .summary-cards { grid-template-columns: repeat(4, 1fr); } }
+.summary-card { background: var(--bg-card); border-radius: var(--radius-md); padding: 1rem; text-align: center; border: 1px solid var(--border-color); }
+.summary-card.primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; }
+.summary-card .value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
+.summary-card .label { font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem; }
+.info-grid-compact { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+@media (min-width: 576px) { .info-grid-compact { grid-template-columns: repeat(3, 1fr); } }
+.info-item-compact { display: flex; justify-content: space-between; padding: 0.5rem 0.75rem; background: var(--gray-50); border-radius: var(--radius-sm); }
+.info-item-compact .label { color: var(--text-muted); font-size: 0.8rem; }
+.info-item-compact .value { font-weight: 600; }
+@media (max-width: 576px) { .weekly-table td:first-child { max-width: 120px; overflow: hidden; text-overflow: ellipsis; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-calendar-week"></i> Weekly Summary</h1></div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form" id="weeklyForm">
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" id="assignmentSelect" class="form-control">
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id == selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Week</label>
+                <select name="week_id" id="weekSelect" class="form-control">
+                    <option value="">Select Week</option>
+                    {% for w in weeks %}<option value="{{ w.id }}" {% if selected_week and w.id == selected_week.id %}selected{% endif %}>Week {{ w.week_number }} ({{ w.start_date.strftime('%d %b') }} - {{ w.end_date.strftime('%d %b') }})</option>{% endfor %}
+                </select>
+            </div>
+            {% if summary %}
+            <div class="form-group"><label class="form-label">&nbsp;</label><a href="{{ url_for('attendance.export_weekly', assignment_id=selected_assignment.id, week_id=selected_week.id) }}" class="btn btn-success"><i class="fas fa-download"></i> Export</a></div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('weeklyForm');
+    document.getElementById('assignmentSelect').addEventListener('change', function() { if (this.value && document.getElementById('weekSelect').value) form.submit(); });
+    document.getElementById('weekSelect').addEventListener('change', function() { if (this.value && document.getElementById('assignmentSelect').value) form.submit(); });
+});
+</script>
+
+{% if summary %}
+<div class="summary-cards">
+    <div class="summary-card primary"><div class="value">{{ summary.class_totals.weekly_percentage }}%</div><div class="label">Attendance Rate</div></div>
+    <div class="summary-card"><div class="value">{{ summary.total_students }}</div><div class="label">Students</div></div>
+    <div class="summary-card"><div class="value">{{ summary.school_days_count }}</div><div class="label">School Days</div></div>
+    <div class="summary-card"><div class="value">{{ summary.times_opened }}</div><div class="label">Roll Calls</div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-calculator"></i> Week {{ selected_week.week_number }} Totals</h3></div>
+    <div class="card-body">
+        <div class="info-grid-compact">
+            <div class="info-item-compact"><span class="label">Morning</span><span class="value">{{ summary.class_totals.total_morning }}</span></div>
+            <div class="info-item-compact"><span class="label">Afternoon</span><span class="value">{{ summary.class_totals.total_afternoon }}</span></div>
+            <div class="info-item-compact"><span class="label">Combined</span><span class="value text-primary">{{ summary.class_totals.total_attendance }}</span></div>
+            <div class="info-item-compact"><span class="label">Male</span><span class="value">{{ summary.class_totals.male_attendance }}</span></div>
+            <div class="info-item-compact"><span class="label">Female</span><span class="value">{{ summary.class_totals.female_attendance }}</span></div>
+            <div class="info-item-compact"><span class="label">Max Possible</span><span class="value">{{ summary.total_students * summary.times_opened }}</span></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-list"></i> Student Breakdown</h3></div>
+    <div class="card-body" style="padding: 0.5rem;">
+        <div class="weekly-table-wrapper">
+            <table class="weekly-table">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        {% for day in summary.school_days %}<th><div class="day-header"><div class="day-name">{{ day.strftime('%a') }}</div><div class="day-date">{{ day.strftime('%d') }}</div></div></th>{% endfor %}
+                        <th>AM</th><th>PM</th><th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in summary.students %}
+                    <tr>
+                        <td>{{ s.student_name }}<br><small class="text-muted">{{ s.gender }}</small></td>
+                        {% for d in s.daily %}<td><div class="att-mark"><span class="{% if d.morning %}present{% else %}absent{% endif %}">{{ '✓' if d.morning else '✗' }}</span><span class="{% if d.afternoon %}present{% else %}absent{% endif %}">{{ '✓' if d.afternoon else '✗' }}</span></div></td>{% endfor %}
+                        <td>{{ s.weekly_morning }}</td><td>{{ s.weekly_afternoon }}</td><td><strong>{{ s.weekly_total }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr><td>Class Total</td>{% for day in summary.school_days %}<td>-</td>{% endfor %}<td>{{ summary.class_totals.total_morning }}</td><td>{{ summary.class_totals.total_afternoon }}</td><td>{{ summary.class_totals.total_attendance }}</td></tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3"><div class="card-body"><p class="text-muted mb-0" style="font-size: 0.8rem;"><strong>Legend:</strong> <span class="text-success">✓</span> = Present, <span class="text-danger">✗</span> = Absent | <strong>AM</strong> = Morning, <strong>PM</strong> = Afternoon</p></div></div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-calendar-week"></i><h3>Select Class & Week</h3><p>Choose a class and week above</p></div></div></div>
+{% endif %}
+{% endblock %}

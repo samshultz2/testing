@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Period Count Report - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index') }}">Reports</a> / <span>Period Count</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Period Count Report</h1>
+</div>
+
+<p class="text-muted mb-3">Compare assigned periods vs required per subject for each class.</p>
+
+<div class="card">
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Class</th>
+                    {% for subject in subjects %}
+                    <th style="text-align: center; font-size: 0.8rem;">{{ subject.name[:10] }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for class_arm, subj_counts in counts.items() %}
+                <tr>
+                    <td><strong>{{ class_arm }}</strong></td>
+                    {% for subject in subjects %}
+                    {% set actual = subj_counts.get(subject.id, 0) %}
+                    {% set cfg = configs.get(subject.id) %}
+                    {% set expected = cfg.periods_per_week if cfg else 0 %}
+                    <td style="text-align: center;">
+                        {% if actual == expected %}
+                        <span class="badge badge-success">{{ actual }}</span>
+                        {% elif actual > 0 and actual < expected %}
+                        <span class="badge badge-warning" title="Expected {{ expected }}">{{ actual }}</span>
+                        {% elif actual > expected %}
+                        <span class="badge badge-info" title="Expected {{ expected }}">{{ actual }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background: var(--bg-tertiary);">
+                    <td><strong>Required</strong></td>
+                    {% for subject in subjects %}
+                    {% set cfg = configs.get(subject.id) %}
+                    <td style="text-align: center;"><strong>{{ cfg.periods_per_week if cfg else '-' }}</strong></td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><h3>Legend</h3></div>
+    <div class="card-body">
+        <span class="badge badge-success">Green</span> = Correct count &nbsp;
+        <span class="badge badge-warning">Yellow</span> = Under-assigned &nbsp;
+        <span class="badge badge-info">Blue</span> = Over-assigned &nbsp;
+        <span class="text-muted">-</span> = Not assigned
+    </div>
+</div>
+{% endblock %}

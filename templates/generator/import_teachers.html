@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Import Teachers - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.teachers_list') }}">Teachers</a> / <span>Import</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Import Teachers from CSV</h1>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Upload CSV File</h3></div>
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label class="form-label">CSV File</label>
+                <input type="file" name="file" class="form-control" accept=".csv" required>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Import</button>
+            <a href="{{ url_for('generator.teachers_list') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>CSV Format</h3></div>
+    <div class="card-body">
+        <p>Your CSV file should have these columns:</p>
+        <table class="data-table">
+            <thead>
+                <tr><th>Column</th><th>Required</th><th>Example</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>name</td><td>Yes</td><td>Mr. John Obi</td></tr>
+                <tr><td>staff_id</td><td>No</td><td>TCH001</td></tr>
+                <tr><td>phone</td><td>No</td><td>08012345678</td></tr>
+                <tr><td>email</td><td>No</td><td>john@school.com</td></tr>
+                <tr><td>max_per_day</td><td>No</td><td>6</td></tr>
+                <tr><td>max_per_week</td><td>No</td><td>30</td></tr>
+            </tbody>
+        </table>
+        <p class="mt-3"><strong>Example CSV:</strong></p>
+        <pre style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--border-radius);">name,staff_id,phone,email,max_per_day,max_per_week
+Mr. John Obi,TCH001,08012345678,john@school.com,6,30
+Mrs. Mary Ada,TCH002,08098765432,mary@school.com,5,25</pre>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Attendance - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Attendance</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Attendance</h1></div>
+<div class="stats-grid">
+    <a href="{{ url_for('attendance.mark_attendance_page') }}" class="stat-card" style="text-decoration: none;"><div class="stat-icon primary"><i class="fas fa-clipboard-check"></i></div><div class="stat-content"><h3>Mark</h3><p>Daily Attendance</p></div></a>
+    <a href="{{ url_for('attendance.daily_summary') }}" class="stat-card" style="text-decoration: none;"><div class="stat-icon info"><i class="fas fa-calendar-day"></i></div><div class="stat-content"><h3>Daily</h3><p>Summary</p></div></a>
+    <a href="{{ url_for('attendance.weekly_summary') }}" class="stat-card" style="text-decoration: none;"><div class="stat-icon success"><i class="fas fa-calendar-week"></i></div><div class="stat-content"><h3>Weekly</h3><p>Summary</p></div></a>
+    <a href="{{ url_for('attendance.termly_summary') }}" class="stat-card" style="text-decoration: none;"><div class="stat-icon secondary"><i class="fas fa-chart-bar"></i></div><div class="stat-content"><h3>Termly</h3><p>Statistics</p></div></a>
+</div>
+{% endblock %}

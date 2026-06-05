@@ -1,0 +1,342 @@
+"""
+Mock JAMB Examination Models
+Extends the existing JAMB model to support multiple mock examinations per session
+"""
+from datetime import datetime
+from models.models import db
+
+
+class MockJAMBExam(db.Model):
+    """
+    Represents a single Mock JAMB examination event.
+    Schools typically conduct 3-4 mock exams before the real JAMB.
+    """
+    __tablename__ = 'mock_jamb_exams'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    exam_number = db.Column(db.Integer, nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'), nullable=False)
+    exam_date = db.Column(db.Date, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    is_completed = db.Column(db.Boolean, default=False)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    session = db.relationship('AcademicSession', backref=db.backref('mock_jamb_exams', lazy='dynamic'))
+    results = db.relationship('MockJAMBResult', backref='exam', lazy='dynamic', cascade='all, delete-orphan')
+    
+    __table_args__ = (
+        db.UniqueConstraint('session_id', 'exam_number', name='unique_mock_exam_per_session'),
+    )
+    
+    @property
+    def display_name(self):
+        ordinals = {1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth'}
+        ordinal = ordinals.get(self.exam_number, f'{self.exam_number}th')
+        return f"{ordinal} Mock JAMB"
+    
+    @property
+    def student_count(self):
+        return self.results.count()
+    
+    @property
+    def average_score(self):
+        results = self.results.all()
+        if not results:
+            return 0
+        return sum(r.total_score for r in results) / len(results)
+
+
+class MockJAMBResult(db.Model):
+    """Individual student results for a mock JAMB examination."""
+    __tablename__ = 'mock_jamb_results'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=False)
+    total_score = db.Column(db.Integer, nullable=False)
+    subject1 = db.Column(db.String(50))
+    subject1_score = db.Column(db.Integer)
+    subject2 = db.Column(db.String(50))
+    subject2_score = db.Column(db.Integer)
+    subject3 = db.Column(db.String(50))
+    subject3_score = db.Column(db.Integer)
+    subject4 = db.Column(db.String(50))
+    subject4_score = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    student = db.relationship('Student', backref=db.backref('mock_jamb_results', lazy='dynamic'))
+    
+    __table_args__ = (
+        db.UniqueConstraint('student_id', 'mock_exam_id', name='unique_student_mock_result'),
+    )
+    
+    @property
+    def subjects_list(self):
+        subjects = []
+        if self.subject1:
+            subjects.append({'name': self.subject1, 'score': self.subject1_score or 0})
+        if self.subject2:
+            subjects.append({'name': self.subject2, 'score': self.subject2_score or 0})
+        if self.subject3:
+            subjects.append({'name': self.subject3, 'score': self.subject3_score or 0})
+        if self.subject4:
+            subjects.append({'name': self.subject4, 'score': self.subject4_score or 0})
+        return subjects
+    
+    @property
+    def performance_level(self):
+        if self.total_score >= 300:
+            return 'Excellent'
+        elif self.total_score >= 250:
+            return 'Very Good'
+        elif self.total_score >= 200:
+            return 'Good'
+        elif self.total_score >= 180:
+            return 'Fair'
+        else:
+            return 'Needs Improvement'
+    
+    @property
+    def performance_color(self):
+        colors = {
+            'Excellent': 'success',
+            'Very Good': 'info',
+            'Good': 'primary',
+            'Fair': 'warning',
+            'Needs Improvement': 'danger'
+        }
+        return colors.get(self.performance_level, 'secondary')
+
+
+class MockJAMBAnalytics:
+    """Analytics and insights for Mock JAMB examinations."""
+    
+    @staticmethod
+    def get_student_progress(student_id, session_id=None):
+        query = MockJAMBResult.query.filter_by(student_id=student_id).join(MockJAMBExam)
+        if session_id:
+            query = query.filter(MockJAMBExam.session_id == session_id)
+        results = query.order_by(MockJAMBExam.exam_number).all()
+        
+        if not results:
+            return None
+        
+        progress_data = []
+        prev_score = None
+        
+        for result in results:
+            change = None
+            if prev_score is not None:
+                change = result.total_score - prev_score
+            progress_data.append({
+                'exam': result.exam.display_name,
+                'exam_number': result.exam.exam_number,
+                'exam_date': result.exam.exam_date,
+                'score': result.total_score,
+                'change': change,
+                'subjects': result.subjects_list,
+                'performance_level': result.performance_level
+            })
+            prev_score = result.total_score
+        
+        if len(progress_data) >= 2:
+            first_score = progress_data[0]['score']
+            last_score = progress_data[-1]['score']
+            total_change = last_score - first_score
+            trend = 'improving' if total_change > 0 else 'declining' if total_change < 0 else 'stable'
+        else:
+            total_change = 0
+            trend = 'insufficient_data'
+        
+        return {
+            'student_id': student_id,
+            'progress': progress_data,
+            'total_change': total_change,
+            'trend': trend,
+            'exam_count': len(progress_data),
+            'average_score': sum(p['score'] for p in progress_data) / len(progress_data),
+            'best_score': max(p['score'] for p in progress_data),
+            'latest_score': progress_data[-1]['score'] if progress_data else 0
+        }
+    
+    @staticmethod
+    def get_exam_statistics(mock_exam_id):
+        exam = MockJAMBExam.query.get(mock_exam_id)
+        if not exam:
+            return None
+        
+        results = exam.results.all()
+        if not results:
+            return {'exam': exam, 'student_count': 0, 'statistics': None}
+        
+        scores = [r.total_score for r in results]
+        distribution = {
+            '300-400': sum(1 for s in scores if s >= 300),
+            '250-299': sum(1 for s in scores if 250 <= s < 300),
+            '200-249': sum(1 for s in scores if 200 <= s < 250),
+            '180-199': sum(1 for s in scores if 180 <= s < 200),
+            '0-179': sum(1 for s in scores if s < 180)
+        }
+        
+        subject_scores = {}
+        for result in results:
+            for subj in result.subjects_list:
+                if subj['name'] not in subject_scores:
+                    subject_scores[subj['name']] = []
+                subject_scores[subj['name']].append(subj['score'])
+        
+        subject_analysis = []
+        for subject, scores_list in subject_scores.items():
+            subject_analysis.append({
+                'subject': subject,
+                'count': len(scores_list),
+                'average': sum(scores_list) / len(scores_list),
+                'max': max(scores_list),
+                'min': min(scores_list),
+                'above_50': sum(1 for s in scores_list if s >= 50),
+                'above_70': sum(1 for s in scores_list if s >= 70)
+            })
+        
+        return {
+            'exam': exam,
+            'student_count': len(results),
+            'statistics': {
+                'average': sum(scores) / len(scores),
+                'max': max(scores),
+                'min': min(scores),
+                'median': sorted(scores)[len(scores) // 2],
+                'above_200': sum(1 for s in scores if s >= 200),
+                'above_250': sum(1 for s in scores if s >= 250),
+                'above_300': sum(1 for s in scores if s >= 300)
+            },
+            'distribution': distribution,
+            'subject_analysis': sorted(subject_analysis, key=lambda x: x['average'], reverse=True),
+            'top_performers': sorted(results, key=lambda r: r.total_score, reverse=True)[:10]
+        }
+    
+    @staticmethod
+    def compare_mock_exams(session_id):
+        exams = MockJAMBExam.query.filter_by(session_id=session_id).order_by(MockJAMBExam.exam_number).all()
+        comparison = []
+        for exam in exams:
+            results = exam.results.all()
+            if results:
+                scores = [r.total_score for r in results]
+                comparison.append({
+                    'exam': exam,
+                    'exam_number': exam.exam_number,
+                    'student_count': len(results),
+                    'average': sum(scores) / len(scores),
+                    'max': max(scores),
+                    'min': min(scores),
+                    'above_200': sum(1 for s in scores if s >= 200),
+                    'above_250_pct': round(sum(1 for s in scores if s >= 250) / len(scores) * 100, 1)
+                })
+        return comparison
+    
+    @staticmethod
+    def predict_real_jamb(student_id, session_id):
+        progress = MockJAMBAnalytics.get_student_progress(student_id, session_id)
+        if not progress or progress['exam_count'] < 2:
+            return None
+
+        # Recent exams are weighted more heavily than earlier ones.
+        weights = [(i + 1, p['score']) for i, p in enumerate(progress['progress'])]
+        total_weight = sum(w[0] for w in weights)
+        predicted_score = sum(w[0] * w[1] for w in weights) / total_weight
+
+        total_change = progress['total_change']
+        if progress['trend'] == 'improving':
+            predicted_score += min(10, total_change * 0.2)
+        elif progress['trend'] == 'declining':
+            predicted_score -= min(10, abs(total_change) * 0.1)
+
+        predicted_score = max(0, min(400, round(predicted_score)))
+
+        # Spread of recent scores feeds both the confidence level and the range.
+        scores = [p['score'] for p in progress['progress']]
+        spread = max(scores) - min(scores)
+        margin = max(15, min(40, round(spread / 2) + 10))
+        low = max(0, predicted_score - margin)
+        high = min(400, predicted_score + margin)
+
+        exam_count = progress['exam_count']
+        confidence_level = min(95, 60 + exam_count * 8 - min(20, spread // 5))
+        confidence_label = 'high' if exam_count >= 3 and spread < 50 else \
+            'medium' if exam_count >= 2 else 'low'
+
+        if progress['trend'] == 'improving':
+            recommendation = (
+                f"Scores are trending up (+{total_change}). Keep the current "
+                f"study routine; a real JAMB score near {high} is within reach."
+            )
+        elif progress['trend'] == 'declining':
+            recommendation = (
+                f"Scores have slipped ({total_change}). Review weak subjects "
+                f"now to recover before the real exam."
+            )
+        else:
+            recommendation = (
+                "Scores are stable. Targeting weaker subjects could push the "
+                f"prediction above {predicted_score}."
+            )
+
+        return {
+            'predicted_score': predicted_score,
+            # Keys consumed by templates.
+            'predicted_range': {'low': low, 'high': high},
+            'improvement_trend': total_change,
+            'confidence_level': confidence_level,
+            'mock_count': exam_count,
+            'recommendation': recommendation,
+            # Legacy keys kept for backwards compatibility (API/older callers).
+            'confidence': confidence_label,
+            'based_on_exams': exam_count,
+            'trend': progress['trend'],
+            'range': {'low': low, 'high': high},
+        }
+    
+    @staticmethod
+    def get_improvement_recommendations(student_id, session_id):
+        results = MockJAMBResult.query.filter_by(student_id=student_id).join(MockJAMBExam).filter(
+            MockJAMBExam.session_id == session_id
+        ).order_by(MockJAMBExam.exam_number.desc()).first()
+        
+        if not results:
+            return None
+        
+        recommendations = []
+        for subj in results.subjects_list:
+            score = subj['score']
+            subject = subj['name']
+            
+            if score < 40:
+                priority = 'critical'
+                rec = f'Focus heavily on {subject}. Consider extra tutoring.'
+            elif score < 50:
+                priority = 'high'
+                rec = f'{subject} needs significant improvement. Review fundamentals.'
+            elif score < 60:
+                priority = 'medium'
+                rec = f'{subject} is fair but can improve. Focus on weak topics.'
+            elif score < 75:
+                priority = 'low'
+                rec = f'{subject} is good. Target challenging questions.'
+            else:
+                priority = 'none'
+                rec = f'Excellent in {subject}. Keep it up!'
+            
+            recommendations.append({
+                'subject': subject,
+                'score': score,
+                'priority': priority,
+                'recommendation': rec
+            })
+        
+        priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'none': 4}
+        recommendations.sort(key=lambda x: priority_order[x['priority']])
+        return recommendations

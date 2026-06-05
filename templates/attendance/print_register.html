@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Attendance Register - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Print Register</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    body { font-size: 10pt; }
+    .register-table { width: 100%; border-collapse: collapse; }
+    .register-table th, .register-table td { 
+        border: 1px solid #000; 
+        padding: 4px 6px; 
+        text-align: center;
+        font-size: 9pt;
+    }
+    .register-table th { background: #f0f0f0 !important; }
+    .register-table .student-name { text-align: left; white-space: nowrap; }
+    .day-header { writing-mode: vertical-rl; text-orientation: mixed; height: 60px; }
+    .signature-area { margin-top: 2rem; display: flex; justify-content: space-between; }
+    .signature-box { width: 45%; }
+    .signature-line { border-top: 1px solid #000; margin-top: 40px; padding-top: 5px; }
+}
+
+.register-container { max-width: 100%; overflow-x: auto; }
+.register-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.register-table th, .register-table td { 
+    border: 1px solid var(--border-color); 
+    padding: 0.5rem; 
+    text-align: center;
+}
+.register-table th { background: var(--bg-tertiary); font-weight: 600; }
+.register-table .student-name { text-align: left; white-space: nowrap; min-width: 150px; }
+.day-col { width: 30px; }
+.attendance-cell { width: 25px; height: 25px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+    <h1>Print Attendance Register</h1>
+    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+</div>
+
+<div class="card mb-3 no-print">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}
+                    <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Week</label>
+                <select name="week_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Week</option>
+                    {% for week in weeks %}
+                    <option value="{{ week.id }}" {% if week_id == week.id %}selected{% endif %}>Week {{ week.week_number }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if register_data %}
+<div class="card">
+    <div class="card-body">
+        <div class="print-header print-only">
+            <h1>{{ school_name }}</h1>
+            <p>Weekly Attendance Register</p>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 1rem;">
+            <h3>{{ selected_assignment.display_name }} - Week {{ selected_week.week_number }}</h3>
+            <p>{{ selected_week.start_date.strftime('%d %b %Y') }} - {{ selected_week.end_date.strftime('%d %b %Y') }}</p>
+        </div>
+        
+        <div class="register-container">
+            <table class="register-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2">S/N</th>
+                        <th rowspan="2" class="student-name">Student Name</th>
+                        {% for day in school_days %}
+                        <th colspan="2" class="day-col">{{ day.strftime('%a') }}<br>{{ day.strftime('%d') }}</th>
+                        {% endfor %}
+                        <th rowspan="2">Total</th>
+                    </tr>
+                    <tr>
+                        {% for day in school_days %}
+                        <th title="Morning">M</th>
+                        <th title="Afternoon">A</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in register_data %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td class="student-name">{{ row.student.full_name }}</td>
+                        {% for day in school_days %}
+                        {% set att = row.attendance.get(day.isoformat(), {}) %}
+                        <td>{% if att.morning_present %}✓{% elif att.morning_present == false %}✗{% else %}-{% endif %}</td>
+                        <td>{% if att.afternoon_present %}✓{% elif att.afternoon_present == false %}✗{% else %}-{% endif %}</td>
+                        {% endfor %}
+                        <td><strong>{{ row.total_present }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="signature-area" style="display: flex; justify-content: space-between; margin-top: 2rem;">
+            <div style="width: 45%;">
+                <div style="border-top: 1px solid var(--border-color); margin-top: 40px; padding-top: 5px; text-align: center;">
+                    Class Teacher's Signature
+                </div>
+            </div>
+            <div style="width: 45%;">
+                <div style="border-top: 1px solid var(--border-color); margin-top: 40px; padding-top: 5px; text-align: center;">
+                    Date
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% elif selected_term %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select Class & Week</h3>
+            <p>Choose a class and week to generate the register</p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-print"></i>
+            <h3>Print Attendance Register</h3>
+            <p>Select term, class, and week to generate a printable attendance register</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
