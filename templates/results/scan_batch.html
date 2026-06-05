@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% set label = 'JAMB' if exam == 'jamb' else 'WAEC' %}
+{% block title %}Batch Scan {{ label }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Batch Scan {{ label }}</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.scan-card{max-width:640px}
+.dropzone{border:2px dashed var(--border-color);border-radius:var(--radius-lg);padding:2rem 1rem;text-align:center;cursor:pointer}
+.dropzone:hover,.dropzone.drag{border-color:var(--primary);background:var(--primary-light)}
+.dropzone i{font-size:2.5rem;color:var(--primary);margin-bottom:.5rem}
+#fileList{margin-top:.75rem;font-size:.82rem;text-align:left}
+#fileList div{padding:.2rem 0;border-bottom:1px solid var(--border-light)}
+.tabs{display:flex;gap:.4rem;margin-bottom:1rem}
+.tabs a{padding:.35rem .9rem;border:1px solid var(--border-color);border-radius:var(--radius-full);text-decoration:none;color:var(--text-secondary);font-size:.85rem}
+.tabs a.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div><h1>Batch Scan {{ label }}</h1><p class="text-muted text-sm">Upload several result images/PDFs at once — each is matched to a student for you to confirm.</p></div>
+</div>
+
+<div class="tabs">
+    <a href="{{ url_for('results.scan_batch', exam='waec') }}" class="{% if exam=='waec' %}active{% endif %}">WAEC</a>
+    <a href="{{ url_for('results.scan_batch', exam='jamb') }}" class="{% if exam=='jamb' %}active{% endif %}">JAMB</a>
+</div>
+
+<div class="card scan-card"><div class="card-body">
+    <form method="POST" enctype="multipart/form-data" id="batchForm">
+        <input type="hidden" name="exam" value="{{ exam }}">
+        <label class="dropzone" id="dropzone" for="files">
+            <i class="fas fa-layer-group"></i>
+            <div><strong>Tap to choose multiple</strong> images/PDFs</div>
+            <div class="text-muted" style="font-size:.8rem;margin-top:.3rem;">Each file = one student's result</div>
+            <div id="fileList"></div>
+        </label>
+        <input type="file" name="result_images" id="files" accept="image/*,application/pdf" multiple hidden required>
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary btn-lg" id="goBtn"><i class="fas fa-magnifying-glass"></i> Read All</button>
+            <a href="{{ url_for('results.waec_list' if exam=='waec' else 'results.jamb_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
+        </div>
+    </form>
+</div></div>
+
+<script>
+(function () {
+    var input = document.getElementById('files');
+    var list = document.getElementById('fileList');
+    var dz = document.getElementById('dropzone');
+    input.addEventListener('change', function () {
+        list.innerHTML = '';
+        Array.prototype.forEach.call(input.files, function (f) {
+            var d = document.createElement('div');
+            d.innerHTML = '<i class="fas fa-file"></i> ' + f.name;
+            list.appendChild(d);
+        });
+    });
+    ['dragover','dragenter'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.add('drag');}));
+    ['dragleave','drop'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.remove('drag');}));
+    dz.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length){ input.files=ev.dataTransfer.files; input.dispatchEvent(new Event('change')); }});
+    document.getElementById('batchForm').addEventListener('submit',function(){
+        var b=document.getElementById('goBtn'); b.disabled=true; b.innerHTML='<i class="fas fa-spinner fa-spin"></i> Reading…';
+    });
+})();
+</script>
+{% endblock %}

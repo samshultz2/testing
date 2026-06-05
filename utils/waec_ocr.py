@@ -137,6 +137,30 @@ def pdf_first_page_png(pdf_bytes):
         doc.close()
 
 
+def _expand_inline(lines):
+    """Split comma/semicolon separated fragments into their own lines so inline
+    SMS-style results ("ENG C6, MAT B3, BIO A1") parse like a table."""
+    out = []
+    for line in lines:
+        for part in re.split(r'[;,]', line):
+            part = part.strip(' -\t')
+            if part:
+                out.append(part)
+    return out
+
+
+def _match_subject_or_code(text):
+    """Match a subject by name, then by a short abbreviation code."""
+    subject = _match_subject(text)
+    if subject:
+        return subject
+    for token in re.findall(r'\b([A-Za-z]{2,12})\b', text):
+        key = token.upper()
+        if key in _JAMB_CODES:
+            return _JAMB_CODES[key]
+    return None
+
+
 def _match_subject(text):
     """Fuzzy-match a fragment of OCR text to a known WAEC subject name."""
     cleaned = re.sub(r'[^A-Za-z ]', ' ', text).strip().lower()
@@ -216,13 +240,14 @@ def parse_waec_result(text):
     """
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-    # Classify each line: which known subject (if any) and which grade (if any).
+    # Classify each fragment: which known subject (if any) and grade (if any).
+    # Inline "ENG C6, MAT B3" fragments are split out first.
     classified = []
-    for line in lines:
+    for line in _expand_inline(lines):
         grades = _grades_in(line)
         grade = grades[-1][1] if grades else None       # right-most = grade column
         before = line[:grades[-1][0]] if grades else line
-        subject = _match_subject(before) or _match_subject(line)
+        subject = _match_subject_or_code(before) or _match_subject_or_code(line)
         classified.append({'subject': subject, 'grade': grade, 'line': line})
 
     results = []

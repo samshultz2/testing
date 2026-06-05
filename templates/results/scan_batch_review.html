@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% set label = 'JAMB' if exam == 'jamb' else 'WAEC' %}
+{% block title %}Confirm Batch {{ label }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.scan_batch', exam=exam) }}">Batch Scan</a> / <span>Confirm</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.batch-row{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.85rem;margin-bottom:.75rem;display:grid;grid-template-columns:1fr;gap:.5rem}
+@media(min-width:768px){.batch-row{grid-template-columns:24px 1.4fr 1fr 90px}}
+.batch-row.err{background:var(--danger-light)}
+.read-summary{font-size:.8rem;color:var(--text-secondary)}
+.fname{font-size:.72rem;color:var(--text-muted)}
+.conf{font-size:.72rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div><h1>Confirm Batch {{ label }}</h1><p class="text-muted text-sm">Check each match, untick any to skip, then save.</p></div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.scan_batch', exam=exam) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Rescan</a>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('results.scan_batch') }}">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="exam" value="{{ exam }}">
+    <input type="hidden" name="count" value="{{ items|length }}">
+
+    {% for it in items %}
+    <div class="batch-row {% if it.error %}err{% endif %}">
+        {% if it.error %}
+        <div></div>
+        <div><div class="fname">{{ it.filename }}</div><span class="text-danger">{{ it.error }}</span></div>
+        <div></div><div></div>
+        {% else %}
+        <div><input type="checkbox" name="include_{{ loop.index0 }}" value="1" checked></div>
+        <div>
+            <div class="fname">{{ it.filename }}</div>
+            <select name="student_id_{{ loop.index0 }}" class="form-control">
+                <option value="">Select Student</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {% if it.matched_id == s.id %}selected{% endif %}>{{ s.full_name }} ({{ s.student_id }})</option>
+                {% endfor %}
+            </select>
+            <div class="conf">Read name: <strong>{{ it.parsed.name or '—' }}</strong>{% if it.matched_id %} · match {{ (it.score*100)|round|int }}%{% else %} · <span class="text-danger">no match — pick manually</span>{% endif %}</div>
+        </div>
+        <div class="read-summary">
+            {% if exam == 'jamb' %}
+            Total {{ it.parsed.total_score or '—' }} ·
+            {% for r in it.parsed.subjects %}{{ r.subject[:10] }} {{ r.score }}{% if not loop.last %}, {% endif %}{% endfor %}
+            {% else %}
+            {% for r in it.parsed.subjects %}{{ r.subject[:12] }} {{ r.grade }}{% if not loop.last %}, {% endif %}{% endfor %}
+            {% if not it.parsed.subjects %}<span class="text-danger">no subjects read</span>{% endif %}
+            {% endif %}
+        </div>
+        <div>
+            <input type="number" name="year_{{ loop.index0 }}" class="form-control" value="{{ it.parsed.year or current_year }}" min="2000" max="2100" title="Year">
+        </div>
+        <input type="hidden" name="data_{{ loop.index0 }}" value="{{ it.data_json }}">
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="page-header-actions mt-3">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Selected</button>
+        <a href="{{ url_for('results.scan_batch', exam=exam) }}" class="btn btn-secondary btn-lg">Cancel</a>
+    </div>
+</form>
+{% endblock %}

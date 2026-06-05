@@ -4,7 +4,7 @@ Comprehensive academic performance tracking and analysis
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from collections import defaultdict
-from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm
+from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm, AcademicSession
 from utils.access_control import login_required
 from utils.helpers import (
     WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, FlashMessages,
@@ -725,6 +725,97 @@ def scan_jamb():
     )
 
 
+def _read_uploaded_text(file):
+    """Return OCR/PDF text + a flag for whether the upload was usable."""
+    from utils.waec_ocr import (tesseract_available, extract_text, pdf_available, extract_text_from_pdf)
+    filename = (file.filename or '').lower()
+    data = file.read()
+    if (file.mimetype == 'application/pdf') or filename.endswith('.pdf'):
+        if not pdf_available():
+            return None
+        return extract_text_from_pdf(data)
+    if not tesseract_available():
+        return None
+    return extract_text(data)
+
+
+@results_bp.route('/scan/batch', methods=['GET', 'POST'])
+@login_required
+def scan_batch():
+    """Batch-scan several WAEC or JAMB results, each routed to its student."""
+    from utils.waec_ocr import parse_waec_result, parse_jamb_result, match_student
+    import json
+
+    students = get_sss3_students()
+    exam = request.values.get('exam', 'waec')
+    exam = 'jamb' if exam == 'jamb' else 'waec'
+
+    if request.method == 'POST' and request.form.get('action') == 'save':
+        count = int(request.form.get('count', 0))
+        saved = 0
+        for i in range(count):
+            if not request.form.get(f'include_{i}'):
+                continue
+            student_id = request.form.get(f'student_id_{i}', type=int)
+            year = request.form.get(f'year_{i}', type=int)
+            if not student_id or not year:
+                continue
+            data = json.loads(request.form.get(f'data_{i}', '{}'))
+            if exam == 'waec':
+                for row in data.get('subjects', []):
+                    if not row.get('subject') or not row.get('grade'):
+                        continue
+                    existing = WAECResult.query.filter_by(student_id=student_id, exam_year=year, subject=row['subject']).first()
+                    if existing:
+                        existing.grade = row['grade']
+                    else:
+                        db.session.add(WAECResult(student_id=student_id, exam_year=year, subject=row['subject'], grade=row['grade']))
+                saved += 1
+            else:
+                subs = data.get('subjects', [])[:4]
+                total = data.get('total_score') or sum(r.get('score', 0) for r in subs)
+                existing = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first()
+                target = existing or JAMBResult(student_id=student_id, exam_year=year, total_score=total)
+                target.total_score = total
+                for n, row in enumerate(subs, 1):
+                    setattr(target, f'subject{n}', row.get('subject'))
+                    setattr(target, f'subject{n}_score', row.get('score'))
+                if not existing:
+                    db.session.add(target)
+                saved += 1
+        db.session.commit()
+        flash(f'Saved {saved} {exam.upper()} result(s) from batch scan.', 'success')
+        return redirect(url_for('results.waec_list' if exam == 'waec' else 'results.jamb_list'))
+
+    if request.method == 'POST':
+        files = request.files.getlist('result_images')
+        items = []
+        for f in files:
+            if not f or not f.filename:
+                continue
+            try:
+                text = _read_uploaded_text(f)
+            except Exception:
+                text = None
+            if text is None:
+                items.append({'filename': f.filename, 'error': 'Unreadable / engine missing', 'data': {}})
+                continue
+            parsed = parse_jamb_result(text) if exam == 'jamb' else parse_waec_result(text)
+            matched, score = match_student(parsed.get('name'), students)
+            items.append({
+                'filename': f.filename,
+                'parsed': parsed,
+                'matched_id': matched.id if matched else None,
+                'matched_name': matched.full_name if matched else None,
+                'score': score,
+                'data_json': json.dumps(parsed),
+            })
+        return render_template('results/scan_batch_review.html',
+            exam=exam, items=items, students=students, current_year=_date.today().year)
+
+    return render_template('results/scan_batch.html', exam=exam)
+
+
 @results_bp.route('/jamb/student/<int:student_id>')
 @login_required
 def view_jamb_student(student_id):
@@ -776,6 +867,64 @@ def subject_enrolment():
         jamb_enrolled=jamb_enrolled,
         student_count=len(students),
         only_sss3=only_sss3
+    )
+
+
+@results_bp.route('/student/<int:student_id>/report')
+@login_required
+def student_report(student_id):
+    """A consolidated, print/PDF-ready exam report for one student."""
+    from models.mock_jamb import MockJAMBResult, MockJAMBExam, MockJAMBAnalytics
+
+    student = Student.query.get_or_404(student_id)
+    pass_grades = set(AcademicAnalytics.PASS_GRADES)
+    distinction_grades = set(AcademicAnalytics.DISTINCTION_GRADES)
+
+    # WAEC grouped by year with summary counts.
+    waec = student.waec_results.order_by(WAECResult.exam_year.desc(), WAECResult.subject).all()
+    waec_by_year = {}
+    for r in waec:
+        y = waec_by_year.setdefault(r.exam_year, {'rows': [], 'credits': 0, 'distinctions': 0})
+        y['rows'].append(r)
+        if r.grade in pass_grades:
+            y['credits'] += 1
+        if r.grade in distinction_grades:
+            y['distinctions'] += 1
+    waec_years = sorted(waec_by_year.items(), reverse=True)
+
+    # JAMB results (most recent first), with subject breakdown.
+    jamb = student.jamb_results.order_by(JAMBResult.exam_year.desc()).all()
+    jamb_list = []
+    for r in jamb:
+        subs = []
+        for n, sc in [(r.subject1, r.subject1_score), (r.subject2, r.subject2_score),
+                      (r.subject3, r.subject3_score), (r.subject4, r.subject4_score)]:
+            if n:
+                subs.append({'subject': n, 'score': sc or 0})
+        jamb_list.append({'year': r.exam_year, 'total': r.total_score, 'subjects': subs,
+                          'level': AcademicAnalytics._jamb_performance_level(r.total_score)})
+
+    # Mock JAMB progression + prediction (active session).
+    mock_rows = MockJAMBResult.query.filter_by(student_id=student_id).join(MockJAMBExam).order_by(
+        MockJAMBExam.exam_number).all()
+    mock_progress = [{'name': m.exam.display_name, 'date': m.exam.exam_date, 'score': m.total_score}
+                     for m in mock_rows]
+    prediction = None
+    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    if active_session:
+        prediction = MockJAMBAnalytics.predict_real_jamb(student_id, active_session.id)
+
+    from utils.admission import assess_admission
+    admission = assess_admission(student)
+
+    return render_template('results/student_report.html',
+        student=student,
+        waec_years=waec_years,
+        jamb_list=jamb_list,
+        mock_progress=mock_progress,
+        prediction=prediction,
+        admission=admission,
+        generated=_date.today()
     )
 
 

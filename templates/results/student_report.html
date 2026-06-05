@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}{{ student.full_name }} — Exam Report{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.view_student', student_id=student.id) }}">{{ student.first_name }}</a> / <span>Exam Report</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.report{max-width:880px;margin:0 auto}
+.report-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;border-bottom:2px solid var(--primary);padding-bottom:.75rem;margin-bottom:1rem;flex-wrap:wrap}
+.report-head h1{margin:0;font-size:1.4rem}
+.report-head .meta{font-size:.85rem;color:var(--text-muted)}
+.rsection{margin:1.25rem 0}
+.rsection h2{font-size:1rem;border-left:4px solid var(--primary);padding-left:.5rem;margin-bottom:.6rem}
+.rtable{width:100%;border-collapse:collapse;font-size:.85rem}
+.rtable th,.rtable td{padding:.4rem .55rem;border:1px solid var(--border-color);text-align:left}
+.rtable th{background:var(--gray-50)}
+.pill{display:inline-block;padding:.1rem .5rem;border-radius:var(--radius-full);font-size:.75rem;font-weight:600}
+.g-dist{background:#d4edda;color:#155724}.g-credit{background:#cce5ff;color:#004085}.g-fail{background:#f8d7da;color:#721c24}
+.summary-chips{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem}
+.chip{background:var(--gray-50);border:1px solid var(--border-color);border-radius:var(--radius-full);padding:.15rem .6rem;font-size:.78rem}
+.pred{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:var(--radius-md);padding:1rem;text-align:center}
+.pred .big{font-size:2rem;font-weight:700}
+.muted{color:var(--text-muted)}
+@media print{
+    .no-print{display:none !important}
+    .app-container,.main-content,.page-content{display:block !important}
+    .sidebar,.top-header{display:none !important}
+    .report{max-width:100%}
+    a[href]:after{content:""}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+    <div><h1>Exam Report</h1><p class="text-muted text-sm">Consolidated WAEC, JAMB and Mock JAMB record</p></div>
+    <div class="page-header-actions">
+        <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Print / Save PDF</button>
+        <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="report">
+    <div class="report-head">
+        <div>
+            <h1>{{ student.full_name }}</h1>
+            <div class="meta">
+                {{ student.student_id }}{% if student.gender %} · {{ student.gender }}{% endif %}{% if student.stream %} · {{ student.stream }}{% endif %}
+                {% if student.is_graduated %} · Graduate{% endif %}
+            </div>
+        </div>
+        <div class="meta">Generated {{ generated.strftime('%d %b %Y') }}</div>
+    </div>
+
+    <!-- WAEC -->
+    <div class="rsection">
+        <h2><i class="fas fa-file-alt"></i> WAEC</h2>
+        {% if waec_years %}
+        {% for year, data in waec_years %}
+        <div style="margin-bottom:.75rem;">
+            <strong>{{ year }}</strong>
+            <div class="summary-chips">
+                <span class="chip">{{ data.rows|length }} subjects</span>
+                <span class="chip">{{ data.credits }} credits</span>
+                <span class="chip">{{ data.distinctions }} distinctions</span>
+            </div>
+            <table class="rtable" style="margin-top:.4rem;">
+                <thead><tr><th>Subject</th><th style="width:90px;">Grade</th></tr></thead>
+                <tbody>
+                {% for r in data.rows %}
+                <tr>
+                    <td>{{ r.subject }}</td>
+                    <td><span class="pill {% if r.grade in ['A1','B2','B3'] %}g-dist{% elif r.grade in ['C4','C5','C6'] %}g-credit{% else %}g-fail{% endif %}">{{ r.grade }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        {% else %}<p class="muted">No WAEC results recorded.</p>{% endif %}
+    </div>
+
+    <!-- JAMB -->
+    <div class="rsection">
+        <h2><i class="fas fa-file-contract"></i> JAMB</h2>
+        {% if jamb_list %}
+        {% for j in jamb_list %}
+        <div style="margin-bottom:.6rem;">
+            <strong>{{ j.year }}</strong> — Total <strong>{{ j.total }}</strong>/400 <span class="muted">({{ j.level|replace('_',' ') }})</span>
+            {% if j.subjects %}
+            <table class="rtable" style="margin-top:.3rem;">
+                <thead><tr><th>Subject</th><th style="width:90px;">Score</th></tr></thead>
+                <tbody>{% for s in j.subjects %}<tr><td>{{ s.subject }}</td><td>{{ s.score }}/100</td></tr>{% endfor %}</tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}<p class="muted">No JAMB results recorded.</p>{% endif %}
+    </div>
+
+    <!-- Mock JAMB + prediction -->
+    <div class="rsection">
+        <h2><i class="fas fa-clipboard-list"></i> Mock JAMB</h2>
+        {% if mock_progress %}
+        <table class="rtable">
+            <thead><tr><th>Exam</th><th>Date</th><th style="width:90px;">Score</th></tr></thead>
+            <tbody>
+            {% for m in mock_progress %}
+            <tr><td>{{ m.name }}</td><td>{{ m.date.strftime('%d %b %Y') if m.date else '' }}</td><td><strong>{{ m.score }}</strong>/400</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}<p class="muted">No mock exams taken.</p>{% endif %}
+
+        {% if prediction %}
+        <div class="pred" style="margin-top:.75rem;">
+            <div style="font-size:.85rem;opacity:.9;">Predicted real JAMB score</div>
+            <div class="big">{{ prediction.predicted_score }}</div>
+            <div style="font-size:.85rem;opacity:.9;">Expected range {{ prediction.predicted_range.low }}–{{ prediction.predicted_range.high }} · {{ prediction.confidence_level }}% confidence</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Admission readiness -->
+    <div class="rsection">
+        <h2><i class="fas fa-graduation-cap"></i> Admission Readiness <span class="muted" style="font-size:.75rem;font-weight:400;">(guidance only)</span></h2>
+        <div class="summary-chips" style="margin-bottom:.5rem;">
+            <span class="chip">Best JAMB: <strong>{{ admission.jamb_best }}</strong> — {{ admission.jamb_band }}</span>
+            <span class="chip">SSC credits: <strong>{{ admission.credit_count }}</strong></span>
+            <span class="chip">English: {{ 'Yes' if admission.has_english else 'No' }}</span>
+            <span class="chip">Maths: {{ 'Yes' if admission.has_maths else 'No' }}</span>
+            <span class="chip">{{ 'Meets 5-credit baseline' if admission.meets_ssc else 'Baseline not met' }}</span>
+        </div>
+        <table class="rtable">
+            <thead><tr><th>Course category</th><th style="width:110px;">JAMB ≥</th><th>Status</th></tr></thead>
+            <tbody>
+            {% for c in admission.categories %}
+            <tr>
+                <td>{{ c.name }}</td>
+                <td>{{ c.jamb_required }}</td>
+                <td>
+                    {% if c.eligible %}
+                        <span class="pill g-dist">Eligible</span>
+                    {% else %}
+                        <span class="pill g-fail">Not yet</span>
+                        <span class="muted" style="font-size:.72rem;">
+                        {%- if not admission.meets_ssc %} need 5 credits incl. Eng & Maths{% elif c.missing %} need credit in {{ c.missing|join(', ') }}{% elif not c.jamb_ok %} JAMB below {{ c.jamb_required }}{% endif -%}
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

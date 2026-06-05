@@ -22,6 +22,7 @@
         <p class="text-muted text-sm">Upload a photo/scan/PDF of a JAMB result — we read the name, subjects, scores and total for you to review.</p>
     </div>
     <div class="page-header-actions">
+        <a href="{{ url_for('results.scan_batch', exam='jamb') }}" class="btn btn-info btn-sm"><i class="fas fa-layer-group"></i> Batch</a>
         <a href="{{ url_for('results.add_jamb') }}" class="btn btn-secondary btn-sm"><i class="fas fa-keyboard"></i> Enter manually</a>
     </div>
 </div>

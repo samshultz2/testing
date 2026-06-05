@@ -23,6 +23,9 @@
             <button type="submit" class="btn btn-success"><i class="fas fa-user-graduate"></i> Mark as Graduate</button>
         </form>
         {% endif %}
+        <a href="{{ url_for('results.student_report', student_id=student.id) }}" class="btn btn-info">
+            <i class="fas fa-file-pdf"></i> Exam Report
+        </a>
         <a href="{{ url_for('results.student_predictions', student_id=student.id) }}" class="btn btn-info">
             <i class="fas fa-chart-line"></i> Predictions
         </a>
