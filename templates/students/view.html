@@ -60,6 +60,14 @@
                 <span class="text-muted">Hobbies</span>
                 <strong>{{ student.hobbies or 'Not set' }}</strong>
             </div>
+            <div class="info-row">
+                <span class="text-muted">WAEC Subjects</span>
+                <strong>{{ student.waec_subject_list|join(', ') if student.waec_subject_list else 'Not set' }}</strong>
+            </div>
+            <div class="info-row">
+                <span class="text-muted">JAMB Subjects</span>
+                <strong>{{ student.jamb_subject_list|join(', ') if student.jamb_subject_list else 'Not set' }}</strong>
+            </div>
         </div>
     </div>
 </div>

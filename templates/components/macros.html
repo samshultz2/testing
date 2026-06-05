@@ -167,3 +167,57 @@
 {% macro csrf_input() %}
 <!-- CSRF disabled -->
 {% endmacro %}
+
+{# Optional WAEC / JAMB exam enrolment picker for the student add/edit forms.
+   Stored subjects auto-populate the result-entry pages later. #}
+{% macro exam_subjects_card(all_subjects, selected_waec=[], selected_jamb=[]) %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-file-signature"></i> External Exam Subjects <span class="text-muted" style="font-weight:400;font-size:0.8rem;">(optional)</span></h3>
+    </div>
+    <div class="card-body">
+        <p class="text-muted text-sm mb-3">
+            Select the subjects this student is registered for. These pre-fill the
+            WAEC and JAMB result-entry pages. You can skip this and set it later.
+        </p>
+
+        <div class="exam-subjects-group">
+            <div class="exam-subjects-head">
+                <strong><i class="fas fa-file-alt"></i> WAEC Subjects</strong>
+                <a href="#" class="exam-subjects-clear" data-target="waec">Clear</a>
+            </div>
+            <div class="subject-checks" data-group="waec">
+                {% for subj in all_subjects %}
+                <label class="subject-check">
+                    <input type="checkbox" name="waec_subjects[]" value="{{ subj }}" {% if subj in selected_waec %}checked{% endif %}>
+                    <span>{{ subj }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="exam-subjects-group mt-3">
+            <div class="exam-subjects-head">
+                <strong><i class="fas fa-file-contract"></i> JAMB Subjects</strong>
+                <a href="#" class="exam-subjects-clear" data-target="jamb">Clear</a>
+            </div>
+            <div class="subject-checks" data-group="jamb">
+                {% for subj in all_subjects %}
+                <label class="subject-check">
+                    <input type="checkbox" name="jamb_subjects[]" value="{{ subj }}" {% if subj in selected_jamb %}checked{% endif %}>
+                    <span>{{ subj }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.querySelectorAll('.exam-subjects-clear').forEach(function (link) {
+    link.addEventListener('click', function (e) {
+        e.preventDefault();
+        document.querySelectorAll('.subject-checks[data-group="' + link.dataset.target + '"] input').forEach(function (cb) { cb.checked = false; });
+    });
+});
+</script>
+{% endmacro %}

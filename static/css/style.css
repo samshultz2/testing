@@ -2134,3 +2134,28 @@ input:focus, select:focus, textarea:focus {
 @media (prefers-reduced-motion: reduce) {
     * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* Exam-subject enrolment picker (student add/edit) */
+.exam-subjects-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; }
+.exam-subjects-clear { font-size:0.75rem; color:var(--danger); text-decoration:none; }
+.exam-subjects-clear:hover { text-decoration:underline; }
+.subject-checks {
+    display:grid;
+    grid-template-columns:1fr;
+    gap:0.4rem;
+}
+@media (min-width:480px){ .subject-checks{ grid-template-columns:repeat(2,1fr);} }
+@media (min-width:768px){ .subject-checks{ grid-template-columns:repeat(3,1fr);} }
+.subject-check {
+    display:flex; align-items:center; gap:0.5rem;
+    padding:0.45rem 0.6rem;
+    border:1px solid var(--border-color);
+    border-radius:var(--radius-sm);
+    background:var(--gray-50);
+    font-size:0.82rem;
+    cursor:pointer;
+    transition:border-color var(--transition), background var(--transition);
+}
+.subject-check:hover { border-color:var(--primary); }
+.subject-check input { width:16px; height:16px; flex-shrink:0; accent-color:var(--primary); }
+.subject-check input:checked + span { font-weight:600; color:var(--primary); }

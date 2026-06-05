@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/macros.html" import exam_subjects_card %}
 
 {% block title %}Edit {{ student.full_name }} - {{ app_name }}{% endblock %}
 
@@ -127,7 +128,9 @@
             </button>
         </div>
     </div>
-    
+
+    {{ exam_subjects_card(waec_subjects, student.waec_subject_list, student.jamb_subject_list) }}
+
     <div class="page-header-actions">
         <button type="submit" class="btn btn-primary btn-lg">
             <i class="fas fa-save"></i> Save Changes

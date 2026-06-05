@@ -11,7 +11,7 @@ from utils.access_control import (
     login_required, is_admin, can_access_class, 
     get_accessible_class_ids, filter_classes_for_user
 )
-from utils.helpers import RELIGIONS, parse_date, FlashMessages
+from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS
 from sqlalchemy import extract, func
 
 main_bp = Blueprint('main', __name__)
@@ -367,7 +367,9 @@ def add_student():
                 date_of_birth=parse_date(request.form.get('date_of_birth')),
                 religion=request.form.get('religion'),
                 home_address=request.form.get('home_address', '').strip() or None,
-                hobbies=request.form.get('hobbies', '').strip() or None
+                hobbies=request.form.get('hobbies', '').strip() or None,
+                waec_subjects=', '.join(request.form.getlist('waec_subjects[]')) or None,
+                jamb_subjects=', '.join(request.form.getlist('jamb_subjects[]')) or None
             )
 
             db.session.add(student)
@@ -397,7 +399,7 @@ def add_student():
             db.session.rollback()
             flash(f'Error creating student: {str(e)}', 'error')
 
-    return render_template('students/add.html', religions=RELIGIONS)
+    return render_template('students/add.html', religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS)
 
 
 @main_bp.route('/students/<int:student_id>')
@@ -441,6 +443,8 @@ def edit_student(student_id):
             student.religion = request.form.get('religion')
             student.home_address = request.form.get('home_address', '').strip() or None
             student.hobbies = request.form.get('hobbies', '').strip() or None
+            student.waec_subjects = ', '.join(request.form.getlist('waec_subjects[]')) or None
+            student.jamb_subjects = ', '.join(request.form.getlist('jamb_subjects[]')) or None
 
             # Update contacts - delete existing and add new
             ParentContact.query.filter_by(student_id=student.id).delete()
@@ -468,7 +472,7 @@ def edit_student(student_id):
             db.session.rollback()
             flash(f'Error updating student: {str(e)}', 'error')
 
-    return render_template('students/edit.html', student=student, religions=RELIGIONS)
+    return render_template('students/edit.html', student=student, religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS)
 
 
 @main_bp.route('/students/<int:student_id>/delete', methods=['POST'])

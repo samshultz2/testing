@@ -9,7 +9,7 @@ from io import BytesIO
 
 from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass, Term
 from models.mock_jamb import MockJAMBExam, MockJAMBResult, MockJAMBAnalytics
-from utils.helpers import login_required, WAEC_SUBJECTS
+from utils.helpers import login_required, WAEC_SUBJECTS, get_sss3_students, student_subject_map
 from utils.csrf import csrf_protect
 from utils.jamb_config import (
     convert_correct_to_100, question_count_map, COMPULSORY_SUBJECT,
@@ -282,15 +282,9 @@ def add_result(exam_id):
     """Add results for a student"""
     exam = MockJAMBExam.query.get_or_404(exam_id)
     
-    # Get students who don't have results for this exam yet
-    existing_student_ids = [r.student_id for r in exam.results]
-    if existing_student_ids:
-        students = Student.query.filter(
-            Student.is_active == True,
-            ~Student.id.in_(existing_student_ids)
-        ).order_by(Student.surname).all()
-    else:
-        students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+    # SSS3 students who don't already have a result for this exam.
+    existing_student_ids = {r.student_id for r in exam.results}
+    students = [s for s in get_sss3_students() if s.id not in existing_student_ids]
     
     if request.method == 'POST':
         try:
@@ -349,7 +343,8 @@ def add_result(exam_id):
         students=students,
         subjects=WAEC_SUBJECTS,
         question_counts=question_count_map(WAEC_SUBJECTS),
-        compulsory_subject=COMPULSORY_SUBJECT
+        compulsory_subject=COMPULSORY_SUBJECT,
+        subject_map=student_subject_map(students)
     )
 
 

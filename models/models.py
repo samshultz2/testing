@@ -33,6 +33,10 @@ class Student(db.Model):
     home_address = db.Column(db.Text)
     hobbies = db.Column(db.Text)
     photo_url = db.Column(db.String(255))
+    # Optional external-exam enrolment (comma-separated subject names).
+    # Used to auto-populate the WAEC / JAMB result-entry subject fields.
+    waec_subjects = db.Column(db.Text)
+    jamb_subjects = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
@@ -56,6 +60,16 @@ class Student(db.Model):
             return f"{self.surname} {self.first_name} {self.middle_name}"
         return f"{self.surname} {self.first_name}"
     
+    @property
+    def waec_subject_list(self):
+        """Subjects the student is enrolled to sit for WAEC."""
+        return [s.strip() for s in (self.waec_subjects or '').split(',') if s.strip()]
+
+    @property
+    def jamb_subject_list(self):
+        """Subjects the student is enrolled to sit for JAMB."""
+        return [s.strip() for s in (self.jamb_subjects or '').split(',') if s.strip()]
+
     @property
     def age(self):
         """Calculate student's age"""
@@ -954,11 +968,35 @@ class TeacherSubjectAssignment(db.Model):
 # UTILITY FUNCTIONS
 # ============================================================================
 
+def _ensure_student_exam_columns():
+    """
+    Lightweight migration: add the optional WAEC/JAMB enrolment columns to the
+    existing ``students`` table if they are not present yet. ``db.create_all()``
+    only creates missing tables, never missing columns, so older databases need
+    this ALTER TABLE to pick up new fields.
+    """
+    from sqlalchemy import inspect, text
+    try:
+        existing = {c['name'] for c in inspect(db.engine).get_columns('students')}
+    except Exception:
+        return
+    statements = []
+    if 'waec_subjects' not in existing:
+        statements.append('ALTER TABLE students ADD COLUMN waec_subjects TEXT')
+    if 'jamb_subjects' not in existing:
+        statements.append('ALTER TABLE students ADD COLUMN jamb_subjects TEXT')
+    if statements:
+        with db.engine.begin() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+
+
 def init_db(app):
     """Initialize database with default data"""
     with app.app_context():
         db.create_all()
-        
+        _ensure_student_exam_columns()
+
         # Create default classes if none exist
         if SchoolClass.query.count() == 0:
             default_classes = [

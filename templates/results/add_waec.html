@@ -1,27 +1,109 @@
 {% extends "base.html" %}
 {% block title %}Add WAEC - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<span>Add WAEC</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Add Results</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.waec-form{max-width:760px}
+.subject-grade-row{display:grid;grid-template-columns:1fr 110px;gap:.6rem;margin-bottom:.6rem}
+.entry-hint{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;margin:.25rem 0 1rem;line-height:1.4}
+.entry-hint i{margin-top:.15rem}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header"><h1>Add WAEC Results</h1></div>
-<div class="card">
+<div class="page-header">
+    <div>
+        <h1>Add WAEC Results</h1>
+        <p class="text-muted text-sm">SSS3 students &middot; current exam year</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="card waec-form">
     <div class="card-body">
+        {% if students %}
         <form method="POST">
             <div class="form-row">
-                <div class="form-group"><label class="form-label">Student <span class="required">*</span></label><select name="student_id" class="form-control" required><option value="">Select</option>{% for s in students %}<option value="{{ s.id }}">{{ s.full_name }}</option>{% endfor %}</select></div>
-                <div class="form-group"><label class="form-label">Year <span class="required">*</span></label><input type="number" name="exam_year" class="form-control" min="2000" max="2030" required></div>
+                <div class="form-group">
+                    <label class="form-label">Student <span class="required">*</span></label>
+                    <select name="student_id" id="studentSelect" class="form-control" required>
+                        <option value="">Select Student</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Year <span class="required">*</span></label>
+                    <input type="number" name="exam_year" class="form-control" min="2000" max="2100" value="{{ current_year }}" required>
+                </div>
             </div>
-            <h3 class="mb-3 mt-3">Subject Grades</h3>
+
+            <hr class="my-3">
+            <h3 class="mb-1">Subject Grades</h3>
+            <div class="entry-hint">
+                <i class="fas fa-circle-info"></i>
+                <span>Common subjects are pre-selected. Pick a student who has saved WAEC subjects and the list fills from their profile &mdash; edit any row freely.</span>
+            </div>
+
             {% for i in range(9) %}
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">Subject {{ i+1 }}</label><select name="subject[]" class="form-control"><option value="">Select</option>{% for subj in subjects %}<option value="{{ subj }}">{{ subj }}</option>{% endfor %}</select></div>
-                <div class="form-group"><label class="form-label">Grade</label><select name="grade[]" class="form-control"><option value="">Select</option>{% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select></div>
+            <div class="subject-grade-row">
+                <select name="subject[]" class="form-control waec-subject">
+                    <option value="">Select Subject</option>
+                    {% for subj in subjects %}
+                    <option value="{{ subj }}">{{ subj }}</option>
+                    {% endfor %}
+                </select>
+                <select name="grade[]" class="form-control">
+                    <option value="">Grade</option>
+                    {% for g in grades %}
+                    <option value="{{ g }}">{{ g }}</option>
+                    {% endfor %}
+                </select>
             </div>
             {% endfor %}
+
             <div class="page-header-actions mt-3">
                 <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save</button>
                 <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
             </div>
         </form>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-user-slash"></i>
+            <p>No SSS3 students found for the current term. Set up SSS3 class enrolment first.</p>
+            <a href="{{ url_for('results.waec_list') }}" class="btn btn-primary">Back to WAEC</a>
+        </div>
+        {% endif %}
     </div>
 </div>
+
+<script>
+(function () {
+    const SUBJECT_MAP = {{ subject_map | tojson }};
+    const DEFAULTS = {{ default_subjects | tojson }};
+    const subjectSelects = Array.from(document.querySelectorAll('.waec-subject'));
+
+    function applySubjects(list) {
+        subjectSelects.forEach(function (sel, idx) {
+            sel.value = (list && list[idx]) ? list[idx] : '';
+        });
+    }
+
+    const studentSelect = document.getElementById('studentSelect');
+    if (studentSelect) {
+        studentSelect.addEventListener('change', function () {
+            const entry = SUBJECT_MAP[this.value];
+            const saved = entry && entry.waec ? entry.waec : [];
+            applySubjects(saved.length ? saved : DEFAULTS);
+        });
+    }
+
+    // Pre-select the common subjects on first load.
+    applySubjects(DEFAULTS);
+})();
+</script>
 {% endblock %}

@@ -6,7 +6,11 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from collections import defaultdict
 from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm
 from utils.access_control import login_required
-from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES, FlashMessages
+from utils.helpers import (
+    WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, FlashMessages,
+    get_sss3_students, student_subject_map,
+)
+from datetime import date as _date
 from utils.analytics_service import AcademicAnalytics
 
 results_bp = Blueprint('results', __name__, url_prefix='/results')
@@ -218,8 +222,8 @@ def waec_list():
 @login_required
 def add_waec():
     """Add WAEC results for a student"""
-    students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
-    
+    students = get_sss3_students()
+
     if request.method == 'POST':
         try:
             student_id = request.form.get('student_id', type=int)
@@ -265,7 +269,10 @@ def add_waec():
     return render_template('results/add_waec.html',
         students=students,
         subjects=WAEC_SUBJECTS,
-        grades=WAEC_GRADES
+        grades=WAEC_GRADES,
+        default_subjects=WAEC_DEFAULT_SUBJECTS,
+        subject_map=student_subject_map(students),
+        current_year=_date.today().year
     )
 
 
@@ -526,7 +533,7 @@ def jamb_list():
 @login_required
 def add_jamb():
     """Add JAMB results for a student"""
-    students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+    students = get_sss3_students()
     
     if request.method == 'POST':
         try:
@@ -580,7 +587,9 @@ def add_jamb():
     
     return render_template('results/add_jamb.html',
         students=students,
-        subjects=WAEC_SUBJECTS
+        subjects=WAEC_SUBJECTS,
+        subject_map=student_subject_map(students),
+        current_year=_date.today().year
     )
 
 

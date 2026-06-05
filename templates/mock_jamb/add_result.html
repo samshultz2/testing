@@ -158,6 +158,23 @@
         el.addEventListener('change', recalcTotal);
     });
 
+    // Auto-fill subjects from the selected student's saved JAMB enrolment.
+    const SUBJECT_MAP = {{ subject_map | tojson }};
+    const studentSelect = document.querySelector('select[name="student_id"]');
+    if (studentSelect) {
+        studentSelect.addEventListener('change', function () {
+            const entry = SUBJECT_MAP[this.value];
+            const saved = entry && entry.jamb ? entry.jamb : [];
+            if (saved.length) {
+                for (let row = 1; row <= 4; row++) {
+                    const sel = document.querySelector(`.subject-select[data-row="${row}"]`);
+                    if (sel) sel.value = saved[row - 1] || '';
+                }
+                recalcTotal();
+            }
+        });
+    }
+
     recalcTotal();
 })();
 </script>

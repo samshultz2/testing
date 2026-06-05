@@ -6,6 +6,7 @@
 <span>Students</span> / <span>Add Student</span>
 {% endblock %}
 
+{% from "components/macros.html" import exam_subjects_card %}
 {% block content %}
 <div class="page-header">
     <h1>Add New Student</h1>
@@ -100,7 +101,9 @@
             </button>
         </div>
     </div>
-    
+
+    {{ exam_subjects_card(waec_subjects) }}
+
     <div class="page-header-actions">
         <button type="submit" class="btn btn-primary btn-lg">
             <i class="fas fa-save"></i> Save Student

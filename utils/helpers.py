@@ -223,11 +223,73 @@ WAEC_SUBJECTS = [
     'Food and Nutrition',
     'Home Economics',
     'Physical Education',
-    'Data Processing'
+    'Data Processing',
+    'Digital Technologies',
+    'Livestock Farming'
 ]
 
 # WAEC Grades
 WAEC_GRADES = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6', 'D7', 'E8', 'F9']
+
+# Subjects pre-selected by default on the WAEC entry page (most students take them).
+WAEC_DEFAULT_SUBJECTS = [
+    'Mathematics',
+    'English Language',
+    'Livestock Farming',
+    'Civic Education',
+]
+
+
+def get_sss3_students():
+    """
+    Return the list of active SSS3 students enrolled in the current active term,
+    ordered by surname. External exams (WAEC/JAMB/Mock JAMB) are taken by SSS3
+    students, so result-entry screens are restricted to this set.
+
+    Falls back to all active students only if the SSS3 class / active term has
+    not been set up yet, so result entry never becomes impossible.
+    """
+    from models import (
+        Student, SchoolClass, ClassArmAssignment, StudentEnrollment, Term
+    )
+
+    active_term = Term.query.filter_by(is_active=True).first()
+    sss3 = SchoolClass.query.filter_by(name='SSS3').first()
+
+    students = {}
+    if sss3 and active_term:
+        assignments = ClassArmAssignment.query.filter_by(
+            class_id=sss3.id, term_id=active_term.id
+        ).all()
+        for assignment in assignments:
+            enrollments = StudentEnrollment.query.filter_by(
+                class_arm_assignment_id=assignment.id,
+                is_active=True
+            ).join(Student).all()
+            for enrollment in enrollments:
+                if enrollment.student.is_active:
+                    students[enrollment.student.id] = enrollment.student
+
+    if students:
+        return sorted(students.values(), key=lambda s: (s.surname or '', s.first_name or ''))
+
+    # Fallback: SSS3/active term not configured yet.
+    return Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+
+
+def student_subject_map(students):
+    """
+    Build {student_id: {'waec': [...], 'jamb': [...]}} for the given students so
+    result-entry pages can auto-populate the subject fields from each student's
+    saved exam enrolment.
+    """
+    return {
+        s.id: {
+            'waec': s.waec_subject_list,
+            'jamb': s.jamb_subject_list,
+        }
+        for s in students
+    }
 
 # Religions
 RELIGIONS = [
