@@ -4,7 +4,9 @@ Comprehensive academic performance tracking and analysis
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from collections import defaultdict
-from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm, AcademicSession, UniversityCutoff, SchoolSettings
+from models import (db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm,
+                    AcademicSession, UniversityCutoff, SchoolSettings,
+                    StudentEnrollment, ClassArmAssignment, TermSummary)
 import json as _json
 from utils.access_control import login_required, admin_required
 from utils.audit import log_action
@@ -1202,9 +1204,64 @@ def analytics_hub():
             'elite_300_pct': round(jamb_stats['above_300'] / total * 100, 1) if total else 0,
         }
 
+    # Class/arm comparison + internal-vs-JAMB correlation for the selected year.
+    class_compare = []
+    internal_corr = None
+    if year:
+        active_term = Term.query.filter_by(is_active=True).first()
+        arm_map = {}
+        if active_term:
+            enrs = StudentEnrollment.query.join(ClassArmAssignment).filter(
+                ClassArmAssignment.term_id == active_term.id,
+                StudentEnrollment.is_active == True
+            ).all()
+            for e in enrs:
+                arm_map.setdefault(e.student_id, e.class_arm_assignment.display_name)
+
+        jamb_by_arm = defaultdict(list)
+        for r in JAMBResult.query.filter_by(exam_year=year).all():
+            arm = arm_map.get(r.student_id)
+            if arm:
+                jamb_by_arm[arm].append(r.total_score)
+        waec_by_arm = defaultdict(lambda: {'pass': 0, 'total': 0})
+        for r in WAECResult.query.filter_by(exam_year=year).all():
+            arm = arm_map.get(r.student_id)
+            if arm:
+                waec_by_arm[arm]['total'] += 1
+                if r.grade in AcademicAnalytics.PASS_GRADES:
+                    waec_by_arm[arm]['pass'] += 1
+        for arm in sorted(set(list(jamb_by_arm) + list(waec_by_arm))):
+            js = jamb_by_arm.get(arm, [])
+            w = waec_by_arm.get(arm, {'pass': 0, 'total': 0})
+            class_compare.append({
+                'arm': arm,
+                'jamb_count': len(js),
+                'jamb_mean': round(sum(js) / len(js), 1) if js else 0,
+                'waec_pass_rate': round(w['pass'] / w['total'] * 100, 1) if w['total'] else 0,
+                'waec_entries': w['total'],
+            })
+
+        pairs = []
+        for r in JAMBResult.query.filter_by(exam_year=year).all():
+            ts = TermSummary.query.filter_by(student_id=r.student_id).order_by(
+                TermSummary.term_id.desc()).first()
+            if ts and ts.average_score is not None:
+                pairs.append((ts.average_score, r.total_score))
+        if len(pairs) >= 5:
+            xs = [p[0] for p in pairs]
+            ys = [p[1] for p in pairs]
+            internal_corr = {
+                'n': len(pairs),
+                'r': round(AcademicAnalytics._pearson_correlation(xs, ys), 3),
+                'mean_internal': round(sum(xs) / len(xs), 1),
+                'mean_jamb': round(sum(ys) / len(ys), 1),
+            }
+
     return render_template('results/analytics_hub.html',
         years=years,
         selected_year=year,
+        class_compare=class_compare,
+        internal_corr=internal_corr,
         waec_stats=waec_stats,
         jamb_stats=jamb_stats,
         correlation=correlation,

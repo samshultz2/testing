@@ -232,6 +232,44 @@
     {% endif %}
 </div></div>
 
+<!-- ============ CLASS COMPARISON & INTERNAL CORRELATION ============ -->
+{% if class_compare or internal_corr %}
+<div class="section-title"><i class="fas fa-users-between-lines"></i> Class Comparison &amp; Internal Link</div>
+<div class="two-col mb-3">
+    {% if class_compare %}
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-layer-group"></i> Performance by Arm</h3></div>
+        <div class="card-body" style="padding:0;">
+            <table class="mini-table">
+                <thead><tr><th>Arm</th><th class="num">JAMB n</th><th class="num">JAMB mean</th><th class="num">WAEC pass %</th></tr></thead>
+                <tbody>
+                {% for c in class_compare %}
+                <tr><td>{{ c.arm }}</td><td class="num">{{ c.jamb_count }}</td><td class="num"><strong>{{ c.jamb_mean }}</strong></td><td class="num">{{ c.waec_pass_rate }}%</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-link"></i> Internal Average ↔ JAMB</h3></div>
+        <div class="card-body">
+            {% if internal_corr %}
+            <div class="insight"><i class="fas fa-lightbulb"></i><span>Across {{ internal_corr.n }} students, the correlation between term average and JAMB score is <strong>{{ internal_corr.r }}</strong>{% if internal_corr.r >= 0.5 %} — a strong link{% elif internal_corr.r >= 0.3 %} — a moderate link{% else %} — a weak link{% endif %}.</span></div>
+            <div class="kpi-grid">
+                <div class="kpi"><div class="v">{{ internal_corr.r }}</div><div class="l">Pearson r</div></div>
+                <div class="kpi"><div class="v">{{ internal_corr.mean_internal }}</div><div class="l">Mean term avg</div></div>
+                <div class="kpi"><div class="v">{{ internal_corr.mean_jamb }}</div><div class="l">Mean JAMB</div></div>
+                <div class="kpi"><div class="v">{{ internal_corr.n }}</div><div class="l">Students</div></div>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0"><i class="fas fa-info-circle"></i> Need at least 5 students who have both a term result (internal average) and a JAMB score for {{ selected_year }}.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- ============ PROJECTIONS / TRENDS ============ -->
 <div class="section-title"><i class="fas fa-chart-line"></i> Trends &amp; Projections</div>
 <div class="two-col mb-3">
