@@ -52,6 +52,18 @@ def create_app(config_class=Config):
     # Keep a rolling daily backup of the database
     from utils.backup import auto_backup
     auto_backup(app)
+
+    # Serve the service worker from the root so its scope covers the whole app
+    from flask import send_from_directory
+    import os as _os
+
+    @app.route('/sw.js')
+    def _service_worker():
+        resp = send_from_directory(_os.path.join(app.root_path, 'static', 'js'), 'sw.js')
+        resp.headers['Content-Type'] = 'application/javascript'
+        resp.headers['Service-Worker-Allowed'] = '/'
+        resp.headers['Cache-Control'] = 'no-cache'
+        return resp
     
     # Template context processors
     @app.context_processor
