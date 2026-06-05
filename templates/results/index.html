@@ -15,7 +15,7 @@
 }
 
 .result-type-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 12px;
     border: 1px solid #e0e0e0;
     overflow: hidden;
@@ -56,12 +56,12 @@
     border-bottom: 1px solid #eee;
 }
 .result-stat:last-child { border-bottom: none; }
-.result-stat-label { color: #666; }
+.result-stat-label { color: var(--text-muted); }
 .result-stat-value { font-weight: 600; }
 
 .result-type-actions {
     padding: 1rem 1.5rem;
-    background: #f8f9fa;
+    background: var(--gray-50);
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
@@ -76,7 +76,7 @@
     .quick-actions { grid-template-columns: repeat(4, 1fr); }
 }
 .quick-action-card {
-    background: white;
+    background: var(--bg-card);
     border: 1px solid #e0e0e0;
     border-radius: 8px;
     padding: 1rem;
@@ -87,7 +87,7 @@
 }
 .quick-action-card:hover {
     border-color: #007bff;
-    background: #f8f9fa;
+    background: var(--gray-50);
 }
 .quick-action-icon {
     font-size: 1.5rem;
@@ -207,21 +207,21 @@
     <div class="card-header"><h3>Analytics Features</h3></div>
     <div class="card-body">
         <div class="dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+            <div style="padding: 1rem; background: var(--gray-50); border-radius: 8px;">
                 <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-chart-line" style="color: #007bff;"></i> Performance Trends</h4>
-                <p style="font-size: 0.85rem; color: #666; margin: 0;">Track year-over-year performance, pass rates, and grade distributions.</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Track year-over-year performance, pass rates, and grade distributions.</p>
             </div>
-            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+            <div style="padding: 1rem; background: var(--gray-50); border-radius: 8px;">
                 <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-user-graduate" style="color: #28a745;"></i> Student Profiles</h4>
-                <p style="font-size: 0.85rem; color: #666; margin: 0;">Individual student analytics with strengths, weaknesses, and predictions.</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Individual student analytics with strengths, weaknesses, and predictions.</p>
             </div>
-            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+            <div style="padding: 1rem; background: var(--gray-50); border-radius: 8px;">
                 <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-calculator" style="color: #ffc107;"></i> JAMB Predictions</h4>
-                <p style="font-size: 0.85rem; color: #666; margin: 0;">ML-based JAMB score predictions from WAEC performance.</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">ML-based JAMB score predictions from WAEC performance.</p>
             </div>
-            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+            <div style="padding: 1rem; background: var(--gray-50); border-radius: 8px;">
                 <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Risk Assessment</h4>
-                <p style="font-size: 0.85rem; color: #666; margin: 0;">Identify at-risk students with actionable recommendations.</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Identify at-risk students with actionable recommendations.</p>
             </div>
         </div>
     </div>

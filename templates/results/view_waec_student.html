@@ -51,7 +51,7 @@
 }
 
 .stat-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
     border: 1px solid #e0e0e0;
@@ -66,12 +66,12 @@
 
 .stat-label {
     font-size: 0.7rem;
-    color: #666;
+    color: var(--text-muted);
     margin-top: 0.25rem;
 }
 
 .card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     border: 1px solid #e0e0e0;
     margin-bottom: 1rem;
@@ -110,7 +110,7 @@
 }
 
 .results-table th {
-    background: #f8f9fa;
+    background: var(--gray-50);
     font-weight: 600;
 }
 
@@ -158,7 +158,7 @@
     align-items: flex-start;
     gap: 0.5rem;
     padding: 0.5rem;
-    background: #f8f9fa;
+    background: var(--gray-50);
     border-radius: 6px;
     margin-bottom: 0.5rem;
     font-size: 0.85rem;
@@ -187,7 +187,7 @@
 .empty-state {
     text-align: center;
     padding: 2rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .empty-state i {
@@ -313,7 +313,7 @@
                 </div>
             </div>
             {% if jamb_prediction.explanation %}
-            <div style="margin-top: 0.75rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; font-size: 0.8rem;">
+            <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--gray-50); border-radius: 6px; font-size: 0.8rem;">
                 <strong>How calculated:</strong><br>
                 {{ jamb_prediction.explanation }}
             </div>
@@ -380,7 +380,7 @@
             {% endfor %}
             {% endif %}
             {% else %}
-            <p style="color: #666; font-size: 0.85rem;">No risk assessment available.</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">No risk assessment available.</p>
             {% endif %}
         </div>
     </div>
@@ -401,12 +401,12 @@
                 <div class="recommendation-icon strength"><i class="fas fa-check"></i></div>
                 <div>
                     <strong>{{ item.subject }}</strong> ({{ item.grade }})<br>
-                    <small style="color: #666;">{{ item.message }}</small>
+                    <small style="color: var(--text-muted);">{{ item.message }}</small>
                 </div>
             </div>
             {% endfor %}
             {% else %}
-            <p style="color: #666; font-size: 0.85rem;">No outstanding strengths identified.</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">No outstanding strengths identified.</p>
             {% endif %}
         </div>
     </div>
@@ -423,12 +423,12 @@
                 <div class="recommendation-icon weakness"><i class="fas fa-arrow-up"></i></div>
                 <div>
                     <strong>{{ item.subject }}</strong> ({{ item.grade }})<br>
-                    <small style="color: #666;">{{ item.message }}</small>
+                    <small style="color: var(--text-muted);">{{ item.message }}</small>
                 </div>
             </div>
             {% endfor %}
             {% else %}
-            <p style="color: #666; font-size: 0.85rem;">Great job! No major weaknesses.</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Great job! No major weaknesses.</p>
             {% endif %}
         </div>
     </div>

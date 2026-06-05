@@ -2159,3 +2159,26 @@ input:focus, select:focus, textarea:focus {
 .subject-check:hover { border-color:var(--primary); }
 .subject-check input { width:16px; height:16px; flex-shrink:0; accent-color:var(--primary); }
 .subject-check input:checked + span { font-weight:600; color:var(--primary); }
+
+/* ============================================
+   MOBILE-FIRST TABLES + DARK-MODE READABILITY
+   ============================================ */
+/* Wide tables scroll horizontally instead of overflowing the viewport */
+.table-container, .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 768px) {
+    .page-content table:not(.no-mobile-scroll) {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+    /* keep stat/kpi grids from forcing horizontal scroll */
+    .page-content table.no-mobile-scroll { display: table; }
+}
+
+/* Generic tables follow the theme (export tables use inline styles and are unaffected) */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { background: var(--gray-50); color: var(--text-secondary); }
+.data-table td, .data-table th { border-bottom: 1px solid var(--border-color); }
+[data-theme="dark"] .data-table th { background: var(--gray-100); }

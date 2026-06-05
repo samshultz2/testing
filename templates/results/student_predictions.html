@@ -52,7 +52,7 @@
 .outlook-needs-improvement{background:linear-gradient(135deg,#dc3545,#c82333);color:white}
 .no-data{text-align:center;padding:2rem;color:var(--text-muted)}
 .no-data i{font-size:2rem;margin-bottom:.5rem}
-.debug-box{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:1rem;margin-bottom:1rem;font-size:.8rem}
+.debug-box{background:var(--gray-50);border:1px solid #dee2e6;border-radius:8px;padding:1rem;margin-bottom:1rem;font-size:.8rem}
 .debug-box pre{margin:0;white-space:pre-wrap;word-break:break-all}
 </style>
 {% endblock %}
@@ -90,7 +90,7 @@
 <div class="debug-box">
     <strong>Debug: Mock JAMB Data Found ({{ debug_info|length }} results)</strong>
     {% for d in debug_info %}
-    <div style="margin-top:.5rem;padding:.5rem;background:white;border-radius:4px">
+    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:4px">
         <strong>Result #{{ d.id }}:</strong> Total={{ d.total_score }}<br>
         {{ d.subject1 }}: {{ d.subject1_score }} | {{ d.subject2 }}: {{ d.subject2_score }} | {{ d.subject3 }}: {{ d.subject3_score }} | {{ d.subject4 }}: {{ d.subject4_score }}
     </div>

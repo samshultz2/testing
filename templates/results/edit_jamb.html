@@ -9,7 +9,7 @@
 {% block extra_css %}
 <style>
 .form-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     border: 1px solid #e0e0e0;
     margin-bottom: 1rem;
@@ -19,7 +19,7 @@
 .form-card-header {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid #eee;
-    background: #f8f9fa;
+    background: var(--gray-50);
 }
 
 .form-card-header h3 {
@@ -41,7 +41,7 @@
     font-size: 0.85rem;
     font-weight: 500;
     margin-bottom: 0.35rem;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .form-group input,
@@ -65,14 +65,14 @@
     grid-template-columns: 2fr 1fr;
     gap: 0.5rem;
     padding: 0.5rem;
-    background: #f8f9fa;
+    background: var(--gray-50);
     border-radius: 6px;
     margin-bottom: 0.5rem;
 }
 
 .subject-row label {
     font-size: 0.75rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .total-score-input {

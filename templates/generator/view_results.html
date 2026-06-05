@@ -54,7 +54,7 @@
                         {% if entry.teacher %}
                         <br><small class="text-muted">{{ entry.teacher.name }}</small>
                         {% endif %}
-                        {% if entry.is_locked %}<br><i class="fas fa-lock" style="font-size: 0.7rem; color: #999;"></i>{% endif %}
+                        {% if entry.is_locked %}<br><i class="fas fa-lock" style="font-size: 0.7rem; color: var(--text-muted);"></i>{% endif %}
                         {% else %}
                         <span class="text-muted">-</span>
                         {% endif %}
@@ -65,7 +65,7 @@
                 <tr style="background: #f0f0f0;">
                     <td><strong>-</strong></td>
                     {% for day in days %}
-                    <td style="text-align: center; color: #666;"><em>BREAK</em></td>
+                    <td style="text-align: center; color: var(--text-muted);"><em>BREAK</em></td>
                     {% endfor %}
                 </tr>
                 {% endif %}

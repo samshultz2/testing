@@ -33,7 +33,7 @@
 }
 
 .stat-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
     border: 1px solid #e0e0e0;
@@ -48,7 +48,7 @@
 
 .stat-label {
     font-size: 0.7rem;
-    color: #666;
+    color: var(--text-muted);
     margin-top: 0.25rem;
 }
 
@@ -63,14 +63,14 @@
 
 .tab {
     padding: 0.5rem 0.75rem;
-    background: white;
+    background: var(--bg-card);
     border: 1px solid #e0e0e0;
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
     white-space: nowrap;
     text-decoration: none;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .tab.active {
@@ -81,7 +81,7 @@
 
 /* Cards */
 .card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     border: 1px solid #e0e0e0;
     margin-bottom: 1rem;
@@ -108,7 +108,7 @@
 
 /* Filters */
 .filters-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
     border: 1px solid #e0e0e0;
@@ -131,7 +131,7 @@
 
 .filter-group label {
     font-size: 0.7rem;
-    color: #666;
+    color: var(--text-muted);
     display: block;
     margin-bottom: 0.2rem;
 }
@@ -236,7 +236,7 @@
 }
 
 .subject-table th {
-    background: #f8f9fa;
+    background: var(--gray-50);
     font-weight: 600;
     position: sticky;
     top: 0;
@@ -263,7 +263,7 @@
 }
 
 .student-card {
-    background: white;
+    background: var(--bg-card);
     border: 1px solid #e0e0e0;
     border-radius: 8px;
     padding: 0.75rem;
@@ -282,7 +282,7 @@
 
 .student-id {
     font-size: 0.75rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .student-stats {
@@ -303,7 +303,7 @@
 
 .student-stat-label {
     font-size: 0.6rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .student-grades {
@@ -335,8 +335,8 @@
     font-size: 0.7rem;
     border-radius: 4px;
     text-decoration: none;
-    background: #f8f9fa;
-    color: #333;
+    background: var(--gray-50);
+    color: var(--text-primary);
     border: 1px solid #ddd;
 }
 
@@ -396,13 +396,13 @@
     }
     
     .desktop-table th {
-        background: #f8f9fa;
+        background: var(--gray-50);
         font-weight: 600;
         position: sticky;
         top: 0;
     }
     
-    .desktop-table tbody tr:hover { background: #f8f9fa; }
+    .desktop-table tbody tr:hover { background: var(--gray-50); }
     
     .subject-table { font-size: 0.8rem; }
     .subject-table th, .subject-table td { padding: 0.5rem; }
@@ -886,7 +886,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.4rem 0.5rem;
-    background: #f8f9fa;
+    background: var(--gray-50);
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.8rem;

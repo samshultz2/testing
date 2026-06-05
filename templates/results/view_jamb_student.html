@@ -41,7 +41,7 @@
 }
 
 .card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     border: 1px solid #e0e0e0;
     margin-bottom: 1rem;
@@ -73,7 +73,7 @@
 
 .score-label {
     font-size: 0.85rem;
-    color: #666;
+    color: var(--text-muted);
     margin-top: 0.5rem;
 }
 
@@ -102,7 +102,7 @@
 }
 
 .subject-card {
-    background: #f8f9fa;
+    background: var(--gray-50);
     border-radius: 8px;
     padding: 0.75rem;
     text-align: center;
@@ -116,7 +116,7 @@
 
 .subject-name {
     font-size: 0.75rem;
-    color: #666;
+    color: var(--text-muted);
     margin-top: 0.25rem;
     white-space: nowrap;
     overflow: hidden;
@@ -145,7 +145,7 @@
 /* Analysis Box */
 .analysis-box {
     padding: 0.75rem;
-    background: #f8f9fa;
+    background: var(--gray-50);
     border-radius: 6px;
     font-size: 0.85rem;
     margin-top: 0.5rem;
@@ -166,7 +166,7 @@
 }
 
 .results-table th {
-    background: #f8f9fa;
+    background: var(--gray-50);
     font-weight: 600;
 }
 
@@ -174,7 +174,7 @@
 .empty-state {
     text-align: center;
     padding: 2rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .empty-state i {
@@ -355,7 +355,7 @@
                 {% elif waec.average_points > 5 and latest.total_score >= 250 %}
                 <span style="color: #17a2b8;">★ JAMB exceeds WAEC expectations - great improvement!</span>
                 {% else %}
-                <span style="color: #666;">Performance is consistent across both exams</span>
+                <span style="color: var(--text-muted);">Performance is consistent across both exams</span>
                 {% endif %}
             </div>
             {% else %}

@@ -15,7 +15,7 @@
                     {% for student in students %}<option value="{{ student.id }}">{{ student.name }}</option>{% endfor %}
                 </select>
             </div>
-            <div id="studentInfo" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+            <div id="studentInfo" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--gray-50); border-radius: 8px;">
                 <div class="info-grid">
                     <div class="info-row"><span>Total Paid:</span> <strong id="infoPaid">-</strong></div>
                     <div class="info-row"><span>Remaining:</span> <strong id="infoRemaining">-</strong></div>
