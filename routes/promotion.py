@@ -8,6 +8,8 @@ from models import (
     ClassSubject, Subject, SchoolSettings, GradeScale
 )
 from utils.helpers import login_required, get_sss3_enrolled_students
+from utils.access_control import admin_required
+from utils.audit import log_action
 from sqlalchemy import func
 from datetime import date
 import json
@@ -40,7 +42,7 @@ def graduates_list():
 
 
 @promotion_bp.route('/graduate/<int:student_id>', methods=['POST'])
-@login_required
+@admin_required
 def mark_graduate(student_id):
     """Mark a single (SSS3) student as graduated."""
     student = Student.query.get_or_404(student_id)
@@ -51,6 +53,7 @@ def mark_graduate(student_id):
         if active_session:
             student.graduation_session_id = active_session.id
         db.session.commit()
+        log_action('graduate', student.full_name)
         flash(f'{student.full_name} has been marked as a graduate.', 'success')
     except Exception as e:
         db.session.rollback()
@@ -59,7 +62,7 @@ def mark_graduate(student_id):
 
 
 @promotion_bp.route('/ungraduate/<int:student_id>', methods=['POST'])
-@login_required
+@admin_required
 def unmark_graduate(student_id):
     """Reverse a graduation (in case it was marked by mistake)."""
     student = Student.query.get_or_404(student_id)
@@ -68,6 +71,7 @@ def unmark_graduate(student_id):
         student.graduation_date = None
         student.graduation_session_id = None
         db.session.commit()
+        log_action('ungraduate', student.full_name)
         flash(f'{student.full_name} is no longer marked as a graduate.', 'success')
     except Exception as e:
         db.session.rollback()
@@ -76,7 +80,7 @@ def unmark_graduate(student_id):
 
 
 @promotion_bp.route('/graduate-sss3', methods=['POST'])
-@login_required
+@admin_required
 def graduate_sss3():
     """Mark every current SSS3 student (active term) as a graduate in one click."""
     active_session = AcademicSession.query.filter_by(is_active=True).first()
@@ -91,6 +95,7 @@ def graduate_sss3():
                     student.graduation_session_id = active_session.id
                 graduated += 1
         db.session.commit()
+        log_action('graduate_sss3', f'{graduated} students')
         if graduated:
             flash(f'{graduated} SSS3 student(s) marked as graduates.', 'success')
         else:

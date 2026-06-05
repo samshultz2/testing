@@ -6,7 +6,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from collections import defaultdict
 from models import db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm, AcademicSession, UniversityCutoff, SchoolSettings
 import json as _json
-from utils.access_control import login_required
+from utils.access_control import login_required, admin_required
+from utils.audit import log_action
 from utils.helpers import (
     WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, FlashMessages,
     get_sss3_students, student_subject_map,
@@ -413,7 +414,7 @@ def edit_waec(student_id, year):
 # ============================================================================
 
 @results_bp.route('/waec/student/<int:student_id>/delete/<int:year>', methods=['POST'])
-@login_required
+@admin_required
 def delete_waec(student_id, year):
     """Delete all WAEC results for a student in a given year"""
     student = Student.query.get_or_404(student_id)
@@ -435,7 +436,7 @@ def delete_waec(student_id, year):
 
 
 @results_bp.route('/waec/result/<int:result_id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def delete_waec_single(result_id):
     """Delete a single WAEC result entry"""
     result = WAECResult.query.get_or_404(result_id)
@@ -1178,7 +1179,7 @@ def cutoffs_list():
 
 
 @results_bp.route('/cutoffs/save', methods=['POST'])
-@login_required
+@admin_required
 def cutoffs_save():
     cid = request.form.get('id', type=int)
     uni = (request.form.get('university_name') or '').strip() or 'General Requirements'
@@ -1204,6 +1205,7 @@ def cutoffs_save():
     obj.required_subjects = _json.dumps(request.form.getlist('required_subjects[]'))
     try:
         db.session.commit()
+        log_action('cutoff_save', f'{uni} / {course}')
         flash(f'Saved cut-off for {course}.', 'success')
     except Exception as e:
         db.session.rollback()
@@ -1212,7 +1214,7 @@ def cutoffs_save():
 
 
 @results_bp.route('/cutoffs/<int:cid>/delete', methods=['POST'])
-@login_required
+@admin_required
 def cutoffs_delete(cid):
     obj = db.session.get(UniversityCutoff, cid)
     if obj:
@@ -1225,7 +1227,7 @@ def cutoffs_delete(cid):
 
 
 @results_bp.route('/cutoffs/reference', methods=['POST'])
-@login_required
+@admin_required
 def cutoffs_reference():
     ref = (request.form.get('reference') or 'General Requirements').strip()
     SchoolSettings.set('admission_reference', ref, 'string',
@@ -1302,7 +1304,7 @@ def edit_jamb(student_id, year):
 
 
 @results_bp.route('/jamb/student/<int:student_id>/delete/<int:year>', methods=['POST'])
-@login_required
+@admin_required
 def delete_jamb(student_id, year):
     """Delete JAMB result for a student in a given year"""
     student = Student.query.get_or_404(student_id)

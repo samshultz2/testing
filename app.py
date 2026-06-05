@@ -49,6 +49,10 @@ def create_app(config_class=Config):
     from utils.csrf import init_csrf
     init_csrf(app)
 
+    # Friendly error pages
+    from utils.errors import register_error_handlers
+    register_error_handlers(app)
+
     # Keep a rolling daily backup of the database
     from utils.backup import auto_backup
     auto_backup(app)

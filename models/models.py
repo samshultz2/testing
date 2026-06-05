@@ -966,6 +966,22 @@ class TeacherSubjectAssignment(db.Model):
     )
 
 
+class AuditLog(db.Model):
+    """Records who performed sensitive/administrative actions."""
+    __tablename__ = 'audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user = db.Column(db.String(100))
+    role = db.Column(db.String(30))
+    action = db.Column(db.String(80), nullable=False)
+    detail = db.Column(db.Text)
+    ip_address = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    def __repr__(self):
+        return f'<AuditLog {self.action} by {self.user}>'
+
+
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================

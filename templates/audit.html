@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Audit Log - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Audit Log</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div><h1>Audit Log</h1><p class="text-muted text-sm">Record of administrative & destructive actions.</p></div>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        {% if logs.items %}
+        <table style="width:100%;border-collapse:collapse;font-size:.83rem;">
+            <thead><tr style="background:var(--gray-50);">
+                <th style="text-align:left;padding:.5rem;">When</th>
+                <th style="text-align:left;padding:.5rem;">User</th>
+                <th style="text-align:left;padding:.5rem;">Action</th>
+                <th style="text-align:left;padding:.5rem;">Detail</th>
+                <th style="text-align:left;padding:.5rem;">IP</th>
+            </tr></thead>
+            <tbody>
+            {% for l in logs.items %}
+            <tr style="border-bottom:1px solid var(--border-light);">
+                <td style="padding:.5rem;white-space:nowrap;">{{ l.created_at.strftime('%d %b %Y %H:%M') }}</td>
+                <td style="padding:.5rem;">{{ l.user }}{% if l.role %} <span class="text-muted">({{ l.role }})</span>{% endif %}</td>
+                <td style="padding:.5rem;"><span class="badge badge-primary">{{ l.action }}</span></td>
+                <td style="padding:.5rem;">{{ l.detail or '' }}</td>
+                <td style="padding:.5rem;color:var(--text-muted);">{{ l.ip_address or '' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" style="padding:1.5rem;"><i class="fas fa-clipboard-list"></i><p>No audited actions yet.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+{% if logs.pages > 1 %}
+<div class="pagination">
+    {% if logs.has_prev %}<a href="{{ url_for('main.audit_log', page=logs.prev_num) }}"><i class="fas fa-chevron-left"></i></a>{% endif %}
+    <span>Page {{ logs.page }} of {{ logs.pages }}</span>
+    {% if logs.has_next %}<a href="{{ url_for('main.audit_log', page=logs.next_num) }}"><i class="fas fa-chevron-right"></i></a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

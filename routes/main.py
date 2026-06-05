@@ -8,9 +8,10 @@ from models import (
     ClassArmAssignment, Attendance, Week, ClassArm, Subject, SchoolClass
 )
 from utils.access_control import (
-    login_required, is_admin, can_access_class, 
+    login_required, admin_required, is_admin, can_access_class,
     get_accessible_class_ids, filter_classes_for_user
 )
+from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
 from sqlalchemy import extract, func
 from urllib.parse import urlparse
@@ -531,7 +532,7 @@ def edit_student(student_id):
 
 
 @main_bp.route('/students/<int:student_id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def delete_student(student_id):
     """Delete a student (soft delete)"""
     student = Student.query.get_or_404(student_id)
@@ -539,6 +540,7 @@ def delete_student(student_id):
     try:
         student.is_active = False
         db.session.commit()
+        log_action('delete_student', f'{student.full_name} ({student.student_id})')
         flash(FlashMessages.STUDENT_DELETED, 'success')
     except Exception as e:
         db.session.rollback()
@@ -548,7 +550,7 @@ def delete_student(student_id):
 
 
 @main_bp.route('/students/bulk-stream', methods=['POST'])
-@login_required
+@admin_required
 def bulk_set_stream():
     """Set the stream/track for several students at once."""
     stream = request.form.get('stream') or None
@@ -570,12 +572,13 @@ def bulk_set_stream():
     db.session.commit()
 
     label = stream if stream else 'cleared'
+    log_action('bulk_set_stream', f'{updated} students -> {label}')
     flash(f'Stream set to {label} for {updated} student(s).', 'success')
     return jsonify({'updated': updated, 'stream': stream})
 
 
 @main_bp.route('/students/apply-stream-waec', methods=['POST'])
-@login_required
+@admin_required
 def apply_stream_waec():
     """Fill WAEC subjects from each student's stream where not already set."""
     updated = 0
@@ -590,7 +593,7 @@ def apply_stream_waec():
 
 
 @main_bp.route('/students/trash')
-@login_required
+@admin_required
 def students_trash():
     """List soft-deleted students with restore / permanent-delete options."""
     students = Student.query.filter_by(is_active=False).order_by(Student.surname, Student.first_name).all()
@@ -598,17 +601,18 @@ def students_trash():
 
 
 @main_bp.route('/students/<int:student_id>/restore', methods=['POST'])
-@login_required
+@admin_required
 def restore_student(student_id):
     student = Student.query.get_or_404(student_id)
     student.is_active = True
     db.session.commit()
+    log_action('restore_student', f'{student.full_name} ({student.student_id})')
     flash(f'{student.full_name} restored.', 'success')
     return redirect(url_for('main.students_trash'))
 
 
 @main_bp.route('/students/<int:student_id>/purge', methods=['POST'])
-@login_required
+@admin_required
 def purge_student(student_id):
     """Permanently delete a soft-deleted student and their related records."""
     student = Student.query.get_or_404(student_id)
@@ -616,14 +620,26 @@ def purge_student(student_id):
         flash('Only deleted students can be permanently removed.', 'error')
         return redirect(url_for('main.students_trash'))
     name = student.full_name
+    sid = student.student_id
     try:
         db.session.delete(student)
         db.session.commit()
+        log_action('purge_student', f'{name} ({sid})')
         flash(f'{name} permanently deleted.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('main.students_trash'))
+
+
+@main_bp.route('/audit')
+@admin_required
+def audit_log():
+    """View the audit trail of administrative actions."""
+    from models import AuditLog
+    page = request.args.get('page', 1, type=int)
+    logs = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    return render_template('audit.html', logs=logs)
 
 
 # ============================================================================
