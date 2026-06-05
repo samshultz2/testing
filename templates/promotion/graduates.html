@@ -2,7 +2,14 @@
 {% block title %}Graduates - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Graduates</span>{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Graduates</h1></div>
+<div class="page-header">
+    <h1>Graduates</h1>
+    <div class="page-header-actions">
+        <form method="POST" action="{{ url_for('promotion.graduate_sss3') }}" onsubmit="return confirm('Mark all current SSS3 students as graduates?');" style="display:inline;">
+            <button type="submit" class="btn btn-success"><i class="fas fa-user-graduate"></i> Graduate current SSS3</button>
+        </form>
+    </div>
+</div>
 
 <div class="card mb-3">
     <div class="card-body">

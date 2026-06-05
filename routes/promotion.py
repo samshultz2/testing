@@ -7,8 +7,9 @@ from models import (
     Term, AcademicSession, SchoolClass, ClassArm, TermSummary, StudentScore,
     ClassSubject, Subject, SchoolSettings, GradeScale
 )
-from utils.helpers import login_required
+from utils.helpers import login_required, get_sss3_enrolled_students
 from sqlalchemy import func
+from datetime import date
 import json
 
 promotion_bp = Blueprint('promotion', __name__, url_prefix='/promotion')
@@ -36,6 +37,68 @@ def graduates_list():
     return render_template('promotion/graduates.html',
         sessions=sessions, session_id=session_id, graduates=graduates
     )
+
+
+@promotion_bp.route('/graduate/<int:student_id>', methods=['POST'])
+@login_required
+def mark_graduate(student_id):
+    """Mark a single (SSS3) student as graduated."""
+    student = Student.query.get_or_404(student_id)
+    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    try:
+        student.is_graduated = True
+        student.graduation_date = date.today()
+        if active_session:
+            student.graduation_session_id = active_session.id
+        db.session.commit()
+        flash(f'{student.full_name} has been marked as a graduate.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(request.referrer or url_for('main.view_student', student_id=student.id))
+
+
+@promotion_bp.route('/ungraduate/<int:student_id>', methods=['POST'])
+@login_required
+def unmark_graduate(student_id):
+    """Reverse a graduation (in case it was marked by mistake)."""
+    student = Student.query.get_or_404(student_id)
+    try:
+        student.is_graduated = False
+        student.graduation_date = None
+        student.graduation_session_id = None
+        db.session.commit()
+        flash(f'{student.full_name} is no longer marked as a graduate.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(request.referrer or url_for('main.view_student', student_id=student.id))
+
+
+@promotion_bp.route('/graduate-sss3', methods=['POST'])
+@login_required
+def graduate_sss3():
+    """Mark every current SSS3 student (active term) as a graduate in one click."""
+    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    students = get_sss3_enrolled_students()
+    graduated = 0
+    try:
+        for student in students:
+            if not student.is_graduated:
+                student.is_graduated = True
+                student.graduation_date = date.today()
+                if active_session:
+                    student.graduation_session_id = active_session.id
+                graduated += 1
+        db.session.commit()
+        if graduated:
+            flash(f'{graduated} SSS3 student(s) marked as graduates.', 'success')
+        else:
+            flash('No new SSS3 students to graduate.', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('promotion.graduates_list'))
 
 
 @promotion_bp.route('/graduates/<int:student_id>')

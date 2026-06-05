@@ -11,8 +11,18 @@
     <div>
         <h1>{{ student.full_name }}</h1>
         <span class="badge badge-primary">{{ student.student_id }}</span>
+        {% if student.is_graduated %}<span class="badge badge-success"><i class="fas fa-user-graduate"></i> Graduate</span>{% endif %}
     </div>
     <div class="page-header-actions">
+        {% if student.is_graduated %}
+        <form method="POST" action="{{ url_for('promotion.unmark_graduate', student_id=student.id) }}" onsubmit="return confirm('Undo graduation for {{ student.full_name }}?');" style="display:inline;">
+            <button type="submit" class="btn btn-warning"><i class="fas fa-rotate-left"></i> Undo Graduate</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('promotion.mark_graduate', student_id=student.id) }}" onsubmit="return confirm('Mark {{ student.full_name }} as a graduate?');" style="display:inline;">
+            <button type="submit" class="btn btn-success"><i class="fas fa-user-graduate"></i> Mark as Graduate</button>
+        </form>
+        {% endif %}
         <a href="{{ url_for('results.student_predictions', student_id=student.id) }}" class="btn btn-info">
             <i class="fas fa-chart-line"></i> Predictions
         </a>

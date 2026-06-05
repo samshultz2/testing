@@ -240,15 +240,8 @@ WAEC_DEFAULT_SUBJECTS = [
 ]
 
 
-def get_sss3_students():
-    """
-    Return the list of active SSS3 students enrolled in the current active term,
-    ordered by surname. External exams (WAEC/JAMB/Mock JAMB) are taken by SSS3
-    students, so result-entry screens are restricted to this set.
-
-    Falls back to all active students only if the SSS3 class / active term has
-    not been set up yet, so result entry never becomes impossible.
-    """
+def _sss3_enrolled_map():
+    """Return {id: Student} for active SSS3 students enrolled in the active term."""
     from models import (
         Student, SchoolClass, ClassArmAssignment, StudentEnrollment, Term
     )
@@ -269,6 +262,38 @@ def get_sss3_students():
             for enrollment in enrollments:
                 if enrollment.student.is_active:
                     students[enrollment.student.id] = enrollment.student
+    return students
+
+
+def get_sss3_enrolled_students():
+    """Active SSS3 students enrolled in the current active term, ordered by name."""
+    students = _sss3_enrolled_map()
+    return sorted(students.values(), key=lambda s: (s.surname or '', s.first_name or ''))
+
+
+def get_sss3_students():
+    """
+    Students eligible for external-exam (WAEC/JAMB/Mock JAMB) result entry.
+
+    This is the current SSS3 class (enrolled in the active term) PLUS students
+    who graduated in the active session, so their WAEC/JAMB results can still be
+    entered after they have graduated. Falls back to all active students only if
+    the SSS3 class / active term has not been set up yet, so result entry never
+    becomes impossible.
+    """
+    from models import Student, AcademicSession
+
+    students = _sss3_enrolled_map()
+
+    # Include this session's graduates (former SSS3) so results can still be added.
+    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    if active_session:
+        graduates = Student.query.filter_by(
+            is_active=True, is_graduated=True,
+            graduation_session_id=active_session.id
+        ).all()
+        for g in graduates:
+            students.setdefault(g.id, g)
 
     if students:
         return sorted(students.values(), key=lambda s: (s.surname or '', s.first_name or ''))

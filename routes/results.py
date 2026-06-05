@@ -608,6 +608,45 @@ def view_jamb_student(student_id):
     )
 
 
+@results_bp.route('/subject-enrolment')
+@login_required
+def subject_enrolment():
+    """Report: how many students are enrolled for each WAEC / JAMB subject."""
+    only_sss3 = request.args.get('scope', 'sss3') != 'all'
+    if only_sss3:
+        students = get_sss3_students()
+    else:
+        students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+
+    waec_counts = {}
+    jamb_counts = {}
+    waec_enrolled = 0
+    jamb_enrolled = 0
+    for s in students:
+        wl = s.waec_subject_list
+        jl = s.jamb_subject_list
+        if wl:
+            waec_enrolled += 1
+        if jl:
+            jamb_enrolled += 1
+        for subj in wl:
+            waec_counts[subj] = waec_counts.get(subj, 0) + 1
+        for subj in jl:
+            jamb_counts[subj] = jamb_counts.get(subj, 0) + 1
+
+    waec_rows = sorted(waec_counts.items(), key=lambda x: (-x[1], x[0]))
+    jamb_rows = sorted(jamb_counts.items(), key=lambda x: (-x[1], x[0]))
+
+    return render_template('results/subject_enrolment.html',
+        waec_rows=waec_rows,
+        jamb_rows=jamb_rows,
+        waec_enrolled=waec_enrolled,
+        jamb_enrolled=jamb_enrolled,
+        student_count=len(students),
+        only_sss3=only_sss3
+    )
+
+
 @results_bp.route('/jamb/student/<int:student_id>/edit/<int:year>', methods=['GET', 'POST'])
 @login_required
 def edit_jamb(student_id, year):

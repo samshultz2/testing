@@ -185,6 +185,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('results.subject_enrolment') }}" class="nav-link {% if request.endpoint == 'results.subject_enrolment' %}active{% endif %}">
+                            <i class="fas fa-list-check"></i><span>Subject Enrolment</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('results.predictions_dashboard') }}" class="nav-link {% if 'predictions' in request.endpoint %}active{% endif %}">
                             <i class="fas fa-crystal-ball"></i><span>Predictions</span>
                         </a>
