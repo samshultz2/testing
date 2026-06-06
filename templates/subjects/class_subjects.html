@@ -4,8 +4,30 @@
 {% block content %}
 <div class="page-header">
     <h1>Class Subjects</h1>
-    <a href="{{ url_for('subjects.assign_class_subjects') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Assign</a>
+    <div class="page-header-actions">
+        {% if term_id %}<button type="button" class="btn btn-info btn-sm" onclick="document.getElementById('copyCard').classList.toggle('hidden')"><i class="fas fa-copy"></i> Copy from term</button>{% endif %}
+        <a href="{{ url_for('subjects.assign_class_subjects') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Assign</a>
+    </div>
 </div>
+
+{% if term_id %}
+<div class="card mb-3 hidden" id="copyCard" style="border-color:var(--info);">
+    <div class="card-header"><h3><i class="fas fa-copy"></i> Copy subject assignments into {{ selected_term.full_name if selected_term else 'this term' }}</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm">Copy the subject-to-class assignments (and teachers) from another term. You can modify them afterwards. Existing assignments are kept.</p>
+        <form method="POST" action="{{ url_for('subjects.copy_class_subjects') }}" class="d-flex gap-2 align-center flex-wrap" data-confirm="Copy subject assignments into this term?">
+            <input type="hidden" name="to_term_id" value="{{ term_id }}">
+            {% if class_id %}<input type="hidden" name="class_id" value="{{ class_id }}">{% endif %}
+            <label class="form-label mb-0">Copy from</label>
+            <select name="from_term_id" class="form-control" style="max-width:240px;" required>
+                <option value="">Select source term…</option>
+                {% for term in terms %}{% if term.id != term_id %}<option value="{{ term.id }}">{{ term.full_name }}</option>{% endif %}{% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-copy"></i> Copy{% if class_id %} (this class){% else %} (all classes){% endif %}</button>
+        </form>
+    </div>
+</div>
+{% endif %}
 
 <div class="card mb-3">
     <div class="card-body">

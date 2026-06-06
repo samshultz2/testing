@@ -2182,3 +2182,4 @@ input:focus, select:focus, textarea:focus {
 .data-table th { background: var(--gray-50); color: var(--text-secondary); }
 .data-table td, .data-table th { border-bottom: 1px solid var(--border-color); }
 [data-theme="dark"] .data-table th { background: var(--gray-100); }
+.hidden { display: none !important; }

@@ -196,6 +196,41 @@ def class_subjects_list():
     )
 
 
+@subjects_bp.route('/class-subjects/copy', methods=['POST'])
+@login_required
+def copy_class_subjects():
+    """Copy subject assignments from one term into another (modifiable later)."""
+    from_term_id = request.form.get('from_term_id', type=int)
+    to_term_id = request.form.get('to_term_id', type=int)
+    class_id = request.form.get('class_id', type=int)
+
+    if not from_term_id or not to_term_id or from_term_id == to_term_id:
+        flash('Choose two different terms to copy between.', 'error')
+        return redirect(url_for('subjects.class_subjects_list', term_id=to_term_id, class_id=class_id))
+
+    source = ClassSubject.query.filter_by(term_id=from_term_id, is_active=True)
+    if class_id:
+        source = source.filter_by(class_id=class_id)
+    source = source.all()
+
+    copied, skipped = 0, 0
+    for cs in source:
+        exists = ClassSubject.query.filter_by(
+            term_id=to_term_id, class_id=cs.class_id, arm_id=cs.arm_id,
+            subject_id=cs.subject_id
+        ).first()
+        if exists:
+            skipped += 1
+            continue
+        db.session.add(ClassSubject(
+            subject_id=cs.subject_id, class_id=cs.class_id, arm_id=cs.arm_id,
+            term_id=to_term_id, teacher_name=cs.teacher_name, is_active=True))
+        copied += 1
+    db.session.commit()
+    flash(f'Copied {copied} subject assignment(s){" (" + str(skipped) + " already existed)" if skipped else ""}.', 'success')
+    return redirect(url_for('subjects.class_subjects_list', term_id=to_term_id, class_id=class_id))
+
+
 @subjects_bp.route('/class-subjects/assign', methods=['GET', 'POST'])
 @login_required
 def assign_class_subjects():
