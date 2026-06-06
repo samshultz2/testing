@@ -2,9 +2,11 @@
 <div class="fin-tabs">
     <a href="{{ url_for('hr.dashboard') }}" class="fin-tab {% if ep == 'hr.dashboard' %}active{% endif %}"><i class="fas fa-chart-pie"></i> Overview</a>
     <a href="{{ url_for('hr.staff_list') }}" class="fin-tab {% if ep in ['hr.staff_list','hr.staff_detail','hr.add_staff','hr.edit_staff'] %}active{% endif %}"><i class="fas fa-users"></i> Staff</a>
+    <a href="{{ url_for('hr.attendance') }}" class="fin-tab {% if ep == 'hr.attendance' %}active{% endif %}"><i class="fas fa-user-clock"></i> Attendance</a>
     <a href="{{ url_for('hr.leave_list') }}" class="fin-tab {% if ep == 'hr.leave_list' %}active{% endif %}"><i class="fas fa-plane-departure"></i> Leave</a>
     <a href="{{ url_for('hr.payroll_list') }}" class="fin-tab {% if ep in ['hr.payroll_list','hr.payroll_detail'] %}active{% endif %}"><i class="fas fa-money-check-dollar"></i> Payroll</a>
     <a href="{{ url_for('hr.departments') }}" class="fin-tab {% if ep == 'hr.departments' %}active{% endif %}"><i class="fas fa-sitemap"></i> Departments</a>
+    <a href="{{ url_for('hr.settings') }}" class="fin-tab {% if ep == 'hr.settings' %}active{% endif %}"><i class="fas fa-gear"></i> Settings</a>
 </div>
 <style>
 .fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}

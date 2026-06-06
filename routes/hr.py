@@ -10,7 +10,7 @@ from sqlalchemy import func
 
 from models import (
     db, StaffMember, Department, LeaveRecord, PayrollRun, Payslip,
-    Term,
+    SalaryHistory, StaffAttendance, Term,
 )
 from utils.access_control import login_required, admin_required, is_admin
 from utils import hr
@@ -23,6 +23,11 @@ def _d(value, default=None):
         return datetime.strptime(value, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return default
+
+
+def _current_user():
+    from flask import session
+    return session.get('username') or session.get('user') or 'Admin'
 
 
 # ============================================================================
@@ -125,8 +130,10 @@ def staff_detail(staff_id):
     leaves = s.leave_records.order_by(LeaveRecord.start_date.desc()).all()
     payslips = (Payslip.query.filter_by(staff_id=s.id)
                 .join(PayrollRun).order_by(PayrollRun.year.desc(), PayrollRun.month.desc()).all())
+    salary_history = s.salary_history.order_by(SalaryHistory.created_at.desc()).all()
     return render_template('hr/staff_detail.html', s=s, leaves=leaves,
-                           payslips=payslips, leave_types=hr.LEAVE_TYPES)
+                           payslips=payslips, leave_types=hr.LEAVE_TYPES,
+                           salary_history=salary_history, today=date.today())
 
 
 @hr_bp.route('/staff/<int:staff_id>/edit', methods=['GET', 'POST'])
@@ -141,6 +148,26 @@ def edit_staff(staff_id):
     return render_template('hr/staff_form.html', staff=s,
         departments=Department.query.filter_by(is_active=True).order_by(Department.name).all(),
         statuses=hr.STATUSES, staff_types=hr.STAFF_TYPES, employment_types=hr.EMPLOYMENT_TYPES)
+
+
+@hr_bp.route('/staff/<int:staff_id>/salary', methods=['POST'])
+@admin_required
+def adjust_salary(staff_id):
+    """Record a salary increment / adjustment and update the current salary."""
+    s = StaffMember.query.get_or_404(staff_id)
+    new_salary = request.form.get('new_salary', type=float)
+    if new_salary is None or new_salary < 0:
+        flash('Enter a valid new salary.', 'error')
+        return redirect(url_for('hr.staff_detail', staff_id=staff_id))
+    db.session.add(SalaryHistory(
+        staff_id=s.id, previous_salary=s.salary or 0, new_salary=new_salary,
+        effective_date=_d(request.form.get('effective_date')) or date.today(),
+        reason=(request.form.get('reason') or '').strip() or None,
+        created_by=_current_user()))
+    s.salary = new_salary
+    db.session.commit()
+    flash(f'Salary updated to {new_salary:,.2f}.', 'success')
+    return redirect(url_for('hr.staff_detail', staff_id=staff_id))
 
 
 @hr_bp.route('/staff/<int:staff_id>/delete', methods=['POST'])
@@ -401,3 +428,87 @@ def print_payslip(run_id, slip_id):
               'address': SchoolSettings.get('school_address', ''),
               'phone': SchoolSettings.get('school_phone', '')}
     return render_template('hr/payslip_print.html', ps=ps, run=ps.run, school=school)
+
+
+@hr_bp.route('/payroll/<int:run_id>/sync-deductions', methods=['POST'])
+@admin_required
+def sync_deductions(run_id):
+    run = PayrollRun.query.get_or_404(run_id)
+    n = hr.sync_attendance_deductions(run)
+    db.session.commit()
+    flash(f'Refreshed deductions from attendance ({n} payslip(s) updated).', 'success')
+    return redirect(url_for('hr.payroll_detail', run_id=run_id))
+
+
+# ============================================================================
+# STAFF ATTENDANCE (with auto lateness / absence deductions)
+# ============================================================================
+
+@hr_bp.route('/attendance')
+@login_required
+def attendance():
+    day = _d(request.args.get('date')) or date.today()
+    dept_id = request.args.get('department_id', type=int)
+    query = StaffMember.query.filter_by(is_active=True, status='Active')
+    if dept_id:
+        query = query.filter_by(department_id=dept_id)
+    staff = query.order_by(StaffMember.surname, StaffMember.first_name).all()
+
+    existing = {a.staff_id: a for a in StaffAttendance.query.filter_by(date=day).all()}
+    rows = [{'staff': s, 'att': existing.get(s.id)} for s in staff]
+    # Daily summary
+    todays = list(existing.values())
+    summary = {
+        'present': sum(1 for a in todays if a.status == 'Present'),
+        'late': sum(1 for a in todays if a.status == 'Late'),
+        'absent': sum(1 for a in todays if a.status == 'Absent'),
+        'deduction': sum(a.deduction or 0 for a in todays),
+    }
+    departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    return render_template('hr/attendance.html', rows=rows, day=day, dept_id=dept_id,
+        departments=departments, settings=hr.get_settings(), summary=summary,
+        att_statuses=hr.ATT_STATUSES)
+
+
+@hr_bp.route('/attendance/save', methods=['POST'])
+@login_required
+def save_attendance():
+    day = _d(request.form.get('date')) or date.today()
+    settings = hr.get_settings()
+    staff_ids = request.form.getlist('staff_id', type=int)
+    saved = 0
+    for sid in staff_ids:
+        status = request.form.get(f'status_{sid}') or 'Present'
+        clock_in = (request.form.get(f'clock_{sid}') or '').strip() or None
+        st, mins, ded = hr.compute_attendance(status, clock_in, settings)
+        rec = StaffAttendance.query.filter_by(staff_id=sid, date=day).first()
+        if not rec:
+            rec = StaffAttendance(staff_id=sid, date=day)
+            db.session.add(rec)
+        rec.status = st
+        rec.clock_in = clock_in
+        rec.minutes_late = mins
+        rec.deduction = ded
+        saved += 1
+    db.session.commit()
+    flash(f'Attendance saved for {saved} staff on {day.strftime("%d %b %Y")}.', 'success')
+    return redirect(url_for('hr.attendance', date=day.isoformat()))
+
+
+# ============================================================================
+# HR SETTINGS
+# ============================================================================
+
+@hr_bp.route('/settings')
+@login_required
+def settings():
+    return render_template('hr/settings.html', settings=hr.get_settings())
+
+
+@hr_bp.route('/settings/save', methods=['POST'])
+@admin_required
+def save_hr_settings():
+    hr.save_settings(request.form)
+    db.session.commit()
+    flash('HR settings saved.', 'success')
+    return redirect(url_for('hr.settings'))

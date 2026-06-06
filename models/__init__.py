@@ -24,7 +24,8 @@ from .models_contributions import ContributionSettings, ContributionPayment, Con
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
                              ExpenseCategory, Expense)
 from .models_comms import MessageTemplate, Message, MessageRecipient
-from .models_hr import Department, StaffMember, LeaveRecord, PayrollRun, Payslip
+from .models_hr import (Department, StaffMember, LeaveRecord, PayrollRun, Payslip,
+                        SalaryHistory, StaffAttendance)
 
 __all__ = [
     'db', 'local_now', 'init_db',
@@ -47,7 +48,8 @@ __all__ = [
     'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
     'ExpenseCategory', 'Expense',
     'MessageTemplate', 'Message', 'MessageRecipient',
-    'Department', 'StaffMember', 'LeaveRecord', 'PayrollRun', 'Payslip'
+    'Department', 'StaffMember', 'LeaveRecord', 'PayrollRun', 'Payslip',
+    'SalaryHistory', 'StaffAttendance'
 ]
 
 # Analytics models

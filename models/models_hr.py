@@ -155,3 +155,50 @@ class Payslip(db.Model):
 
     def __repr__(self):
         return f'<Payslip run{self.run_id} staff{self.staff_id} net{self.net}>'
+
+
+class SalaryHistory(db.Model):
+    """Audit trail of salary changes (increments / adjustments)."""
+    __tablename__ = 'salary_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False)
+    previous_salary = db.Column(db.Float, default=0)
+    new_salary = db.Column(db.Float, default=0)
+    effective_date = db.Column(db.Date)
+    reason = db.Column(db.String(200))
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    staff = db.relationship('StaffMember', backref=db.backref(
+        'salary_history', lazy='dynamic', cascade='all, delete-orphan'))
+
+    @property
+    def change(self):
+        return (self.new_salary or 0) - (self.previous_salary or 0)
+
+    def __repr__(self):
+        return f'<SalaryHistory staff{self.staff_id} {self.previous_salary}->{self.new_salary}>'
+
+
+class StaffAttendance(db.Model):
+    """Daily staff attendance with auto lateness / absence deductions."""
+    __tablename__ = 'staff_attendance'
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(15), default='Present')  # Present/Late/Absent/Excused
+    clock_in = db.Column(db.String(5))                    # 'HH:MM'
+    minutes_late = db.Column(db.Integer, default=0)
+    deduction = db.Column(db.Float, default=0)
+    note = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    staff = db.relationship('StaffMember', backref=db.backref(
+        'attendance', lazy='dynamic', cascade='all, delete-orphan'))
+
+    __table_args__ = (db.UniqueConstraint('staff_id', 'date', name='uq_staff_attendance_day'),)
+
+    def __repr__(self):
+        return f'<StaffAttendance {self.staff_id} {self.date} {self.status}>'

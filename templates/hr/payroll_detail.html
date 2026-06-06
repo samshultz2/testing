@@ -8,6 +8,10 @@
         <span class="badge {% if run.status=='Paid' %}badge-success{% elif run.status=='Finalized' %}badge-info{% else %}badge-warning{% endif %}" style="align-self:center;">{{ run.status }}</span>
         {% if user_permissions.is_admin %}
             {% if run.status == 'Draft' %}
+            <form method="POST" action="{{ url_for('hr.sync_deductions', run_id=run.id) }}" data-confirm="Refresh every payslip's deductions from this month's attendance?">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-secondary"><i class="fas fa-rotate"></i> Refresh deductions from attendance</button>
+            </form>
             <form method="POST" action="{{ url_for('hr.finalize_payroll', run_id=run.id) }}" data-confirm="Finalize this payroll? You can optionally post the total to Finance.">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="post_expense" value="1">
