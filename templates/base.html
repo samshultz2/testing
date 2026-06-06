@@ -343,6 +343,9 @@
                     </div>
                     {% endif %}
                     <button class="theme-toggle" id="themeToggle" title="Toggle dark mode"></button>
+                    <button class="header-icon-btn header-install-btn" id="installBtn" title="Install app" style="display:none;">
+                        <i class="fas fa-circle-down"></i>
+                    </button>
                     <button class="header-icon-btn" id="clearCacheBtn" title="Clear cache & reload (use if changes aren't showing)">
                         <i class="fas fa-rotate"></i>
                     </button>
@@ -408,6 +411,8 @@
         transition: all 0.2s ease;
     }
     .header-icon-btn:hover { background: var(--primary); color: #fff; }
+    .header-install-btn { background: var(--primary); color: #fff; }
+    .header-install-btn:hover { filter: brightness(1.08); background: var(--primary); color: #fff; }
     .header-icon-btn.spinning i { animation: hib-spin 0.8s linear infinite; }
     @keyframes hib-spin { to { transform: rotate(360deg); } }
 
@@ -489,6 +494,40 @@
             }
         });
     }
+
+    // Install (Add to Home Screen) button.
+    (function () {
+        var btn = document.getElementById('installBtn');
+        if (!btn) return;
+        var deferred = null;
+        var ua = navigator.userAgent || '';
+        var isIOS = /iphone|ipad|ipod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+        var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+        window.addEventListener('beforeinstallprompt', function (e) {
+            e.preventDefault();
+            deferred = e;
+            if (!standalone) btn.style.display = 'flex';
+        });
+        window.addEventListener('appinstalled', function () {
+            btn.style.display = 'none';
+            deferred = null;
+        });
+        // iOS/iPadOS never fire beforeinstallprompt — surface the button so we
+        // can show the manual Add-to-Home-Screen steps.
+        if (isIOS && !standalone) btn.style.display = 'flex';
+
+        btn.addEventListener('click', function () {
+            if (deferred) {
+                deferred.prompt();
+                deferred.userChoice.finally(function () { deferred = null; btn.style.display = 'none'; });
+            } else if (isIOS) {
+                alert('To install PosyHub:\n\n1. Tap the Share button (the square with an up-arrow).\n2. Choose "Add to Home Screen".\n3. Tap Add.');
+            } else {
+                alert('To install PosyHub:\n\nOpen your browser menu (⋮) and choose "Install app" or "Add to Home screen".\n\nIf you don\'t see it yet, reload this page and try again.');
+            }
+        });
+    })();
 
     // Clear-cache button: wipe all caches, update the service worker, hard reload.
     (function () {
