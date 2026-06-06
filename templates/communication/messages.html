@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Message History - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('comms.dashboard') }}">Communication</a> / <span>History</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Message History</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('comms.compose') }}" class="btn btn-primary"><i class="fas fa-paper-plane"></i> New Message</a>
+    </div>
+</div>
+{% include 'communication/_tabs.html' %}
+
+<div class="card">
+    <div class="card-body" style="padding:0;">
+        {% if messages %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Date</th><th>Title</th><th>Audience</th><th>Channel</th><th class="text-right">Recipients</th><th class="text-right">Sent</th><th></th></tr></thead>
+                <tbody>
+                    {% for m in messages %}
+                    <tr>
+                        <td data-label="Date">{{ m.created_at.strftime('%d %b %Y') }}</td>
+                        <td data-label="Title"><a href="{{ url_for('comms.message_detail', message_id=m.id) }}"><strong>{{ m.title or 'Message' }}</strong></a></td>
+                        <td data-label="Audience" class="text-muted text-sm">{{ m.audience_label }}</td>
+                        <td data-label="Channel"><span class="badge {{ 'badge-success' if m.channel=='WhatsApp' else 'badge-info' }}">{{ m.channel }}</span></td>
+                        <td data-label="Recipients" class="text-right">{{ m.recipient_count }}</td>
+                        <td data-label="Sent" class="text-right">{{ m.sent_count }}</td>
+                        <td class="actions"><a href="{{ url_for('comms.message_detail', message_id=m.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-right"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-paper-plane"></i><h3>No messages yet</h3><p>Compose your first parent broadcast.</p><a href="{{ url_for('comms.compose') }}" class="btn btn-primary mt-2">Compose</a></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

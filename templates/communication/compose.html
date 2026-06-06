@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Compose Message - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('comms.dashboard') }}">Communication</a> / <span>Compose</span>{% endblock %}
+{% block extra_css %}
+<style>
+.compose-grid{display:grid;grid-template-columns:1fr;gap:1rem;align-items:start}
+@media(min-width:992px){.compose-grid{grid-template-columns:1.3fr 1fr}}
+.ph-btns{display:flex;flex-wrap:wrap;gap:.35rem;margin:.4rem 0}
+.ph-btn{font-size:.74rem;font-family:var(--font-mono,monospace);background:var(--gray-100);border:1px solid var(--border-color);border-radius:var(--radius-full);padding:.2rem .6rem;cursor:pointer}
+.ph-btn:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+.seg-info{display:flex;justify-content:space-between;font-size:.75rem;color:var(--text-muted);margin-top:.35rem}
+.aud-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+@media(min-width:560px){.aud-cards{grid-template-columns:repeat(4,1fr)}}
+.aud-card{border:1.5px solid var(--border-color);border-radius:var(--radius-md);padding:.7rem;text-align:center;cursor:pointer;transition:all .15s}
+.aud-card i{font-size:1.2rem;color:var(--primary);display:block;margin-bottom:.3rem}
+.aud-card.sel{border-color:var(--primary);background:var(--primary-light,rgba(13,106,78,.08))}
+.aud-card .t{font-size:.78rem;font-weight:600}
+.preview-phone{background:#e5ddd5;border-radius:var(--radius-md);padding:1rem;min-height:120px}
+[data-theme="dark"] .preview-phone{background:#0b141a}
+.bubble{background:#dcf8c6;border-radius:10px;padding:.6rem .8rem;font-size:.85rem;max-width:90%;box-shadow:0 1px 1px rgba(0,0,0,.1);white-space:pre-wrap;word-break:break-word}
+[data-theme="dark"] .bubble{background:#075e54;color:#e9edef}
+.chip{display:inline-flex;align-items:center;gap:.4rem;background:var(--gray-100);border-radius:var(--radius-full);padding:.25rem .6rem;font-size:.8rem;margin:.15rem}
+.chip button{border:none;background:none;cursor:pointer;color:var(--danger)}
+.ac-wrap{position:relative}
+.ac-list{position:absolute;z-index:30;left:0;right:0;top:100%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);box-shadow:var(--shadow-md);max-height:220px;overflow:auto}
+.ac-list div{padding:.5rem .75rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid var(--border-light)}
+.ac-list div:hover{background:var(--gray-50)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Compose Message</h1></div>
+{% include 'communication/_tabs.html' %}
+
+<form method="POST" action="{{ url_for('comms.compose') }}" id="composeForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="compose-grid">
+        <div>
+            <!-- Audience -->
+            <div class="card mb-3">
+                <div class="card-header"><h3>1 · Audience</h3></div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label class="form-label">Term</label>
+                        <select name="term_id" id="termSelect" class="form-control">
+                            {% for t in terms %}<option value="{{ t.id }}" {% if term and term.id==t.id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <input type="hidden" name="audience" id="audienceInput" value="all">
+                    <div class="aud-cards">
+                        <div class="aud-card sel" data-aud="all"><i class="fas fa-users"></i><div class="t">All parents</div></div>
+                        <div class="aud-card" data-aud="class"><i class="fas fa-school"></i><div class="t">By class</div></div>
+                        <div class="aud-card" data-aud="defaulters"><i class="fas fa-triangle-exclamation"></i><div class="t">Fee defaulters</div></div>
+                        <div class="aud-card" data-aud="students"><i class="fas fa-user-check"></i><div class="t">Selected</div></div>
+                    </div>
+
+                    <div id="classRow" class="form-row mt-3" style="display:none;">
+                        <div class="form-group"><label class="form-label">Class</label>
+                            <select name="class_id" id="classSelect" class="form-control"><option value="">All classes</option>{% for c in classes %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+                        </div>
+                        <div class="form-group" id="armGroup"><label class="form-label">Arm</label>
+                            <select name="arm_id" class="form-control"><option value="">All arms</option>{% for a in arms %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select>
+                        </div>
+                    </div>
+
+                    <div id="studentsRow" class="mt-3" style="display:none;">
+                        <div class="form-group ac-wrap">
+                            <label class="form-label">Add students</label>
+                            <input type="text" id="studentSearch" class="form-control" placeholder="Search name or ID…" autocomplete="off">
+                            <div id="acList" class="ac-list" style="display:none;"></div>
+                        </div>
+                        <div id="chips"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message -->
+            <div class="card">
+                <div class="card-header"><h3>2 · Message</h3></div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Title (internal)</label><input type="text" name="title" class="form-control" placeholder="e.g., June fee reminder"></div>
+                        <div class="form-group"><label class="form-label">Channel</label><select name="channel" id="channelSelect" class="form-control">{% for ch in channels %}<option value="{{ ch }}">{{ ch }}</option>{% endfor %}</select></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Use a template</label>
+                        <select id="templateSelect" class="form-control">
+                            <option value="">— Start from scratch —</option>
+                            {% for t in templates %}<option value="{{ t.id }}" data-body="{{ t.body|e }}">{{ t.name }}{% if t.category %} · {{ t.category }}{% endif %}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label class="form-label">Message body <span class="required">*</span></label>
+                        <div class="ph-btns">
+                            {% for p in placeholders %}<span class="ph-btn" data-ph="{{ p }}">{{ p }}</span>{% endfor %}
+                        </div>
+                        <textarea name="body" id="bodyInput" class="form-control" rows="6" required placeholder="Type your message. Tap a tag above to personalise it."></textarea>
+                        <div class="seg-info"><span id="charCount">0 characters</span><span id="segCount">0 SMS segments</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview + send -->
+        <div>
+            <div class="card mb-3" style="position:sticky;top:1rem;">
+                <div class="card-header"><h3>3 · Preview &amp; send</h3></div>
+                <div class="card-body">
+                    <div class="d-flex gap-2 align-center mb-2" style="font-size:.85rem;">
+                        <span class="badge badge-info" id="reachBadge">— recipients</span>
+                        <span class="text-muted" id="noPhoneNote"></span>
+                    </div>
+                    <div class="text-muted text-sm mb-1">Sample (first recipient):</div>
+                    <div class="preview-phone mb-3"><div class="bubble" id="previewBubble">Your message preview appears here…</div></div>
+                    <button type="button" class="btn btn-secondary w-100 mb-2" id="refreshPreview"><i class="fas fa-rotate"></i> Refresh preview</button>
+                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-paper-plane"></i> Create campaign</button>
+                    <p class="text-muted text-sm mt-2 mb-0"><i class="fas fa-circle-info"></i> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export for bulk gateways. Nothing is sent automatically.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+    const audInput=document.getElementById('audienceInput');
+    const classRow=document.getElementById('classRow');
+    const armGroup=document.getElementById('armGroup');
+    const studentsRow=document.getElementById('studentsRow');
+    const body=document.getElementById('bodyInput');
+    const charCount=document.getElementById('charCount');
+    const segCount=document.getElementById('segCount');
+
+    document.querySelectorAll('.aud-card').forEach(card=>{
+        card.addEventListener('click',()=>{
+            document.querySelectorAll('.aud-card').forEach(c=>c.classList.remove('sel'));
+            card.classList.add('sel');
+            const a=card.dataset.aud; audInput.value=a;
+            classRow.style.display=(a==='class'||a==='defaulters')?'':'none';
+            armGroup.style.display=(a==='class')?'':'none';
+            studentsRow.style.display=(a==='students')?'':'none';
+            schedulePreview();
+        });
+    });
+
+    // Template -> body
+    const tpl=document.getElementById('templateSelect');
+    tpl.addEventListener('change',function(){
+        const opt=tpl.options[tpl.selectedIndex];
+        const b=opt.getAttribute('data-body');
+        if(b){ body.value=b; updateCount(); schedulePreview(); }
+    });
+
+    // Placeholder insert at cursor
+    document.querySelectorAll('.ph-btn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            const ph=btn.dataset.ph, s=body.selectionStart||body.value.length, e=body.selectionEnd||body.value.length;
+            body.value=body.value.slice(0,s)+ph+body.value.slice(e);
+            body.focus(); body.selectionStart=body.selectionEnd=s+ph.length;
+            updateCount(); schedulePreview();
+        });
+    });
+
+    function updateCount(){
+        const n=body.value.length;
+        charCount.textContent=n+' character'+(n===1?'':'s');
+        segCount.textContent=(n?Math.ceil(n/160):0)+' SMS segment'+(Math.ceil(n/160)===1?'':'s');
+    }
+    body.addEventListener('input',()=>{updateCount();schedulePreview();});
+    updateCount();
+
+    // Selected-students chips
+    const chips=document.getElementById('chips');
+    const picked=new Set();
+    function addChip(id,name){
+        if(picked.has(id))return; picked.add(id);
+        const span=document.createElement('span'); span.className='chip';
+        span.innerHTML='<input type="hidden" name="student_ids" value="'+id+'">'+name+' <button type="button">&times;</button>';
+        span.querySelector('button').onclick=()=>{picked.delete(id);span.remove();schedulePreview();};
+        chips.appendChild(span); schedulePreview();
+    }
+    const ss=document.getElementById('studentSearch'), acList=document.getElementById('acList');
+    let t=null;
+    if(ss){
+        ss.addEventListener('input',function(){
+            clearTimeout(t); const q=ss.value.trim();
+            if(q.length<2){acList.style.display='none';return;}
+            t=setTimeout(()=>{
+                fetch("{{ url_for('comms.students_search') }}?q="+encodeURIComponent(q)).then(r=>r.json()).then(rows=>{
+                    acList.innerHTML=''; if(!rows.length){acList.style.display='none';return;}
+                    rows.forEach(s=>{const d=document.createElement('div');d.textContent=s.name+' ('+s.sid+')';
+                        d.onclick=()=>{addChip(s.id,s.name);ss.value='';acList.style.display='none';};acList.appendChild(d);});
+                    acList.style.display='block';
+                });
+            },220);
+        });
+        document.addEventListener('click',e=>{if(!acList.contains(e.target)&&e.target!==ss)acList.style.display='none';});
+    }
+
+    // Live preview
+    const reachBadge=document.getElementById('reachBadge');
+    const noPhoneNote=document.getElementById('noPhoneNote');
+    const bubble=document.getElementById('previewBubble');
+    let pt=null;
+    function schedulePreview(){clearTimeout(pt);pt=setTimeout(runPreview,400);}
+    function runPreview(){
+        const fd=new FormData(document.getElementById('composeForm'));
+        fetch("{{ url_for('comms.compose_preview') }}",{method:'POST',body:fd,headers:{'X-Requested-With':'fetch'}})
+            .then(r=>r.json()).then(d=>{
+                reachBadge.textContent=d.reachable+' recipient'+(d.reachable===1?'':'s');
+                noPhoneNote.textContent=d.no_phone?(d.no_phone+' have no phone'):'';
+                bubble.textContent=d.sample||'(no matching recipients)';
+            }).catch(()=>{});
+    }
+    document.getElementById('refreshPreview').addEventListener('click',runPreview);
+    document.getElementById('termSelect').addEventListener('change',schedulePreview);
+    document.getElementById('classSelect') && document.getElementById('classSelect').addEventListener('change',schedulePreview);
+    document.querySelector('[name=arm_id]') && document.querySelector('[name=arm_id]').addEventListener('change',schedulePreview);
+    setTimeout(runPreview,300);
+})();
+</script>
+{% endblock %}

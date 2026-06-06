@@ -23,6 +23,7 @@ from .models import (
 from .models_contributions import ContributionSettings, ContributionPayment, ContributionExpense
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
                              ExpenseCategory, Expense)
+from .models_comms import MessageTemplate, Message, MessageRecipient
 
 __all__ = [
     'db', 'local_now', 'init_db',
@@ -43,7 +44,8 @@ __all__ = [
     'GenSubjectClashRule', 'GenCombinedClassRule',
     'ContributionSettings', 'ContributionPayment', 'ContributionExpense',
     'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
-    'ExpenseCategory', 'Expense'
+    'ExpenseCategory', 'Expense',
+    'MessageTemplate', 'Message', 'MessageRecipient'
 ]
 
 # Analytics models

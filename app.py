@@ -12,6 +12,7 @@ from routes.generator import generator_bp
 from routes.contributions import contributions_bp
 from routes.mock_jamb import mock_jamb_bp
 from routes.finance import finance_bp
+from routes.communication import comms_bp
 
 
 def create_app(config_class=Config):
@@ -42,6 +43,7 @@ def create_app(config_class=Config):
     app.register_blueprint(mock_jamb_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(finance_bp)
+    app.register_blueprint(comms_bp)
     
     # Initialize database
     with app.app_context():
@@ -154,6 +156,12 @@ def create_app(config_class=Config):
         if n >= 1_000:
             return f'{sign}₦{n/1_000:.1f}k'
         return f'{sign}₦{n:,.0f}'
+
+    @app.template_filter('wa_intl')
+    def wa_intl_filter(value):
+        """Phone number in international digits for wa.me links (080… -> 23480…)."""
+        from utils.comms import normalise_phone
+        return normalise_phone(value)
 
     @app.template_filter('format_phone')
     def format_phone_filter(value):

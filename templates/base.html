@@ -209,6 +209,28 @@
                         </a>
                     </li>
 
+                    <li class="nav-section">Communication</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.dashboard') }}" class="nav-link {% if request.endpoint == 'comms.dashboard' %}active{% endif %}">
+                            <i class="fas fa-comments"></i><span>Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.compose') }}" class="nav-link {% if request.endpoint in ['comms.compose','comms.messages_list','comms.message_detail'] %}active{% endif %}">
+                            <i class="fas fa-paper-plane"></i><span>Send Message</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.templates_list') }}" class="nav-link {% if request.endpoint == 'comms.templates_list' %}active{% endif %}">
+                            <i class="fas fa-file-lines"></i><span>Templates</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.contacts') }}" class="nav-link {% if request.endpoint == 'comms.contacts' %}active{% endif %}">
+                            <i class="fas fa-address-book"></i><span>Contacts</span>
+                        </a>
+                    </li>
+
                     <li class="nav-section">External Exams</li>
                     <li class="nav-item">
                         <a href="{{ url_for('results.waec_list') }}" class="nav-link">

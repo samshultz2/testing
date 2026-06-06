@@ -1121,6 +1121,33 @@ def init_db(app):
         except Exception:
             db.session.rollback()
 
+        # Seed default parent-communication templates.
+        try:
+            from models.models_comms import MessageTemplate
+            if MessageTemplate.query.count() == 0:
+                seed_templates = [
+                    ('Fee Reminder', 'Fees',
+                     'Dear {parent}, this is a reminder that {first_name} ({class}) '
+                     'has an outstanding fee balance of {balance} for {term}. '
+                     'Kindly make payment. Thank you. - {school}'),
+                    ('Absence Notice', 'Attendance',
+                     'Dear {parent}, our records show {first_name} ({class}) was '
+                     'absent today. Please contact the school if this is unexpected. - {school}'),
+                    ('Resumption Notice', 'General',
+                     'Dear Parent, this is to inform you that school resumes on [DATE]. '
+                     'Please ensure {first_name} resumes promptly. - {school}'),
+                    ('PTA Meeting', 'Event',
+                     'Dear Parent of {first_name} ({class}), there will be a PTA '
+                     'meeting on [DATE] by [TIME]. Your presence is highly valued. - {school}'),
+                    ('Result Notification', 'General',
+                     'Dear {parent}, {first_name}\'s {term} result is now available. '
+                     'Kindly visit the school to collect the report card. - {school}'),
+                ]
+                for name, cat, body in seed_templates:
+                    db.session.add(MessageTemplate(name=name, category=cat, body=body))
+        except Exception:
+            db.session.rollback()
+
         # Create default admin user if none exists
         if User.query.count() == 0:
             admin = User(
