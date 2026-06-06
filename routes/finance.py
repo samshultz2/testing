@@ -823,21 +823,29 @@ def reports():
             expected += total_cache[key]
         for p in FeePayment.query.filter_by(term_id=term_id).all():
             collected += p.amount
-            cn = placement.get(p.student_id)
-            if cn:
-                by_class.setdefault(cn, {'expected': 0.0, 'collected': 0.0, 'students': 0})['collected'] += p.amount
-        discounts = (db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
-                     .filter(FeeDiscount.term_id == term_id).scalar()) or 0.0
+            # Payments from withdrawn students (not in the active placement) go to
+            # an "Unassigned" bucket so the class table reconciles to the total.
+            cn = placement.get(p.student_id, 'Unassigned / withdrawn')
+            by_class.setdefault(cn, {'expected': 0.0, 'collected': 0.0,
+                                     'discount': 0.0, 'students': 0})['collected'] += p.amount
+        # Per-class discounts (mapped via the student's placement) so each row's
+        # outstanding matches the headline payable figure.
+        for d in FeeDiscount.query.filter_by(term_id=term_id).all():
+            discounts += d.amount
+            cn = placement.get(d.student_id)
+            if cn and cn in by_class:
+                by_class[cn].setdefault('discount', 0.0)
+                by_class[cn]['discount'] += d.amount
         expenses = (db.session.query(func.coalesce(func.sum(Expense.amount), 0.0))
                     .filter(Expense.term_id == term_id).scalar()) or 0.0
 
     payable = max(expected - discounts, 0)
     class_rows = []
     for name, v in sorted(by_class.items()):
-        exp = v['expected']
+        exp = max(v['expected'] - v.get('discount', 0.0), 0)
         col = v['collected']
         class_rows.append({'name': name, 'students': v['students'], 'expected': exp,
-                           'collected': col, 'outstanding': exp - col,
+                           'collected': col, 'outstanding': max(exp - col, 0),
                            'rate': round(col / exp * 100, 1) if exp > 0 else 0.0})
 
     item_breakdown = fee_item_breakdown(term_id) if term_id else []

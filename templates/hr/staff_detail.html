@@ -154,7 +154,7 @@
                 <td data-label="Period">{{ ps.run.period_label }}</td>
                 <td data-label="Basic" class="text-right">{{ ps.basic|naira }}</td>
                 <td data-label="Allow." class="text-right">{{ ps.allowances|naira }}</td>
-                <td data-label="Deduct." class="text-right">{{ ps.deductions|naira }}</td>
+                <td data-label="Deduct." class="text-right">{{ ps.total_deductions|naira }}</td>
                 <td data-label="Net" class="text-right"><strong>{{ ps.net|naira }}</strong></td>
                 <td class="actions"><a href="{{ url_for('hr.print_payslip', run_id=ps.run_id, slip_id=ps.id) }}" class="btn btn-secondary btn-sm" title="Payslip"><i class="fas fa-print"></i></a></td>
             </tr>

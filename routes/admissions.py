@@ -166,7 +166,7 @@ def set_status(applicant_id):
     new_status = request.form.get('status')
     if new_status in admissions.ALL_STATUSES:
         a.status = new_status
-        if new_status in ('Rejected', 'Admitted', 'Accepted', 'Offered'):
+        if new_status in ('Rejected', 'Admitted'):
             a.decision_date = date.today()
         score = request.form.get('entrance_score', type=float)
         if score is not None:
@@ -180,7 +180,11 @@ def set_status(applicant_id):
 @admin_required
 def convert(applicant_id):
     a = Applicant.query.get_or_404(applicant_id)
-    student, err = admissions.convert_to_student(a, request.form.get('assignment_id', type=int))
+    assignment_id = request.form.get('assignment_id', type=int)
+    if assignment_id and not ClassArmAssignment.query.get(assignment_id):
+        flash('Selected class arm no longer exists — admitting without enrolment.', 'warning')
+        assignment_id = None
+    student, err = admissions.convert_to_student(a, assignment_id)
     if err and not student:
         flash(err, 'error')
         return redirect(url_for('admissions.applicant_detail', applicant_id=applicant_id))

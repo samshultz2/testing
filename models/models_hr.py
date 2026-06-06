@@ -143,14 +143,20 @@ class Payslip(db.Model):
     staff_name = db.Column(db.String(120))      # snapshot
     basic = db.Column(db.Float, default=0)
     allowances = db.Column(db.Float, default=0)
-    deductions = db.Column(db.Float, default=0)
+    deductions = db.Column(db.Float, default=0)              # manual (loans, PAYE…)
+    attendance_deduction = db.Column(db.Float, default=0)    # auto from attendance
     net = db.Column(db.Float, default=0)
     created_at = db.Column(db.DateTime, default=local_now)
 
     staff = db.relationship('StaffMember')
 
+    @property
+    def total_deductions(self):
+        return (self.deductions or 0) + (self.attendance_deduction or 0)
+
     def recompute(self):
-        self.net = (self.basic or 0) + (self.allowances or 0) - (self.deductions or 0)
+        self.net = ((self.basic or 0) + (self.allowances or 0)
+                    - (self.deductions or 0) - (self.attendance_deduction or 0))
         return self.net
 
     def __repr__(self):

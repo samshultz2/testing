@@ -86,13 +86,15 @@ class Student(db.Model):
     
     @staticmethod
     def generate_student_id():
-        """Generate unique student ID"""
-        last_student = Student.query.order_by(Student.id.desc()).first()
-        if last_student:
-            num = int(last_student.student_id[3:]) + 1
-        else:
-            num = 1
-        return f"STU{num:05d}"
+        """Generate a unique STU##### id (robust to legacy/non-conforming ids)."""
+        nums = []
+        for (sid,) in db.session.query(Student.student_id).all():
+            if sid and sid.startswith('STU'):
+                try:
+                    nums.append(int(sid[3:]))
+                except (ValueError, TypeError):
+                    continue
+        return f"STU{(max(nums) if nums else 0) + 1:05d}"
     
     def __repr__(self):
         return f'<Student {self.full_name}>'
@@ -1034,6 +1036,14 @@ def _ensure_student_exam_columns():
             statements.append("ALTER TABLE messages ADD COLUMN status VARCHAR(15) DEFAULT 'Draft'")
         if 'scheduled_at' not in m_cols:
             statements.append('ALTER TABLE messages ADD COLUMN scheduled_at DATETIME')
+    except Exception:
+        pass
+
+    # payslips.attendance_deduction (separates auto attendance vs manual deductions).
+    try:
+        ps_cols = {c['name'] for c in inspect(db.engine).get_columns('payslips')}
+        if 'attendance_deduction' not in ps_cols:
+            statements.append('ALTER TABLE payslips ADD COLUMN attendance_deduction FLOAT DEFAULT 0')
     except Exception:
         pass
 

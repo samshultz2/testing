@@ -426,9 +426,13 @@ def send_gateway(message_id):
         flash('No SMS gateway is configured. Add your provider key in Settings.', 'error')
         return redirect(url_for('comms.message_detail', message_id=message_id))
 
+    # Claim a scheduled campaign so this manual send can't race the worker.
+    if msg.status in ('Scheduled', 'Sending') and not comms._claim_message(msg.id, msg.status):
+        flash('This campaign is already being sent.', 'warning')
+        return redirect(url_for('comms.message_detail', message_id=message_id))
+
     sent, failed = comms.dispatch_campaign(msg, cfg)
-    if msg.status in ('Scheduled', 'Draft'):
-        msg.status = 'Sent'
+    msg.status = 'Sent'
     db.session.commit()
     if sent:
         flash(f'Sent {sent} message(s) via {sms_gateway.provider_label(cfg)}.', 'success')

@@ -90,9 +90,19 @@ def student_bill(student_id, term_id):
 
 
 def next_receipt_no():
-    """Sequential receipt number like RCP-000123."""
+    """
+    Monotonic receipt number like RCP-000123.
+
+    Uses a persistent high-water counter in SchoolSettings so numbers are never
+    reused after a payment is deleted (deriving from the latest row id alone
+    would re-issue a just-freed id). Seeded from existing rows for legacy data.
+    """
+    from models import SchoolSettings
     last = FeePayment.query.order_by(FeePayment.id.desc()).first()
-    n = (last.id if last else 0) + 1
+    by_id = last.id if last else 0
+    seq = int(SchoolSettings.get('fee_receipt_seq', 0) or 0)
+    n = max(by_id, seq) + 1
+    SchoolSettings.set('fee_receipt_seq', n, 'int', 'Fee receipt counter')
     return f'RCP-{n:06d}'
 
 

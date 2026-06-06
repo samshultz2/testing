@@ -38,7 +38,7 @@
         {% if slips %}
         <div class="table-container">
             <table class="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Staff</th><th class="text-right">Basic</th><th class="text-right">Allowances</th><th class="text-right">Deductions</th><th class="text-right">Net</th><th></th></tr></thead>
+                <thead><tr><th>Staff</th><th class="text-right">Basic</th><th class="text-right">Allowances</th><th class="text-right">Deductions</th><th class="text-right">Attendance</th><th class="text-right">Net</th><th></th></tr></thead>
                 <tbody>
                     {% for ps in slips %}
                     <tr>
@@ -46,6 +46,7 @@
                         <td data-label="Basic" class="text-right">{{ ps.basic|naira }}</td>
                         <td data-label="Allowances" class="text-right">{{ ps.allowances|naira }}</td>
                         <td data-label="Deductions" class="text-right">{{ ps.deductions|naira }}</td>
+                        <td data-label="Attendance" class="text-right">{% if ps.attendance_deduction %}<span style="color:var(--danger);">{{ ps.attendance_deduction|naira }}</span>{% else %}—{% endif %}</td>
                         <td data-label="Net" class="text-right"><strong>{{ ps.net|naira }}</strong></td>
                         <td class="actions">
                             <div class="d-flex gap-1 justify-end">
@@ -55,12 +56,13 @@
                         </td>
                     </tr>
                     {% if user_permissions.is_admin and run.status=='Draft' %}
-                    <tr id="ps-{{ ps.id }}" class="hidden"><td colspan="6" class="stack-full" style="background:var(--gray-50);">
+                    <tr id="ps-{{ ps.id }}" class="hidden"><td colspan="7" class="stack-full" style="background:var(--gray-50);">
                         <form method="POST" action="{{ url_for('hr.edit_payslip', run_id=run.id, slip_id=ps.id) }}" class="d-flex gap-2 align-end flex-wrap">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <div class="form-group mb-0"><label class="form-label">Basic</label><input type="number" name="basic" class="form-control" step="100" value="{{ ps.basic }}"></div>
                             <div class="form-group mb-0"><label class="form-label">Allowances</label><input type="number" name="allowances" class="form-control" step="100" value="{{ ps.allowances }}"></div>
-                            <div class="form-group mb-0"><label class="form-label">Deductions</label><input type="number" name="deductions" class="form-control" step="100" value="{{ ps.deductions }}"></div>
+                            <div class="form-group mb-0"><label class="form-label">Manual deductions</label><input type="number" name="deductions" class="form-control" step="100" value="{{ ps.deductions }}"></div>
+                            <span class="text-muted text-sm">+ {{ ps.attendance_deduction|naira }} attendance (auto)</span>
                             <button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Update</button>
                         </form>
                     </td></tr>

@@ -102,7 +102,9 @@ def primary_contact(student):
 def dispatch_campaign(msg, cfg=None):
     """Send every pending recipient of a campaign via the SMS gateway.
 
-    Returns (sent, failed). Caller commits. Requires a configured gateway."""
+    Commits after each recipient so an interruption never resends an already
+    delivered message and the DB write-lock is held only briefly. Returns
+    (sent, failed). Requires a configured gateway."""
     from datetime import datetime
     from models import MessageRecipient
     from utils import sms_gateway
@@ -116,8 +118,21 @@ def dispatch_campaign(msg, cfg=None):
         else:
             r.status, r.error = 'Failed', info
             failed += 1
+        db.session.commit()           # persist each result immediately
     msg.sent_count = msg.recipients.filter_by(status='Sent').count()
+    db.session.commit()
     return sent, failed
+
+
+def _claim_message(message_id, from_status='Scheduled'):
+    """Atomically flip a campaign's status to 'Sending'. Returns True if THIS
+    caller won the claim — guards against the worker and a manual send racing."""
+    from models import Message
+    updated = (Message.query
+               .filter(Message.id == message_id, Message.status == from_status)
+               .update({Message.status: 'Sending'}, synchronize_session=False))
+    db.session.commit()
+    return updated == 1
 
 
 def dispatch_due_scheduled():
@@ -133,8 +148,9 @@ def dispatch_due_scheduled():
                                Message.scheduled_at <= datetime.now()).all()
     processed = 0
     for msg in due:
-        msg.status = 'Sending'      # claim so a second pass won't re-grab it
-        db.session.commit()
+        if not _claim_message(msg.id):   # someone else already grabbed it
+            continue
+        db.session.refresh(msg)
         dispatch_campaign(msg, cfg)
         msg.status = 'Sent'
         db.session.commit()
@@ -146,7 +162,9 @@ def coverage_stats():
     """How many active students have at least one parent phone number."""
     total = Student.query.filter_by(is_active=True).count()
     with_contact = (db.session.query(ParentContact.student_id)
-                    .filter(ParentContact.phone_number != None,
+                    .join(Student, Student.id == ParentContact.student_id)
+                    .filter(Student.is_active == True,
+                            ParentContact.phone_number != None,
                             ParentContact.phone_number != '')
                     .distinct().count())
     pct = round(with_contact / total * 100, 1) if total else 0.0

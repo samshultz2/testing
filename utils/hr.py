@@ -60,6 +60,10 @@ def compute_attendance(status, clock_in, settings=None):
     if cin is not None and late_min is not None and cin > late_min:
         minutes = cin - late_min
         return 'Late', minutes, round(minutes * s['late_rate'], 2)
+    # Marked Late but with no (or an on-time) clock-in: keep the Late status but
+    # there are no computable minutes to charge for.
+    if status == 'Late':
+        return 'Late', 0, 0
     return 'Present', 0, 0
 
 
@@ -114,7 +118,8 @@ def generate_payslips(run):
             continue
         ded = month_attendance_deduction(s.id, run.year, run.month)
         ps = Payslip(run_id=run.id, staff_id=s.id, staff_name=s.full_name,
-                     basic=s.salary or 0, allowances=0, deductions=ded)
+                     basic=s.salary or 0, allowances=0, deductions=0,
+                     attendance_deduction=ded)
         ps.recompute()
         db.session.add(ps)
         created += 1
@@ -122,12 +127,13 @@ def generate_payslips(run):
 
 
 def sync_attendance_deductions(run):
-    """Refresh every payslip's deduction from the month's attendance."""
+    """Refresh the auto attendance-deduction on each payslip (manual deductions
+    in ``deductions`` are preserved)."""
     n = 0
     for ps in run.payslips:
         ded = month_attendance_deduction(ps.staff_id, run.year, run.month)
-        if ps.deductions != ded:
-            ps.deductions = ded
+        if ps.attendance_deduction != ded:
+            ps.attendance_deduction = ded
             ps.recompute()
             n += 1
     return n
