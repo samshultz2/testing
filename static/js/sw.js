@@ -5,14 +5,20 @@
      have already visited stay viewable with no connection.
    Note: cached pages live on the device; suitable for a single-user, phone-
    hosted install. Mutations (POST/etc.) always require the network. */
-const STATIC_CACHE = 'posyhub-static-v2';
-const RUNTIME_CACHE = 'posyhub-runtime-v2';
+const STATIC_CACHE = 'posyhub-static-v3';
+const RUNTIME_CACHE = 'posyhub-runtime-v3';
 const OFFLINE_URL = '/static/offline.html';
 const ASSETS = [
   '/static/css/style.css',
   '/static/js/app.js',
+  '/static/img/logo-mark.svg',
+  '/static/img/favicon.svg',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
+  '/static/icons/icon-192-maskable.png',
+  '/static/icons/icon-512-maskable.png',
+  '/static/icons/apple-touch-icon.png',
+  '/static/icons/favicon-32.png',
   '/static/manifest.webmanifest',
   OFFLINE_URL
 ];

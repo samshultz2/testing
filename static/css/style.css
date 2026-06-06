@@ -250,6 +250,14 @@ img {
     color: var(--accent);
 }
 
+.logo .logo-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: block;
+}
+
 .sidebar-toggle {
     display: flex;
     align-items: center;
