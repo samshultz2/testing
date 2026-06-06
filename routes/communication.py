@@ -202,13 +202,31 @@ def compose():
         flash(f'Campaign created for {len(reachable)} parent(s).', 'success')
         return redirect(url_for('comms.message_detail', message_id=msg.id))
 
+    # Pre-selection from query params (e.g. "Message defaulters" from Finance,
+    # or "Use" from the templates page).
+    pre_audience = request.args.get('audience') or 'all'
+    pre_class = request.args.get('class_id', type=int)
+    pre_tpl = request.args.get('tpl', type=int)
+    pre_body = ''
+    if pre_tpl:
+        t = MessageTemplate.query.get(pre_tpl)
+        if t:
+            pre_body = t.body
+    elif pre_audience == 'defaulters':
+        # Convenience: default to the Fee Reminder template when messaging debtors.
+        t = MessageTemplate.query.filter(MessageTemplate.name.ilike('%fee%reminder%'),
+                                         MessageTemplate.is_active == True).first()
+        if t:
+            pre_tpl, pre_body = t.id, t.body
+
     from utils import sms_gateway
     gw = sms_gateway.get_config()
     return render_template('communication/compose.html',
         term=term, terms=terms, classes=classes, arms=arms, templates=templates,
         channels=CHANNELS, placeholders=comms.PLACEHOLDERS, cov=comms.coverage_stats(),
         gateway_ready=sms_gateway.is_configured(gw),
-        gateway_label=sms_gateway.provider_label(gw))
+        gateway_label=sms_gateway.provider_label(gw),
+        pre_audience=pre_audience, pre_class=pre_class, pre_tpl=pre_tpl, pre_body=pre_body)
 
 
 def _current_user():

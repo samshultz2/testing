@@ -4,6 +4,11 @@
 {% block content %}
 <div class="page-header">
     <h1>Outstanding Fees</h1>
+    {% if rows %}
+    <div class="page-header-actions">
+        <a href="{{ url_for('comms.compose', audience='defaulters', class_id=class_id or '', term_id=term_id) }}" class="btn btn-primary"><i class="fab fa-whatsapp"></i> Message defaulters</a>
+    </div>
+    {% endif %}
 </div>
 {% include 'finance/_tabs.html' %}
 

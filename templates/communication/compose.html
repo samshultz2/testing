@@ -45,24 +45,24 @@
                             {% for t in terms %}<option value="{{ t.id }}" {% if term and term.id==t.id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
                         </select>
                     </div>
-                    <input type="hidden" name="audience" id="audienceInput" value="all">
+                    <input type="hidden" name="audience" id="audienceInput" value="{{ pre_audience }}">
                     <div class="aud-cards">
-                        <div class="aud-card sel" data-aud="all"><i class="fas fa-users"></i><div class="t">All parents</div></div>
-                        <div class="aud-card" data-aud="class"><i class="fas fa-school"></i><div class="t">By class</div></div>
-                        <div class="aud-card" data-aud="defaulters"><i class="fas fa-triangle-exclamation"></i><div class="t">Fee defaulters</div></div>
-                        <div class="aud-card" data-aud="students"><i class="fas fa-user-check"></i><div class="t">Selected</div></div>
+                        <div class="aud-card {% if pre_audience=='all' %}sel{% endif %}" data-aud="all"><i class="fas fa-users"></i><div class="t">All parents</div></div>
+                        <div class="aud-card {% if pre_audience=='class' %}sel{% endif %}" data-aud="class"><i class="fas fa-school"></i><div class="t">By class</div></div>
+                        <div class="aud-card {% if pre_audience=='defaulters' %}sel{% endif %}" data-aud="defaulters"><i class="fas fa-triangle-exclamation"></i><div class="t">Fee defaulters</div></div>
+                        <div class="aud-card {% if pre_audience=='students' %}sel{% endif %}" data-aud="students"><i class="fas fa-user-check"></i><div class="t">Selected</div></div>
                     </div>
 
-                    <div id="classRow" class="form-row mt-3" style="display:none;">
+                    <div id="classRow" class="form-row mt-3" style="display:{% if pre_audience in ['class','defaulters'] %}grid{% else %}none{% endif %};">
                         <div class="form-group"><label class="form-label">Class</label>
-                            <select name="class_id" id="classSelect" class="form-control"><option value="">All classes</option>{% for c in classes %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+                            <select name="class_id" id="classSelect" class="form-control"><option value="">All classes</option>{% for c in classes %}<option value="{{ c.id }}" {% if pre_class==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
                         </div>
-                        <div class="form-group" id="armGroup"><label class="form-label">Arm</label>
+                        <div class="form-group" id="armGroup" style="display:{% if pre_audience=='class' %}block{% else %}none{% endif %};"><label class="form-label">Arm</label>
                             <select name="arm_id" class="form-control"><option value="">All arms</option>{% for a in arms %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select>
                         </div>
                     </div>
 
-                    <div id="studentsRow" class="mt-3" style="display:none;">
+                    <div id="studentsRow" class="mt-3" style="display:{% if pre_audience=='students' %}block{% else %}none{% endif %};">
                         <div class="form-group ac-wrap">
                             <label class="form-label">Add students</label>
                             <input type="text" id="studentSearch" class="form-control" placeholder="Search name or ID…" autocomplete="off">
@@ -85,7 +85,7 @@
                         <label class="form-label">Use a template</label>
                         <select id="templateSelect" class="form-control">
                             <option value="">— Start from scratch —</option>
-                            {% for t in templates %}<option value="{{ t.id }}" data-body="{{ t.body|e }}">{{ t.name }}{% if t.category %} · {{ t.category }}{% endif %}</option>{% endfor %}
+                            {% for t in templates %}<option value="{{ t.id }}" data-body="{{ t.body|e }}" {% if pre_tpl==t.id %}selected{% endif %}>{{ t.name }}{% if t.category %} · {{ t.category }}{% endif %}</option>{% endfor %}
                         </select>
                     </div>
                     <div class="form-group mb-0">
@@ -93,7 +93,7 @@
                         <div class="ph-btns">
                             {% for p in placeholders %}<span class="ph-btn" data-ph="{{ p }}">{{ p }}</span>{% endfor %}
                         </div>
-                        <textarea name="body" id="bodyInput" class="form-control" rows="6" required placeholder="Type your message. Tap a tag above to personalise it."></textarea>
+                        <textarea name="body" id="bodyInput" class="form-control" rows="6" required placeholder="Type your message. Tap a tag above to personalise it.">{{ pre_body }}</textarea>
                         <div class="seg-info"><span id="charCount">0 characters</span><span id="segCount">0 SMS segments</span></div>
                     </div>
                 </div>
