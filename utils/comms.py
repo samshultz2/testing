@@ -99,6 +99,49 @@ def primary_contact(student):
     return contacts[0]
 
 
+def dispatch_campaign(msg, cfg=None):
+    """Send every pending recipient of a campaign via the SMS gateway.
+
+    Returns (sent, failed). Caller commits. Requires a configured gateway."""
+    from datetime import datetime
+    from models import MessageRecipient
+    from utils import sms_gateway
+    cfg = cfg or sms_gateway.get_config()
+    sent = failed = 0
+    for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
+        ok, info = sms_gateway.send_sms(r.phone, r.body, cfg)
+        if ok:
+            r.status, r.sent_at, r.error = 'Sent', datetime.now(), None
+            sent += 1
+        else:
+            r.status, r.error = 'Failed', info
+            failed += 1
+    msg.sent_count = msg.recipients.filter_by(status='Sent').count()
+    return sent, failed
+
+
+def dispatch_due_scheduled():
+    """Process scheduled campaigns whose time has come (used by the worker)."""
+    from datetime import datetime
+    from models import Message
+    from utils import sms_gateway
+    cfg = sms_gateway.get_config()
+    if not sms_gateway.is_configured(cfg):
+        return 0
+    due = Message.query.filter(Message.status == 'Scheduled',
+                               Message.scheduled_at != None,
+                               Message.scheduled_at <= datetime.now()).all()
+    processed = 0
+    for msg in due:
+        msg.status = 'Sending'      # claim so a second pass won't re-grab it
+        db.session.commit()
+        dispatch_campaign(msg, cfg)
+        msg.status = 'Sent'
+        db.session.commit()
+        processed += 1
+    return processed
+
+
 def coverage_stats():
     """How many active students have at least one parent phone number."""
     total = Student.query.filter_by(is_active=True).count()

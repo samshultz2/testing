@@ -33,6 +33,16 @@ def _term_from(tid):
     return (Term.query.get(tid) if tid else None) or _active_term()
 
 
+def _dt(value):
+    """Parse an HTML datetime-local value ('YYYY-MM-DDTHH:MM')."""
+    for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M'):
+        try:
+            return datetime.strptime(value, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
 # ============================================================================
 # DASHBOARD
 # ============================================================================
@@ -184,11 +194,21 @@ def compose():
             flash('No recipients with a phone number matched that audience.', 'warning')
             return redirect(url_for('comms.compose'))
 
+        # Optional scheduling (auto-send via gateway at a future time).
+        from utils import sms_gateway
+        scheduled_at = None
+        status = 'Draft'
+        if request.form.get('schedule') and sms_gateway.is_configured():
+            scheduled_at = _dt(request.form.get('scheduled_at'))
+            if scheduled_at and scheduled_at > datetime.now():
+                status = 'Scheduled'
+
         label = _audience_label(audience, classes, arms, class_id, arm_id, len(reachable))
         msg = Message(title=title or label, body=body, channel=channel,
                       audience=audience, audience_label=label,
                       term_id=term.id if term else None,
-                      created_by=_current_user(), recipient_count=len(reachable))
+                      created_by=_current_user(), recipient_count=len(reachable),
+                      status=status, scheduled_at=scheduled_at)
         db.session.add(msg)
         db.session.flush()
 
@@ -199,7 +219,11 @@ def compose():
                 parent_name=t['parent_name'], phone=t['phone'],
                 body=comms.render(body, ctx)))
         db.session.commit()
-        flash(f'Campaign created for {len(reachable)} parent(s).', 'success')
+        if status == 'Scheduled':
+            flash(f'Campaign scheduled for {scheduled_at.strftime("%d %b %Y, %I:%M %p")} '
+                  f'({len(reachable)} parent(s)).', 'success')
+        else:
+            flash(f'Campaign created for {len(reachable)} parent(s).', 'success')
         return redirect(url_for('comms.message_detail', message_id=msg.id))
 
     # Pre-selection from query params (e.g. "Message defaulters" from Finance,
@@ -285,6 +309,26 @@ def students_search():
                            Student.student_id.ilike(like)))
             .order_by(Student.surname).limit(15).all())
     return jsonify([{'id': s.id, 'name': s.full_name, 'sid': s.student_id} for s in rows])
+
+
+@comms_bp.route('/messages/<int:message_id>/cancel-schedule', methods=['POST'])
+@login_required
+def cancel_schedule(message_id):
+    msg = Message.query.get_or_404(message_id)
+    msg.status = 'Draft'
+    msg.scheduled_at = None
+    db.session.commit()
+    flash('Schedule cancelled — the campaign is now on hold.', 'success')
+    return redirect(url_for('comms.message_detail', message_id=message_id))
+
+
+@comms_bp.route('/process-scheduled', methods=['POST'])
+@admin_required
+def process_scheduled():
+    n = comms.dispatch_due_scheduled()
+    flash(f'Processed {n} due scheduled campaign(s).' if n else 'No campaigns were due.',
+          'success' if n else 'info')
+    return redirect(url_for('comms.messages_list'))
 
 
 # ============================================================================
@@ -382,19 +426,9 @@ def send_gateway(message_id):
         flash('No SMS gateway is configured. Add your provider key in Settings.', 'error')
         return redirect(url_for('comms.message_detail', message_id=message_id))
 
-    sent = failed = 0
-    for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
-        ok, info = sms_gateway.send_sms(r.phone, r.body, cfg)
-        if ok:
-            r.status = 'Sent'
-            r.sent_at = datetime.now()
-            r.error = None
-            sent += 1
-        else:
-            r.status = 'Failed'
-            r.error = info
-            failed += 1
-    msg.sent_count = msg.recipients.filter_by(status='Sent').count()
+    sent, failed = comms.dispatch_campaign(msg, cfg)
+    if msg.status in ('Scheduled', 'Draft'):
+        msg.status = 'Sent'
     db.session.commit()
     if sent:
         flash(f'Sent {sent} message(s) via {sms_gateway.provider_label(cfg)}.', 'success')

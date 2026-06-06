@@ -25,12 +25,19 @@
             <div>
                 <span class="badge {{ 'badge-success' if msg.channel=='WhatsApp' else 'badge-info' }}">{{ msg.channel }}</span>
                 <span class="badge badge-secondary">{{ msg.audience_label }}</span>
+                {% if msg.status == 'Scheduled' %}<span class="badge badge-warning"><i class="fas fa-clock"></i> Scheduled {{ msg.scheduled_at.strftime('%d %b, %I:%M %p') }}</span>{% endif %}
                 <span class="text-muted text-sm">· {{ msg.created_at.strftime('%d %b %Y, %I:%M %p') }} by {{ msg.created_by }}</span>
             </div>
             <div class="text-sm"><strong>{{ msg.sent_count }}</strong> / {{ msg.recipient_count }} sent · {{ segments }} SMS segment(s)</div>
         </div>
         <div class="msg-body">{{ msg.body }}</div>
         <div class="d-flex gap-2 flex-wrap mt-3 align-center">
+            {% if msg.status == 'Scheduled' %}
+            <form method="POST" action="{{ url_for('comms.cancel_schedule', message_id=msg.id) }}" data-confirm="Cancel the scheduled send?">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-secondary btn-sm"><i class="fas fa-clock"></i> Cancel schedule</button>
+            </form>
+            {% endif %}
             {% if gateway_ready and pending_count %}
             <form method="POST" action="{{ url_for('comms.send_gateway', message_id=msg.id) }}" data-confirm="Send {{ pending_count }} pending message(s) now via {{ gateway_label }}?">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

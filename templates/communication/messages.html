@@ -5,6 +5,12 @@
 <div class="page-header">
     <h1>Message History</h1>
     <div class="page-header-actions">
+        {% if user_permissions.is_admin %}
+        <form method="POST" action="{{ url_for('comms.process_scheduled') }}" title="Send any scheduled campaigns that are now due">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-secondary"><i class="fas fa-clock-rotate-left"></i> Process due</button>
+        </form>
+        {% endif %}
         <a href="{{ url_for('comms.compose') }}" class="btn btn-primary"><i class="fas fa-paper-plane"></i> New Message</a>
     </div>
 </div>
@@ -20,7 +26,7 @@
                     {% for m in messages %}
                     <tr>
                         <td data-label="Date">{{ m.created_at.strftime('%d %b %Y') }}</td>
-                        <td data-label="Title"><a href="{{ url_for('comms.message_detail', message_id=m.id) }}"><strong>{{ m.title or 'Message' }}</strong></a></td>
+                        <td data-label="Title"><a href="{{ url_for('comms.message_detail', message_id=m.id) }}"><strong>{{ m.title or 'Message' }}</strong></a>{% if m.status == 'Scheduled' %} <span class="badge badge-warning"><i class="fas fa-clock"></i> {{ m.scheduled_at.strftime('%d %b %H:%M') if m.scheduled_at }}</span>{% endif %}</td>
                         <td data-label="Audience" class="text-muted text-sm">{{ m.audience_label }}</td>
                         <td data-label="Channel"><span class="badge {{ 'badge-success' if m.channel=='WhatsApp' else 'badge-info' }}">{{ m.channel }}</span></td>
                         <td data-label="Recipients" class="text-right">{{ m.recipient_count }}</td>

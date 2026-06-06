@@ -1027,6 +1027,16 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # messages.status / scheduled_at (added with scheduled sends).
+    try:
+        m_cols = {c['name'] for c in inspect(db.engine).get_columns('messages')}
+        if 'status' not in m_cols:
+            statements.append("ALTER TABLE messages ADD COLUMN status VARCHAR(15) DEFAULT 'Draft'")
+        if 'scheduled_at' not in m_cols:
+            statements.append('ALTER TABLE messages ADD COLUMN scheduled_at DATETIME')
+    except Exception:
+        pass
+
     if statements:
         with db.engine.begin() as conn:
             for stmt in statements:

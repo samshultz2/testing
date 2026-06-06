@@ -39,6 +39,8 @@ class Message(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
     recipient_count = db.Column(db.Integer, default=0)
     sent_count = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(15), default='Draft')   # Draft/Scheduled/Sending/Sent
+    scheduled_at = db.Column(db.DateTime)                 # when to auto-send (gateway)
 
     term = db.relationship('Term')
     recipients = db.relationship('MessageRecipient', backref='message',

@@ -112,7 +112,15 @@
                     <div class="text-muted text-sm mb-1">Sample (first recipient):</div>
                     <div class="preview-phone mb-3"><div class="bubble" id="previewBubble">Your message preview appears here…</div></div>
                     <button type="button" class="btn btn-secondary w-100 mb-2" id="refreshPreview"><i class="fas fa-rotate"></i> Refresh preview</button>
-                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-paper-plane"></i> Create campaign</button>
+                    {% if gateway_ready %}
+                    <label class="form-check mb-2"><input type="checkbox" name="schedule" id="scheduleChk"> Schedule for later</label>
+                    <div id="scheduleRow" class="form-group" style="display:none;">
+                        <label class="form-label">Send at</label>
+                        <input type="datetime-local" name="scheduled_at" class="form-control">
+                        <span class="form-hint d-block">The campaign will auto-send via {{ gateway_label }} at this time.</span>
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-paper-plane"></i> <span id="submitLabel">Create campaign</span></button>
                     {% if gateway_ready %}
                     <p class="text-muted text-sm mt-2 mb-0"><i class="fas fa-tower-broadcast" style="color:var(--success);"></i> SMS gateway active ({{ gateway_label }}) — after creating, send all automatically with one tap, or use the WhatsApp / SMS links.</p>
                     {% else %}
@@ -216,6 +224,11 @@
                 bubble.textContent=d.sample||'(no matching recipients)';
             }).catch(()=>{});
     }
+    var schedChk=document.getElementById('scheduleChk');
+    if(schedChk){schedChk.addEventListener('change',function(){
+        document.getElementById('scheduleRow').style.display=this.checked?'block':'none';
+        document.getElementById('submitLabel').textContent=this.checked?'Schedule campaign':'Create campaign';
+    });}
     document.getElementById('refreshPreview').addEventListener('click',runPreview);
     document.getElementById('termSelect').addEventListener('change',schedulePreview);
     document.getElementById('classSelect') && document.getElementById('classSelect').addEventListener('change',schedulePreview);

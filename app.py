@@ -17,6 +17,31 @@ from routes.hr import hr_bp
 from routes.admissions import adm_bp
 
 
+_scheduler_started = False
+
+
+def _start_scheduled_messages_worker(app):
+    """Daemon thread that every minute sends any due scheduled SMS campaigns."""
+    global _scheduler_started
+    if _scheduler_started:
+        return
+    _scheduler_started = True
+    import threading
+    import time
+
+    def _loop():
+        while True:
+            time.sleep(60)
+            try:
+                with app.app_context():
+                    from utils.comms import dispatch_due_scheduled
+                    dispatch_due_scheduled()
+            except Exception:
+                pass
+
+    threading.Thread(target=_loop, daemon=True).start()
+
+
 def create_app(config_class=Config):
     """Application factory pattern"""
     app = Flask(__name__)
@@ -64,6 +89,10 @@ def create_app(config_class=Config):
     # Keep a rolling daily backup of the database
     from utils.backup import auto_backup
     auto_backup(app)
+
+    # Background worker: dispatch due scheduled parent-communication campaigns.
+    if os.environ.get('POSYHUB_TESTING') != '1':
+        _start_scheduled_messages_worker(app)
 
     # Serve the service worker from the root so its scope covers the whole app
     from flask import send_from_directory
