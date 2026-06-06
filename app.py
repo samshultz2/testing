@@ -14,6 +14,7 @@ from routes.mock_jamb import mock_jamb_bp
 from routes.finance import finance_bp
 from routes.communication import comms_bp
 from routes.hr import hr_bp
+from routes.admissions import adm_bp
 
 
 def create_app(config_class=Config):
@@ -46,6 +47,7 @@ def create_app(config_class=Config):
     app.register_blueprint(finance_bp)
     app.register_blueprint(comms_bp)
     app.register_blueprint(hr_bp)
+    app.register_blueprint(adm_bp)
     
     # Initialize database
     with app.app_context():

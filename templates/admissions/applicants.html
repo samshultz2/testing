@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Applicants - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('admissions.dashboard') }}">Admissions</a> / <span>Applicants</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Applicants</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('admissions.export') }}" class="btn btn-secondary"><i class="fas fa-file-csv"></i> Export</a>
+        <a href="{{ url_for('admissions.add_applicant') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> New Application</a>
+    </div>
+</div>
+{% include 'admissions/_tabs.html' %}
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form">
+        <div class="form-group"><label class="form-label">Status</label>
+            <select name="status" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for s in statuses %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Session</label>
+            <select name="session_id" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for s in sessions %}<option value="{{ s.id }}" {% if session_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Intended class</label>
+            <select name="class_id" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for c in classes %}<option value="{{ c.id }}" {% if class_id==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Search</label><input type="text" name="q" class="form-control" value="{{ q }}" placeholder="Name, app no, phone"></div>
+    </form>
+</div></div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ rows|length }} applicant(s)</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if rows %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>App No</th><th>Name</th><th>Class</th><th>Parent</th><th>Score</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    {% for a in rows %}
+                    <tr>
+                        <td data-label="App No">{{ a.application_no }}</td>
+                        <td data-label="Name"><a href="{{ url_for('admissions.applicant_detail', applicant_id=a.id) }}"><strong>{{ a.full_name }}</strong></a>{% if a.gender %}<div class="text-muted text-sm">{{ a.gender }}</div>{% endif %}</td>
+                        <td data-label="Class">{{ a.intended_class.name if a.intended_class else '—' }}</td>
+                        <td data-label="Parent">{{ a.parent_name or '—' }}{% if a.parent_phone %}<div class="text-muted text-sm">{{ a.parent_phone }}</div>{% endif %}</td>
+                        <td data-label="Score">{{ a.entrance_score if a.entrance_score is not none else '—' }}</td>
+                        <td data-label="Status"><span class="badge {{ status_badge.get(a.status,'badge-secondary') }}">{{ a.status }}</span>{% if a.admitted_student_id %} <i class="fas fa-link text-muted" title="Linked to student"></i>{% endif %}</td>
+                        <td class="actions"><a href="{{ url_for('admissions.applicant_detail', applicant_id=a.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-right"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-user-plus"></i><h3>No applicants</h3><p>Create an application or adjust filters.</p><a href="{{ url_for('admissions.add_applicant') }}" class="btn btn-primary mt-2">New Application</a></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

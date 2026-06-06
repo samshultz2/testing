@@ -56,7 +56,12 @@
                             <i class="fas fa-user-plus"></i><span>Add Student</span>
                         </a>
                     </li>
-                    
+                    <li class="nav-item">
+                        <a href="{{ url_for('admissions.dashboard') }}" class="nav-link {% if 'admissions' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-clipboard-user"></i><span>Admissions</span>
+                        </a>
+                    </li>
+
                     <li class="nav-section">Academics</li>
                     <li class="nav-item">
                         <a href="{{ url_for('academics.sessions_list') }}" class="nav-link">

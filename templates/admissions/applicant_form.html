@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if a else 'New' }} Application - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('admissions.applicants') }}">Applicants</a> / <span>{{ 'Edit' if a else 'New' }}</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>{{ 'Edit Application' if a else 'New Application' }}</h1></div>
+
+<form method="POST" action="{{ url_for('admissions.edit_applicant', applicant_id=a.id) if a else url_for('admissions.add_applicant') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-3">
+        <div class="card-header"><h3>Applicant</h3></div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">First name <span class="required">*</span></label><input type="text" name="first_name" class="form-control" required value="{{ a.first_name if a else '' }}"></div>
+                <div class="form-group"><label class="form-label">Surname <span class="required">*</span></label><input type="text" name="surname" class="form-control" required value="{{ a.surname if a else '' }}"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Middle name</label><input type="text" name="middle_name" class="form-control" value="{{ a.middle_name or '' if a else '' }}"></div>
+                <div class="form-group"><label class="form-label">Gender</label><select name="gender" class="form-control"><option value="">—</option><option {% if a and a.gender=='Male' %}selected{% endif %}>Male</option><option {% if a and a.gender=='Female' %}selected{% endif %}>Female</option></select></div>
+                <div class="form-group"><label class="form-label">Date of birth</label><input type="date" name="date_of_birth" class="form-control" value="{{ a.date_of_birth.isoformat() if a and a.date_of_birth else '' }}"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Previous school</label><input type="text" name="previous_school" class="form-control" value="{{ a.previous_school or '' if a else '' }}"></div>
+                <div class="form-group"><label class="form-label">How did they hear?</label><select name="source" class="form-control"><option value="">—</option>{% for s in sources %}<option value="{{ s }}" {% if a and a.source==s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header"><h3>Application</h3></div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Session</label><select name="session_id" class="form-control"><option value="">—</option>{% for s in sessions %}<option value="{{ s.id }}" {% if (a and a.session_id==s.id) or (not a and active_session and active_session.id==s.id) %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label class="form-label">Intended class</label><select name="intended_class_id" class="form-control"><option value="">—</option>{% for c in classes %}<option value="{{ c.id }}" {% if a and a.intended_class_id==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+            </div>
+            <div class="form-row">
+                {% if not a %}<div class="form-group"><label class="form-label">Initial status</label><select name="status" class="form-control">{% for st in statuses %}<option value="{{ st }}" {% if st=='Applied' %}selected{% endif %}>{{ st }}</option>{% endfor %}</select></div>{% endif %}
+                <div class="form-group"><label class="form-label">Entrance score</label><input type="number" name="entrance_score" class="form-control" step="0.5" value="{{ a.entrance_score if a and a.entrance_score is not none else '' }}"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header"><h3>Parent / Guardian</h3></div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Name</label><input type="text" name="parent_name" class="form-control" value="{{ a.parent_name or '' if a else '' }}"></div>
+                <div class="form-group"><label class="form-label">Relationship</label><input type="text" name="relationship" class="form-control" placeholder="Father/Mother/Guardian" value="{{ a.relationship or '' if a else '' }}"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Phone</label><input type="text" name="parent_phone" class="form-control" value="{{ a.parent_phone or '' if a else '' }}"></div>
+                <div class="form-group"><label class="form-label">Email</label><input type="email" name="parent_email" class="form-control" value="{{ a.parent_email or '' if a else '' }}"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Address</label><input type="text" name="address" class="form-control" value="{{ a.address or '' if a else '' }}"></div>
+            <div class="form-group mb-0"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2">{{ a.notes or '' if a else '' }}</textarea></div>
+        </div>
+    </div>
+
+    <div class="page-header-actions">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ 'Save Changes' if a else 'Create Application' }}</button>
+        <a href="{{ url_for('admissions.applicant_detail', applicant_id=a.id) if a else url_for('admissions.applicants') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}
