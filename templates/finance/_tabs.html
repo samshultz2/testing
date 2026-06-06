@@ -12,6 +12,7 @@
     <a href="{{ url_for('finance.items_list') }}" class="fin-tab {% if ep == 'finance.items_list' %}active{% endif %}"><i class="fas fa-tags"></i> Fee Items</a>
     <a href="{{ url_for('finance.expenses_list') }}" class="fin-tab {% if ep == 'finance.expenses_list' %}active{% endif %}"><i class="fas fa-money-bill-wave"></i> Expenses</a>
     <a href="{{ url_for('finance.defaulters') }}" class="fin-tab {% if ep == 'finance.defaulters' %}active{% endif %}"><i class="fas fa-triangle-exclamation"></i> Defaulters</a>
+    <a href="{{ url_for('finance.collections') }}" class="fin-tab {% if ep == 'finance.collections' %}active{% endif %}"><i class="fas fa-calendar-day"></i> Collections</a>
     <a href="{{ url_for('finance.reports') }}" class="fin-tab {% if ep == 'finance.reports' %}active{% endif %}"><i class="fas fa-chart-column"></i> Reports</a>
 </div>
 <style>

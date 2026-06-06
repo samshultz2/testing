@@ -6,7 +6,7 @@ dashboard.
 from datetime import date, datetime
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, jsonify)
+                   flash, jsonify, Response)
 from sqlalchemy import func
 
 from models import (
@@ -37,6 +37,59 @@ def _parse_date(value, default=None):
         return datetime.strptime(value, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return default or date.today()
+
+
+def _collections_query(from_date, to_date):
+    return (FeePayment.query
+            .filter(FeePayment.payment_date >= from_date,
+                    FeePayment.payment_date <= to_date)
+            .order_by(FeePayment.payment_date.desc(), FeePayment.id.desc()))
+
+
+@finance_bp.route('/collections')
+@login_required
+def collections():
+    """Day-book: payments collected within a date range, with daily/method totals."""
+    today = date.today()
+    from_date = _parse_date(request.args.get('from'), today.replace(day=1))
+    to_date = _parse_date(request.args.get('to'), today)
+    payments = _collections_query(from_date, to_date).all()
+    total = sum(p.amount for p in payments)
+
+    by_method = {}
+    by_day = {}
+    for p in payments:
+        by_method[p.method or 'Other'] = by_method.get(p.method or 'Other', 0.0) + p.amount
+        key = p.payment_date.isoformat()
+        by_day[key] = by_day.get(key, 0.0) + p.amount
+    method_rows = sorted(by_method.items(), key=lambda x: x[1], reverse=True)
+    day_chart = [{'label': d, 'amount': round(v, 2)} for d, v in sorted(by_day.items())]
+
+    return render_template('finance/collections.html',
+        from_date=from_date, to_date=to_date, payments=payments, total=total,
+        method_rows=method_rows, day_chart=day_chart, count=len(payments))
+
+
+@finance_bp.route('/collections/export')
+@login_required
+def collections_export():
+    import csv, io
+    today = date.today()
+    from_date = _parse_date(request.args.get('from'), today.replace(day=1))
+    to_date = _parse_date(request.args.get('to'), today)
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(['Date', 'Receipt', 'Student', 'Student ID', 'Term', 'Method',
+                'Reference', 'Received By', 'Amount'])
+    for p in _collections_query(from_date, to_date).all():
+        w.writerow([p.payment_date.strftime('%Y-%m-%d'), p.receipt_no,
+                    p.student.full_name if p.student else '',
+                    p.student.student_id if p.student else '',
+                    p.term.full_name if p.term else '', p.method, p.reference or '',
+                    p.received_by or '', p.amount])
+    fname = f'collections_{from_date}_{to_date}.csv'
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={fname}'})
 
 
 # ============================================================================
