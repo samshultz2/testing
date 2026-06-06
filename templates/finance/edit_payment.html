@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Edit Payment - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <a href="{{ url_for('finance.payments_list', term_id=payment.term_id) }}">Payments</a> / <span>Edit</span>{% endblock %}
+{% block extra_css %}
+<style>
+.pay-fields{display:grid;grid-template-columns:1fr;gap:.85rem}
+@media(min-width:520px){.pay-fields.two{grid-template-columns:1fr 1fr}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Edit Payment</h1></div>
+{% include 'finance/_tabs.html' %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-between flex-wrap gap-2">
+            <div><strong>{{ payment.student.full_name }}</strong> <span class="text-muted">({{ payment.student.student_id }})</span><div class="text-muted text-sm">{{ payment.term.full_name }} · Receipt {{ payment.receipt_no }}</div></div>
+            <div class="text-right"><div class="text-muted text-sm">Current balance</div><strong style="color:{{ 'var(--danger)' if bill.balance > 0 else 'var(--success)' }};">{{ bill.balance|naira }}</strong></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Payment Details</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('finance.edit_payment', payment_id=payment.id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">Amount (₦) <span class="required">*</span></label>
+                <input type="number" name="amount" class="form-control" inputmode="decimal" min="0" step="50" required value="{{ payment.amount }}">
+            </div>
+            <div class="pay-fields two">
+                <div class="form-group mb-0">
+                    <label class="form-label">Date</label>
+                    <input type="date" name="payment_date" class="form-control" value="{{ payment.payment_date.isoformat() }}">
+                </div>
+                <div class="form-group mb-0">
+                    <label class="form-label">Method</label>
+                    <select name="method" class="form-control">{% for m in methods %}<option value="{{ m }}" {% if payment.method == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
+                </div>
+            </div>
+            <div class="pay-fields two mt-3">
+                <div class="form-group mb-0"><label class="form-label">Reference / Teller No.</label><input type="text" name="reference" class="form-control" value="{{ payment.reference or '' }}"></div>
+                <div class="form-group mb-0"><label class="form-label">Received by</label><input type="text" name="received_by" class="form-control" value="{{ payment.received_by or '' }}"></div>
+            </div>
+            <div class="form-group mt-3"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2">{{ payment.notes or '' }}</textarea></div>
+            <div class="page-header-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Changes</button>
+                <a href="{{ url_for('finance.receipt', payment_id=payment.id) }}" class="btn btn-secondary">Cancel</a>
+                {% if user_permissions.is_admin %}
+                <form method="POST" action="{{ url_for('finance.delete_payment', payment_id=payment.id) }}" data-confirm="Delete receipt {{ payment.receipt_no }} ({{ payment.amount|naira }})?" style="margin-left:auto;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>
+                </form>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

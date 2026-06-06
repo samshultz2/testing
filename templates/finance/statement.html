@@ -52,10 +52,10 @@
             {% if payments %}
             <div class="table-container">
                 <table class="data-table table-stack no-mobile-scroll">
-                    <thead><tr><th>Date</th><th>Receipt</th><th>Method</th><th class="text-right">Amount</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Receipt</th><th>Method</th><th class="text-right">Amount</th><th></th></tr></thead>
                     <tbody>
                         {% for p in payments %}
-                        <tr><td data-label="Date">{{ p.payment_date.strftime('%d %b %Y') }}</td><td data-label="Receipt"><a href="{{ url_for('finance.receipt', payment_id=p.id) }}">{{ p.receipt_no }}</a></td><td data-label="Method"><span class="badge badge-info">{{ p.method }}</span></td><td data-label="Amount" class="text-right">{{ p.amount|naira }}</td></tr>
+                        <tr><td data-label="Date">{{ p.payment_date.strftime('%d %b %Y') }}</td><td data-label="Receipt"><a href="{{ url_for('finance.receipt', payment_id=p.id) }}">{{ p.receipt_no }}</a></td><td data-label="Method"><span class="badge badge-info">{{ p.method }}</span></td><td data-label="Amount" class="text-right">{{ p.amount|naira }}</td><td class="actions"><a href="{{ url_for('finance.edit_payment', payment_id=p.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-edit"></i></a></td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -77,7 +77,22 @@
                 <tr>
                     <td data-label="Reason">{{ d.reason or '—' }}</td>
                     <td data-label="Amount" class="text-right">{{ d.amount|naira }}</td>
-                    <td class="actions text-right"><form method="POST" action="{{ url_for('finance.delete_discount', discount_id=d.id) }}" data-confirm="Remove this discount?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form></td>
+                    <td class="actions text-right">
+                        <div class="d-flex gap-1 justify-end">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('disc-{{ d.id }}').classList.toggle('hidden')"><i class="fas fa-edit"></i></button>
+                            <form method="POST" action="{{ url_for('finance.delete_discount', discount_id=d.id) }}" data-confirm="Remove this discount?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                        </div>
+                    </td>
+                </tr>
+                <tr id="disc-{{ d.id }}" class="hidden">
+                    <td colspan="3" class="stack-full" style="background:var(--gray-50);">
+                        <form method="POST" action="{{ url_for('finance.edit_discount', discount_id=d.id) }}" class="d-flex gap-2 align-end flex-wrap">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <div class="form-group mb-0"><label class="form-label">Amount (₦)</label><input type="number" name="amount" class="form-control" min="0" step="100" value="{{ d.amount }}" required></div>
+                            <div class="form-group mb-0" style="flex:1;min-width:180px;"><label class="form-label">Reason</label><input type="text" name="reason" class="form-control" value="{{ d.reason or '' }}"></div>
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Update</button>
+                        </form>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -281,6 +281,23 @@ def copy_structure():
     return redirect(url_for('finance.structure', term_id=to_term_id))
 
 
+@finance_bp.route('/structure/clear', methods=['POST'])
+@admin_required
+def clear_structure():
+    """Remove every fee row for a term + class (+ arm)."""
+    term_id = request.form.get('term_id', type=int)
+    class_id = request.form.get('class_id', type=int)
+    arm_id = request.form.get('arm_id', type=int)
+    if not (term_id and class_id):
+        flash('Select a term and class first.', 'error')
+        return redirect(url_for('finance.structure'))
+    deleted = FeeStructure.query.filter_by(
+        term_id=term_id, class_id=class_id, arm_id=arm_id).delete()
+    db.session.commit()
+    flash(f'Cleared {deleted} fee row(s) for this class.', 'success')
+    return redirect(url_for('finance.structure', term_id=term_id, class_id=class_id, arm_id=arm_id or ''))
+
+
 # ============================================================================
 # PAYMENTS
 # ============================================================================
@@ -423,6 +440,33 @@ def receipt(payment_id):
     return render_template('finance/receipt.html', payment=payment, bill=bill, school=school)
 
 
+@finance_bp.route('/payments/<int:payment_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_payment(payment_id):
+    """Correct a recorded payment (amount, date, method, reference, notes)."""
+    payment = FeePayment.query.get_or_404(payment_id)
+
+    if request.method == 'POST':
+        amount = request.form.get('amount', type=float)
+        if not amount or amount <= 0:
+            flash('Enter a positive amount.', 'error')
+            return redirect(url_for('finance.edit_payment', payment_id=payment_id))
+        payment.amount = amount
+        payment.payment_date = _parse_date(request.form.get('payment_date'), payment.payment_date)
+        payment.method = request.form.get('method') or payment.method
+        payment.reference = (request.form.get('reference') or '').strip() or None
+        payment.received_by = (request.form.get('received_by') or '').strip() or None
+        payment.notes = (request.form.get('notes') or '').strip() or None
+        db.session.commit()
+        flash(f'Payment {payment.receipt_no} updated.', 'success')
+        return redirect(url_for('finance.receipt', payment_id=payment.id))
+
+    terms = Term.query.order_by(Term.id.desc()).all()
+    bill = student_bill(payment.student_id, payment.term_id)
+    return render_template('finance/edit_payment.html',
+        payment=payment, bill=bill, terms=terms, methods=PAYMENT_METHODS)
+
+
 @finance_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
 @admin_required
 def delete_payment(payment_id):
@@ -469,6 +513,21 @@ def add_discount():
     db.session.commit()
     flash('Discount / waiver applied.', 'success')
     return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+
+
+@finance_bp.route('/discounts/<int:discount_id>/edit', methods=['POST'])
+@admin_required
+def edit_discount(discount_id):
+    d = FeeDiscount.query.get_or_404(discount_id)
+    amount = request.form.get('amount', type=float)
+    if not amount or amount <= 0:
+        flash('Enter a positive amount.', 'error')
+    else:
+        d.amount = amount
+        d.reason = (request.form.get('reason') or '').strip() or None
+        db.session.commit()
+        flash('Discount updated.', 'success')
+    return redirect(url_for('finance.statement', student_id=d.student_id, term_id=d.term_id))
 
 
 @finance_bp.route('/discounts/<int:discount_id>/delete', methods=['POST'])

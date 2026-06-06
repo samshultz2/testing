@@ -54,6 +54,7 @@
                         <td class="actions">
                             <div class="d-flex gap-1">
                                 <a href="{{ url_for('finance.receipt', payment_id=p.id) }}" class="btn btn-secondary btn-sm" title="Receipt"><i class="fas fa-receipt"></i></a>
+                                <a href="{{ url_for('finance.edit_payment', payment_id=p.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-edit"></i></a>
                                 {% if user_permissions.is_admin %}
                                 <form method="POST" action="{{ url_for('finance.delete_payment', payment_id=p.id) }}" data-confirm="Delete receipt {{ p.receipt_no }} ({{ p.amount|naira }})?">
                                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

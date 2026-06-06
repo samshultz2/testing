@@ -72,11 +72,22 @@
                     {% endfor %}
                 </div>
                 <div class="page-header-actions mt-3">
-                    {% if user_permissions.is_admin %}<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Structure</button>{% else %}<p class="text-muted">Only admins can edit the fee structure.</p>{% endif %}
+                    {% if user_permissions.is_admin %}
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Structure</button>
+                    {% else %}<p class="text-muted">Only admins can edit the fee structure.</p>{% endif %}
                 </div>
             </div>
         </div>
     </form>
+    {% if user_permissions.is_admin and current %}
+    <form method="POST" action="{{ url_for('finance.clear_structure') }}" class="mt-2" data-confirm="Remove ALL fee amounts for this class this term?">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="term_id" value="{{ term_id }}">
+        <input type="hidden" name="class_id" value="{{ class_id }}">
+        <input type="hidden" name="arm_id" value="{{ arm_id or '' }}">
+        <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Clear this class's fees</button>
+    </form>
+    {% endif %}
     {% else %}
     <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-tags"></i><h3>No fee items</h3><p>Create fee items first, then set their amounts here.</p><a href="{{ url_for('finance.items_list') }}" class="btn btn-primary">Add Fee Items</a></div></div></div>
     {% endif %}
