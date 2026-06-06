@@ -27,6 +27,7 @@ from .models_comms import MessageTemplate, Message, MessageRecipient
 from .models_hr import (Department, StaffMember, LeaveRecord, PayrollRun, Payslip,
                         SalaryHistory, StaffAttendance)
 from .models_admissions import Applicant
+from .models_library import Book, BookLoan
 
 __all__ = [
     'db', 'local_now', 'init_db',
@@ -51,7 +52,8 @@ __all__ = [
     'MessageTemplate', 'Message', 'MessageRecipient',
     'Department', 'StaffMember', 'LeaveRecord', 'PayrollRun', 'Payslip',
     'SalaryHistory', 'StaffAttendance',
-    'Applicant'
+    'Applicant',
+    'Book', 'BookLoan'
 ]
 
 # Analytics models

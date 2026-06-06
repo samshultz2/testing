@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Library - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Library</span>{% endblock %}
+{% block extra_css %}
+<style>
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
+.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
+.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
+.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
+.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
+.kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
+.kpi .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1rem}
+.widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
+.widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;gap:.45rem;align-items:center}
+.widget .wh h3 i{color:var(--primary)}
+.widget .wb{padding:1rem}
+.chart-box{position:relative;height:230px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Library</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('library.issue') }}" class="btn btn-primary"><i class="fas fa-hand-holding"></i> Issue Book</a>
+        <a href="{{ url_for('library.add_book') }}" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Book</a>
+    </div>
+</div>
+{% include 'library/_tabs.html' %}
+
+<div class="kpi-row">
+    <div class="kpi"><div class="ic blue"><i class="fas fa-book"></i></div><div><div class="v">{{ titles }}</div><div class="l">Titles</div></div></div>
+    <div class="kpi"><div class="ic green"><i class="fas fa-layer-group"></i></div><div><div class="v">{{ available }}/{{ copies }}</div><div class="l">Available</div></div></div>
+    <div class="kpi"><div class="ic amber"><i class="fas fa-hand-holding"></i></div><div><div class="v">{{ on_loan }}</div><div class="l">On loan</div></div></div>
+    <div class="kpi"><div class="ic red"><i class="fas fa-clock"></i></div><div><div class="v">{{ overdue }}</div><div class="l">Overdue</div></div></div>
+</div>
+
+<div class="widget">
+    <div class="wh"><h3><i class="fas fa-shapes"></i> By category</h3></div>
+    <div class="wb"><div class="chart-box">{% if cat_chart %}<canvas id="catChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-book"></i><p>No books yet</p></div>{% endif %}</div></div>
+</div>
+
+<div class="widget">
+    <div class="wh"><h3><i class="fas fa-clock-rotate-left"></i> Recent loans</h3><a href="{{ url_for('library.loans') }}" class="text-sm">View all</a></div>
+    <div class="wb" style="padding:0;">
+        {% if recent %}
+        <div class="table-container"><table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Book</th><th>Student</th><th>Borrowed</th><th>Due</th><th>Status</th></tr></thead>
+            <tbody>
+            {% for l in recent %}
+            <tr>
+                <td data-label="Book">{{ l.book.title if l.book else '—' }}</td>
+                <td data-label="Student">{{ l.student.full_name if l.student else '—' }}</td>
+                <td data-label="Borrowed">{{ l.borrowed_date.strftime('%d %b') if l.borrowed_date }}</td>
+                <td data-label="Due">{{ l.due_date.strftime('%d %b') if l.due_date }}</td>
+                <td data-label="Status"><span class="badge {% if l.status=='Returned' %}badge-success{% elif l.is_overdue %}badge-danger{% else %}badge-warning{% endif %}">{{ 'Overdue' if l.is_overdue else l.status }}</span></td>
+            </tr>
+            {% endfor %}
+            </tbody></table></div>
+        {% else %}<div class="empty-state" style="padding:1.5rem;"><i class="fas fa-hand-holding"></i><p>No loans yet</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+    var el=document.getElementById('catChart'); if(!el) return;
+    var d={{ cat_chart|tojson }};
+    Chart.defaults.color=getComputedStyle(document.body).getPropertyValue('--text-secondary')||'#666';
+    new Chart(el,{type:'doughnut',data:{labels:d.map(x=>x.name),datasets:[{data:d.map(x=>x.count),backgroundColor:['#4e73df','#1cc88a','#f6c23e','#e74a3b','#7e6cf0','#11998e','#fd7e14','#20c997'],borderWidth:0}]},
+        options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Catalogue - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('library.dashboard') }}">Library</a> / <span>Catalogue</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Catalogue</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('library.export') }}" class="btn btn-secondary"><i class="fas fa-file-csv"></i> Export</a>
+        <a href="{{ url_for('library.add_book') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Book</a>
+    </div>
+</div>
+{% include 'library/_tabs.html' %}
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form">
+        <div class="form-group"><label class="form-label">Search</label><input type="text" name="q" class="form-control" value="{{ q }}" placeholder="Title, author, ISBN"></div>
+        <div class="form-group"><label class="form-label">Category</label>
+            <select name="category" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for c in categories %}<option value="{{ c }}" {% if category==c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+        <div class="form-group" style="align-self:flex-end;"><label class="form-check"><input type="checkbox" name="avail" value="1" onchange="this.form.submit()" {% if avail=='1' %}checked{% endif %}> Available only</label></div>
+    </form>
+</div></div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ books|length }} title(s)</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if books %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Title</th><th>Author</th><th>Category</th><th>Shelf</th><th class="text-right">Avail/Total</th><th></th></tr></thead>
+                <tbody>
+                    {% for b in books %}
+                    <tr>
+                        <td data-label="Title"><strong>{{ b.title }}</strong>{% if b.isbn %}<div class="text-muted text-sm">{{ b.isbn }}</div>{% endif %}</td>
+                        <td data-label="Author">{{ b.author or '—' }}</td>
+                        <td data-label="Category">{% if b.category %}<span class="badge badge-secondary">{{ b.category }}</span>{% else %}—{% endif %}</td>
+                        <td data-label="Shelf">{{ b.shelf or '—' }}</td>
+                        <td data-label="Avail/Total" class="text-right"><span class="badge {{ 'badge-success' if b.copies_available else 'badge-danger' }}">{{ b.copies_available }}</span> / {{ b.copies_total }}</td>
+                        <td class="actions">
+                            <div class="d-flex gap-1 justify-end">
+                                {% if b.copies_available %}<a href="{{ url_for('library.issue') }}?book_id={{ b.id }}" class="btn btn-primary btn-sm" title="Issue"><i class="fas fa-hand-holding"></i></a>{% endif %}
+                                <a href="{{ url_for('library.edit_book', book_id=b.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                                {% if user_permissions.is_admin %}<form method="POST" action="{{ url_for('library.delete_book', book_id=b.id) }}" data-confirm="Remove {{ b.title }}?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>{% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-book"></i><h3>No books</h3><p>Add titles to the catalogue.</p><a href="{{ url_for('library.add_book') }}" class="btn btn-primary mt-2">Add Book</a></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

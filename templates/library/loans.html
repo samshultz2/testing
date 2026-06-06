@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Loans - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('library.dashboard') }}">Library</a> / <span>Loans</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Loans</h1>
+    <div class="page-header-actions"><a href="{{ url_for('library.issue') }}" class="btn btn-primary"><i class="fas fa-hand-holding"></i> Issue Book</a></div>
+</div>
+{% include 'library/_tabs.html' %}
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form">
+        <div class="form-group"><label class="form-label">Show</label>
+            <select name="status" class="form-control" onchange="this.form.submit()">
+                {% for s in ['Borrowed','Overdue','Returned'] %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                <option value="all" {% if status=='all' %}selected{% endif %}>All</option>
+            </select></div>
+    </form>
+</div></div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ loans|length }} loan(s)</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if loans %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Book</th><th>Student</th><th>Borrowed</th><th>Due</th><th>Status</th><th>Fine</th><th></th></tr></thead>
+                <tbody>
+                    {% for l in loans %}
+                    <tr>
+                        <td data-label="Book">{{ l.book.title if l.book else '—' }}</td>
+                        <td data-label="Student">{{ l.student.full_name if l.student else '—' }}</td>
+                        <td data-label="Borrowed">{{ l.borrowed_date.strftime('%d %b %Y') if l.borrowed_date }}</td>
+                        <td data-label="Due">{{ l.due_date.strftime('%d %b %Y') if l.due_date }}{% if l.is_overdue %} <span class="text-danger text-sm">({{ l.days_overdue }}d late)</span>{% endif %}</td>
+                        <td data-label="Status"><span class="badge {% if l.status=='Returned' %}badge-success{% elif l.is_overdue %}badge-danger{% else %}badge-warning{% endif %}">{{ 'Overdue' if l.is_overdue else l.status }}</span></td>
+                        <td data-label="Fine">{% if l.fine %}{{ l.fine|naira }}{% else %}—{% endif %}</td>
+                        <td class="actions">
+                            {% if l.status == 'Borrowed' %}
+                            <form method="POST" action="{{ url_for('library.return_loan', loan_id=l.id) }}" data-confirm="Mark '{{ l.book.title if l.book else 'book' }}' as returned?">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-primary btn-sm"><i class="fas fa-rotate-left"></i> Return</button>
+                            </form>
+                            {% else %}<span class="text-muted text-sm">{{ l.returned_date.strftime('%d %b %Y') if l.returned_date }}</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-rotate-left"></i><h3>No loans</h3><p>Nothing matches this filter.</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

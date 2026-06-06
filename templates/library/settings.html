@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Library Settings - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('library.dashboard') }}">Library</a> / <span>Settings</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Library Settings</h1></div>
+{% include 'library/_tabs.html' %}
+<div class="card" style="max-width:560px;">
+    <div class="card-header"><h3><i class="fas fa-gear"></i> Loan rules</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('library.settings') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Loan period (days)</label><input type="number" name="loan_days" class="form-control" min="1" value="{{ settings.loan_days }}"></div>
+                <div class="form-group"><label class="form-label">Overdue fine (₦ per day)</label><input type="number" name="fine_per_day" class="form-control" min="0" step="1" value="{{ settings.fine_per_day }}"><span class="form-hint d-block">0 to disable fines.</span></div>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -236,6 +236,23 @@
                         </a>
                     </li>
 
+                    <li class="nav-section">Library</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.dashboard') }}" class="nav-link {% if request.endpoint == 'library.dashboard' %}active{% endif %}">
+                            <i class="fas fa-book"></i><span>Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.books') }}" class="nav-link {% if request.endpoint in ['library.books','library.add_book','library.edit_book'] %}active{% endif %}">
+                            <i class="fas fa-book-open"></i><span>Catalogue</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.loans') }}" class="nav-link {% if request.endpoint in ['library.loans','library.issue'] %}active{% endif %}">
+                            <i class="fas fa-hand-holding"></i><span>Loans</span>
+                        </a>
+                    </li>
+
                     <li class="nav-section">Staff / HR</li>
                     <li class="nav-item">
                         <a href="{{ url_for('hr.dashboard') }}" class="nav-link {% if request.endpoint == 'hr.dashboard' %}active{% endif %}">

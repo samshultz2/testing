@@ -1,0 +1,15 @@
+{% set ep = request.endpoint %}
+<div class="fin-tabs">
+    <a href="{{ url_for('library.dashboard') }}" class="fin-tab {% if ep == 'library.dashboard' %}active{% endif %}"><i class="fas fa-chart-pie"></i> Overview</a>
+    <a href="{{ url_for('library.books') }}" class="fin-tab {% if ep in ['library.books','library.add_book','library.edit_book'] %}active{% endif %}"><i class="fas fa-book"></i> Catalogue</a>
+    <a href="{{ url_for('library.issue') }}" class="fin-tab {% if ep == 'library.issue' %}active{% endif %}"><i class="fas fa-hand-holding"></i> Issue</a>
+    <a href="{{ url_for('library.loans') }}" class="fin-tab {% if ep == 'library.loans' %}active{% endif %}"><i class="fas fa-rotate-left"></i> Loans</a>
+    <a href="{{ url_for('library.settings') }}" class="fin-tab {% if ep == 'library.settings' %}active{% endif %}"><i class="fas fa-gear"></i> Settings</a>
+</div>
+<style>
+.fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
+.fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.fin-tab i{font-size:.85rem;opacity:.8}
+.fin-tab:hover{color:var(--primary);background:var(--gray-50)}
+.fin-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+</style>

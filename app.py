@@ -15,6 +15,7 @@ from routes.finance import finance_bp
 from routes.communication import comms_bp
 from routes.hr import hr_bp
 from routes.admissions import adm_bp
+from routes.library import library_bp
 
 
 _scheduler_started = False
@@ -73,6 +74,7 @@ def create_app(config_class=Config):
     app.register_blueprint(comms_bp)
     app.register_blueprint(hr_bp)
     app.register_blueprint(adm_bp)
+    app.register_blueprint(library_bp)
     
     # Initialize database
     with app.app_context():
