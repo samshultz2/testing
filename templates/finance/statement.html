@@ -31,7 +31,7 @@
         <div class="card-header"><h3>Bill</h3></div>
         <div class="card-body">
             {% if bill.lines %}
-                <table class="data-table">
+                <table class="data-table no-mobile-scroll" style="width:100%;">
                     <tbody>
                         {% for item, amount in bill.lines %}<tr><td>{{ item.name }}</td><td class="text-right">{{ amount|naira }}</td></tr>{% endfor %}
                         <tr><td><strong>Total billed</strong></td><td class="text-right"><strong>{{ bill.billed|naira }}</strong></td></tr>

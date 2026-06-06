@@ -2186,32 +2186,43 @@ input:focus, select:focus, textarea:focus {
 
 /* Responsive "stacked" tables: on phones each row becomes a card and every
    cell shows its column label (set via data-label). Opt in with class
-   "table-stack no-mobile-scroll" so wide finance/report tables stay readable
-   without horizontal scrolling. */
-@media (max-width: 640px) {
-    table.table-stack, table.table-stack tbody, table.table-stack tr, table.table-stack td {
+   "table-stack" so wide finance/report tables stay readable without horizontal
+   scrolling. Selectors are scoped to .page-content and use the !important-free
+   high-specificity needed to beat the global .page-content table rule. */
+@media (max-width: 768px) {
+    .page-content table.table-stack,
+    .page-content table.table-stack tbody,
+    .page-content table.table-stack tr,
+    .page-content table.table-stack td {
         display: block;
         width: 100%;
+        max-width: 100%;
     }
-    table.table-stack thead { display: none; }
-    table.table-stack tr {
+    .page-content table.table-stack {
+        white-space: normal;
+        overflow: visible;
+    }
+    .page-content table.table-stack thead {
+        display: none;
+    }
+    .page-content table.table-stack tr {
         border: 1px solid var(--border-color);
         border-radius: var(--radius-md);
         margin-bottom: 0.6rem;
         padding: 0.3rem 0.25rem;
         background: var(--bg-card);
     }
-    table.table-stack td {
+    .page-content table.table-stack td {
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 1rem;
         border: none;
-        padding: 0.4rem 0.75rem;
+        padding: 0.45rem 0.75rem;
         white-space: normal;
         text-align: right;
     }
-    table.table-stack td::before {
+    .page-content table.table-stack td::before {
         content: attr(data-label);
         font-weight: 600;
         font-size: 0.7rem;
@@ -2221,9 +2232,9 @@ input:focus, select:focus, textarea:focus {
         text-align: left;
         flex-shrink: 0;
     }
-    table.table-stack td.actions { justify-content: flex-end; }
-    table.table-stack td.actions::before { content: none; }
+    .page-content table.table-stack td.actions { justify-content: flex-end; }
+    .page-content table.table-stack td.actions::before { content: none; }
     /* Full-width cell (e.g. an inline edit form spanning all columns). */
-    table.table-stack td.stack-full { display: block; text-align: left; }
-    table.table-stack td.stack-full::before { content: none; }
+    .page-content table.table-stack td.stack-full { display: block; text-align: left; }
+    .page-content table.table-stack td.stack-full::before { content: none; }
 }
