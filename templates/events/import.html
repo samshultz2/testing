@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Import Calendar - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('events.calendar') }}">Calendar</a> / <span>Import</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Import School Calendar</h1></div>
+
+<div class="card" style="max-width:640px;">
+    <div class="card-header"><h3><i class="fas fa-file-import"></i> Scan a calendar file</h3></div>
+    <div class="card-body">
+        <p class="text-muted">Upload your school calendar as a <strong>Word document (.docx)</strong>, an <strong>image</strong> (photo/scan) or a <strong>PDF</strong>. The system reads the dates and activities and shows them for review before adding them to the calendar — no manual typing.</p>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">Calendar file <span class="required">*</span></label>
+                <input type="file" name="file" class="form-control" accept=".docx,image/*,.pdf" required>
+                <span class="form-hint d-block">Best results: a Word table of Week / Activity / Dates, or a clear, straight photo.</span>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-magic"></i> Scan &amp; Review</button>
+            <a href="{{ url_for('events.calendar') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

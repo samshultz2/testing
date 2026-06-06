@@ -88,6 +88,8 @@ def _read_exam(e):
     e.arm_id = request.form.get('arm_id', type=int) or None
     e.term_id = request.form.get('term_id', type=int) or None
     e.exam_date = _d(request.form.get('exam_date')) or date.today()
+    e.start_time = (request.form.get('start_time') or '').strip() or None
+    e.end_time = (request.form.get('end_time') or '').strip() or None
     e.duration_minutes = request.form.get('duration_minutes', type=int) or 30
     e.access_password = (request.form.get('access_password') or '').strip()
     e.instructions = (request.form.get('instructions') or '').strip() or None
@@ -200,19 +202,92 @@ def results(exam_id):
     return render_template('cbt/results.html', e=e, attempts=attempts, avg=avg)
 
 
+def _exam_sheet(ws, exam):
+    """Write one exam's results (alphabetical by name) into an openpyxl sheet."""
+    from openpyxl.styles import Font, PatternFill, Alignment
+    head_fill = PatternFill(start_color='0d6a4e', end_color='0d6a4e', fill_type='solid')
+    head_font = Font(bold=True, color='FFFFFF')
+    title = f'{exam.subject.name if exam.subject else "Exam"} — {exam.title}'
+    ws.merge_cells('A1:E1')
+    ws['A1'] = title
+    ws['A1'].font = Font(bold=True, size=13)
+    ws.merge_cells('A2:E2')
+    ws['A2'] = (f'{exam.school_class.name if exam.school_class else ""} · '
+                f'{exam.exam_date.strftime("%d %b %Y") if exam.exam_date else ""} · '
+                f'Total {exam.total_marks} marks')
+    ws['A2'].font = Font(italic=True, color='666666')
+    headers = ['S/N', 'Student ID', 'Name', 'Score', '%']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.fill = head_fill
+        cell.font = head_font
+    # Submitted attempts, alphabetical by surname then first name.
+    attempts = (exam.attempts.filter_by(status='Submitted')
+                .join(Student).order_by(Student.surname, Student.first_name).all())
+    r = 5
+    for i, a in enumerate(attempts, 1):
+        ws.cell(row=r, column=1, value=i)
+        ws.cell(row=r, column=2, value=a.student.student_id if a.student else '')
+        ws.cell(row=r, column=3, value=a.student.full_name if a.student else '')
+        ws.cell(row=r, column=4, value=a.score)
+        ws.cell(row=r, column=5, value=a.percentage)
+        r += 1
+    widths = [6, 16, 32, 10, 8]
+    for i, wd in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = wd
+    return len(attempts)
+
+
+def _safe_sheet_title(text):
+    bad = set('[]:*?/\\')
+    return ''.join(c for c in text if c not in bad)[:31] or 'Sheet'
+
+
 @cbt_bp.route('/exams/<int:exam_id>/results/export')
 @login_required
 def results_export(exam_id):
+    from openpyxl import Workbook
     e = CBTExam.query.get_or_404(exam_id)
-    out = io.StringIO()
-    w = csv.writer(out)
-    w.writerow(['Student', 'Student ID', 'Score', 'Total', 'Percentage', 'Status', 'Submitted'])
-    for a in e.attempts.join(Student).order_by(Student.surname).all():
-        w.writerow([a.student.full_name if a.student else '', a.student.student_id if a.student else '',
-                    a.score, a.total, a.percentage, a.status,
-                    a.submitted_at.strftime('%Y-%m-%d %H:%M') if a.submitted_at else ''])
-    return Response(out.getvalue(), mimetype='text/csv',
-        headers={'Content-Disposition': f'attachment; filename=cbt_results_{exam_id}.csv'})
+    wb = Workbook()
+    ws = wb.active
+    ws.title = _safe_sheet_title(e.subject.name if e.subject else 'Results')
+    _exam_sheet(ws, e)
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    fname = _safe_sheet_title(f'{e.subject.name if e.subject else "exam"}_{e.title}') + '.xlsx'
+    return Response(output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename={fname}'})
+
+
+@cbt_bp.route('/results/export-all')
+@login_required
+def results_export_all():
+    """Workbook with one alphabetical results sheet per exam (grouped by subject)."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    wb.remove(wb.active)
+    exams = (CBTExam.query.join(Subject, isouter=True)
+             .order_by(Subject.name, CBTExam.exam_date).all())
+    exams = [e for e in exams if e.attempts.filter_by(status='Submitted').count()]
+    if not exams:
+        ws = wb.create_sheet('No results')
+        ws['A1'] = 'No submitted exam results yet.'
+    seen = {}
+    for e in exams:
+        base = _safe_sheet_title(f'{e.subject.name if e.subject else "Exam"}-{e.title}')
+        title, n = base, seen.get(base, 0)
+        if n:
+            title = _safe_sheet_title(f'{base} {n+1}')
+        seen[base] = n + 1
+        _exam_sheet(wb.create_sheet(title), e)
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return Response(output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename=cbt_all_results.xlsx'})
 
 
 # ============================================================================
@@ -328,14 +403,25 @@ def home():
                                  CBTExam.exam_date == date.today(),
                                  CBTExam.class_id == class_id)
         q = q.filter((CBTExam.arm_id == None) | (CBTExam.arm_id == arm_id))
-        exams = q.order_by(CBTExam.title).all()
-    # attach this student's attempt status
+        exams = q.order_by(CBTExam.start_time, CBTExam.title).all()
+    # attach this student's attempt status + availability window
     rows = []
     for e in exams:
         att = CBTAttempt.query.filter_by(exam_id=e.id, student_id=student.id).first()
-        rows.append({'exam': e, 'attempt': att})
+        state, msg = e.access_state()
+        rows.append({'exam': e, 'attempt': att, 'state': state, 'msg': msg})
     return render_template('cbt/portal_home.html', student=student, rows=rows,
                            has_class=bool(class_id))
+
+
+def _student_can_access(student, exam):
+    """The exam must be for the student's current class/arm."""
+    class_id, arm_id = _student_placement(student.id, _active_term())
+    if not class_id or exam.class_id != class_id:
+        return False
+    if exam.arm_id and exam.arm_id != arm_id:
+        return False
+    return True
 
 
 @cbt_portal_bp.route('/<int:exam_id>/start', methods=['GET', 'POST'])
@@ -343,12 +429,16 @@ def home():
 def start(exam_id):
     student = _current_student()
     exam = CBTExam.query.get_or_404(exam_id)
-    if not (exam.is_published and exam.exam_date == date.today()):
-        flash('This exam is not available.', 'error')
+    if not exam.is_published or not _student_can_access(student, exam):
+        flash('This exam is not available for your class.', 'error')
         return redirect(url_for('cbt_portal.home'))
     existing = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if existing and existing.status == 'Submitted':
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
+    state, msg = exam.access_state()
+    if state != 'open' and not (existing and existing.status == 'In progress'):
+        flash(f'This test is not open right now — {msg}.', 'error')
+        return redirect(url_for('cbt_portal.home'))
     if request.method == 'POST':
         pw = (request.form.get('access_password') or '').strip()
         if pw != (exam.access_password or ''):
@@ -368,6 +458,9 @@ def start(exam_id):
 def take(exam_id):
     student = _current_student()
     exam = CBTExam.query.get_or_404(exam_id)
+    if not _student_can_access(student, exam):
+        flash('This exam is not available for your class.', 'error')
+        return redirect(url_for('cbt_portal.home'))
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt:
         return redirect(url_for('cbt_portal.start', exam_id=exam.id))

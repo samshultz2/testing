@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Review Imported Events - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('events.calendar') }}">Calendar</a> / <span>Review Import</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Review Scanned Events</h1>
+    <div class="page-header-actions"><a href="{{ url_for('events.import_calendar') }}" class="btn btn-secondary"><i class="fas fa-redo"></i> Scan another</a></div>
+</div>
+
+<div class="card mb-3"><div class="card-body">
+    <p class="mb-0 text-muted">{{ rows|length }} activities detected. Untick any you don't want, fix dates/titles/categories, then import. Multi-day items have an end date.</p>
+</div></div>
+
+<form method="POST" action="{{ url_for('events.import_save') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="row_count" value="{{ rows|length }}">
+    <div class="card">
+        <div class="card-header">
+            <h3>Detected events</h3>
+            <div class="d-flex gap-2 align-center">
+                <label class="text-sm"><input type="checkbox" id="selAll" checked> Select all</label>
+                <div class="form-group mb-0"><select name="term_id" class="form-control" style="max-width:200px;"><option value="">No term</option>{% for t in terms %}<option value="{{ t.id }}">{{ t.full_name }}</option>{% endfor %}</select></div>
+            </div>
+        </div>
+        <div class="card-body" style="padding:0;">
+            <div class="table-container">
+                <table class="data-table table-stack no-mobile-scroll">
+                    <thead><tr><th>Use</th><th>Start</th><th>End</th><th>Activity</th><th>Category</th></tr></thead>
+                    <tbody>
+                        {% for r in rows %}
+                        <tr>
+                            <td data-label="Use"><input type="checkbox" class="usebox" name="include_{{ loop.index0 }}" value="1" checked></td>
+                            <td data-label="Start"><input type="date" name="start_{{ loop.index0 }}" class="form-control" value="{{ r.start_date.isoformat() if r.start_date }}" style="min-width:140px;"></td>
+                            <td data-label="End"><input type="date" name="end_{{ loop.index0 }}" class="form-control" value="{{ r.end_date.isoformat() if r.end_date else '' }}" style="min-width:140px;"></td>
+                            <td data-label="Activity"><input type="text" name="title_{{ loop.index0 }}" class="form-control" value="{{ r.title }}"></td>
+                            <td data-label="Category">
+                                <select name="category_{{ loop.index0 }}" class="form-control">
+                                    {% for c in categories %}<option value="{{ c }}" {% if r.category==c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="page-header-actions mt-3">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-calendar-plus"></i> Import selected events</button>
+        <a href="{{ url_for('events.calendar') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+<script>
+document.getElementById('selAll').addEventListener('change',function(){
+    document.querySelectorAll('.usebox').forEach(b=>b.checked=this.checked);
+});
+</script>
+{% endblock %}

@@ -24,6 +24,8 @@ class CBTExam(db.Model):
     arm_id = db.Column(db.Integer, db.ForeignKey('class_arms.id'))      # optional
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'))
     exam_date = db.Column(db.Date, default=date.today)                   # day it is active
+    start_time = db.Column(db.String(5))     # 'HH:MM' window opens (optional)
+    end_time = db.Column(db.String(5))       # 'HH:MM' window closes (optional)
     duration_minutes = db.Column(db.Integer, default=30)
     instructions = db.Column(db.Text)
     access_password = db.Column(db.String(60))                           # per-exam subject password
@@ -40,6 +42,48 @@ class CBTExam(db.Model):
                                 lazy='dynamic', cascade='all, delete-orphan')
     attempts = db.relationship('CBTAttempt', backref='exam',
                                lazy='dynamic', cascade='all, delete-orphan')
+
+    def _dt(self, hhmm, default_h, default_m):
+        from datetime import datetime, time
+        h, m = default_h, default_m
+        if hhmm:
+            try:
+                h, m = [int(x) for x in hhmm.split(':')]
+            except (ValueError, AttributeError):
+                pass
+        return datetime.combine(self.exam_date, time(h, m))
+
+    @property
+    def opens_at(self):
+        return self._dt(self.start_time, 0, 0)
+
+    @property
+    def closes_at(self):
+        return self._dt(self.end_time, 23, 59)
+
+    def access_state(self, now=None):
+        """('open'|'before'|'closed'|'wrong_day', human_message)."""
+        from datetime import datetime
+        now = now or datetime.now()
+        if now.date() < self.exam_date:
+            return 'wrong_day', f'Opens on {self.exam_date.strftime("%d %b %Y")}'
+        if now.date() > self.exam_date:
+            return 'closed', 'This test has closed'
+        if now < self.opens_at:
+            return 'before', f'Opens at {self.opens_at.strftime("%I:%M %p")}'
+        if now > self.closes_at:
+            return 'closed', f'Closed at {self.closes_at.strftime("%I:%M %p")}'
+        return 'open', 'Available now'
+
+    @property
+    def is_available(self):
+        return self.access_state()[0] == 'open'
+
+    @property
+    def window_label(self):
+        if self.start_time or self.end_time:
+            return f'{self.start_time or "00:00"}–{self.end_time or "23:59"}'
+        return 'All day'
 
     @property
     def total_marks(self):

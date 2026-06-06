@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Results · {{ e.title }}</h1>
-    <div class="page-header-actions"><a href="{{ url_for('cbt.results_export', exam_id=e.id) }}" class="btn btn-primary"><i class="fas fa-file-csv"></i> Export</a></div>
+    <div class="page-header-actions"><a href="{{ url_for('cbt.results_export', exam_id=e.id) }}" class="btn btn-primary"><i class="fas fa-file-excel"></i> Download Excel</a></div>
 </div>
 
 <div class="card mb-3"><div class="card-body d-flex justify-between flex-wrap gap-2">

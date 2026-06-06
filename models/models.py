@@ -1050,6 +1050,16 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # cbt_exams time window (added after initial release).
+    try:
+        ce_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_exams')}
+        if 'start_time' not in ce_cols:
+            statements.append('ALTER TABLE cbt_exams ADD COLUMN start_time VARCHAR(5)')
+        if 'end_time' not in ce_cols:
+            statements.append('ALTER TABLE cbt_exams ADD COLUMN end_time VARCHAR(5)')
+    except Exception:
+        pass
+
     # payslips.attendance_deduction (separates auto attendance vs manual deductions).
     try:
         ps_cols = {c['name'] for c in inspect(db.engine).get_columns('payslips')}

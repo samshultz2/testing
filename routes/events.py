@@ -138,3 +138,63 @@ def delete_event(event_id):
     db.session.commit()
     flash('Event deleted.', 'success')
     return redirect(url_for('events.agenda'))
+
+
+# ============================================================================
+# IMPORT (scan a Word doc / image of the school calendar)
+# ============================================================================
+
+@events_bp.route('/import', methods=['GET', 'POST'])
+@login_required
+def import_calendar():
+    from utils import calendar_import
+    if request.method == 'POST':
+        f = request.files.get('file')
+        if not f or not f.filename:
+            flash('Choose a Word document or image to scan.', 'error')
+            return redirect(url_for('events.import_calendar'))
+        data = f.read()
+        name = f.filename.lower()
+        try:
+            if name.endswith('.docx'):
+                parsed = calendar_import.parse_docx(data)
+            elif name.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.pdf')):
+                parsed = calendar_import.parse_image(data, f.filename)
+            else:
+                flash('Unsupported file. Upload a .docx, image, or PDF.', 'error')
+                return redirect(url_for('events.import_calendar'))
+        except Exception as e:
+            flash(f'Could not read the file: {e}', 'error')
+            return redirect(url_for('events.import_calendar'))
+        if not parsed:
+            flash('No dated activities were detected. Try a clearer scan or add events manually.', 'warning')
+            return redirect(url_for('events.import_calendar'))
+        return render_template('events/import_review.html', rows=parsed,
+            categories=CATEGORIES, terms=Term.query.order_by(Term.id.desc()).all())
+    return render_template('events/import.html')
+
+
+@events_bp.route('/import/save', methods=['POST'])
+@login_required
+def import_save():
+    term_id = request.form.get('term_id', type=int) or None
+    count = request.form.get('row_count', type=int) or 0
+    user = _current_user()
+    saved = 0
+    for i in range(count):
+        if not request.form.get(f'include_{i}'):
+            continue
+        title = (request.form.get(f'title_{i}') or '').strip()
+        start = _d(request.form.get(f'start_{i}'))
+        if not (title and start):
+            continue
+        end = _d(request.form.get(f'end_{i}'))
+        db.session.add(SchoolEvent(
+            title=title, start_date=start,
+            end_date=end if end and end >= start else None,
+            category=request.form.get(f'category_{i}') or 'General',
+            all_day=True, audience='All', term_id=term_id, created_by=user))
+        saved += 1
+    db.session.commit()
+    flash(f'Imported {saved} event(s) into the calendar.', 'success')
+    return redirect(url_for('events.agenda'))

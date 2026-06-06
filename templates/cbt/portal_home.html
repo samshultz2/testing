@@ -15,6 +15,7 @@
             <div>
                 <strong style="font-size:1.05rem;">{{ e.title }}</strong>
                 <div class="text-muted text-sm">{{ e.subject.name if e.subject else '' }} · {{ e.question_count }} questions · {{ e.duration_minutes }} min · {{ e.total_marks }} marks</div>
+                <div class="text-sm" style="margin-top:.2rem;"><i class="fas fa-clock"></i> {{ e.window_label }}{% if row.state != 'open' %} · <span style="color:#b8860b;">{{ row.msg }}</span>{% endif %}</div>
             </div>
             <div>
                 {% if a and a.status == 'Submitted' %}
@@ -22,8 +23,10 @@
                     <a href="{{ url_for('cbt_portal.result', exam_id=e.id) }}" class="btn btn-secondary btn-sm">View</a>
                 {% elif a %}
                     <a href="{{ url_for('cbt_portal.take', exam_id=e.id) }}" class="btn btn-primary btn-sm">Resume</a>
-                {% else %}
+                {% elif row.state == 'open' %}
                     <a href="{{ url_for('cbt_portal.start', exam_id=e.id) }}" class="btn btn-primary btn-sm">Start <i class="fas fa-arrow-right"></i></a>
+                {% else %}
+                    <span class="badge badge-secondary">{{ 'Not open yet' if row.state=='before' else 'Closed' }}</span>
                 {% endif %}
             </div>
         </div>

@@ -15,8 +15,13 @@
         </div>
         <div class="form-row">
             <div class="form-group"><label class="form-label">Term</label><select name="term_id" class="form-control"><option value="">—</option>{% for t in terms %}<option value="{{ t.id }}" {% if (exam and exam.term_id==t.id) or (not exam and active_term and active_term.id==t.id) %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}</select></div>
-            <div class="form-group"><label class="form-label">Exam date <span class="required">*</span></label><input type="date" name="exam_date" class="form-control" required value="{{ exam.exam_date.isoformat() if exam else '' }}"><span class="form-hint d-block">The test is only available to students on this day.</span></div>
+            <div class="form-group"><label class="form-label">Exam date <span class="required">*</span></label><input type="date" name="exam_date" class="form-control" required value="{{ exam.exam_date.isoformat() if exam else '' }}"></div>
             <div class="form-group"><label class="form-label">Duration (minutes)</label><input type="number" name="duration_minutes" class="form-control" min="1" value="{{ exam.duration_minutes if exam else 30 }}"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="form-label">Opens at <span class="text-muted text-sm">(time)</span></label><input type="time" name="start_time" class="form-control" value="{{ exam.start_time or '' if exam else '' }}"></div>
+            <div class="form-group"><label class="form-label">Closes at <span class="text-muted text-sm">(time)</span></label><input type="time" name="end_time" class="form-control" value="{{ exam.end_time or '' if exam else '' }}"></div>
+            <div class="form-group" style="align-self:center;"><span class="form-hint">Students of this class can only access the test on the date, within this time window. Leave times blank for all-day access.</span></div>
         </div>
         <div class="form-row">
             <div class="form-group"><label class="form-label">Access password <span class="required">*</span></label><input type="text" name="access_password" class="form-control" required placeholder="Read out to students at start" value="{{ exam.access_password if exam else '' }}"><span class="form-hint d-block">Per-exam password students must enter to begin — different from their login password.</span></div>

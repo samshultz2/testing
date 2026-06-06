@@ -1,51 +1,123 @@
-{% extends "cbt/portal_base.html" %}
-{% block title %}{{ exam.title }}{% endblock %}
-{% block head_extra %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>{{ exam.title }} — Exam</title>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
-.timer-bar{position:sticky;top:0;z-index:20;background:#0a5236;color:#fff;border-radius:12px;padding:.6rem 1rem;display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;font-weight:600}
-.timer-bar.warn{background:#be2617}
-.q-block{border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:.8rem}
-.q-opt{display:block;padding:.6rem .8rem;border:1px solid var(--border-color);border-radius:8px;margin-top:.45rem;cursor:pointer}
-.q-opt:hover{background:var(--gray-50)}
-.q-opt input{margin-right:.5rem}
+:root{--ex:#4f46e5;--ex-dark:#3730a3;--ok:#16a34a;--bg:#0f172a;--panel:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:var(--ink);-webkit-font-smoothing:antialiased}
+/* top exam bar — distinct dark slate, nothing like the green app */
+.ex-bar{position:fixed;top:0;left:0;right:0;height:60px;background:var(--bg);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.ex-bar .t{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:.5rem;overflow:hidden}
+.ex-bar .t .sub{color:#a5b4fc;font-weight:500;font-size:.8rem}
+.ex-timer{display:flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.1);padding:.4rem .8rem;border-radius:999px;font-weight:700;font-variant-numeric:tabular-nums}
+.ex-timer.warn{background:#dc2626;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.6}}
+.ex-wrap{max-width:1100px;margin:0 auto;padding:78px 1rem 2rem;display:grid;grid-template-columns:1fr 230px;gap:1.2rem;align-items:start}
+@media(max-width:860px){.ex-wrap{grid-template-columns:1fr;padding-top:70px}}
+.q-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1.2rem 1.3rem;margin-bottom:1rem;scroll-margin-top:74px}
+.q-num{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;background:var(--ex);color:#fff;border-radius:8px;font-size:.8rem;font-weight:700;margin-right:.5rem}
+.q-text{font-weight:600;font-size:1.02rem;margin:0 0 .9rem;line-height:1.5}
+.opt{display:flex;align-items:center;gap:.7rem;padding:.8rem 1rem;border:2px solid var(--line);border-radius:12px;margin-bottom:.55rem;cursor:pointer;transition:all .12s;font-size:.95rem}
+.opt:hover{border-color:#c7d2fe;background:#f5f7ff}
+.opt input{display:none}
+.opt .mark{width:24px;height:24px;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;flex-shrink:0;font-weight:700}
+.opt.sel{border-color:var(--ex);background:#eef2ff}
+.opt.sel .mark{background:var(--ex);border-color:var(--ex)}
+.opt .letter{font-weight:700;color:var(--muted)}
+.opt.sel .letter{color:var(--ex-dark)}
+/* navigator */
+.nav-panel{position:sticky;top:78px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1rem}
+.nav-panel h4{margin:0 0 .2rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.nav-prog{font-size:.8rem;color:var(--muted);margin-bottom:.7rem}
+.nav-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:.4rem}
+.nav-grid a{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f5f9;color:var(--ink);text-decoration:none;font-weight:600;font-size:.82rem;border:1px solid var(--line)}
+.nav-grid a.done{background:var(--ok);color:#fff;border-color:var(--ok)}
+.btn-submit{width:100%;margin-top:1rem;background:var(--ex);color:#fff;border:none;border-radius:12px;padding:.85rem;font-weight:700;font-size:.95rem;cursor:pointer;font-family:inherit}
+.btn-submit:hover{background:var(--ex-dark)}
+.mini-submit{display:none}
+@media(max-width:860px){.nav-panel{position:static;margin-bottom:1rem}.nav-grid{grid-template-columns:repeat(10,1fr)}}
 </style>
-{% endblock %}
-{% block content %}
-<div class="portal-card">
-    <div class="timer-bar" id="timerBar">
-        <span>{{ exam.title }}</span>
-        <span><i class="fas fa-clock"></i> <span id="timer">--:--</span></span>
-    </div>
-    <form method="POST" action="{{ url_for('cbt_portal.submit', exam_id=exam.id) }}" id="examForm">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+</head>
+<body>
+<div class="ex-bar">
+    <div class="t"><i class="fas fa-pen-to-square" style="color:#a5b4fc"></i> <span>{{ exam.title }}</span> <span class="sub">· {{ exam.subject.name if exam.subject else '' }}</span></div>
+    <div class="ex-timer" id="timerBox"><i class="fas fa-clock"></i> <span id="timer">--:--</span></div>
+</div>
+
+<form method="POST" action="{{ url_for('cbt_portal.submit', exam_id=exam.id) }}" id="examForm">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+<div class="ex-wrap">
+    <div>
         {% for q in questions %}
-        <div class="q-block">
-            <strong>{{ loop.index }}. {{ q.question_text }}</strong>
+        <div class="q-card" id="q{{ loop.index }}">
+            <p class="q-text"><span class="q-num">{{ loop.index }}</span>{{ q.question_text }}</p>
             {% for letter, text in q.options %}{% if text %}
-            <label class="q-opt"><input type="radio" name="q_{{ q.id }}" value="{{ letter }}"> {{ letter }}. {{ text }}</label>
+            <label class="opt" data-q="{{ loop.index }}">
+                <input type="radio" name="q_{{ q.id }}" value="{{ letter }}">
+                <span class="mark"><i class="fas fa-check"></i></span>
+                <span class="letter">{{ letter }}.</span> <span>{{ text }}</span>
+            </label>
             {% endif %}{% endfor %}
         </div>
         {% endfor %}
-        <button type="submit" class="btn btn-primary w-100" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit Test</button>
-    </form>
+        <button type="submit" class="btn-submit mini-submit" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit Test</button>
+    </div>
+    <div class="nav-panel">
+        <h4>Questions</h4>
+        <div class="nav-prog"><span id="answered">0</span> of {{ questions|length }} answered</div>
+        <div class="nav-grid">
+            {% for q in questions %}<a href="#q{{ loop.index }}" data-n="{{ loop.index }}">{{ loop.index }}</a>{% endfor %}
+        </div>
+        <button type="submit" class="btn-submit" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit Test</button>
+    </div>
 </div>
-{% endblock %}
-{% block scripts %}
+</form>
+
 <script>
 (function(){
-    var remaining = {{ remaining }};
-    var el = document.getElementById('timer'), bar = document.getElementById('timerBar');
-    var form = document.getElementById('examForm'), submitted = false;
-    function submit(){ if(submitted) return; submitted = true; form.submit(); }
+    var remaining={{ remaining }}, el=document.getElementById('timer'), box=document.getElementById('timerBox');
+    var form=document.getElementById('examForm'), submitted=false;
+    function doSubmit(){ if(submitted)return; submitted=true; form.submit(); }
     function tick(){
-        if(remaining <= 0){ el.textContent='00:00'; submit(); return; }
-        var m = Math.floor(remaining/60), s = remaining%60;
-        el.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
-        if(remaining <= 60) bar.classList.add('warn');
+        if(remaining<=0){el.textContent='00:00';doSubmit();return;}
+        var m=Math.floor(remaining/60),s=remaining%60;
+        el.textContent=(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+        if(remaining<=60)box.classList.add('warn');
         remaining--;
     }
-    tick(); setInterval(tick, 1000);
-    form.addEventListener('submit', function(){ submitted = true; });
+    tick(); setInterval(tick,1000);
+
+    // option selection styling + answered tracking
+    function refresh(){
+        var qs=document.querySelectorAll('.q-card'), done=0;
+        qs.forEach(function(card,i){
+            var checked=card.querySelector('input:checked');
+            card.querySelectorAll('.opt').forEach(function(o){o.classList.toggle('sel', o.querySelector('input').checked);});
+            var navBtn=document.querySelector('.nav-grid a[data-n="'+(i+1)+'"]');
+            if(checked){done++; if(navBtn)navBtn.classList.add('done');} else if(navBtn)navBtn.classList.remove('done');
+        });
+        document.getElementById('answered').textContent=done;
+    }
+    document.querySelectorAll('.opt input').forEach(function(inp){inp.addEventListener('change',refresh);});
+    refresh();
+
+    form.addEventListener('submit',function(e){
+        if(!submitted){
+            var total=document.querySelectorAll('.q-card').length;
+            var done=document.querySelectorAll('.q-card input:checked').length;
+            if(done<total && !confirm('You answered '+done+' of '+total+' questions. Submit now?')){ e.preventDefault(); return; }
+        }
+        submitted=true;
+    });
+    if(window.innerWidth<=860){document.querySelector('.mini-submit').style.display='block';}
 })();
 </script>
-{% endblock %}
+</body>
+</html>
