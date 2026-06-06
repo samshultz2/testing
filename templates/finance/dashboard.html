@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Finance - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Finance</span>{% endblock %}
+{% block extra_css %}
+<style>
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
+.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
+.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
+.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
+.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
+.kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
+.kpi .v{font-size:1.35rem;font-weight:700;line-height:1.1;font-family:var(--font-display)}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.fin-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:992px){.fin-grid.split{grid-template-columns:1.4fr 1fr}}
+.widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
+.widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.45rem}
+.widget .wh h3 i{color:var(--primary)}
+.widget .wb{padding:1rem}
+.chart-box{position:relative;height:240px}
+.progress-wrap{height:10px;background:var(--gray-100);border-radius:var(--radius-full);overflow:hidden;margin-top:.5rem}
+.progress-wrap .bar{height:100%;background:linear-gradient(90deg,var(--primary),#38ef7d);border-radius:var(--radius-full)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Finance &amp; Fees</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('finance.record_payment', term_id=term_id) }}" class="btn btn-primary"><i class="fas fa-cash-register"></i> Record Payment</a>
+        <a href="{{ url_for('finance.defaulters', term_id=term_id) }}" class="btn btn-secondary"><i class="fas fa-triangle-exclamation"></i> Defaulters</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if not has_structure %}
+<div class="card mb-3" style="border-color:var(--warning);">
+    <div class="card-body d-flex align-center gap-2 flex-wrap">
+        <i class="fas fa-circle-info" style="color:var(--warning);font-size:1.4rem;"></i>
+        <div style="flex:1;min-width:200px;">
+            <strong>No fee structure for this term yet.</strong>
+            <div class="text-muted text-sm">Set up the fee items and how much each class pays to start tracking collections.</div>
+        </div>
+        <a href="{{ url_for('finance.items_list') }}" class="btn btn-secondary btn-sm">Fee Items</a>
+        <a href="{{ url_for('finance.structure', term_id=term_id) }}" class="btn btn-primary btn-sm">Set Fee Structure</a>
+    </div>
+</div>
+{% endif %}
+
+<div class="kpi-row">
+    <div class="kpi"><div class="ic blue"><i class="fas fa-file-invoice-dollar"></i></div><div><div class="v">{{ payable_total|naira }}</div><div class="l">Expected</div></div></div>
+    <div class="kpi"><div class="ic green"><i class="fas fa-coins"></i></div><div><div class="v">{{ collected|naira }}</div><div class="l">Collected</div></div></div>
+    <div class="kpi"><div class="ic red"><i class="fas fa-hourglass-half"></i></div><div><div class="v">{{ outstanding|naira }}</div><div class="l">Outstanding</div></div></div>
+    <div class="kpi"><div class="ic amber"><i class="fas fa-percent"></i></div><div><div class="v">{{ rate }}%</div><div class="l">Collection rate</div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-between text-sm"><span>{{ collected|naira }} collected of {{ payable_total|naira }}</span><span>{{ defaulter_count }} owing · {{ enrolled }} enrolled{% if discounts %} · {{ discounts|naira }} waived{% endif %}</span></div>
+        <div class="progress-wrap"><div class="bar" style="width: {{ rate if rate <= 100 else 100 }}%;"></div></div>
+    </div>
+</div>
+
+<div class="fin-grid split">
+    <div class="widget">
+        <div class="wh"><h3><i class="fas fa-school"></i> Expected vs Collected by class</h3></div>
+        <div class="wb"><div class="chart-box">{% if class_chart %}<canvas id="classChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-school"></i><p>No fee structure set</p></div>{% endif %}</div></div>
+    </div>
+    <div class="widget">
+        <div class="wh"><h3><i class="fas fa-wallet"></i> Payment methods</h3></div>
+        <div class="wb"><div class="chart-box">{% if method_chart %}<canvas id="methodChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-wallet"></i><p>No payments yet</p></div>{% endif %}</div></div>
+    </div>
+</div>
+
+<div class="widget">
+    <div class="wh"><h3><i class="fas fa-receipt"></i> Recent payments</h3><a href="{{ url_for('finance.payments_list', term_id=term_id) }}" class="text-sm">View all</a></div>
+    <div class="wb" style="padding:0;">
+        {% if recent %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Date</th><th>Student</th><th>Receipt</th><th>Method</th><th class="text-right">Amount</th></tr></thead>
+                <tbody>
+                    {% for p in recent %}
+                    <tr>
+                        <td>{{ p.payment_date.strftime('%d %b') }}</td>
+                        <td>{{ p.student.full_name }}</td>
+                        <td><a href="{{ url_for('finance.receipt', payment_id=p.id) }}">{{ p.receipt_no }}</a></td>
+                        <td><span class="badge badge-info">{{ p.method }}</span></td>
+                        <td class="text-right">{{ p.amount|naira }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:1.5rem;"><i class="fas fa-receipt"></i><p>No payments recorded for this term</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+    const tick = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
+    const grid = 'rgba(128,128,128,.15)';
+    Chart.defaults.color = tick;
+    const cc = document.getElementById('classChart');
+    if(cc){
+        const d = {{ class_chart|tojson }};
+        new Chart(cc,{type:'bar',data:{labels:d.map(x=>x.name),datasets:[
+            {label:'Expected',data:d.map(x=>x.expected),backgroundColor:'#cbd5e1',borderRadius:5},
+            {label:'Collected',data:d.map(x=>x.collected),backgroundColor:'#1cc88a',borderRadius:5}
+        ]},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});
+    }
+    const mc = document.getElementById('methodChart');
+    if(mc){
+        const m = {{ method_chart|tojson }};
+        new Chart(mc,{type:'doughnut',data:{labels:m.map(x=>x.method),datasets:[{data:m.map(x=>x.amount),backgroundColor:['#4e73df','#1cc88a','#f6c23e','#e74a3b','#7e6cf0'],borderWidth:0}]},options:{maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
+    }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Fee Statement - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Statement</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Fee Statement</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('finance.record_payment', student_id=student.id, term_id=term_id) }}" class="btn btn-primary"><i class="fas fa-cash-register"></i> Record Payment</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body d-flex justify-between align-center flex-wrap gap-2">
+        <div>
+            <h2 style="margin:0;">{{ student.full_name }}</h2>
+            <div class="text-muted">{{ student.student_id }}{% if student.gender %} · {{ student.gender }}{% endif %}</div>
+        </div>
+        <form method="GET" class="form-group mb-0">
+            <label class="form-label">Term</label>
+            <select name="term_id" class="form-control" onchange="this.form.submit()">
+                {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+            </select>
+        </form>
+    </div>
+</div>
+
+{% if bill %}
+<div class="form-row" style="align-items:flex-start;">
+    <div class="card">
+        <div class="card-header"><h3>Bill</h3></div>
+        <div class="card-body">
+            {% if bill.lines %}
+                <table class="data-table">
+                    <tbody>
+                        {% for item, amount in bill.lines %}<tr><td>{{ item.name }}</td><td class="text-right">{{ amount|naira }}</td></tr>{% endfor %}
+                        <tr><td><strong>Total billed</strong></td><td class="text-right"><strong>{{ bill.billed|naira }}</strong></td></tr>
+                        {% if bill.discount %}<tr><td>Discount / waiver</td><td class="text-right">− {{ bill.discount|naira }}</td></tr>{% endif %}
+                        <tr><td>Paid</td><td class="text-right">{{ bill.paid|naira }}</td></tr>
+                        <tr><td><strong>Balance</strong></td><td class="text-right"><strong style="color:{{ 'var(--danger)' if bill.balance > 0 else 'var(--success)' }};">{{ bill.balance|naira }}</strong></td></tr>
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state" style="padding:1rem;"><i class="fas fa-circle-info"></i><p>No fee structure set for this student's class this term.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Payments ({{ payments|length }})</h3></div>
+        <div class="card-body" style="padding:0;">
+            {% if payments %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Receipt</th><th>Method</th><th class="text-right">Amount</th></tr></thead>
+                    <tbody>
+                        {% for p in payments %}
+                        <tr><td>{{ p.payment_date.strftime('%d %b %Y') }}</td><td><a href="{{ url_for('finance.receipt', payment_id=p.id) }}">{{ p.receipt_no }}</a></td><td><span class="badge badge-info">{{ p.method }}</span></td><td class="text-right">{{ p.amount|naira }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}<div class="empty-state" style="padding:1rem;"><i class="fas fa-receipt"></i><p>No payments yet</p></div>{% endif %}
+        </div>
+    </div>
+</div>
+
+{% if user_permissions.is_admin %}
+<div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-tag"></i> Discounts / Waivers</h3></div>
+    <div class="card-body">
+        {% if discounts %}
+        <table class="data-table mb-3">
+            <thead><tr><th>Reason</th><th class="text-right">Amount</th><th></th></tr></thead>
+            <tbody>
+                {% for d in discounts %}
+                <tr>
+                    <td>{{ d.reason or '—' }}</td>
+                    <td class="text-right">{{ d.amount|naira }}</td>
+                    <td class="text-right"><form method="POST" action="{{ url_for('finance.delete_discount', discount_id=d.id) }}" data-confirm="Remove this discount?"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        <form method="POST" action="{{ url_for('finance.add_discount') }}" class="d-flex gap-2 align-end flex-wrap">
+            <input type="hidden" name="student_id" value="{{ student.id }}">
+            <input type="hidden" name="term_id" value="{{ term_id }}">
+            <div class="form-group mb-0"><label class="form-label">Amount (₦)</label><input type="number" name="amount" class="form-control" min="0" step="100" required></div>
+            <div class="form-group mb-0" style="flex:1;min-width:200px;"><label class="form-label">Reason</label><input type="text" name="reason" class="form-control" placeholder="e.g., Sibling discount, Staff ward, Scholarship"></div>
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Discount</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><p>Select a term.</p></div></div></div>
+{% endif %}
+{% endblock %}

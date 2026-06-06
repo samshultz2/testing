@@ -171,7 +171,29 @@
                             <i class="fas fa-print"></i><span>Print Reports</span>
                         </a>
                     </li>
-                    
+
+                    <li class="nav-section">Finance</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.dashboard') }}" class="nav-link {% if request.endpoint == 'finance.dashboard' %}active{% endif %}">
+                            <i class="fas fa-chart-pie"></i><span>Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.record_payment') }}" class="nav-link {% if 'record_payment' in request.endpoint or 'payments_list' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-cash-register"></i><span>Payments</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.structure') }}" class="nav-link {% if 'structure' in request.endpoint or 'items' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-table-list"></i><span>Fee Structure</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.defaulters') }}" class="nav-link {% if request.endpoint == 'finance.defaulters' %}active{% endif %}">
+                            <i class="fas fa-triangle-exclamation"></i><span>Defaulters</span>
+                        </a>
+                    </li>
+
                     <li class="nav-section">External Exams</li>
                     <li class="nav-item">
                         <a href="{{ url_for('results.waec_list') }}" class="nav-link">

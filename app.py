@@ -11,6 +11,7 @@ from routes import auth_bp, main_bp, academics_bp, attendance_bp, results_bp, re
 from routes.generator import generator_bp
 from routes.contributions import contributions_bp
 from routes.mock_jamb import mock_jamb_bp
+from routes.finance import finance_bp
 
 
 def create_app(config_class=Config):
@@ -40,6 +41,7 @@ def create_app(config_class=Config):
     app.register_blueprint(contributions_bp)
     app.register_blueprint(mock_jamb_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(finance_bp)
     
     # Initialize database
     with app.app_context():
@@ -129,6 +131,14 @@ def create_app(config_class=Config):
             return json.loads(value) if value else []
         except (ValueError, TypeError):
             return []
+
+    @app.template_filter('naira')
+    def naira_filter(value):
+        """Format a number as Naira, e.g. 25000 -> ₦25,000.00."""
+        try:
+            return '₦{:,.2f}'.format(float(value or 0))
+        except (ValueError, TypeError):
+            return '₦0.00'
 
     @app.template_filter('format_phone')
     def format_phone_filter(value):

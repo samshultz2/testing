@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Fee Structure - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Fee Structure</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Fee Structure</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('finance.items_list') }}" class="btn btn-secondary"><i class="fas fa-tags"></i> Fee Items</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="class_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for c in classes %}<option value="{{ c.id }}" {% if class_id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Arm <span class="text-muted text-sm">(optional)</span></label>
+                <select name="arm_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">All arms</option>
+                    {% for a in arms %}<option value="{{ a.id }}" {% if arm_id == a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+                </select>
+            </div>
+        </form>
+        <p class="text-muted text-sm mb-0 mt-2"><i class="fas fa-circle-info"></i> Leave <strong>All arms</strong> selected to charge every arm of the class the same. Set an arm only if that arm pays a different amount — arm-specific amounts override the all-arms figure.</p>
+    </div>
+</div>
+
+{% if term_id and class_id %}
+    {% if items %}
+    <form method="POST" action="{{ url_for('finance.save_structure') }}">
+        <input type="hidden" name="term_id" value="{{ term_id }}">
+        <input type="hidden" name="class_id" value="{{ class_id }}">
+        <input type="hidden" name="arm_id" value="{{ arm_id or '' }}">
+        <div class="card">
+            <div class="card-header"><h3>Amounts per student</h3><span class="badge badge-primary" id="totalBadge">Total: {{ total|naira }}</span></div>
+            <div class="card-body">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead><tr><th>Fee Item</th><th style="width:220px;">Amount (₦)</th></tr></thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td><strong>{{ item.name }}</strong>{% if item.description %}<div class="text-muted text-sm">{{ item.description }}</div>{% endif %}</td>
+                                <td><input type="number" name="amount_{{ item.id }}" class="form-control fee-amount" min="0" step="100" value="{{ current.get(item.id, '') }}" placeholder="0" style="max-width:200px;"></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="page-header-actions mt-3">
+                    {% if user_permissions.is_admin %}<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Structure</button>{% else %}<p class="text-muted">Only admins can edit the fee structure.</p>{% endif %}
+                </div>
+            </div>
+        </div>
+    </form>
+    {% else %}
+    <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-tags"></i><h3>No fee items</h3><p>Create fee items first, then set their amounts here.</p><a href="{{ url_for('finance.items_list') }}" class="btn btn-primary">Add Fee Items</a></div></div></div>
+    {% endif %}
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><h3>Select a class</h3><p>Choose a term and class to set its fees.</p></div></div></div>
+{% endif %}
+
+{% if user_permissions.is_admin and term_id %}
+<div class="card mt-3" style="border-color:var(--info);">
+    <div class="card-header"><h3><i class="fas fa-copy"></i> Copy structure from another term</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('finance.copy_structure') }}" class="d-flex gap-2 align-end flex-wrap" data-confirm="Copy the whole fee structure into this term? Existing rows are kept.">
+            <input type="hidden" name="to_term_id" value="{{ term_id }}">
+            <div class="form-group mb-0"><label class="form-label">Copy all classes from</label>
+                <select name="from_term_id" class="form-control" required>
+                    <option value="">Select source term…</option>
+                    {% for term in terms %}{% if term.id != term_id %}<option value="{{ term.id }}">{{ term.full_name }}</option>{% endif %}{% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-info"><i class="fas fa-copy"></i> Copy into this term</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+    const fmt = n => '₦' + (n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    const badge = document.getElementById('totalBadge');
+    function recompute(){
+        let t = 0;
+        document.querySelectorAll('.fee-amount').forEach(i => t += parseFloat(i.value) || 0);
+        if(badge) badge.textContent = 'Total: ' + fmt(t);
+    }
+    document.querySelectorAll('.fee-amount').forEach(i => i.addEventListener('input', recompute));
+})();
+</script>
+{% endblock %}

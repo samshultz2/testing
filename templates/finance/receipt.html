@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Receipt {{ payment.receipt_no }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Receipt</span>{% endblock %}
+{% block extra_css %}
+<style>
+.receipt{max-width:560px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.receipt .r-head{text-align:center;padding:1.4rem 1.2rem .9rem;border-bottom:2px dashed var(--border-color)}
+.receipt .r-head h2{margin:0;font-family:var(--font-display)}
+.receipt .r-head .motto{font-size:.8rem;color:var(--text-muted);font-style:italic}
+.receipt .r-head .addr{font-size:.8rem;color:var(--text-muted);margin-top:.2rem}
+.receipt .r-title{text-align:center;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.6rem;background:var(--gray-50)}
+.receipt .r-body{padding:1.2rem}
+.r-row{display:flex;justify-content:space-between;padding:.45rem 0;border-bottom:1px solid var(--border-light);font-size:.92rem}
+.r-row .k{color:var(--text-muted)}
+.r-amount{text-align:center;margin:1rem 0;padding:1rem;background:var(--success-light, #e6f7ef);border-radius:var(--radius-md)}
+.r-amount .big{font-size:1.8rem;font-weight:800;font-family:var(--font-display);color:var(--success)}
+.r-foot{display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-muted);padding-top:1rem;margin-top:.5rem}
+@media print{
+    .sidebar,.topbar,.page-header,.breadcrumb,.no-print,.sidebar-overlay{display:none !important}
+    .main-content,.content-area,body{margin:0 !important;padding:0 !important;background:#fff !important}
+    .receipt{border:none;box-shadow:none;max-width:100%}
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header no-print">
+    <h1>Receipt</h1>
+    <div class="page-header-actions">
+        <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+        <a href="{{ url_for('finance.record_payment', term_id=payment.term_id) }}" class="btn btn-secondary"><i class="fas fa-plus"></i> New Payment</a>
+    </div>
+</div>
+
+<div class="receipt">
+    <div class="r-head">
+        <h2>{{ school.name }}</h2>
+        {% if school.motto %}<div class="motto">{{ school.motto }}</div>{% endif %}
+        {% if school.address %}<div class="addr">{{ school.address }}{% if school.phone %} · {{ school.phone }}{% endif %}</div>{% endif %}
+    </div>
+    <div class="r-title">Fee Payment Receipt</div>
+    <div class="r-body">
+        <div class="r-row"><span class="k">Receipt No.</span><span><strong>{{ payment.receipt_no }}</strong></span></div>
+        <div class="r-row"><span class="k">Date</span><span>{{ payment.payment_date.strftime('%d %B %Y') }}</span></div>
+        <div class="r-row"><span class="k">Student</span><span>{{ payment.student.full_name }}</span></div>
+        <div class="r-row"><span class="k">Student ID</span><span>{{ payment.student.student_id }}</span></div>
+        <div class="r-row"><span class="k">Term</span><span>{{ payment.term.full_name }}</span></div>
+        <div class="r-row"><span class="k">Method</span><span>{{ payment.method }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</span></div>
+
+        <div class="r-amount">
+            <div class="text-muted text-sm">Amount Paid</div>
+            <div class="big">{{ payment.amount|naira }}</div>
+        </div>
+
+        <div class="r-row"><span class="k">Total billed (term)</span><span>{{ bill.billed|naira }}</span></div>
+        {% if bill.discount %}<div class="r-row"><span class="k">Discount / waiver</span><span>− {{ bill.discount|naira }}</span></div>{% endif %}
+        <div class="r-row"><span class="k">Total paid to date</span><span>{{ bill.paid|naira }}</span></div>
+        <div class="r-row"><span class="k">Outstanding balance</span><span><strong style="color:{{ 'var(--danger)' if bill.balance > 0 else 'var(--success)' }};">{{ bill.balance|naira }}</strong></span></div>
+
+        {% if payment.notes %}<div class="r-row"><span class="k">Notes</span><span>{{ payment.notes }}</span></div>{% endif %}
+
+        <div class="r-foot">
+            <span>Received by: {{ payment.received_by or '__________' }}</span>
+            <span>{{ app_name }}</span>
+        </div>
+    </div>
+</div>
+{% endblock %}

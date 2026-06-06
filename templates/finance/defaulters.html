@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Defaulters - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Defaulters</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Outstanding Fees</h1>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="class_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">All Classes</option>
+                    {% for c in classes %}<option value="{{ c.id }}" {% if class_id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="kpi-summary card mb-3">
+    <div class="card-body d-flex justify-between flex-wrap gap-2">
+        <div><div class="text-muted text-sm">Students owing</div><strong style="font-size:1.3rem;">{{ rows|length }}</strong></div>
+        <div><div class="text-muted text-sm">Total billed (owing)</div><strong style="font-size:1.3rem;">{{ totals.billed|naira }}</strong></div>
+        <div><div class="text-muted text-sm">Paid so far</div><strong style="font-size:1.3rem;">{{ totals.paid|naira }}</strong></div>
+        <div><div class="text-muted text-sm">Outstanding</div><strong style="font-size:1.3rem;color:var(--danger);">{{ totals.balance|naira }}</strong></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Defaulters</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if rows %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Student</th><th>Class</th><th class="text-right">Payable</th><th class="text-right">Paid</th><th class="text-right">Balance</th><th></th></tr></thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr>
+                        <td>{{ r.student.full_name }}<div class="text-muted text-sm">{{ r.student.student_id }}</div></td>
+                        <td>{{ r.class_name }}{% if r.arm_name %} {{ r.arm_name }}{% endif %}</td>
+                        <td class="text-right">{{ r.billed|naira }}</td>
+                        <td class="text-right">{{ r.paid|naira }}</td>
+                        <td class="text-right"><strong style="color:var(--danger);">{{ r.balance|naira }}</strong></td>
+                        <td class="text-right">
+                            <div class="d-flex gap-1 justify-end">
+                                <a href="{{ url_for('finance.statement', student_id=r.student.id, term_id=term_id) }}" class="btn btn-secondary btn-sm" title="Statement"><i class="fas fa-file-lines"></i></a>
+                                <a href="{{ url_for('finance.record_payment', student_id=r.student.id, term_id=term_id) }}" class="btn btn-primary btn-sm" title="Record payment"><i class="fas fa-cash-register"></i></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-circle-check"></i><h3>No outstanding fees</h3><p>Every enrolled student has cleared their bill for this selection.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

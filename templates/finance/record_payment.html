@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Record Payment - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Record Payment</span>{% endblock %}
+{% block extra_css %}
+<style>
+.ac-wrap{position:relative}
+.ac-list{position:absolute;z-index:30;left:0;right:0;top:100%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);box-shadow:var(--shadow-md);max-height:240px;overflow:auto}
+.ac-list div{padding:.55rem .8rem;cursor:pointer;font-size:.9rem;border-bottom:1px solid var(--border-light)}
+.ac-list div:hover{background:var(--gray-50)}
+.bill-line{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border-light)}
+.bill-line.total{font-weight:700;border-top:2px solid var(--border-color);border-bottom:none;margin-top:.3rem;padding-top:.6rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Record Payment</h1></div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 1: Find Student</h3></div>
+    <div class="card-body">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="termSelect" class="form-control">
+                    {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group ac-wrap">
+                <label class="form-label">Student</label>
+                <input type="text" id="studentSearch" class="form-control" placeholder="Type name or student ID…" autocomplete="off" value="{{ student.full_name ~ ' (' ~ student.student_id ~ ')' if student else '' }}">
+                <div id="acList" class="ac-list" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if student and bill %}
+<div class="form-row" style="align-items:flex-start;">
+    <div class="card">
+        <div class="card-header"><h3>Bill — {{ student.full_name }}</h3></div>
+        <div class="card-body">
+            {% if bill.lines %}
+                {% for item, amount in bill.lines %}
+                <div class="bill-line"><span>{{ item.name }}</span><span>{{ amount|naira }}</span></div>
+                {% endfor %}
+                <div class="bill-line"><span>Total billed</span><span>{{ bill.billed|naira }}</span></div>
+                {% if bill.discount %}<div class="bill-line"><span>Discount / waiver</span><span>− {{ bill.discount|naira }}</span></div>{% endif %}
+                <div class="bill-line"><span>Already paid</span><span>{{ bill.paid|naira }}</span></div>
+                <div class="bill-line total"><span>Outstanding balance</span><span style="color:{{ 'var(--danger)' if bill.balance > 0 else 'var(--success)' }};">{{ bill.balance|naira }}</span></div>
+            {% else %}
+                <div class="empty-state" style="padding:1rem;"><i class="fas fa-circle-info"></i><p>No fee structure for this student's class this term.</p><a href="{{ url_for('finance.structure', term_id=term_id, class_id=bill.class_id) }}" class="btn btn-secondary btn-sm">Set fee structure</a></div>
+            {% endif %}
+            <a href="{{ url_for('finance.statement', student_id=student.id, term_id=term_id) }}" class="btn btn-secondary btn-sm mt-2"><i class="fas fa-file-lines"></i> Full statement</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Step 2: Payment Details</h3></div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('finance.record_payment') }}">
+                <input type="hidden" name="student_id" value="{{ student.id }}">
+                <input type="hidden" name="term_id" value="{{ term_id }}">
+                <div class="form-group">
+                    <label class="form-label">Amount (₦) <span class="required">*</span></label>
+                    <input type="number" name="amount" class="form-control" min="0" step="50" required value="{{ bill.balance if bill.balance > 0 else '' }}">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Date</label>
+                        <input type="date" name="payment_date" class="form-control" value="{{ today.isoformat() }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Method</label>
+                        <select name="method" class="form-control">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Reference / Teller No.</label><input type="text" name="reference" class="form-control" placeholder="Optional"></div>
+                    <div class="form-group"><label class="form-label">Received by</label><input type="text" name="received_by" class="form-control" placeholder="Bursar name"></div>
+                </div>
+                <div class="form-group"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2" placeholder="Optional"></textarea></div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Save &amp; Print Receipt</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% elif student %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-circle-info"></i><p>This student has no active enrolment for the selected term.</p></div></div></div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-user-magnifying-glass"></i><h3>Find a student</h3><p>Search by name or student ID above to record a payment.</p></div></div></div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+    const input = document.getElementById('studentSearch');
+    const list = document.getElementById('acList');
+    const term = document.getElementById('termSelect');
+    let timer = null;
+    function go(studentId){
+        const t = term.value;
+        window.location = "{{ url_for('finance.record_payment') }}?student_id=" + studentId + "&term_id=" + t;
+    }
+    term.addEventListener('change', function(){
+        {% if student %}go({{ student.id }});{% endif %}
+    });
+    input.addEventListener('input', function(){
+        const q = input.value.trim();
+        clearTimeout(timer);
+        if(q.length < 2){ list.style.display='none'; return; }
+        timer = setTimeout(function(){
+            fetch("{{ url_for('finance.search_students') }}?q=" + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(rows => {
+                    list.innerHTML = '';
+                    if(!rows.length){ list.style.display='none'; return; }
+                    rows.forEach(s => {
+                        const d = document.createElement('div');
+                        d.textContent = s.label;
+                        d.onclick = () => go(s.id);
+                        list.appendChild(d);
+                    });
+                    list.style.display = 'block';
+                });
+        }, 250);
+    });
+    document.addEventListener('click', e => { if(!list.contains(e.target) && e.target !== input) list.style.display='none'; });
+})();
+</script>
+{% endblock %}
