@@ -1,0 +1,36 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}My Tests{% endblock %}
+{% block content %}
+<div class="portal-card">
+    <h1>Today's Tests</h1>
+    <p class="text-muted">{{ "now"|default('') }}Tests available for your class today. Each test needs its access password (your teacher will provide it).</p>
+
+    {% if not has_class %}
+    <div class="empty-state"><i class="fas fa-circle-info"></i><h3>No class found</h3><p>You don't have an active class enrolment, so no tests are listed. Please see your teacher.</p></div>
+    {% elif rows %}
+    <div style="display:flex;flex-direction:column;gap:.6rem;margin-top:1rem;">
+        {% for row in rows %}
+        {% set e = row.exam %}{% set a = row.attempt %}
+        <div style="border:1px solid var(--border-color);border-radius:12px;padding:1rem;display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;">
+            <div>
+                <strong style="font-size:1.05rem;">{{ e.title }}</strong>
+                <div class="text-muted text-sm">{{ e.subject.name if e.subject else '' }} · {{ e.question_count }} questions · {{ e.duration_minutes }} min · {{ e.total_marks }} marks</div>
+            </div>
+            <div>
+                {% if a and a.status == 'Submitted' %}
+                    <span class="badge badge-success">Done · {{ a.score }}/{{ a.total }}</span>
+                    <a href="{{ url_for('cbt_portal.result', exam_id=e.id) }}" class="btn btn-secondary btn-sm">View</a>
+                {% elif a %}
+                    <a href="{{ url_for('cbt_portal.take', exam_id=e.id) }}" class="btn btn-primary btn-sm">Resume</a>
+                {% else %}
+                    <a href="{{ url_for('cbt_portal.start', exam_id=e.id) }}" class="btn btn-primary btn-sm">Start <i class="fas fa-arrow-right"></i></a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-mug-hot"></i><h3>No tests today</h3><p>There are no published tests for your class today. Check back on your exam day.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

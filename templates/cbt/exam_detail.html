@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ e.title }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <span>{{ e.title|truncate(30) }}</span>{% endblock %}
+{% block extra_css %}
+<style>.opt-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-row{grid-template-columns:1fr}}
+.qcard{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.6rem}
+.qopt{font-size:.88rem;padding:.15rem 0}.qopt.correct{color:var(--success);font-weight:600}</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ e.title }}</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('cbt.results', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Results</a>
+        <a href="{{ url_for('cbt.edit_exam', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>
+        <form method="POST" action="{{ url_for('cbt.toggle_publish', exam_id=e.id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn {{ 'btn-secondary' if e.is_published else 'btn-primary' }}"><i class="fas fa-globe"></i> {{ 'Unpublish' if e.is_published else 'Publish' }}</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3"><div class="card-body d-flex justify-between flex-wrap gap-2">
+    <div>
+        <span class="badge {{ 'badge-success' if e.is_published else 'badge-secondary' }}">{{ 'Published' if e.is_published else 'Draft' }}</span>
+        <span class="badge badge-info">{{ e.subject.name if e.subject else 'No subject' }}</span>
+        <span class="badge badge-secondary">{{ e.school_class.name if e.school_class else 'No class' }}{% if e.arm %} {{ e.arm.name }}{% endif %}</span>
+        <span class="text-muted text-sm">· {{ e.exam_date.strftime('%d %b %Y') if e.exam_date }} · {{ e.duration_minutes }} min</span>
+    </div>
+    <div class="text-sm"><i class="fas fa-key text-muted"></i> Access password: <strong>{{ e.access_password }}</strong> · {{ e.question_count }} Q · {{ e.total_marks }} marks</div>
+</div></div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Add Question</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('cbt.add_question', exam_id=e.id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" class="form-control" rows="2" required></textarea></div>
+            <div class="opt-row">
+                <div class="form-group"><label class="form-label">Option A</label><input type="text" name="option_a" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Option B</label><input type="text" name="option_b" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Option C</label><input type="text" name="option_c" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Option D</label><input type="text" name="option_d" class="form-control"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Correct option <span class="required">*</span></label><select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+                <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" class="form-control" step="0.5" value="1"></div>
+            </div>
+            <button class="btn btn-primary"><i class="fas fa-plus"></i> Add Question</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Questions ({{ questions|length }})</h3></div>
+    <div class="card-body">
+        {% if questions %}
+            {% for q in questions %}
+            <div class="qcard">
+                <div class="d-flex justify-between gap-2">
+                    <strong>{{ loop.index }}. {{ q.question_text }}</strong>
+                    <form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                </div>
+                {% for letter, text in q.options %}{% if text %}<div class="qopt {% if q.correct_option==letter %}correct{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
+                <div class="text-muted text-sm mt-1">{{ q.marks }} mark(s)</div>
+            </div>
+            {% endfor %}
+        {% else %}<div class="empty-state"><i class="fas fa-circle-question"></i><h3>No questions yet</h3><p>Add questions above. You can publish once there's at least one.</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

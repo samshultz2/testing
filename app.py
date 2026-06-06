@@ -16,6 +16,8 @@ from routes.communication import comms_bp
 from routes.hr import hr_bp
 from routes.admissions import adm_bp
 from routes.library import library_bp
+from routes.events import events_bp
+from routes.cbt import cbt_bp, cbt_portal_bp
 
 
 _scheduler_started = False
@@ -75,6 +77,9 @@ def create_app(config_class=Config):
     app.register_blueprint(hr_bp)
     app.register_blueprint(adm_bp)
     app.register_blueprint(library_bp)
+    app.register_blueprint(events_bp)
+    app.register_blueprint(cbt_bp)
+    app.register_blueprint(cbt_portal_bp)
     
     # Initialize database
     with app.app_context():

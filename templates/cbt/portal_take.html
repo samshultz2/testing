@@ -1,0 +1,51 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}{{ exam.title }}{% endblock %}
+{% block head_extra %}
+<style>
+.timer-bar{position:sticky;top:0;z-index:20;background:#0a5236;color:#fff;border-radius:12px;padding:.6rem 1rem;display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;font-weight:600}
+.timer-bar.warn{background:#be2617}
+.q-block{border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:.8rem}
+.q-opt{display:block;padding:.6rem .8rem;border:1px solid var(--border-color);border-radius:8px;margin-top:.45rem;cursor:pointer}
+.q-opt:hover{background:var(--gray-50)}
+.q-opt input{margin-right:.5rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="portal-card">
+    <div class="timer-bar" id="timerBar">
+        <span>{{ exam.title }}</span>
+        <span><i class="fas fa-clock"></i> <span id="timer">--:--</span></span>
+    </div>
+    <form method="POST" action="{{ url_for('cbt_portal.submit', exam_id=exam.id) }}" id="examForm">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        {% for q in questions %}
+        <div class="q-block">
+            <strong>{{ loop.index }}. {{ q.question_text }}</strong>
+            {% for letter, text in q.options %}{% if text %}
+            <label class="q-opt"><input type="radio" name="q_{{ q.id }}" value="{{ letter }}"> {{ letter }}. {{ text }}</label>
+            {% endif %}{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary w-100" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit Test</button>
+    </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+    var remaining = {{ remaining }};
+    var el = document.getElementById('timer'), bar = document.getElementById('timerBar');
+    var form = document.getElementById('examForm'), submitted = false;
+    function submit(){ if(submitted) return; submitted = true; form.submit(); }
+    function tick(){
+        if(remaining <= 0){ el.textContent='00:00'; submit(); return; }
+        var m = Math.floor(remaining/60), s = remaining%60;
+        el.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+        if(remaining <= 60) bar.classList.add('warn');
+        remaining--;
+    }
+    tick(); setInterval(tick, 1000);
+    form.addEventListener('submit', function(){ submitted = true; });
+})();
+</script>
+{% endblock %}

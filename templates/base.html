@@ -64,6 +64,11 @@
 
                     <li class="nav-section">Academics</li>
                     <li class="nav-item">
+                        <a href="{{ url_for('events.calendar') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('events.') %}active{% endif %}">
+                            <i class="fas fa-calendar-day"></i><span>Calendar &amp; Events</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('academics.sessions_list') }}" class="nav-link">
                             <i class="fas fa-calendar-alt"></i><span>Sessions</span>
                         </a>
@@ -150,6 +155,18 @@
                         </a>
                     </li>
                     
+                    <li class="nav-section">CBT / Tests</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('cbt.dashboard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('cbt.') %}active{% endif %}">
+                            <i class="fas fa-laptop-code"></i><span>Online Tests</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('cbt.passwords') }}" class="nav-link {% if request.endpoint == 'cbt.passwords' %}active{% endif %}">
+                            <i class="fas fa-key"></i><span>Student Passwords</span>
+                        </a>
+                    </li>
+
                     <li class="nav-section">Results</li>
                     <li class="nav-item">
                         <a href="{{ url_for('subjects.subjects_list') }}" class="nav-link">

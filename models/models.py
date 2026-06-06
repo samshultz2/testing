@@ -49,7 +49,10 @@ class Student(db.Model):
     is_graduated = db.Column(db.Boolean, default=False)
     graduation_date = db.Column(db.Date)
     graduation_session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
-    
+
+    # CBT / student portal login password
+    portal_password_hash = db.Column(db.String(256))
+
     # Relationships
     parent_contacts = db.relationship('ParentContact', backref='student', lazy='dynamic', cascade='all, delete-orphan')
     enrollments = db.relationship('StudentEnrollment', backref='student', lazy='dynamic', cascade='all, delete-orphan')
@@ -84,6 +87,12 @@ class Student(db.Model):
             )
         return None
     
+    def set_portal_password(self, password):
+        self.portal_password_hash = generate_password_hash(password)
+
+    def check_portal_password(self, password):
+        return bool(self.portal_password_hash) and check_password_hash(self.portal_password_hash, password)
+
     @staticmethod
     def generate_student_id():
         """Generate a unique STU##### id (robust to legacy/non-conforming ids)."""
@@ -1014,6 +1023,8 @@ def _ensure_student_exam_columns():
         statements.append('ALTER TABLE students ADD COLUMN stream VARCHAR(20)')
     if 'jamb_target' not in existing:
         statements.append('ALTER TABLE students ADD COLUMN jamb_target INTEGER')
+    if 'portal_password_hash' not in existing:
+        statements.append('ALTER TABLE students ADD COLUMN portal_password_hash VARCHAR(256)')
     try:
         subj_cols = {c['name'] for c in inspect(db.engine).get_columns('subjects')}
         if 'has_practical' not in subj_cols:

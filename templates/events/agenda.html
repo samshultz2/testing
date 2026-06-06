@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Events - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('events.calendar') }}">Calendar</a> / <span>Agenda</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Events</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('events.calendar') }}" class="btn btn-secondary"><i class="fas fa-calendar"></i> Calendar</a>
+        <a href="{{ url_for('events.add_event') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Event</a>
+    </div>
+</div>
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form">
+        <div class="form-group"><label class="form-label">Category</label>
+            <select name="category" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for c in categories %}<option value="{{ c }}" {% if category==c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+        <div class="form-group" style="align-self:flex-end;"><label class="form-check"><input type="checkbox" name="upcoming" value="1" onchange="this.form.submit()" {% if upcoming=='1' %}checked{% endif %}> Upcoming only</label></div>
+    </form>
+</div></div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ events|length }} event(s)</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if events %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Date</th><th>Event</th><th>Category</th><th>Audience</th><th>Location</th><th></th></tr></thead>
+                <tbody>
+                    {% for e in events %}
+                    <tr>
+                        <td data-label="Date">{{ e.start_date.strftime('%a, %d %b %Y') }}{% if e.end_date %} – {{ e.end_date.strftime('%d %b') }}{% endif %}{% if e.start_time and not e.all_day %}<div class="text-muted text-sm">{{ e.start_time }}{% if e.end_time %}–{{ e.end_time }}{% endif %}</div>{% endif %}</td>
+                        <td data-label="Event"><strong>{{ e.title }}</strong>{% if e.description %}<div class="text-muted text-sm">{{ e.description|truncate(80) }}</div>{% endif %}</td>
+                        <td data-label="Category"><span class="badge" style="background:{{ e.color }};color:#fff;">{{ e.category }}</span></td>
+                        <td data-label="Audience">{{ e.audience }}</td>
+                        <td data-label="Location">{{ e.location or '—' }}</td>
+                        <td class="actions">
+                            <div class="d-flex gap-1 justify-end">
+                                <a href="{{ url_for('events.edit_event', event_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                                <form method="POST" action="{{ url_for('events.delete_event', event_id=e.id) }}" data-confirm="Delete {{ e.title }}?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-calendar-day"></i><h3>No events</h3><p>Add school events, holidays and exams to the calendar.</p><a href="{{ url_for('events.add_event') }}" class="btn btn-primary mt-2">Add Event</a></div>{% endif %}
+    </div>
+</div>
+{% endblock %}
