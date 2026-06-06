@@ -5,8 +5,8 @@
      have already visited stay viewable with no connection.
    Note: cached pages live on the device; suitable for a single-user, phone-
    hosted install. Mutations (POST/etc.) always require the network. */
-const STATIC_CACHE = 'posyhub-static-v3';
-const RUNTIME_CACHE = 'posyhub-runtime-v3';
+const STATIC_CACHE = 'posyhub-static-v4';
+const RUNTIME_CACHE = 'posyhub-runtime-v4';
 const OFFLINE_URL = '/static/offline.html';
 const ASSETS = [
   '/static/css/style.css',
