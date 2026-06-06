@@ -140,6 +140,21 @@ def create_app(config_class=Config):
         except (ValueError, TypeError):
             return '₦0.00'
 
+    @app.template_filter('naira_short')
+    def naira_short_filter(value):
+        """Compact Naira for tight spaces (KPIs): 1250000 -> ₦1.25M, 9500 -> ₦9.5k."""
+        try:
+            n = float(value or 0)
+        except (ValueError, TypeError):
+            return '₦0'
+        sign = '-' if n < 0 else ''
+        n = abs(n)
+        if n >= 1_000_000:
+            return f'{sign}₦{n/1_000_000:.2f}M'
+        if n >= 1_000:
+            return f'{sign}₦{n/1_000:.1f}k'
+        return f'{sign}₦{n:,.0f}'
+
     @app.template_filter('format_phone')
     def format_phone_filter(value):
         if value and len(value) == 11:

@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Fee Structure - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Fee Structure</span>{% endblock %}
+{% block extra_css %}
+<style>
+.fee-rows{display:flex;flex-direction:column}
+.fee-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.7rem .25rem;border-bottom:1px solid var(--border-light);flex-wrap:wrap}
+.fee-row:last-child{border-bottom:none}
+.fee-name{flex:1;min-width:160px;margin:0}
+.fee-amt{display:flex;align-items:center;gap:.4rem}
+.fee-cur{color:var(--text-muted);font-weight:600}
+.fee-amt .form-control{width:150px;text-align:right;font-variant-numeric:tabular-nums}
+@media(max-width:420px){.fee-amt{width:100%}.fee-amt .form-control{width:100%}}
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Fee Structure</h1>
@@ -48,18 +60,16 @@
         <div class="card">
             <div class="card-header"><h3>Amounts per student</h3><span class="badge badge-primary" id="totalBadge">Total: {{ total|naira }}</span></div>
             <div class="card-body">
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead><tr><th>Fee Item</th><th style="width:220px;">Amount (₦)</th></tr></thead>
-                        <tbody>
-                            {% for item in items %}
-                            <tr>
-                                <td><strong>{{ item.name }}</strong>{% if item.description %}<div class="text-muted text-sm">{{ item.description }}</div>{% endif %}</td>
-                                <td><input type="number" name="amount_{{ item.id }}" class="form-control fee-amount" min="0" step="100" value="{{ current.get(item.id, '') }}" placeholder="0" style="max-width:200px;"></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="fee-rows">
+                    {% for item in items %}
+                    <div class="fee-row">
+                        <label class="fee-name" for="amount_{{ item.id }}"><strong>{{ item.name }}</strong>{% if item.description %}<span class="text-muted text-sm d-block">{{ item.description }}</span>{% endif %}</label>
+                        <div class="fee-amt">
+                            <span class="fee-cur">₦</span>
+                            <input type="number" id="amount_{{ item.id }}" name="amount_{{ item.id }}" class="form-control fee-amount" inputmode="decimal" min="0" step="100" value="{{ current.get(item.id, '') }}" placeholder="0">
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
                 <div class="page-header-actions mt-3">
                     {% if user_permissions.is_admin %}<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Structure</button>{% else %}<p class="text-muted">Only admins can edit the fee structure.</p>{% endif %}

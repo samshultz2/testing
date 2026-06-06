@@ -14,7 +14,9 @@ from models import (
     Student, Term, SchoolClass, ClassArm, AcademicSession,
     StudentEnrollment, ClassArmAssignment,
 )
-from utils.access_control import login_required, admin_required, is_admin
+from utils.access_control import (
+    login_required, admin_required, is_admin, filter_classes_for_user,
+)
 from utils.finance import (
     student_bill, structure_items, class_fee_total, student_placement,
     next_receipt_no,
@@ -352,8 +354,27 @@ def record_payment():
     student = Student.query.get(student_id) if student_id else None
     bill = student_bill(student_id, term_id) if (student and term_id) else None
 
+    # Class/arm roster picker — lets the user browse a class arm and pick a
+    # student (disambiguates students who share a name across arms).
+    assignment_id = request.values.get('assignment_id', type=int)
+    assignments = []
+    if term_id:
+        all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
+        assignments = filter_classes_for_user(all_assignments)
+        assignments.sort(key=lambda a: a.display_name)
+    roster = []
+    if term_id and assignment_id and not student:
+        enrollments = (StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True)
+            .join(Student).order_by(Student.surname, Student.first_name).all())
+        for e in enrollments:
+            b = student_bill(e.student_id, term_id)
+            roster.append({'student': e.student, 'balance': b['balance'],
+                           'paid': b['paid'], 'billed': b['payable']})
+
     return render_template('finance/record_payment.html',
         terms=terms, term_id=term_id, student=student, bill=bill,
+        assignments=assignments, assignment_id=assignment_id, roster=roster,
         methods=PAYMENT_METHODS, today=date.today())
 
 
@@ -364,13 +385,27 @@ def search_students():
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
         return jsonify([])
+    term_id = request.args.get('term_id', type=int) or _active_term_id()
     like = f'%{q}%'
     students = (Student.query.filter_by(is_active=True)
                 .filter(db.or_(Student.surname.ilike(like),
                                Student.first_name.ilike(like),
                                Student.student_id.ilike(like)))
                 .order_by(Student.surname).limit(15).all())
-    return jsonify([{'id': s.id, 'label': f'{s.full_name} ({s.student_id})'} for s in students])
+    out = []
+    for s in students:
+        # Class/arm in the selected term, to tell same-named students apart.
+        cls = ''
+        enr = (StudentEnrollment.query
+               .join(ClassArmAssignment,
+                     StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+               .filter(StudentEnrollment.student_id == s.id,
+                       StudentEnrollment.is_active == True,
+                       ClassArmAssignment.term_id == term_id).first()) if term_id else None
+        if enr:
+            cls = enr.class_arm_assignment.display_name
+        out.append({'id': s.id, 'name': s.full_name, 'sid': s.student_id, 'cls': cls})
+    return jsonify(out)
 
 
 @finance_bp.route('/payments/<int:payment_id>/receipt')

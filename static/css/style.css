@@ -2183,3 +2183,47 @@ input:focus, select:focus, textarea:focus {
 .data-table td, .data-table th { border-bottom: 1px solid var(--border-color); }
 [data-theme="dark"] .data-table th { background: var(--gray-100); }
 .hidden { display: none !important; }
+
+/* Responsive "stacked" tables: on phones each row becomes a card and every
+   cell shows its column label (set via data-label). Opt in with class
+   "table-stack no-mobile-scroll" so wide finance/report tables stay readable
+   without horizontal scrolling. */
+@media (max-width: 640px) {
+    table.table-stack, table.table-stack tbody, table.table-stack tr, table.table-stack td {
+        display: block;
+        width: 100%;
+    }
+    table.table-stack thead { display: none; }
+    table.table-stack tr {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        margin-bottom: 0.6rem;
+        padding: 0.3rem 0.25rem;
+        background: var(--bg-card);
+    }
+    table.table-stack td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        border: none;
+        padding: 0.4rem 0.75rem;
+        white-space: normal;
+        text-align: right;
+    }
+    table.table-stack td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--text-secondary);
+        text-align: left;
+        flex-shrink: 0;
+    }
+    table.table-stack td.actions { justify-content: flex-end; }
+    table.table-stack td.actions::before { content: none; }
+    /* Full-width cell (e.g. an inline edit form spanning all columns). */
+    table.table-stack td.stack-full { display: block; text-align: left; }
+    table.table-stack td.stack-full::before { content: none; }
+}

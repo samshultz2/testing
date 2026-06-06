@@ -41,17 +41,17 @@
     <div class="card-body" style="padding:0;">
         {% if rows %}
         <div class="table-container">
-            <table class="data-table">
+            <table class="data-table table-stack no-mobile-scroll">
                 <thead><tr><th>Student</th><th>Class</th><th class="text-right">Payable</th><th class="text-right">Paid</th><th class="text-right">Balance</th><th></th></tr></thead>
                 <tbody>
                     {% for r in rows %}
                     <tr>
-                        <td>{{ r.student.full_name }}<div class="text-muted text-sm">{{ r.student.student_id }}</div></td>
-                        <td>{{ r.class_name }}{% if r.arm_name %} {{ r.arm_name }}{% endif %}</td>
-                        <td class="text-right">{{ r.billed|naira }}</td>
-                        <td class="text-right">{{ r.paid|naira }}</td>
-                        <td class="text-right"><strong style="color:var(--danger);">{{ r.balance|naira }}</strong></td>
-                        <td class="text-right">
+                        <td data-label="Student">{{ r.student.full_name }} <span class="text-muted text-sm">({{ r.student.student_id }})</span></td>
+                        <td data-label="Class">{{ r.class_name }}{% if r.arm_name %} {{ r.arm_name }}{% endif %}</td>
+                        <td data-label="Payable" class="text-right">{{ r.billed|naira }}</td>
+                        <td data-label="Paid" class="text-right">{{ r.paid|naira }}</td>
+                        <td data-label="Balance" class="text-right"><strong style="color:var(--danger);">{{ r.balance|naira }}</strong></td>
+                        <td class="actions text-right">
                             <div class="d-flex gap-1 justify-end">
                                 <a href="{{ url_for('finance.statement', student_id=r.student.id, term_id=term_id) }}" class="btn btn-secondary btn-sm" title="Statement"><i class="fas fa-file-lines"></i></a>
                                 <a href="{{ url_for('finance.record_payment', student_id=r.student.id, term_id=term_id) }}" class="btn btn-primary btn-sm" title="Record payment"><i class="fas fa-cash-register"></i></a>
