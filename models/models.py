@@ -1019,6 +1019,14 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # message_recipients.error (added with the SMS gateway).
+    try:
+        mr_cols = {c['name'] for c in inspect(db.engine).get_columns('message_recipients')}
+        if 'error' not in mr_cols:
+            statements.append('ALTER TABLE message_recipients ADD COLUMN error TEXT')
+    except Exception:
+        pass
+
     if statements:
         with db.engine.begin() as conn:
             for stmt in statements:

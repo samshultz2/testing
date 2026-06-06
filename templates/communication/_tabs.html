@@ -5,6 +5,7 @@
     <a href="{{ url_for('comms.messages_list') }}" class="fin-tab {% if ep in ['comms.messages_list','comms.message_detail'] %}active{% endif %}"><i class="fas fa-clock-rotate-left"></i> History</a>
     <a href="{{ url_for('comms.templates_list') }}" class="fin-tab {% if ep == 'comms.templates_list' %}active{% endif %}"><i class="fas fa-file-lines"></i> Templates</a>
     <a href="{{ url_for('comms.contacts') }}" class="fin-tab {% if ep == 'comms.contacts' %}active{% endif %}"><i class="fas fa-address-book"></i> Contacts</a>
+    <a href="{{ url_for('comms.settings') }}" class="fin-tab {% if ep == 'comms.settings' %}active{% endif %}"><i class="fas fa-gear"></i> Settings</a>
 </div>
 <style>
 .fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}

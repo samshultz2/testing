@@ -31,6 +31,12 @@
         </div>
         <div class="msg-body">{{ msg.body }}</div>
         <div class="d-flex gap-2 flex-wrap mt-3 align-center">
+            {% if gateway_ready and pending_count %}
+            <form method="POST" action="{{ url_for('comms.send_gateway', message_id=msg.id) }}" data-confirm="Send {{ pending_count }} pending message(s) now via {{ gateway_label }}?">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-primary btn-sm"><i class="fas fa-tower-broadcast"></i> Send all via {{ gateway_label }} ({{ pending_count }})</button>
+            </form>
+            {% endif %}
             <button class="btn btn-secondary btn-sm" id="copyNumbers"><i class="fas fa-copy"></i> Copy all numbers</button>
             <form method="POST" action="{{ url_for('comms.mark_all_sent', message_id=msg.id) }}" data-confirm="Mark all {{ msg.recipient_count }} recipients as sent?">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -59,7 +65,10 @@
                         <td data-label="Parent">{{ r.parent_name }}</td>
                         <td data-label="Student">{{ r.student.full_name if r.student else '—' }}</td>
                         <td data-label="Phone"><a href="tel:{{ r.phone }}">{{ r.phone }}</a></td>
-                        <td data-label="Status"><span class="badge {{ 'badge-success' if r.status=='Sent' else 'badge-warning' }} status-badge">{{ r.status }}</span></td>
+                        <td data-label="Status">
+                            <span class="badge {% if r.status=='Sent' %}badge-success{% elif r.status=='Failed' %}badge-danger{% else %}badge-warning{% endif %} status-badge">{{ r.status }}</span>
+                            {% if r.status=='Failed' and r.error %}<div class="text-danger text-sm" title="{{ r.error }}">{{ r.error|truncate(40) }}</div>{% endif %}
+                        </td>
                         <td class="actions">
                             <div class="act-links">
                                 {% if msg.channel == 'SMS' %}

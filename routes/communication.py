@@ -202,9 +202,13 @@ def compose():
         flash(f'Campaign created for {len(reachable)} parent(s).', 'success')
         return redirect(url_for('comms.message_detail', message_id=msg.id))
 
+    from utils import sms_gateway
+    gw = sms_gateway.get_config()
     return render_template('communication/compose.html',
         term=term, terms=terms, classes=classes, arms=arms, templates=templates,
-        channels=CHANNELS, placeholders=comms.PLACEHOLDERS, cov=comms.coverage_stats())
+        channels=CHANNELS, placeholders=comms.PLACEHOLDERS, cov=comms.coverage_stats(),
+        gateway_ready=sms_gateway.is_configured(gw),
+        gateway_label=sms_gateway.provider_label(gw))
 
 
 def _current_user():
@@ -284,8 +288,13 @@ def message_detail(message_id):
     rows = []
     for r in recips:
         rows.append({'r': r, 'intl': comms.normalise_phone(r.phone)})
+    from utils import sms_gateway
+    gw = sms_gateway.get_config()
     return render_template('communication/message_detail.html',
-        msg=msg, rows=rows, segments=comms.sms_segments(msg.body))
+        msg=msg, rows=rows, segments=comms.sms_segments(msg.body),
+        gateway_ready=sms_gateway.is_configured(gw),
+        gateway_label=sms_gateway.provider_label(gw),
+        pending_count=msg.recipients.filter(MessageRecipient.status != 'Sent').count())
 
 
 @comms_bp.route('/messages/<int:message_id>/recipient/<int:rid>/sent', methods=['POST'])
@@ -342,3 +351,80 @@ def delete_message(message_id):
     db.session.commit()
     flash('Campaign deleted.', 'success')
     return redirect(url_for('comms.messages_list'))
+
+
+@comms_bp.route('/messages/<int:message_id>/send-gateway', methods=['POST'])
+@login_required
+def send_gateway(message_id):
+    """Dispatch all pending recipients through the configured SMS gateway."""
+    from utils import sms_gateway
+    msg = Message.query.get_or_404(message_id)
+    cfg = sms_gateway.get_config()
+    if not sms_gateway.is_configured(cfg):
+        flash('No SMS gateway is configured. Add your provider key in Settings.', 'error')
+        return redirect(url_for('comms.message_detail', message_id=message_id))
+
+    sent = failed = 0
+    for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
+        ok, info = sms_gateway.send_sms(r.phone, r.body, cfg)
+        if ok:
+            r.status = 'Sent'
+            r.sent_at = datetime.now()
+            r.error = None
+            sent += 1
+        else:
+            r.status = 'Failed'
+            r.error = info
+            failed += 1
+    msg.sent_count = msg.recipients.filter_by(status='Sent').count()
+    db.session.commit()
+    if sent:
+        flash(f'Sent {sent} message(s) via {sms_gateway.provider_label(cfg)}.', 'success')
+    if failed:
+        flash(f'{failed} message(s) failed — see the recipient list for details.', 'warning')
+    return redirect(url_for('comms.message_detail', message_id=message_id))
+
+
+# ============================================================================
+# SMS GATEWAY SETTINGS
+# ============================================================================
+
+@comms_bp.route('/settings')
+@login_required
+def settings():
+    from utils import sms_gateway
+    cfg = sms_gateway.get_config()
+    return render_template('communication/settings.html',
+        cfg=cfg, providers=sms_gateway.PROVIDERS,
+        configured=sms_gateway.is_configured(cfg),
+        provider_label=sms_gateway.provider_label(cfg))
+
+
+@comms_bp.route('/settings/save', methods=['POST'])
+@admin_required
+def save_settings():
+    from utils import sms_gateway
+    sms_gateway.save_config(request.form)
+    cfg = sms_gateway.get_config()
+    if cfg['provider'] != 'none' and not sms_gateway.is_configured(cfg):
+        flash('Settings saved, but some required fields for this provider are missing.', 'warning')
+    else:
+        flash('SMS gateway settings saved.', 'success')
+    return redirect(url_for('comms.settings'))
+
+
+@comms_bp.route('/settings/test', methods=['POST'])
+@admin_required
+def test_sms():
+    from utils import sms_gateway
+    phone = (request.form.get('phone') or '').strip()
+    if not phone:
+        flash('Enter a phone number to send the test to.', 'error')
+        return redirect(url_for('comms.settings'))
+    ok, info = sms_gateway.send_sms(phone,
+        f'Test message from {comms.school_name()} via PosyHub. Your SMS gateway is working!')
+    if ok:
+        flash(f'Test SMS sent successfully (ref: {info}).', 'success')
+    else:
+        flash(f'Test failed: {info}', 'error')
+    return redirect(url_for('comms.settings'))

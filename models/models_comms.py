@@ -58,8 +58,9 @@ class MessageRecipient(db.Model):
     parent_name = db.Column(db.String(100))
     phone = db.Column(db.String(20))
     body = db.Column(db.Text)                       # personalised message
-    status = db.Column(db.String(15), default='Pending')  # Pending / Sent
+    status = db.Column(db.String(15), default='Pending')  # Pending / Sent / Failed
     sent_at = db.Column(db.DateTime)
+    error = db.Column(db.Text)            # provider error on a failed gateway send
     created_at = db.Column(db.DateTime, default=local_now)
 
     student = db.relationship('Student')

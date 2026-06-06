@@ -113,7 +113,11 @@
                     <div class="preview-phone mb-3"><div class="bubble" id="previewBubble">Your message preview appears here…</div></div>
                     <button type="button" class="btn btn-secondary w-100 mb-2" id="refreshPreview"><i class="fas fa-rotate"></i> Refresh preview</button>
                     <button type="submit" class="btn btn-primary w-100"><i class="fas fa-paper-plane"></i> Create campaign</button>
-                    <p class="text-muted text-sm mt-2 mb-0"><i class="fas fa-circle-info"></i> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export for bulk gateways. Nothing is sent automatically.</p>
+                    {% if gateway_ready %}
+                    <p class="text-muted text-sm mt-2 mb-0"><i class="fas fa-tower-broadcast" style="color:var(--success);"></i> SMS gateway active ({{ gateway_label }}) — after creating, send all automatically with one tap, or use the WhatsApp / SMS links.</p>
+                    {% else %}
+                    <p class="text-muted text-sm mt-2 mb-0"><i class="fas fa-circle-info"></i> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export. <a href="{{ url_for('comms.settings') }}">Add an SMS gateway</a> to auto-send.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
