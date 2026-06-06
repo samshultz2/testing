@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Payroll - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.dashboard') }}">HR</a> / <span>Payroll</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Payroll</h1></div>
+{% include 'hr/_tabs.html' %}
+
+{% if user_permissions.is_admin %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Generate Payroll</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm">Creates a payslip for every active staff member using their monthly salary. You can adjust allowances/deductions afterwards.</p>
+        <form method="POST" action="{{ url_for('hr.create_payroll') }}" class="d-flex gap-2 align-end flex-wrap">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group mb-0"><label class="form-label">Month</label><select name="month" class="form-control">{% for m in range(1,13) %}<option value="{{ m }}" {% if m==cur_month %}selected{% endif %}>{{ months[m] }}</option>{% endfor %}</select></div>
+            <div class="form-group mb-0"><label class="form-label">Year</label><input type="number" name="year" class="form-control" value="{{ cur_year }}" min="2000" max="2100" style="width:120px;"></div>
+            <button class="btn btn-primary"><i class="fas fa-gears"></i> Generate</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header"><h3>Payroll Runs ({{ rows|length }})</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if rows %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Period</th><th class="text-right">Staff</th><th class="text-right">Total</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td data-label="Period"><a href="{{ url_for('hr.payroll_detail', run_id=row.run.id) }}"><strong>{{ row.run.period_label }}</strong></a></td>
+                        <td data-label="Staff" class="text-right">{{ row.count }}</td>
+                        <td data-label="Total" class="text-right">{{ row.total|naira }}</td>
+                        <td data-label="Status"><span class="badge {% if row.run.status=='Paid' %}badge-success{% elif row.run.status=='Finalized' %}badge-info{% else %}badge-warning{% endif %}">{{ row.run.status }}</span></td>
+                        <td class="actions"><a href="{{ url_for('hr.payroll_detail', run_id=row.run.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-right"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-money-check-dollar"></i><h3>No payroll yet</h3><p>Generate your first monthly payroll above.</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Payroll {{ run.period_label }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.payroll_list') }}">Payroll</a> / <span>{{ run.period_label }}</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Payroll · {{ run.period_label }}</h1>
+    <div class="page-header-actions">
+        <span class="badge {% if run.status=='Paid' %}badge-success{% elif run.status=='Finalized' %}badge-info{% else %}badge-warning{% endif %}" style="align-self:center;">{{ run.status }}</span>
+        {% if user_permissions.is_admin %}
+            {% if run.status == 'Draft' %}
+            <form method="POST" action="{{ url_for('hr.finalize_payroll', run_id=run.id) }}" data-confirm="Finalize this payroll? You can optionally post the total to Finance.">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="post_expense" value="1">
+                <button class="btn btn-primary"><i class="fas fa-lock"></i> Finalize &amp; post to Finance</button>
+            </form>
+            {% elif run.status == 'Finalized' %}
+            <form method="POST" action="{{ url_for('hr.mark_paid', run_id=run.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-success"><i class="fas fa-check-double"></i> Mark paid</button></form>
+            {% endif %}
+            <form method="POST" action="{{ url_for('hr.delete_payroll', run_id=run.id) }}" data-confirm="Delete this payroll run and all payslips?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger"><i class="fas fa-trash"></i></button></form>
+        {% endif %}
+    </div>
+</div>
+{% include 'hr/_tabs.html' %}
+
+<div class="card mb-3"><div class="card-body d-flex justify-between flex-wrap gap-2">
+    <div><div class="text-muted text-sm">Staff</div><strong style="font-size:1.2rem;">{{ slips|length }}</strong></div>
+    <div><div class="text-muted text-sm">Total net pay</div><strong style="font-size:1.2rem;">{{ total|naira }}</strong></div>
+    {% if run.posted_expense_id %}<div><div class="text-muted text-sm">Finance</div><span class="badge badge-success">Posted to expenses</span></div>{% endif %}
+</div></div>
+
+<div class="card">
+    <div class="card-header"><h3>Payslips</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if slips %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Staff</th><th class="text-right">Basic</th><th class="text-right">Allowances</th><th class="text-right">Deductions</th><th class="text-right">Net</th><th></th></tr></thead>
+                <tbody>
+                    {% for ps in slips %}
+                    <tr>
+                        <td data-label="Staff">{{ ps.staff_name or (ps.staff.full_name if ps.staff else '—') }}</td>
+                        <td data-label="Basic" class="text-right">{{ ps.basic|naira }}</td>
+                        <td data-label="Allowances" class="text-right">{{ ps.allowances|naira }}</td>
+                        <td data-label="Deductions" class="text-right">{{ ps.deductions|naira }}</td>
+                        <td data-label="Net" class="text-right"><strong>{{ ps.net|naira }}</strong></td>
+                        <td class="actions">
+                            <div class="d-flex gap-1 justify-end">
+                                <a href="{{ url_for('hr.print_payslip', run_id=run.id, slip_id=ps.id) }}" class="btn btn-secondary btn-sm" title="Payslip"><i class="fas fa-print"></i></a>
+                                {% if user_permissions.is_admin and run.status=='Draft' %}<button class="btn btn-secondary btn-sm" onclick="document.getElementById('ps-{{ ps.id }}').classList.toggle('hidden')" title="Edit"><i class="fas fa-edit"></i></button>{% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% if user_permissions.is_admin and run.status=='Draft' %}
+                    <tr id="ps-{{ ps.id }}" class="hidden"><td colspan="6" class="stack-full" style="background:var(--gray-50);">
+                        <form method="POST" action="{{ url_for('hr.edit_payslip', run_id=run.id, slip_id=ps.id) }}" class="d-flex gap-2 align-end flex-wrap">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <div class="form-group mb-0"><label class="form-label">Basic</label><input type="number" name="basic" class="form-control" step="100" value="{{ ps.basic }}"></div>
+                            <div class="form-group mb-0"><label class="form-label">Allowances</label><input type="number" name="allowances" class="form-control" step="100" value="{{ ps.allowances }}"></div>
+                            <div class="form-group mb-0"><label class="form-label">Deductions</label><input type="number" name="deductions" class="form-control" step="100" value="{{ ps.deductions }}"></div>
+                            <button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Update</button>
+                        </form>
+                    </td></tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-money-check-dollar"></i><h3>No payslips</h3></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

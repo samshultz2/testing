@@ -231,6 +231,28 @@
                         </a>
                     </li>
 
+                    <li class="nav-section">Staff / HR</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.dashboard') }}" class="nav-link {% if request.endpoint == 'hr.dashboard' %}active{% endif %}">
+                            <i class="fas fa-id-badge"></i><span>Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.staff_list') }}" class="nav-link {% if request.endpoint in ['hr.staff_list','hr.staff_detail','hr.add_staff','hr.edit_staff'] %}active{% endif %}">
+                            <i class="fas fa-users"></i><span>Staff</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.leave_list') }}" class="nav-link {% if request.endpoint == 'hr.leave_list' %}active{% endif %}">
+                            <i class="fas fa-plane-departure"></i><span>Leave</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.payroll_list') }}" class="nav-link {% if request.endpoint in ['hr.payroll_list','hr.payroll_detail'] %}active{% endif %}">
+                            <i class="fas fa-money-check-dollar"></i><span>Payroll</span>
+                        </a>
+                    </li>
+
                     <li class="nav-section">External Exams</li>
                     <li class="nav-item">
                         <a href="{{ url_for('results.waec_list') }}" class="nav-link">

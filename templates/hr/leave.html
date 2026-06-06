@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Leave Management - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.dashboard') }}">HR</a> / <span>Leave</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Leave Management</h1></div>
+{% include 'hr/_tabs.html' %}
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Record Leave</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('hr.add_leave') }}" class="d-flex gap-2 align-end flex-wrap">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group mb-0" style="flex:1;min-width:200px;"><label class="form-label">Staff</label>
+                <select name="staff_id" class="form-control" required><option value="">Select…</option>{% for s in staff %}<option value="{{ s.id }}">{{ s.full_name }}</option>{% endfor %}</select></div>
+            <div class="form-group mb-0"><label class="form-label">Type</label><select name="leave_type" class="form-control">{% for t in leave_types %}<option>{{ t }}</option>{% endfor %}</select></div>
+            <div class="form-group mb-0"><label class="form-label">From</label><input type="date" name="start_date" class="form-control" required></div>
+            <div class="form-group mb-0"><label class="form-label">To</label><input type="date" name="end_date" class="form-control" required></div>
+            <button class="btn btn-primary"><i class="fas fa-save"></i> Add</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group"><label class="form-label">Status</label>
+                <select name="status" class="form-control" onchange="this.form.submit()">
+                    <option value="">All</option>
+                    {% for s in ['Pending','Approved','Rejected'] %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                </select></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ leaves|length }} record(s)</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if leaves %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    {% for lv in leaves %}
+                    <tr>
+                        <td data-label="Staff"><a href="{{ url_for('hr.staff_detail', staff_id=lv.staff_id) }}">{{ lv.staff.full_name }}</a></td>
+                        <td data-label="Type">{{ lv.leave_type }}</td>
+                        <td data-label="Dates">{{ lv.start_date.strftime('%d %b %Y') }} – {{ lv.end_date.strftime('%d %b %Y') }}</td>
+                        <td data-label="Days">{{ lv.days }}</td>
+                        <td data-label="Status"><span class="badge {% if lv.status=='Approved' %}badge-success{% elif lv.status=='Rejected' %}badge-danger{% else %}badge-warning{% endif %}">{{ lv.status }}</span></td>
+                        <td class="actions">
+                            <div class="d-flex gap-1 justify-end">
+                                {% if lv.status!='Approved' %}<form method="POST" action="{{ url_for('hr.leave_status', leave_id=lv.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="Approved"><button class="btn btn-success btn-sm"><i class="fas fa-check"></i></button></form>{% endif %}
+                                {% if lv.status!='Rejected' %}<form method="POST" action="{{ url_for('hr.leave_status', leave_id=lv.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="Rejected"><button class="btn btn-secondary btn-sm"><i class="fas fa-xmark"></i></button></form>{% endif %}
+                                <form method="POST" action="{{ url_for('hr.delete_leave', leave_id=lv.id) }}" data-confirm="Delete?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-plane-departure"></i><h3>No leave records</h3><p>Record staff leave above.</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

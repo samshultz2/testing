@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Payslip - {{ ps.staff_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.payroll_detail', run_id=run.id) }}">Payroll</a> / <span>Payslip</span>{% endblock %}
+{% block extra_css %}
+<style>
+.slip{max-width:560px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.slip .head{text-align:center;padding:1.3rem 1.2rem .9rem;border-bottom:2px dashed var(--border-color)}
+.slip .head h2{margin:0;font-family:var(--font-display)}
+.slip .title{text-align:center;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.55rem;background:var(--gray-50)}
+.slip .body{padding:1.2rem}
+.r{display:flex;justify-content:space-between;padding:.45rem 0;border-bottom:1px solid var(--border-light);font-size:.92rem}
+.r .k{color:var(--text-muted)}
+.net{text-align:center;margin:1rem 0;padding:1rem;background:var(--success-light,#e6f7ef);border-radius:var(--radius-md)}
+.net .big{font-size:1.7rem;font-weight:800;font-family:var(--font-display);color:var(--success)}
+@media print{.sidebar,.top-header,.page-header,.breadcrumb,.no-print,.sidebar-overlay{display:none!important}.main-content,.page-content,body{margin:0!important;padding:0!important;background:#fff!important}.slip{border:none;box-shadow:none;max-width:100%}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header no-print">
+    <h1>Payslip</h1>
+    <div class="page-header-actions"><button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button></div>
+</div>
+
+<div class="slip">
+    <div class="head">
+        <h2>{{ school.name }}</h2>
+        {% if school.address %}<div class="text-muted text-sm">{{ school.address }}{% if school.phone %} · {{ school.phone }}{% endif %}</div>{% endif %}
+    </div>
+    <div class="title">Payslip · {{ run.period_label }}</div>
+    <div class="body">
+        <div class="r"><span class="k">Staff</span><span><strong>{{ ps.staff_name or (ps.staff.full_name if ps.staff else '') }}</strong></span></div>
+        {% if ps.staff %}
+        <div class="r"><span class="k">Staff ID</span><span>{{ ps.staff.staff_id }}</span></div>
+        <div class="r"><span class="k">Designation</span><span>{{ ps.staff.designation or '—' }}</span></div>
+        <div class="r"><span class="k">Department</span><span>{{ ps.staff.department.name if ps.staff.department else '—' }}</span></div>
+        {% if ps.staff.bank_name %}<div class="r"><span class="k">Bank</span><span>{{ ps.staff.bank_name }} · {{ ps.staff.account_number or '' }}</span></div>{% endif %}
+        {% endif %}
+        <div class="r"><span class="k">Basic salary</span><span>{{ ps.basic|naira }}</span></div>
+        <div class="r"><span class="k">Allowances</span><span>+ {{ ps.allowances|naira }}</span></div>
+        <div class="r"><span class="k">Deductions</span><span>− {{ ps.deductions|naira }}</span></div>
+        <div class="net"><div class="text-muted text-sm">Net Pay</div><div class="big">{{ ps.net|naira }}</div></div>
+        <div class="r" style="border:none;"><span class="k">Status</span><span>{{ run.status }}</span></div>
+    </div>
+</div>
+{% endblock %}

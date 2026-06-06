@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Staff Directory - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.dashboard') }}">HR</a> / <span>Staff</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Staff Directory</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('hr.export_staff') }}" class="btn btn-secondary"><i class="fas fa-file-csv"></i> Export</a>
+        <a href="{{ url_for('hr.add_staff') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Staff</a>
+    </div>
+</div>
+{% include 'hr/_tabs.html' %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group"><label class="form-label">Department</label>
+                <select name="department_id" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for d in departments %}<option value="{{ d.id }}" {% if dept_id==d.id %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Type</label>
+                <select name="staff_type" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for t in staff_types %}<option value="{{ t }}" {% if staff_type==t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Status</label>
+                <select name="status" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for s in statuses %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Search</label><input type="text" name="q" class="form-control" value="{{ q }}" placeholder="Name, ID, role, phone"></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ staff|length }} staff</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if staff %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Staff ID</th><th>Name</th><th>Designation</th><th>Department</th><th>Type</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    {% for s in staff %}
+                    <tr>
+                        <td data-label="Staff ID">{{ s.staff_id }}</td>
+                        <td data-label="Name"><a href="{{ url_for('hr.staff_detail', staff_id=s.id) }}"><strong>{{ s.full_name }}</strong></a>{% if s.phone %}<div class="text-muted text-sm">{{ s.phone }}</div>{% endif %}</td>
+                        <td data-label="Designation">{{ s.designation or '—' }}</td>
+                        <td data-label="Department">{{ s.department.name if s.department else '—' }}</td>
+                        <td data-label="Type"><span class="badge {{ 'badge-info' if s.staff_type=='Teaching' else 'badge-secondary' }}">{{ s.staff_type }}</span></td>
+                        <td data-label="Status"><span class="badge {% if s.status=='Active' %}badge-success{% elif s.status=='On Leave' %}badge-warning{% else %}badge-danger{% endif %}">{{ s.status }}</span></td>
+                        <td class="actions"><a href="{{ url_for('hr.staff_detail', staff_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-right"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-users"></i><h3>No staff found</h3><p>Add your first staff member or adjust filters.</p><a href="{{ url_for('hr.add_staff') }}" class="btn btn-primary mt-2">Add Staff</a></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

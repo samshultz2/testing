@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}{{ s.full_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.staff_list') }}">Staff</a> / <span>{{ s.display_name }}</span>{% endblock %}
+{% block extra_css %}
+<style>
+.profile-head{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#11998e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;flex-shrink:0}
+.info-grid{display:grid;grid-template-columns:1fr;gap:.1rem}
+@media(min-width:640px){.info-grid{grid-template-columns:1fr 1fr}}
+.info-row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}
+.info-row .k{color:var(--text-muted);font-size:.85rem}
+.info-row .v{font-weight:600;text-align:right}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Staff Profile</h1>
+    <div class="page-header-actions">
+        {% if s.phone %}<a href="tel:{{ s.phone }}" class="btn btn-secondary"><i class="fas fa-phone"></i></a>
+        <a href="https://wa.me/{{ s.phone|wa_intl }}" target="_blank" rel="noopener" class="btn btn-secondary"><i class="fab fa-whatsapp"></i></a>{% endif %}
+        <a href="{{ url_for('hr.edit_staff', staff_id=s.id) }}" class="btn btn-primary"><i class="fas fa-edit"></i> Edit</a>
+        {% if user_permissions.is_admin %}
+        <form method="POST" action="{{ url_for('hr.delete_staff', staff_id=s.id) }}" data-confirm="Archive {{ s.full_name }}?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger"><i class="fas fa-box-archive"></i></button></form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="profile-head">
+            <div class="avatar">{{ (s.first_name[0] if s.first_name else '') ~ (s.surname[0] if s.surname else '') }}</div>
+            <div style="flex:1;min-width:200px;">
+                <h2 style="margin:0;">{{ s.full_name }}</h2>
+                <div class="text-muted">{{ s.designation or '—' }}{% if s.department %} · {{ s.department.name }}{% endif %}</div>
+                <div class="mt-1">
+                    <span class="badge {{ 'badge-info' if s.staff_type=='Teaching' else 'badge-secondary' }}">{{ s.staff_type }}</span>
+                    <span class="badge badge-secondary">{{ s.employment_type }}</span>
+                    <span class="badge {% if s.status=='Active' %}badge-success{% elif s.status=='On Leave' %}badge-warning{% else %}badge-danger{% endif %}">{{ s.status }}</span>
+                    <span class="badge badge-primary">{{ s.staff_id }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="hr-2col" style="display:grid;grid-template-columns:1fr;gap:1rem;">
+<style>@media(min-width:992px){.hr-2col{grid-template-columns:1fr 1fr !important}}</style>
+    <div class="card">
+        <div class="card-header"><h3>Details</h3></div>
+        <div class="card-body">
+            <div class="info-grid">
+                <div class="info-row"><span class="k">Phone</span><span class="v">{{ s.phone or '—' }}</span></div>
+                <div class="info-row"><span class="k">Email</span><span class="v">{{ s.email or '—' }}</span></div>
+                <div class="info-row"><span class="k">Gender</span><span class="v">{{ s.gender or '—' }}</span></div>
+                <div class="info-row"><span class="k">Date of birth</span><span class="v">{{ s.date_of_birth.strftime('%d %b %Y') if s.date_of_birth else '—' }}</span></div>
+                <div class="info-row"><span class="k">Date employed</span><span class="v">{{ s.date_employed.strftime('%d %b %Y') if s.date_employed else '—' }}</span></div>
+                <div class="info-row"><span class="k">Salary</span><span class="v">{{ s.salary|naira if s.salary else '—' }}</span></div>
+                <div class="info-row"><span class="k">Qualification</span><span class="v">{{ s.qualification or '—' }}</span></div>
+                <div class="info-row"><span class="k">Address</span><span class="v">{{ s.address or '—' }}</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>Next of kin &amp; bank</h3></div>
+        <div class="card-body">
+            <div class="info-grid">
+                <div class="info-row"><span class="k">Next of kin</span><span class="v">{{ s.nok_name or '—' }}</span></div>
+                <div class="info-row"><span class="k">NOK phone</span><span class="v">{{ s.nok_phone or '—' }}</span></div>
+                <div class="info-row"><span class="k">Relationship</span><span class="v">{{ s.nok_relationship or '—' }}</span></div>
+                <div class="info-row"><span class="k">Bank</span><span class="v">{{ s.bank_name or '—' }}</span></div>
+                <div class="info-row"><span class="k">Account no.</span><span class="v">{{ s.account_number or '—' }}</span></div>
+                <div class="info-row"><span class="k">Account name</span><span class="v">{{ s.account_name or '—' }}</span></div>
+            </div>
+            {% if s.notes %}<p class="text-muted text-sm mt-2">{{ s.notes }}</p>{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-plane-departure"></i> Leave history</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('hr.add_leave') }}" class="d-flex gap-2 align-end flex-wrap mb-3">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="staff_id" value="{{ s.id }}">
+            <div class="form-group mb-0"><label class="form-label">Type</label><select name="leave_type" class="form-control">{% for t in leave_types %}<option>{{ t }}</option>{% endfor %}</select></div>
+            <div class="form-group mb-0"><label class="form-label">From</label><input type="date" name="start_date" class="form-control" required></div>
+            <div class="form-group mb-0"><label class="form-label">To</label><input type="date" name="end_date" class="form-control" required></div>
+            <div class="form-group mb-0" style="flex:1;min-width:160px;"><label class="form-label">Reason</label><input type="text" name="reason" class="form-control"></div>
+            <button class="btn btn-secondary"><i class="fas fa-plus"></i> Add</button>
+        </form>
+        {% if leaves %}
+        <div class="table-container"><table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for lv in leaves %}
+            <tr>
+                <td data-label="Type">{{ lv.leave_type }}</td>
+                <td data-label="Dates">{{ lv.start_date.strftime('%d %b %Y') }} – {{ lv.end_date.strftime('%d %b %Y') }}</td>
+                <td data-label="Days">{{ lv.days }}</td>
+                <td data-label="Status"><span class="badge {% if lv.status=='Approved' %}badge-success{% elif lv.status=='Rejected' %}badge-danger{% else %}badge-warning{% endif %}">{{ lv.status }}</span></td>
+                <td class="actions">
+                    <div class="d-flex gap-1 justify-end">
+                        {% if lv.status!='Approved' %}<form method="POST" action="{{ url_for('hr.leave_status', leave_id=lv.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="Approved"><button class="btn btn-success btn-sm" title="Approve"><i class="fas fa-check"></i></button></form>{% endif %}
+                        {% if lv.status!='Rejected' %}<form method="POST" action="{{ url_for('hr.leave_status', leave_id=lv.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="Rejected"><button class="btn btn-secondary btn-sm" title="Reject"><i class="fas fa-xmark"></i></button></form>{% endif %}
+                        <form method="POST" action="{{ url_for('hr.delete_leave', leave_id=lv.id) }}" data-confirm="Delete leave record?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody></table></div>
+        {% else %}<p class="text-muted mb-0">No leave records.</p>{% endif %}
+    </div>
+</div>
+
+{% if payslips %}
+<div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-money-check-dollar"></i> Payslips</h3></div>
+    <div class="card-body" style="padding:0;">
+        <div class="table-container"><table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Period</th><th class="text-right">Basic</th><th class="text-right">Allow.</th><th class="text-right">Deduct.</th><th class="text-right">Net</th><th></th></tr></thead>
+            <tbody>
+            {% for ps in payslips %}
+            <tr>
+                <td data-label="Period">{{ ps.run.period_label }}</td>
+                <td data-label="Basic" class="text-right">{{ ps.basic|naira }}</td>
+                <td data-label="Allow." class="text-right">{{ ps.allowances|naira }}</td>
+                <td data-label="Deduct." class="text-right">{{ ps.deductions|naira }}</td>
+                <td data-label="Net" class="text-right"><strong>{{ ps.net|naira }}</strong></td>
+                <td class="actions"><a href="{{ url_for('hr.print_payslip', run_id=ps.run_id, slip_id=ps.id) }}" class="btn btn-secondary btn-sm" title="Payslip"><i class="fas fa-print"></i></a></td>
+            </tr>
+            {% endfor %}
+            </tbody></table></div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

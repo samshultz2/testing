@@ -1129,6 +1129,16 @@ def init_db(app):
         except Exception:
             db.session.rollback()
 
+        # Seed default HR departments.
+        try:
+            from models.models_hr import Department
+            if Department.query.count() == 0:
+                for d in ['Academics', 'Administration', 'Bursary / Finance',
+                          'Library', 'ICT', 'Security', 'Support / Cleaning', 'Health']:
+                    db.session.add(Department(name=d))
+        except Exception:
+            db.session.rollback()
+
         # Seed default parent-communication templates.
         try:
             from models.models_comms import MessageTemplate
