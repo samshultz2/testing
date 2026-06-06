@@ -23,6 +23,17 @@
 .chart-box{position:relative;height:240px}
 .progress-wrap{height:10px;background:var(--gray-100);border-radius:var(--radius-full);overflow:hidden;margin-top:.5rem}
 .progress-wrap .bar{height:100%;background:linear-gradient(90deg,var(--primary),#38ef7d);border-radius:var(--radius-full)}
+.fin-steps .card-header{display:flex;justify-content:space-between;align-items:center}
+.fin-steps .card-header .fa-chevron-down{transition:transform .2s;color:var(--text-muted)}
+.fin-steps.is-collapsed .fin-steps-body{display:none}
+.fin-steps.is-collapsed .card-header .fa-chevron-down{transform:rotate(-90deg)}
+.steps-row{display:flex;align-items:stretch;gap:.5rem;flex-wrap:wrap}
+.step{flex:1;min-width:200px;display:flex;gap:.7rem;align-items:flex-start;padding:.8rem;border:1px solid var(--border-color);border-radius:var(--radius-md);text-decoration:none;color:inherit;transition:box-shadow var(--transition),transform var(--transition)}
+.step:hover{box-shadow:var(--shadow-sm);transform:translateY(-2px);border-color:var(--primary)}
+.step-n{width:28px;height:28px;flex-shrink:0;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
+.step-t{display:flex;flex-direction:column;gap:.15rem}
+.step-arrow{align-self:center;color:var(--text-muted)}
+@media(max-width:700px){.step-arrow{display:none}}
 </style>
 {% endblock %}
 {% block content %}
@@ -33,6 +44,7 @@
         <a href="{{ url_for('finance.defaulters', term_id=term_id) }}" class="btn btn-secondary"><i class="fas fa-triangle-exclamation"></i> Defaulters</a>
     </div>
 </div>
+{% include 'finance/_tabs.html' %}
 
 <div class="card mb-3">
     <div class="card-body">
@@ -49,15 +61,39 @@
     </div>
 </div>
 
+<div class="card mb-3 fin-steps {% if has_structure %}is-collapsed{% endif %}">
+    <div class="card-header" style="cursor:pointer;" onclick="this.parentElement.classList.toggle('is-collapsed')">
+        <h3><i class="fas fa-route"></i> How fees work here {% if not has_structure %}<span class="badge badge-warning">Start here</span>{% endif %}</h3>
+        <i class="fas fa-chevron-down"></i>
+    </div>
+    <div class="card-body fin-steps-body">
+        <div class="steps-row">
+            <a href="{{ url_for('finance.items_list') }}" class="step">
+                <span class="step-n">1</span>
+                <span class="step-t"><strong>Create fee items</strong><span class="text-muted text-sm">Tuition, levies, PTA — the things you charge.</span></span>
+            </a>
+            <i class="fas fa-arrow-right step-arrow"></i>
+            <a href="{{ url_for('finance.structure', term_id=term_id) }}" class="step">
+                <span class="step-n">2</span>
+                <span class="step-t"><strong>Set the fee structure</strong><span class="text-muted text-sm">How much each class pays this term.</span></span>
+            </a>
+            <i class="fas fa-arrow-right step-arrow"></i>
+            <a href="{{ url_for('finance.record_payment', term_id=term_id) }}" class="step">
+                <span class="step-n">3</span>
+                <span class="step-t"><strong>Record payments</strong><span class="text-muted text-sm">Search a student, enter what they paid, print the receipt.</span></span>
+            </a>
+        </div>
+        <p class="text-muted text-sm mb-0 mt-2"><i class="fas fa-circle-info"></i> Each student's bill, balance and the figures below are worked out automatically from steps&nbsp;1–2 and the payments you record.</p>
+    </div>
+</div>
 {% if not has_structure %}
 <div class="card mb-3" style="border-color:var(--warning);">
     <div class="card-body d-flex align-center gap-2 flex-wrap">
         <i class="fas fa-circle-info" style="color:var(--warning);font-size:1.4rem;"></i>
         <div style="flex:1;min-width:200px;">
-            <strong>No fee structure for this term yet.</strong>
-            <div class="text-muted text-sm">Set up the fee items and how much each class pays to start tracking collections.</div>
+            <strong>No fee structure for {{ selected_term.full_name if selected_term else 'this term' }} yet.</strong>
+            <div class="text-muted text-sm">Finish steps 1 &amp; 2 above to start tracking collections for this term.</div>
         </div>
-        <a href="{{ url_for('finance.items_list') }}" class="btn btn-secondary btn-sm">Fee Items</a>
         <a href="{{ url_for('finance.structure', term_id=term_id) }}" class="btn btn-primary btn-sm">Set Fee Structure</a>
     </div>
 </div>

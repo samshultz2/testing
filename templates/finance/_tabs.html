@@ -1,0 +1,21 @@
+{#
+  Finance sub-navigation. Include right under the page-header on every finance
+  page so the module reads as one connected flow. `active` is matched on the
+  endpoint so the current tab is highlighted.
+#}
+{% set ep = request.endpoint %}
+<div class="fin-tabs">
+    <a href="{{ url_for('finance.dashboard') }}" class="fin-tab {% if ep == 'finance.dashboard' %}active{% endif %}"><i class="fas fa-chart-pie"></i> Overview</a>
+    <a href="{{ url_for('finance.record_payment') }}" class="fin-tab {% if ep == 'finance.record_payment' %}active{% endif %}"><i class="fas fa-cash-register"></i> Record Payment</a>
+    <a href="{{ url_for('finance.payments_list') }}" class="fin-tab {% if ep == 'finance.payments_list' %}active{% endif %}"><i class="fas fa-receipt"></i> Payments</a>
+    <a href="{{ url_for('finance.structure') }}" class="fin-tab {% if ep == 'finance.structure' %}active{% endif %}"><i class="fas fa-table-list"></i> Fee Structure</a>
+    <a href="{{ url_for('finance.items_list') }}" class="fin-tab {% if ep == 'finance.items_list' %}active{% endif %}"><i class="fas fa-tags"></i> Fee Items</a>
+    <a href="{{ url_for('finance.defaulters') }}" class="fin-tab {% if ep == 'finance.defaulters' %}active{% endif %}"><i class="fas fa-triangle-exclamation"></i> Defaulters</a>
+</div>
+<style>
+.fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
+.fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.fin-tab i{font-size:.85rem;opacity:.8}
+.fin-tab:hover{color:var(--primary);background:var(--gray-50)}
+.fin-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+</style>

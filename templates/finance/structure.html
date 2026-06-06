@@ -8,6 +8,7 @@
         <a href="{{ url_for('finance.items_list') }}" class="btn btn-secondary"><i class="fas fa-tags"></i> Fee Items</a>
     </div>
 </div>
+{% include 'finance/_tabs.html' %}
 
 <div class="card mb-3">
     <div class="card-body">
@@ -40,6 +41,7 @@
 {% if term_id and class_id %}
     {% if items %}
     <form method="POST" action="{{ url_for('finance.save_structure') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="term_id" value="{{ term_id }}">
         <input type="hidden" name="class_id" value="{{ class_id }}">
         <input type="hidden" name="arm_id" value="{{ arm_id or '' }}">
@@ -77,6 +79,7 @@
     <div class="card-header"><h3><i class="fas fa-copy"></i> Copy structure from another term</h3></div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('finance.copy_structure') }}" class="d-flex gap-2 align-end flex-wrap" data-confirm="Copy the whole fee structure into this term? Existing rows are kept.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="to_term_id" value="{{ term_id }}">
             <div class="form-group mb-0"><label class="form-label">Copy all classes from</label>
                 <select name="from_term_id" class="form-control" required>

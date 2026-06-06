@@ -53,6 +53,7 @@
         CBT and Theory). You can review and correct everything before saving — the Exam&nbsp;Total and Grand&nbsp;Total
         are calculated automatically, so you don't need those columns.</p>
         <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="term_id" value="{{ term_id }}">
             <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
             <input type="hidden" name="class_subject_id" value="{{ class_subject_id }}">
