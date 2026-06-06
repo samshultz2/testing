@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Review Scanned Scores - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Review Scanned Scores</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Review Scanned Scores</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('subjects.scoresheet_scan', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-redo"></i> Scan Again</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <p class="mb-0"><strong>{{ class_subject.subject.name }}</strong> &middot; {{ assignment.display_name }}</p>
+        <p class="text-muted text-sm mb-0">Check each row: pick the matching student, fix the student number and any
+        mis-read scores, then save. Rows left on <em>— skip —</em> are ignored. Empty cells are not saved. The
+        Exam&nbsp;Total and Grand&nbsp;Total are calculated automatically.</p>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('subjects.scoresheet_save') }}">
+    <input type="hidden" name="term_id" value="{{ term_id }}">
+    <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+    <input type="hidden" name="class_subject_id" value="{{ class_subject_id }}">
+    <input type="hidden" name="row_count" value="{{ rows|length }}">
+
+    <div class="card">
+        <div class="card-body" style="padding: 0;">
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>S/N</th>
+                            <th>Scanned Name</th>
+                            <th>Student</th>
+                            <th>Student No.</th>
+                            {% for at, mx in columns %}
+                            <th title="{{ at.name }}">{{ at.short_name or at.name }}<br><small class="text-muted">/{{ mx }}</small></th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr {% if not row.matched_id %}style="background: var(--warning-bg, rgba(255,193,7,0.08));"{% endif %}>
+                            <td>{{ loop.index }}</td>
+                            <td class="text-sm">{{ row.name }}</td>
+                            <td>
+                                <select name="student_{{ loop.index0 }}" class="form-control" style="min-width: 180px;">
+                                    <option value="">— skip —</option>
+                                    {% for s in students %}
+                                    <option value="{{ s.id }}" {% if row.matched_id == s.id %}selected{% endif %}>{{ s.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" name="studentnum_{{ loop.index0 }}" class="form-control" value="{{ row.student_num }}" style="width: 110px;">
+                            </td>
+                            {% for at, mx in columns %}
+                            <td>
+                                <input type="number" name="cell_{{ loop.index0 }}_{{ at.id }}" class="form-control"
+                                    value="{{ row.cells.get(at.id, '') }}" min="0" max="{{ mx }}" step="0.5" style="width: 72px;">
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-header-actions mt-3">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Scores</button>
+        <a href="{{ url_for('subjects.scoresheet_scan', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

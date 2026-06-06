@@ -557,3 +557,111 @@ def match_student(name, students):
     if best_score >= 0.6:
         return best, round(best_score, 2)
     return None, round(best_score, 2)
+
+
+# ---------------------------------------------------------------------------
+# Class broadsheet / score-sheet parsing
+# ---------------------------------------------------------------------------
+
+# Header / footer words that signal a line is NOT a student row.
+_SHEET_SKIP_WORDS = {
+    'NAME', 'NAMES', 'STUDENT', 'STUDENTS', 'NO', 'SN', 'S/N', 'NUMBER',
+    'SUBJECT', 'CLASS', 'ARM', 'TERM', 'SESSION', 'TOTAL', 'GRAND', 'EXAM',
+    'CA', 'CBT', 'PBT', 'THEORY', 'OBJECTIVE', 'OBJECTIVES', 'PRACTICAL',
+    'MIDTERM', 'HOLIDAY', 'ASSIGNMENT', 'SCORE', 'SCORES', 'POSITION',
+    'REMARK', 'REMARKS', 'TEACHER', 'SIGN', 'SIGNATURE', 'GENDER', 'SEX',
+    'HEADTEACHER', 'HEADMASTER', 'HEADMISTRESS', 'PRINCIPAL', 'DATE',
+    'AVERAGE', 'HIGHEST', 'LOWEST', 'MARK', 'MARKS', 'GRADE', 'ET', 'GT',
+}
+
+_NUM_TOKEN_RE = re.compile(r'^\d+(?:\.\d+)?$')
+
+
+def _is_alpha_token(tok):
+    """A token that is part of a name: has letters and no digits."""
+    return bool(re.search(r'[A-Za-z]', tok)) and not re.search(r'\d', tok)
+
+
+def parse_score_sheet(text, num_columns):
+    """
+    Parse a photographed class broadsheet into one row per student.
+
+    For each non-empty line we isolate the student's name (the longest run of
+    alphabetic words), a best-guess student number (the longest purely-numeric
+    token appearing *before* the name, e.g. an admission/registration number as
+    opposed to a small serial number) and the trailing numeric cells, which the
+    caller maps positionally to the subject's assessment columns. Up to
+    ``num_columns`` cells are kept; extra trailing cells (the printed Exam-Total
+    / Grand-Total columns) are dropped.
+
+    OCR is never perfect, so the result is always shown to the user in an
+    editable review grid before anything is saved.
+
+    Returns a list of dicts: ``{'student_num': str|'', 'name': str,
+    'cells': [str, ...]}``.
+    """
+    rows = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        tokens = line.split()
+
+        # Find the longest consecutive run of alphabetic tokens — the name.
+        best = None  # (start, end, letter_count)
+        i = 0
+        while i < len(tokens):
+            if _is_alpha_token(tokens[i]):
+                j = i
+                while j < len(tokens) and _is_alpha_token(tokens[j]):
+                    j += 1
+                letters = sum(len(t) for t in tokens[i:j])
+                if best is None or letters > best[2]:
+                    best = (i, j, letters)
+                i = j
+            else:
+                i += 1
+
+        # No real name on this line (blank rule, page number, etc.).
+        if not best or best[2] < 3:
+            continue
+
+        start, end, _ = best
+        name = ' '.join(tokens[start:end]).strip()
+
+        # Skip obvious header/footer lines.
+        upper_words = {re.sub(r'[^A-Z]', '', w.upper()) for w in name.split()}
+        if upper_words and upper_words <= _SHEET_SKIP_WORDS:
+            continue
+
+        leading = tokens[:start]
+        trailing = tokens[end:]
+
+        # Student number: the longest numeric token before the name (admission
+        # numbers are longer than a 1-2 digit serial). None if there is none.
+        leading_nums = [t for t in leading if _NUM_TOKEN_RE.match(t)]
+        student_num = ''
+        if leading_nums:
+            student_num = max(leading_nums, key=len)
+            # A lone 1-2 digit leading number is almost certainly a serial, not
+            # an admission number — ignore it.
+            if len(leading_nums) == 1 and len(student_num) <= 2:
+                student_num = ''
+
+        # Score cells: numeric runs in the text after the name.
+        cells = re.findall(r'\d+(?:\.\d+)?', ' '.join(trailing))
+        cells = cells[:num_columns]
+
+        rows.append({
+            'student_num': student_num,
+            'name': name,
+            'cells': cells,
+        })
+    return rows
+
+
+# The left-to-right order assessment columns typically appear on a printed
+# Nigerian broadsheet (by AssessmentType short_name). Used to map OCR'd numeric
+# cells to the right columns regardless of internal storage order.
+SHEET_COLUMN_ORDER = ['CA1', 'CA2', 'CA3', 'HA', 'MID', 'CBT', 'EXAM']

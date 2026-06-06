@@ -2,7 +2,13 @@
 {% block title %}Score Entry - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Scores</span>{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Score Entry</h1></div>
+<div class="page-header">
+    <h1>Score Entry</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('subjects.scoresheet_scan', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-primary"><i class="fas fa-camera"></i> Scan Score Sheet</a>
+        <a href="{{ url_for('subjects.import_scores', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-file-excel"></i> Import Excel</a>
+    </div>
+</div>
 
 <div class="card mb-3">
     <div class="card-body">

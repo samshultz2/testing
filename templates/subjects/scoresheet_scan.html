@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Import Scores - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<span>Import Scores</span>{% endblock %}
+{% block title %}Scan Score Sheet - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Scan Score Sheet</span>{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1>Import Scores from Excel</h1>
+    <h1>Scan Score Sheet</h1>
     <div class="page-header-actions">
-        <a href="{{ url_for('subjects.scoresheet_scan', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-primary"><i class="fas fa-camera"></i> Scan Score Sheet (Image)</a>
+        <a href="{{ url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-keyboard"></i> Manual Entry</a>
     </div>
 </div>
 
 <div class="card mb-3">
-    <div class="card-header"><h3>Step 1: Select Class & Subject</h3></div>
+    <div class="card-header"><h3>Step 1: Select Class &amp; Subject</h3></div>
     <div class="card-body">
         <form method="GET" class="filter-form">
             <div class="form-group">
@@ -45,30 +45,23 @@
 </div>
 
 {% if assignment_id and class_subject_id %}
-<div class="card mb-3">
-    <div class="card-header"><h3>Step 2: Download Template</h3></div>
-    <div class="card-body">
-        <p>Download the template, fill in scores, then upload.</p>
-        <a href="{{ url_for('subjects.score_import_template', assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary">
-            <i class="fas fa-download"></i> Download Template
-        </a>
-    </div>
-</div>
-
 <div class="card">
-    <div class="card-header"><h3>Step 3: Upload Completed File</h3></div>
+    <div class="card-header"><h3>Step 2: Upload the Score Sheet</h3></div>
     <div class="card-body">
+        <p class="text-muted">Take a clear, straight photo (or scan) of the class broadsheet. The system reads the
+        student numbers, names and each assessment column (1st/2nd/3rd CA, Holiday Assignment, Midterm/Practical,
+        CBT and Theory). You can review and correct everything before saving — the Exam&nbsp;Total and Grand&nbsp;Total
+        are calculated automatically, so you don't need those columns.</p>
         <form method="POST" enctype="multipart/form-data">
             <input type="hidden" name="term_id" value="{{ term_id }}">
             <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
             <input type="hidden" name="class_subject_id" value="{{ class_subject_id }}">
-            
             <div class="form-group">
-                <label class="form-label">Excel File <span class="required">*</span></label>
-                <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+                <label class="form-label">Score-sheet image / PDF <span class="required">*</span></label>
+                <input type="file" name="file" class="form-control" accept="image/*,.pdf" capture="environment" required>
+                <span class="form-hint d-block">JPG, PNG or PDF. Best results: good lighting, the page filling the frame, no skew.</span>
             </div>
-            
-            <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Import Scores</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-magic"></i> Read Score Sheet</button>
         </form>
     </div>
 </div>
@@ -78,22 +71,9 @@
         <div class="empty-state">
             <i class="fas fa-hand-pointer"></i>
             <h3>Select Options Above</h3>
-            <p>Choose term, class, and subject to import scores</p>
+            <p>Choose a term, class and subject, then upload the score sheet image.</p>
         </div>
     </div>
 </div>
 {% endif %}
-
-<div class="card mt-3">
-    <div class="card-header"><h3>Template Format</h3></div>
-    <div class="card-body">
-        <p>The Excel template will have these columns:</p>
-        <ul>
-            <li><strong>Student ID</strong> - Don't change this</li>
-            <li><strong>Student Name</strong> - For reference only (not imported)</li>
-            <li><strong>Assessment columns</strong> - Enter scores for each CA/exam type</li>
-        </ul>
-        <p class="text-muted">Leave cells blank if no score. Existing scores will be overwritten.</p>
-    </div>
-</div>
 {% endblock %}

@@ -1093,6 +1093,253 @@ def score_import_template():
 
 
 # ============================================================================
+# SCORE-SHEET (BROADSHEET) IMAGE IMPORT — Tesseract OCR
+# ============================================================================
+
+def _sheet_columns(class_subject):
+    """Assessment columns for a subject, ordered as they appear on a printed
+    broadsheet. Returns [(assessment_type, max_score), ...]."""
+    from utils.assessments import subject_columns
+    from utils.waec_ocr import SHEET_COLUMN_ORDER
+    cols = subject_columns(class_subject.subject)  # [(at, max)] in storage order
+    present = {at.short_name: (at, mx) for at, mx in cols}
+    ordered = [present[sn] for sn in SHEET_COLUMN_ORDER if sn in present]
+    # Append any columns not covered by the canonical order (defensive).
+    seen = {at.id for at, _ in ordered}
+    ordered += [(at, mx) for at, mx in cols if at.id not in seen]
+    return ordered
+
+
+def _scan_selector_context():
+    """Shared term/class/subject selector context for the scan pages."""
+    term_id = request.values.get('term_id', type=int)
+    assignment_id = request.values.get('assignment_id', type=int)
+    class_subject_id = request.values.get('class_subject_id', type=int)
+
+    if not term_id:
+        active_term = Term.query.filter_by(is_active=True).first()
+        if active_term:
+            term_id = active_term.id
+
+    terms = Term.query.order_by(Term.id.desc()).all()
+    assignments = []
+    if term_id:
+        all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
+        assignments = filter_classes_for_user(all_assignments)
+
+    class_subjects = []
+    assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    if assignment:
+        class_subjects = ClassSubject.query.filter_by(
+            term_id=term_id, class_id=assignment.class_id, is_active=True
+        ).filter(
+            (ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)
+        ).join(Subject).order_by(Subject.name).all()
+
+    return {
+        'terms': terms, 'term_id': term_id,
+        'assignments': assignments, 'assignment_id': assignment_id,
+        'class_subjects': class_subjects, 'class_subject_id': class_subject_id,
+    }
+
+
+@subjects_bp.route('/scores/scan', methods=['GET', 'POST'])
+@login_required
+def scoresheet_scan():
+    """Upload a photographed score sheet and OCR it into an editable grid."""
+    if not can_enter_results() and not is_admin():
+        flash('You do not have permission to enter scores.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from utils.waec_ocr import (
+        tesseract_available, extract_text, extract_text_from_pdf,
+        parse_score_sheet, match_student,
+    )
+
+    ctx = _scan_selector_context()
+
+    if request.method == 'POST':
+        term_id = ctx['term_id']
+        assignment_id = ctx['assignment_id']
+        class_subject_id = ctx['class_subject_id']
+
+        assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+        class_subject = ClassSubject.query.get(class_subject_id) if class_subject_id else None
+
+        if not (assignment and class_subject):
+            flash('Select a class and subject before uploading.', 'error')
+            return render_template('subjects/scoresheet_scan.html', **ctx)
+
+        if not can_access_class(assignment_id):
+            flash('You do not have access to this class.', 'error')
+            return redirect(url_for('subjects.scoresheet_scan'))
+
+        if not tesseract_available():
+            flash('OCR engine (Tesseract) is not available on the server.', 'error')
+            return render_template('subjects/scoresheet_scan.html', **ctx)
+
+        upload = request.files.get('file')
+        if not upload or not upload.filename:
+            flash('No file selected.', 'error')
+            return render_template('subjects/scoresheet_scan.html', **ctx)
+
+        data = upload.read()
+        try:
+            if upload.filename.lower().endswith('.pdf'):
+                text = extract_text_from_pdf(data)
+            else:
+                text = extract_text(data)
+        except Exception as e:
+            flash(f'Could not read the image: {e}', 'error')
+            return render_template('subjects/scoresheet_scan.html', **ctx)
+
+        sheet_cols = _sheet_columns(class_subject)
+        parsed = parse_score_sheet(text, num_columns=len(sheet_cols))
+
+        if not parsed:
+            flash('No student rows could be detected. Try a clearer, straight photo.', 'warning')
+            return render_template('subjects/scoresheet_scan.html', **ctx)
+
+        # Students enrolled in this class (for matching + the picker).
+        enrollments = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True
+        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        students = [e.student for e in enrollments]
+        by_student_id = {s.student_id: s for s in students}
+
+        rows = []
+        for p in parsed:
+            matched = None
+            # 1) exact match on a scanned student number
+            if p['student_num'] and p['student_num'] in by_student_id:
+                matched = by_student_id[p['student_num']]
+            # 2) fuzzy match on the name
+            if not matched:
+                matched, _ = match_student(p['name'], students)
+            # Map the positional cells to assessment-type ids.
+            cell_map = {}
+            for (at, _mx), value in zip(sheet_cols, p['cells']):
+                cell_map[at.id] = value
+            rows.append({
+                'student_num': p['student_num'],
+                'name': p['name'],
+                'matched_id': matched.id if matched else None,
+                'cells': cell_map,
+            })
+
+        return render_template('subjects/scoresheet_review.html',
+            term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id,
+            assignment=assignment, class_subject=class_subject,
+            columns=sheet_cols, rows=rows, students=students,
+        )
+
+    return render_template('subjects/scoresheet_scan.html', **ctx)
+
+
+@subjects_bp.route('/scores/scan/save', methods=['POST'])
+@login_required
+def scoresheet_save():
+    """Persist the reviewed score-sheet grid as StudentScores."""
+    import re as _re
+
+    if not can_enter_results() and not is_admin():
+        flash('You do not have permission to enter scores.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    term_id = request.form.get('term_id', type=int)
+    assignment_id = request.form.get('assignment_id', type=int)
+    class_subject_id = request.form.get('class_subject_id', type=int)
+    row_count = request.form.get('row_count', type=int) or 0
+
+    assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    class_subject = ClassSubject.query.get(class_subject_id) if class_subject_id else None
+
+    if not (assignment and class_subject):
+        flash('Missing class/subject context.', 'error')
+        return redirect(url_for('subjects.scoresheet_scan'))
+
+    if not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.scoresheet_scan'))
+
+    sheet_cols = _sheet_columns(class_subject)
+    auto_id_re = _re.compile(r'^STU\d{3,}$')
+
+    saved_rows = 0
+    saved_scores = 0
+    adopted = 0
+    warnings = []
+
+    try:
+        for r in range(row_count):
+            student_pk = request.form.get(f'student_{r}', type=int)
+            if not student_pk:
+                continue  # row skipped by the user
+            student = Student.query.get(student_pk)
+            if not student:
+                continue
+
+            # Adopt the scanned student number only when the student currently
+            # has an auto-generated STU##### id (never overwrite a manual id).
+            scanned = (request.form.get(f'studentnum_{r}') or '').strip()
+            if scanned and scanned != student.student_id and auto_id_re.match(student.student_id or ''):
+                clash = Student.query.filter(
+                    Student.student_id == scanned, Student.id != student.id).first()
+                if clash:
+                    warnings.append(f"{student.full_name}: number {scanned} already used by {clash.full_name}")
+                else:
+                    student.student_id = scanned
+                    adopted += 1
+
+            row_has_score = False
+            for at, max_score in sheet_cols:
+                raw = (request.form.get(f'cell_{r}_{at.id}') or '').strip()
+                if raw == '':
+                    continue
+                try:
+                    value = float(raw)
+                except ValueError:
+                    continue
+                if value < 0:
+                    value = 0
+                if max_score and value > max_score:
+                    value = max_score
+
+                existing = StudentScore.query.filter_by(
+                    student_id=student.id,
+                    class_subject_id=class_subject_id,
+                    assessment_type_id=at.id,
+                ).first()
+                if existing:
+                    existing.score = value
+                else:
+                    db.session.add(StudentScore(
+                        student_id=student.id,
+                        class_subject_id=class_subject_id,
+                        assessment_type_id=at.id,
+                        score=value,
+                    ))
+                saved_scores += 1
+                row_has_score = True
+
+            if row_has_score:
+                saved_rows += 1
+
+        db.session.commit()
+        flash(f'Saved {saved_scores} scores for {saved_rows} students.', 'success')
+        if adopted:
+            flash(f'Adopted scanned student number for {adopted} student(s).', 'info')
+        for w in warnings[:5]:
+            flash(w, 'warning')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error saving scores: {e}', 'error')
+
+    return redirect(url_for('subjects.scores_entry',
+        term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id))
+
+
+# ============================================================================
 # PRINT ALL REPORT CARDS
 # ============================================================================
 
