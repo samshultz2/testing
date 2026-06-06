@@ -10,7 +10,9 @@
     <a href="{{ url_for('finance.payments_list') }}" class="fin-tab {% if ep == 'finance.payments_list' %}active{% endif %}"><i class="fas fa-receipt"></i> Payments</a>
     <a href="{{ url_for('finance.structure') }}" class="fin-tab {% if ep == 'finance.structure' %}active{% endif %}"><i class="fas fa-table-list"></i> Fee Structure</a>
     <a href="{{ url_for('finance.items_list') }}" class="fin-tab {% if ep == 'finance.items_list' %}active{% endif %}"><i class="fas fa-tags"></i> Fee Items</a>
+    <a href="{{ url_for('finance.expenses_list') }}" class="fin-tab {% if ep == 'finance.expenses_list' %}active{% endif %}"><i class="fas fa-money-bill-wave"></i> Expenses</a>
     <a href="{{ url_for('finance.defaulters') }}" class="fin-tab {% if ep == 'finance.defaulters' %}active{% endif %}"><i class="fas fa-triangle-exclamation"></i> Defaulters</a>
+    <a href="{{ url_for('finance.reports') }}" class="fin-tab {% if ep == 'finance.reports' %}active{% endif %}"><i class="fas fa-chart-column"></i> Reports</a>
 </div>
 <style>
 .fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}

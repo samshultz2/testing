@@ -194,8 +194,18 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('finance.expenses_list') }}" class="nav-link {% if request.endpoint == 'finance.expenses_list' %}active{% endif %}">
+                            <i class="fas fa-money-bill-wave"></i><span>Expenses</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('finance.defaulters') }}" class="nav-link {% if request.endpoint == 'finance.defaulters' %}active{% endif %}">
                             <i class="fas fa-triangle-exclamation"></i><span>Defaulters</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.reports') }}" class="nav-link {% if request.endpoint == 'finance.reports' %}active{% endif %}">
+                            <i class="fas fa-chart-column"></i><span>Reports</span>
                         </a>
                     </li>
 
@@ -333,6 +343,9 @@
                     </div>
                     {% endif %}
                     <button class="theme-toggle" id="themeToggle" title="Toggle dark mode"></button>
+                    <button class="header-icon-btn" id="clearCacheBtn" title="Clear cache & reload (use if changes aren't showing)">
+                        <i class="fas fa-rotate"></i>
+                    </button>
                     <a href="{{ url_for('auth.logout') }}" class="header-logout-btn" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
                     </a>
@@ -380,6 +393,24 @@
     </div>
     
     <style>
+    /* Header icon button (clear cache / refresh) */
+    .header-icon-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        background: var(--gray-100);
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+    }
+    .header-icon-btn:hover { background: var(--primary); color: #fff; }
+    .header-icon-btn.spinning i { animation: hib-spin 0.8s linear infinite; }
+    @keyframes hib-spin { to { transform: rotate(360deg); } }
+
     /* Header logout button */
     .header-logout-btn {
         display: flex;
@@ -458,6 +489,33 @@
             }
         });
     }
+
+    // Clear-cache button: wipe all caches, update the service worker, hard reload.
+    (function () {
+        var btn = document.getElementById('clearCacheBtn');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            btn.classList.add('spinning');
+            btn.disabled = true;
+            var tasks = [];
+            if (window.caches && caches.keys) {
+                tasks.push(caches.keys().then(function (keys) {
+                    return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                }));
+            }
+            if ('serviceWorker' in navigator) {
+                tasks.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    return Promise.all(regs.map(function (r) { return r.update().catch(function () {}); }));
+                }));
+            }
+            Promise.all(tasks).catch(function () {}).then(function () {
+                // Cache-busting reload so the browser refetches HTML/CSS/JS.
+                var u = new URL(window.location.href);
+                u.searchParams.set('_r', Date.now());
+                window.location.replace(u.toString());
+            });
+        });
+    })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>

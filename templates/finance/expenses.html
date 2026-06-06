@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Expenses - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Expenses</span>{% endblock %}
+{% block extra_css %}
+<style>
+.chip-row{display:flex;flex-wrap:wrap;gap:.5rem}
+.chip{background:var(--gray-100);border-radius:var(--radius-full);padding:.35rem .75rem;font-size:.8rem;font-weight:600}
+.chip span{color:var(--text-muted);font-weight:500}
+.exp-fields{display:grid;grid-template-columns:1fr;gap:.75rem}
+@media(min-width:640px){.exp-fields{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:992px){.exp-fields{grid-template-columns:repeat(3,1fr)}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Expenses</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('finance.reports', term_id=term_id) }}" class="btn btn-secondary"><i class="fas fa-chart-column"></i> Reports</a>
+    </div>
+</div>
+{% include 'finance/_tabs.html' %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">All terms</option>
+                    {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select name="category_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">All categories</option>
+                    {% for cat in categories %}<option value="{{ cat.id }}" {% if category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>{% endfor %}
+                </select>
+            </div>
+        </form>
+        {% if cat_summary %}
+        <div class="chip-row mt-2">
+            <span class="chip" style="background:var(--danger);color:#fff;">Total <span style="color:rgba(255,255,255,.85);">{{ total|naira }}</span></span>
+            {% for name, amt in cat_summary %}<span class="chip">{{ name }} <span>{{ amt|naira }}</span></span>{% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Record Expense</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('finance.add_expense') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="term_id" value="{{ term_id or '' }}">
+            <div class="exp-fields">
+                <div class="form-group mb-0"><label class="form-label">Description <span class="required">*</span></label><input type="text" name="description" class="form-control" placeholder="e.g., June electricity bill" required></div>
+                <div class="form-group mb-0"><label class="form-label">Amount (₦) <span class="required">*</span></label><input type="number" name="amount" class="form-control" inputmode="decimal" min="0" step="50" required></div>
+                <div class="form-group mb-0"><label class="form-label">Category</label><select name="category_id" class="form-control"><option value="">—</option>{% for cat in categories %}<option value="{{ cat.id }}">{{ cat.name }}</option>{% endfor %}</select></div>
+                <div class="form-group mb-0"><label class="form-label">Date</label><input type="date" name="expense_date" class="form-control" value="{{ today.isoformat() }}"></div>
+                <div class="form-group mb-0"><label class="form-label">Payee</label><input type="text" name="payee" class="form-control" placeholder="Paid to"></div>
+                <div class="form-group mb-0"><label class="form-label">Method</label><select name="method" class="form-control">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
+            </div>
+            <div class="mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Record Expense</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Expenses ({{ expenses|length }})</h3><span class="badge badge-danger">{{ total|naira }}</span></div>
+    <div class="card-body" style="padding:0;">
+        {% if expenses %}
+        <div class="table-container">
+            <table class="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Payee</th><th>Method</th><th class="text-right">Amount</th><th></th></tr></thead>
+                <tbody>
+                    {% for e in expenses %}
+                    <tr>
+                        <td data-label="Date">{{ e.expense_date.strftime('%d %b %Y') }}</td>
+                        <td data-label="Category">{% if e.category %}<span class="badge badge-secondary">{{ e.category.name }}</span>{% else %}—{% endif %}</td>
+                        <td data-label="Description">{{ e.description }}</td>
+                        <td data-label="Payee" class="text-muted text-sm">{{ e.payee or '—' }}</td>
+                        <td data-label="Method"><span class="badge badge-info">{{ e.method }}</span></td>
+                        <td data-label="Amount" class="text-right"><strong>{{ e.amount|naira }}</strong></td>
+                        <td class="actions">
+                            <div class="d-flex gap-1 justify-end">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('exp-{{ e.id }}').classList.toggle('hidden')"><i class="fas fa-edit"></i></button>
+                                {% if user_permissions.is_admin %}
+                                <form method="POST" action="{{ url_for('finance.delete_expense', expense_id=e.id) }}" data-confirm="Delete this expense ({{ e.amount|naira }})?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr id="exp-{{ e.id }}" class="hidden">
+                        <td colspan="7" class="stack-full" style="background:var(--gray-50);">
+                            <form method="POST" action="{{ url_for('finance.edit_expense', expense_id=e.id) }}" class="exp-fields">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <div class="form-group mb-0"><label class="form-label">Description</label><input type="text" name="description" class="form-control" value="{{ e.description }}" required></div>
+                                <div class="form-group mb-0"><label class="form-label">Amount (₦)</label><input type="number" name="amount" class="form-control" min="0" step="50" value="{{ e.amount }}" required></div>
+                                <div class="form-group mb-0"><label class="form-label">Category</label><select name="category_id" class="form-control"><option value="">—</option>{% for cat in categories %}<option value="{{ cat.id }}" {% if e.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>{% endfor %}</select></div>
+                                <div class="form-group mb-0"><label class="form-label">Date</label><input type="date" name="expense_date" class="form-control" value="{{ e.expense_date.isoformat() }}"></div>
+                                <div class="form-group mb-0"><label class="form-label">Payee</label><input type="text" name="payee" class="form-control" value="{{ e.payee or '' }}"></div>
+                                <div class="form-group mb-0"><label class="form-label">Method</label><select name="method" class="form-control">{% for m in methods %}<option value="{{ m }}" {% if e.method == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+                                <div class="form-group mb-0" style="align-self:end;"><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Update</button></div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-money-bill-wave"></i><h3>No expenses recorded</h3><p>Record school expenditure to track your net position.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+{% if user_permissions.is_admin %}
+<div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-folder-tree"></i> Expense Categories</h3></div>
+    <div class="card-body">
+        <div class="chip-row mb-3">
+            {% for cat in categories %}
+            <span class="chip d-flex align-center gap-1">{{ cat.name }}
+                <form method="POST" action="{{ url_for('finance.delete_expense_category', category_id=cat.id) }}" data-confirm="Delete category {{ cat.name }}?" style="display:inline;"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm" style="padding:.1rem .35rem;"><i class="fas fa-times"></i></button></form>
+            </span>
+            {% endfor %}
+        </div>
+        <form method="POST" action="{{ url_for('finance.add_expense_category') }}" class="d-flex gap-2 align-end flex-wrap">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group mb-0" style="flex:1;min-width:180px;"><label class="form-label">New category</label><input type="text" name="name" class="form-control" placeholder="e.g., Security" required></div>
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-plus"></i> Add</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -94,3 +94,52 @@ def next_receipt_no():
     last = FeePayment.query.order_by(FeePayment.id.desc()).first()
     n = (last.id if last else 0) + 1
     return f'RCP-{n:06d}'
+
+
+def collection_trend(term_id, weeks=12):
+    """Total collected per ISO week for a term — [{label, amount}, ...]."""
+    if not term_id:
+        return []
+    rows = (db.session.query(FeePayment.payment_date, FeePayment.amount)
+            .filter(FeePayment.term_id == term_id).all())
+    if not rows:
+        return []
+    buckets = {}
+    for d, amt in rows:
+        key = d.isocalendar()[:2] if d else (0, 0)  # (year, week)
+        buckets[key] = buckets.get(key, 0.0) + (amt or 0)
+    ordered = sorted(buckets.items())[-weeks:]
+    out = []
+    for (yr, wk), amt in ordered:
+        out.append({'label': f'W{wk}', 'amount': round(amt, 2)})
+    return out
+
+
+def fee_item_breakdown(term_id):
+    """
+    Expected revenue per fee item across all enrolled students in a term:
+    [{name, amount}, ...] sorted high→low. Used for the income-mix chart.
+    """
+    if not term_id:
+        return []
+    enrollments = (StudentEnrollment.query
+                   .join(ClassArmAssignment,
+                         StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                   .filter(StudentEnrollment.is_active == True,
+                           ClassArmAssignment.term_id == term_id).all())
+    # count students per (class, arm)
+    counts = {}
+    for e in enrollments:
+        asg = e.class_arm_assignment
+        counts[(asg.class_id, asg.arm_id)] = counts.get((asg.class_id, asg.arm_id), 0) + 1
+    totals = {}  # fee_item_id -> amount
+    for (class_id, arm_id), n in counts.items():
+        for item, amt in structure_items(term_id, class_id, arm_id):
+            totals[item.id] = totals.get(item.id, 0.0) + amt * n
+    if not totals:
+        return []
+    items = {i.id: i for i in FeeItem.query.filter(FeeItem.id.in_(totals.keys())).all()}
+    out = [{'name': items[iid].name, 'amount': round(amt, 2)}
+           for iid, amt in totals.items() if iid in items]
+    out.sort(key=lambda x: x['amount'], reverse=True)
+    return out

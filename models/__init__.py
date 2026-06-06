@@ -21,7 +21,8 @@ from .models import (
     GenSubjectClashRule, GenCombinedClassRule
 )
 from .models_contributions import ContributionSettings, ContributionPayment, ContributionExpense
-from .models_finance import FeeItem, FeeStructure, FeePayment, FeeDiscount
+from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
+                             ExpenseCategory, Expense)
 
 __all__ = [
     'db', 'local_now', 'init_db',
@@ -41,7 +42,8 @@ __all__ = [
     'GenTeacherAssignment', 'GenTimetableRule', 'GenTimetableResult', 'GenSettings',
     'GenSubjectClashRule', 'GenCombinedClassRule',
     'ContributionSettings', 'ContributionPayment', 'ContributionExpense',
-    'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount'
+    'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
+    'ExpenseCategory', 'Expense'
 ]
 
 # Analytics models

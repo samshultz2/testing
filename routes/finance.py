@@ -10,7 +10,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 
 from models import (
-    db, FeeItem, FeeStructure, FeePayment, FeeDiscount,
+    db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
     Student, Term, SchoolClass, ClassArm, AcademicSession,
     StudentEnrollment, ClassArmAssignment,
 )
@@ -19,7 +19,7 @@ from utils.access_control import (
 )
 from utils.finance import (
     student_bill, structure_items, class_fee_total, student_placement,
-    next_receipt_no,
+    next_receipt_no, collection_trend, fee_item_breakdown,
 )
 
 finance_bp = Blueprint('finance', __name__, url_prefix='/finance')
@@ -108,18 +108,38 @@ def dashboard():
     outstanding = payable_total - collected
     rate = round(collected / payable_total * 100, 1) if payable_total > 0 else 0.0
 
+    # Expenditure + net position for the term.
+    expenses = 0.0
+    expense_breakdown = {}
+    recent_expenses = []
+    if term_id:
+        exp_rows = Expense.query.filter_by(term_id=term_id).all()
+        for e in exp_rows:
+            expenses += e.amount
+            cat = e.category.name if e.category else 'Uncategorised'
+            expense_breakdown[cat] = expense_breakdown.get(cat, 0.0) + e.amount
+        recent_expenses = (Expense.query.filter_by(term_id=term_id)
+                           .order_by(Expense.created_at.desc()).limit(6).all())
+    net = collected - expenses
+
     class_chart = [{'name': k, 'expected': round(v['expected'], 2),
                     'collected': round(v['collected'], 2)}
                    for k, v in sorted(by_class.items())]
     method_chart = [{'method': k, 'amount': round(v, 2)} for k, v in method_breakdown.items()]
+    item_chart = fee_item_breakdown(term_id) if term_id else []
+    trend_chart = collection_trend(term_id) if term_id else []
+    expense_chart = [{'name': k, 'amount': round(v, 2)} for k, v in
+                     sorted(expense_breakdown.items(), key=lambda x: x[1], reverse=True)]
 
     return render_template('finance/dashboard.html',
         terms=terms, term_id=term_id, selected_term=selected_term,
         expected=expected, collected=collected, discounts=discounts,
         payable_total=payable_total, outstanding=outstanding, rate=rate,
+        expenses=expenses, net=net,
         enrolled=len(placement) if term_id else 0, defaulter_count=defaulter_count,
         class_chart=class_chart, method_chart=method_chart, recent=recent,
-        has_structure=(expected > 0),
+        item_chart=item_chart, trend_chart=trend_chart, expense_chart=expense_chart,
+        recent_expenses=recent_expenses, has_structure=(expected > 0),
     )
 
 
@@ -597,3 +617,260 @@ def defaulters():
     return render_template('finance/defaulters.html',
         terms=terms, classes=classes, term_id=term_id, class_id=class_id,
         rows=rows, totals=totals)
+
+
+# ============================================================================
+# EXPENSES / EXPENDITURE
+# ============================================================================
+
+@finance_bp.route('/expenses')
+@login_required
+def expenses_list():
+    term_id = request.args.get('term_id', type=int) or _active_term_id()
+    category_id = request.args.get('category_id', type=int)
+    terms = Term.query.order_by(Term.id.desc()).all()
+    categories = ExpenseCategory.query.filter_by(is_active=True).order_by(ExpenseCategory.name).all()
+
+    query = Expense.query
+    if term_id:
+        query = query.filter_by(term_id=term_id)
+    if category_id:
+        query = query.filter_by(category_id=category_id)
+    expenses = query.order_by(Expense.expense_date.desc(), Expense.id.desc()).all()
+    total = sum(e.amount for e in expenses)
+
+    # Per-category totals for the quick summary.
+    by_cat = {}
+    for e in expenses:
+        cat = e.category.name if e.category else 'Uncategorised'
+        by_cat[cat] = by_cat.get(cat, 0.0) + e.amount
+    cat_summary = sorted(by_cat.items(), key=lambda x: x[1], reverse=True)
+
+    return render_template('finance/expenses.html',
+        terms=terms, categories=categories, term_id=term_id, category_id=category_id,
+        expenses=expenses, total=total, cat_summary=cat_summary,
+        methods=PAYMENT_METHODS, today=date.today())
+
+
+@finance_bp.route('/expenses/add', methods=['POST'])
+@login_required
+def add_expense():
+    term_id = request.form.get('term_id', type=int)
+    description = (request.form.get('description') or '').strip()
+    amount = request.form.get('amount', type=float)
+    if not (description and amount and amount > 0):
+        flash('A description and positive amount are required.', 'error')
+        return redirect(url_for('finance.expenses_list', term_id=term_id))
+    db.session.add(Expense(
+        term_id=term_id or None,
+        category_id=request.form.get('category_id', type=int) or None,
+        description=description,
+        amount=amount,
+        expense_date=_parse_date(request.form.get('expense_date')),
+        payee=(request.form.get('payee') or '').strip() or None,
+        method=request.form.get('method') or 'Cash',
+        reference=(request.form.get('reference') or '').strip() or None,
+        notes=(request.form.get('notes') or '').strip() or None,
+    ))
+    db.session.commit()
+    flash('Expense recorded.', 'success')
+    return redirect(url_for('finance.expenses_list', term_id=term_id))
+
+
+@finance_bp.route('/expenses/<int:expense_id>/edit', methods=['POST'])
+@login_required
+def edit_expense(expense_id):
+    e = Expense.query.get_or_404(expense_id)
+    amount = request.form.get('amount', type=float)
+    description = (request.form.get('description') or '').strip()
+    if not (description and amount and amount > 0):
+        flash('A description and positive amount are required.', 'error')
+        return redirect(url_for('finance.expenses_list', term_id=e.term_id))
+    e.description = description
+    e.amount = amount
+    e.category_id = request.form.get('category_id', type=int) or None
+    e.expense_date = _parse_date(request.form.get('expense_date'), e.expense_date)
+    e.payee = (request.form.get('payee') or '').strip() or None
+    e.method = request.form.get('method') or e.method
+    e.reference = (request.form.get('reference') or '').strip() or None
+    e.notes = (request.form.get('notes') or '').strip() or None
+    db.session.commit()
+    flash('Expense updated.', 'success')
+    return redirect(url_for('finance.expenses_list', term_id=e.term_id))
+
+
+@finance_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
+@admin_required
+def delete_expense(expense_id):
+    e = Expense.query.get_or_404(expense_id)
+    term_id = e.term_id
+    db.session.delete(e)
+    db.session.commit()
+    flash('Expense deleted.', 'success')
+    return redirect(url_for('finance.expenses_list', term_id=term_id))
+
+
+@finance_bp.route('/expense-categories/add', methods=['POST'])
+@admin_required
+def add_expense_category():
+    name = (request.form.get('name') or '').strip()
+    if name and not ExpenseCategory.query.filter(func.lower(ExpenseCategory.name) == name.lower()).first():
+        db.session.add(ExpenseCategory(name=name))
+        db.session.commit()
+        flash(f'Added category "{name}".', 'success')
+    return redirect(url_for('finance.expenses_list'))
+
+
+@finance_bp.route('/expense-categories/<int:category_id>/delete', methods=['POST'])
+@admin_required
+def delete_expense_category(category_id):
+    cat = ExpenseCategory.query.get_or_404(category_id)
+    if Expense.query.filter_by(category_id=category_id).count():
+        cat.is_active = False
+        flash('Category is in use; deactivated instead of deleted.', 'info')
+    else:
+        db.session.delete(cat)
+        flash('Category deleted.', 'success')
+    db.session.commit()
+    return redirect(url_for('finance.expenses_list'))
+
+
+# ============================================================================
+# REPORTS + EXPORT
+# ============================================================================
+
+@finance_bp.route('/reports')
+@login_required
+def reports():
+    term_id = request.args.get('term_id', type=int) or _active_term_id()
+    terms = Term.query.order_by(Term.id.desc()).all()
+    selected_term = Term.query.get(term_id) if term_id else None
+
+    # Expected (per-class) and collected.
+    expected = collected = discounts = expenses = 0.0
+    by_class = {}
+    if term_id:
+        enrollments = (StudentEnrollment.query
+                       .join(ClassArmAssignment,
+                             StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                       .filter(StudentEnrollment.is_active == True,
+                               ClassArmAssignment.term_id == term_id).all())
+        placement = {}
+        total_cache = {}
+        for e in enrollments:
+            asg = e.class_arm_assignment
+            key = (asg.class_id, asg.arm_id)
+            if key not in total_cache:
+                total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
+            cname = asg.school_class.name if asg.school_class else '—'
+            placement[e.student_id] = cname
+            slot = by_class.setdefault(cname, {'expected': 0.0, 'collected': 0.0, 'students': 0})
+            slot['expected'] += total_cache[key]
+            slot['students'] += 1
+            expected += total_cache[key]
+        for p in FeePayment.query.filter_by(term_id=term_id).all():
+            collected += p.amount
+            cn = placement.get(p.student_id)
+            if cn:
+                by_class.setdefault(cn, {'expected': 0.0, 'collected': 0.0, 'students': 0})['collected'] += p.amount
+        discounts = (db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
+                     .filter(FeeDiscount.term_id == term_id).scalar()) or 0.0
+        expenses = (db.session.query(func.coalesce(func.sum(Expense.amount), 0.0))
+                    .filter(Expense.term_id == term_id).scalar()) or 0.0
+
+    payable = max(expected - discounts, 0)
+    class_rows = []
+    for name, v in sorted(by_class.items()):
+        exp = v['expected']
+        col = v['collected']
+        class_rows.append({'name': name, 'students': v['students'], 'expected': exp,
+                           'collected': col, 'outstanding': exp - col,
+                           'rate': round(col / exp * 100, 1) if exp > 0 else 0.0})
+
+    item_breakdown = fee_item_breakdown(term_id) if term_id else []
+    method_rows = []
+    if term_id:
+        method_rows = (db.session.query(FeePayment.method, func.sum(FeePayment.amount),
+                                        func.count(FeePayment.id))
+                       .filter(FeePayment.term_id == term_id)
+                       .group_by(FeePayment.method).all())
+
+    return render_template('finance/reports.html',
+        terms=terms, term_id=term_id, selected_term=selected_term,
+        expected=expected, payable=payable, collected=collected, discounts=discounts,
+        outstanding=payable - collected, expenses=expenses, net=collected - expenses,
+        rate=round(collected / payable * 100, 1) if payable > 0 else 0.0,
+        class_rows=class_rows, item_breakdown=item_breakdown, method_rows=method_rows)
+
+
+@finance_bp.route('/reports/export')
+@login_required
+def export_report():
+    """Export the term's payments and expenses to a multi-sheet Excel workbook."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from flask import Response
+    import io
+
+    term_id = request.args.get('term_id', type=int) or _active_term_id()
+    term = Term.query.get(term_id) if term_id else None
+
+    wb = Workbook()
+    head_fill = PatternFill(start_color='0d6a4e', end_color='0d6a4e', fill_type='solid')
+    head_font = Font(bold=True, color='FFFFFF')
+
+    def write_head(ws, headers):
+        for col, h in enumerate(headers, 1):
+            c = ws.cell(row=1, column=col, value=h)
+            c.fill = head_fill
+            c.font = head_font
+
+    # Payments sheet
+    ws = wb.active
+    ws.title = 'Payments'
+    write_head(ws, ['Receipt', 'Date', 'Student', 'Student ID', 'Method', 'Reference', 'Received By', 'Amount'])
+    payments = (FeePayment.query.filter_by(term_id=term_id)
+                .order_by(FeePayment.payment_date).all()) if term_id else []
+    for p in payments:
+        ws.append([p.receipt_no, p.payment_date.strftime('%Y-%m-%d'), p.student.full_name,
+                   p.student.student_id, p.method, p.reference or '', p.received_by or '', p.amount])
+
+    # Expenses sheet
+    ws2 = wb.create_sheet('Expenses')
+    write_head(ws2, ['Date', 'Category', 'Description', 'Payee', 'Method', 'Reference', 'Amount'])
+    for e in (Expense.query.filter_by(term_id=term_id).order_by(Expense.expense_date).all() if term_id else []):
+        ws2.append([e.expense_date.strftime('%Y-%m-%d'), e.category.name if e.category else '',
+                    e.description, e.payee or '', e.method, e.reference or '', e.amount])
+
+    # Outstanding sheet
+    ws3 = wb.create_sheet('Outstanding')
+    write_head(ws3, ['Student', 'Student ID', 'Class', 'Payable', 'Paid', 'Balance'])
+    if term_id:
+        paid_map = dict(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
+                        .filter(FeePayment.term_id == term_id).group_by(FeePayment.student_id).all())
+        disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
+                        .filter(FeeDiscount.term_id == term_id).group_by(FeeDiscount.student_id).all())
+        enrollments = (StudentEnrollment.query
+                       .join(ClassArmAssignment,
+                             StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                       .filter(StudentEnrollment.is_active == True,
+                               ClassArmAssignment.term_id == term_id).all())
+        cache = {}
+        for e in enrollments:
+            asg = e.class_arm_assignment
+            key = (asg.class_id, asg.arm_id)
+            if key not in cache:
+                cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
+            payable = max(cache[key] - (disc_map.get(e.student_id) or 0.0), 0)
+            paid = paid_map.get(e.student_id) or 0.0
+            if payable - paid > 0.005:
+                ws3.append([e.student.full_name, e.student.student_id,
+                            asg.display_name if asg else '', payable, paid, payable - paid])
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    fname = f"finance_report_{(term.full_name if term else 'all').replace(' ', '_').replace('/', '-')}.xlsx"
+    return Response(output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename={fname}'})

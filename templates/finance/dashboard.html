@@ -11,10 +11,14 @@
 .kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
 .kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
 .kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
+.kpi .ic.teal{background:linear-gradient(135deg,#11998e,#0b6b63)}
+.kpi .ic.orange{background:linear-gradient(135deg,#fd7e14,#c75e00)}
 .kpi .v{font-size:1.35rem;font-weight:700;line-height:1.1;font-family:var(--font-display)}
 .kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+@media(min-width:768px){.kpi-row.kpi-6{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1100px){.kpi-row.kpi-6{grid-template-columns:repeat(6,1fr)}}
 .fin-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
-@media(min-width:992px){.fin-grid.split{grid-template-columns:1.4fr 1fr}}
+@media(min-width:992px){.fin-grid.split{grid-template-columns:1.4fr 1fr}.fin-grid.c2{grid-template-columns:1fr 1fr}.fin-grid.c3{grid-template-columns:repeat(3,1fr)}}
 .widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
 .widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
 .widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.45rem}
@@ -99,11 +103,13 @@
 </div>
 {% endif %}
 
-<div class="kpi-row">
+<div class="kpi-row kpi-6">
     <div class="kpi"><div class="ic blue"><i class="fas fa-file-invoice-dollar"></i></div><div><div class="v" title="{{ payable_total|naira }}">{{ payable_total|naira_short }}</div><div class="l">Expected</div></div></div>
     <div class="kpi"><div class="ic green"><i class="fas fa-coins"></i></div><div><div class="v" title="{{ collected|naira }}">{{ collected|naira_short }}</div><div class="l">Collected</div></div></div>
     <div class="kpi"><div class="ic red"><i class="fas fa-hourglass-half"></i></div><div><div class="v" title="{{ outstanding|naira }}">{{ outstanding|naira_short }}</div><div class="l">Outstanding</div></div></div>
     <div class="kpi"><div class="ic amber"><i class="fas fa-percent"></i></div><div><div class="v">{{ rate }}%</div><div class="l">Collection rate</div></div></div>
+    <div class="kpi"><div class="ic orange"><i class="fas fa-money-bill-wave"></i></div><div><div class="v" title="{{ expenses|naira }}">{{ expenses|naira_short }}</div><div class="l">Expenses</div></div></div>
+    <div class="kpi"><div class="ic {{ 'teal' if net >= 0 else 'red' }}"><i class="fas fa-scale-balanced"></i></div><div><div class="v" title="{{ net|naira }}">{{ net|naira_short }}</div><div class="l">Net (cash)</div></div></div>
 </div>
 
 <div class="card mb-3">
@@ -113,14 +119,29 @@
     </div>
 </div>
 
-<div class="fin-grid split">
+<div class="fin-grid c2">
+    <div class="widget">
+        <div class="wh"><h3><i class="fas fa-chart-line"></i> Collection trend</h3></div>
+        <div class="wb"><div class="chart-box">{% if trend_chart %}<canvas id="trendChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-chart-line"></i><p>No payments yet</p></div>{% endif %}</div></div>
+    </div>
     <div class="widget">
         <div class="wh"><h3><i class="fas fa-school"></i> Expected vs Collected by class</h3></div>
         <div class="wb"><div class="chart-box">{% if class_chart %}<canvas id="classChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-school"></i><p>No fee structure set</p></div>{% endif %}</div></div>
     </div>
+</div>
+
+<div class="fin-grid c3">
+    <div class="widget">
+        <div class="wh"><h3><i class="fas fa-layer-group"></i> Income mix (by fee)</h3></div>
+        <div class="wb"><div class="chart-box">{% if item_chart %}<canvas id="itemChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-layer-group"></i><p>No fee structure</p></div>{% endif %}</div></div>
+    </div>
     <div class="widget">
         <div class="wh"><h3><i class="fas fa-wallet"></i> Payment methods</h3></div>
         <div class="wb"><div class="chart-box">{% if method_chart %}<canvas id="methodChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-wallet"></i><p>No payments yet</p></div>{% endif %}</div></div>
+    </div>
+    <div class="widget">
+        <div class="wh"><h3><i class="fas fa-money-bill-trend-up"></i> Expenses by category</h3></div>
+        <div class="wb"><div class="chart-box">{% if expense_chart %}<canvas id="expenseChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-money-bill-wave"></i><p>No expenses recorded</p></div>{% endif %}</div></div>
     </div>
 </div>
 
@@ -156,20 +177,34 @@
 (function(){
     const tick = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
     const grid = 'rgba(128,128,128,.15)';
+    const PALETTE = ['#4e73df','#1cc88a','#f6c23e','#e74a3b','#7e6cf0','#11998e','#fd7e14','#20c997','#6610f2','#e83e8c'];
     Chart.defaults.color = tick;
+    Chart.defaults.font.size = 11;
+    const nairaTick = v => '₦' + (v>=1e6 ? (v/1e6).toFixed(1)+'M' : v>=1e3 ? (v/1e3).toFixed(0)+'k' : v);
+    const doughnut = (id, rows, labelKey, valKey) => {
+        const el = document.getElementById(id); if(!el) return;
+        new Chart(el,{type:'doughnut',data:{labels:rows.map(x=>x[labelKey]),datasets:[{data:rows.map(x=>x[valKey]),backgroundColor:PALETTE,borderWidth:0}]},
+            options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{boxWidth:12}},
+                tooltip:{callbacks:{label:c=>' '+c.label+': ₦'+c.raw.toLocaleString()}}}}});
+    };
+
+    const tr = {{ trend_chart|tojson }};
+    const te = document.getElementById('trendChart');
+    if(te) new Chart(te,{type:'line',data:{labels:tr.map(x=>x.label),datasets:[{label:'Collected',data:tr.map(x=>x.amount),borderColor:'#1cc88a',backgroundColor:'rgba(28,200,138,.12)',fill:true,tension:.35,pointRadius:3,borderWidth:3}]},
+        options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' ₦'+c.raw.toLocaleString()}}},scales:{y:{beginAtZero:true,grid:{color:grid},ticks:{callback:nairaTick}},x:{grid:{display:false}}}}});
+
     const cc = document.getElementById('classChart');
     if(cc){
         const d = {{ class_chart|tojson }};
         new Chart(cc,{type:'bar',data:{labels:d.map(x=>x.name),datasets:[
             {label:'Expected',data:d.map(x=>x.expected),backgroundColor:'#cbd5e1',borderRadius:5},
             {label:'Collected',data:d.map(x=>x.collected),backgroundColor:'#1cc88a',borderRadius:5}
-        ]},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});
+        ]},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12}},tooltip:{callbacks:{label:c=>' '+c.dataset.label+': ₦'+c.raw.toLocaleString()}}},scales:{y:{beginAtZero:true,grid:{color:grid},ticks:{callback:nairaTick}},x:{grid:{display:false}}}}});
     }
-    const mc = document.getElementById('methodChart');
-    if(mc){
-        const m = {{ method_chart|tojson }};
-        new Chart(mc,{type:'doughnut',data:{labels:m.map(x=>x.method),datasets:[{data:m.map(x=>x.amount),backgroundColor:['#4e73df','#1cc88a','#f6c23e','#e74a3b','#7e6cf0'],borderWidth:0}]},options:{maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
-    }
+
+    doughnut('itemChart', {{ item_chart|tojson }}, 'name', 'amount');
+    doughnut('methodChart', {{ method_chart|tojson }}, 'method', 'amount');
+    doughnut('expenseChart', {{ expense_chart|tojson }}, 'name', 'amount');
 })();
 </script>
 {% endblock %}

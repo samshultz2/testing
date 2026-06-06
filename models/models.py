@@ -1109,7 +1109,18 @@ def init_db(app):
                 db.session.add(AssessmentType(
                     name=name, short_name=short, max_score=max_score, order=order
                 ))
-        
+
+        # Seed default expense categories for the finance module.
+        try:
+            from models.models_finance import ExpenseCategory
+            if ExpenseCategory.query.count() == 0:
+                for cat in ['Salaries & Wages', 'Utilities', 'Maintenance',
+                            'Teaching Materials', 'Transport', 'Examinations',
+                            'Administration', 'Miscellaneous']:
+                    db.session.add(ExpenseCategory(name=cat))
+        except Exception:
+            db.session.rollback()
+
         # Create default admin user if none exists
         if User.query.count() == 0:
             admin = User(

@@ -90,3 +90,40 @@ class FeeDiscount(db.Model):
 
     def __repr__(self):
         return f'<FeeDiscount {self.student_id} t{self.term_id}: {self.amount}>'
+
+
+class ExpenseCategory(db.Model):
+    """A category for school expenditure (Salaries, Utilities, Supplies, …)."""
+    __tablename__ = 'expense_categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    def __repr__(self):
+        return f'<ExpenseCategory {self.name}>'
+
+
+class Expense(db.Model):
+    """A recorded expense / money paid out by the school."""
+    __tablename__ = 'expenses'
+
+    id = db.Column(db.Integer, primary_key=True)
+    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('expense_categories.id'), nullable=True)
+    description = db.Column(db.String(200), nullable=False)
+    amount = db.Column(db.Float, nullable=False, default=0)
+    expense_date = db.Column(db.Date, nullable=False, default=local_now)
+    payee = db.Column(db.String(120))
+    method = db.Column(db.String(30), default='Cash')
+    reference = db.Column(db.String(60))
+    recorded_by = db.Column(db.String(100))
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    term = db.relationship('Term')
+    category = db.relationship('ExpenseCategory')
+
+    def __repr__(self):
+        return f'<Expense {self.description}: {self.amount}>'
