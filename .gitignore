@@ -12,7 +12,10 @@ venv/
 env/
 ENV/
 
-# Flask / instance data (the seeded instance/school.db is kept tracked on purpose)
+# Flask / instance data — the live database stays local, never in version
+# control, so each install keeps its own data and code pulls never conflict.
+# (init_db recreates schema + seed data on first run.)
+instance/*.db
 instance/*.db.backup
 instance/*.sqlite
 instance/backups/
