@@ -11,6 +11,8 @@
 .bar{height:7px;background:var(--gray-100);border-radius:99px;overflow:hidden;min-width:80px}
 .bar > i{display:block;height:100%;background:var(--primary)}
 .flash-row{animation:fl 1s}@keyframes fl{from{background:rgba(231,74,59,.18)}to{background:transparent}}
+.mobile-row{box-shadow:inset 3px 0 0 #f6c23e}
+.mob-tag{display:inline-block;margin-left:.3rem;font-size:.65rem;font-weight:700;color:#9a6b00;background:#fff3cd;border-radius:4px;padding:.05rem .3rem;vertical-align:middle}
 </style>
 {% endblock %}
 {% block content %}
@@ -23,8 +25,10 @@
     <div class="mon-chip">{{ e.title }} <span>· {{ e.subject.name if e.subject else '' }} · {{ e.school_class.name if e.school_class else '' }}</span></div>
     <div class="mon-chip"><span>Writing</span> <strong id="cIn">—</strong></div>
     <div class="mon-chip"><span>Submitted</span> <strong id="cDone">—</strong></div>
+    <div class="mon-chip"><span><i class="fas fa-mobile-screen"></i> Mobile</span> <strong id="cMobile">—</strong></div>
     <div class="mon-chip"><span>Server</span> <strong id="cTime">—</strong></div>
-    <label class="text-sm" style="margin-left:auto;"><input type="checkbox" id="auto" checked> Auto-refresh (5s)</label>
+    <label class="text-sm" style="margin-left:auto;"><input type="checkbox" id="mobileOnly"> <i class="fas fa-mobile-screen"></i> Mobile only</label>
+    <label class="text-sm"><input type="checkbox" id="auto" checked> Auto-refresh (5s)</label>
 </div>
 
 <div class="card"><div class="card-body" style="padding:0;">
@@ -50,13 +54,18 @@
         var sub = esc(dev.ip||'');
         return icon+' '+esc(dev.label)+'<div class="text-muted text-sm">'+sub+loc+'</div>';
     }
+    var last=null;
     function render(d){
+        last=d;
+        var mobileOnly=document.getElementById('mobileOnly').checked;
         document.getElementById('cIn').textContent=d.in_progress;
         document.getElementById('cDone').textContent=d.submitted;
         document.getElementById('cTime').textContent=d.server_time;
+        document.getElementById('cMobile').textContent=d.rows.filter(function(r){return r.device&&r.device.is_mobile;}).length;
         var body=document.getElementById('monBody');
-        if(!d.rows.length){ body.innerHTML='<tr><td colspan="7" class="text-muted" style="padding:1.2rem;">No one has started yet.</td></tr>'; return; }
-        body.innerHTML=d.rows.map(function(r){
+        var rows=mobileOnly ? d.rows.filter(function(r){return r.device&&r.device.is_mobile;}) : d.rows;
+        if(!rows.length){ body.innerHTML='<tr><td colspan="7" class="text-muted" style="padding:1.2rem;">'+(mobileOnly?'No mobile devices.':'No one has started yet.')+'</td></tr>'; return; }
+        body.innerHTML=rows.map(function(r){
             var pct=r.questions? Math.round(r.answered/r.questions*100):0;
             var conn = r.status!=='In progress' ? '<span class="dot done"></span>—'
                 : (r.paused ? '<span class="dot off"></span>paused'
@@ -66,8 +75,9 @@
                 : '<span class="badge badge-warning">Writing</span>';
             var flagged = (prev[r.id]!=null && r.violations>prev[r.id]);
             prev[r.id]=r.violations;
-            return '<tr class="'+(flagged?'flash-row':'')+'">'
-                +'<td data-label="Student">'+r.name+'<div class="text-muted text-sm">'+r.sid+'</div></td>'
+            var isMob = r.device && r.device.is_mobile;
+            return '<tr class="'+(flagged?'flash-row ':'')+(isMob?'mobile-row':'')+'">'
+                +'<td data-label="Student">'+r.name+(isMob?'<span class="mob-tag"><i class="fas fa-mobile-screen"></i> mobile</span>':'')+'<div class="text-muted text-sm">'+r.sid+'</div></td>'
                 +'<td data-label="Status">'+st+'</td>'
                 +'<td data-label="Progress"><div class="bar"><i style="width:'+pct+'%"></i></div><span class="text-sm">'+r.answered+'/'+r.questions+'</span></td>'
                 +'<td data-label="Time left">'+(r.status==='In progress'?fmt(r.remaining):'—')+'</td>'
@@ -77,6 +87,7 @@
         }).join('');
     }
     function load(){ fetch(URL).then(function(r){return r.json();}).then(render).catch(function(){}); }
+    document.getElementById('mobileOnly').addEventListener('change', function(){ if(last) render(last); });
     load();
     var timer=setInterval(function(){ if(document.getElementById('auto').checked) load(); },5000);
 })();
