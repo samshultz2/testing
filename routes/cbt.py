@@ -479,12 +479,33 @@ def monitor_data(exam_id):
                     .filter(CBTAttempt.exam_id == exam_id,
                             CBTAnswer.selected_option != None)
                     .group_by(CBTAnswer.attempt_id).all())
+    # Latest device fingerprint per student for this exam (login or start event).
+    fp_by_student = {}
+    fps = (CBTLoginEvent.query
+           .filter((CBTLoginEvent.exam_id == exam_id) | (CBTLoginEvent.exam_id == None))
+           .order_by(CBTLoginEvent.created_at.desc()).all())
+    for fp in fps:
+        fp_by_student.setdefault(fp.student_id, fp)
     rows = []
     for a in e.attempts.join(Student).order_by(Student.surname, Student.first_name).all():
         deadline = _deadline(a, e)
         remaining = int((deadline - now).total_seconds())
         seen_ago = int((now - a.last_seen).total_seconds()) if a.last_seen else None
         paused = bool(a.paused_until and now < a.paused_until)
+        fp = fp_by_student.get(a.student_id)
+        device = None
+        if fp:
+            bits = [fp.device_model or fp.device_type, fp.browser, fp.os]
+            device = {
+                'model': fp.device_model,
+                'type': fp.device_type,
+                'is_mobile': bool(fp.is_mobile),
+                'browser': fp.browser,
+                'os': fp.os,
+                'ip': fp.ip_address or a.ip_address,
+                'location': fp.location,
+                'label': ' · '.join(b for b in bits if b) or '—',
+            }
         rows.append({
             'id': a.id,
             'name': a.student.full_name if a.student else '—',
@@ -499,6 +520,7 @@ def monitor_data(exam_id):
             'paused': paused,
             'score': a.score if a.status == 'Submitted' else None,
             'total': a.total,
+            'device': device,
         })
     inprog = sum(1 for r in rows if r['status'] == 'In progress')
     return jsonify({'rows': rows, 'in_progress': inprog,

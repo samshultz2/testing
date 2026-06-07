@@ -30,8 +30,8 @@
 <div class="card"><div class="card-body" style="padding:0;">
     <div class="table-container">
         <table class="data-table table-stack no-mobile-scroll">
-            <thead><tr><th>Student</th><th>Status</th><th>Progress</th><th>Time left</th><th>Flags</th><th>Connection</th></tr></thead>
-            <tbody id="monBody"><tr><td colspan="6" class="text-muted" style="padding:1.2rem;">Loading…</td></tr></tbody>
+            <thead><tr><th>Student</th><th>Status</th><th>Progress</th><th>Time left</th><th>Flags</th><th>Device</th><th>Connection</th></tr></thead>
+            <tbody id="monBody"><tr><td colspan="7" class="text-muted" style="padding:1.2rem;">Loading…</td></tr></tbody>
         </table>
     </div>
 </div></div>
@@ -42,12 +42,20 @@
     var URL="{{ url_for('cbt.monitor_data', exam_id=e.id) }}";
     var prev={};
     function fmt(s){ if(s<=0) return '0:00'; var m=Math.floor(s/60),x=s%60; return m+':'+(x<10?'0':'')+x; }
+    function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+    function deviceCell(dev){
+        if(!dev) return '<span class="text-muted">—</span>';
+        var icon = dev.is_mobile ? '<i class="fas fa-mobile-screen" title="Mobile"></i>' : '<i class="fas fa-desktop" title="Desktop"></i>';
+        var loc = dev.location ? ' · <a href="https://maps.google.com/?q='+encodeURIComponent(dev.location)+'" target="_blank" rel="noopener" title="'+esc(dev.location)+'"><i class="fas fa-location-dot"></i></a>' : '';
+        var sub = esc(dev.ip||'');
+        return icon+' '+esc(dev.label)+'<div class="text-muted text-sm">'+sub+loc+'</div>';
+    }
     function render(d){
         document.getElementById('cIn').textContent=d.in_progress;
         document.getElementById('cDone').textContent=d.submitted;
         document.getElementById('cTime').textContent=d.server_time;
         var body=document.getElementById('monBody');
-        if(!d.rows.length){ body.innerHTML='<tr><td colspan="6" class="text-muted" style="padding:1.2rem;">No one has started yet.</td></tr>'; return; }
+        if(!d.rows.length){ body.innerHTML='<tr><td colspan="7" class="text-muted" style="padding:1.2rem;">No one has started yet.</td></tr>'; return; }
         body.innerHTML=d.rows.map(function(r){
             var pct=r.questions? Math.round(r.answered/r.questions*100):0;
             var conn = r.status!=='In progress' ? '<span class="dot done"></span>—'
@@ -64,6 +72,7 @@
                 +'<td data-label="Progress"><div class="bar"><i style="width:'+pct+'%"></i></div><span class="text-sm">'+r.answered+'/'+r.questions+'</span></td>'
                 +'<td data-label="Time left">'+(r.status==='In progress'?fmt(r.remaining):'—')+'</td>'
                 +'<td data-label="Flags">'+(r.violations?'<span class="badge badge-danger"><i class="fas fa-flag"></i> '+r.violations+'</span>':'—')+'</td>'
+                +'<td data-label="Device">'+deviceCell(r.device)+'</td>'
                 +'<td data-label="Connection">'+conn+'</td></tr>';
         }).join('');
     }
