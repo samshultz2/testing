@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Lab / Kiosk Setup - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <span>Lab Setup</span>{% endblock %}
+{% block extra_css %}
+<style>
+.cmd{position:relative;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:.9rem 2.6rem .9rem 1rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;white-space:pre-wrap;word-break:break-all;margin:.4rem 0}
+.cmd .copy{position:absolute;top:.5rem;right:.5rem;background:#334155;color:#fff;border:none;border-radius:6px;padding:.25rem .5rem;font-size:.72rem;cursor:pointer}
+.cmd .copy:hover{background:#475569}
+.step{display:flex;gap:.8rem;margin-bottom:1rem}
+.step .n{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.os-tabs{display:flex;gap:.3rem;margin-bottom:.6rem;flex-wrap:wrap}
+.os-tab{padding:.4rem .8rem;border:1px solid var(--border-color);border-radius:var(--radius-full);cursor:pointer;font-size:.82rem;font-weight:600}
+.os-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.os-panel{display:none}.os-panel.active{display:block}
+kbd{background:var(--gray-100);border:1px solid var(--border-color);border-radius:4px;padding:.05rem .35rem;font-size:.78rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Lab / Kiosk Setup</h1></div>
+{% include 'cbt/_tabs.html' %}
+
+<div class="card mb-3" style="border-color:var(--info);"><div class="card-body">
+    <p class="mb-2"><i class="fas fa-circle-info" style="color:var(--info);"></i> The in-app lockdown (fullscreen, leave-detection, paste/shortcut blocking) is a strong deterrent, but a normal browser can't truly stop a new tab or <kbd>Alt</kbd>+<kbd>Tab</kbd>. Launching the laptops in <strong>kiosk mode</strong> removes the address bar, tabs and most escapes — combine it with supervisors for genuinely exam-grade control.</p>
+    <div class="form-group mb-0" style="max-width:520px;">
+        <label class="form-label">Exam portal address (students open this)</label>
+        <input type="text" id="portalUrl" class="form-control" value="{{ portal_url }}">
+        <span class="form-hint d-block">Edit if your lab reaches the server on a different address (e.g. http://192.168.1.10:5000/exam/login). Commands below update automatically.</span>
+    </div>
+</div></div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-rocket"></i> 1 · Launch the browser in kiosk mode</h3></div>
+    <div class="card-body">
+        <div class="os-tabs">
+            <span class="os-tab active" data-os="win">Windows</span>
+            <span class="os-tab" data-os="mac">macOS</span>
+            <span class="os-tab" data-os="linux">Linux</span>
+        </div>
+
+        <div class="os-panel active" data-os="win">
+            <p class="text-sm"><strong>Chrome</strong> — create a desktop shortcut with this target (or run in Command Prompt):</p>
+            <div class="cmd" data-tpl='"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --disable-pinch --overscroll-history-navigation=0 --disable-features=TranslateUI "{url}"'></div>
+            <p class="text-sm mt-2"><strong>Edge</strong>:</p>
+            <div class="cmd" data-tpl='"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --kiosk "{url}" --edge-kiosk-type=fullscreen --no-first-run'></div>
+            <p class="text-sm text-muted mt-2">Exit (invigilator only): <kbd>Alt</kbd>+<kbd>F4</kbd>. For the strongest lockdown, use Windows <strong>Assigned Access</strong> (Settings → Accounts → Other users → Set up a kiosk) to pin the laptop to a single app with no Windows key.</p>
+        </div>
+
+        <div class="os-panel" data-os="mac">
+            <p class="text-sm"><strong>Chrome</strong> — run in Terminal:</p>
+            <div class="cmd" data-tpl='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --kiosk "{url}"'></div>
+            <p class="text-sm text-muted mt-2">Exit (invigilator only): <kbd>Cmd</kbd>+<kbd>Q</kbd>. Turn on <em>System Settings → Keyboard → disable Mission Control / Spaces shortcuts</em> to reduce escapes.</p>
+        </div>
+
+        <div class="os-panel" data-os="linux">
+            <p class="text-sm"><strong>Chrome / Chromium</strong> — run in a terminal:</p>
+            <div class="cmd" data-tpl='google-chrome --kiosk --disable-pinch "{url}"'></div>
+            <div class="cmd" data-tpl='chromium-browser --kiosk "{url}"'></div>
+            <p class="text-sm text-muted mt-2">Exit (invigilator only): <kbd>Ctrl</kbd>+<kbd>W</kbd> or <kbd>Alt</kbd>+<kbd>F4</kbd>.</p>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-list-check"></i> 2 · Before the exam starts</h3></div>
+    <div class="card-body">
+        <div class="step"><span class="n">1</span><div><strong>Print the passwords.</strong> Export each class arm's Student IDs + passwords (CBT → Student Passwords → Excel/Word/PDF) and hand them out.</div></div>
+        <div class="step"><span class="n">2</span><div><strong>Set a Supervisor PIN</strong> (CBT → Supervisor) and share it only with invigilators — for helping students mid-exam without flagging them.</div></div>
+        <div class="step"><span class="n">3</span><div><strong>Publish</strong> the exam and confirm its <strong>date, time window and total mark</strong>. Students only see it for their class, on its day, within the window.</div></div>
+        <div class="step"><span class="n">4</span><div><strong>Open the kiosk</strong> on each laptop to the address above. Students log in with their Student ID + password, then enter the exam's access password (read it out at the start).</div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-shield-halved"></i> 3 · Highest security (optional)</h3></div>
+    <div class="card-body">
+        <ul class="text-sm" style="line-height:1.8;margin:0;padding-left:1.1rem;">
+            <li><strong>Safe Exam Browser</strong> (safeexambrowser.org) — free, purpose-built lockdown browser that blocks tab/app switching, screenshots and copy at the OS level. Point it at the portal address above.</li>
+            <li>Use <strong>guest / restricted accounts</strong> on the laptops, disable USB ports, and disable the on-screen translate / autofill features.</li>
+            <li>Keep the in-app <strong>Strict mode</strong> on with a low <strong>leave-page limit</strong> for high-stakes exams.</li>
+            <li>Position invigilators to see screens; the <strong>integrity log</strong> (per student, in results) records every leave, paste attempt and the time spent away for after-the-fact review.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+    var urlInput=document.getElementById('portalUrl');
+    function render(){
+        var url=urlInput.value.trim();
+        document.querySelectorAll('.cmd').forEach(function(box){
+            var cmd=box.getAttribute('data-tpl').replace('{url}',url);
+            var span=box.querySelector('.txt');
+            if(!span){ span=document.createElement('span'); span.className='txt'; box.appendChild(span); }
+            span.textContent=cmd;
+            if(!box.querySelector('.copy')){
+                var b=document.createElement('button'); b.className='copy'; b.type='button'; b.textContent='Copy';
+                b.onclick=function(){navigator.clipboard.writeText(box.getAttribute('data-tpl').replace('{url}',urlInput.value.trim())).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy';},1200);});};
+                box.appendChild(b);
+            }
+        });
+    }
+    urlInput.addEventListener('input',render); render();
+    document.querySelectorAll('.os-tab').forEach(function(tab){
+        tab.addEventListener('click',function(){
+            document.querySelectorAll('.os-tab').forEach(function(t){t.classList.remove('active');});
+            document.querySelectorAll('.os-panel').forEach(function(p){p.classList.remove('active');});
+            tab.classList.add('active');
+            document.querySelector('.os-panel[data-os="'+tab.dataset.os+'"]').classList.add('active');
+        });
+    });
+})();
+</script>
+{% endblock %}

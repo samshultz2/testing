@@ -103,6 +103,14 @@ def settings():
         supervisor_pin=SchoolSettings.get('cbt_supervisor_pin', ''))
 
 
+@cbt_bp.route('/lab-setup')
+@login_required
+def lab_setup():
+    """Invigilator guide: launch lab laptops in locked kiosk mode."""
+    portal_url = url_for('cbt_portal.login', _external=True)
+    return render_template('cbt/lab_setup.html', portal_url=portal_url)
+
+
 def _exam_choices():
     return {
         'subjects': Subject.query.filter_by(is_active=True).order_by(Subject.name).all(),
