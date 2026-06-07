@@ -12,5 +12,35 @@
     {% endif %}
     <p class="text-muted text-sm" style="margin-top:1rem;">Submitted {{ attempt.submitted_at.strftime('%d %b %Y, %I:%M %p') if attempt.submitted_at }}</p>
     <a href="{{ url_for('cbt_portal.home') }}" class="btn btn-primary w-100" style="margin-top:.5rem;"><i class="fas fa-arrow-left"></i> Back to my tests</a>
+    <button type="button" class="btn btn-secondary w-100" style="margin-top:.5rem;" onclick="document.getElementById('review').classList.toggle('hidden');this.querySelector('span').textContent=document.getElementById('review').classList.contains('hidden')?'Review answers':'Hide review';"><i class="fas fa-list-check"></i> <span>Review answers</span></button>
 </div>
+
+<div id="review" class="portal-card hidden" style="margin-top:1rem;text-align:left;">
+    <h3 style="margin-top:0;">Answer review</h3>
+    {% for r in rows %}
+    <div style="border:1px solid var(--border-color);border-radius:12px;padding:.9rem 1rem;margin-bottom:.7rem;">
+        <div style="display:flex;gap:.5rem;align-items:flex-start;">
+            <span style="font-weight:700;">{{ loop.index }}.</span>
+            <div style="flex:1;">
+                <strong>{{ r.q.question_text }}</strong>
+                <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:.3rem;">
+                    {% for letter, text in r.q.options %}{% if text %}
+                    {% set is_ans = (r.q.correct_option == letter) %}
+                    {% set is_pick = (r.selected == letter) %}
+                    <div style="padding:.45rem .7rem;border-radius:8px;font-size:.9rem;
+                        {% if is_ans %}background:#dcfce7;color:#166534;font-weight:600;
+                        {% elif is_pick %}background:#fee2e2;color:#991b1b;{% else %}background:var(--gray-50);{% endif %}">
+                        {{ letter }}. {{ text }}
+                        {% if is_ans %} <i class="fas fa-check"></i> correct answer{% endif %}
+                        {% if is_pick and not is_ans %} <i class="fas fa-xmark"></i> your answer{% endif %}
+                        {% if is_pick and is_ans %} <i class="fas fa-check-double"></i> your answer{% endif %}
+                    </div>
+                    {% endif %}{% endfor %}
+                    {% if not r.selected %}<div class="text-muted text-sm"><i class="fas fa-minus"></i> You did not answer this question.</div>{% endif %}
+                </div>
+            </div>
+            <span class="badge {{ 'badge-success' if r.is_correct else 'badge-danger' }}">{{ '✓' if r.is_correct else '✗' }}</span>
+        </div>
+    </div>
+    {% endfor %}
 {% endblock %}

@@ -328,6 +328,7 @@ def students_list():
     gender = request.args.get('gender', '')
     religion = request.args.get('religion', '')
     stream = request.args.get('stream', '')
+    subject = request.args.get('subject', '')
     class_id = request.args.get('class_id', '', type=int) or None
     arm_id = request.args.get('arm_id', '', type=int) or None
     sort_by = request.args.get('sort', 'surname')
@@ -378,6 +379,24 @@ def students_list():
     # Apply stream filter
     if stream:
         query = query.filter(Student.stream == stream)
+
+    # Apply WAEC-subject filter (SSS3 students only). Uses a subquery so it
+    # doesn't interfere with the class/arm/teacher joins above.
+    if subject:
+        sss3_q = (db.session.query(StudentEnrollment.student_id)
+                  .join(ClassArmAssignment,
+                        StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                  .join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id)
+                  .filter(StudentEnrollment.is_active == True, SchoolClass.name == 'SSS3'))
+        if active_term:
+            sss3_q = sss3_q.filter(ClassArmAssignment.term_id == active_term.id)
+        # Token-bounded match within the comma-joined waec_subjects string.
+        query = query.filter(
+            Student.id.in_(sss3_q),
+            db.or_(Student.waec_subjects == subject,
+                   Student.waec_subjects.ilike(f'{subject}, %'),
+                   Student.waec_subjects.ilike(f'%, {subject}, %'),
+                   Student.waec_subjects.ilike(f'%, {subject}')))
 
     # Apply class/arm filter - need to join with enrollments (only if admin since teacher already filtered)
     if (class_id or arm_id) and is_admin():
@@ -434,6 +453,7 @@ def students_list():
             gender=gender,
             religion=religion,
             stream=stream,
+            subject=subject,
             class_id=class_id,
             arm_id=arm_id
         )
@@ -444,6 +464,7 @@ def students_list():
         gender=gender,
         religion=religion,
         stream=stream,
+        subject=subject,
         class_id=class_id,
         arm_id=arm_id,
         sort_by=sort_by,
@@ -451,7 +472,8 @@ def students_list():
         religions=RELIGIONS,
         classes=classes,
         arms=arms,
-        streams=STREAMS
+        streams=STREAMS,
+        subject_options=WAEC_SUBJECTS
     )
 
 
@@ -663,6 +685,52 @@ def bulk_set_stream():
     log_action('bulk_set_stream', f'{updated} students -> {label}')
     flash(f'Stream set to {label} for {updated} student(s).', 'success')
     return jsonify({'updated': updated, 'stream': stream})
+
+
+@main_bp.route('/students/bulk-add-subject', methods=['POST'])
+@admin_required
+def bulk_add_subject():
+    """Add a WAEC subject to selected students' enrolled subjects (SSS3 only)."""
+    subject = (request.form.get('subject') or '').strip()
+    student_ids = request.form.getlist('student_ids')
+    if subject not in WAEC_SUBJECTS:
+        return jsonify({'error': 'Invalid subject'}), 400
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+
+    # Which of the selected students are SSS3 (current/active term)?
+    active_term = Term.query.filter_by(is_active=True).first()
+    sss3_q = (db.session.query(StudentEnrollment.student_id)
+              .join(ClassArmAssignment,
+                    StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+              .join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id)
+              .filter(StudentEnrollment.is_active == True,
+                      SchoolClass.name == 'SSS3',
+                      StudentEnrollment.student_id.in_(ids)))
+    if active_term:
+        sss3_q = sss3_q.filter(ClassArmAssignment.term_id == active_term.id)
+    sss3_ids = {r[0] for r in sss3_q.all()}
+
+    updated = skipped = 0
+    for student in Student.query.filter(Student.id.in_(ids)).all():
+        if student.id not in sss3_ids:
+            skipped += 1
+            continue
+        subs = student.waec_subject_list
+        if subject in subs:
+            skipped += 1
+            continue
+        subs.append(subject)
+        student.waec_subjects = ', '.join(subs)
+        updated += 1
+    db.session.commit()
+    log_action('bulk_add_subject', f'{subject} -> {updated} SSS3 students')
+    flash(f'Added "{subject}" to {updated} SSS3 student(s).', 'success')
+    return jsonify({'updated': updated, 'skipped': skipped, 'subject': subject})
 
 
 @main_bp.route('/students/apply-stream-waec', methods=['POST'])

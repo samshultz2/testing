@@ -509,6 +509,15 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>WAEC Subject <span class="text-muted" style="font-size:.72rem;">(SSS3)</span></label>
+                    <select id="subjectFilter" class="form-control">
+                        <option value="">All</option>
+                        {% for sub in subject_options %}
+                        <option value="{{ sub }}" {% if subject == sub %}selected{% endif %}>{{ sub }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -530,12 +539,17 @@
             <label for="selectAll">Select All</label>
         </div>
         <span class="selection-info"><span id="selectedCount">0</span> selected</span>
-        <div class="bulk-stream" style="display:flex; gap:0.4rem; align-items:center; margin-left:auto;">
+        <div class="bulk-stream" style="display:flex; gap:0.4rem; align-items:center; margin-left:auto; flex-wrap:wrap;">
             <select id="bulkStream" class="form-control" style="width:auto; min-width:130px;">
                 <option value="">Set stream to…</option>
                 {% for st in streams %}<option value="{{ st }}">{{ st }}</option>{% endfor %}
             </select>
             <button type="button" id="applyBulkStream" class="btn btn-primary btn-sm"><i class="fas fa-check"></i> Apply</button>
+            <select id="bulkSubject" class="form-control" style="width:auto; min-width:150px;">
+                <option value="">Add WAEC subject…</option>
+                {% for sub in subject_options %}<option value="{{ sub }}">{{ sub }}</option>{% endfor %}
+            </select>
+            <button type="button" id="applyBulkSubject" class="btn btn-primary btn-sm" title="SSS3 students only"><i class="fas fa-plus"></i> Add (SSS3)</button>
         </div>
     </div>
     
@@ -660,6 +674,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const genderFilter = document.getElementById('genderFilter');
     const religionFilter = document.getElementById('religionFilter');
     const streamFilter = document.getElementById('streamFilter');
+    const subjectFilter = document.getElementById('subjectFilter');
     const selectAllCheckbox = document.getElementById('selectAll');
     const selectedCountEl = document.getElementById('selectedCount');
     const totalCountEl = document.getElementById('totalCount');
@@ -686,6 +701,7 @@ document.addEventListener('DOMContentLoaded', function() {
             gender: genderFilter.value,
             religion: religionFilter.value,
             stream: streamFilter.value,
+            subject: subjectFilter ? subjectFilter.value : '',
             page: page,
             ajax: '1'
         });
@@ -714,6 +730,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Filter events
     searchInput.addEventListener('input', applyFilters);
+    if (subjectFilter) subjectFilter.addEventListener('change', applyFilters);
     classFilter.addEventListener('change', applyFilters);
     armFilter.addEventListener('change', applyFilters);
     genderFilter.addEventListener('change', applyFilters);
@@ -751,7 +768,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 .finally(() => { applyBulkStreamBtn.disabled = false; });
         });
     }
-    
+
+    // Bulk add a WAEC subject to selected SSS3 students
+    const applyBulkSubjectBtn = document.getElementById('applyBulkSubject');
+    if (applyBulkSubjectBtn) {
+        applyBulkSubjectBtn.addEventListener('click', function () {
+            const subject = document.getElementById('bulkSubject').value;
+            const ids = Array.from(window.selectedStudents);
+            if (!subject) { alert('Choose a subject first.'); return; }
+            if (!ids.length) { alert('Select at least one student.'); return; }
+            if (!confirm(`Add "${subject}" to the WAEC subjects of ${ids.length} selected SSS3 student(s)?`)) return;
+
+            const body = new URLSearchParams();
+            ids.forEach(id => body.append('student_ids', id));
+            body.append('subject', subject);
+
+            applyBulkSubjectBtn.disabled = true;
+            fetch("{{ url_for('main.bulk_add_subject') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
+            })
+                .then(r => r.json())
+                .then(d => {
+                    let msg = `Added "${subject}" to ${d.updated} student(s).`;
+                    if (d.skipped) msg += ` ${d.skipped} skipped (not SSS3 or already had it).`;
+                    alert(msg);
+                    window.selectedStudents.clear();
+                    document.getElementById('selectAll').checked = false;
+                    document.getElementById('bulkSubject').value = '';
+                    fetchStudents();
+                })
+                .catch(err => console.error('Bulk subject error:', err))
+                .finally(() => { applyBulkSubjectBtn.disabled = false; });
+        });
+    }
+
     // Select All
     selectAllCheckbox.addEventListener('change', function() {
         document.querySelectorAll('.student-select').forEach(cb => {

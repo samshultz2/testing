@@ -19,15 +19,16 @@
         {% if attempts %}
         <div class="table-container">
             <table class="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Student</th><th class="text-right">Score</th><th class="text-right">%</th><th>Status</th><th>Submitted</th></tr></thead>
+                <thead><tr><th>Student</th><th class="text-right">Raw</th><th class="text-right">Score</th><th class="text-right">%</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                     {% for a in attempts %}
                     <tr>
                         <td data-label="Student">{{ a.student.full_name if a.student else '—' }}<div class="text-muted text-sm">{{ a.student.student_id if a.student else '' }}</div></td>
+                        <td data-label="Raw" class="text-right">{% if a.raw_total %}{{ a.raw_score|int }}/{{ a.raw_total|int }}{% else %}—{% endif %}</td>
                         <td data-label="Score" class="text-right">{{ a.score }} / {{ a.total }}</td>
                         <td data-label="%" class="text-right"><span class="badge {{ 'badge-success' if a.percentage>=50 else 'badge-danger' }}">{{ a.percentage }}%</span></td>
                         <td data-label="Status"><span class="badge {{ 'badge-success' if a.status=='Submitted' else 'badge-warning' }}">{{ a.status }}</span></td>
-                        <td data-label="Submitted" class="text-muted text-sm">{{ a.submitted_at.strftime('%d %b %H:%M') if a.submitted_at else '—' }}</td>
+                        <td class="actions">{% if a.status=='Submitted' %}<a href="{{ url_for('cbt.attempt_review', attempt_id=a.id) }}" class="btn btn-secondary btn-sm" title="Review answers"><i class="fas fa-list-check"></i></a>{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -36,4 +37,20 @@
         {% else %}<div class="empty-state"><i class="fas fa-chart-bar"></i><h3>No attempts yet</h3><p>Results appear here once students take the test.</p></div>{% endif %}
     </div>
 </div>
+
+{% if analysis and submitted_count %}
+<div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-chart-simple"></i> Question analysis</h3><span class="text-muted text-sm">% of {{ submitted_count }} submission(s) correct</span></div>
+    <div class="card-body">
+        {% for item in analysis %}
+        <div style="margin-bottom:.7rem;">
+            <div class="d-flex justify-between text-sm"><span>{{ loop.index }}. {{ item.q.question_text|truncate(70) }}</span><span><strong>{{ item.pct }}%</strong> ({{ item.correct }}/{{ submitted_count }})</span></div>
+            <div style="height:8px;background:var(--gray-100);border-radius:99px;overflow:hidden;margin-top:.25rem;">
+                <div style="height:100%;width:{{ item.pct }}%;background:{{ 'var(--success)' if item.pct>=50 else 'var(--danger)' }};"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 {% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Answer Review - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <a href="{{ url_for('cbt.results', exam_id=exam.id) }}">Results</a> / <span>Review</span>{% endblock %}
+{% block extra_css %}
+<style>
+.opt{padding:.45rem .7rem;border-radius:8px;font-size:.9rem;margin-top:.3rem}
+.opt.ans{background:#dcfce7;color:#166534;font-weight:600}
+.opt.pick{background:#fee2e2;color:#991b1b}
+.qrev{border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:.7rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Answer Review</h1></div>
+
+<div class="card mb-3"><div class="card-body d-flex justify-between flex-wrap gap-2">
+    <div>
+        <strong>{{ attempt.student.full_name if attempt.student else '—' }}</strong> <span class="text-muted">({{ attempt.student.student_id if attempt.student }})</span>
+        <div class="text-muted text-sm">{{ exam.title }}{% if exam.subject %} · {{ exam.subject.name }}{% endif %}</div>
+    </div>
+    <div class="text-right">
+        <div><strong style="font-size:1.2rem;">{{ attempt.score }} / {{ attempt.total }}</strong> <span class="badge {{ 'badge-success' if attempt.percentage>=50 else 'badge-danger' }}">{{ attempt.percentage }}%</span></div>
+        {% if attempt.raw_total %}<div class="text-muted text-sm">Raw {{ attempt.raw_score|int }}/{{ attempt.raw_total|int }} correct</div>{% endif %}
+    </div>
+</div></div>
+
+<div class="card"><div class="card-body">
+    {% for r in rows %}
+    <div class="qrev">
+        <div class="d-flex justify-between gap-2">
+            <strong>{{ loop.index }}. {{ r.q.question_text }}</strong>
+            <span class="badge {{ 'badge-success' if r.is_correct else 'badge-danger' }}">{{ 'Correct' if r.is_correct else 'Wrong' }}</span>
+        </div>
+        {% for letter, text in r.q.options %}{% if text %}
+        <div class="opt {% if r.q.correct_option==letter %}ans{% elif r.selected==letter %}pick{% endif %}">
+            {{ letter }}. {{ text }}
+            {% if r.q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}
+            {% if r.selected==letter and r.q.correct_option!=letter %} <i class="fas fa-xmark"></i> (chosen){% endif %}
+        </div>
+        {% endif %}{% endfor %}
+        {% if not r.selected %}<div class="text-muted text-sm mt-1">Not answered.</div>{% endif %}
+    </div>
+    {% endfor %}
+</div></div>
+{% endblock %}

@@ -201,7 +201,44 @@ def results(exam_id):
     attempts = (e.attempts.join(Student).order_by(Student.surname, Student.first_name).all())
     submitted = [a for a in attempts if a.status == 'Submitted']
     avg = round(sum(a.score for a in submitted) / len(submitted), 1) if submitted else 0
-    return render_template('cbt/results.html', e=e, attempts=attempts, avg=avg)
+
+    # Per-question analytics: % of submitted attempts that got each question right.
+    questions = e.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
+    sub_ids = [a.id for a in submitted]
+    analysis = []
+    for q in questions:
+        correct = 0
+        if sub_ids:
+            correct = CBTAnswer.query.filter(
+                CBTAnswer.question_id == q.id,
+                CBTAnswer.attempt_id.in_(sub_ids),
+                CBTAnswer.is_correct == True).count()
+        pct = round(correct / len(submitted) * 100, 1) if submitted else 0
+        analysis.append({'q': q, 'correct': correct, 'pct': pct})
+    return render_template('cbt/results.html', e=e, attempts=attempts, avg=avg,
+                           analysis=analysis, submitted_count=len(submitted))
+
+
+def _review_rows(exam, attempt):
+    """Per-question review: each question with the student's pick + correctness."""
+    ans = {a.question_id: a for a in attempt.answers}
+    rows = []
+    for q in exam.questions.order_by(CBTQuestion.order, CBTQuestion.id).all():
+        a = ans.get(q.id)
+        rows.append({'q': q,
+                     'selected': a.selected_option if a else None,
+                     'is_correct': bool(a and a.is_correct)})
+    return rows
+
+
+@cbt_bp.route('/attempts/<int:attempt_id>/review')
+@login_required
+def attempt_review(attempt_id):
+    attempt = CBTAttempt.query.get_or_404(attempt_id)
+    rows = _review_rows(attempt.exam, attempt)
+    return render_template('cbt/attempt_review.html', attempt=attempt,
+                           exam=attempt.exam, rows=rows)
+
 
 
 def _exam_sheet(ws, exam):
@@ -681,4 +718,6 @@ def result(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt or attempt.status != 'Submitted':
         return redirect(url_for('cbt_portal.home'))
-    return render_template('cbt/portal_result.html', exam=exam, student=student, attempt=attempt)
+    rows = _review_rows(exam, attempt)
+    return render_template('cbt/portal_result.html', exam=exam, student=student,
+                           attempt=attempt, rows=rows)
