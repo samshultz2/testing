@@ -25,6 +25,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
 .q-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1.2rem 1.3rem;margin-bottom:1rem;scroll-margin-top:74px}
 .q-num{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;background:var(--ex);color:#fff;border-radius:8px;font-size:.8rem;font-weight:700;margin-right:.5rem}
 .q-text{font-weight:600;font-size:1.02rem;margin:0 0 .9rem;line-height:1.5}
+.q-figure{margin:0 0 .9rem}.q-figure img{max-width:100%;max-height:340px;border:1px solid var(--border-color,#e2e6ee);border-radius:8px;background:#fff}
 .opt{display:flex;align-items:center;gap:.7rem;padding:.8rem 1rem;border:2px solid var(--line);border-radius:12px;margin-bottom:.55rem;cursor:pointer;transition:all .12s;font-size:.95rem}
 .opt:hover{border-color:#c7d2fe;background:#f5f7ff}
 .opt input{display:none}
@@ -59,11 +60,12 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         {% for item in qview %}{% set q = item.q %}
         <div class="q-card" id="q{{ loop.index }}">
             <p class="q-text"><span class="q-num">{{ loop.index }}</span>{{ q.question_text }}</p>
-            {% for letter, text in item.options %}
+            {% if q.image_url %}<div class="q-figure"><img src="{{ q.image_url }}" alt="Figure for question {{ loop.index }}" loading="lazy"></div>{% endif %}
+            {% for opt in item.options %}
             <label class="opt" data-q="{{ loop.index }}">
-                <input type="radio" name="q_{{ q.id }}" data-qid="{{ q.id }}" value="{{ letter }}" {% if saved is defined and saved.get(q.id) == letter %}checked{% endif %}>
+                <input type="radio" name="q_{{ q.id }}" data-qid="{{ q.id }}" value="{{ opt.value }}" {% if saved is defined and saved.get(q.id) == opt.value %}checked{% endif %}>
                 <span class="mark"><i class="fas fa-check"></i></span>
-                <span class="letter">{{ letter }}.</span> <span>{{ text }}</span>
+                <span class="letter">{{ opt.label }}.</span> <span>{{ opt.text }}</span>
             </label>
             {% endfor %}
         </div>
@@ -230,5 +232,6 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     if(window.innerWidth<=860){document.querySelector('.mini-submit').style.display='block';}
 })();
 </script>
+{% include 'cbt/_mathjax.html' %}
 </body>
 </html>

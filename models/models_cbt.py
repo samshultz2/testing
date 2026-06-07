@@ -122,6 +122,7 @@ class CBTQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exam_id = db.Column(db.Integer, db.ForeignKey('cbt_exams.id'), nullable=False)
     question_text = db.Column(db.Text, nullable=False)
+    image_url = db.Column(db.String(300))        # optional figure (e.g. a diagram)
     option_a = db.Column(db.String(300))
     option_b = db.Column(db.String(300))
     option_c = db.Column(db.String(300))
@@ -186,6 +187,42 @@ class CBTAnswer(db.Model):
     __table_args__ = (db.UniqueConstraint('attempt_id', 'question_id', name='uq_cbt_answer'),)
 
 
+class CBTLoginEvent(db.Model):
+    """Device fingerprint captured when a student logs into / starts the exam
+    portal, kept for malpractice investigations."""
+    __tablename__ = 'cbt_login_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    exam_id = db.Column(db.Integer, db.ForeignKey('cbt_exams.id'))   # nullable (login)
+    event = db.Column(db.String(20), default='login')               # login / start / fingerprint
+    ip_address = db.Column(db.String(60))
+    user_agent = db.Column(db.String(400))
+    browser = db.Column(db.String(40))
+    os = db.Column(db.String(40))
+    device_type = db.Column(db.String(20))      # Desktop / Mobile / Tablet
+    is_mobile = db.Column(db.Boolean, default=False)
+    # Enriched client-side (best effort, may be blank).
+    screen = db.Column(db.String(20))           # e.g. 1366x768
+    viewport = db.Column(db.String(20))
+    timezone = db.Column(db.String(60))
+    language = db.Column(db.String(40))
+    platform = db.Column(db.String(60))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    geo_accuracy = db.Column(db.Float)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    student = db.relationship('Student')
+    exam = db.relationship('CBTExam')
+
+    @property
+    def location(self):
+        if self.latitude is not None and self.longitude is not None:
+            return f'{self.latitude:.5f}, {self.longitude:.5f}'
+        return None
+
+
 class QuestionBank(db.Model):
     """A reusable question, tagged by subject/topic, copied into exams as needed."""
     __tablename__ = 'question_bank'
@@ -195,6 +232,7 @@ class QuestionBank(db.Model):
     topic = db.Column(db.String(100))
     difficulty = db.Column(db.String(10), default='Medium')   # Easy/Medium/Hard
     question_text = db.Column(db.Text, nullable=False)
+    image_url = db.Column(db.String(300))        # optional figure
     option_a = db.Column(db.String(300))
     option_b = db.Column(db.String(300))
     option_c = db.Column(db.String(300))

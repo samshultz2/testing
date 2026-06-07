@@ -12,18 +12,21 @@ from datetime import datetime, date, timedelta
 from functools import wraps
 import csv
 import io
+import os
 import random
 import secrets
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, session, jsonify, Response)
+                   flash, session, jsonify, Response, current_app)
+from werkzeug.utils import secure_filename
 from sqlalchemy import func
 
 from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
-                    QuestionBank, Subject, SchoolClass, ClassArm, Term, Student,
-                    StudentEnrollment, ClassArmAssignment, SchoolSettings)
+                    QuestionBank, CBTLoginEvent, Subject, SchoolClass, ClassArm, Term,
+                    Student, StudentEnrollment, ClassArmAssignment, SchoolSettings)
 from utils.access_control import login_required, admin_required, is_admin
 from utils import timeutil
+from utils.useragent import parse_user_agent
 
 cbt_bp = Blueprint('cbt', __name__, url_prefix='/cbt')
 cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
@@ -37,6 +40,23 @@ def _d(value, default=None):
         return datetime.strptime(value, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return default
+
+
+_IMG_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
+
+
+def _save_question_image(file):
+    """Save an uploaded question figure under static/uploads/cbt; return its URL."""
+    if not file or not file.filename:
+        return None
+    ext = os.path.splitext(secure_filename(file.filename))[1].lower()
+    if ext not in _IMG_EXTS:
+        return None
+    name = secrets.token_hex(8) + ext
+    folder = os.path.join(current_app.root_path, 'static', 'uploads', 'cbt')
+    os.makedirs(folder, exist_ok=True)
+    file.save(os.path.join(folder, name))
+    return url_for('static', filename='uploads/cbt/' + name)
 
 
 def _active_term():
@@ -211,8 +231,9 @@ def add_question(exam_id):
         return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
     nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
                .filter(CBTQuestion.exam_id == exam_id).scalar()) + 1
+    image_url = _save_question_image(request.files.get('image'))
     db.session.add(CBTQuestion(
-        exam_id=exam_id, question_text=text,
+        exam_id=exam_id, question_text=text, image_url=image_url,
         option_a=(request.form.get('option_a') or '').strip(),
         option_b=(request.form.get('option_b') or '').strip(),
         option_c=(request.form.get('option_c') or '').strip(),
@@ -266,7 +287,8 @@ def import_from_bank(exam_id):
         for bq in QuestionBank.query.filter(QuestionBank.id.in_(ids or [-1])).all():
             nextord += 1
             db.session.add(CBTQuestion(exam_id=exam_id, order=nextord,
-                question_text=bq.question_text, option_a=bq.option_a, option_b=bq.option_b,
+                question_text=bq.question_text, image_url=bq.image_url,
+                option_a=bq.option_a, option_b=bq.option_b,
                 option_c=bq.option_c, option_d=bq.option_d,
                 correct_option=bq.correct_option, marks=bq.marks))
             n += 1
@@ -332,6 +354,7 @@ def bank_add():
     from flask import session as _s
     db.session.add(QuestionBank(
         question_text=text, correct_option=correct,
+        image_url=_save_question_image(request.files.get('image')),
         subject_id=request.form.get('subject_id', type=int) or None,
         topic=(request.form.get('topic') or '').strip() or None,
         difficulty=request.form.get('difficulty') or 'Medium',
@@ -502,9 +525,15 @@ def attempt_review(attempt_id):
     rows = _review_rows(attempt.exam, attempt)
     violations = attempt.violation_log.order_by(CBTViolation.created_at).all()
     total_away = sum(v.away_seconds or 0 for v in violations)
+    # Device fingerprints recorded for this student around this exam.
+    logins = (CBTLoginEvent.query
+              .filter(CBTLoginEvent.student_id == attempt.student_id)
+              .filter((CBTLoginEvent.exam_id == attempt.exam_id)
+                      | (CBTLoginEvent.exam_id == None))
+              .order_by(CBTLoginEvent.created_at.desc()).limit(10).all())
     return render_template('cbt/attempt_review.html', attempt=attempt,
                            exam=attempt.exam, rows=rows, violations=violations,
-                           total_away=total_away)
+                           total_away=total_away, logins=logins)
 
 
 
@@ -791,6 +820,27 @@ def _current_student():
     return Student.query.get(sid) if sid else None
 
 
+def _record_login_event(student, event='login', exam_id=None):
+    """Capture an IP + parsed-UA device fingerprint for investigations.
+
+    Returns the event id so the client can enrich it (screen/timezone/geo).
+    """
+    try:
+        ua = (request.headers.get('User-Agent') or '')
+        info = parse_user_agent(ua)
+        ev = CBTLoginEvent(
+            student_id=student.id, exam_id=exam_id, event=event,
+            ip_address=(request.headers.get('X-Forwarded-For', request.remote_addr) or '')[:60],
+            user_agent=ua[:400], browser=info['browser'], os=info['os'],
+            device_type=info['device_type'], is_mobile=info['is_mobile'])
+        db.session.add(ev)
+        db.session.commit()
+        return ev.id
+    except Exception:
+        db.session.rollback()
+        return None
+
+
 @cbt_portal_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get(PORTAL_KEY):
@@ -801,6 +851,9 @@ def login():
         student = Student.query.filter_by(student_id=student_id, is_active=True).first()
         if student and student.check_portal_password(password):
             session[PORTAL_KEY] = student.id
+            ev_id = _record_login_event(student, event='login')
+            if ev_id:
+                session['cbt_login_event'] = ev_id
             return redirect(url_for('cbt_portal.home'))
         flash('Invalid student ID or password.', 'error')
     return render_template('cbt/portal_login.html')
@@ -876,6 +929,7 @@ def start(exam_id):
                                   user_agent=(request.headers.get('User-Agent') or '')[:255])
             db.session.add(existing)
             db.session.commit()
+            _record_login_event(student, event='start', exam_id=exam.id)
         return redirect(url_for('cbt_portal.take', exam_id=exam.id))
     return render_template('cbt/portal_start.html', exam=exam, student=student)
 
@@ -927,14 +981,19 @@ def take(exam_id):
     questions = exam.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     if exam.shuffle:
         random.Random(attempt.id).shuffle(questions)   # stable per attempt
-    # Build per-question option lists, shuffled per attempt (each option keeps
-    # its original letter, so two students rarely see "the answer is C").
+    # Build per-question option lists, shuffled per attempt. Displayed labels
+    # always read A, B, C, D top-to-bottom (less confusing), but the *content*
+    # is shuffled and each radio carries the option's ORIGINAL letter as its
+    # value — so the backend always knows the real option chosen, and grading
+    # (selected_option vs correct_option) stays correct.
     qview = []
     for q in questions:
-        opts = [(l, t) for l, t in q.options if t]
+        opts = [(letter, text) for letter, text in q.options if text]
         if exam.shuffle:
             random.Random(attempt.id * 1009 + q.id).shuffle(opts)
-        qview.append({'q': q, 'options': opts})
+        options = [{'label': 'ABCD'[i], 'value': orig, 'text': text}
+                   for i, (orig, text) in enumerate(opts)]
+        qview.append({'q': q, 'options': options})
     saved = {a.question_id: a.selected_option for a in attempt.answers}
     has_pin = bool((SchoolSettings.get('cbt_supervisor_pin', '') or '').strip())
     return render_template('cbt/portal_take.html', exam=exam, student=student,
@@ -1010,6 +1069,41 @@ def ping(exam_id):
     if attempt and attempt.status == 'In progress':
         attempt.last_seen = timeutil.now()
         db.session.commit()
+    return jsonify({'ok': True})
+
+
+@cbt_portal_bp.route('/fingerprint', methods=['POST'])
+@cbt_login_required
+def fingerprint():
+    """Enrich the latest login event with client-side device details (best effort)."""
+    student = _current_student()
+    if not student:
+        return jsonify({'ok': False}), 400
+    ev = None
+    ev_id = session.get('cbt_login_event')
+    if ev_id:
+        ev = CBTLoginEvent.query.filter_by(id=ev_id, student_id=student.id).first()
+    if not ev:
+        ev = (CBTLoginEvent.query.filter_by(student_id=student.id)
+              .order_by(CBTLoginEvent.id.desc()).first())
+    if not ev:
+        return jsonify({'ok': False}), 400
+
+    def _s(key, n):
+        return (request.form.get(key) or '').strip()[:n] or None
+    ev.screen = _s('screen', 20)
+    ev.viewport = _s('viewport', 20)
+    ev.timezone = _s('timezone', 60)
+    ev.language = _s('language', 40)
+    ev.platform = _s('platform', 60)
+    for col, key in (('latitude', 'lat'), ('longitude', 'lon'), ('geo_accuracy', 'acc')):
+        try:
+            val = request.form.get(key)
+            if val not in (None, ''):
+                setattr(ev, col, float(val))
+        except (ValueError, TypeError):
+            pass
+    db.session.commit()
     return jsonify({'ok': True})
 
 

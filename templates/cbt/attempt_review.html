@@ -52,6 +52,32 @@
 </div>
 {% endif %}
 
+{% if logins %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-fingerprint"></i> Device fingerprints</h3>
+        <span class="text-sm text-muted">Captured at login / exam start</span></div>
+    <div class="card-body" style="padding:0;">
+        <div class="table-container"><table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>When</th><th>Event</th><th>Device</th><th>Browser / OS</th><th>IP</th><th>Screen</th><th>Timezone</th><th>Location</th></tr></thead>
+            <tbody>
+                {% for lg in logins %}
+                <tr>
+                    <td data-label="When">{{ lg.created_at.strftime('%d %b %H:%M:%S') if lg.created_at }}</td>
+                    <td data-label="Event"><span class="badge badge-info">{{ lg.event }}</span></td>
+                    <td data-label="Device">{{ lg.device_type or '—' }}{% if lg.is_mobile %} <i class="fas fa-mobile-screen" title="Mobile"></i>{% endif %}</td>
+                    <td data-label="Browser / OS">{{ lg.browser or '—' }} · {{ lg.os or '—' }}</td>
+                    <td data-label="IP">{{ lg.ip_address or '—' }}</td>
+                    <td data-label="Screen">{{ lg.screen or '—' }}</td>
+                    <td data-label="Timezone">{{ lg.timezone or '—' }}</td>
+                    <td data-label="Location">{% if lg.location %}<a href="https://maps.google.com/?q={{ lg.latitude }},{{ lg.longitude }}" target="_blank" rel="noopener">{{ lg.location }}</a>{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+    </div>
+</div>
+{% endif %}
+
 <div class="card"><div class="card-body">
     {% for r in rows %}
     <div class="qrev">
@@ -59,6 +85,7 @@
             <strong>{{ loop.index }}. {{ r.q.question_text }}</strong>
             <span class="badge {{ 'badge-success' if r.is_correct else 'badge-danger' }}">{{ 'Correct' if r.is_correct else 'Wrong' }}</span>
         </div>
+        {% if r.q.image_url %}<div><img src="{{ r.q.image_url }}" alt="figure" style="max-width:240px;max-height:160px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
         {% for letter, text in r.q.options %}{% if text %}
         <div class="opt {% if r.q.correct_option==letter %}ans{% elif r.selected==letter %}pick{% endif %}">
             {{ letter }}. {{ text }}
@@ -70,4 +97,5 @@
     </div>
     {% endfor %}
 </div></div>
+{% include 'cbt/_mathjax.html' %}
 {% endblock %}

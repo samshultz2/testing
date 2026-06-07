@@ -37,5 +37,29 @@
         {% block content %}{% endblock %}
     </div>
     {% block scripts %}{% endblock %}
+    {% if session.get('cbt_student_id') %}
+    <script>
+    // Best-effort device fingerprint for exam-integrity investigations.
+    (function(){
+        var token=document.querySelector('meta[name=csrf-token]').content;
+        function send(extra){
+            var b=new URLSearchParams(Object.assign({
+                _csrf_token:token,
+                screen:(screen.width+'x'+screen.height),
+                viewport:(window.innerWidth+'x'+window.innerHeight),
+                timezone:(Intl.DateTimeFormat().resolvedOptions().timeZone||''),
+                language:(navigator.language||''),
+                platform:(navigator.platform||'')
+            }, extra||{}));
+            fetch('{{ url_for("cbt_portal.fingerprint") }}',{method:'POST',body:b}).catch(function(){});
+        }
+        if(navigator.geolocation){
+            navigator.geolocation.getCurrentPosition(
+                function(p){ send({lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy}); },
+                function(){ send(); }, {timeout:6000, maximumAge:600000});
+        } else { send(); }
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

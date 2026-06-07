@@ -42,9 +42,11 @@
         </div>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('cbt.add_question', exam_id=e.id) }}">
+        <form method="POST" action="{{ url_for('cbt.add_question', exam_id=e.id) }}" enctype="multipart/form-data">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" class="form-control" rows="2" required></textarea></div>
+            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" class="form-control" rows="2" required></textarea>
+                <small class="text-muted">Maths: write LaTeX as <code>\( \sqrt{b^2-4ac} \)</code> or <code>$x^2$</code>. It renders for students.</small></div>
+            <div class="form-group"><label class="form-label">Figure / image (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
             <div class="opt-row">
                 <div class="form-group"><label class="form-label">Option A</label><input type="text" name="option_a" class="form-control"></div>
                 <div class="form-group"><label class="form-label">Option B</label><input type="text" name="option_b" class="form-control"></div>
@@ -70,6 +72,7 @@
                     <strong>{{ loop.index }}. {{ q.question_text }}</strong>
                     <form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
                 </div>
+                {% if q.image_url %}<div style="margin:.4rem 0"><img src="{{ q.image_url }}" alt="figure" style="max-width:260px;max-height:180px;border:1px solid var(--border-color);border-radius:6px"></div>{% endif %}
                 {% for letter, text in q.options %}{% if text %}<div class="qopt {% if q.correct_option==letter %}correct{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
                 <div class="text-muted text-sm mt-1">{{ q.marks }} mark(s)</div>
             </div>
@@ -77,4 +80,5 @@
         {% else %}<div class="empty-state"><i class="fas fa-circle-question"></i><h3>No questions yet</h3><p>Add questions above. You can publish once there's at least one.</p></div>{% endif %}
     </div>
 </div>
+{% include 'cbt/_mathjax.html' %}
 {% endblock %}

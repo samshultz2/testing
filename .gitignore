@@ -41,3 +41,6 @@ Thumbs.db
 
 # Local environment overrides
 .env
+
+# CBT question image uploads (user content)
+static/uploads/

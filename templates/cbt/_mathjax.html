@@ -1,0 +1,10 @@
+{# Shared MathJax loader: renders LaTeX in questions/options.
+   Teachers can write inline math as \( ... \) or $ ... $ and display
+   math as \[ ... \] — e.g. \( \sqrt{b^2-4ac} \) or $x^2+y^2=r^2$. #}
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)'], ['$', '$']], displayMath: [['\\[', '\\]'], ['$$', '$$']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>

@@ -1142,6 +1142,15 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # cbt question image columns (figures in questions).
+    for tbl in ('cbt_questions', 'question_bank'):
+        try:
+            cols = {c['name'] for c in inspect(db.engine).get_columns(tbl)}
+            if 'image_url' not in cols:
+                statements.append(f'ALTER TABLE {tbl} ADD COLUMN image_url VARCHAR(300)')
+        except Exception:
+            pass
+
     # payslips.attendance_deduction (separates auto attendance vs manual deductions).
     try:
         ps_cols = {c['name'] for c in inspect(db.engine).get_columns('payslips')}
