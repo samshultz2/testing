@@ -284,7 +284,20 @@ def dashboard():
     if is_admin():
         recent_activity = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(6).all()
 
+    # Active announcements for the dashboard banner.
+    announcements = []
+    try:
+        from models import Announcement
+        for a in (Announcement.query.order_by(Announcement.is_pinned.desc(),
+                  Announcement.created_at.desc()).limit(15).all()):
+            if a.is_active:
+                announcements.append(a)
+        announcements = announcements[:5]
+    except Exception:
+        announcements = []
+
     return render_template('dashboard.html',
+        announcements=announcements,
         total_students=total_students,
         male_students=male_students,
         female_students=female_students,

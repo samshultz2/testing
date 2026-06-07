@@ -23,7 +23,7 @@ from .models import (
 from .models_contributions import ContributionSettings, ContributionPayment, ContributionExpense
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
                              ExpenseCategory, Expense)
-from .models_comms import MessageTemplate, Message, MessageRecipient
+from .models_comms import MessageTemplate, Message, MessageRecipient, Announcement
 from .models_hr import (Department, StaffMember, LeaveRecord, PayrollRun, Payslip,
                         SalaryHistory, StaffAttendance)
 from .models_admissions import Applicant
@@ -51,7 +51,7 @@ __all__ = [
     'ContributionSettings', 'ContributionPayment', 'ContributionExpense',
     'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
     'ExpenseCategory', 'Expense',
-    'MessageTemplate', 'Message', 'MessageRecipient',
+    'MessageTemplate', 'Message', 'MessageRecipient', 'Announcement',
     'Department', 'StaffMember', 'LeaveRecord', 'PayrollRun', 'Payslip',
     'SalaryHistory', 'StaffAttendance',
     'Applicant',

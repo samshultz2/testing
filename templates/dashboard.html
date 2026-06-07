@@ -91,6 +91,18 @@
     {% if active_term %}<div class="term-chip"><i class="fas fa-calendar-day"></i> {{ active_term.name }}</div>{% endif %}
 </div>
 
+{% if announcements %}
+<div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem;">
+    {% for a in announcements %}
+    <div style="display:flex;gap:.6rem;align-items:flex-start;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid {{ '#e74a3b' if a.category=='Important' else '#f6c23e' if a.category=='Event' else 'var(--primary)' }};border-radius:var(--radius-md);padding:.7rem .9rem;">
+        <i class="fas {{ 'fa-triangle-exclamation' if a.category=='Important' else 'fa-calendar-day' if a.category=='Event' else 'fa-bullhorn' }}" style="color:{{ '#e74a3b' if a.category=='Important' else '#f6c23e' if a.category=='Event' else 'var(--primary)' }};margin-top:.2rem;"></i>
+        <div style="flex:1;"><strong>{{ a.title }}</strong>{% if a.body %}<div class="text-muted text-sm">{{ a.body }}</div>{% endif %}</div>
+        {% if a.is_pinned %}<i class="fas fa-thumbtack text-muted" title="Pinned"></i>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <!-- KPI strip -->
 <div class="kpi-row">
     <div class="kpi"><div class="ic blue"><i class="fas fa-users"></i></div><div><div class="v">{{ total_students }}</div><div class="l">Students</div></div></div>

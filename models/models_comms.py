@@ -9,6 +9,35 @@ campaign and recipient is logged so schools keep a full communication history.
 from models.models import db, local_now
 
 
+class Announcement(db.Model):
+    """An in-app school notice shown on the dashboard."""
+    __tablename__ = 'announcements'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    body = db.Column(db.Text)
+    audience = db.Column(db.String(20), default='All')   # All/Staff/Students/Parents
+    category = db.Column(db.String(20), default='Info')   # Info/Important/Event
+    is_pinned = db.Column(db.Boolean, default=False)
+    starts_on = db.Column(db.Date)
+    ends_on = db.Column(db.Date)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    @property
+    def is_active(self):
+        from datetime import date
+        today = date.today()
+        if self.starts_on and today < self.starts_on:
+            return False
+        if self.ends_on and today > self.ends_on:
+            return False
+        return True
+
+    def __repr__(self):
+        return f'<Announcement {self.title!r}>'
+
+
 class MessageTemplate(db.Model):
     """A reusable message body with {placeholders}."""
     __tablename__ = 'message_templates'

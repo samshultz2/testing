@@ -2,6 +2,7 @@
 <div class="fin-tabs">
     <a href="{{ url_for('comms.dashboard') }}" class="fin-tab {% if ep == 'comms.dashboard' %}active{% endif %}"><i class="fas fa-chart-pie"></i> Overview</a>
     <a href="{{ url_for('comms.compose') }}" class="fin-tab {% if ep == 'comms.compose' %}active{% endif %}"><i class="fas fa-paper-plane"></i> Compose</a>
+    <a href="{{ url_for('comms.announcements') }}" class="fin-tab {% if ep == 'comms.announcements' %}active{% endif %}"><i class="fas fa-bullhorn"></i> Announcements</a>
     <a href="{{ url_for('comms.messages_list') }}" class="fin-tab {% if ep in ['comms.messages_list','comms.message_detail'] %}active{% endif %}"><i class="fas fa-clock-rotate-left"></i> History</a>
     <a href="{{ url_for('comms.templates_list') }}" class="fin-tab {% if ep == 'comms.templates_list' %}active{% endif %}"><i class="fas fa-file-lines"></i> Templates</a>
     <a href="{{ url_for('comms.contacts') }}" class="fin-tab {% if ep == 'comms.contacts' %}active{% endif %}"><i class="fas fa-address-book"></i> Contacts</a>

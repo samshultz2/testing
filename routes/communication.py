@@ -14,7 +14,7 @@ from sqlalchemy import func
 from models import (
     db, Student, ParentContact, Term, SchoolClass, ClassArm,
     StudentEnrollment, ClassArmAssignment,
-    MessageTemplate, Message, MessageRecipient,
+    MessageTemplate, Message, MessageRecipient, Announcement,
 )
 from utils.access_control import login_required, admin_required, is_admin
 from utils import comms
@@ -68,6 +68,65 @@ def dashboard():
 # ============================================================================
 # CONTACT DIRECTORY
 # ============================================================================
+
+@comms_bp.route('/announcements')
+@login_required
+def announcements():
+    items = Announcement.query.order_by(Announcement.is_pinned.desc(),
+                                        Announcement.created_at.desc()).all()
+    return render_template('communication/announcements.html', items=items)
+
+
+def _read_announcement(a):
+    a.title = (request.form.get('title') or '').strip()
+    a.body = (request.form.get('body') or '').strip() or None
+    a.audience = request.form.get('audience') or 'All'
+    a.category = request.form.get('category') or 'Info'
+    a.is_pinned = bool(request.form.get('is_pinned'))
+    a.starts_on = _date(request.form.get('starts_on'))
+    a.ends_on = _date(request.form.get('ends_on'))
+
+
+def _date(v):
+    try:
+        return datetime.strptime(v, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+@comms_bp.route('/announcements/add', methods=['POST'])
+@login_required
+def add_announcement():
+    if not (request.form.get('title') or '').strip():
+        flash('Title is required.', 'error')
+        return redirect(url_for('comms.announcements'))
+    a = Announcement(created_by=_current_user())
+    _read_announcement(a)
+    db.session.add(a)
+    db.session.commit()
+    flash('Announcement posted.', 'success')
+    return redirect(url_for('comms.announcements'))
+
+
+@comms_bp.route('/announcements/<int:ann_id>/edit', methods=['POST'])
+@login_required
+def edit_announcement(ann_id):
+    a = Announcement.query.get_or_404(ann_id)
+    _read_announcement(a)
+    db.session.commit()
+    flash('Announcement updated.', 'success')
+    return redirect(url_for('comms.announcements'))
+
+
+@comms_bp.route('/announcements/<int:ann_id>/delete', methods=['POST'])
+@login_required
+def delete_announcement(ann_id):
+    a = Announcement.query.get_or_404(ann_id)
+    db.session.delete(a)
+    db.session.commit()
+    flash('Announcement deleted.', 'success')
+    return redirect(url_for('comms.announcements'))
+
 
 @comms_bp.route('/contacts')
 @login_required
