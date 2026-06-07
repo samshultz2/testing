@@ -30,9 +30,11 @@ from .models_admissions import Applicant
 from .models_library import Book, BookLoan
 from .models_events import SchoolEvent
 from .models_cbt import CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation, QuestionBank
+from .models_scratchcard import ScratchCard, ResultCheckLog
 
 __all__ = [
     'db', 'local_now', 'init_db',
+    'ScratchCard', 'ResultCheckLog',
     'Student', 'ParentContact',
     'AcademicSession', 'Term', 'SchoolClass', 'ClassArm', 'ClassArmAssignment', 'StudentEnrollment',
     'Week', 'Holiday', 'Attendance',

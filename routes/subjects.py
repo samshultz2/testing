@@ -640,98 +640,14 @@ def student_report_card(student_id):
             term_id = active_term.id
     
     selected_term = Term.query.get(term_id) if term_id else None
-    
+
     report_data = None
     enrollment = None
-    
+
     if selected_term:
-        # Find student's enrollment for this term
-        enrollment = StudentEnrollment.query.join(ClassArmAssignment).filter(
-            StudentEnrollment.student_id == student_id,
-            ClassArmAssignment.term_id == term_id,
-            StudentEnrollment.is_active == True
-        ).first()
-        
-        if enrollment:
-            assignment = enrollment.class_arm_assignment
-            
-            # Get class subjects
-            class_subjects = ClassSubject.query.filter_by(
-                term_id=term_id,
-                class_id=assignment.class_id,
-                is_active=True
-            ).filter(
-                (ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)
-            ).join(Subject).order_by(Subject.name).all()
-            
-            assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
-            pass_mark = SchoolSettings.get('pass_mark', 50)
-            
-            subjects_data = []
-            total_score = 0
-            subjects_passed = 0
-            subjects_failed = 0
-            
-            for cs in class_subjects:
-                subject_row = {
-                    'subject': cs.subject,
-                    'teacher': cs.teacher_name,
-                    'assessments': {},
-                    'total': 0,
-                    'grade': '-',
-                    'remark': '-'
-                }
-                
-                scores = StudentScore.query.filter_by(
-                    student_id=student_id,
-                    class_subject_id=cs.id
-                ).all()
-                
-                scores_dict = {s.assessment_type_id: s.score for s in scores}
-                
-                subject_total = 0
-                for at in assessment_types:
-                    score = scores_dict.get(at.id)
-                    subject_row['assessments'][at.id] = score
-                    if score:
-                        subject_total += score
-                
-                subject_row['total'] = subject_total
-                if subject_total > 0:
-                    subject_row['grade'] = GradeScale.get_grade(subject_total)
-                    subject_row['remark'] = GradeScale.get_remark(subject_total)
-                    total_score += subject_total
-                    
-                    if subject_total >= pass_mark:
-                        subjects_passed += 1
-                    else:
-                        subjects_failed += 1
-                
-                subjects_data.append(subject_row)
-            
-            # Calculate average
-            average = round(total_score / len(class_subjects), 2) if class_subjects else 0
-            
-            # Get term summary if exists
-            term_summary = TermSummary.query.filter_by(
-                student_id=student_id,
-                term_id=term_id
-            ).first()
-            
-            report_data = {
-                'enrollment': enrollment,
-                'assignment': assignment,
-                'subjects': subjects_data,
-                'assessment_types': assessment_types,
-                'total_score': total_score,
-                'average': average,
-                'overall_grade': GradeScale.get_grade(average) if average else '-',
-                'subjects_passed': subjects_passed,
-                'subjects_failed': subjects_failed,
-                'total_subjects': len(class_subjects),
-                'term_summary': term_summary
-            }
-    
+        from utils.report_card import build_report_card
+        enrollment, report_data = build_report_card(student_id, term_id)
+
     return render_template('subjects/report_card.html',
         student=student, terms=terms, term_id=term_id, selected_term=selected_term,
         report_data=report_data, enrollment=enrollment

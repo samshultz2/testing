@@ -165,8 +165,10 @@ class Term(db.Model):
     start_date = db.Column(db.Date)
     end_date = db.Column(db.Date)
     is_active = db.Column(db.Boolean, default=False)
+    # When True, term results are released to the student/parent result-checker portal.
+    results_published = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=local_now)
-    
+
     # Relationships
     weeks = db.relationship('Week', backref='term', lazy='dynamic', cascade='all, delete-orphan')
     holidays = db.relationship('Holiday', backref='term', lazy='dynamic', cascade='all, delete-orphan')
@@ -1129,6 +1131,14 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN allowed_modules TEXT')
         if 'view_only' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN view_only BOOLEAN DEFAULT 0')
+    except Exception:
+        pass
+
+    # terms.results_published (release results to the parent/student portal).
+    try:
+        t_cols = {c['name'] for c in inspect(db.engine).get_columns('terms')}
+        if 'results_published' not in t_cols:
+            statements.append('ALTER TABLE terms ADD COLUMN results_published BOOLEAN DEFAULT 0')
     except Exception:
         pass
 

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Scratch Cards</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;margin:12px;color:#111}
+.toolbar{margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.card{border:1.5px dashed #555;border-radius:8px;padding:10px;font-size:12px}
+.card h4{margin:0 0 4px;font-size:13px}
+.card .pin{font-size:16px;font-weight:bold;letter-spacing:1px;font-family:monospace}
+.card .row{margin:2px 0}
+.muted{color:#666;font-size:10px}
+@media print{.toolbar{display:none}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+    <button onclick="window.print()">Print</button>
+    <a href="{{ url_for('scratchcards.index') }}">Back</a>
+</div>
+<div class="grid">
+    {% for c in cards %}
+    <div class="card">
+        <h4>Result Checker Card</h4>
+        <div class="row">Serial: <strong>{{ c.serial }}</strong></div>
+        <div class="row">PIN: <span class="pin">{{ c.pin }}</span></div>
+        <div class="row">Checks: {{ c.max_uses }}{% if c.term %} · {{ c.term.name }}{% endif %}</div>
+        <div class="row muted">Visit: {{ portal_url }}</div>
+        <div class="row muted">Enter your Student ID + this PIN to view your result.</div>
+    </div>
+    {% endfor %}
+</div>
+</body>
+</html>

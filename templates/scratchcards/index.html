@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Scratch Cards - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Scratch Cards</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-ticket"></i> Result Scratch Cards</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('scratchcards.logs') }}" class="btn btn-secondary"><i class="fas fa-list-check"></i> Check Logs</a>
+    </div>
+</div>
+
+<div class="sum-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem;">
+    <div class="card"><div class="card-body"><div style="font-size:1.4rem;font-weight:700;">{{ stats.total }}</div><div class="text-muted text-sm">Cards</div></div></div>
+    <div class="card"><div class="card-body"><div style="font-size:1.4rem;font-weight:700;">{{ stats.active }}</div><div class="text-muted text-sm">Active</div></div></div>
+    <div class="card"><div class="card-body"><div style="font-size:1.4rem;font-weight:700;">{{ stats.used }}</div><div class="text-muted text-sm">Checks used</div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-unlock"></i> Release results to portal</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm">A term's results are only visible on the public checker when released here.</p>
+        <table class="data-table table-stack no-mobile-scroll" style="width:100%;">
+            <thead><tr><th>Term</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for t in terms %}
+            <tr>
+                <td data-label="Term">{{ t.full_name if t.full_name else t.name }}</td>
+                <td data-label="Status">{% if t.results_published %}<span class="badge badge-success">Released</span>{% else %}<span class="badge badge-secondary">Hidden</span>{% endif %}</td>
+                <td data-label="">
+                    <form method="POST" action="{{ url_for('scratchcards.publish', term_id=t.id) }}" style="display:inline;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm {% if t.results_published %}btn-danger{% else %}btn-success{% endif %}">{{ 'Hide' if t.results_published else 'Release' }}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Generate cards</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('scratchcards.generate') }}" class="filter-form" style="flex-wrap:wrap;gap:1rem;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label class="form-label">How many</label><input type="number" name="count" class="form-control" value="20" min="1" max="500"></div>
+            <div class="form-group"><label class="form-label">Checks per card</label><input type="number" name="max_uses" class="form-control" value="5" min="1" max="100"></div>
+            <div class="form-group"><label class="form-label">Lock to term (optional)</label>
+                <select name="term_id" class="form-control">
+                    <option value="">Any term</option>
+                    {% for t in terms %}<option value="{{ t.id }}">{{ t.full_name if t.full_name else t.name }}</option>{% endfor %}
+                </select></div>
+            <div class="form-group"><label class="form-label">Batch label (optional)</label><input type="text" name="batch_label" class="form-control" placeholder="e.g., 2025 T1 Sales"></div>
+            <div class="form-group" style="align-self:flex-end;"><button type="submit" class="btn btn-primary"><i class="fas fa-bolt"></i> Generate &amp; Print</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Cards ({{ cards|length }})</h3>
+        <form method="GET" style="display:flex;gap:.5rem;">
+            <select name="batch" class="form-control" onchange="this.form.submit()">
+                <option value="">All batches</option>
+                {% for b in batches %}<option value="{{ b }}" {% if b == batch %}selected{% endif %}>{{ b }}</option>{% endfor %}
+            </select>
+            {% if batch %}<a href="{{ url_for('scratchcards.print_cards', batch=batch) }}" class="btn btn-sm btn-secondary"><i class="fas fa-print"></i> Print batch</a>{% endif %}
+        </form>
+    </div>
+    <div class="card-body" style="padding:0;">
+        {% if cards %}
+        <div class="table-container">
+        <table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Serial</th><th>PIN</th><th>Uses</th><th>Term</th><th>Batch</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                {% for c in cards %}
+                <tr>
+                    <td data-label="Serial">{{ c.serial }}</td>
+                    <td data-label="PIN"><code>{{ c.pin }}</code></td>
+                    <td data-label="Uses">{{ c.used_count }}/{{ c.max_uses }} <span class="text-muted">({{ c.uses_left }} left)</span></td>
+                    <td data-label="Term">{{ c.term.name if c.term else 'Any' }}</td>
+                    <td data-label="Batch">{{ c.batch_label or '—' }}</td>
+                    <td data-label="Status">{% if c.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-danger">Disabled</span>{% endif %}</td>
+                    <td data-label="">
+                        <form method="POST" action="{{ url_for('scratchcards.toggle', card_id=c.id) }}" style="display:inline;">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm {% if c.is_active %}btn-danger{% else %}btn-success{% endif %}">{{ 'Disable' if c.is_active else 'Enable' }}</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-ticket"></i><h3>No cards yet</h3><p>Generate a batch above.</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

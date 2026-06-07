@@ -45,7 +45,7 @@ BLUEPRINT_MODULE = {
     'results': 'external_exams', 'mock_jamb': 'external_exams', 'cbt': 'cbt',
     'timetable': 'timetable', 'generator': 'timetable', 'promotion': 'promotion',
     'finance': 'finance', 'comms': 'communication', 'hr': 'hr',
-    'library': 'library', 'reports': 'reports',
+    'library': 'library', 'reports': 'reports', 'scratchcards': 'results',
 }
 
 # Endpoints always reachable by any logged-in user (the shell + own account).

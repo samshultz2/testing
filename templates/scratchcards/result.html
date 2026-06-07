@@ -1,0 +1,65 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}Result — {{ student.full_name }}{% endblock %}
+{% block content %}
+<div class="portal-card" style="max-width:820px;margin:4vh auto 0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
+        <div>
+            <h1 style="margin:0;">{{ student.full_name }}</h1>
+            <p class="text-muted" style="margin:0;">{{ student.student_id }} ·
+                {{ report_data.assignment.display_name if report_data.assignment else '' }} ·
+                {{ term.full_name if term.full_name else term.name }}</p>
+        </div>
+        <span class="badge badge-info">{{ uses_left }} check(s) left</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin:1rem 0;">
+        <div class="kpi"><div class="v">{{ report_data.total_score }}</div><div class="l">Total</div></div>
+        <div class="kpi"><div class="v">{{ report_data.average }}%</div><div class="l">Average ({{ report_data.overall_grade }})</div></div>
+        <div class="kpi"><div class="v">{{ report_data.subjects_passed }}</div><div class="l">Passed</div></div>
+        <div class="kpi"><div class="v">{{ report_data.subjects_failed }}</div><div class="l">Failed</div></div>
+    </div>
+
+    {% if report_data.term_summary and report_data.term_summary.position_in_class %}
+    <p style="margin:.2rem 0;"><strong>Position in class:</strong> {{ report_data.term_summary.position_in_class }}</p>
+    {% endif %}
+
+    <div style="overflow-x:auto;">
+    <table class="data-table" style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+            <th style="text-align:left;">Subject</th>
+            {% for at in report_data.assessment_types %}<th>{{ at.name }}</th>{% endfor %}
+            <th>Total</th><th>Grade</th><th>Remark</th>
+        </tr></thead>
+        <tbody>
+        {% for row in report_data.subjects %}
+            <tr>
+                <td style="text-align:left;">{{ row.subject.name }}</td>
+                {% for at in report_data.assessment_types %}<td>{{ row.assessments[at.id] if row.assessments[at.id] is not none else '–' }}</td>{% endfor %}
+                <td><strong>{{ row.total }}</strong></td>
+                <td>{{ row.grade }}</td>
+                <td>{{ row.remark }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    {% if report_data.term_summary %}
+        {% if report_data.term_summary.teacher_comment %}
+        <p style="margin-top:1rem;"><strong>Form teacher:</strong> {{ report_data.term_summary.teacher_comment }}</p>{% endif %}
+        {% if report_data.term_summary.principal_comment %}
+        <p><strong>Principal:</strong> {{ report_data.term_summary.principal_comment }}</p>{% endif %}
+    {% endif %}
+
+    <div style="margin-top:1.2rem;display:flex;gap:.5rem;">
+        <a href="{{ url_for('result_portal.check') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Check another</a>
+        <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    </div>
+</div>
+<style>
+.kpi{background:var(--gray-50,#f4f6fb);border-radius:10px;padding:.6rem .8rem;text-align:center}
+.kpi .v{font-size:1.3rem;font-weight:700}
+.kpi .l{font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted,#777)}
+.data-table th,.data-table td{border:1px solid var(--border-color,#e2e6ee);padding:.4rem .5rem;text-align:center;font-size:.85rem}
+</style>
+{% endblock %}
