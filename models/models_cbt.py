@@ -27,6 +27,7 @@ class CBTExam(db.Model):
     start_time = db.Column(db.String(5))     # 'HH:MM' window opens (optional)
     end_time = db.Column(db.String(5))       # 'HH:MM' window closes (optional)
     duration_minutes = db.Column(db.Integer, default=30)
+    max_score = db.Column(db.Float)          # scaled total for the subject (e.g. 30); None = raw
     instructions = db.Column(db.Text)
     access_password = db.Column(db.String(60))                           # per-exam subject password
     shuffle = db.Column(db.Boolean, default=True)
@@ -63,8 +64,9 @@ class CBTExam(db.Model):
 
     def access_state(self, now=None):
         """('open'|'before'|'closed'|'wrong_day', human_message)."""
-        from datetime import datetime
-        now = now or datetime.now()
+        if now is None:
+            from utils.timeutil import now as _now
+            now = _now()
         if now.date() < self.exam_date:
             return 'wrong_day', f'Opens on {self.exam_date.strftime("%d %b %Y")}'
         if now.date() > self.exam_date:
@@ -86,8 +88,23 @@ class CBTExam(db.Model):
         return 'All day'
 
     @property
-    def total_marks(self):
+    def raw_total(self):
+        """Sum of all question marks (unscaled)."""
         return sum(q.marks or 0 for q in self.questions)
+
+    @property
+    def total_marks(self):
+        """The score the exam is reported out of (scaled total, or raw if unset)."""
+        return self.max_score if self.max_score else self.raw_total
+
+    def scale(self, raw_score):
+        """Scale a raw score to the exam's reported total."""
+        rt = self.raw_total
+        if not rt:
+            return 0.0
+        if not self.max_score:
+            return round(raw_score, 2)
+        return round(raw_score / rt * self.max_score, 2)
 
     @property
     def question_count(self):
@@ -128,8 +145,10 @@ class CBTAttempt(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     started_at = db.Column(db.DateTime, default=local_now)
     submitted_at = db.Column(db.DateTime)
-    score = db.Column(db.Float, default=0)
-    total = db.Column(db.Float, default=0)
+    score = db.Column(db.Float, default=0)        # scaled score (out of exam total)
+    total = db.Column(db.Float, default=0)        # exam reported total (scaled)
+    raw_score = db.Column(db.Float, default=0)    # marks earned from questions
+    raw_total = db.Column(db.Float, default=0)    # sum of question marks
     status = db.Column(db.String(15), default='In progress')   # In progress / Submitted
 
     student = db.relationship('Student')

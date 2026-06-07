@@ -11,7 +11,8 @@
 <style>
 :root{--ex:#4f46e5;--ex-dark:#3730a3;--ok:#16a34a;--bg:#0f172a;--panel:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0}
 *{box-sizing:border-box}
-body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:var(--ink);-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:var(--ink);-webkit-font-smoothing:antialiased;
+    -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* top exam bar — distinct dark slate, nothing like the green app */
 .ex-bar{position:fixed;top:0;left:0;right:0;height:60px;background:var(--bg);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .ex-bar .t{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:.5rem;overflow:hidden}
@@ -60,7 +61,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
             <p class="q-text"><span class="q-num">{{ loop.index }}</span>{{ q.question_text }}</p>
             {% for letter, text in q.options %}{% if text %}
             <label class="opt" data-q="{{ loop.index }}">
-                <input type="radio" name="q_{{ q.id }}" value="{{ letter }}">
+                <input type="radio" name="q_{{ q.id }}" data-qid="{{ q.id }}" value="{{ letter }}" {% if saved is defined and saved.get(q.id) == letter %}checked{% endif %}>
                 <span class="mark"><i class="fas fa-check"></i></span>
                 <span class="letter">{{ letter }}.</span> <span>{{ text }}</span>
             </label>
@@ -105,8 +106,22 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         });
         document.getElementById('answered').textContent=done;
     }
-    document.querySelectorAll('.opt input').forEach(function(inp){inp.addEventListener('change',refresh);});
+    // Autosave each answer immediately so a refresh / disconnect resumes here.
+    var token=document.querySelector('meta[name=csrf-token]').content;
+    var ANSWER_URL="{{ url_for('cbt_portal.answer', exam_id=exam.id) }}";
+    function autosave(inp){
+        var body=new URLSearchParams({question_id:inp.dataset.qid, option:inp.value, _csrf_token:token});
+        fetch(ANSWER_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:body}).catch(function(){});
+    }
+    document.querySelectorAll('.opt input').forEach(function(inp){
+        inp.addEventListener('change',function(){refresh();autosave(inp);});
+    });
     refresh();
+
+    // Deter copying of exam content.
+    ['copy','cut','contextmenu','selectstart','dragstart'].forEach(function(ev){
+        document.addEventListener(ev,function(e){e.preventDefault();});
+    });
 
     form.addEventListener('submit',function(e){
         if(!submitted){

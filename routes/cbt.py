@@ -23,6 +23,7 @@ from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer,
                     Subject, SchoolClass, ClassArm, Term, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolSettings)
 from utils.access_control import login_required, admin_required, is_admin
+from utils import timeutil
 
 cbt_bp = Blueprint('cbt', __name__, url_prefix='/cbt')
 cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
@@ -66,7 +67,7 @@ def dashboard():
     exams = CBTExam.query.order_by(CBTExam.exam_date.desc(), CBTExam.id.desc()).all()
     total = len(exams)
     published = sum(1 for e in exams if e.is_published)
-    today_count = sum(1 for e in exams if e.exam_date == date.today() and e.is_published)
+    today_count = sum(1 for e in exams if e.exam_date == timeutil.today() and e.is_published)
     attempts = CBTAttempt.query.filter_by(status='Submitted').count()
     return render_template('cbt/dashboard.html', exams=exams, total=total,
         published=published, today_count=today_count, attempts=attempts)
@@ -87,10 +88,11 @@ def _read_exam(e):
     e.class_id = request.form.get('class_id', type=int) or None
     e.arm_id = request.form.get('arm_id', type=int) or None
     e.term_id = request.form.get('term_id', type=int) or None
-    e.exam_date = _d(request.form.get('exam_date')) or date.today()
+    e.exam_date = _d(request.form.get('exam_date')) or timeutil.today()
     e.start_time = (request.form.get('start_time') or '').strip() or None
     e.end_time = (request.form.get('end_time') or '').strip() or None
     e.duration_minutes = request.form.get('duration_minutes', type=int) or 30
+    e.max_score = request.form.get('max_score', type=float)
     e.access_password = (request.form.get('access_password') or '').strip()
     e.instructions = (request.form.get('instructions') or '').strip() or None
     e.shuffle = bool(request.form.get('shuffle'))
@@ -216,7 +218,7 @@ def _exam_sheet(ws, exam):
                 f'{exam.exam_date.strftime("%d %b %Y") if exam.exam_date else ""} · '
                 f'Total {exam.total_marks} marks')
     ws['A2'].font = Font(italic=True, color='666666')
-    headers = ['S/N', 'Student ID', 'Name', 'Score', '%']
+    headers = ['S/N', 'Student ID', 'Name', 'Raw', f'Score (/{exam.total_marks:g})', '%']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=4, column=col, value=h)
         cell.fill = head_fill
@@ -229,10 +231,11 @@ def _exam_sheet(ws, exam):
         ws.cell(row=r, column=1, value=i)
         ws.cell(row=r, column=2, value=a.student.student_id if a.student else '')
         ws.cell(row=r, column=3, value=a.student.full_name if a.student else '')
-        ws.cell(row=r, column=4, value=a.score)
-        ws.cell(row=r, column=5, value=a.percentage)
+        ws.cell(row=r, column=4, value=f'{a.raw_score:g}/{a.raw_total:g}' if a.raw_total else a.score)
+        ws.cell(row=r, column=5, value=a.score)
+        ws.cell(row=r, column=6, value=a.percentage)
         r += 1
-    widths = [6, 16, 32, 10, 8]
+    widths = [6, 16, 32, 12, 12, 8]
     for i, wd in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = wd
     return len(attempts)
@@ -299,7 +302,9 @@ def results_export_all():
 def passwords():
     term = _active_term()
     class_id = request.values.get('class_id', type=int)
+    arm_id = request.values.get('arm_id', type=int)
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -327,26 +332,141 @@ def passwords():
                 s.set_portal_password(pw)
                 generated.append((s, pw))
             db.session.commit()
-            # show the generated passwords once
-            return render_template('cbt/passwords.html', classes=classes, term=term,
-                class_id=class_id, students=_password_roster(class_id, term),
-                generated=generated)
-        return redirect(url_for('cbt.passwords', class_id=class_id or ''))
+            return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
+                class_id=class_id, arm_id=arm_id,
+                students=_password_roster(class_id, arm_id, term), generated=generated)
+        return redirect(url_for('cbt.passwords', class_id=class_id or '', arm_id=arm_id or ''))
 
-    return render_template('cbt/passwords.html', classes=classes, term=term,
-        class_id=class_id, students=_password_roster(class_id, term), generated=None)
+    return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
+        class_id=class_id, arm_id=arm_id,
+        students=_password_roster(class_id, arm_id, term), generated=None)
 
 
-def _password_roster(class_id, term):
+def _password_roster(class_id, arm_id, term):
     if class_id and term:
-        ids = [e.student_id for e in (StudentEnrollment.query
-               .join(ClassArmAssignment,
-                     StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-               .filter(StudentEnrollment.is_active == True,
-                       ClassArmAssignment.term_id == term.id,
-                       ClassArmAssignment.class_id == class_id).all())]
-        return Student.query.filter(Student.id.in_(ids or [-1])).order_by(Student.surname).all()
+        q = (StudentEnrollment.query
+             .join(ClassArmAssignment,
+                   StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+             .filter(StudentEnrollment.is_active == True,
+                     ClassArmAssignment.term_id == term.id,
+                     ClassArmAssignment.class_id == class_id))
+        if arm_id:
+            q = q.filter(ClassArmAssignment.arm_id == arm_id)
+        ids = [e.student_id for e in q.all()]
+        return Student.query.filter(Student.id.in_(ids or [-1])).order_by(Student.surname, Student.first_name).all()
     return Student.query.filter_by(is_active=True).order_by(Student.surname).limit(300).all()
+
+
+def _roster_label(class_id, arm_id, classes, arms):
+    cls = next((c for c in classes if c.id == class_id), None)
+    arm = next((a for a in arms if a.id == arm_id), None)
+    return ' '.join(p for p in [cls.name if cls else 'All students', arm.name if arm else ''] if p)
+
+
+@cbt_bp.route('/passwords/export')
+@login_required
+def passwords_export():
+    """Export portal passwords for a class arm as Excel / Word / PDF."""
+    term = _active_term()
+    class_id = request.args.get('class_id', type=int)
+    arm_id = request.args.get('arm_id', type=int)
+    fmt = (request.args.get('format') or 'xlsx').lower()
+    classes = SchoolClass.query.all()
+    arms = ClassArm.query.all()
+    label = _roster_label(class_id, arm_id, classes, arms)
+    students = _password_roster(class_id, arm_id, term)
+    rows = [(i + 1, s.student_id, s.full_name, s.portal_password_plain or '—')
+            for i, s in enumerate(students)]
+    school = SchoolSettings.get('school_name', 'School')
+    safe = ''.join(c for c in label if c.isalnum() or c in ' -_').strip().replace(' ', '_') or 'students'
+
+    if fmt == 'docx':
+        return _passwords_docx(school, label, rows, safe)
+    if fmt == 'pdf':
+        return _passwords_pdf(school, label, rows, safe)
+    return _passwords_xlsx(school, label, rows, safe)
+
+
+def _passwords_xlsx(school, label, rows, safe):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Passwords'
+    ws.merge_cells('A1:D1')
+    ws['A1'] = f'{school} — Test Portal Passwords ({label})'
+    ws['A1'].font = Font(bold=True, size=13)
+    fill = PatternFill(start_color='0d6a4e', end_color='0d6a4e', fill_type='solid')
+    for col, h in enumerate(['S/N', 'Student ID', 'Name', 'Password'], 1):
+        c = ws.cell(row=3, column=col, value=h)
+        c.fill = fill
+        c.font = Font(bold=True, color='FFFFFF')
+    for r, row in enumerate(rows, 4):
+        for col, val in enumerate(row, 1):
+            ws.cell(row=r, column=col, value=val)
+    for i, w in enumerate([6, 18, 34, 16], 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return Response(out.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename=passwords_{safe}.xlsx'})
+
+
+def _passwords_docx(school, label, rows, safe):
+    from docx import Document
+    from docx.shared import Pt
+    doc = Document()
+    doc.add_heading(f'{school}', level=1)
+    doc.add_heading(f'Test Portal Passwords — {label}', level=2)
+    table = doc.add_table(rows=1, cols=4)
+    table.style = 'Light Grid Accent 1'
+    hdr = table.rows[0].cells
+    for i, h in enumerate(['S/N', 'Student ID', 'Name', 'Password']):
+        hdr[i].text = h
+        hdr[i].paragraphs[0].runs[0].font.bold = True
+    for row in rows:
+        cells = table.add_row().cells
+        for i, val in enumerate(row):
+            cells[i].text = str(val)
+    out = io.BytesIO()
+    doc.save(out)
+    out.seek(0)
+    return Response(out.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers={'Content-Disposition': f'attachment; filename=passwords_{safe}.docx'})
+
+
+def _passwords_pdf(school, label, rows, safe):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    out = io.BytesIO()
+    doc = SimpleDocTemplate(out, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    elems = [Paragraph(f'<b>{school}</b>', styles['Title']),
+             Paragraph(f'Test Portal Passwords — {label}', styles['Heading2']),
+             Spacer(1, 6 * mm)]
+    data = [['S/N', 'Student ID', 'Name', 'Password']] + [[str(c) for c in row] for row in rows]
+    t = Table(data, colWidths=[14 * mm, 32 * mm, 78 * mm, 36 * mm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d6a4e')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cccccc')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f3f6f4')]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (3, 1), (3, -1), 'Courier-Bold'),
+    ]))
+    elems.append(t)
+    doc.build(elems)
+    out.seek(0)
+    return Response(out.getvalue(), mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename=passwords_{safe}.pdf'})
 
 
 # ============================================================================
@@ -400,7 +520,7 @@ def home():
     exams = []
     if class_id:
         q = CBTExam.query.filter(CBTExam.is_published == True,
-                                 CBTExam.exam_date == date.today(),
+                                 CBTExam.exam_date == timeutil.today(),
                                  CBTExam.class_id == class_id)
         q = q.filter((CBTExam.arm_id == None) | (CBTExam.arm_id == arm_id))
         exams = q.order_by(CBTExam.start_time, CBTExam.title).all()
@@ -446,11 +566,36 @@ def start(exam_id):
             return render_template('cbt/portal_start.html', exam=exam, student=student)
         if not existing:
             existing = CBTAttempt(exam_id=exam.id, student_id=student.id,
-                                  started_at=datetime.now(), total=exam.total_marks)
+                                  started_at=timeutil.now(), total=exam.total_marks)
             db.session.add(existing)
             db.session.commit()
         return redirect(url_for('cbt_portal.take', exam_id=exam.id))
     return render_template('cbt/portal_start.html', exam=exam, student=student)
+
+
+def _deadline(attempt, exam):
+    return attempt.started_at + timedelta(minutes=exam.duration_minutes or 30)
+
+
+def _finalize(attempt, exam):
+    """Grade from saved answers, apply the exam's scaling, mark Submitted."""
+    raw_score = 0.0
+    raw_total = exam.raw_total
+    saved = {a.question_id: a for a in attempt.answers}
+    for q in exam.questions.all():
+        ans = saved.get(q.id)
+        correct = bool(ans and ans.selected_option == q.correct_option)
+        if ans:
+            ans.is_correct = correct
+        if correct:
+            raw_score += q.marks or 0
+    attempt.raw_score = raw_score
+    attempt.raw_total = raw_total
+    attempt.total = exam.total_marks
+    attempt.score = exam.scale(raw_score)
+    attempt.status = 'Submitted'
+    attempt.submitted_at = timeutil.now()
+    db.session.commit()
 
 
 @cbt_portal_bp.route('/<int:exam_id>/take')
@@ -466,13 +611,41 @@ def take(exam_id):
         return redirect(url_for('cbt_portal.start', exam_id=exam.id))
     if attempt.status == 'Submitted':
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
+    # Timer already expired while away -> auto-submit from saved answers.
+    remaining = int((_deadline(attempt, exam) - timeutil.now()).total_seconds())
+    if remaining <= 0:
+        _finalize(attempt, exam)
+        flash('Time was up — your test was submitted automatically.', 'info')
+        return redirect(url_for('cbt_portal.result', exam_id=exam.id))
     questions = exam.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     if exam.shuffle:
         random.Random(attempt.id).shuffle(questions)   # stable per attempt
-    deadline = attempt.started_at + timedelta(minutes=exam.duration_minutes or 30)
-    remaining = int((deadline - datetime.now()).total_seconds())
+    saved = {a.question_id: a.selected_option for a in attempt.answers}
     return render_template('cbt/portal_take.html', exam=exam, student=student,
-        questions=questions, attempt=attempt, remaining=max(remaining, 0))
+        questions=questions, attempt=attempt, remaining=remaining, saved=saved)
+
+
+@cbt_portal_bp.route('/<int:exam_id>/answer', methods=['POST'])
+@cbt_login_required
+def answer(exam_id):
+    """Autosave a single answer so a refresh / disconnect never loses progress."""
+    student = _current_student()
+    attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
+    if not attempt or attempt.status == 'Submitted':
+        return jsonify({'ok': False}), 400
+    qid = request.form.get('question_id', type=int)
+    sel = (request.form.get('option') or '').strip().upper() or None
+    q = CBTQuestion.query.filter_by(id=qid, exam_id=exam_id).first()
+    if not q:
+        return jsonify({'ok': False}), 400
+    ans = CBTAnswer.query.filter_by(attempt_id=attempt.id, question_id=qid).first()
+    if not ans:
+        ans = CBTAnswer(attempt_id=attempt.id, question_id=qid)
+        db.session.add(ans)
+    ans.selected_option = sel
+    ans.is_correct = (sel == q.correct_option)
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 @cbt_portal_bp.route('/<int:exam_id>/submit', methods=['POST'])
@@ -485,26 +658,18 @@ def submit(exam_id):
         return redirect(url_for('cbt_portal.home'))
     if attempt.status == 'Submitted':
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
-
-    score = 0.0
-    total = 0.0
+    # Persist any answers posted with the final submit (covers JS-off / last picks).
     for q in exam.questions.all():
-        total += q.marks or 0
+        if f'q_{q.id}' not in request.form:
+            continue
         sel = (request.form.get(f'q_{q.id}') or '').strip().upper() or None
-        correct = sel == q.correct_option
-        if correct:
-            score += q.marks or 0
         ans = CBTAnswer.query.filter_by(attempt_id=attempt.id, question_id=q.id).first()
         if not ans:
             ans = CBTAnswer(attempt_id=attempt.id, question_id=q.id)
             db.session.add(ans)
         ans.selected_option = sel
-        ans.is_correct = correct
-    attempt.score = score
-    attempt.total = total
-    attempt.status = 'Submitted'
-    attempt.submitted_at = datetime.now()
-    db.session.commit()
+    db.session.flush()
+    _finalize(attempt, exam)
     return redirect(url_for('cbt_portal.result', exam_id=exam.id))
 
 

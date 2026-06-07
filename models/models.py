@@ -10,8 +10,12 @@ db = SQLAlchemy()
 
 
 def local_now():
-    """Return current local datetime"""
-    return datetime.now()
+    """Current datetime in the configured site timezone (naive wall-clock)."""
+    try:
+        from utils.timeutil import now as _now
+        return _now()
+    except Exception:
+        return datetime.now()
 
 
 # ============================================================================
@@ -50,8 +54,10 @@ class Student(db.Model):
     graduation_date = db.Column(db.Date)
     graduation_session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
 
-    # CBT / student portal login password
+    # CBT / student portal login password (plaintext kept so it can be
+    # re-printed/exported by class — these are low-sensitivity exam passwords).
     portal_password_hash = db.Column(db.String(256))
+    portal_password_plain = db.Column(db.String(60))
 
     # Relationships
     parent_contacts = db.relationship('ParentContact', backref='student', lazy='dynamic', cascade='all, delete-orphan')
@@ -89,6 +95,7 @@ class Student(db.Model):
     
     def set_portal_password(self, password):
         self.portal_password_hash = generate_password_hash(password)
+        self.portal_password_plain = password
 
     def check_portal_password(self, password):
         return bool(self.portal_password_hash) and check_password_hash(self.portal_password_hash, password)
@@ -1050,13 +1057,32 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
-    # cbt_exams time window (added after initial release).
+    # cbt_exams time window + scaled total (added after initial release).
     try:
         ce_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_exams')}
         if 'start_time' not in ce_cols:
             statements.append('ALTER TABLE cbt_exams ADD COLUMN start_time VARCHAR(5)')
         if 'end_time' not in ce_cols:
             statements.append('ALTER TABLE cbt_exams ADD COLUMN end_time VARCHAR(5)')
+        if 'max_score' not in ce_cols:
+            statements.append('ALTER TABLE cbt_exams ADD COLUMN max_score FLOAT')
+    except Exception:
+        pass
+
+    # cbt_attempts raw score columns.
+    try:
+        ca_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_attempts')}
+        if 'raw_score' not in ca_cols:
+            statements.append('ALTER TABLE cbt_attempts ADD COLUMN raw_score FLOAT DEFAULT 0')
+        if 'raw_total' not in ca_cols:
+            statements.append('ALTER TABLE cbt_attempts ADD COLUMN raw_total FLOAT DEFAULT 0')
+    except Exception:
+        pass
+
+    # students.portal_password_plain (export student portal passwords later).
+    try:
+        if 'portal_password_plain' not in existing:
+            statements.append('ALTER TABLE students ADD COLUMN portal_password_plain VARCHAR(60)')
     except Exception:
         pass
 

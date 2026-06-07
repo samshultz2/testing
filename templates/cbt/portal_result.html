@@ -7,6 +7,9 @@
     <p class="text-muted">{{ exam.title }}{% if exam.subject %} · {{ exam.subject.name }}{% endif %}</p>
     <div style="font-size:2.4rem;font-weight:800;font-family:'Space Grotesk',sans-serif;color:var(--primary);">{{ attempt.score }} / {{ attempt.total }}</div>
     <div class="badge {{ 'badge-success' if attempt.percentage>=50 else 'badge-danger' }}" style="font-size:1rem;">{{ attempt.percentage }}%</div>
+    {% if attempt.raw_total and attempt.total != attempt.raw_total %}
+    <div class="text-muted text-sm" style="margin-top:.5rem;">Raw: {{ attempt.raw_score }} / {{ attempt.raw_total }} correct &nbsp;·&nbsp; scaled to {{ attempt.total }}</div>
+    {% endif %}
     <p class="text-muted text-sm" style="margin-top:1rem;">Submitted {{ attempt.submitted_at.strftime('%d %b %Y, %I:%M %p') if attempt.submitted_at }}</p>
     <a href="{{ url_for('cbt_portal.home') }}" class="btn btn-primary w-100" style="margin-top:.5rem;"><i class="fas fa-arrow-left"></i> Back to my tests</a>
 </div>

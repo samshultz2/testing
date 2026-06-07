@@ -42,7 +42,12 @@ def school_settings():
             SchoolSettings.set('school_phone', request.form.get('school_phone', ''), 'string', 'School phone number')
             SchoolSettings.set('school_email', request.form.get('school_email', ''), 'string', 'School email')
             SchoolSettings.set('school_motto', request.form.get('school_motto', ''), 'string', 'School motto')
-            
+            tz = (request.form.get('timezone') or '').strip()
+            if tz:
+                SchoolSettings.set('timezone', tz, 'string', 'Site-wide timezone')
+                from utils.timeutil import clear_cache
+                clear_cache()
+
             flash('School settings updated!', 'success')
         except Exception as e:
             flash(f'Error: {str(e)}', 'error')
@@ -50,7 +55,9 @@ def school_settings():
         return redirect(url_for('settings.school_settings'))
     
     settings = {s.key: s.value for s in SchoolSettings.query.all()}
-    return render_template('settings/school.html', settings=settings)
+    from utils.timeutil import all_timezones, get_timezone
+    return render_template('settings/school.html', settings=settings,
+        timezones=all_timezones(), current_tz=get_timezone())
 
 
 @settings_bp.route('/academic', methods=['GET', 'POST'])
