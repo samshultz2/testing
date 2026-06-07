@@ -224,6 +224,39 @@ class CBTLoginEvent(db.Model):
         return None
 
 
+class CBTDeviceSession(db.Model):
+    """A live device a student's portal session is active on, keyed by a
+    per-browser token. Used to flag one student appearing on two devices at
+    once (concurrent sessions) — sequential reuse of a lab laptop is fine
+    because the old device simply stops pinging."""
+    __tablename__ = 'cbt_device_sessions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    exam_id = db.Column(db.Integer, db.ForeignKey('cbt_exams.id'))
+    client_token = db.Column(db.String(64), nullable=False)   # per-browser id
+    ip_address = db.Column(db.String(60))
+    browser = db.Column(db.String(40))
+    os = db.Column(db.String(40))
+    device_type = db.Column(db.String(20))
+    device_model = db.Column(db.String(80))
+    is_mobile = db.Column(db.Boolean, default=False)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    first_seen = db.Column(db.DateTime, default=local_now)
+    last_seen = db.Column(db.DateTime, default=local_now)
+
+    student = db.relationship('Student')
+
+    __table_args__ = (db.UniqueConstraint('student_id', 'client_token',
+                                          name='uq_cbt_device_session'),)
+
+    @property
+    def label(self):
+        bits = [self.device_model or self.device_type, self.browser, self.os]
+        return ' · '.join(b for b in bits if b) or (self.ip_address or 'Unknown device')
+
+
 class QuestionBank(db.Model):
     """A reusable question, tagged by subject/topic, copied into exams as needed."""
     __tablename__ = 'question_bank'

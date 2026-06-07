@@ -142,6 +142,12 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     var FLAG_URL="{{ url_for('cbt_portal.flag', exam_id=exam.id) }}";
     var UNLOCK_URL="{{ url_for('cbt_portal.supervisor_unlock', exam_id=exam.id) }}";
     var PING_URL="{{ url_for('cbt_portal.ping', exam_id=exam.id) }}";
+    // Stable per-browser id (shared with the fingerprint capture) so the server
+    // can detect the same student writing from two devices at once.
+    var devTok; try{ devTok=localStorage.getItem('cbt_dev_tok');
+        if(!devTok){ devTok=(self.crypto&&crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(16).slice(2)));
+            localStorage.setItem('cbt_dev_tok',devTok); } }catch(e){ devTok=''; }
+    window.__cbtDevTok=devTok;
     var RESULT_URL="{{ url_for('cbt_portal.result', exam_id=exam.id) }}";
     var overlay=document.getElementById('warnOverlay'), warnMsg=document.getElementById('warnMsg');
     var pauseBar=document.getElementById('pauseBar'), pauseLeft=document.getElementById('pauseLeft');
@@ -218,7 +224,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         {% endif %}
 
         // heartbeat so admins can spot disconnects
-        setInterval(function(){ if(!submitted) fetch(PING_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token}).catch(function(){}); }, 20000);
+        setInterval(function(){ if(!submitted) fetch(PING_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token+'&client_token='+encodeURIComponent(window.__cbtDevTok||'')}).catch(function(){}); }, 20000);
     }
 
     form.addEventListener('submit',function(e){

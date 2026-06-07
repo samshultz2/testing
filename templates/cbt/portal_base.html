@@ -72,9 +72,15 @@
     // Best-effort device fingerprint for exam-integrity investigations.
     (function(){
         var token=document.querySelector('meta[name=csrf-token]').content;
+        // Stable per-browser id so the server can tell devices apart.
+        var devTok;
+        try{ devTok=localStorage.getItem('cbt_dev_tok');
+            if(!devTok){ devTok=(self.crypto&&crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(16).slice(2)));
+                localStorage.setItem('cbt_dev_tok',devTok); } }catch(e){ devTok=''; }
+        window.__cbtDevTok=devTok;
         function send(extra){
             var b=new URLSearchParams(Object.assign({
-                _csrf_token:token,
+                _csrf_token:token, client_token:devTok,
                 screen:(screen.width+'x'+screen.height),
                 viewport:(window.innerWidth+'x'+window.innerHeight),
                 timezone:(Intl.DateTimeFormat().resolvedOptions().timeZone||''),

@@ -12,6 +12,7 @@
 .bar > i{display:block;height:100%;background:var(--primary)}
 .flash-row{animation:fl 1s}@keyframes fl{from{background:rgba(231,74,59,.18)}to{background:transparent}}
 .mobile-row{box-shadow:inset 3px 0 0 #f6c23e}
+.concurrent-row{box-shadow:inset 4px 0 0 #e74a3b;background:rgba(231,74,59,.06)}
 .mob-tag{display:inline-block;margin-left:.3rem;font-size:.65rem;font-weight:700;color:#9a6b00;background:#fff3cd;border-radius:4px;padding:.05rem .3rem;vertical-align:middle}
 </style>
 {% endblock %}
@@ -26,6 +27,7 @@
     <div class="mon-chip"><span>Writing</span> <strong id="cIn">—</strong></div>
     <div class="mon-chip"><span>Submitted</span> <strong id="cDone">—</strong></div>
     <div class="mon-chip"><span><i class="fas fa-mobile-screen"></i> Mobile</span> <strong id="cMobile">—</strong></div>
+    <div class="mon-chip" id="concChip" style="display:none;border-color:#e74a3b"><span><i class="fas fa-triangle-exclamation"></i> 2 devices</span> <strong id="cConc">0</strong></div>
     <div class="mon-chip"><span>Server</span> <strong id="cTime">—</strong></div>
     <label class="text-sm" style="margin-left:auto;"><input type="checkbox" id="mobileOnly"> <i class="fas fa-mobile-screen"></i> Mobile only</label>
     <label class="text-sm"><input type="checkbox" id="auto" checked> Auto-refresh (5s)</label>
@@ -62,6 +64,9 @@
         document.getElementById('cDone').textContent=d.submitted;
         document.getElementById('cTime').textContent=d.server_time;
         document.getElementById('cMobile').textContent=d.rows.filter(function(r){return r.device&&r.device.is_mobile;}).length;
+        var nConc=d.concurrent||0;
+        document.getElementById('cConc').textContent=nConc;
+        document.getElementById('concChip').style.display=nConc?'':'none';
         var body=document.getElementById('monBody');
         var rows=mobileOnly ? d.rows.filter(function(r){return r.device&&r.device.is_mobile;}) : d.rows;
         if(!rows.length){ body.innerHTML='<tr><td colspan="7" class="text-muted" style="padding:1.2rem;">'+(mobileOnly?'No mobile devices.':'No one has started yet.')+'</td></tr>'; return; }
@@ -76,8 +81,10 @@
             var flagged = (prev[r.id]!=null && r.violations>prev[r.id]);
             prev[r.id]=r.violations;
             var isMob = r.device && r.device.is_mobile;
-            return '<tr class="'+(flagged?'flash-row ':'')+(isMob?'mobile-row':'')+'">'
-                +'<td data-label="Student">'+r.name+(isMob?'<span class="mob-tag"><i class="fas fa-mobile-screen"></i> mobile</span>':'')+'<div class="text-muted text-sm">'+r.sid+'</div></td>'
+            var concTag = r.concurrent ? '<span class="mob-tag" style="color:#a11;background:#fde2e2" title="'+esc((r.concurrent_devices||[]).join('  |  '))+'"><i class="fas fa-triangle-exclamation"></i> 2 devices</span>' : '';
+            var rowCls = (flagged?'flash-row ':'')+(r.concurrent?'concurrent-row':(isMob?'mobile-row':''));
+            return '<tr class="'+rowCls+'">'
+                +'<td data-label="Student">'+r.name+(isMob?'<span class="mob-tag"><i class="fas fa-mobile-screen"></i> mobile</span>':'')+concTag+'<div class="text-muted text-sm">'+r.sid+'</div></td>'
                 +'<td data-label="Status">'+st+'</td>'
                 +'<td data-label="Progress"><div class="bar"><i style="width:'+pct+'%"></i></div><span class="text-sm">'+r.answered+'/'+r.questions+'</span></td>'
                 +'<td data-label="Time left">'+(r.status==='In progress'?fmt(r.remaining):'—')+'</td>'

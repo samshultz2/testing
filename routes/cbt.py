@@ -22,8 +22,9 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import func
 
 from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
-                    QuestionBank, CBTLoginEvent, Subject, SchoolClass, ClassArm, Term,
-                    Student, StudentEnrollment, ClassArmAssignment, SchoolSettings)
+                    QuestionBank, CBTLoginEvent, CBTDeviceSession, Subject, SchoolClass,
+                    ClassArm, Term, Student, StudentEnrollment, ClassArmAssignment,
+                    SchoolSettings)
 from utils.access_control import login_required, admin_required, is_admin
 from utils import timeutil
 from utils.useragent import parse_user_agent
@@ -486,12 +487,21 @@ def monitor_data(exam_id):
            .order_by(CBTLoginEvent.created_at.desc()).all())
     for fp in fps:
         fp_by_student.setdefault(fp.student_id, fp)
+    # Live devices per student (pinged recently) -> flag concurrent sessions.
+    active_cut = now - timedelta(seconds=DEVICE_ACTIVE_WINDOW)
+    active_by_student = {}
+    for ds in (CBTDeviceSession.query
+               .filter(CBTDeviceSession.exam_id == exam_id,
+                       CBTDeviceSession.last_seen >= active_cut).all()):
+        active_by_student.setdefault(ds.student_id, []).append(ds)
     rows = []
     for a in e.attempts.join(Student).order_by(Student.surname, Student.first_name).all():
         deadline = _deadline(a, e)
         remaining = int((deadline - now).total_seconds())
         seen_ago = int((now - a.last_seen).total_seconds()) if a.last_seen else None
         paused = bool(a.paused_until and now < a.paused_until)
+        active_devs = active_by_student.get(a.student_id, [])
+        concurrent = a.status == 'In progress' and len(active_devs) >= 2
         fp = fp_by_student.get(a.student_id)
         device = None
         if fp:
@@ -521,10 +531,13 @@ def monitor_data(exam_id):
             'score': a.score if a.status == 'Submitted' else None,
             'total': a.total,
             'device': device,
+            'concurrent': concurrent,
+            'concurrent_devices': [d.label for d in active_devs] if concurrent else [],
         })
     inprog = sum(1 for r in rows if r['status'] == 'In progress')
     return jsonify({'rows': rows, 'in_progress': inprog,
                     'submitted': sum(1 for r in rows if r['status'] == 'Submitted'),
+                    'concurrent': sum(1 for r in rows if r['concurrent']),
                     'server_time': now.strftime('%H:%M:%S')})
 
 
@@ -864,6 +877,43 @@ def _record_login_event(student, event='login', exam_id=None):
         return None
 
 
+# A device is "still live" if it pinged within this window (≈2 missed pings).
+DEVICE_ACTIVE_WINDOW = 50
+
+
+def _touch_device_session(student, exam_id, client_fields=None):
+    """Upsert the live device (per-browser token) the student is active on."""
+    token = (request.form.get('client_token') or '').strip()[:64]
+    if not student or not token:
+        return None
+    try:
+        sess = CBTDeviceSession.query.filter_by(
+            student_id=student.id, client_token=token).first()
+        if not sess:
+            sess = CBTDeviceSession(student_id=student.id, client_token=token,
+                                    first_seen=timeutil.now())
+            db.session.add(sess)
+        if exam_id:
+            sess.exam_id = exam_id
+        info = parse_user_agent(request.headers.get('User-Agent') or '')
+        sess.ip_address = (request.headers.get('X-Forwarded-For', request.remote_addr) or '')[:60]
+        sess.browser = info['browser']
+        sess.os = info['os']
+        sess.device_type = info['device_type']
+        sess.is_mobile = info['is_mobile']
+        if info.get('model'):
+            sess.device_model = info['model']
+        for k in ('device_model', 'latitude', 'longitude'):
+            if client_fields and client_fields.get(k) is not None:
+                setattr(sess, k, client_fields[k])
+        sess.last_seen = timeutil.now()
+        db.session.commit()
+        return sess
+    except Exception:
+        db.session.rollback()
+        return None
+
+
 @cbt_portal_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get(PORTAL_KEY):
@@ -1092,6 +1142,7 @@ def ping(exam_id):
     if attempt and attempt.status == 'In progress':
         attempt.last_seen = timeutil.now()
         db.session.commit()
+        _touch_device_session(student, exam_id)
     return jsonify({'ok': True})
 
 
@@ -1123,14 +1174,20 @@ def fingerprint():
     model = _s('model', 80)
     if model:
         ev.device_model = model
+    cf = {}
     for col, key in (('latitude', 'lat'), ('longitude', 'lon'), ('geo_accuracy', 'acc')):
         try:
             val = request.form.get(key)
             if val not in (None, ''):
                 setattr(ev, col, float(val))
+                cf[col] = float(val)
         except (ValueError, TypeError):
             pass
+    if model:
+        cf['device_model'] = model
     db.session.commit()
+    # Also register this as a live device for concurrent-session detection.
+    _touch_device_session(student, ev.exam_id, client_fields=cf)
     return jsonify({'ok': True})
 
 
