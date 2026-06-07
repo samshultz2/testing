@@ -41,6 +41,17 @@
 <option value="readonly" {% if user.role == 'readonly' %}selected{% endif %}>View Only</option>
 </select></div>
 </div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Branch scope</label>
+<select name="scope" class="form-control" id="scopeSelect" onchange="toggleScope()">
+<option value="branch" {% if user.scope != 'central' %}selected{% endif %}>Single branch</option>
+<option value="central" {% if user.scope == 'central' %}selected{% endif %}>Central (all branches)</option>
+</select></div>
+<div class="form-group" id="branchPick"><label class="form-label">Branch</label>
+<select name="branch_id" class="form-control">
+{% for b in branches %}<option value="{{ b.id }}" {% if user.branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+</select></div>
+</div>
 <div class="form-group"><label class="toggle-label"><input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}> <span>Account Active</span></label></div>
 </div>
 </div>
@@ -86,6 +97,10 @@ function toggleTeacherOptions(){
     document.getElementById('teacherPermissions').style.display = role === 'teacher' ? 'block' : 'none';
     document.getElementById('moduleAccess').style.display = role === 'admin' ? 'none' : 'block';
 }
-toggleTeacherOptions();
+function toggleScope(){
+    const central = document.getElementById('scopeSelect').value === 'central';
+    document.getElementById('branchPick').style.display = central ? 'none' : 'block';
+}
+toggleTeacherOptions(); toggleScope();
 </script>
 {% endblock %}

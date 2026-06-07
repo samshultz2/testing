@@ -2,6 +2,7 @@
 Database models for the Student Management System
 All models use SQLAlchemy ORM for database operations
 """
+import os
 from datetime import datetime, date
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -28,6 +29,7 @@ class Student(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.String(20), unique=True, nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     first_name = db.Column(db.String(50), nullable=False)
     middle_name = db.Column(db.String(50))
     surname = db.Column(db.String(50), nullable=False)
@@ -226,6 +228,7 @@ class ClassArmAssignment(db.Model):
     class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'), nullable=False)
     arm_id = db.Column(db.Integer, db.ForeignKey('class_arms.id'), nullable=False)
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     form_teacher_name = db.Column(db.String(100))
     form_teacher_phone = db.Column(db.String(15))
     created_at = db.Column(db.DateTime, default=local_now)
@@ -859,6 +862,10 @@ class User(db.Model):
     # When True, the user may browse but cannot create/edit/delete anything
     # (enforced globally for unsafe HTTP methods). The 'readonly' role implies this too.
     view_only = db.Column(db.Boolean, default=False)
+    # Multi-branch scope: 'central' users see every branch (Director of Studies,
+    # Exams & Standards, IT); 'branch' users are limited to their own branch_id.
+    scope = db.Column(db.String(10), default='branch')
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -868,7 +875,13 @@ class User(db.Model):
     # Relationships
     teacher_profile = db.relationship('Teacher', backref='user', uselist=False, cascade='all, delete-orphan')
     created_by = db.relationship('User', remote_side=[id], backref='created_users')
-    
+    branch = db.relationship('Branch')
+
+    @property
+    def is_central(self):
+        """A central user sees across all branches (not limited to branch_id)."""
+        return self.scope == 'central' or self.role in ('super_admin', 'admin')
+
     def set_password(self, password):
         """Hash and set password"""
         self.password_hash = generate_password_hash(password)
@@ -930,7 +943,8 @@ class Teacher(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True, nullable=False)
     employee_id = db.Column(db.String(20), unique=True)
-    
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+
     # Permissions
     can_mark_attendance = db.Column(db.Boolean, default=True)
     can_enter_results = db.Column(db.Boolean, default=False)
@@ -1167,10 +1181,57 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # Multi-branch: branch_id on branch-owned tables + users.scope (Stage 1).
+    for tbl in ('students', 'teachers', 'class_arm_assignments', 'staff_members', 'users'):
+        try:
+            cols = {c['name'] for c in inspect(db.engine).get_columns(tbl)}
+            if 'branch_id' not in cols:
+                statements.append(f'ALTER TABLE {tbl} ADD COLUMN branch_id INTEGER')
+        except Exception:
+            pass
+    try:
+        u_cols = {c['name'] for c in inspect(db.engine).get_columns('users')}
+        if 'scope' not in u_cols:
+            statements.append("ALTER TABLE users ADD COLUMN scope VARCHAR(10) DEFAULT 'branch'")
+    except Exception:
+        pass
+
     if statements:
         with db.engine.begin() as conn:
             for stmt in statements:
                 conn.execute(text(stmt))
+
+
+def _seed_branches():
+    """Create the default branch and assign any unbranched data to it.
+
+    Idempotent: only seeds the branch once, only backfills NULL branch_ids.
+    Existing admins become 'central' so they keep seeing every branch.
+    """
+    from sqlalchemy import text
+    from models.models_branch import Branch
+    try:
+        default = Branch.get_default()
+        if default is None:
+            # POSYHUB_DEFAULT_BRANCH lets a fresh install name its first branch;
+            # this install's existing data belongs to the "Jemila" branch.
+            name = os.environ.get('POSYHUB_DEFAULT_BRANCH', 'Jemila')
+            default = Branch(name=name, is_default=True, is_active=True)
+            db.session.add(default)
+            db.session.commit()
+        bid = default.id
+        with db.engine.begin() as conn:
+            for tbl in ('students', 'teachers', 'class_arm_assignments',
+                        'staff_members', 'users'):
+                conn.execute(text(
+                    f'UPDATE {tbl} SET branch_id = :bid WHERE branch_id IS NULL'),
+                    {'bid': bid})
+            # Existing admins keep cross-branch visibility.
+            conn.execute(text(
+                "UPDATE users SET scope = 'central' "
+                "WHERE role IN ('super_admin', 'admin')"))
+    except Exception:
+        db.session.rollback()
 
 
 def init_db(app):
@@ -1178,6 +1239,7 @@ def init_db(app):
     with app.app_context():
         db.create_all()
         _ensure_student_exam_columns()
+        _seed_branches()
 
         # Seed standard course admission requirements (idempotent).
         try:

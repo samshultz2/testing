@@ -1,0 +1,45 @@
+# Multi-branch support
+
+A school may run several branches sharing one structure. Some users are
+**central** (see every branch); others are **branch**-scoped.
+
+## Approach
+
+Single database, branch-aware rows (shared-schema multi-tenancy): branch-owned
+records carry a `branch_id`; a scoping layer (Stage 2) filters queries for
+branch users while central users bypass it.
+
+## Stages
+
+1. **Branch foundation — DONE.** `Branch` model + `branch_id` columns +
+   `User.scope`/`branch_id`. Existing data is backfilled to a default branch
+   (**Jemila** on this install); existing admins become `central`. No query
+   filtering yet — pure groundwork, no behaviour change.
+2. Scoping layer — central vs branch filtering + a branch switcher for central
+   users; extend the access gate.
+3. Role presets — the school's hierarchy (Director of Studies, Exams &
+   Standards, IT, Principal, Headmaster, HODs, Headteachers, Teachers, Bursar)
+   as configurable presets.
+4. Section/stream filters — Principal (secondary) vs Headmaster (nursery/primary);
+   HOD Arts vs Sciences.
+5. Bursar Sales & Inventory module (textbooks, workbooks, uniforms…), branch-scoped.
+
+## Stage 1 details
+
+- **Model:** `models/models_branch.py::Branch` (name, code, address, phone,
+  `is_default`, `is_active`). `Branch.get_default()` returns the default branch.
+- **Scoped tables (carry `branch_id`):** `students`, `teachers`,
+  `class_arm_assignments`, `staff_members`, `users`. More tables join in Stage 2
+  as filtering requires.
+- **User scope:** `User.scope` (`central`/`branch`) + `User.branch_id`.
+  `User.is_central` is true for `central` scope or admin roles.
+- **Migration/seed:** `init_db` → `_seed_branches()` creates the default branch
+  once (name from `POSYHUB_DEFAULT_BRANCH`, default `Jemila`), backfills any
+  `NULL` `branch_id` to it, and sets existing admins to `central`. Idempotent.
+- **Admin UI:** Settings → **Branches** (`/settings/branches`) to add/edit
+  branches and set the default. User add/edit forms gained a **Branch scope**
+  selector (central vs a specific branch).
+
+Single-branch / other schools: one branch exists and every user is effectively
+scoped to it (or central), so the feature is invisible until more branches and
+branch-scoped users are added.

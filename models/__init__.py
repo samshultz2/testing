@@ -32,9 +32,11 @@ from .models_events import SchoolEvent
 from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
                          QuestionBank, CBTLoginEvent, CBTDeviceSession)
 from .models_scratchcard import ScratchCard, ResultCheckLog
+from .models_branch import Branch
 
 __all__ = [
     'db', 'local_now', 'init_db',
+    'Branch',
     'ScratchCard', 'ResultCheckLog', 'CBTLoginEvent', 'CBTDeviceSession',
     'Student', 'ParentContact',
     'AcademicSession', 'Term', 'SchoolClass', 'ClassArm', 'ClassArmAssignment', 'StudentEnrollment',

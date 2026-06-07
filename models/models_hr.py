@@ -27,6 +27,7 @@ class StaffMember(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     staff_id = db.Column(db.String(20), unique=True)         # e.g. STF0001
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
 
     # Bio
     first_name = db.Column(db.String(60), nullable=False)

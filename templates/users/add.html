@@ -48,9 +48,24 @@
                     <option value="readonly">View Only</option>
                 </select>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Branch scope</label>
+                    <select name="scope" class="form-control" id="scopeSelect" onchange="toggleScope()">
+                        <option value="branch">Single branch</option>
+                        <option value="central">Central (all branches)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="branchPick">
+                    <label class="form-label">Branch</label>
+                    <select name="branch_id" class="form-control">
+                        {% for b in branches %}<option value="{{ b.id }}" {% if b.is_default %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
         </div>
     </div>
-    
+
     <div class="card mb-3" id="teacherPermissions">
         <div class="card-header"><h3><i class="fas fa-key"></i> Teacher Permissions</h3></div>
         <div class="card-body">
@@ -100,6 +115,10 @@ function toggleTeacherOptions(){
     document.getElementById('teacherPermissions').style.display=role==='teacher'?'block':'none';
     document.getElementById('moduleAccess').style.display=role==='admin'?'none':'block';
 }
-toggleTeacherOptions();
+function toggleScope(){
+    const central=document.getElementById('scopeSelect').value==='central';
+    document.getElementById('branchPick').style.display=central?'none':'block';
+}
+toggleTeacherOptions(); toggleScope();
 </script>
 {% endblock %}

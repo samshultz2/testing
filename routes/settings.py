@@ -26,8 +26,62 @@ def index():
     """Settings main page"""
     settings = SchoolSettings.query.all()
     settings_dict = {s.key: s.value for s in settings}
-    
+
     return render_template('settings/index.html', settings=settings_dict)
+
+
+# ---------------------------------------------------------------------------
+# Branches (multi-branch support)
+# ---------------------------------------------------------------------------
+
+@settings_bp.route('/branches')
+@admin_required
+def branches():
+    from models import Branch
+    rows = Branch.query.order_by(Branch.is_default.desc(), Branch.name).all()
+    return render_template('settings/branches.html', branches=rows)
+
+
+@settings_bp.route('/branches/add', methods=['POST'])
+@admin_required
+def add_branch():
+    from models import db, Branch
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash('Branch name is required.', 'error')
+        return redirect(url_for('settings.branches'))
+    if Branch.query.filter_by(name=name).first():
+        flash('A branch with that name already exists.', 'error')
+        return redirect(url_for('settings.branches'))
+    first = Branch.query.count() == 0
+    db.session.add(Branch(
+        name=name,
+        code=(request.form.get('code') or '').strip() or None,
+        address=(request.form.get('address') or '').strip() or None,
+        phone=(request.form.get('phone') or '').strip() or None,
+        is_default=first))   # the very first branch is the default
+    db.session.commit()
+    flash(f'Branch "{name}" added.', 'success')
+    return redirect(url_for('settings.branches'))
+
+
+@settings_bp.route('/branches/<int:branch_id>/edit', methods=['POST'])
+@admin_required
+def edit_branch(branch_id):
+    from models import db, Branch
+    b = Branch.query.get_or_404(branch_id)
+    b.name = (request.form.get('name') or b.name).strip()
+    b.code = (request.form.get('code') or '').strip() or None
+    b.address = (request.form.get('address') or '').strip() or None
+    b.phone = (request.form.get('phone') or '').strip() or None
+    b.is_active = request.form.get('is_active') == 'on'
+    if request.form.get('make_default') == 'on' and not b.is_default:
+        Branch.query.update({Branch.is_default: False})
+        b.is_default = True
+        b.is_active = True
+    db.session.commit()
+    flash('Branch updated.', 'success')
+    return redirect(url_for('settings.branches'))
 
 
 @settings_bp.route('/school', methods=['GET', 'POST'])

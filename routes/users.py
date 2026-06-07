@@ -118,6 +118,10 @@ def add_user():
                 selected = [m for m in request.form.getlist('modules') if m in MODULES]
                 user.set_modules(selected)
             user.view_only = request.form.get('view_only') == 'on'
+            # Branch scope: central users see all branches; branch users one.
+            user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
+            user.branch_id = (None if user.scope == 'central'
+                              else request.form.get('branch_id', type=int))
             db.session.add(user)
             db.session.flush()  # Get user ID
 
@@ -126,6 +130,7 @@ def add_user():
                 teacher = Teacher(
                     user_id=user.id,
                     employee_id=Teacher.generate_employee_id(),
+                    branch_id=user.branch_id,
                     can_mark_attendance=request.form.get('can_mark_attendance') == 'on',
                     can_enter_results=request.form.get('can_enter_results') == 'on',
                     can_edit_results=request.form.get('can_edit_results') == 'on',
@@ -146,7 +151,9 @@ def add_user():
             flash(f'Error creating user: {str(e)}', 'error')
             return redirect(url_for('users.add_user'))
     
-    return render_template('users/add.html', modules=MODULES)
+    from models import Branch
+    return render_template('users/add.html', modules=MODULES,
+                           branches=Branch.query.order_by(Branch.name).all())
 
 
 @users_bp.route('/<int:user_id>')
@@ -165,7 +172,8 @@ def edit_user(user_id):
     
     if request.method == 'POST':
         # Snapshot access-related fields so we can audit any change.
-        before = (user.role, sorted(user.module_list), bool(user.view_only))
+        before = (user.role, sorted(user.module_list), bool(user.view_only),
+                  user.scope, user.branch_id)
 
         user.email = request.form.get('email', '').strip() or None
         user.full_name = request.form.get('full_name', '').strip()
@@ -180,6 +188,10 @@ def edit_user(user_id):
             selected = [m for m in request.form.getlist('modules') if m in MODULES]
             user.set_modules(selected)
         user.view_only = request.form.get('view_only') == 'on'
+        # Branch scope.
+        user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
+        user.branch_id = (None if user.scope == 'central'
+                          else request.form.get('branch_id', type=int))
         
         # Update password if provided
         new_password = request.form.get('new_password', '')
@@ -205,22 +217,27 @@ def edit_user(user_id):
             teacher.can_edit_results = request.form.get('can_edit_results') == 'on'
             teacher.can_view_student_details = request.form.get('can_view_student_details') == 'on'
             teacher.can_print_reports = request.form.get('can_print_reports') == 'on'
-        
+            teacher.branch_id = user.branch_id
+
         try:
             db.session.commit()
-            after = (user.role, sorted(user.module_list), bool(user.view_only))
+            after = (user.role, sorted(user.module_list), bool(user.view_only),
+                     user.scope, user.branch_id)
             if after != before:
                 log_action('user.permissions',
                            f'{user.username}: role {before[0]}→{after[0]}, '
                            f'modules {before[1]}→{after[1]}, '
-                           f'view_only {before[2]}→{after[2]}')
+                           f'view_only {before[2]}→{after[2]}, '
+                           f'scope {before[3]}→{after[3]}, branch {before[4]}→{after[4]}')
             flash('User updated successfully!', 'success')
             return redirect(url_for('users.view_user', user_id=user_id))
         except Exception as e:
             db.session.rollback()
             flash(f'Error updating user: {str(e)}', 'error')
     
-    return render_template('users/edit.html', user=user, modules=MODULES)
+    from models import Branch
+    return render_template('users/edit.html', user=user, modules=MODULES,
+                           branches=Branch.query.order_by(Branch.name).all())
 
 
 @users_bp.route('/<int:user_id>/delete', methods=['POST'])

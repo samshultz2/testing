@@ -431,6 +431,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('settings.branches') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') and 'branch' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-code-branch"></i><span>Branches</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('main.audit_log') }}" class="nav-link {% if request.endpoint == 'main.audit_log' %}active{% endif %}">
                             <i class="fas fa-clipboard-list"></i><span>Audit Log</span>
                         </a>
