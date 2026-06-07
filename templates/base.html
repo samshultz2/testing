@@ -45,7 +45,9 @@
                         </a>
                     </li>
                     
+                    {% if can_access_module('students') or can_access_module('admissions') %}
                     <li class="nav-section">Students</li>
+                    {% if can_access_module('students') %}
                     <li class="nav-item">
                         <a href="{{ url_for('main.students_list') }}" class="nav-link {% if 'students' in request.endpoint %}active{% endif %}">
                             <i class="fas fa-users"></i><span>All Students</span>
@@ -56,18 +58,26 @@
                             <i class="fas fa-user-plus"></i><span>Add Student</span>
                         </a>
                     </li>
+                    {% endif %}
+                    {% if can_access_module('admissions') %}
                     <li class="nav-item">
                         <a href="{{ url_for('admissions.dashboard') }}" class="nav-link {% if 'admissions' in request.endpoint %}active{% endif %}">
                             <i class="fas fa-clipboard-user"></i><span>Admissions</span>
                         </a>
                     </li>
+                    {% endif %}
+                    {% endif %}
 
+                    {% if can_access_module('events') or can_access_module('academics') %}
                     <li class="nav-section">Academics</li>
+                    {% if can_access_module('events') %}
                     <li class="nav-item">
                         <a href="{{ url_for('events.calendar') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('events.') %}active{% endif %}">
                             <i class="fas fa-calendar-day"></i><span>Calendar &amp; Events</span>
                         </a>
                     </li>
+                    {% endif %}
+                    {% if can_access_module('academics') %}
                     <li class="nav-item">
                         <a href="{{ url_for('academics.sessions_list') }}" class="nav-link">
                             <i class="fas fa-calendar-alt"></i><span>Sessions</span>
@@ -98,7 +108,10 @@
                             <i class="fas fa-copy"></i><span>Copy Setup</span>
                         </a>
                     </li>
-                    
+                    {% endif %}
+                    {% endif %}
+
+                    {% if can_access_module('attendance') %}
                     <li class="nav-section">Attendance</li>
                     <li class="nav-item">
                         <a href="{{ url_for('attendance.mark_attendance_page') }}" class="nav-link">
@@ -131,6 +144,8 @@
                         </a>
                     </li>
                     
+                    {% endif %}
+                    {% if can_access_module('timetable') %}
                     <li class="nav-section">Timetable</li>
                     <li class="nav-item">
                         <a href="{{ url_for('timetable.index') }}" class="nav-link">
@@ -138,6 +153,8 @@
                         </a>
                     </li>
                     
+                    {% endif %}
+                    {% if can_access_module('promotion') %}
                     <li class="nav-section">Promotion</li>
                     <li class="nav-item">
                         <a href="{{ url_for('promotion.index') }}" class="nav-link">
@@ -155,6 +172,8 @@
                         </a>
                     </li>
                     
+                    {% endif %}
+                    {% if can_access_module('cbt') %}
                     <li class="nav-section">CBT / Tests</li>
                     <li class="nav-item">
                         <a href="{{ url_for('cbt.dashboard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('cbt.') %}active{% endif %}">
@@ -167,6 +186,8 @@
                         </a>
                     </li>
 
+                    {% endif %}
+                    {% if can_access_module('results') %}
                     <li class="nav-section">Results</li>
                     <li class="nav-item">
                         <a href="{{ url_for('subjects.subjects_list') }}" class="nav-link">
@@ -199,6 +220,8 @@
                         </a>
                     </li>
 
+                    {% endif %}
+                    {% if can_access_module('finance') %}
                     <li class="nav-section">Finance</li>
                     <li class="nav-item">
                         <a href="{{ url_for('finance.dashboard') }}" class="nav-link {% if request.endpoint == 'finance.dashboard' %}active{% endif %}">
@@ -231,6 +254,8 @@
                         </a>
                     </li>
 
+                    {% endif %}
+                    {% if can_access_module('communication') %}
                     <li class="nav-section">Communication</li>
                     <li class="nav-item">
                         <a href="{{ url_for('comms.dashboard') }}" class="nav-link {% if request.endpoint == 'comms.dashboard' %}active{% endif %}">
@@ -253,6 +278,8 @@
                         </a>
                     </li>
 
+                    {% endif %}
+                    {% if can_access_module('library') %}
                     <li class="nav-section">Library</li>
                     <li class="nav-item">
                         <a href="{{ url_for('library.dashboard') }}" class="nav-link {% if request.endpoint == 'library.dashboard' %}active{% endif %}">
@@ -270,6 +297,8 @@
                         </a>
                     </li>
 
+                    {% endif %}
+                    {% if can_access_module('hr') %}
                     <li class="nav-section">Staff / HR</li>
                     <li class="nav-item">
                         <a href="{{ url_for('hr.dashboard') }}" class="nav-link {% if request.endpoint == 'hr.dashboard' %}active{% endif %}">
@@ -297,6 +326,8 @@
                         </a>
                     </li>
 
+                    {% endif %}
+                    {% if can_access_module('external_exams') %}
                     <li class="nav-section">External Exams</li>
                     <li class="nav-item">
                         <a href="{{ url_for('results.waec_list') }}" class="nav-link">
@@ -339,6 +370,8 @@
                         </a>
                     </li>
                     
+                    {% endif %}
+                    {% if can_access_module('reports') %}
                     <li class="nav-section">Reports</li>
                     <li class="nav-item">
                         <a href="{{ url_for('reports.summary_report') }}" class="nav-link">
@@ -361,6 +394,8 @@
                         </a>
                     </li>
                     
+                    {% endif %}
+                    {% if session.get('role') in ('super_admin', 'admin') %}
                     <li class="nav-section">Tools</li>
                     <li class="nav-item has-submenu">
                         <a href="#" class="nav-link submenu-toggle">
@@ -385,7 +420,6 @@
                     </li>
 
                     <li class="nav-section">Settings</li>
-                    {% if session.get('role') in ('super_admin', 'admin') %}
                     <li class="nav-item">
                         <a href="{{ url_for('users.index') }}" class="nav-link">
                             <i class="fas fa-users-cog"></i><span>Users</span>
@@ -396,7 +430,6 @@
                             <i class="fas fa-clipboard-list"></i><span>Audit Log</span>
                         </a>
                     </li>
-                    {% endif %}
                     <li class="nav-item">
                         <a href="{{ url_for('settings.index') }}" class="nav-link">
                             <i class="fas fa-cog"></i><span>Settings</span>
@@ -407,6 +440,7 @@
                             <i class="fas fa-database"></i><span>Backup</span>
                         </a>
                     </li>
+                    {% endif %}
                 </ul>
             </nav>
             

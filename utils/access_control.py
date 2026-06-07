@@ -15,6 +15,100 @@ def get_current_user():
     return None
 
 
+# =============================================================================
+# FINE-GRAINED MODULE PERMISSIONS
+# =============================================================================
+
+# All grantable modules: key -> human label (order = display order).
+MODULES = {
+    'students': 'Students',
+    'admissions': 'Admissions',
+    'academics': 'Academics (sessions/classes)',
+    'events': 'Calendar & Events',
+    'attendance': 'Attendance',
+    'results': 'Subjects & Scores',
+    'external_exams': 'WAEC / JAMB / Analytics',
+    'cbt': 'CBT / Online Tests',
+    'timetable': 'Timetable',
+    'promotion': 'Promotion',
+    'finance': 'Finance & Fees',
+    'communication': 'Parent Communication',
+    'hr': 'Staff / HR',
+    'library': 'Library',
+    'reports': 'Reports',
+}
+
+# Which module a blueprint belongs to (blueprints not listed are never gated).
+BLUEPRINT_MODULE = {
+    'main': 'students', 'admissions': 'admissions', 'academics': 'academics',
+    'events': 'events', 'attendance': 'attendance', 'subjects': 'results',
+    'results': 'external_exams', 'mock_jamb': 'external_exams', 'cbt': 'cbt',
+    'timetable': 'timetable', 'generator': 'timetable', 'promotion': 'promotion',
+    'finance': 'finance', 'comms': 'communication', 'hr': 'hr',
+    'library': 'library', 'reports': 'reports',
+}
+
+# Endpoints always reachable by any logged-in user (the shell + own account).
+_ALWAYS_ALLOWED_ENDPOINTS = {
+    'main.dashboard', 'main.global_search', 'auth.logout', 'auth.change_password',
+}
+
+# Default module set when a non-admin user has no explicit allowed_modules.
+ROLE_DEFAULT_MODULES = {
+    'teacher': {'students', 'attendance', 'results', 'external_exams', 'cbt',
+                'timetable', 'events'},
+    'readonly': {'students', 'results', 'external_exams', 'reports', 'events'},
+    'staff': set(),
+}
+
+
+def user_modules():
+    """Set of module keys the current user may access (admins => all)."""
+    if is_admin():
+        return set(MODULES.keys())
+    user = get_current_user()
+    if user and user.module_list:
+        return set(user.module_list) & set(MODULES.keys())
+    role = session.get('role', 'teacher')
+    return set(ROLE_DEFAULT_MODULES.get(role, ROLE_DEFAULT_MODULES['teacher']))
+
+
+def can_access_module(key):
+    return is_admin() or key in user_modules()
+
+
+def enforce_module_access():
+    """before_request gate: block non-admins from modules they lack."""
+    if not session.get('logged_in') or is_admin():
+        return None
+    endpoint = request.endpoint
+    if not endpoint or endpoint in _ALWAYS_ALLOWED_ENDPOINTS:
+        return None
+    blueprint = endpoint.split('.')[0]
+    module = BLUEPRINT_MODULE.get(blueprint)
+    if module and module not in user_modules():
+        if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+            abort(403)
+        flash('You do not have access to that section.', 'error')
+        return redirect(url_for('main.dashboard'))
+    return None
+
+
+def module_required(key):
+    """Decorator form for a single route."""
+    def deco(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if not session.get('logged_in'):
+                return redirect(url_for('auth.login'))
+            if not can_access_module(key):
+                flash('You do not have access to that section.', 'error')
+                return redirect(url_for('main.dashboard'))
+            return f(*args, **kwargs)
+        return wrapper
+    return deco
+
+
 def is_admin():
     """Check if current user is admin"""
     role = session.get('role')

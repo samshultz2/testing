@@ -850,7 +850,10 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     full_name = db.Column(db.String(100))
     phone = db.Column(db.String(20))
-    role = db.Column(db.String(20), default='teacher')  # super_admin, admin, teacher, readonly
+    role = db.Column(db.String(20), default='teacher')  # super_admin, admin, teacher, staff, readonly
+    # JSON list of module keys this (non-admin) user may access. Empty/None =>
+    # fall back to the role's default module set. Admins ignore this (see all).
+    allowed_modules = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -868,7 +871,23 @@ class User(db.Model):
     def check_password(self, password):
         """Verify password"""
         return check_password_hash(self.password_hash, password)
-    
+
+    @property
+    def module_list(self):
+        """The explicit module keys granted to this user (may be empty)."""
+        import json
+        if not self.allowed_modules:
+            return []
+        try:
+            v = json.loads(self.allowed_modules)
+            return v if isinstance(v, list) else []
+        except (ValueError, TypeError):
+            return []
+
+    def set_modules(self, keys):
+        import json
+        self.allowed_modules = json.dumps(list(keys)) if keys else None
+
     @property
     def is_super_admin(self):
         return self.role == 'super_admin'
@@ -1097,6 +1116,14 @@ def _ensure_student_exam_columns():
     try:
         if 'portal_password_plain' not in existing:
             statements.append('ALTER TABLE students ADD COLUMN portal_password_plain VARCHAR(60)')
+    except Exception:
+        pass
+
+    # users.allowed_modules (fine-grained module permissions).
+    try:
+        u_cols = {c['name'] for c in inspect(db.engine).get_columns('users')}
+        if 'allowed_modules' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN allowed_modules TEXT')
     except Exception:
         pass
 

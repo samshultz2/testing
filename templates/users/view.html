@@ -50,6 +50,24 @@
     {% endif %}
 </div>
 
+{% if not user.is_admin %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-th-large"></i> Module Access</h3></div>
+    <div class="card-body">
+        {% set granted = user.module_list %}
+        {% if granted %}
+        <div class="permission-list">
+            {% for key, label in modules.items() %}
+            <div class="perm {% if key in granted %}active{% endif %}"><i class="fas fa-{% if key in granted %}check{% else %}times{% endif %}"></i> {{ label }}</div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted"><i class="fas fa-info-circle"></i> No custom modules set &mdash; using the default access for the <strong>{{ user.get_display_role() }}</strong> role.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% if user.is_teacher and user.teacher_profile %}
 {% set teacher = user.teacher_profile %}
 

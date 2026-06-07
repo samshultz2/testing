@@ -89,6 +89,10 @@ def create_app(config_class=Config):
     from utils.csrf import init_csrf
     init_csrf(app)
 
+    # Fine-grained module access for non-admin users.
+    from utils.access_control import enforce_module_access
+    app.before_request(enforce_module_access)
+
     # Friendly error pages
     from utils.errors import register_error_handlers
     register_error_handlers(app)
@@ -150,13 +154,21 @@ def create_app(config_class=Config):
                     'can_enter_results': True,
                 }
         
+        def can_access_module(key):
+            try:
+                from utils.access_control import can_access_module as _cam
+                return _cam(key)
+            except Exception:
+                return True
+
         return {
             'get_active_session': get_active_session,
             'get_active_term': get_active_term,
             'today': date.today(),
             'app_name': Config.APP_NAME,
             'csrf_token': csrf_token,
-            'user_permissions': get_user_permissions()
+            'user_permissions': get_user_permissions(),
+            'can_access_module': can_access_module,
         }
     
     # Custom Jinja filters

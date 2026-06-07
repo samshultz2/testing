@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from datetime import datetime
 from functools import wraps
 from models import db, ClassArmAssignment, Term, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
+from utils.access_control import MODULES
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
@@ -84,9 +85,13 @@ def add_user():
                 created_by_id=session.get('user_id')
             )
             user.set_password(password)
+            # Fine-grained module access (admins always have full access).
+            if role != 'admin':
+                selected = [m for m in request.form.getlist('modules') if m in MODULES]
+                user.set_modules(selected)
             db.session.add(user)
             db.session.flush()  # Get user ID
-            
+
             # Create teacher profile if role is teacher
             if role == 'teacher':
                 teacher = Teacher(
@@ -109,7 +114,7 @@ def add_user():
             flash(f'Error creating user: {str(e)}', 'error')
             return redirect(url_for('users.add_user'))
     
-    return render_template('users/add.html')
+    return render_template('users/add.html', modules=MODULES)
 
 
 @users_bp.route('/<int:user_id>')
@@ -117,7 +122,7 @@ def add_user():
 def view_user(user_id):
     """View user details"""
     user = User.query.get_or_404(user_id)
-    return render_template('users/view.html', user=user)
+    return render_template('users/view.html', user=user, modules=MODULES)
 
 
 @users_bp.route('/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -132,6 +137,13 @@ def edit_user(user_id):
         user.phone = request.form.get('phone', '').strip() or None
         user.role = request.form.get('role', user.role)
         user.is_active = request.form.get('is_active') == 'on'
+
+        # Fine-grained module access (admins always have full access).
+        if user.role == 'admin':
+            user.set_modules(None)
+        else:
+            selected = [m for m in request.form.getlist('modules') if m in MODULES]
+            user.set_modules(selected)
         
         # Update password if provided
         new_password = request.form.get('new_password', '')
@@ -166,7 +178,7 @@ def edit_user(user_id):
             db.session.rollback()
             flash(f'Error updating user: {str(e)}', 'error')
     
-    return render_template('users/edit.html', user=user)
+    return render_template('users/edit.html', user=user, modules=MODULES)
 
 
 @users_bp.route('/<int:user_id>/delete', methods=['POST'])

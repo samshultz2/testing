@@ -43,6 +43,7 @@
                 <label class="form-label">Role <span class="text-danger">*</span></label>
                 <select name="role" class="form-control" id="roleSelect" onchange="toggleTeacherOptions()">
                     <option value="teacher">Teacher</option>
+                    <option value="staff">Staff (restricted)</option>
                     <option value="admin">Admin</option>
                     <option value="readonly">View Only</option>
                 </select>
@@ -63,7 +64,19 @@
             <p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Teachers can only access classes and subjects assigned to them.</p>
         </div>
     </div>
-    
+
+    <div class="card mb-3" id="moduleAccess">
+        <div class="card-header"><h3><i class="fas fa-th-large"></i> Module Access</h3></div>
+        <div class="card-body">
+            <div class="permission-grid">
+                {% for key, label in modules.items() %}
+                <label class="permission-item"><input type="checkbox" name="modules" value="{{ key }}"> <span>{{ label }}</span></label>
+                {% endfor %}
+            </div>
+            <p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Tick the sections this user may open. Leave all unticked to use the role's default access. Admins always have full access.</p>
+        </div>
+    </div>
+
     <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Create User</button>
         <a href="{{ url_for('users.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
@@ -84,6 +97,7 @@
 function toggleTeacherOptions(){
     const role=document.getElementById('roleSelect').value;
     document.getElementById('teacherPermissions').style.display=role==='teacher'?'block':'none';
+    document.getElementById('moduleAccess').style.display=role==='admin'?'none':'block';
 }
 toggleTeacherOptions();
 </script>
