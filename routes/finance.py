@@ -39,21 +39,28 @@ def _parse_date(value, default=None):
         return default or date.today()
 
 
-def _collections_query(from_date, to_date):
-    return (FeePayment.query
-            .filter(FeePayment.payment_date >= from_date,
-                    FeePayment.payment_date <= to_date)
-            .order_by(FeePayment.payment_date.desc(), FeePayment.id.desc()))
+def _collections_query(from_date, to_date, term_id=None):
+    q = (FeePayment.query
+         .filter(FeePayment.payment_date >= from_date,
+                 FeePayment.payment_date <= to_date))
+    if term_id:
+        q = q.filter(FeePayment.term_id == term_id)
+    return q.order_by(FeePayment.payment_date.desc(), FeePayment.id.desc())
 
 
 @finance_bp.route('/collections')
 @login_required
 def collections():
-    """Day-book: payments collected within a date range, with daily/method totals."""
+    """Day-book: payments collected within a date range, with daily/method totals.
+
+    Spans all terms by default (cash reconciliation), with an optional filter
+    to narrow the day-book to a single term.
+    """
     today = date.today()
     from_date = _parse_date(request.args.get('from'), today.replace(day=1))
     to_date = _parse_date(request.args.get('to'), today)
-    payments = _collections_query(from_date, to_date).all()
+    term_id = request.args.get('term_id', type=int)
+    payments = _collections_query(from_date, to_date, term_id).all()
     total = sum(p.amount for p in payments)
 
     by_method = {}
@@ -67,7 +74,8 @@ def collections():
 
     return render_template('finance/collections.html',
         from_date=from_date, to_date=to_date, payments=payments, total=total,
-        method_rows=method_rows, day_chart=day_chart, count=len(payments))
+        method_rows=method_rows, day_chart=day_chart, count=len(payments),
+        terms=Term.query.order_by(Term.id.desc()).all(), term_id=term_id)
 
 
 @finance_bp.route('/collections/export')
@@ -77,11 +85,12 @@ def collections_export():
     today = date.today()
     from_date = _parse_date(request.args.get('from'), today.replace(day=1))
     to_date = _parse_date(request.args.get('to'), today)
+    term_id = request.args.get('term_id', type=int)
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['Date', 'Receipt', 'Student', 'Student ID', 'Term', 'Method',
                 'Reference', 'Received By', 'Amount'])
-    for p in _collections_query(from_date, to_date).all():
+    for p in _collections_query(from_date, to_date, term_id).all():
         w.writerow([p.payment_date.strftime('%Y-%m-%d'), p.receipt_no,
                     p.student.full_name if p.student else '',
                     p.student.student_id if p.student else '',
