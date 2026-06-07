@@ -58,6 +58,9 @@ class ScratchCard(db.Model):
                            term_id=term_id, student_id=student_id,
                            batch_label=batch_label)
 
+    def __repr__(self):
+        return f'<ScratchCard {self.serial} {self.used_count}/{self.max_uses}>'
+
 
 class ResultCheckLog(db.Model):
     """Audit trail of every result-checker access (for investigations)."""
@@ -75,3 +78,6 @@ class ResultCheckLog(db.Model):
 
     student = db.relationship('Student')
     term = db.relationship('Term')
+
+    def __repr__(self):
+        return f'<ResultCheckLog student{self.student_id} {"ok" if self.success else "fail"}>'

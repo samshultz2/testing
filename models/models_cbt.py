@@ -185,6 +185,9 @@ class CBTAnswer(db.Model):
 
     __table_args__ = (db.UniqueConstraint('attempt_id', 'question_id', name='uq_cbt_answer'),)
 
+    def __repr__(self):
+        return f'<CBTAnswer attempt{self.attempt_id} q{self.question_id}={self.selected_option}>'
+
 
 class CBTLoginEvent(db.Model):
     """Device fingerprint captured when a student logs into / starts the exam
@@ -222,6 +225,9 @@ class CBTLoginEvent(db.Model):
             return f'{self.latitude:.5f}, {self.longitude:.5f}'
         return None
 
+    def __repr__(self):
+        return f'<CBTLoginEvent student{self.student_id} {self.event} {self.device_type}>'
+
 
 class CBTDeviceSession(db.Model):
     """A live device a student's portal session is active on, keyed by a
@@ -254,6 +260,9 @@ class CBTDeviceSession(db.Model):
     def label(self):
         bits = [self.device_model or self.device_type, self.browser, self.os]
         return ' · '.join(b for b in bits if b) or (self.ip_address or 'Unknown device')
+
+    def __repr__(self):
+        return f'<CBTDeviceSession student{self.student_id} {self.label}>'
 
 
 class QuestionBank(db.Model):
@@ -312,3 +321,6 @@ class CBTViolation(db.Model):
     @property
     def label(self):
         return self.LABELS.get(self.vtype, self.vtype or 'Event')
+
+    def __repr__(self):
+        return f'<CBTViolation attempt{self.attempt_id} {self.vtype}>'
