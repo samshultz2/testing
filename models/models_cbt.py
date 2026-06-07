@@ -186,6 +186,36 @@ class CBTAnswer(db.Model):
     __table_args__ = (db.UniqueConstraint('attempt_id', 'question_id', name='uq_cbt_answer'),)
 
 
+class QuestionBank(db.Model):
+    """A reusable question, tagged by subject/topic, copied into exams as needed."""
+    __tablename__ = 'question_bank'
+
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
+    topic = db.Column(db.String(100))
+    difficulty = db.Column(db.String(10), default='Medium')   # Easy/Medium/Hard
+    question_text = db.Column(db.Text, nullable=False)
+    option_a = db.Column(db.String(300))
+    option_b = db.Column(db.String(300))
+    option_c = db.Column(db.String(300))
+    option_d = db.Column(db.String(300))
+    correct_option = db.Column(db.String(1))
+    marks = db.Column(db.Float, default=1)
+    is_active = db.Column(db.Boolean, default=True)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    subject = db.relationship('Subject')
+
+    @property
+    def options(self):
+        return [('A', self.option_a), ('B', self.option_b),
+                ('C', self.option_c), ('D', self.option_d)]
+
+    def __repr__(self):
+        return f'<QuestionBank {self.id}>'
+
+
 class CBTViolation(db.Model):
     """One recorded anti-malpractice event during an attempt."""
     __tablename__ = 'cbt_violations'

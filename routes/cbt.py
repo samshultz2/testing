@@ -20,7 +20,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 
 from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
-                    Subject, SchoolClass, ClassArm, Term, Student,
+                    QuestionBank, Subject, SchoolClass, ClassArm, Term, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolSettings)
 from utils.access_control import login_required, admin_required, is_admin
 from utils import timeutil
@@ -224,6 +224,68 @@ def add_question(exam_id):
     return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
 
 
+@cbt_bp.route('/exams/<int:exam_id>/import-file', methods=['POST'])
+@login_required
+def import_questions_file(exam_id):
+    """Bulk-add questions to an exam from an uploaded Excel/CSV file."""
+    from utils import cbt_import
+    e = CBTExam.query.get_or_404(exam_id)
+    f = request.files.get('file')
+    if not f or not f.filename:
+        flash('Choose an Excel or CSV file.', 'error')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+    try:
+        parsed = cbt_import.parse_file(f.read(), f.filename)
+    except Exception as ex:
+        flash(f'Could not read the file: {ex}', 'error')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+    if not parsed:
+        flash('No valid questions found. Check the columns (Question, A, B, C, D, Correct, Marks).', 'warning')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+    nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
+               .filter(CBTQuestion.exam_id == exam_id).scalar())
+    for q in parsed:
+        nextord += 1
+        db.session.add(CBTQuestion(exam_id=exam_id, order=nextord, **{k: q[k] for k in
+            ('question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'marks')}))
+    db.session.commit()
+    flash(f'Imported {len(parsed)} question(s) into the exam.', 'success')
+    return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+
+
+@cbt_bp.route('/exams/<int:exam_id>/import-bank', methods=['GET', 'POST'])
+@login_required
+def import_from_bank(exam_id):
+    """Pick questions from the bank to copy into an exam."""
+    e = CBTExam.query.get_or_404(exam_id)
+    if request.method == 'POST':
+        ids = request.form.getlist('bank_id', type=int)
+        nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
+                   .filter(CBTQuestion.exam_id == exam_id).scalar())
+        n = 0
+        for bq in QuestionBank.query.filter(QuestionBank.id.in_(ids or [-1])).all():
+            nextord += 1
+            db.session.add(CBTQuestion(exam_id=exam_id, order=nextord,
+                question_text=bq.question_text, option_a=bq.option_a, option_b=bq.option_b,
+                option_c=bq.option_c, option_d=bq.option_d,
+                correct_option=bq.correct_option, marks=bq.marks))
+            n += 1
+        db.session.commit()
+        flash(f'Added {n} question(s) from the bank.', 'success')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+    subject_id = request.args.get('subject_id', type=int) or e.subject_id
+    q = QuestionBank.query.filter_by(is_active=True)
+    if subject_id:
+        q = q.filter_by(subject_id=subject_id)
+    topic = (request.args.get('topic') or '').strip()
+    if topic:
+        q = q.filter(QuestionBank.topic.ilike(f'%{topic}%'))
+    questions = q.order_by(QuestionBank.topic, QuestionBank.id.desc()).all()
+    subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+    return render_template('cbt/import_bank.html', e=e, questions=questions,
+                           subjects=subjects, subject_id=subject_id, topic=topic)
+
+
 @cbt_bp.route('/questions/<int:question_id>/delete', methods=['POST'])
 @login_required
 def delete_question(question_id):
@@ -233,6 +295,120 @@ def delete_question(question_id):
     db.session.commit()
     flash('Question removed.', 'success')
     return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+
+
+# ============================================================================
+# QUESTION BANK
+# ============================================================================
+
+@cbt_bp.route('/bank')
+@login_required
+def bank():
+    subject_id = request.args.get('subject_id', type=int)
+    topic = (request.args.get('topic') or '').strip()
+    search = (request.args.get('q') or '').strip()
+    q = QuestionBank.query.filter_by(is_active=True)
+    if subject_id:
+        q = q.filter_by(subject_id=subject_id)
+    if topic:
+        q = q.filter(QuestionBank.topic.ilike(f'%{topic}%'))
+    if search:
+        q = q.filter(QuestionBank.question_text.ilike(f'%{search}%'))
+    questions = q.order_by(QuestionBank.id.desc()).limit(500).all()
+    subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+    total = QuestionBank.query.filter_by(is_active=True).count()
+    return render_template('cbt/bank.html', questions=questions, subjects=subjects,
+        subject_id=subject_id, topic=topic, search=search, total=total)
+
+
+@cbt_bp.route('/bank/add', methods=['POST'])
+@login_required
+def bank_add():
+    text = (request.form.get('question_text') or '').strip()
+    correct = (request.form.get('correct_option') or '').strip().upper()
+    if not text or correct not in ('A', 'B', 'C', 'D'):
+        flash('Question text and a correct option (A–D) are required.', 'error')
+        return redirect(url_for('cbt.bank'))
+    from flask import session as _s
+    db.session.add(QuestionBank(
+        question_text=text, correct_option=correct,
+        subject_id=request.form.get('subject_id', type=int) or None,
+        topic=(request.form.get('topic') or '').strip() or None,
+        difficulty=request.form.get('difficulty') or 'Medium',
+        option_a=(request.form.get('option_a') or '').strip(),
+        option_b=(request.form.get('option_b') or '').strip(),
+        option_c=(request.form.get('option_c') or '').strip(),
+        option_d=(request.form.get('option_d') or '').strip(),
+        marks=request.form.get('marks', type=float) or 1,
+        created_by=_s.get('username') or 'Admin'))
+    db.session.commit()
+    flash('Question added to the bank.', 'success')
+    return redirect(url_for('cbt.bank', subject_id=request.form.get('subject_id') or ''))
+
+
+@cbt_bp.route('/bank/<int:bank_id>/delete', methods=['POST'])
+@login_required
+def bank_delete(bank_id):
+    bq = QuestionBank.query.get_or_404(bank_id)
+    bq.is_active = False
+    db.session.commit()
+    flash('Question removed from the bank.', 'success')
+    return redirect(request.referrer or url_for('cbt.bank'))
+
+
+@cbt_bp.route('/bank/import', methods=['GET', 'POST'])
+@login_required
+def bank_import():
+    subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+    if request.method == 'POST':
+        from utils import cbt_import
+        from flask import session as _s
+        f = request.files.get('file')
+        subject_id = request.form.get('subject_id', type=int) or None
+        if not f or not f.filename:
+            flash('Choose an Excel or CSV file.', 'error')
+            return redirect(url_for('cbt.bank_import'))
+        try:
+            parsed = cbt_import.parse_file(f.read(), f.filename)
+        except Exception as ex:
+            flash(f'Could not read the file: {ex}', 'error')
+            return redirect(url_for('cbt.bank_import'))
+        if not parsed:
+            flash('No valid questions found. Check the column headers.', 'warning')
+            return redirect(url_for('cbt.bank_import'))
+        for q in parsed:
+            db.session.add(QuestionBank(subject_id=subject_id, created_by=_s.get('username') or 'Admin',
+                question_text=q['question_text'], option_a=q['option_a'], option_b=q['option_b'],
+                option_c=q['option_c'], option_d=q['option_d'], correct_option=q['correct_option'],
+                marks=q['marks'], topic=q.get('topic'), difficulty=q.get('difficulty') or 'Medium'))
+        db.session.commit()
+        flash(f'Imported {len(parsed)} question(s) into the bank.', 'success')
+        return redirect(url_for('cbt.bank', subject_id=subject_id or ''))
+    return render_template('cbt/bank_import.html', subjects=subjects)
+
+
+@cbt_bp.route('/bank/template')
+@login_required
+def bank_template():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Questions'
+    headers = ['Question', 'A', 'B', 'C', 'D', 'Correct', 'Marks', 'Topic', 'Difficulty']
+    fill = PatternFill(start_color='0d6a4e', end_color='0d6a4e', fill_type='solid')
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = fill
+        c.font = Font(bold=True, color='FFFFFF')
+    ws.append(['What is 5 + 7?', '10', '12', '13', '11', 'B', 1, 'Arithmetic', 'Easy'])
+    ws.append(['Water is made of hydrogen and ___?', 'Oxygen', 'Nitrogen', 'Carbon', 'Helium', 'A', 1, 'Science', 'Easy'])
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return Response(output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename=cbt_question_template.xlsx'})
 
 
 @cbt_bp.route('/exams/<int:exam_id>/results')

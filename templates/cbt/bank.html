@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Question Bank - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <span>Question Bank</span>{% endblock %}
+{% block extra_css %}
+<style>.opt-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-row{grid-template-columns:1fr}}
+.qb{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.55rem}
+.qb .o{font-size:.85rem;padding:.1rem 0}.qb .o.c{color:var(--success);font-weight:600}</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Question Bank</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('cbt.bank_import') }}" class="btn btn-secondary"><i class="fas fa-file-import"></i> Import</a>
+    </div>
+</div>
+{% include 'cbt/_tabs.html' %}
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form">
+        <div class="form-group"><label class="form-label">Subject</label>
+            <select name="subject_id" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for s in subjects %}<option value="{{ s.id }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Topic</label><input type="text" name="topic" class="form-control" value="{{ topic }}"></div>
+        <div class="form-group"><label class="form-label">Search</label><input type="text" name="q" class="form-control" value="{{ search }}" placeholder="Question text"></div>
+        <div class="form-group" style="align-self:flex-end;"><button class="btn btn-secondary"><i class="fas fa-search"></i></button></div>
+    </form>
+    <div class="text-muted text-sm mt-2">{{ total }} question(s) in the bank. Build exams faster by adding from here (Exam → Add from bank).</div>
+</div></div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Add a question</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('cbt.bank_add') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" class="form-control" rows="2" required></textarea></div>
+            <div class="opt-row">
+                <div class="form-group"><label class="form-label">Option A</label><input type="text" name="option_a" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Option B</label><input type="text" name="option_b" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Option C</label><input type="text" name="option_c" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Option D</label><input type="text" name="option_d" class="form-control"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Correct <span class="required">*</span></label><select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+                <div class="form-group"><label class="form-label">Subject</label><select name="subject_id" class="form-control"><option value="">—</option>{% for s in subjects %}<option value="{{ s.id }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label class="form-label">Topic</label><input type="text" name="topic" class="form-control" value="{{ topic }}"></div>
+                <div class="form-group"><label class="form-label">Difficulty</label><select name="difficulty" class="form-control"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></div>
+                <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" class="form-control" step="0.5" value="1"></div>
+            </div>
+            <button class="btn btn-primary"><i class="fas fa-plus"></i> Add to bank</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>{{ questions|length }} shown</h3></div>
+    <div class="card-body">
+        {% if questions %}
+            {% for q in questions %}
+            <div class="qb">
+                <div class="d-flex justify-between gap-2">
+                    <strong>{{ q.question_text }}</strong>
+                    <form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove from bank?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                </div>
+                {% for letter, text in q.options %}{% if text %}<div class="o {% if q.correct_option==letter %}c{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
+                <div class="text-muted text-sm mt-1">{{ q.subject.name if q.subject else 'No subject' }}{% if q.topic %} · {{ q.topic }}{% endif %} · {{ q.difficulty }} · {{ q.marks }} mark(s)</div>
+            </div>
+            {% endfor %}
+        {% else %}<div class="empty-state"><i class="fas fa-layer-group"></i><h3>No questions</h3><p>Add questions above or import a file.</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

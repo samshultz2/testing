@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Import Questions - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.bank') }}">Question Bank</a> / <span>Import</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Import Questions</h1></div>
+{% include 'cbt/_tabs.html' %}
+
+<div class="card" style="max-width:640px;">
+    <div class="card-header"><h3><i class="fas fa-file-import"></i> Upload Excel or CSV</h3></div>
+    <div class="card-body">
+        <p class="text-muted">Columns (in any order): <strong>Question, A, B, C, D, Correct, Marks, Topic, Difficulty</strong>. <em>Correct</em> is the letter A–D (or the answer text). For True/False questions, just fill A &amp; B.</p>
+        <a href="{{ url_for('cbt.bank_template') }}" class="btn btn-secondary btn-sm mb-3"><i class="fas fa-download"></i> Download template</a>
+        <form method="POST" action="{{ url_for('cbt.bank_import') }}" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label class="form-label">Subject (for all imported questions)</label>
+                <select name="subject_id" class="form-control"><option value="">—</option>{% for s in subjects %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">File <span class="required">*</span></label><input type="file" name="file" class="form-control" accept=".xlsx,.xlsm,.csv" required></div>
+            <button class="btn btn-primary"><i class="fas fa-file-import"></i> Import into bank</button>
+            <a href="{{ url_for('cbt.bank') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
