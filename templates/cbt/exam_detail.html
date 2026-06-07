@@ -44,8 +44,9 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('cbt.add_question', exam_id=e.id) }}" enctype="multipart/form-data">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" class="form-control" rows="2" required></textarea>
-                <small class="text-muted">Maths: write LaTeX as <code>\( \sqrt{b^2-4ac} \)</code> or <code>$x^2$</code>. It renders for students.</small></div>
+            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" id="qtext_exam" class="form-control" rows="2" required></textarea>
+                {% with tid='qtext_exam' %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
+                <small class="text-muted">Tap a symbol or structure above to add maths — no typing needed.</small></div>
             <div class="form-group"><label class="form-label">Figure / image (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
             <div class="opt-row">
                 <div class="form-group"><label class="form-label">Option A</label><input type="text" name="option_a" class="form-control"></div>

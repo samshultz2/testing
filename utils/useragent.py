@@ -34,8 +34,28 @@ _OS = [
 ]
 
 
+def device_model(ua):
+    """Best-effort device model from a UA string (e.g. 'Redmi 13C', 'SM-G991B').
+
+    Modern Chrome on Android sends a 'reduced' UA where the model is just 'K',
+    so the reliable source is UA Client Hints (captured client-side). This is a
+    fallback for older/other browsers.
+    """
+    ua = ua or ''
+    if re.search(r'ipad', ua, re.I):
+        return 'iPad'
+    if re.search(r'iphone', ua, re.I):
+        return 'iPhone'
+    m = re.search(r'android[^;]*;\s*([^;)]+?)\s*(?:build/|[)])', ua, re.I)
+    if m:
+        model = m.group(1).strip()
+        if model and model.lower() not in ('wv', 'k'):
+            return model
+    return None
+
+
 def parse_user_agent(ua):
-    """Return dict(browser, os, device_type, is_mobile) from a UA string."""
+    """Return dict(browser, os, device_type, is_mobile, model) from a UA string."""
     ua = ua or ''
     browser = _first(_BROWSERS, ua) or 'Unknown'
     os_name = _first(_OS, ua) or 'Unknown'
@@ -52,4 +72,5 @@ def parse_user_agent(ua):
         'os': os_name,
         'device_type': device_type,
         'is_mobile': is_mobile or is_tablet,
+        'model': device_model(ua),
     }

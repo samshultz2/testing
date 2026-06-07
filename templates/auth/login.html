@@ -135,9 +135,36 @@
             color: #666;
             margin-top: 0.5rem;
         }
+        .menu-btn {
+            position: fixed; top: 1rem; right: 1rem; z-index: 30;
+            width: 46px; height: 46px; border-radius: 12px; border: none;
+            background: rgba(255,255,255,0.14); color: #fff; font-size: 1.15rem;
+            cursor: pointer; backdrop-filter: blur(6px);
+        }
+        .menu-btn:hover { background: rgba(255,255,255,0.24); }
+        .menu-panel {
+            position: fixed; top: 4.2rem; right: 1rem; z-index: 30;
+            background: #fff; border-radius: 14px; box-shadow: 0 18px 40px rgba(0,0,0,.35);
+            min-width: 230px; overflow: hidden; display: none;
+        }
+        .menu-panel.open { display: block; }
+        .menu-panel a {
+            display: flex; align-items: center; gap: .7rem; padding: .9rem 1.1rem;
+            color: #333; text-decoration: none; font-size: .92rem; font-weight: 500;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .menu-panel a:last-child { border-bottom: none; }
+        .menu-panel a:hover { background: #f0fbf6; color: #0d6a4e; }
+        .menu-panel a i { width: 20px; text-align: center; color: #0d6a4e; }
     </style>
 </head>
 <body>
+    <button class="menu-btn" id="menuBtn" aria-label="Menu" aria-expanded="false"><i class="fas fa-bars"></i></button>
+    <nav class="menu-panel" id="menuPanel">
+        <a href="{{ url_for('auth.login') }}"><i class="fas fa-user-shield"></i> Staff Login</a>
+        <a href="{{ url_for('cbt_portal.login') }}"><i class="fas fa-laptop-code"></i> Student / Exam Login</a>
+        <a href="{{ url_for('result_portal.check') }}"><i class="fas fa-magnifying-glass-chart"></i> Check Result</a>
+    </nav>
     <div class="login-container">
         <div class="login-card">
             <div class="login-header">
@@ -181,5 +208,18 @@
             </div>
         </div>
     </div>
+    <script>
+        (function(){
+            var b=document.getElementById('menuBtn'), p=document.getElementById('menuPanel');
+            b.addEventListener('click', function(e){
+                e.stopPropagation();
+                var open=p.classList.toggle('open');
+                b.setAttribute('aria-expanded', open?'true':'false');
+            });
+            document.addEventListener('click', function(e){
+                if(!p.contains(e.target) && e.target!==b){ p.classList.remove('open'); b.setAttribute('aria-expanded','false'); }
+            });
+        })();
+    </script>
 </body>
 </html>

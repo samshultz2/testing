@@ -201,6 +201,7 @@ class CBTLoginEvent(db.Model):
     browser = db.Column(db.String(40))
     os = db.Column(db.String(40))
     device_type = db.Column(db.String(20))      # Desktop / Mobile / Tablet
+    device_model = db.Column(db.String(80))      # e.g. Redmi 13C, iPhone, SM-G991B
     is_mobile = db.Column(db.Boolean, default=False)
     # Enriched client-side (best effort, may be blank).
     screen = db.Column(db.String(20))           # e.g. 1366x768

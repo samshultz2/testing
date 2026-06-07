@@ -58,13 +58,14 @@
         <span class="text-sm text-muted">Captured at login / exam start</span></div>
     <div class="card-body" style="padding:0;">
         <div class="table-container"><table class="data-table table-stack no-mobile-scroll">
-            <thead><tr><th>When</th><th>Event</th><th>Device</th><th>Browser / OS</th><th>IP</th><th>Screen</th><th>Timezone</th><th>Location</th></tr></thead>
+            <thead><tr><th>When</th><th>Event</th><th>Device</th><th>Model</th><th>Browser / OS</th><th>IP</th><th>Screen</th><th>Timezone</th><th>Location</th></tr></thead>
             <tbody>
                 {% for lg in logins %}
                 <tr>
                     <td data-label="When">{{ lg.created_at.strftime('%d %b %H:%M:%S') if lg.created_at }}</td>
                     <td data-label="Event"><span class="badge badge-info">{{ lg.event }}</span></td>
                     <td data-label="Device">{{ lg.device_type or '—' }}{% if lg.is_mobile %} <i class="fas fa-mobile-screen" title="Mobile"></i>{% endif %}</td>
+                    <td data-label="Model">{{ lg.device_model or '—' }}</td>
                     <td data-label="Browser / OS">{{ lg.browser or '—' }} · {{ lg.os or '—' }}</td>
                     <td data-label="IP">{{ lg.ip_address or '—' }}</td>
                     <td data-label="Screen">{{ lg.screen or '—' }}</td>

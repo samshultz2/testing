@@ -1151,6 +1151,14 @@ def _ensure_student_exam_columns():
         except Exception:
             pass
 
+    # cbt_login_events.device_model (device name, e.g. Redmi 13C).
+    try:
+        le_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_login_events')}
+        if 'device_model' not in le_cols:
+            statements.append('ALTER TABLE cbt_login_events ADD COLUMN device_model VARCHAR(80)')
+    except Exception:
+        pass
+
     # payslips.attendance_deduction (separates auto attendance vs manual deductions).
     try:
         ps_cols = {c['name'] for c in inspect(db.engine).get_columns('payslips')}

@@ -20,6 +20,15 @@
         .portal-card{background:var(--bg-card,#fff);border-radius:16px;padding:1.4rem;box-shadow:0 10px 30px rgba(0,0,0,.18)}
         .portal-card h1{margin:0 0 .3rem;font-size:1.3rem;font-family:'Space Grotesk',sans-serif}
         .flash-message{margin-bottom:.6rem}
+        .pmenu-wrap{position:relative}
+        .pmenu-btn{width:42px;height:42px;border-radius:10px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:1.05rem;cursor:pointer}
+        .pmenu-btn:hover{background:rgba(255,255,255,.28)}
+        .pmenu-panel{position:absolute;top:50px;right:0;z-index:30;background:#fff;border-radius:12px;box-shadow:0 16px 36px rgba(0,0,0,.3);min-width:220px;overflow:hidden;display:none}
+        .pmenu-panel.open{display:block}
+        .pmenu-panel a{display:flex;align-items:center;gap:.7rem;padding:.85rem 1rem;color:#333;text-decoration:none;font-size:.9rem;border-bottom:1px solid #f0f0f0}
+        .pmenu-panel a:last-child{border-bottom:none}
+        .pmenu-panel a:hover{background:#f0fbf6;color:#0d6a4e}
+        .pmenu-panel a i{width:18px;text-align:center;color:#0d6a4e}
     </style>
     {% block head_extra %}{% endblock %}
 </head>
@@ -27,7 +36,18 @@
     <div class="portal-wrap">
         <div class="portal-top">
             <div class="brand"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> PosyHub CBT</div>
-            {% if student is defined and student %}<div>{{ student.full_name }} ({{ student.student_id }}) · <a href="{{ url_for('cbt_portal.logout') }}">Logout</a></div>{% endif %}
+            {% if student is defined and student %}
+            <div>{{ student.full_name }} ({{ student.student_id }}) · <a href="{{ url_for('cbt_portal.logout') }}">Logout</a></div>
+            {% else %}
+            <div class="pmenu-wrap">
+                <button class="pmenu-btn" id="pmenuBtn" aria-label="Menu" aria-expanded="false"><i class="fas fa-bars"></i></button>
+                <nav class="pmenu-panel" id="pmenuPanel">
+                    <a href="{{ url_for('cbt_portal.login') }}"><i class="fas fa-laptop-code"></i> Student / Exam Login</a>
+                    <a href="{{ url_for('result_portal.check') }}"><i class="fas fa-magnifying-glass-chart"></i> Check Result</a>
+                    <a href="{{ url_for('auth.login') }}"><i class="fas fa-user-shield"></i> Staff Login</a>
+                </nav>
+            </div>
+            {% endif %}
         </div>
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}{% for category, message in messages %}
@@ -37,6 +57,16 @@
         {% block content %}{% endblock %}
     </div>
     {% block scripts %}{% endblock %}
+    <script>
+    (function(){
+        var b=document.getElementById('pmenuBtn'), p=document.getElementById('pmenuPanel');
+        if(!b||!p) return;
+        b.addEventListener('click', function(e){ e.stopPropagation();
+            var o=p.classList.toggle('open'); b.setAttribute('aria-expanded', o?'true':'false'); });
+        document.addEventListener('click', function(e){
+            if(!p.contains(e.target) && e.target!==b){ p.classList.remove('open'); b.setAttribute('aria-expanded','false'); } });
+    })();
+    </script>
     {% if session.get('cbt_student_id') %}
     <script>
     // Best-effort device fingerprint for exam-integrity investigations.
@@ -53,11 +83,20 @@
             }, extra||{}));
             fetch('{{ url_for("cbt_portal.fingerprint") }}',{method:'POST',body:b}).catch(function(){});
         }
+        function withModel(extra){
+            extra=extra||{};
+            // UA Client Hints expose the real device model (e.g. "Redmi 13C") on Android.
+            if(navigator.userAgentData && navigator.userAgentData.getHighEntropyValues){
+                navigator.userAgentData.getHighEntropyValues(['model','platform','platformVersion'])
+                    .then(function(h){ if(h&&h.model) extra.model=h.model; send(extra); })
+                    .catch(function(){ send(extra); });
+            } else { send(extra); }
+        }
         if(navigator.geolocation){
             navigator.geolocation.getCurrentPosition(
-                function(p){ send({lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy}); },
-                function(){ send(); }, {timeout:6000, maximumAge:600000});
-        } else { send(); }
+                function(p){ withModel({lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy}); },
+                function(){ withModel(); }, {timeout:6000, maximumAge:600000});
+        } else { withModel(); }
     })();
     </script>
     {% endif %}

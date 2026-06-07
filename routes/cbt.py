@@ -832,7 +832,8 @@ def _record_login_event(student, event='login', exam_id=None):
             student_id=student.id, exam_id=exam_id, event=event,
             ip_address=(request.headers.get('X-Forwarded-For', request.remote_addr) or '')[:60],
             user_agent=ua[:400], browser=info['browser'], os=info['os'],
-            device_type=info['device_type'], is_mobile=info['is_mobile'])
+            device_type=info['device_type'], is_mobile=info['is_mobile'],
+            device_model=info.get('model'))
         db.session.add(ev)
         db.session.commit()
         return ev.id
@@ -1096,6 +1097,10 @@ def fingerprint():
     ev.timezone = _s('timezone', 60)
     ev.language = _s('language', 40)
     ev.platform = _s('platform', 60)
+    # UA Client Hints model (more accurate than the UA string) wins if provided.
+    model = _s('model', 80)
+    if model:
+        ev.device_model = model
     for col, key in (('latitude', 'lat'), ('longitude', 'lon'), ('geo_accuracy', 'acc')):
         try:
             val = request.form.get(key)

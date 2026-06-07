@@ -26,6 +26,15 @@ def test_parse_android_tablet():
     assert info['device_type'] == 'Tablet'
 
 
+def test_parse_device_model():
+    redmi = parse_user_agent('Mozilla/5.0 (Linux; Android 14; Redmi 13C Build/UP1A) '
+                             'AppleWebKit Chrome/120 Mobile Safari')
+    assert redmi['model'] == 'Redmi 13C'
+    # Reduced UA ("K") yields no usable model.
+    assert parse_user_agent('Mozilla/5.0 (Linux; Android 10; K) Chrome/120 Mobile Safari')['model'] is None
+    assert parse_user_agent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0) Mobile Safari')['model'] == 'iPhone'
+
+
 def test_login_event_model_records(app):
     """CBTLoginEvent persists a fingerprint row."""
     from models import db, CBTLoginEvent, Student

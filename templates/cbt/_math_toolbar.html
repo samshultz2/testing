@@ -1,0 +1,63 @@
+{# Easy math input for a textarea.
+   Usage: give the textarea id="{{ tid }}", then
+   {% with tid='qtext_exam' %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
+   Symbol buttons drop a character; structure buttons drop a fill-in template
+   (auto-wrapped in \( \) so it renders). A live preview shows the result. #}
+<div class="math-tb" id="{{ tid }}_tb" role="toolbar" aria-label="Maths symbols">
+    <span class="math-tb-group">
+        <button type="button" data-tex="\frac{|}{}" title="Fraction">a&frasl;b</button>
+        <button type="button" data-tex="\sqrt{|}" title="Square root">&radic;&#9744;</button>
+        <button type="button" data-tex="\sqrt[|]{}" title="nth root"><sup>n</sup>&radic;</button>
+        <button type="button" data-tex="x^{|}" title="Power / exponent">x<sup>n</sup></button>
+        <button type="button" data-tex="x_{|}" title="Subscript">x<sub>n</sub></button>
+        <button type="button" data-tex="|" data-mathwrap="1" title="Insert a formula">ƒ</button>
+    </span>
+    <span class="math-tb-group">
+        {% for s in ['×','÷','±','≤','≥','≠','≈','π','θ','Δ','°','∞','√','→'] %}
+        <button type="button" data-sym="{{ s }}">{{ s }}</button>
+        {% endfor %}
+    </span>
+</div>
+<div class="math-prev-wrap"><span class="math-prev-label">Preview:</span> <span class="math-prev" id="{{ tid }}_pv"></span></div>
+<style>
+.math-tb{display:flex;flex-wrap:wrap;gap:.5rem;margin:.4rem 0}
+.math-tb-group{display:flex;flex-wrap:wrap;gap:.25rem;padding:.2rem;border:1px solid var(--border-color,#e2e6ee);border-radius:8px;background:var(--gray-50,#f6f8fb)}
+.math-tb button{min-width:34px;height:30px;padding:0 .45rem;border:1px solid var(--border-color,#dde);border-radius:6px;background:#fff;cursor:pointer;font-size:.9rem;line-height:1}
+.math-tb button:hover{background:#eafaf2;border-color:#0d6a4e}
+.math-prev-wrap{font-size:.9rem;min-height:1.6rem;margin:.1rem 0 .3rem}
+.math-prev-label{color:var(--text-muted,#888);font-size:.78rem;text-transform:uppercase;letter-spacing:.03em}
+.math-prev{display:inline-block}
+</style>
+<script>
+(function(){
+    var ta=document.getElementById('{{ tid }}');
+    var tb=document.getElementById('{{ tid }}_tb');
+    var pv=document.getElementById('{{ tid }}_pv');
+    if(!ta||!tb) return;
+    function insideMath(v,pos){ return v.lastIndexOf('\\(',pos-1) > v.lastIndexOf('\\)',pos-1); }
+    function preview(){
+        pv.textContent = ta.value || '';
+        if(window.MathJax && MathJax.typesetPromise){
+            if(MathJax.typesetClear) MathJax.typesetClear([pv]);
+            MathJax.typesetPromise([pv]).catch(function(){});
+        }
+    }
+    function insert(snip, isTex){
+        var s=ta.selectionStart, e=ta.selectionEnd, v=ta.value;
+        var caretRel=snip.indexOf('|');
+        var text=snip.replace('|','');
+        if(isTex && !insideMath(v,s)){ text='\\('+text+'\\)'; if(caretRel>=0) caretRel+=2; }
+        ta.value=v.substring(0,s)+text+v.substring(e);
+        var caret = caretRel>=0 ? s+caretRel : s+text.length;
+        ta.focus(); ta.setSelectionRange(caret,caret);
+        preview();
+    }
+    tb.addEventListener('click', function(ev){
+        var b=ev.target.closest('button'); if(!b) return; ev.preventDefault();
+        if(b.hasAttribute('data-sym')) insert(b.getAttribute('data-sym'), false);
+        else if(b.hasAttribute('data-tex')) insert(b.getAttribute('data-tex'), true);
+    });
+    ta.addEventListener('input', preview);
+    preview();
+})();
+</script>
