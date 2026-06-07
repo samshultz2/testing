@@ -472,6 +472,23 @@
                     <input type="text" name="q" placeholder="Search…" aria-label="Search" autocomplete="off">
                 </form>
                 <div class="header-right">
+                    {% if branch_ctx.is_central %}
+                    <div class="branch-switch">
+                        <button type="button" class="branch-switch-btn" id="branchSwitchBtn" title="Switch branch">
+                            <i class="fas fa-code-branch"></i>
+                            <span>{{ branch_ctx.current.name if branch_ctx.current else 'All branches' }}</span>
+                            <i class="fas fa-chevron-down" style="font-size:.65rem;"></i>
+                        </button>
+                        <div class="branch-switch-menu" id="branchSwitchMenu">
+                            <a href="{{ url_for('main.set_view_branch', branch_id='all') }}" class="{% if not branch_ctx.current %}active{% endif %}"><i class="fas fa-layer-group"></i> All branches</a>
+                            {% for b in branch_ctx.branches %}
+                            <a href="{{ url_for('main.set_view_branch', branch_id=b.id) }}" class="{% if branch_ctx.current and branch_ctx.current.id == b.id %}active{% endif %}"><i class="fas fa-code-branch"></i> {{ b.name }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% elif branch_ctx.current %}
+                    <div class="current-term" title="Your branch"><i class="fas fa-code-branch"></i> <span>{{ branch_ctx.current.name }}</span></div>
+                    {% endif %}
                     {% if get_active_term() %}
                     <div class="current-term">
                         <i class="fas fa-calendar"></i>
@@ -586,6 +603,28 @@
     .sidebar-footer-padding {
         height: 60px;
     }
+    .branch-switch { position: relative; }
+    .branch-switch-btn {
+        display: inline-flex; align-items: center; gap: .4rem;
+        padding: .4rem .7rem; border: 1px solid var(--border-color);
+        background: var(--bg-card); color: var(--text-primary);
+        border-radius: 8px; cursor: pointer; font-size: .85rem; font-weight: 600;
+    }
+    .branch-switch-btn:hover { border-color: var(--primary); }
+    .branch-switch-menu {
+        position: absolute; top: 110%; right: 0; z-index: 50; min-width: 190px;
+        background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18);
+        padding: .3rem; display: none;
+    }
+    .branch-switch-menu.open { display: block; }
+    .branch-switch-menu a {
+        display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem;
+        border-radius: 7px; color: var(--text-primary); text-decoration: none;
+        font-size: .85rem;
+    }
+    .branch-switch-menu a:hover { background: var(--gray-50); }
+    .branch-switch-menu a.active { background: var(--primary); color: #fff; }
     </style>
     
     <script>
@@ -619,6 +658,20 @@
             }
             return origFetch(input, init);
         };
+    })();
+
+    // Branch switcher dropdown (central users).
+    (function () {
+        var btn = document.getElementById('branchSwitchBtn');
+        var menu = document.getElementById('branchSwitchMenu');
+        if (!btn || !menu) return;
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            menu.classList.toggle('open');
+        });
+        document.addEventListener('click', function (e) {
+            if (!menu.contains(e.target) && e.target !== btn) menu.classList.remove('open');
+        });
     })();
     </script>
     <script>

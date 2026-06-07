@@ -165,6 +165,25 @@ def create_app(config_class=Config):
             except Exception:
                 return True
 
+        def branch_context():
+            """Header branch switcher state."""
+            try:
+                from models import Branch
+                from utils.branch_scope import is_central, viewing_branch_id
+                if not session.get('logged_in'):
+                    return {'is_central': False, 'branches': [], 'current': None}
+                central = is_central()
+                bid = viewing_branch_id()
+                current = Branch.query.get(bid) if (bid and bid != -1) else None
+                return {
+                    'is_central': central,
+                    'branches': Branch.query.filter_by(is_active=True)
+                                .order_by(Branch.name).all() if central else [],
+                    'current': current,
+                }
+            except Exception:
+                return {'is_central': False, 'branches': [], 'current': None}
+
         return {
             'get_active_session': get_active_session,
             'get_active_term': get_active_term,
@@ -173,6 +192,7 @@ def create_app(config_class=Config):
             'csrf_token': csrf_token,
             'user_permissions': get_user_permissions(),
             'can_access_module': can_access_module,
+            'branch_ctx': branch_context(),
         }
     
     # Custom Jinja filters

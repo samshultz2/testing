@@ -58,7 +58,8 @@ def staff_list():
     status = request.args.get('status')
     q = (request.args.get('q') or '').strip()
 
-    query = StaffMember.query.filter_by(is_active=True)
+    from utils.branch_scope import scope_query
+    query = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember)
     if dept_id:
         query = query.filter_by(department_id=dept_id)
     if staff_type:
@@ -114,6 +115,8 @@ def add_staff():
             return redirect(url_for('hr.add_staff'))
         s = StaffMember(staff_id=StaffMember.generate_staff_id())
         _read_staff_form(s)
+        from utils.branch_scope import branch_for_new
+        s.branch_id = branch_for_new(request.form.get('branch_id', type=int))
         db.session.add(s)
         db.session.commit()
         flash(f'Staff member {s.full_name} added ({s.staff_id}).', 'success')
@@ -127,6 +130,10 @@ def add_staff():
 @login_required
 def staff_detail(staff_id):
     s = StaffMember.query.get_or_404(staff_id)
+    from utils.branch_scope import can_access_branch
+    if not can_access_branch(s.branch_id):
+        flash('That staff member belongs to another branch.', 'error')
+        return redirect(url_for('hr.staff_list'))
     leaves = s.leave_records.order_by(LeaveRecord.start_date.desc()).all()
     payslips = (Payslip.query.filter_by(staff_id=s.id)
                 .join(PayrollRun).order_by(PayrollRun.year.desc(), PayrollRun.month.desc()).all())

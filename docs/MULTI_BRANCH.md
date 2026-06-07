@@ -15,8 +15,13 @@ branch users while central users bypass it.
    `User.scope`/`branch_id`. Existing data is backfilled to a default branch
    (**Jemila** on this install); existing admins become `central`. No query
    filtering yet — pure groundwork, no behaviour change.
-2. Scoping layer — central vs branch filtering + a branch switcher for central
-   users; extend the access gate.
+2. **Scoping layer — DONE.** `utils/branch_scope.py` decides the branch(es) in
+   view; central users see all by default with a header **branch switcher**
+   (`/set-branch`), branch users are locked to their own. Applied to the
+   Students and Staff lists + dashboard counts, with a record-access guard on
+   student/staff detail pages and auto branch-stamping on create. More modules
+   (finance, CBT, results, attendance) adopt `scope_query`/`branch_for_new`
+   incrementally.
 3. Role presets — the school's hierarchy (Director of Studies, Exams &
    Standards, IT, Principal, Headmaster, HODs, Headteachers, Teachers, Bursar)
    as configurable presets.
@@ -43,3 +48,18 @@ branch users while central users bypass it.
 Single-branch / other schools: one branch exists and every user is effectively
 scoped to it (or central), so the feature is invisible until more branches and
 branch-scoped users are added.
+
+## Stage 2 details
+
+- **`utils/branch_scope.py`** — `is_central()`, `viewing_branch_id()`
+  (`None` = all branches), `scope_query(query, Model)`, `can_access_branch(id)`,
+  `branch_for_new(form_id)`, `set_session_scope(user)`.
+- **Session:** login stores `scope` + `branch_id`; central users' picked branch
+  lives in `view_branch_id` (set by `/set-branch`, `'all'` clears it).
+- **Header switcher:** central users get an "All branches / <branch>" dropdown;
+  branch users see their branch name as a static label.
+- **Applied so far:** Students list + dashboard counts + detail guard + create
+  stamping; Staff list + detail guard + create stamping.
+- **To extend a module:** wrap its list query with `scope_query(...)`, stamp new
+  records with `branch_for_new(...)`, and guard detail pages with
+  `can_access_branch(...)`.

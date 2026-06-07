@@ -1,7 +1,7 @@
 """
 Main routes for dashboard and general pages
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from datetime import date, timedelta
 from models import (
     db, Student, ParentContact, AcademicSession, Term, StudentEnrollment, 
@@ -27,14 +27,32 @@ def _safe_next(target, fallback):
 main_bp = Blueprint('main', __name__)
 
 
+@main_bp.route('/set-branch')
+@login_required
+def set_view_branch():
+    """Central users switch the branch they're viewing ('all' clears it)."""
+    from utils.branch_scope import is_central, VIEW_KEY
+    if is_central():
+        raw = request.args.get('branch_id')
+        if raw in (None, '', 'all'):
+            session.pop(VIEW_KEY, None)
+        else:
+            try:
+                session[VIEW_KEY] = int(raw)
+            except (TypeError, ValueError):
+                session.pop(VIEW_KEY, None)
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+
 @main_bp.route('/')
 @login_required
 def dashboard():
     """Main dashboard page with comprehensive statistics"""
-    # Basic student statistics
-    total_students = Student.query.filter_by(is_active=True).count()
-    male_students = Student.query.filter_by(is_active=True, gender='Male').count()
-    female_students = Student.query.filter_by(is_active=True, gender='Female').count()
+    from utils.branch_scope import scope_query
+    # Basic student statistics (branch-scoped for branch users)
+    total_students = scope_query(Student.query.filter_by(is_active=True), Student).count()
+    male_students = scope_query(Student.query.filter_by(is_active=True, gender='Male'), Student).count()
+    female_students = scope_query(Student.query.filter_by(is_active=True, gender='Female'), Student).count()
 
     # Get active session and term
     active_session = AcademicSession.query.filter_by(is_active=True).first()
@@ -346,7 +364,8 @@ def students_list():
     order = request.args.get('order', 'asc')
 
     # Build query
-    query = Student.query.filter_by(is_active=True)
+    from utils.branch_scope import scope_query
+    query = scope_query(Student.query.filter_by(is_active=True), Student)
 
     # For teachers, only show students from their assigned classes
     active_term = Term.query.filter_by(is_active=True).first()
@@ -510,6 +529,9 @@ def add_student():
                 stream=request.form.get('stream') or None,
                 jamb_target=request.form.get('jamb_target', type=int)
             )
+            # Stamp the student with the creator's (or chosen) branch.
+            from utils.branch_scope import branch_for_new
+            student.branch_id = branch_for_new(request.form.get('branch_id', type=int))
 
             db.session.add(student)
             db.session.flush()
@@ -547,6 +569,10 @@ def add_student():
 def view_student(student_id):
     """View student details"""
     student = Student.query.get_or_404(student_id)
+    from utils.branch_scope import can_access_branch
+    if not can_access_branch(student.branch_id):
+        flash('That student belongs to another branch.', 'error')
+        return redirect(url_for('main.students_list'))
 
     # Get enrollments
     enrollments = student.enrollments.join(ClassArmAssignment).order_by(

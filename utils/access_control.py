@@ -50,7 +50,8 @@ BLUEPRINT_MODULE = {
 
 # Endpoints always reachable by any logged-in user (the shell + own account).
 _ALWAYS_ALLOWED_ENDPOINTS = {
-    'main.dashboard', 'main.global_search', 'auth.logout', 'auth.change_password',
+    'main.dashboard', 'main.global_search', 'main.set_view_branch',
+    'auth.logout', 'auth.change_password',
 }
 
 # Default module set when a non-admin user has no explicit allowed_modules.
