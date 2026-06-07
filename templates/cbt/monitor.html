@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Live Monitor — {{ e.title }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <a href="{{ url_for('cbt.exam_detail', exam_id=e.id) }}">{{ e.title|truncate(24) }}</a> / <span>Monitor</span>{% endblock %}
+{% block extra_css %}
+<style>
+.mon-top{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem}
+.mon-chip{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.5rem .9rem;font-weight:600}
+.mon-chip span{color:var(--text-muted);font-weight:500;font-size:.8rem}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:.35rem}
+.dot.on{background:#1cc88a}.dot.off{background:#e74a3b}.dot.done{background:#4e73df}
+.bar{height:7px;background:var(--gray-100);border-radius:99px;overflow:hidden;min-width:80px}
+.bar > i{display:block;height:100%;background:var(--primary)}
+.flash-row{animation:fl 1s}@keyframes fl{from{background:rgba(231,74,59,.18)}to{background:transparent}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Live Monitor</h1>
+    <div class="page-header-actions"><a href="{{ url_for('cbt.results', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Results</a></div>
+</div>
+
+<div class="mon-top">
+    <div class="mon-chip">{{ e.title }} <span>· {{ e.subject.name if e.subject else '' }} · {{ e.school_class.name if e.school_class else '' }}</span></div>
+    <div class="mon-chip"><span>Writing</span> <strong id="cIn">—</strong></div>
+    <div class="mon-chip"><span>Submitted</span> <strong id="cDone">—</strong></div>
+    <div class="mon-chip"><span>Server</span> <strong id="cTime">—</strong></div>
+    <label class="text-sm" style="margin-left:auto;"><input type="checkbox" id="auto" checked> Auto-refresh (5s)</label>
+</div>
+
+<div class="card"><div class="card-body" style="padding:0;">
+    <div class="table-container">
+        <table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Student</th><th>Status</th><th>Progress</th><th>Time left</th><th>Flags</th><th>Connection</th></tr></thead>
+            <tbody id="monBody"><tr><td colspan="6" class="text-muted" style="padding:1.2rem;">Loading…</td></tr></tbody>
+        </table>
+    </div>
+</div></div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+    var URL="{{ url_for('cbt.monitor_data', exam_id=e.id) }}";
+    var prev={};
+    function fmt(s){ if(s<=0) return '0:00'; var m=Math.floor(s/60),x=s%60; return m+':'+(x<10?'0':'')+x; }
+    function render(d){
+        document.getElementById('cIn').textContent=d.in_progress;
+        document.getElementById('cDone').textContent=d.submitted;
+        document.getElementById('cTime').textContent=d.server_time;
+        var body=document.getElementById('monBody');
+        if(!d.rows.length){ body.innerHTML='<tr><td colspan="6" class="text-muted" style="padding:1.2rem;">No one has started yet.</td></tr>'; return; }
+        body.innerHTML=d.rows.map(function(r){
+            var pct=r.questions? Math.round(r.answered/r.questions*100):0;
+            var conn = r.status!=='In progress' ? '<span class="dot done"></span>—'
+                : (r.paused ? '<span class="dot off"></span>paused'
+                : (r.online ? '<span class="dot on"></span>online'
+                : '<span class="dot off"></span>'+(r.seen_ago==null?'no ping':(r.seen_ago+'s ago'))));
+            var st = r.status==='Submitted' ? '<span class="badge badge-success">Submitted '+(r.score!=null?(r.score+'/'+r.total):'')+'</span>'
+                : '<span class="badge badge-warning">Writing</span>';
+            var flagged = (prev[r.id]!=null && r.violations>prev[r.id]);
+            prev[r.id]=r.violations;
+            return '<tr class="'+(flagged?'flash-row':'')+'">'
+                +'<td data-label="Student">'+r.name+'<div class="text-muted text-sm">'+r.sid+'</div></td>'
+                +'<td data-label="Status">'+st+'</td>'
+                +'<td data-label="Progress"><div class="bar"><i style="width:'+pct+'%"></i></div><span class="text-sm">'+r.answered+'/'+r.questions+'</span></td>'
+                +'<td data-label="Time left">'+(r.status==='In progress'?fmt(r.remaining):'—')+'</td>'
+                +'<td data-label="Flags">'+(r.violations?'<span class="badge badge-danger"><i class="fas fa-flag"></i> '+r.violations+'</span>':'—')+'</td>'
+                +'<td data-label="Connection">'+conn+'</td></tr>';
+        }).join('');
+    }
+    function load(){ fetch(URL).then(function(r){return r.json();}).then(render).catch(function(){}); }
+    load();
+    var timer=setInterval(function(){ if(document.getElementById('auto').checked) load(); },5000);
+})();
+</script>
+{% endblock %}

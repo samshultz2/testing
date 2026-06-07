@@ -436,6 +436,53 @@ def results(exam_id):
                            analysis=analysis, submitted_count=len(submitted))
 
 
+@cbt_bp.route('/exams/<int:exam_id>/monitor')
+@login_required
+def monitor(exam_id):
+    e = CBTExam.query.get_or_404(exam_id)
+    return render_template('cbt/monitor.html', e=e)
+
+
+@cbt_bp.route('/exams/<int:exam_id>/monitor/data')
+@login_required
+def monitor_data(exam_id):
+    """Live JSON snapshot of every attempt for the invigilator monitor."""
+    e = CBTExam.query.get_or_404(exam_id)
+    now = timeutil.now()
+    qcount = e.question_count
+    # answered counts per attempt (only saved answers with a choice)
+    answered = dict(db.session.query(CBTAnswer.attempt_id, func.count(CBTAnswer.id))
+                    .join(CBTAttempt, CBTAnswer.attempt_id == CBTAttempt.id)
+                    .filter(CBTAttempt.exam_id == exam_id,
+                            CBTAnswer.selected_option != None)
+                    .group_by(CBTAnswer.attempt_id).all())
+    rows = []
+    for a in e.attempts.join(Student).order_by(Student.surname, Student.first_name).all():
+        deadline = _deadline(a, e)
+        remaining = int((deadline - now).total_seconds())
+        seen_ago = int((now - a.last_seen).total_seconds()) if a.last_seen else None
+        paused = bool(a.paused_until and now < a.paused_until)
+        rows.append({
+            'id': a.id,
+            'name': a.student.full_name if a.student else '—',
+            'sid': a.student.student_id if a.student else '',
+            'status': a.status,
+            'answered': answered.get(a.id, 0),
+            'questions': qcount,
+            'violations': a.violations or 0,
+            'remaining': max(remaining, 0) if a.status == 'In progress' else 0,
+            'seen_ago': seen_ago,
+            'online': (a.status == 'In progress' and seen_ago is not None and seen_ago <= 35),
+            'paused': paused,
+            'score': a.score if a.status == 'Submitted' else None,
+            'total': a.total,
+        })
+    inprog = sum(1 for r in rows if r['status'] == 'In progress')
+    return jsonify({'rows': rows, 'in_progress': inprog,
+                    'submitted': sum(1 for r in rows if r['status'] == 'Submitted'),
+                    'server_time': now.strftime('%H:%M:%S')})
+
+
 def _review_rows(exam, attempt):
     """Per-question review: each question with the student's pick + correctness."""
     ans = {a.question_id: a for a in attempt.answers}

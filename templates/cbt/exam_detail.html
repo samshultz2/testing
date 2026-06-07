@@ -10,6 +10,7 @@
 <div class="page-header">
     <h1>{{ e.title }}</h1>
     <div class="page-header-actions">
+        <a href="{{ url_for('cbt.monitor', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-tower-broadcast"></i> Live Monitor</a>
         <a href="{{ url_for('cbt.results', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Results</a>
         <a href="{{ url_for('cbt.edit_exam', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>
         <form method="POST" action="{{ url_for('cbt.toggle_publish', exam_id=e.id) }}">
