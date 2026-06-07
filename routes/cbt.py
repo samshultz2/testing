@@ -97,6 +97,9 @@ def _read_exam(e):
     e.access_password = (request.form.get('access_password') or '').strip()
     e.instructions = (request.form.get('instructions') or '').strip() or None
     e.shuffle = bool(request.form.get('shuffle'))
+    e.strict_mode = bool(request.form.get('strict_mode'))
+    vl = request.form.get('violation_limit', type=int)
+    e.violation_limit = vl if vl is not None and vl >= 0 else 3
 
 
 @cbt_bp.route('/exams/add', methods=['GET', 'POST'])
@@ -669,7 +672,8 @@ def take(exam_id):
     saved = {a.question_id: a.selected_option for a in attempt.answers}
     return render_template('cbt/portal_take.html', exam=exam, student=student,
         qview=qview, attempt=attempt, remaining=remaining, saved=saved,
-        max_violations=MAX_VIOLATIONS)
+        max_violations=(exam.violation_limit if exam.violation_limit is not None else 3),
+        strict=bool(exam.strict_mode))
 
 
 @cbt_portal_bp.route('/<int:exam_id>/flag', methods=['POST'])
@@ -680,13 +684,15 @@ def flag(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status != 'In progress':
         return jsonify({'ok': False}), 400
+    exam = CBTExam.query.get(exam_id)
     attempt.violations = (attempt.violations or 0) + 1
     db.session.commit()
-    over = attempt.violations >= MAX_VIOLATIONS
+    limit = exam.violation_limit if exam.violation_limit is not None else 3
+    over = bool(limit) and attempt.violations >= limit
     if over:
-        _finalize(attempt, CBTExam.query.get(exam_id))   # forced submit
+        _finalize(attempt, exam)   # forced submit
     return jsonify({'ok': True, 'violations': attempt.violations,
-                    'max': MAX_VIOLATIONS, 'autosubmit': over})
+                    'max': limit, 'autosubmit': over})
 
 
 @cbt_portal_bp.route('/<int:exam_id>/answer', methods=['POST'])

@@ -1066,6 +1066,10 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE cbt_exams ADD COLUMN end_time VARCHAR(5)')
         if 'max_score' not in ce_cols:
             statements.append('ALTER TABLE cbt_exams ADD COLUMN max_score FLOAT')
+        if 'strict_mode' not in ce_cols:
+            statements.append('ALTER TABLE cbt_exams ADD COLUMN strict_mode BOOLEAN DEFAULT 1')
+        if 'violation_limit' not in ce_cols:
+            statements.append('ALTER TABLE cbt_exams ADD COLUMN violation_limit INTEGER DEFAULT 3')
     except Exception:
         pass
 

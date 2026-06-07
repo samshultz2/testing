@@ -31,6 +31,8 @@ class CBTExam(db.Model):
     instructions = db.Column(db.Text)
     access_password = db.Column(db.String(60))                           # per-exam subject password
     shuffle = db.Column(db.Boolean, default=True)
+    strict_mode = db.Column(db.Boolean, default=True)        # fullscreen + lockdown
+    violation_limit = db.Column(db.Integer, default=3)       # leaves before auto-submit (0 = never)
     is_published = db.Column(db.Boolean, default=False)
     created_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=local_now)

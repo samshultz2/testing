@@ -125,41 +125,49 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     });
     refresh();
 
-    // Deter copying of exam content.
-    ['copy','cut','contextmenu','selectstart','dragstart'].forEach(function(ev){
-        document.addEventListener(ev,function(e){e.preventDefault();});
+    // Block copy / paste / right-click / drag everywhere on the exam.
+    ['copy','cut','paste','contextmenu','selectstart','dragstart'].forEach(function(ev){
+        document.addEventListener(ev,function(e){e.preventDefault();},true);
     });
-    // Block common shortcuts (print, save, view-source, devtools).
+    // Block shortcuts: print, save, view-source, devtools, new tab/window/close,
+    // tab cycling and refresh-loss.
     document.addEventListener('keydown',function(e){
         var k=(e.key||'').toLowerCase();
-        if((e.ctrlKey||e.metaKey)&&['p','s','u','c','x'].indexOf(k)>=0){e.preventDefault();}
-        if(k==='f12'){e.preventDefault();}
+        var combo=e.ctrlKey||e.metaKey;
+        if(combo && ['p','s','u','c','x','v','t','n','w','a','tab'].indexOf(k)>=0){e.preventDefault();}
+        if(k==='f12' || (combo && e.shiftKey && ['i','j','c'].indexOf(k)>=0)){e.preventDefault();}  // devtools
     });
 
-    // ---- Anti-malpractice: lock to fullscreen + record leaving the page ----
+    var STRICT={{ 'true' if strict else 'false' }};
     var MAX={{ max_violations }}, violations={{ attempt.violations or 0 }};
     var FLAG_URL="{{ url_for('cbt_portal.flag', exam_id=exam.id) }}";
     var overlay=document.getElementById('warnOverlay'), warnMsg=document.getElementById('warnMsg');
-    function enterFullscreen(){ var el=document.documentElement; if(el.requestFullscreen){el.requestFullscreen().catch(function(){});} }
-    document.getElementById('warnBack').addEventListener('click',function(){overlay.style.display='none';enterFullscreen();});
-    enterFullscreen();
-
-    var flagging=false, lastFlag=0;
-    function recordViolation(){
-        if(submitted) return;
-        var t=Date.now(); if(t-lastFlag<1200) return; lastFlag=t;   // debounce
-        overlay.style.display='flex';
-        fetch(FLAG_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token})
-            .then(function(r){return r.json();}).then(function(d){
-                if(!d||!d.ok) return;
-                violations=d.violations;
-                warnMsg.textContent='Warning '+violations+' of '+d.max+': leaving the exam is recorded. After '+d.max+' you are submitted automatically.';
-                if(d.autosubmit){ submitted=true; window.location="{{ url_for('cbt_portal.result', exam_id=exam.id) }}"; }
-            }).catch(function(){});
-    }
-    document.addEventListener('visibilitychange',function(){ if(document.hidden) recordViolation(); });
-    document.addEventListener('fullscreenchange',function(){ if(!document.fullscreenElement && !submitted) recordViolation(); });
     window.addEventListener('beforeunload',function(e){ if(!submitted){ e.preventDefault(); e.returnValue=''; } });
+
+    if(STRICT){
+        // ---- Lockdown: fullscreen + record leaving the exam page ----
+        function enterFullscreen(){ var el=document.documentElement; if(el.requestFullscreen){el.requestFullscreen().catch(function(){});} }
+        document.getElementById('warnBack').addEventListener('click',function(){overlay.style.display='none';enterFullscreen();});
+        enterFullscreen();
+
+        var lastFlag=0;
+        function recordViolation(){
+            if(submitted) return;
+            var t=Date.now(); if(t-lastFlag<1200) return; lastFlag=t;   // debounce
+            overlay.style.display='flex';
+            fetch(FLAG_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token})
+                .then(function(r){return r.json();}).then(function(d){
+                    if(!d||!d.ok) return;
+                    violations=d.violations;
+                    warnMsg.textContent = d.max
+                        ? ('Warning '+violations+' of '+d.max+': leaving the exam is recorded. After '+d.max+' you are submitted automatically.')
+                        : ('Leaving the exam is recorded ('+violations+').');
+                    if(d.autosubmit){ submitted=true; window.location="{{ url_for('cbt_portal.result', exam_id=exam.id) }}"; }
+                }).catch(function(){});
+        }
+        document.addEventListener('visibilitychange',function(){ if(document.hidden) recordViolation(); });
+        document.addEventListener('fullscreenchange',function(){ if(!document.fullscreenElement && !submitted) recordViolation(); });
+    }
 
     form.addEventListener('submit',function(e){
         if(!submitted){
