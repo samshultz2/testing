@@ -58,6 +58,50 @@ def test_admin_sees_everything(app):
     assert client.get('/finance/').status_code == 200
 
 
+def test_view_only_user_cannot_write(app):
+    """A view-only user may GET pages but POSTs are blocked."""
+    _make_user(app, 'viewer1', role='teacher', modules=['students'])
+    with app.app_context():
+        u = User.query.filter_by(username='viewer1').first()
+        u.view_only = True
+        db.session.commit()
+    client = _login(app, 'viewer1')
+
+    # Can read the students page.
+    assert client.get('/students').status_code == 200
+
+    # A write attempt (with a valid CSRF token) is blocked -> redirect away.
+    import re
+    html = client.get('/students').get_data(as_text=True)
+    m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', html)
+    token = m.group(1) if m else None
+    with app.app_context():
+        from models import Student
+        before_count = Student.query.count()
+    resp = client.post('/students/add',
+                       data={'full_name': 'X Y', '_csrf_token': token},
+                       follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    # And no student was created.
+    with app.app_context():
+        from models import Student
+        assert Student.query.count() == before_count
+
+
+def test_readonly_role_implies_view_only(app):
+    """The 'readonly' role blocks writes even without the explicit flag."""
+    _make_user(app, 'ro1', role='readonly', modules=['students'])
+    client = _login(app, 'ro1')
+    import re
+    html = client.get('/students').get_data(as_text=True)
+    m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', html)
+    token = m.group(1) if m else None
+    resp = client.post('/students/add',
+                       data={'first_name': 'RO', 'last_name': 'Test', '_csrf_token': token},
+                       follow_redirects=False)
+    assert resp.status_code in (302, 303)
+
+
 def test_teacher_default_modules(app):
     """A teacher with no explicit modules gets the role default set."""
     _make_user(app, 'teach1', role='teacher', modules=None)

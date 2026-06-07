@@ -94,6 +94,35 @@ def enforce_module_access():
     return None
 
 
+# Unsafe methods a read-only user may still call (managing their own account).
+_READONLY_WRITE_OK = {'auth.login', 'auth.logout', 'auth.change_password'}
+_SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS'}
+
+
+def is_read_only():
+    """True if the current user may browse but not change anything."""
+    if is_admin():
+        return False
+    if session.get('role') == 'readonly':
+        return True
+    user = get_current_user()
+    return bool(user and getattr(user, 'view_only', False))
+
+
+def enforce_read_only():
+    """before_request gate: block create/edit/delete for view-only users."""
+    if not session.get('logged_in') or request.method in _SAFE_METHODS:
+        return None
+    if not is_read_only():
+        return None
+    if (request.endpoint or '') in _READONLY_WRITE_OK:
+        return None
+    if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+        abort(403)
+    flash('Your account is view-only — you cannot make changes.', 'error')
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+
 def module_required(key):
     """Decorator form for a single route."""
     def deco(f):

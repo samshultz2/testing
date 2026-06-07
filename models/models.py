@@ -854,6 +854,9 @@ class User(db.Model):
     # JSON list of module keys this (non-admin) user may access. Empty/None =>
     # fall back to the role's default module set. Admins ignore this (see all).
     allowed_modules = db.Column(db.Text)
+    # When True, the user may browse but cannot create/edit/delete anything
+    # (enforced globally for unsafe HTTP methods). The 'readonly' role implies this too.
+    view_only = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -1124,6 +1127,8 @@ def _ensure_student_exam_columns():
         u_cols = {c['name'] for c in inspect(db.engine).get_columns('users')}
         if 'allowed_modules' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN allowed_modules TEXT')
+        if 'view_only' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN view_only BOOLEAN DEFAULT 0')
     except Exception:
         pass
 

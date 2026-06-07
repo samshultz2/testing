@@ -7,6 +7,7 @@ from datetime import datetime
 from functools import wraps
 from models import db, ClassArmAssignment, Term, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
 from utils.access_control import MODULES
+from utils.audit import log_action
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
@@ -36,6 +37,34 @@ def index():
     """List all users"""
     users = User.query.order_by(User.created_at.desc()).all()
     return render_template('users/index.html', users=users)
+
+
+@users_bp.route('/matrix', methods=['GET', 'POST'])
+@admin_required
+def matrix():
+    """Grid view of every non-admin user's module access, editable in one place."""
+    users = User.query.order_by(User.username).all()
+    editable = [u for u in users if u.role != 'admin']
+
+    if request.method == 'POST':
+        changed = 0
+        for u in editable:
+            before = (sorted(u.module_list), bool(u.view_only))
+            selected = [m for m in request.form.getlist(f'mod_{u.id}') if m in MODULES]
+            u.set_modules(selected)
+            u.view_only = request.form.get(f'view_{u.id}') == 'on'
+            after = (sorted(u.module_list), bool(u.view_only))
+            if after != before:
+                changed += 1
+                log_action('user.permissions',
+                           f'{u.username} (matrix): modules {before[0]}→{after[0]}, '
+                           f'view_only {before[1]}→{after[1]}')
+        db.session.commit()
+        flash(f'Updated access for {changed} user(s).', 'success')
+        return redirect(url_for('users.matrix'))
+
+    return render_template('users/matrix.html', users=users, editable=editable,
+                           modules=MODULES)
 
 
 @users_bp.route('/add', methods=['GET', 'POST'])
@@ -89,6 +118,7 @@ def add_user():
             if role != 'admin':
                 selected = [m for m in request.form.getlist('modules') if m in MODULES]
                 user.set_modules(selected)
+            user.view_only = request.form.get('view_only') == 'on'
             db.session.add(user)
             db.session.flush()  # Get user ID
 
@@ -106,6 +136,9 @@ def add_user():
                 db.session.add(teacher)
             
             db.session.commit()
+            log_action('user.create',
+                       f'{username} (role={role}, modules={user.module_list or "role default"}, '
+                       f'view_only={user.view_only})')
             flash(f'User "{username}" created successfully!', 'success')
             return redirect(url_for('users.index'))
             
@@ -132,6 +165,9 @@ def edit_user(user_id):
     user = User.query.get_or_404(user_id)
     
     if request.method == 'POST':
+        # Snapshot access-related fields so we can audit any change.
+        before = (user.role, sorted(user.module_list), bool(user.view_only))
+
         user.email = request.form.get('email', '').strip() or None
         user.full_name = request.form.get('full_name', '').strip()
         user.phone = request.form.get('phone', '').strip() or None
@@ -144,6 +180,7 @@ def edit_user(user_id):
         else:
             selected = [m for m in request.form.getlist('modules') if m in MODULES]
             user.set_modules(selected)
+        user.view_only = request.form.get('view_only') == 'on'
         
         # Update password if provided
         new_password = request.form.get('new_password', '')
@@ -172,6 +209,12 @@ def edit_user(user_id):
         
         try:
             db.session.commit()
+            after = (user.role, sorted(user.module_list), bool(user.view_only))
+            if after != before:
+                log_action('user.permissions',
+                           f'{user.username}: role {before[0]}→{after[0]}, '
+                           f'modules {before[1]}→{after[1]}, '
+                           f'view_only {before[2]}→{after[2]}')
             flash('User updated successfully!', 'success')
             return redirect(url_for('users.view_user', user_id=user_id))
         except Exception as e:

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Permission Matrix - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('users.index') }}">Users</a> / <span>Permission Matrix</span>{% endblock %}
+{% block extra_css %}
+<style>
+.matrix-wrap{overflow-x:auto}
+table.matrix{border-collapse:collapse;width:100%;font-size:.85rem}
+table.matrix th,table.matrix td{border:1px solid var(--border-color);padding:.4rem .5rem;text-align:center;white-space:nowrap}
+table.matrix th.user,table.matrix td.user{text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:1;font-weight:600}
+table.matrix thead th{background:var(--gray-50);font-size:.72rem;text-transform:uppercase;letter-spacing:.02em}
+table.matrix thead th.rot{height:120px;vertical-align:bottom}
+table.matrix thead th.rot span{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}
+table.matrix input{width:1.1rem;height:1.1rem;cursor:pointer}
+table.matrix tr.admin-row td{color:var(--text-muted);font-style:italic}
+.matrix-note{color:var(--text-muted);font-size:.8rem;margin:.5rem 0}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-table-cells"></i> Permission Matrix</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('users.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<p class="matrix-note"><i class="fas fa-info-circle"></i> Tick a box to grant a user access to that section. A user with no boxes ticked falls back to their role's default access. <strong>Admins</strong> always have full access and are shown for reference only. Tick <strong>View only</strong> to let a user browse but not change anything.</p>
+
+<form method="POST" action="{{ url_for('users.matrix') }}">
+<div class="card">
+<div class="card-body matrix-wrap">
+<table class="matrix">
+    <thead>
+        <tr>
+            <th class="user">User</th>
+            {% for key, label in modules.items() %}<th class="rot"><span>{{ label }}</span></th>{% endfor %}
+            <th class="rot"><span>View only</span></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        {% if u.role == 'admin' %}
+        <tr class="admin-row">
+            <td class="user">{{ u.full_name or u.username }} <span class="badge badge-warning">Admin</span></td>
+            {% for key in modules %}<td><i class="fas fa-check" style="color:#28a745"></i></td>{% endfor %}
+            <td>—</td>
+        </tr>
+        {% else %}
+        {% set granted = u.module_list %}
+        <tr>
+            <td class="user"><a href="{{ url_for('users.view_user', user_id=u.id) }}">{{ u.full_name or u.username }}</a>
+                <span class="badge badge-secondary">{{ u.get_display_role() }}</span></td>
+            {% for key in modules %}
+            <td><input type="checkbox" name="mod_{{ u.id }}" value="{{ key }}" {% if key in granted %}checked{% endif %}></td>
+            {% endfor %}
+            <td><input type="checkbox" name="view_{{ u.id }}" {% if u.view_only %}checked{% endif %}></td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        {% if not editable %}
+        <tr><td class="user" colspan="{{ modules|length + 2 }}">No non-admin users yet. <a href="{{ url_for('users.add_user') }}">Add a user</a>.</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+</div>
+</div>
+<div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Matrix</button>
+    <a href="{{ url_for('users.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
+</div>
+</form>
+{% endblock %}

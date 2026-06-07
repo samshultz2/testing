@@ -70,6 +70,7 @@
 {% endfor %}
 </div>
 <p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Tick the sections this user may open. Leave all unticked to use the role's default access. Admins always have full access.</p>
+<label class="permission-item mt-2" style="display:inline-flex"><input type="checkbox" name="view_only" {% if user.view_only %}checked{% endif %}> <span>View only — can browse but not create, edit or delete</span></label>
 </div>
 </div>
 

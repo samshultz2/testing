@@ -90,8 +90,9 @@ def create_app(config_class=Config):
     init_csrf(app)
 
     # Fine-grained module access for non-admin users.
-    from utils.access_control import enforce_module_access
+    from utils.access_control import enforce_module_access, enforce_read_only
     app.before_request(enforce_module_access)
+    app.before_request(enforce_read_only)
 
     # Friendly error pages
     from utils.errors import register_error_handlers
