@@ -12,7 +12,7 @@ from models import (
     db, StaffMember, Department, LeaveRecord, PayrollRun, Payslip,
     SalaryHistory, StaffAttendance, Term,
 )
-from utils.access_control import login_required, admin_required, is_admin
+from utils.access_control import login_required, admin_required
 from utils import hr
 
 hr_bp = Blueprint('hr', __name__, url_prefix='/hr')

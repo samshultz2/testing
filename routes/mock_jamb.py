@@ -4,7 +4,6 @@ Full management of mock JAMB exams with analytics and insights
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from datetime import datetime
-from collections import defaultdict
 from io import BytesIO
 
 from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass, Term

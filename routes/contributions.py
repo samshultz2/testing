@@ -4,12 +4,11 @@ Hidden module accessible only with special access code
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from models import (
-    db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm, Term,
-    ContributionSettings, ContributionPayment, ContributionExpense, AcademicSession
+    db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, Term, ContributionSettings,
+    ContributionPayment, ContributionExpense, AcademicSession
 )
 from functools import wraps
 from datetime import datetime, date, timedelta
-from collections import defaultdict
 from sqlalchemy import func
 
 contributions_bp = Blueprint('contributions', __name__, url_prefix='/contributions')
@@ -827,7 +826,7 @@ def export_defaulters():
     """Export defaulters list to Excel"""
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles import Font, PatternFill
         from io import BytesIO
         from flask import send_file
         

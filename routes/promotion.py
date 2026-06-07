@@ -1,16 +1,15 @@
 """
 Student Promotion Management routes
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, PromotionRule, PromotionRecord,
-    Term, AcademicSession, SchoolClass, ClassArm, TermSummary, StudentScore,
-    ClassSubject, Subject, SchoolSettings, GradeScale
+    Term, AcademicSession, SchoolClass, StudentScore, ClassSubject, Subject,
+    SchoolSettings
 )
 from utils.helpers import login_required, get_sss3_enrolled_students
 from utils.access_control import admin_required
 from utils.audit import log_action
-from sqlalchemy import func
 from datetime import date
 import json
 

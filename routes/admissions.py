@@ -10,9 +10,8 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, Response)
 from sqlalchemy import func
 
-from models import (db, Applicant, AcademicSession, SchoolClass, ClassArm,
-                    ClassArmAssignment, Student)
-from utils.access_control import login_required, admin_required, is_admin
+from models import (db, Applicant, AcademicSession, SchoolClass, ClassArmAssignment)
+from utils.access_control import login_required, admin_required
 from utils import admissions
 
 adm_bp = Blueprint('admissions', __name__, url_prefix='/admissions')

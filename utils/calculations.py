@@ -2,9 +2,8 @@
 Attendance calculation utilities
 All attendance-related calculations are performed here
 """
-from datetime import date, timedelta
-from collections import defaultdict
-from models import db, Attendance, StudentEnrollment, Week, Holiday, Student
+from datetime import timedelta
+from models import db, Attendance, StudentEnrollment, Week, Holiday
 
 
 def get_daily_attendance_summary(class_arm_assignment_id, target_date):
@@ -452,7 +451,7 @@ def get_attendance_statistics(term_id=None):
     
     Returns aggregate statistics for dashboard
     """
-    from models import Term, ClassArmAssignment
+    from models import ClassArmAssignment
     
     query = StudentEnrollment.query.filter_by(is_active=True)
     

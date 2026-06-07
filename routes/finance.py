@@ -11,15 +11,15 @@ from sqlalchemy import func
 
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
-    Student, Term, SchoolClass, ClassArm, AcademicSession,
-    StudentEnrollment, ClassArmAssignment,
+    Student, Term, SchoolClass, ClassArm, StudentEnrollment,
+    ClassArmAssignment,
 )
 from utils.access_control import (
-    login_required, admin_required, is_admin, filter_classes_for_user,
+    login_required, admin_required, filter_classes_for_user,
 )
 from utils.finance import (
-    student_bill, structure_items, class_fee_total, student_placement,
-    next_receipt_no, collection_trend, fee_item_breakdown,
+    student_bill, class_fee_total, next_receipt_no, collection_trend,
+    fee_item_breakdown,
 )
 
 finance_bp = Blueprint('finance', __name__, url_prefix='/finance')

@@ -5,10 +5,9 @@ Provides authentication, authorization, input validation, and protection utiliti
 import re
 import html
 import secrets
-import hashlib
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import session, redirect, url_for, flash, request, abort, current_app, g
+from flask import session, redirect, url_for, flash, request, abort, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from collections import defaultdict
 import threading

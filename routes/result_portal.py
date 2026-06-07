@@ -5,7 +5,7 @@
   Student ID + card PIN to view a published term result. No staff login.
 """
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, session)
+                   flash)
 
 from models import db, ScratchCard, ResultCheckLog, Term, Student
 from utils.access_control import login_required

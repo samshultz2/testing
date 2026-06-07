@@ -2,8 +2,6 @@
 Reports and data management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify
-from werkzeug.utils import secure_filename
-import os
 from models import db, Student, ParentContact, Term, AcademicSession
 from utils.helpers import login_required
 from utils.excel_utils import (
@@ -283,7 +281,7 @@ def api_enrollment_by_class():
 @login_required
 def api_attendance_trend():
     """Get attendance trend data"""
-    from models import Attendance, Week, ClassArmAssignment, StudentEnrollment
+    from models import Attendance, Week
     from sqlalchemy import func
     
     active_term = Term.query.filter_by(is_active=True).first()
@@ -406,7 +404,7 @@ def api_jamb_score_distribution():
 @login_required
 def summary_report():
     """Generate summary report"""
-    from models import ClassArmAssignment, StudentEnrollment, Attendance, WAECResult, JAMBResult
+    from models import ClassArmAssignment, StudentEnrollment, WAECResult, JAMBResult
     
     active_session = AcademicSession.query.filter_by(is_active=True).first()
     active_term = Term.query.filter_by(is_active=True).first()

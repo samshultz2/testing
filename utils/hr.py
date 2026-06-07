@@ -1,11 +1,10 @@
 """HR helpers — settings, lateness/deduction maths, dashboard stats and
 attendance-aware payroll generation."""
-from datetime import date
 
 from sqlalchemy import func, extract
 
-from models import (db, StaffMember, Department, LeaveRecord, PayrollRun, Payslip,
-                    StaffAttendance, SchoolSettings)
+from models import (db, StaffMember, Department, LeaveRecord, Payslip, StaffAttendance,
+                    SchoolSettings)
 
 STATUSES = ['Active', 'On Leave', 'Suspended', 'Resigned', 'Terminated']
 STAFF_TYPES = ['Teaching', 'Non-teaching']

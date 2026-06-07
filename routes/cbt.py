@@ -8,9 +8,8 @@ Two surfaces:
     portal password); shows exams active for the student's class *today*; each
     exam is gated by its own access password; answers are auto-graded.
 """
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from functools import wraps
-import csv
 import io
 import os
 import random
@@ -574,7 +573,7 @@ def attempt_review(attempt_id):
 
 def _exam_sheet(ws, exam):
     """Write one exam's results (alphabetical by name) into an openpyxl sheet."""
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill
     head_fill = PatternFill(start_color='0d6a4e', end_color='0d6a4e', fill_type='solid')
     head_font = Font(bold=True, color='FFFFFF')
     title = f'{exam.subject.name if exam.subject else "Exam"} — {exam.title}'
@@ -784,7 +783,6 @@ def _passwords_xlsx(school, label, rows, safe):
 
 def _passwords_docx(school, label, rows, safe):
     from docx import Document
-    from docx.shared import Pt
     doc = Document()
     doc.add_heading(f'{school}', level=1)
     doc.add_heading(f'Test Portal Passwords — {label}', level=2)

@@ -2,16 +2,13 @@
 Comprehensive Analytics Service
 Provides all statistical calculations, metrics, and ML predictions
 """
-import json
 import math
-from datetime import datetime, date, timedelta
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple, Any
-from sqlalchemy import func, and_, or_, desc, asc
+from typing import Dict, List, Tuple
+from sqlalchemy import func
 from models.models import (
-    db, Student, WAECResult, JAMBResult, Term, AcademicSession,
-    StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
-    Subject, Attendance
+    db, Student, WAECResult, JAMBResult, Term, StudentEnrollment,
+    ClassArmAssignment, Attendance
 )
 
 

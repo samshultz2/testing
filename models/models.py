@@ -2,7 +2,7 @@
 Database models for the Student Management System
 All models use SQLAlchemy ORM for database operations
 """
-from datetime import datetime, date, timezone
+from datetime import datetime, date
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 

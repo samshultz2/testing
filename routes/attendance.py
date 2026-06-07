@@ -9,9 +9,9 @@ from models import (
 )
 from utils.access_control import (
     login_required, can_access_class, can_mark_attendance,
-    get_accessible_class_ids, filter_classes_for_user, is_admin
+    filter_classes_for_user
 )
-from utils.helpers import is_school_day, FlashMessages
+from utils.helpers import is_school_day
 from utils.calculations import (
     get_daily_attendance_summary, get_weekly_attendance_summary,
     get_termly_attendance_summary, mark_attendance_bulk, mark_all_present
@@ -725,7 +725,6 @@ def api_school_days(week_id):
 @login_required
 def attendance_alerts():
     """View students with poor attendance"""
-    from models import SchoolSettings
     
     term_id = request.args.get('term_id', type=int)
     threshold = request.args.get('threshold', type=float)

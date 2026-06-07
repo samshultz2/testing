@@ -9,7 +9,6 @@ from models import (
 )
 from utils.helpers import login_required
 from io import BytesIO
-from datetime import datetime
 import uuid
 
 generator_bp = Blueprint('generator', __name__, url_prefix='/generator')
@@ -29,7 +28,6 @@ SUBJECT_COLORS = [
 @login_required
 def index():
     """Timetable generator - Level selector"""
-    from flask import session
     
     # Get counts for each level
     jss_teachers = GenTeacher.query.filter_by(is_active=True, school_level='jss').count()

@@ -4,7 +4,7 @@ Timetable Management routes
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from models import (
     db, TimetableSlot, ClassTimetable, ClassArmAssignment, Subject,
-    Term, SchoolClass, ClassArm, ClassSubject
+    Term, ClassSubject
 )
 from utils.helpers import login_required
 

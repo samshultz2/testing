@@ -3,7 +3,6 @@ Enhanced Exam Analytics Service
 Comprehensive statistical analysis for WAEC, JAMB, and Mock JAMB results
 Includes predictive analytics for Mock JAMB -> Real JAMB/WAEC correlation
 """
-from datetime import datetime
 from collections import defaultdict
 import math
 from models import db, Student, WAECResult, JAMBResult

@@ -4,8 +4,8 @@ Subjects and Score Management routes
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from models import (
     db, Subject, ClassSubject, AssessmentType, SubjectAssessmentOverride,
-    StudentScore, TermResult, TermSummary, StudentEnrollment, ClassArmAssignment,
-    Term, SchoolClass, ClassArm, Student, GradeScale, SchoolSettings
+    StudentScore, StudentEnrollment, ClassArmAssignment, Term, SchoolClass,
+    ClassArm, Student, GradeScale, SchoolSettings
 )
 from utils.access_control import (
     login_required, can_access_class, can_enter_results,

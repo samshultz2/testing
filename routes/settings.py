@@ -1,11 +1,10 @@
 """
 Settings, Backup, and Configuration routes
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, send_file, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, send_file
 from datetime import datetime
 import os
 import shutil
-import io
 import json
 from models import (
     db, SchoolSettings, GradeScale, AssessmentType, TimetableSlot,
@@ -202,7 +201,7 @@ def timetable_slots():
 def generate_timetable_slots():
     """Auto-generate timetable slots based on settings"""
     try:
-        from datetime import time, timedelta, datetime as dt
+        from datetime import timedelta, datetime as dt
         
         # Get settings
         start_time_str = SchoolSettings.get('school_day_start', '08:20')
@@ -389,10 +388,7 @@ def export_json():
     """Export all data to JSON"""
     try:
         from models import (
-            Student, ParentContact, AcademicSession, Term, SchoolClass, ClassArm,
-            ClassArmAssignment, StudentEnrollment, Week, Holiday, Attendance,
-            WAECResult, JAMBResult, SchoolSettings, GradeScale, AssessmentType,
-            Subject, ClassSubject, StudentScore, User
+            Student, ParentContact, AcademicSession, SchoolSettings, GradeScale, AssessmentType
         )
         
         data = {

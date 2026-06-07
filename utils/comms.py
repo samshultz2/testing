@@ -6,8 +6,7 @@ list of parents to message).
 import re
 
 from models import (
-    db, Student, ParentContact, Term, SchoolClass, ClassArm,
-    StudentEnrollment, ClassArmAssignment, SchoolSettings,
+    db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, SchoolSettings,
 )
 
 PLACEHOLDERS = ['{student}', '{first_name}', '{surname}', '{class}', '{arm}',

@@ -6,7 +6,6 @@ view that term's result. Each successful check consumes one use.
 """
 import secrets
 import string
-from datetime import datetime
 
 from models.models import db, local_now
 

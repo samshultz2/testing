@@ -12,11 +12,11 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 
 from models import (
-    db, Student, ParentContact, Term, SchoolClass, ClassArm,
-    StudentEnrollment, ClassArmAssignment,
-    MessageTemplate, Message, MessageRecipient, Announcement,
+    db, Student, Term, SchoolClass, ClassArm, StudentEnrollment,
+    ClassArmAssignment, MessageTemplate,
+    Message, MessageRecipient, Announcement,
 )
-from utils.access_control import login_required, admin_required, is_admin
+from utils.access_control import login_required, admin_required
 from utils import comms
 
 comms_bp = Blueprint('comms', __name__, url_prefix='/communication')

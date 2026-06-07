@@ -2,12 +2,12 @@
 Academic management routes - Sessions, Terms, Classes, Arms
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from datetime import datetime, timedelta, date
+from datetime import timedelta, date
 from models import (
     db, AcademicSession, Term, SchoolClass, ClassArm, 
     ClassArmAssignment, StudentEnrollment, Week, Holiday, Student
 )
-from utils.helpers import login_required, parse_date, get_weeks_in_range, FlashMessages
+from utils.helpers import login_required, parse_date, get_weeks_in_range
 
 academics_bp = Blueprint('academics', __name__, url_prefix='/academics')
 

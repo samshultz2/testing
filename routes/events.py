@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 from flask import (Blueprint, render_template, request, redirect, url_for, flash)
 
 from models import db, SchoolEvent, Term
-from utils.access_control import login_required, is_admin
+from utils.access_control import login_required
 
 events_bp = Blueprint('events', __name__, url_prefix='/events')
 

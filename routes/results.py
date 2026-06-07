@@ -4,15 +4,15 @@ Comprehensive academic performance tracking and analysis
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from collections import defaultdict
-from models import (db, Student, WAECResult, JAMBResult, Term, SchoolClass, ClassArm,
-                    AcademicSession, UniversityCutoff, SchoolSettings,
-                    StudentEnrollment, ClassArmAssignment, TermSummary)
+from models import (db, Student, WAECResult, JAMBResult, Term, AcademicSession, UniversityCutoff,
+                    SchoolSettings, StudentEnrollment, ClassArmAssignment,
+                    TermSummary)
 import json as _json
 from utils.access_control import login_required, admin_required
 from utils.audit import log_action
 from utils.helpers import (
-    WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, FlashMessages,
-    get_sss3_students, student_subject_map,
+    WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, get_sss3_students,
+    student_subject_map,
 )
 from datetime import date as _date
 from sqlalchemy import func
@@ -1735,7 +1735,7 @@ def export_waec():
 def export_jamb():
     """Export JAMB results to Excel"""
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.styles import Font, PatternFill, Border, Side
     from io import BytesIO
     
     year = request.args.get('year', type=int)

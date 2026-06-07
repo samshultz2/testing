@@ -9,7 +9,6 @@ exam's access password to start, answers, and is auto-graded.
 """
 from datetime import date
 
-from werkzeug.security import generate_password_hash, check_password_hash
 
 from models.models import db, local_now
 

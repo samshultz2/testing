@@ -8,8 +8,7 @@ from models import (
     ClassArmAssignment, Attendance, Week, ClassArm, Subject, SchoolClass
 )
 from utils.access_control import (
-    login_required, admin_required, is_admin, can_access_class,
-    get_accessible_class_ids, filter_classes_for_user
+    login_required, admin_required, is_admin, get_accessible_class_ids
 )
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
@@ -208,8 +207,7 @@ def dashboard():
 
     # --- Richer dashboard widgets ---
     from models import WAECResult, JAMBResult, AuditLog
-    from models.mock_jamb import MockJAMBResult, MockJAMBExam
-    from collections import defaultdict as _dd
+    from models.mock_jamb import MockJAMBExam
 
     # Stream distribution (active students)
     stream_rows = db.session.query(Student.stream, func.count(Student.id)).filter(
@@ -976,8 +974,6 @@ def api_dashboard_stats():
 def export_students_data():
     """Export selected students data to various formats with field selection"""
     import json
-    from io import BytesIO
-    from flask import Response
     
     format_type = request.args.get('format', 'excel')
     fields_json = request.args.get('fields', '[]')
@@ -1237,7 +1233,7 @@ def export_students_excel(student_data, fields):
 def export_students_word(student_data, fields):
     """Export students to Word format with selected fields - wraps text and adjusts row heights"""
     from docx import Document
-    from docx.shared import Pt, Inches, Cm, Twips
+    from docx.shared import Pt, Inches, Cm
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ROW_HEIGHT_RULE
     from docx.oxml.ns import nsdecls

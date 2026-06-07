@@ -451,8 +451,8 @@ def run_generation_v2(class_ids, periods_per_day, break_after, db_models):
     """
     from models import (
         GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
-        GenClassSubjectConfig, GenTeacher, GenTeacherSubject, GenTeacherAssignment,
-        GenTeacherAvailability, GenTimetableRule
+        GenClassSubjectConfig, GenTeacher, GenTeacherAssignment, GenTeacherAvailability,
+        GenTimetableRule
     )
     
     generator = TimetableGeneratorV2(
