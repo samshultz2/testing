@@ -825,7 +825,7 @@ def export_broadsheet():
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except Exception:
                 pass
         ws.column_dimensions[column].width = min(max_length + 2, 30)
     

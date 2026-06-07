@@ -265,7 +265,7 @@ def payments_list():
         try:
             payment_date = datetime.strptime(filter_date, '%Y-%m-%d').date()
             query = query.filter(ContributionPayment.payment_date == payment_date)
-        except:
+        except Exception:
             pass
     payments = query.order_by(ContributionPayment.payment_date.desc(), ContributionPayment.created_at.desc()).all()
     unique_dates = db.session.query(ContributionPayment.payment_date).distinct().order_by(ContributionPayment.payment_date.desc()).all()
@@ -296,7 +296,7 @@ def student_detail(student_id):
     start_date_str = ContributionSettings.get('start_date', '2025-01-06')
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-    except:
+    except Exception:
         start_date = date(2025, 1, 6)
     weekly_data = []
     for week_num in range(1, 36):
@@ -665,7 +665,7 @@ def import_excel():
                 else:
                     try:
                         pay_date = datetime.strptime(str(payment_date), '%Y-%m-%d').date()
-                    except:
+                    except Exception:
                         skipped_count += 1
                         continue
                 

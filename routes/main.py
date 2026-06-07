@@ -982,7 +982,7 @@ def export_students_data():
     try:
         fields = json.loads(fields_json)
         student_ids = json.loads(student_ids_json)
-    except:
+    except Exception:
         fields = ['student_id', 'surname', 'first_name', 'gender', 'current_class']
         student_ids = []
     

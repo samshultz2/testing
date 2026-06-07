@@ -390,7 +390,7 @@ def bulk_entry(exam_id):
             def safe_int(val):
                 try:
                     return int(val) if val else None
-                except:
+                except Exception:
                     return None
             
             for student_data in students:
@@ -467,7 +467,7 @@ def edit_result(result_id):
             def safe_int(val):
                 try:
                     return int(val) if val else None
-                except:
+                except Exception:
                     return None
             
             result.total_score = total_score

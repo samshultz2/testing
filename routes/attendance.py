@@ -97,7 +97,7 @@ def mark_attendance_page():
     if target_date:
         try:
             target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
-        except:
+        except Exception:
             target_date = date.today()
     else:
         target_date = date.today()
