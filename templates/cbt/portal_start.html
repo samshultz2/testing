@@ -6,8 +6,13 @@
     <div class="text-muted" style="margin-bottom:.8rem;">{{ exam.subject.name if exam.subject else '' }} · {{ exam.question_count }} questions · {{ exam.duration_minutes }} minutes · {{ exam.total_marks }} marks</div>
     {% if exam.instructions %}<div class="card mb-3" style="background:var(--gray-50);"><div class="card-body">{{ exam.instructions }}</div></div>{% endif %}
     <div class="card mb-3" style="border-color:var(--warning);"><div class="card-body text-sm">
-        <i class="fas fa-triangle-exclamation" style="color:var(--warning);"></i>
-        Once you start, the timer runs for {{ exam.duration_minutes }} minutes and the test auto-submits when time is up. Don't refresh or leave the page.
+        <i class="fas fa-triangle-exclamation" style="color:var(--warning);"></i> <strong>Exam rules</strong>
+        <ul style="margin:.4rem 0 0;padding-left:1.1rem;line-height:1.7;">
+            <li>The timer runs for {{ exam.duration_minutes }} minutes and the test auto-submits when time is up.</li>
+            <li>The test opens in fullscreen. <strong>Leaving the exam page (switching tabs/apps or exiting fullscreen) is recorded.</strong></li>
+            <li>After 3 such attempts your test is submitted automatically.</li>
+            <li>Copying and right-click are disabled. Your answers save as you go, so a refresh resumes where you left off.</li>
+        </ul>
     </div></div>
     <form method="POST" action="{{ url_for('cbt_portal.start', exam_id=exam.id) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

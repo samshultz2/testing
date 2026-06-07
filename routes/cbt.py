@@ -29,6 +29,7 @@ cbt_bp = Blueprint('cbt', __name__, url_prefix='/cbt')
 cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
 
 PORTAL_KEY = 'cbt_student_id'
+MAX_VIOLATIONS = 3   # leave-page events allowed before the test auto-submits
 
 
 def _d(value, default=None):
@@ -657,9 +658,35 @@ def take(exam_id):
     questions = exam.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     if exam.shuffle:
         random.Random(attempt.id).shuffle(questions)   # stable per attempt
+    # Build per-question option lists, shuffled per attempt (each option keeps
+    # its original letter, so two students rarely see "the answer is C").
+    qview = []
+    for q in questions:
+        opts = [(l, t) for l, t in q.options if t]
+        if exam.shuffle:
+            random.Random(attempt.id * 1009 + q.id).shuffle(opts)
+        qview.append({'q': q, 'options': opts})
     saved = {a.question_id: a.selected_option for a in attempt.answers}
     return render_template('cbt/portal_take.html', exam=exam, student=student,
-        questions=questions, attempt=attempt, remaining=remaining, saved=saved)
+        qview=qview, attempt=attempt, remaining=remaining, saved=saved,
+        max_violations=MAX_VIOLATIONS)
+
+
+@cbt_portal_bp.route('/<int:exam_id>/flag', methods=['POST'])
+@cbt_login_required
+def flag(exam_id):
+    """Record an anti-malpractice event (student left the exam tab/window)."""
+    student = _current_student()
+    attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
+    if not attempt or attempt.status != 'In progress':
+        return jsonify({'ok': False}), 400
+    attempt.violations = (attempt.violations or 0) + 1
+    db.session.commit()
+    over = attempt.violations >= MAX_VIOLATIONS
+    if over:
+        _finalize(attempt, CBTExam.query.get(exam_id))   # forced submit
+    return jsonify({'ok': True, 'violations': attempt.violations,
+                    'max': MAX_VIOLATIONS, 'autosubmit': over})
 
 
 @cbt_portal_bp.route('/<int:exam_id>/answer', methods=['POST'])

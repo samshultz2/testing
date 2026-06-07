@@ -149,7 +149,8 @@ class CBTAttempt(db.Model):
     total = db.Column(db.Float, default=0)        # exam reported total (scaled)
     raw_score = db.Column(db.Float, default=0)    # marks earned from questions
     raw_total = db.Column(db.Float, default=0)    # sum of question marks
-    status = db.Column(db.String(15), default='In progress')   # In progress / Submitted
+    violations = db.Column(db.Integer, default=0) # tab-switch / leave-page events
+    status = db.Column(db.String(15), default='In progress')   # In progress / Submitted / Auto-submitted
 
     student = db.relationship('Student')
     answers = db.relationship('CBTAnswer', backref='attempt',

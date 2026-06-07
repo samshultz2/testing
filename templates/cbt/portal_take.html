@@ -56,30 +56,37 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 <div class="ex-wrap">
     <div>
-        {% for q in questions %}
+        {% for item in qview %}{% set q = item.q %}
         <div class="q-card" id="q{{ loop.index }}">
             <p class="q-text"><span class="q-num">{{ loop.index }}</span>{{ q.question_text }}</p>
-            {% for letter, text in q.options %}{% if text %}
+            {% for letter, text in item.options %}
             <label class="opt" data-q="{{ loop.index }}">
                 <input type="radio" name="q_{{ q.id }}" data-qid="{{ q.id }}" value="{{ letter }}" {% if saved is defined and saved.get(q.id) == letter %}checked{% endif %}>
                 <span class="mark"><i class="fas fa-check"></i></span>
                 <span class="letter">{{ letter }}.</span> <span>{{ text }}</span>
             </label>
-            {% endif %}{% endfor %}
+            {% endfor %}
         </div>
         {% endfor %}
         <button type="submit" class="btn-submit mini-submit" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit Test</button>
     </div>
     <div class="nav-panel">
         <h4>Questions</h4>
-        <div class="nav-prog"><span id="answered">0</span> of {{ questions|length }} answered</div>
+        <div class="nav-prog"><span id="answered">0</span> of {{ qview|length }} answered</div>
         <div class="nav-grid">
-            {% for q in questions %}<a href="#q{{ loop.index }}" data-n="{{ loop.index }}">{{ loop.index }}</a>{% endfor %}
+            {% for item in qview %}<a href="#q{{ loop.index }}" data-n="{{ loop.index }}">{{ loop.index }}</a>{% endfor %}
         </div>
         <button type="submit" class="btn-submit" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit Test</button>
     </div>
 </div>
 </form>
+
+<div id="warnOverlay" style="display:none;position:fixed;inset:0;background:rgba(220,38,38,.96);color:#fff;z-index:200;align-items:center;justify-content:center;text-align:center;padding:2rem;flex-direction:column;">
+    <i class="fas fa-triangle-exclamation" style="font-size:3rem;margin-bottom:1rem;"></i>
+    <h2 style="margin:0 0 .5rem;">Stay on the exam</h2>
+    <p id="warnMsg" style="max-width:480px;font-size:1.05rem;">Leaving the exam page is recorded. Repeated attempts will submit your test automatically.</p>
+    <button id="warnBack" style="margin-top:1rem;background:#fff;color:#b91c1c;border:none;border-radius:10px;padding:.7rem 1.4rem;font-weight:700;cursor:pointer;">Continue test</button>
+</div>
 
 <script>
 (function(){
@@ -122,6 +129,37 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     ['copy','cut','contextmenu','selectstart','dragstart'].forEach(function(ev){
         document.addEventListener(ev,function(e){e.preventDefault();});
     });
+    // Block common shortcuts (print, save, view-source, devtools).
+    document.addEventListener('keydown',function(e){
+        var k=(e.key||'').toLowerCase();
+        if((e.ctrlKey||e.metaKey)&&['p','s','u','c','x'].indexOf(k)>=0){e.preventDefault();}
+        if(k==='f12'){e.preventDefault();}
+    });
+
+    // ---- Anti-malpractice: lock to fullscreen + record leaving the page ----
+    var MAX={{ max_violations }}, violations={{ attempt.violations or 0 }};
+    var FLAG_URL="{{ url_for('cbt_portal.flag', exam_id=exam.id) }}";
+    var overlay=document.getElementById('warnOverlay'), warnMsg=document.getElementById('warnMsg');
+    function enterFullscreen(){ var el=document.documentElement; if(el.requestFullscreen){el.requestFullscreen().catch(function(){});} }
+    document.getElementById('warnBack').addEventListener('click',function(){overlay.style.display='none';enterFullscreen();});
+    enterFullscreen();
+
+    var flagging=false, lastFlag=0;
+    function recordViolation(){
+        if(submitted) return;
+        var t=Date.now(); if(t-lastFlag<1200) return; lastFlag=t;   // debounce
+        overlay.style.display='flex';
+        fetch(FLAG_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token})
+            .then(function(r){return r.json();}).then(function(d){
+                if(!d||!d.ok) return;
+                violations=d.violations;
+                warnMsg.textContent='Warning '+violations+' of '+d.max+': leaving the exam is recorded. After '+d.max+' you are submitted automatically.';
+                if(d.autosubmit){ submitted=true; window.location="{{ url_for('cbt_portal.result', exam_id=exam.id) }}"; }
+            }).catch(function(){});
+    }
+    document.addEventListener('visibilitychange',function(){ if(document.hidden) recordViolation(); });
+    document.addEventListener('fullscreenchange',function(){ if(!document.fullscreenElement && !submitted) recordViolation(); });
+    window.addEventListener('beforeunload',function(e){ if(!submitted){ e.preventDefault(); e.returnValue=''; } });
 
     form.addEventListener('submit',function(e){
         if(!submitted){

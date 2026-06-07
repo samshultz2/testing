@@ -19,7 +19,7 @@
         {% if attempts %}
         <div class="table-container">
             <table class="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Student</th><th class="text-right">Raw</th><th class="text-right">Score</th><th class="text-right">%</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Student</th><th class="text-right">Raw</th><th class="text-right">Score</th><th class="text-right">%</th><th>Flags</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                     {% for a in attempts %}
                     <tr>
@@ -27,6 +27,7 @@
                         <td data-label="Raw" class="text-right">{% if a.raw_total %}{{ a.raw_score|int }}/{{ a.raw_total|int }}{% else %}—{% endif %}</td>
                         <td data-label="Score" class="text-right">{{ a.score }} / {{ a.total }}</td>
                         <td data-label="%" class="text-right"><span class="badge {{ 'badge-success' if a.percentage>=50 else 'badge-danger' }}">{{ a.percentage }}%</span></td>
+                        <td data-label="Flags">{% if a.violations %}<span class="badge badge-danger" title="Left the exam page {{ a.violations }} time(s)"><i class="fas fa-flag"></i> {{ a.violations }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
                         <td data-label="Status"><span class="badge {{ 'badge-success' if a.status=='Submitted' else 'badge-warning' }}">{{ a.status }}</span></td>
                         <td class="actions">{% if a.status=='Submitted' %}<a href="{{ url_for('cbt.attempt_review', attempt_id=a.id) }}" class="btn btn-secondary btn-sm" title="Review answers"><i class="fas fa-list-check"></i></a>{% endif %}</td>
                     </tr>

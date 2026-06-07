@@ -1076,6 +1076,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE cbt_attempts ADD COLUMN raw_score FLOAT DEFAULT 0')
         if 'raw_total' not in ca_cols:
             statements.append('ALTER TABLE cbt_attempts ADD COLUMN raw_total FLOAT DEFAULT 0')
+        if 'violations' not in ca_cols:
+            statements.append('ALTER TABLE cbt_attempts ADD COLUMN violations INTEGER DEFAULT 0')
     except Exception:
         pass
 
