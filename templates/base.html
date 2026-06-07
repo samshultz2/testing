@@ -423,6 +423,10 @@
                     </button>
                     <div class="breadcrumb">{% block breadcrumb %}Dashboard{% endblock %}</div>
                 </div>
+                <form class="header-search" method="GET" action="{{ url_for('main.global_search') }}" role="search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="q" placeholder="Search…" aria-label="Search" autocomplete="off">
+                </form>
                 <div class="header-right">
                     {% if get_active_term() %}
                     <div class="current-term">
@@ -484,6 +488,11 @@
     </div>
     
     <style>
+    /* Global header search */
+    .header-search{display:flex;align-items:center;gap:.45rem;background:var(--gray-100);border-radius:999px;padding:.35rem .8rem;max-width:240px;flex:1;margin:0 .5rem}
+    .header-search i{color:var(--text-muted);font-size:.85rem}
+    .header-search input{border:none;background:transparent;outline:none;width:100%;font-size:.85rem;color:var(--text-primary)}
+    @media(max-width:768px){.header-search{display:none}}
     /* Header icon button (clear cache / refresh) */
     .header-icon-btn {
         display: flex;

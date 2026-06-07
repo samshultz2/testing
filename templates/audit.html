@@ -7,6 +7,17 @@
     <div><h1>Audit Log</h1><p class="text-muted text-sm">Record of administrative & destructive actions.</p></div>
 </div>
 
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form">
+        <div class="form-group"><label class="form-label">Search</label><input type="text" name="q" class="form-control" value="{{ q }}" placeholder="Action, detail or user"></div>
+        <div class="form-group"><label class="form-label">Action</label>
+            <select name="action" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for a in actions %}<option value="{{ a }}" {% if action==a %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">From</label><input type="date" name="from" class="form-control" value="{{ from_s }}"></div>
+        <div class="form-group"><label class="form-label">To</label><input type="date" name="to" class="form-control" value="{{ to_s }}"></div>
+        <div class="form-group" style="align-self:flex-end;"><button class="btn btn-secondary"><i class="fas fa-filter"></i> Filter</button></div>
+    </form>
+</div></div>
+
 <div class="card">
     <div class="card-body" style="padding:0;overflow-x:auto;">
         {% if logs.items %}

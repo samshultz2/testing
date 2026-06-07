@@ -788,14 +788,119 @@ def purge_student(student_id):
     return redirect(url_for('main.students_trash'))
 
 
+@main_bp.route('/search')
+@login_required
+def global_search():
+    """Search across the main entities and group the results."""
+    q = (request.args.get('q') or '').strip()
+    groups = []
+    if len(q) >= 2:
+        like = f'%{q}%'
+
+        def add(title, icon, items):
+            if items:
+                groups.append({'title': title, 'icon': icon, 'rows': items})
+
+        students = (Student.query.filter_by(is_active=True)
+                    .filter(db.or_(Student.first_name.ilike(like), Student.surname.ilike(like),
+                                   Student.student_id.ilike(like)))
+                    .order_by(Student.surname).limit(12).all())
+        add('Students', 'fa-user-graduate', [
+            {'label': s.full_name, 'sub': s.student_id,
+             'url': url_for('main.view_student', student_id=s.id)} for s in students])
+
+        try:
+            from models import StaffMember
+            staff = (StaffMember.query.filter_by(is_active=True)
+                     .filter(db.or_(StaffMember.first_name.ilike(like), StaffMember.surname.ilike(like),
+                                    StaffMember.staff_id.ilike(like), StaffMember.phone.ilike(like)))
+                     .limit(10).all())
+            add('Staff', 'fa-id-badge', [
+                {'label': s.full_name, 'sub': s.designation or s.staff_id,
+                 'url': url_for('hr.staff_detail', staff_id=s.id)} for s in staff])
+        except Exception:
+            pass
+
+        try:
+            from models import Applicant
+            apps = (Applicant.query.filter(db.or_(Applicant.first_name.ilike(like),
+                    Applicant.surname.ilike(like), Applicant.application_no.ilike(like)))
+                    .limit(10).all())
+            add('Applicants', 'fa-clipboard-user', [
+                {'label': a.full_name, 'sub': f'{a.application_no} · {a.status}',
+                 'url': url_for('admissions.applicant_detail', applicant_id=a.id)} for a in apps])
+        except Exception:
+            pass
+
+        try:
+            from models import Book
+            books = (Book.query.filter_by(is_active=True)
+                     .filter(db.or_(Book.title.ilike(like), Book.author.ilike(like), Book.isbn.ilike(like)))
+                     .limit(10).all())
+            add('Library books', 'fa-book', [
+                {'label': b.title, 'sub': b.author or '', 'url': url_for('library.books', q=b.title)}
+                for b in books])
+        except Exception:
+            pass
+
+        try:
+            from models import FeePayment
+            pays = FeePayment.query.filter(FeePayment.receipt_no.ilike(like)).limit(8).all()
+            add('Fee receipts', 'fa-receipt', [
+                {'label': p.receipt_no, 'sub': (p.student.full_name if p.student else ''),
+                 'url': url_for('finance.receipt', payment_id=p.id)} for p in pays])
+        except Exception:
+            pass
+
+        try:
+            from models import CBTExam
+            exams = CBTExam.query.filter(CBTExam.title.ilike(like)).limit(8).all()
+            add('CBT exams', 'fa-laptop-code', [
+                {'label': e.title, 'sub': (e.subject.name if e.subject else ''),
+                 'url': url_for('cbt.exam_detail', exam_id=e.id)} for e in exams])
+        except Exception:
+            pass
+
+    return render_template('search.html', q=q, groups=groups,
+                           count=sum(len(g['rows']) for g in groups))
+
+
 @main_bp.route('/audit')
 @admin_required
 def audit_log():
-    """View the audit trail of administrative actions."""
+    """View the audit trail of administrative actions (with filters)."""
     from models import AuditLog
+    from datetime import datetime as _dt
     page = request.args.get('page', 1, type=int)
-    logs = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
-    return render_template('audit.html', logs=logs)
+    q = (request.args.get('q') or '').strip()
+    action = (request.args.get('action') or '').strip()
+    user = (request.args.get('user') or '').strip()
+    from_s = request.args.get('from')
+    to_s = request.args.get('to')
+
+    query = AuditLog.query
+    if q:
+        like = f'%{q}%'
+        query = query.filter(db.or_(AuditLog.action.ilike(like),
+                                    AuditLog.detail.ilike(like),
+                                    AuditLog.user.ilike(like)))
+    if action:
+        query = query.filter(AuditLog.action == action)
+    if user:
+        query = query.filter(AuditLog.user.ilike(f'%{user}%'))
+    try:
+        if from_s:
+            query = query.filter(AuditLog.created_at >= _dt.strptime(from_s, '%Y-%m-%d'))
+        if to_s:
+            d = _dt.strptime(to_s, '%Y-%m-%d')
+            query = query.filter(AuditLog.created_at < d.replace(hour=23, minute=59, second=59))
+    except ValueError:
+        pass
+
+    logs = query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    actions = [a[0] for a in db.session.query(AuditLog.action).distinct().order_by(AuditLog.action).all()]
+    return render_template('audit.html', logs=logs, actions=actions,
+        q=q, action=action, user=user, from_s=from_s or '', to_s=to_s or '')
 
 
 # ============================================================================

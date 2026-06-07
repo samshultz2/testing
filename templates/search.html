@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Search - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Search</span>{% endblock %}
+{% block extra_css %}
+<style>
+.sr-item{display:flex;align-items:center;gap:.7rem;padding:.6rem .25rem;border-bottom:1px solid var(--border-light);text-decoration:none;color:inherit}
+.sr-item:last-child{border-bottom:none}.sr-item:hover{background:var(--gray-50)}
+.sr-item .nm{font-weight:600}.sr-item .sub{font-size:.8rem;color:var(--text-muted)}
+.sr-head{display:flex;align-items:center;gap:.5rem;font-weight:600;font-size:.85rem}
+.sr-head i{color:var(--primary)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Search</h1></div>
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" action="{{ url_for('main.global_search') }}" class="d-flex gap-2">
+        <input type="text" name="q" class="form-control" value="{{ q }}" placeholder="Search students, staff, applicants, books, receipts, exams…" autofocus>
+        <button class="btn btn-primary"><i class="fas fa-search"></i></button>
+    </form>
+</div></div>
+
+{% if q and q|length >= 2 %}
+    {% if groups %}
+    <p class="text-muted text-sm mb-2">{{ count }} result(s) for "{{ q }}"</p>
+    {% for g in groups %}
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="sr-head"><i class="fas {{ g.icon }}"></i> {{ g.title }} ({{ g.rows|length }})</h3></div>
+        <div class="card-body" style="padding:.4rem 1rem;">
+            {% for it in g.rows %}
+            <a class="sr-item" href="{{ it.url }}"><div style="flex:1;"><div class="nm">{{ it.label }}</div>{% if it.sub %}<div class="sub">{{ it.sub }}</div>{% endif %}</div><i class="fas fa-arrow-right text-muted"></i></a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-magnifying-glass"></i><h3>No results</h3><p>Nothing matched "{{ q }}".</p></div></div></div>
+    {% endif %}
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-magnifying-glass"></i><h3>Search the school</h3><p>Type at least 2 characters to search students, staff, applicants, library books, fee receipts and exams.</p></div></div></div>
+{% endif %}
+{% endblock %}
