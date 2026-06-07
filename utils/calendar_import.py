@@ -20,13 +20,13 @@ _SKIP = {'activity', 'activities', 'date/week', 'dates', 'date', 'week',
          'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen'}
 
 _CATEGORY_RULES = [
-    ('Holiday', ('public holiday', 'holiday', 'break', "workers' day", 'eid',
-                 'democracy day', "children's day", 'christmas', 'easter')),
-    ('Exam', ('exam', 'bece', 'waec', 'neco', 'practical', 'test', 'cbt')),
+    ('Holiday', ('public holiday', 'mid-term break', 'mid term break', 'break',
+                 "workers' day", 'eid', 'sallah', 'christmas', 'easter', 'new year')),
+    ('Exam', ('exam', 'bece', 'waec', 'neco', 'jamb', 'practical', 'cbt', ' test')),
     ('Activity', ('competition', 'spelling bee', 'debate', 'quiz', 'fellowship',
-                  'prayer', 'fasting', 'fellowship', 'visitation', 'excursion',
-                  'sport', 'inter-house', 'party', 'day')),
-    ('Meeting', ('meeting', 'pta', 'assembly')),
+                  'prayer', 'fasting', 'visitation', 'excursion', 'sport',
+                  'inter-house', 'party', 'graduation', 'speech', 'cultural')),
+    ('Meeting', ('meeting', 'pta', 'assembly', 'orientation')),
 ]
 
 
@@ -87,33 +87,32 @@ def parse_docx(file_bytes):
     doc = Document(io.BytesIO(file_bytes))
     events = []
     for table in doc.tables:
-        rows = table.rows
-        for row in rows:
+        for row in table.rows:
             cells = row.cells
             if len(cells) < 2:
                 continue
-            week_text = cells[0].text
-            wk_start, _ = parse_dates(week_text)
-            activities = [l.strip() for l in cells[1].text.split('\n') if l.strip()]
-            date_lines = [l.strip() for l in cells[-1].text.split('\n') if l.strip()] if len(cells) >= 3 else []
-            if not activities or _is_skippable(' '.join(activities)):
+            # Week cell -> the week's start date (fallback for undated activities).
+            wk_start, _ = parse_dates(cells[0].text)
+            # IMPORTANT: keep blank paragraphs so activity[i] lines up with date[i]
+            # (the dates column pads with empty paragraphs for undated activities).
+            acts = [p.text.strip() for p in cells[1].paragraphs]
+            dates = [p.text.strip() for p in cells[-1].paragraphs] if len(cells) >= 3 else []
+            if not any(acts) or _is_skippable(' '.join(a for a in acts if a)):
                 continue
-            for i, act in enumerate(activities):
-                if _is_skippable(act):
+            for i, act in enumerate(acts):
+                if not act or _is_skippable(act):
                     continue
-                s = e = None
-                if i < len(date_lines):
-                    s, e = parse_dates(date_lines[i])
+                dstr = dates[i] if i < len(dates) else ''
+                s, e = parse_dates(dstr)
                 if not s:
-                    s, e = parse_dates(act)
+                    s, e = parse_dates(act)        # date inline in the activity text
                 if not s:
-                    s = wk_start
+                    s = wk_start                   # undated -> week's start date
                 if not s:
                     continue
                 events.append({'start_date': s, 'end_date': e,
                                'title': _clean_title(act) or act.strip(),
                                'category': _infer_category(act)})
-    # Fallback: some calendars are plain paragraphs, not tables.
     if not events:
         events = parse_text('\n'.join(p.text for p in doc.paragraphs))
     return _dedupe(events)
