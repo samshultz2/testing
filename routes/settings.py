@@ -12,6 +12,7 @@ from models import (
     Student, AcademicSession, Term, User
 )
 from utils.helpers import login_required
+from utils.access_control import admin_required
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 
@@ -321,7 +322,39 @@ def backup_page():
         'users': User.query.count()
     }
     
-    return render_template('settings/backup.html', db_size=db_size, counts=counts)
+    from flask import current_app
+    from utils.backup import list_backups
+    return render_template('settings/backup.html', db_size=db_size, counts=counts,
+                           backups=list_backups(current_app))
+
+
+@settings_bp.route('/backup/create', methods=['POST'])
+@admin_required
+def create_backup():
+    from flask import current_app
+    from utils.backup import make_backup
+    path = make_backup(current_app)
+    if path:
+        flash('Backup created.', 'success')
+    else:
+        flash('Could not create backup.', 'error')
+    return redirect(url_for('settings.backup_page'))
+
+
+@settings_bp.route('/backup/file/<path:name>')
+@admin_required
+def download_backup_file(name):
+    import os as _os
+    from flask import current_app
+    safe = _os.path.basename(name)
+    if not (safe.startswith('school_') and safe.endswith('.db')):
+        flash('Invalid backup file.', 'error')
+        return redirect(url_for('settings.backup_page'))
+    path = _os.path.join(current_app.config['BASE_DIR'], 'instance', 'backups', safe)
+    if not _os.path.exists(path):
+        flash('Backup not found.', 'error')
+        return redirect(url_for('settings.backup_page'))
+    return send_file(path, as_attachment=True, download_name=safe, mimetype='application/x-sqlite3')
 
 
 @settings_bp.route('/backup/download')

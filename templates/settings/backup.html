@@ -18,7 +18,30 @@
         <div class="page-header-actions">
             <a href="{{ url_for('settings.download_backup') }}" class="btn btn-primary"><i class="fas fa-download"></i> Download Database (.db)</a>
             <a href="{{ url_for('settings.export_json') }}" class="btn btn-secondary"><i class="fas fa-file-code"></i> Export JSON</a>
+            <form method="POST" action="{{ url_for('settings.create_backup') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-secondary"><i class="fas fa-clock-rotate-left"></i> Create snapshot now</button></form>
         </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-box-archive"></i> Stored backups</h3></div>
+    <div class="card-body" style="padding:0;">
+        <p class="text-muted text-sm" style="padding:.8rem 1rem 0;">Automatic daily snapshots are kept on the server (the latest few). Download any to keep off-device.</p>
+        {% if backups %}
+        <div class="table-container"><table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>File</th><th>Date</th><th class="text-right">Size</th><th></th></tr></thead>
+            <tbody>
+                {% for b in backups %}
+                <tr>
+                    <td data-label="File">{{ b.name }}</td>
+                    <td data-label="Date">{{ b.modified.strftime('%d %b %Y %H:%M') }}</td>
+                    <td data-label="Size" class="text-right">{{ "%.0f"|format(b.size / 1024) }} KB</td>
+                    <td class="actions"><a href="{{ url_for('settings.download_backup_file', name=b.name) }}" class="btn btn-secondary btn-sm"><i class="fas fa-download"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+        {% else %}<div class="empty-state" style="padding:1.2rem;"><i class="fas fa-box-archive"></i><p>No snapshots yet — they appear after the app runs or when you create one.</p></div>{% endif %}
     </div>
 </div>
 
