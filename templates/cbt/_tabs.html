@@ -3,6 +3,7 @@
     <a href="{{ url_for('cbt.dashboard') }}" class="fin-tab {% if ep == 'cbt.dashboard' %}active{% endif %}"><i class="fas fa-chart-pie"></i> Overview</a>
     <a href="{{ url_for('cbt.add_exam') }}" class="fin-tab {% if ep in ['cbt.add_exam','cbt.exam_detail','cbt.edit_exam','cbt.results'] %}active{% endif %}"><i class="fas fa-circle-plus"></i> Exams</a>
     <a href="{{ url_for('cbt.passwords') }}" class="fin-tab {% if ep == 'cbt.passwords' %}active{% endif %}"><i class="fas fa-key"></i> Student Passwords</a>
+    <a href="{{ url_for('cbt.settings') }}" class="fin-tab {% if ep == 'cbt.settings' %}active{% endif %}"><i class="fas fa-user-shield"></i> Supervisor</a>
     <a href="{{ url_for('cbt_portal.login') }}" target="_blank" class="fin-tab"><i class="fas fa-up-right-from-square"></i> Test Portal</a>
 </div>
 <style>

@@ -29,7 +29,7 @@ from .models_hr import (Department, StaffMember, LeaveRecord, PayrollRun, Paysli
 from .models_admissions import Applicant
 from .models_library import Book, BookLoan
 from .models_events import SchoolEvent
-from .models_cbt import CBTExam, CBTQuestion, CBTAttempt, CBTAnswer
+from .models_cbt import CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation
 
 __all__ = [
     'db', 'local_now', 'init_db',
@@ -57,7 +57,7 @@ __all__ = [
     'Applicant',
     'Book', 'BookLoan',
     'SchoolEvent',
-    'CBTExam', 'CBTQuestion', 'CBTAttempt', 'CBTAnswer'
+    'CBTExam', 'CBTQuestion', 'CBTAttempt', 'CBTAnswer', 'CBTViolation'
 ]
 
 # Analytics models

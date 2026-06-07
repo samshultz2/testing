@@ -19,7 +19,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify, Response)
 from sqlalchemy import func
 
-from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer,
+from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
                     Subject, SchoolClass, ClassArm, Term, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolSettings)
 from utils.access_control import login_required, admin_required, is_admin
@@ -65,13 +65,42 @@ def _student_placement(student_id, term):
 @cbt_bp.route('/')
 @login_required
 def dashboard():
-    exams = CBTExam.query.order_by(CBTExam.exam_date.desc(), CBTExam.id.desc()).all()
+    terms = Term.query.order_by(Term.id.desc()).all()
+    active = _active_term()
+    # Term-scoped (default active term); 'all' shows history across terms.
+    raw = request.args.get('term_id')
+    if raw == 'all':
+        term_id = None
+    else:
+        term_id = request.args.get('term_id', type=int) or (active.id if active else None)
+    q = CBTExam.query
+    if term_id:
+        q = q.filter(CBTExam.term_id == term_id)
+    exams = q.order_by(CBTExam.exam_date.desc(), CBTExam.id.desc()).all()
     total = len(exams)
     published = sum(1 for e in exams if e.is_published)
     today_count = sum(1 for e in exams if e.exam_date == timeutil.today() and e.is_published)
-    attempts = CBTAttempt.query.filter_by(status='Submitted').count()
+    exam_ids = [e.id for e in exams]
+    attempts = (CBTAttempt.query.filter(CBTAttempt.status == 'Submitted',
+                CBTAttempt.exam_id.in_(exam_ids)).count() if exam_ids else 0)
     return render_template('cbt/dashboard.html', exams=exams, total=total,
-        published=published, today_count=today_count, attempts=attempts)
+        published=published, today_count=today_count, attempts=attempts,
+        terms=terms, term_id=term_id, show_all=(raw == 'all'))
+
+
+@cbt_bp.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    if request.method == 'POST':
+        if not is_admin():
+            flash('Admins only.', 'error')
+            return redirect(url_for('cbt.settings'))
+        SchoolSettings.set('cbt_supervisor_pin', (request.form.get('supervisor_pin') or '').strip(),
+                           'string', 'CBT supervisor override PIN')
+        flash('CBT settings saved.', 'success')
+        return redirect(url_for('cbt.settings'))
+    return render_template('cbt/settings.html',
+        supervisor_pin=SchoolSettings.get('cbt_supervisor_pin', ''))
 
 
 def _exam_choices():
@@ -240,8 +269,11 @@ def _review_rows(exam, attempt):
 def attempt_review(attempt_id):
     attempt = CBTAttempt.query.get_or_404(attempt_id)
     rows = _review_rows(attempt.exam, attempt)
+    violations = attempt.violation_log.order_by(CBTViolation.created_at).all()
+    total_away = sum(v.away_seconds or 0 for v in violations)
     return render_template('cbt/attempt_review.html', attempt=attempt,
-                           exam=attempt.exam, rows=rows)
+                           exam=attempt.exam, rows=rows, violations=violations,
+                           total_away=total_away)
 
 
 
@@ -607,7 +639,10 @@ def start(exam_id):
             return render_template('cbt/portal_start.html', exam=exam, student=student)
         if not existing:
             existing = CBTAttempt(exam_id=exam.id, student_id=student.id,
-                                  started_at=timeutil.now(), total=exam.total_marks)
+                                  started_at=timeutil.now(), total=exam.total_marks,
+                                  last_seen=timeutil.now(),
+                                  ip_address=(request.headers.get('X-Forwarded-For', request.remote_addr) or '')[:50],
+                                  user_agent=(request.headers.get('User-Agent') or '')[:255])
             db.session.add(existing)
             db.session.commit()
         return redirect(url_for('cbt_portal.take', exam_id=exam.id))
@@ -670,29 +705,81 @@ def take(exam_id):
             random.Random(attempt.id * 1009 + q.id).shuffle(opts)
         qview.append({'q': q, 'options': opts})
     saved = {a.question_id: a.selected_option for a in attempt.answers}
+    has_pin = bool((SchoolSettings.get('cbt_supervisor_pin', '') or '').strip())
     return render_template('cbt/portal_take.html', exam=exam, student=student,
         qview=qview, attempt=attempt, remaining=remaining, saved=saved,
         max_violations=(exam.violation_limit if exam.violation_limit is not None else 3),
-        strict=bool(exam.strict_mode))
+        strict=bool(exam.strict_mode), has_supervisor_pin=has_pin)
+
+
+# Event types that count toward the auto-submit limit (leaving the exam).
+_COUNTING_TYPES = {'tab_switch', 'fullscreen_exit'}
 
 
 @cbt_portal_bp.route('/<int:exam_id>/flag', methods=['POST'])
 @cbt_login_required
 def flag(exam_id):
-    """Record an anti-malpractice event (student left the exam tab/window)."""
+    """Log an anti-malpractice event with its type, away-time and any detail."""
     student = _current_student()
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status != 'In progress':
         return jsonify({'ok': False}), 400
     exam = CBTExam.query.get(exam_id)
-    attempt.violations = (attempt.violations or 0) + 1
+    vtype = (request.form.get('type') or 'tab_switch').strip()[:30]
+    away = request.form.get('away', type=int) or 0
+    detail = (request.form.get('detail') or '').strip()[:500] or None
+
+    # During a supervisor-authorised pause, log but never count.
+    paused = bool(attempt.paused_until and timeutil.now() < attempt.paused_until)
+    counts = (vtype in _COUNTING_TYPES) and not paused
+
+    db.session.add(CBTViolation(attempt_id=attempt.id, vtype=vtype, detail=detail,
+                                away_seconds=max(away, 0), counted=counts))
+    if counts:
+        attempt.violations = (attempt.violations or 0) + 1
+    attempt.last_seen = timeutil.now()
     db.session.commit()
+
     limit = exam.violation_limit if exam.violation_limit is not None else 3
-    over = bool(limit) and attempt.violations >= limit
+    over = counts and bool(limit) and attempt.violations >= limit
     if over:
         _finalize(attempt, exam)   # forced submit
-    return jsonify({'ok': True, 'violations': attempt.violations,
-                    'max': limit, 'autosubmit': over})
+    return jsonify({'ok': True, 'violations': attempt.violations, 'max': limit,
+                    'counted': counts, 'paused': paused, 'autosubmit': over})
+
+
+@cbt_portal_bp.route('/<int:exam_id>/supervisor-unlock', methods=['POST'])
+@cbt_login_required
+def supervisor_unlock(exam_id):
+    """A supervisor enters the PIN to pause lockdown (e.g. to fix the laptop)."""
+    student = _current_student()
+    attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
+    if not attempt or attempt.status != 'In progress':
+        return jsonify({'ok': False}), 400
+    pin = (request.form.get('pin') or '').strip()
+    real = (SchoolSettings.get('cbt_supervisor_pin', '') or '').strip()
+    if not real or pin != real:
+        return jsonify({'ok': False, 'error': 'Wrong supervisor PIN'}), 403
+    minutes = request.form.get('minutes', type=int) or 3
+    minutes = max(1, min(minutes, 15))
+    from datetime import timedelta
+    attempt.paused_until = timeutil.now() + timedelta(minutes=minutes)
+    db.session.add(CBTViolation(attempt_id=attempt.id, vtype='resume',
+                                detail=f'Supervisor unlock for {minutes} min', counted=False))
+    db.session.commit()
+    return jsonify({'ok': True, 'minutes': minutes})
+
+
+@cbt_portal_bp.route('/<int:exam_id>/ping', methods=['POST'])
+@cbt_login_required
+def ping(exam_id):
+    """Heartbeat so admins can spot a disconnected/abandoned attempt."""
+    student = _current_student()
+    attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
+    if attempt and attempt.status == 'In progress':
+        attempt.last_seen = timeutil.now()
+        db.session.commit()
+    return jsonify({'ok': True})
 
 
 @cbt_portal_bp.route('/<int:exam_id>/answer', methods=['POST'])

@@ -23,6 +23,17 @@
 </div>
 {% include 'cbt/_tabs.html' %}
 
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form">
+        <div class="form-group"><label class="form-label">Term</label>
+            <select name="term_id" class="form-control" onchange="this.form.submit()">
+                {% for t in terms %}<option value="{{ t.id }}" {% if not show_all and term_id == t.id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
+                <option value="all" {% if show_all %}selected{% endif %}>All terms (history)</option>
+            </select>
+        </div>
+    </form>
+</div></div>
+
 <div class="kpi-row">
     <div class="kpi"><div class="ic blue"><i class="fas fa-file-pen"></i></div><div><div class="v">{{ total }}</div><div class="l">Exams</div></div></div>
     <div class="kpi"><div class="ic green"><i class="fas fa-globe"></i></div><div><div class="v">{{ published }}</div><div class="l">Published</div></div></div>

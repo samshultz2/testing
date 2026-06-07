@@ -151,12 +151,18 @@ class CBTAttempt(db.Model):
     total = db.Column(db.Float, default=0)        # exam reported total (scaled)
     raw_score = db.Column(db.Float, default=0)    # marks earned from questions
     raw_total = db.Column(db.Float, default=0)    # sum of question marks
-    violations = db.Column(db.Integer, default=0) # tab-switch / leave-page events
+    violations = db.Column(db.Integer, default=0) # counted leave-page events
+    paused_until = db.Column(db.DateTime)         # supervisor override window
+    last_seen = db.Column(db.DateTime)            # heartbeat (spot disconnects)
+    ip_address = db.Column(db.String(50))
+    user_agent = db.Column(db.String(255))
     status = db.Column(db.String(15), default='In progress')   # In progress / Submitted / Auto-submitted
 
     student = db.relationship('Student')
     answers = db.relationship('CBTAnswer', backref='attempt',
                               lazy='dynamic', cascade='all, delete-orphan')
+    violation_log = db.relationship('CBTViolation', backref='attempt',
+                                    lazy='dynamic', cascade='all, delete-orphan')
 
     __table_args__ = (db.UniqueConstraint('exam_id', 'student_id', name='uq_cbt_attempt'),)
 
@@ -178,3 +184,30 @@ class CBTAnswer(db.Model):
     is_correct = db.Column(db.Boolean, default=False)
 
     __table_args__ = (db.UniqueConstraint('attempt_id', 'question_id', name='uq_cbt_answer'),)
+
+
+class CBTViolation(db.Model):
+    """One recorded anti-malpractice event during an attempt."""
+    __tablename__ = 'cbt_violations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    attempt_id = db.Column(db.Integer, db.ForeignKey('cbt_attempts.id'), nullable=False)
+    vtype = db.Column(db.String(30))        # tab_switch / fullscreen_exit / paste / copy / shortcut / devtools / resume
+    detail = db.Column(db.Text)             # e.g. pasted text, key combo
+    away_seconds = db.Column(db.Integer, default=0)
+    counted = db.Column(db.Boolean, default=True)   # whether it counted toward the limit
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    LABELS = {
+        'tab_switch': 'Left the exam tab/app',
+        'fullscreen_exit': 'Exited fullscreen',
+        'paste': 'Tried to paste',
+        'copy': 'Tried to copy',
+        'shortcut': 'Blocked shortcut',
+        'devtools': 'Possible dev-tools',
+        'resume': 'Supervisor resume',
+    }
+
+    @property
+    def label(self):
+        return self.LABELS.get(self.vtype, self.vtype or 'Event')

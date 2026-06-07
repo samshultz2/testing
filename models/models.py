@@ -1082,6 +1082,14 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE cbt_attempts ADD COLUMN raw_total FLOAT DEFAULT 0')
         if 'violations' not in ca_cols:
             statements.append('ALTER TABLE cbt_attempts ADD COLUMN violations INTEGER DEFAULT 0')
+        if 'paused_until' not in ca_cols:
+            statements.append('ALTER TABLE cbt_attempts ADD COLUMN paused_until DATETIME')
+        if 'last_seen' not in ca_cols:
+            statements.append('ALTER TABLE cbt_attempts ADD COLUMN last_seen DATETIME')
+        if 'ip_address' not in ca_cols:
+            statements.append('ALTER TABLE cbt_attempts ADD COLUMN ip_address VARCHAR(50)')
+        if 'user_agent' not in ca_cols:
+            statements.append('ALTER TABLE cbt_attempts ADD COLUMN user_agent VARCHAR(255)')
     except Exception:
         pass
 

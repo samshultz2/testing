@@ -81,11 +81,22 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
 </div>
 </form>
 
-<div id="warnOverlay" style="display:none;position:fixed;inset:0;background:rgba(220,38,38,.96);color:#fff;z-index:200;align-items:center;justify-content:center;text-align:center;padding:2rem;flex-direction:column;">
+<div id="warnOverlay" style="display:none;position:fixed;inset:0;background:rgba(220,38,38,.97);color:#fff;z-index:200;align-items:center;justify-content:center;text-align:center;padding:2rem;flex-direction:column;">
     <i class="fas fa-triangle-exclamation" style="font-size:3rem;margin-bottom:1rem;"></i>
-    <h2 style="margin:0 0 .5rem;">Stay on the exam</h2>
+    <h2 style="margin:0 0 .5rem;" id="warnTitle">Stay on the exam</h2>
     <p id="warnMsg" style="max-width:480px;font-size:1.05rem;">Leaving the exam page is recorded. Repeated attempts will submit your test automatically.</p>
     <button id="warnBack" style="margin-top:1rem;background:#fff;color:#b91c1c;border:none;border-radius:10px;padding:.7rem 1.4rem;font-weight:700;cursor:pointer;">Continue test</button>
+    {% if has_supervisor_pin %}
+    <div style="margin-top:1.4rem;font-size:.85rem;opacity:.9;">Supervisor assisting? Enter the PIN to pause:</div>
+    <div style="margin-top:.5rem;display:flex;gap:.4rem;">
+        <input id="supPin" type="password" inputmode="numeric" placeholder="Supervisor PIN" style="border:none;border-radius:8px;padding:.55rem .8rem;font-size:1rem;width:150px;">
+        <button id="supBtn" style="background:#0b3a2b;color:#fff;border:none;border-radius:8px;padding:.55rem 1rem;font-weight:700;cursor:pointer;">Pause</button>
+    </div>
+    <div id="supMsg" style="margin-top:.4rem;font-size:.8rem;"></div>
+    {% endif %}
+</div>
+<div id="pauseBar" style="display:none;position:fixed;top:0;left:0;right:0;background:#0b3a2b;color:#fff;z-index:210;text-align:center;padding:.5rem;font-weight:600;">
+    <i class="fas fa-user-shield"></i> Supervisor pause active — <span id="pauseLeft"></span>s remaining. <button id="resumeBtn" style="background:#fff;color:#0b3a2b;border:none;border-radius:6px;padding:.2rem .7rem;font-weight:700;cursor:pointer;margin-left:.5rem;">Resume exam</button>
 </div>
 
 <script>
@@ -125,48 +136,87 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     });
     refresh();
 
-    // Block copy / paste / right-click / drag everywhere on the exam.
-    ['copy','cut','paste','contextmenu','selectstart','dragstart'].forEach(function(ev){
-        document.addEventListener(ev,function(e){e.preventDefault();},true);
-    });
-    // Block shortcuts: print, save, view-source, devtools, new tab/window/close,
-    // tab cycling and refresh-loss.
-    document.addEventListener('keydown',function(e){
-        var k=(e.key||'').toLowerCase();
-        var combo=e.ctrlKey||e.metaKey;
-        if(combo && ['p','s','u','c','x','v','t','n','w','a','tab'].indexOf(k)>=0){e.preventDefault();}
-        if(k==='f12' || (combo && e.shiftKey && ['i','j','c'].indexOf(k)>=0)){e.preventDefault();}  // devtools
-    });
-
     var STRICT={{ 'true' if strict else 'false' }};
-    var MAX={{ max_violations }}, violations={{ attempt.violations or 0 }};
     var FLAG_URL="{{ url_for('cbt_portal.flag', exam_id=exam.id) }}";
+    var UNLOCK_URL="{{ url_for('cbt_portal.supervisor_unlock', exam_id=exam.id) }}";
+    var PING_URL="{{ url_for('cbt_portal.ping', exam_id=exam.id) }}";
+    var RESULT_URL="{{ url_for('cbt_portal.result', exam_id=exam.id) }}";
     var overlay=document.getElementById('warnOverlay'), warnMsg=document.getElementById('warnMsg');
+    var pauseBar=document.getElementById('pauseBar'), pauseLeft=document.getElementById('pauseLeft');
+    var pausedUntil=0;   // client epoch ms until which we're in supervisor pause
+    function isPaused(){ return Date.now()<pausedUntil; }
+
+    // send a flag/event to the server
+    function sendFlag(type, away, detail){
+        var body=new URLSearchParams({type:type, away:away||0, detail:detail||'', _csrf_token:token});
+        return fetch(FLAG_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:body})
+            .then(function(r){return r.json();}).catch(function(){return null;});
+    }
+
+    // Block copy / paste / right-click / drag, and LOG the attempt (paste content too).
+    document.addEventListener('paste',function(e){
+        e.preventDefault();
+        var txt=''; try{ txt=(e.clipboardData||window.clipboardData).getData('text')||''; }catch(_){}
+        if(!submitted) sendFlag('paste', 0, txt.slice(0,400));
+    },true);
+    ['copy','cut'].forEach(function(ev){ document.addEventListener(ev,function(e){e.preventDefault(); if(!submitted) sendFlag(ev==='cut'?'copy':'copy',0,'');},true); });
+    ['contextmenu','selectstart','dragstart'].forEach(function(ev){ document.addEventListener(ev,function(e){e.preventDefault();},true); });
+    document.addEventListener('keydown',function(e){
+        var k=(e.key||'').toLowerCase(), combo=e.ctrlKey||e.metaKey;
+        if(combo && ['p','s','u','c','x','v','t','n','w','a','tab'].indexOf(k)>=0){e.preventDefault(); if(!submitted) sendFlag('shortcut',0,'Ctrl+'+k.toUpperCase());}
+        if(k==='f12' || (combo && e.shiftKey && ['i','j','c'].indexOf(k)>=0)){e.preventDefault(); if(!submitted) sendFlag('devtools',0,'');}
+    });
     window.addEventListener('beforeunload',function(e){ if(!submitted){ e.preventDefault(); e.returnValue=''; } });
 
     if(STRICT){
-        // ---- Lockdown: fullscreen + record leaving the exam page ----
         function enterFullscreen(){ var el=document.documentElement; if(el.requestFullscreen){el.requestFullscreen().catch(function(){});} }
         document.getElementById('warnBack').addEventListener('click',function(){overlay.style.display='none';enterFullscreen();});
         enterFullscreen();
 
-        var lastFlag=0;
-        function recordViolation(){
+        var hiddenAt=0, lastFlag=0;
+        function recordLeave(type){
             if(submitted) return;
-            var t=Date.now(); if(t-lastFlag<1200) return; lastFlag=t;   // debounce
+            var t=Date.now(); if(t-lastFlag<800) return; lastFlag=t;
+            var away=hiddenAt? Math.round((Date.now()-hiddenAt)/1000):0;
+            if(isPaused()){ sendFlag(type, away, 'during supervisor pause'); return; }  // logged, not counted
             overlay.style.display='flex';
-            fetch(FLAG_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token})
-                .then(function(r){return r.json();}).then(function(d){
-                    if(!d||!d.ok) return;
-                    violations=d.violations;
-                    warnMsg.textContent = d.max
-                        ? ('Warning '+violations+' of '+d.max+': leaving the exam is recorded. After '+d.max+' you are submitted automatically.')
-                        : ('Leaving the exam is recorded ('+violations+').');
-                    if(d.autosubmit){ submitted=true; window.location="{{ url_for('cbt_portal.result', exam_id=exam.id) }}"; }
-                }).catch(function(){});
+            sendFlag(type, away, '').then(function(d){
+                if(!d||!d.ok) return;
+                warnMsg.textContent = d.max
+                    ? ('Warning '+d.violations+' of '+d.max+': leaving the exam is recorded'+(away?(' ('+away+'s away)'):'')+'. At '+d.max+' your test submits automatically.')
+                    : ('Leaving the exam is recorded'+(away?(' — '+away+'s away'):'')+'.');
+                if(d.autosubmit){ submitted=true; window.location=RESULT_URL; }
+            });
         }
-        document.addEventListener('visibilitychange',function(){ if(document.hidden) recordViolation(); });
-        document.addEventListener('fullscreenchange',function(){ if(!document.fullscreenElement && !submitted) recordViolation(); });
+        document.addEventListener('visibilitychange',function(){
+            if(document.hidden){ hiddenAt=Date.now(); }
+            else { if(hiddenAt) recordLeave('tab_switch'); hiddenAt=0; }
+        });
+        document.addEventListener('fullscreenchange',function(){ if(!document.fullscreenElement && !submitted && !isPaused()) recordLeave('fullscreen_exit'); });
+
+        // ---- Supervisor override ----
+        {% if has_supervisor_pin %}
+        var supBtn=document.getElementById('supBtn'), supPin=document.getElementById('supPin'), supMsg=document.getElementById('supMsg');
+        supBtn.addEventListener('click',function(){
+            var body=new URLSearchParams({pin:supPin.value, minutes:3, _csrf_token:token});
+            fetch(UNLOCK_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:body})
+                .then(function(r){return r.json();}).then(function(d){
+                    if(d&&d.ok){ pausedUntil=Date.now()+d.minutes*60000; overlay.style.display='none'; supPin.value='';
+                        if(document.exitFullscreen&&document.fullscreenElement){document.exitFullscreen().catch(function(){});}
+                        pauseTick(); }
+                    else { supMsg.textContent=(d&&d.error)||'Wrong PIN'; }
+                }).catch(function(){ supMsg.textContent='Network error'; });
+        });
+        document.getElementById('resumeBtn').addEventListener('click',function(){ pausedUntil=0; pauseBar.style.display='none'; sendFlag('resume',0,'Resumed by supervisor'); enterFullscreen(); });
+        function pauseTick(){
+            if(!isPaused()){ pauseBar.style.display='none'; if(!submitted) enterFullscreen(); return; }
+            pauseBar.style.display='block'; pauseLeft.textContent=Math.max(0,Math.round((pausedUntil-Date.now())/1000));
+            setTimeout(pauseTick,1000);
+        }
+        {% endif %}
+
+        // heartbeat so admins can spot disconnects
+        setInterval(function(){ if(!submitted) fetch(PING_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token}).catch(function(){}); }, 20000);
     }
 
     form.addEventListener('submit',function(e){
