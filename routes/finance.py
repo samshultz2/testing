@@ -115,101 +115,121 @@ def dashboard():
     terms = Term.query.order_by(Term.id.desc()).all()
     selected_term = Term.query.get(term_id) if term_id else None
 
-    expected = collected = discounts = 0.0
-    by_class = {}            # class_name -> {'expected':, 'collected':}
-    method_breakdown = {}
-    recent = []
-    defaulter_count = 0
+    fees = _term_fee_summary(term_id)
+    exp = _term_expense_summary(term_id)
 
-    from utils.branch_scope import scope_query
-    if term_id:
-        # Map each enrolled student to their class/arm for this term.
-        enrollments = scope_query(
-            StudentEnrollment.query
-            .join(ClassArmAssignment,
-                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-            .filter(StudentEnrollment.is_active == True,
-                    ClassArmAssignment.term_id == term_id),
-            ClassArmAssignment).all()
-
-        placement = {}        # student_id -> (class_id, arm_id, class_name)
-        total_cache = {}      # (class_id, arm_id) -> per-student fee total
-        for e in enrollments:
-            asg = e.class_arm_assignment
-            key = (asg.class_id, asg.arm_id)
-            if key not in total_cache:
-                total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
-            cname = asg.school_class.name if asg.school_class else '—'
-            placement[e.student_id] = (asg.class_id, asg.arm_id, cname)
-            slot = by_class.setdefault(cname, {'expected': 0.0, 'collected': 0.0})
-            slot['expected'] += total_cache[key]
-            expected += total_cache[key]
-
-        discounts = (db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
-                     .filter(FeeDiscount.term_id == term_id).scalar()) or 0.0
-
-        payments = scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment).all()
-        for p in payments:
-            collected += p.amount
-            method_breakdown[p.method or 'Other'] = method_breakdown.get(p.method or 'Other', 0.0) + p.amount
-            plc = placement.get(p.student_id)
-            if plc:
-                by_class.setdefault(plc[2], {'expected': 0.0, 'collected': 0.0})['collected'] += p.amount
-
-        recent = (scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment)
-                  .order_by(FeePayment.created_at.desc()).limit(8).all())
-
-        # Count students with an outstanding balance.
-        paid_by_student = {}
-        for p in payments:
-            paid_by_student[p.student_id] = paid_by_student.get(p.student_id, 0.0) + p.amount
-        disc_rows = FeeDiscount.query.filter_by(term_id=term_id).all()
-        disc_by_student = {}
-        for d in disc_rows:
-            disc_by_student[d.student_id] = disc_by_student.get(d.student_id, 0.0) + d.amount
-        for sid, (cid, aid, _cn) in placement.items():
-            payable = max(total_cache[(cid, aid)] - disc_by_student.get(sid, 0.0), 0)
-            if payable - paid_by_student.get(sid, 0.0) > 0.005:
-                defaulter_count += 1
-
-    payable_total = max(expected - discounts, 0)
-    outstanding = payable_total - collected
-    rate = round(collected / payable_total * 100, 1) if payable_total > 0 else 0.0
-
-    # Expenditure + net position for the term.
-    expenses = 0.0
-    expense_breakdown = {}
-    recent_expenses = []
-    if term_id:
-        exp_rows = scope_query(
-            Expense.query.filter_by(term_id=term_id).options(joinedload(Expense.category)),
-            Expense).order_by(Expense.created_at.desc()).all()
-        for e in exp_rows:
-            expenses += e.amount
-            cat = e.category.name if e.category else 'Uncategorised'
-            expense_breakdown[cat] = expense_breakdown.get(cat, 0.0) + e.amount
-        recent_expenses = exp_rows[:6]
-    net = collected - expenses
+    payable_total = max(fees['expected'] - fees['discounts'], 0)
+    outstanding = payable_total - fees['collected']
+    rate = round(fees['collected'] / payable_total * 100, 1) if payable_total > 0 else 0.0
+    net = fees['collected'] - exp['expenses']
 
     class_chart = [{'name': k, 'expected': round(v['expected'], 2),
                     'collected': round(v['collected'], 2)}
-                   for k, v in sorted(by_class.items())]
-    method_chart = [{'method': k, 'amount': round(v, 2)} for k, v in method_breakdown.items()]
+                   for k, v in sorted(fees['by_class'].items())]
+    method_chart = [{'method': k, 'amount': round(v, 2)}
+                    for k, v in fees['method_breakdown'].items()]
     item_chart = fee_item_breakdown(term_id) if term_id else []
     trend_chart = collection_trend(term_id) if term_id else []
     expense_chart = [{'name': k, 'amount': round(v, 2)} for k, v in
-                     sorted(expense_breakdown.items(), key=lambda x: x[1], reverse=True)]
+                     sorted(exp['expense_breakdown'].items(), key=lambda x: x[1], reverse=True)]
 
     return render_template('finance/dashboard.html',
         terms=terms, term_id=term_id, selected_term=selected_term,
-        expected=expected, collected=collected, discounts=discounts,
+        expected=fees['expected'], collected=fees['collected'], discounts=fees['discounts'],
         payable_total=payable_total, outstanding=outstanding, rate=rate,
-        expenses=expenses, net=net,
-        enrolled=len(placement) if term_id else 0, defaulter_count=defaulter_count,
-        class_chart=class_chart, method_chart=method_chart, recent=recent,
+        expenses=exp['expenses'], net=net,
+        enrolled=fees['enrolled'], defaulter_count=fees['defaulter_count'],
+        class_chart=class_chart, method_chart=method_chart, recent=fees['recent'],
         item_chart=item_chart, trend_chart=trend_chart, expense_chart=expense_chart,
-        recent_expenses=recent_expenses, has_structure=(expected > 0),
+        recent_expenses=exp['recent_expenses'], has_structure=(fees['expected'] > 0),
     )
+
+
+def _term_fee_summary(term_id):
+    """Fee expectation, collection, method split, recent payments + defaulter count."""
+    summary = {'expected': 0.0, 'collected': 0.0, 'discounts': 0.0,
+               'by_class': {}, 'method_breakdown': {}, 'recent': [],
+               'enrolled': 0, 'defaulter_count': 0}
+    if not term_id:
+        return summary
+    from utils.branch_scope import scope_query
+    by_class = summary['by_class']
+    method_breakdown = summary['method_breakdown']
+
+    # Map each enrolled student to their class/arm for this term.
+    enrollments = scope_query(
+        StudentEnrollment.query
+        .join(ClassArmAssignment,
+              StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .filter(StudentEnrollment.is_active == True,
+                ClassArmAssignment.term_id == term_id),
+        ClassArmAssignment).all()
+
+    placement = {}        # student_id -> (class_id, arm_id, class_name)
+    total_cache = {}      # (class_id, arm_id) -> per-student fee total
+    expected = 0.0
+    for e in enrollments:
+        asg = e.class_arm_assignment
+        key = (asg.class_id, asg.arm_id)
+        if key not in total_cache:
+            total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
+        cname = asg.school_class.name if asg.school_class else '—'
+        placement[e.student_id] = (asg.class_id, asg.arm_id, cname)
+        slot = by_class.setdefault(cname, {'expected': 0.0, 'collected': 0.0})
+        slot['expected'] += total_cache[key]
+        expected += total_cache[key]
+    summary['expected'] = expected
+    summary['enrolled'] = len(placement)
+
+    summary['discounts'] = (db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
+                            .filter(FeeDiscount.term_id == term_id).scalar()) or 0.0
+
+    payments = scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment).all()
+    collected = 0.0
+    paid_by_student = {}
+    for p in payments:
+        collected += p.amount
+        method_breakdown[p.method or 'Other'] = \
+            method_breakdown.get(p.method or 'Other', 0.0) + p.amount
+        paid_by_student[p.student_id] = paid_by_student.get(p.student_id, 0.0) + p.amount
+        plc = placement.get(p.student_id)
+        if plc:
+            by_class.setdefault(plc[2], {'expected': 0.0, 'collected': 0.0})['collected'] += p.amount
+    summary['collected'] = collected
+    summary['recent'] = (scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment)
+                         .order_by(FeePayment.created_at.desc()).limit(8).all())
+
+    # Count students with an outstanding balance.
+    disc_by_student = {}
+    for d in FeeDiscount.query.filter_by(term_id=term_id).all():
+        disc_by_student[d.student_id] = disc_by_student.get(d.student_id, 0.0) + d.amount
+    defaulters = 0
+    for sid, (cid, aid, _cn) in placement.items():
+        payable = max(total_cache[(cid, aid)] - disc_by_student.get(sid, 0.0), 0)
+        if payable - paid_by_student.get(sid, 0.0) > 0.005:
+            defaulters += 1
+    summary['defaulter_count'] = defaulters
+    return summary
+
+
+def _term_expense_summary(term_id):
+    """Total expenses, per-category breakdown and the latest few expenses."""
+    summary = {'expenses': 0.0, 'expense_breakdown': {}, 'recent_expenses': []}
+    if not term_id:
+        return summary
+    from utils.branch_scope import scope_query
+    exp_rows = scope_query(
+        Expense.query.filter_by(term_id=term_id).options(joinedload(Expense.category)),
+        Expense).order_by(Expense.created_at.desc()).all()
+    breakdown = summary['expense_breakdown']
+    total = 0.0
+    for e in exp_rows:
+        total += e.amount
+        cat = e.category.name if e.category else 'Uncategorised'
+        breakdown[cat] = breakdown.get(cat, 0.0) + e.amount
+    summary['expenses'] = total
+    summary['recent_expenses'] = exp_rows[:6]
+    return summary
 
 
 # ============================================================================
