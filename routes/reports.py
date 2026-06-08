@@ -2,6 +2,7 @@
 Reports and data management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify
+from utils.helpers import get_active_term, get_active_session
 from models import db, Student, ParentContact, Term, AcademicSession
 from utils.helpers import login_required
 from utils.excel_utils import (
@@ -55,7 +56,7 @@ def export_class_students():
         terms = Term.query.order_by(Term.id.desc()).all()
         
         if not term_id:
-            active_term = Term.query.filter_by(is_active=True).first()
+            active_term = get_active_term()
             if active_term:
                 term_id = active_term.id
         
@@ -248,7 +249,7 @@ def api_enrollment_by_class():
     """Get enrollment distribution by class"""
     from models import ClassArmAssignment, StudentEnrollment, SchoolClass
     
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     
     if not active_term:
         return jsonify({'labels': [], 'data': []})
@@ -284,7 +285,7 @@ def api_attendance_trend():
     from models import Attendance, Week
     from sqlalchemy import func
     
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     
     if not active_term:
         return jsonify({'labels': [], 'data': []})
@@ -406,8 +407,8 @@ def summary_report():
     """Generate summary report"""
     from models import ClassArmAssignment, StudentEnrollment, WAECResult, JAMBResult
     
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
+    active_term = get_active_term()
     
     # Student statistics
     total_students = Student.query.filter_by(is_active=True).count()

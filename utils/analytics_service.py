@@ -3,6 +3,7 @@ Comprehensive Analytics Service
 Provides all statistical calculations, metrics, and ML predictions
 """
 import math
+from utils.helpers import get_active_term
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from sqlalchemy import func
@@ -142,7 +143,7 @@ class AcademicAnalytics:
                     risk_factors.append(f"Poor performance in {subj}")
         
         # Attendance risk
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             enrollment = StudentEnrollment.query.join(ClassArmAssignment).filter(
                 StudentEnrollment.student_id == student_id,
@@ -574,7 +575,7 @@ class AcademicAnalytics:
         
         # Class filter
         if class_id:
-            active_term = Term.query.filter_by(is_active=True).first()
+            active_term = get_active_term()
             if active_term:
                 query = query.join(StudentEnrollment).join(ClassArmAssignment).filter(
                     ClassArmAssignment.term_id == active_term.id,

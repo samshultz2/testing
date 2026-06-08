@@ -4,6 +4,7 @@ deep links, reusable templates, audience targeting (class, arm, fee defaulters,
 selected students), a full send log and CSV export for bulk SMS gateways.
 """
 from datetime import datetime
+from utils.helpers import get_active_term
 import csv
 import io
 
@@ -25,7 +26,7 @@ CHANNELS = ['WhatsApp', 'SMS']
 
 
 def _active_term():
-    return Term.query.filter_by(is_active=True).first()
+    return get_active_term()
 
 
 def _term_from(tid):

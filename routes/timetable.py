@@ -2,6 +2,7 @@
 Timetable Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from utils.helpers import get_active_term
 from models import (
     db, TimetableSlot, ClassTimetable, ClassArmAssignment, Subject,
     Term, ClassSubject
@@ -30,7 +31,7 @@ def index():
     
     # Get active term if not specified
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     

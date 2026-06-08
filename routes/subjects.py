@@ -2,6 +2,7 @@
 Subjects and Score Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from utils.helpers import get_active_term
 from models import (
     db, Subject, ClassSubject, AssessmentType, SubjectAssessmentOverride,
     StudentScore, StudentEnrollment, ClassArmAssignment, Term, SchoolClass,
@@ -174,7 +175,7 @@ def class_subjects_list():
     
     # Get active term if not specified
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
@@ -358,7 +359,7 @@ def scores_entry():
     
     # Get active term if not specified
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
@@ -528,7 +529,7 @@ def broadsheet():
     terms = Term.query.order_by(Term.id.desc()).all()
     
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
@@ -638,7 +639,7 @@ def student_report_card(student_id):
     terms = Term.query.order_by(Term.id.desc()).all()
     
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
@@ -1037,7 +1038,7 @@ def _scan_selector_context():
     class_subject_id = request.values.get('class_subject_id', type=int)
 
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
 
@@ -1273,7 +1274,7 @@ def print_all_report_cards():
     terms = Term.query.order_by(Term.id.desc()).all()
     
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     

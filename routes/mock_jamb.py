@@ -3,6 +3,7 @@ Mock JAMB Examination Routes
 Full management of mock JAMB exams with analytics and insights
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from utils.helpers import get_active_term, get_active_session
 from datetime import datetime
 from io import BytesIO
 
@@ -55,7 +56,7 @@ def _read_subject_scores(form, suffix=''):
 @login_required
 def index():
     """Mock JAMB main dashboard"""
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
     
     session_id = request.args.get('session_id', type=int)
@@ -355,7 +356,7 @@ def bulk_entry(exam_id):
     exam = MockJAMBExam.query.get_or_404(exam_id)
     
     # Get active term to find enrolled students
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     
     # Get SS3 students (most likely to take mock JAMB)
     sss3 = SchoolClass.query.filter_by(name='SSS3').first()
@@ -525,7 +526,7 @@ def student_progress(student_id):
     student = Student.query.get_or_404(student_id)
     
     session_id = request.args.get('session_id', type=int)
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not session_id and active_session:
         session_id = active_session.id
     
@@ -550,7 +551,7 @@ def student_progress(student_id):
 def analytics():
     """Comprehensive analytics dashboard"""
     session_id = request.args.get('session_id', type=int)
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not session_id and active_session:
         session_id = active_session.id
     

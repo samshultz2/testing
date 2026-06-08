@@ -10,6 +10,7 @@ These narrow what a user sees *within* their branch. Users without a section /
 stream (the default) are unaffected.
 """
 from flask import session
+from utils.helpers import get_active_term
 
 from models import db, SchoolClass, StudentEnrollment, ClassArmAssignment
 
@@ -58,7 +59,7 @@ def scope_students(query, term=None):
     if sections:
         if term is None:
             from models import Term
-            term = Term.query.filter_by(is_active=True).first()
+            term = get_active_term()
         sub = (db.session.query(StudentEnrollment.student_id)
                .join(ClassArmAssignment,
                      StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)

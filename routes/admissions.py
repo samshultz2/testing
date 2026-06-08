@@ -3,6 +3,7 @@ Admissions routes — applicant pipeline, screening/decisions, one-click
 conversion of an admitted applicant into a Student, dashboard and CSV export.
 """
 from datetime import datetime, date
+from utils.helpers import get_active_session
 import csv
 import io
 
@@ -25,7 +26,7 @@ def _d(value, default=None):
 
 
 def _active_session():
-    return AcademicSession.query.filter_by(is_active=True).first()
+    return get_active_session()
 
 
 # ============================================================================

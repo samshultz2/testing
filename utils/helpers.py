@@ -287,7 +287,7 @@ def _sss3_enrolled_map():
         Student, SchoolClass, ClassArmAssignment, StudentEnrollment, Term
     )
 
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3 = SchoolClass.query.filter_by(name='SSS3').first()
 
     students = {}
@@ -327,7 +327,7 @@ def get_sss3_students():
     students = _sss3_enrolled_map()
 
     # Include this session's graduates (former SSS3) so results can still be added.
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if active_session:
         graduates = Student.query.filter_by(
             is_active=True, is_graduated=True,
@@ -365,3 +365,16 @@ RELIGIONS = [
     'Traditional',
     'Others'
 ]
+
+
+def get_active_term():
+    """The currently active Term (or None). Single source of truth for the
+    common active-term lookup."""
+    from models import Term
+    return Term.query.filter_by(is_active=True).first()
+
+
+def get_active_session():
+    """The currently active AcademicSession (or None)."""
+    from models import AcademicSession
+    return AcademicSession.query.filter_by(is_active=True).first()

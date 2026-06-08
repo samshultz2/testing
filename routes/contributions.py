@@ -3,6 +3,7 @@ Student Contributions Module - SSS3 Graduation Fund Tracking
 Hidden module accessible only with special access code
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from utils.helpers import get_active_term, get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, Term, ContributionSettings,
     ContributionPayment, ContributionExpense, AcademicSession
@@ -50,7 +51,7 @@ def logout_contributions():
 @contributions_access_required
 def dashboard():
     """Main contributions dashboard with enhanced stats"""
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     if not active_term:
         flash('No active term found', 'error')
         return redirect(url_for('main.dashboard'))
@@ -61,7 +62,7 @@ def dashboard():
         return redirect(url_for('main.dashboard'))
     
     # Get active session
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_session:
         flash('No active session found', 'error')
         return redirect(url_for('main.dashboard'))
@@ -164,9 +165,9 @@ def dashboard():
 @contributions_bp.route('/quick-entry', methods=['GET', 'POST'])
 @contributions_access_required
 def quick_entry():
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
@@ -222,9 +223,9 @@ def quick_entry():
 @contributions_bp.route('/add-payment', methods=['GET', 'POST'])
 @contributions_access_required
 def add_payment():
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
@@ -258,7 +259,7 @@ def add_payment():
 @contributions_bp.route('/payments')
 @contributions_access_required
 def payments_list():
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     filter_date = request.args.get('date')
     query = ContributionPayment.query.filter_by(session_id=active_session.id if active_session else None)
     if filter_date:
@@ -288,7 +289,7 @@ def delete_payment(payment_id):
 @contributions_access_required
 def student_detail(student_id):
     student = Student.query.get_or_404(student_id)
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     payments = ContributionPayment.query.filter_by(student_id=student_id, session_id=active_session.id if active_session else None).order_by(ContributionPayment.payment_date.desc()).all()
     total_paid = sum(p.amount for p in payments)
@@ -313,7 +314,7 @@ def student_detail(student_id):
 @contributions_access_required
 def expenses_list():
     """View all expenses with financial summary"""
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     expenses = ContributionExpense.query.filter_by(session_id=active_session.id if active_session else None).order_by(ContributionExpense.expense_date.desc()).all()
     total_expenses = sum(e.amount for e in expenses)
     
@@ -356,7 +357,7 @@ def add_expense():
             description = request.form.get('description', '').strip()
             amount = float(request.form.get('amount'))
             notes = request.form.get('notes', '').strip()
-            active_session = AcademicSession.query.filter_by(is_active=True).first()
+            active_session = get_active_session()
             expense = ContributionExpense(session_id=active_session.id if active_session else None, expense_date=expense_date, description=description, amount=amount, notes=notes)
             db.session.add(expense)
             db.session.commit()
@@ -399,9 +400,9 @@ def settings():
 @contributions_bp.route('/report')
 @contributions_access_required
 def report():
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
@@ -438,9 +439,9 @@ def export_excel():
         from openpyxl.styles import Font, Alignment, PatternFill
         from io import BytesIO
         from flask import send_file
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-        active_session = AcademicSession.query.filter_by(is_active=True).first()
+        active_session = get_active_session()
         max_due = float(ContributionSettings.get('max_due', 20000))
         wb = Workbook()
         ws_students = wb.active
@@ -510,7 +511,7 @@ def export_excel():
 @contributions_access_required
 def api_student_info(student_id):
     student = Student.query.get_or_404(student_id)
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
         ContributionPayment.student_id == student_id,
@@ -544,7 +545,7 @@ def import_excel():
             
             wb = openpyxl.load_workbook(BytesIO(file.read()), data_only=True)
             
-            active_term = Term.query.filter_by(is_active=True).first()
+            active_term = get_active_term()
             sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
             
             if not active_term or not sss3_class:
@@ -669,7 +670,7 @@ def import_excel():
                         skipped_count += 1
                         continue
                 
-                active_sess = AcademicSession.query.filter_by(is_active=True).first()
+                active_sess = get_active_session()
                 payment = ContributionPayment(
                     session_id=active_sess.id if active_sess else None,
                     student_id=db_student_id,
@@ -717,9 +718,9 @@ def clear_all_data():
 @contributions_access_required
 def defaulters():
     """List students with outstanding balance"""
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
@@ -779,7 +780,7 @@ def defaulters():
 @contributions_access_required
 def daily_summary():
     """Show collections grouped by date"""
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     daily_data = db.session.query(
         ContributionPayment.payment_date,
         func.count(ContributionPayment.id).label('count'),
@@ -830,9 +831,9 @@ def export_defaulters():
         from io import BytesIO
         from flask import send_file
         
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-        active_session = AcademicSession.query.filter_by(is_active=True).first()
+        active_session = get_active_session()
         max_due = float(ContributionSettings.get('max_due', 20000))
         
         sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()

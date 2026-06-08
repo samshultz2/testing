@@ -4,6 +4,7 @@ payments with printable receipts, discounts/waivers, defaulters and a finance
 dashboard.
 """
 from datetime import date, datetime
+from utils.helpers import get_active_term
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response)
@@ -29,7 +30,7 @@ PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Cheque', 'Online']
 
 
 def _active_term_id():
-    t = Term.query.filter_by(is_active=True).first()
+    t = get_active_term()
     return t.id if t else None
 
 

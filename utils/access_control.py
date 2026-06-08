@@ -3,6 +3,7 @@ Access Control Utilities for PosyHub
 Provides decorators and helper functions for role-based access control
 """
 from functools import wraps
+from utils.helpers import get_active_term
 from flask import session, redirect, url_for, flash, request, abort
 from models import User, ClassArmAssignment, Term, StudentEnrollment
 
@@ -394,7 +395,7 @@ def get_accessible_class_ids():
     class in the branch(es) currently in view (so a branch admin is limited to
     their own branch, a central user sees all).
     """
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     if not active_term:
         return []
 

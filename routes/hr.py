@@ -3,6 +3,7 @@ Staff / HR routes — personnel directory, departments, leave management and
 monthly payroll (with optional posting of the salary run to Finance expenses).
 """
 from datetime import datetime, date
+from utils.helpers import get_active_term
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, Response)
@@ -393,7 +394,7 @@ def finalize_payroll(run_id):
             from models import Expense, ExpenseCategory
             cat = ExpenseCategory.query.filter(
                 ExpenseCategory.name.ilike('%salar%')).first()
-            term = Term.query.filter_by(is_active=True).first()
+            term = get_active_term()
             exp = Expense(
                 term_id=term.id if term else None,
                 category_id=cat.id if cat else None,

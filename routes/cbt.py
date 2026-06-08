@@ -9,6 +9,7 @@ Two surfaces:
     exam is gated by its own access password; answers are auto-graded.
 """
 from datetime import datetime, timedelta
+from utils.helpers import get_active_term
 from functools import wraps
 import io
 import os
@@ -61,7 +62,7 @@ def _save_question_image(file):
 
 
 def _active_term():
-    return Term.query.filter_by(is_active=True).first()
+    return get_active_term()
 
 
 def _student_placement(student_id, term):

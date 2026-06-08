@@ -3,6 +3,7 @@ User Management Routes
 Handles user CRUD, role management, and teacher assignments
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, abort
+from utils.helpers import get_active_term
 from models import db, ClassArmAssignment, Term, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
 from utils.access_control import (MODULES, manage_users_required, can_manage,
                                   current_manage_scope, current_rank, get_current_user)
@@ -338,7 +339,7 @@ def assign_class(user_id):
         return redirect(url_for('users.view_user', user_id=user_id))
     
     teacher = user.teacher_profile
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     
     if request.method == 'POST':
         assignment_id = request.form.get('assignment_id', type=int)
@@ -398,7 +399,7 @@ def assign_subject(user_id):
         return redirect(url_for('users.view_user', user_id=user_id))
     
     teacher = user.teacher_profile
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     
     if request.method == 'POST':
         assignment_id = request.form.get('assignment_id', type=int)

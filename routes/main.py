@@ -2,6 +2,7 @@
 Main routes for dashboard and general pages
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from utils.helpers import get_active_term, get_active_session
 from datetime import date, timedelta
 from models import (
     db, Student, ParentContact, AcademicSession, Term, StudentEnrollment, 
@@ -56,7 +57,7 @@ def branch_overview():
         return redirect(url_for('main.dashboard'))
 
     from models import Branch, StaffMember, FeePayment, Sale, WAECResult, JAMBResult
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
 
     def _waec_benchmark(credit_subjects):
         """5+ credits including English & Mathematics — the standard WAEC pass."""
@@ -111,8 +112,8 @@ def branch_overview():
 def dashboard():
     """Main dashboard page: assembles widget data from focused helpers."""
     from utils.branch_scope import scope_query
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
+    active_term = get_active_term()
 
     active_enrollments, total_classes, class_stats = _dash_class_stats(active_term)
     birthdays_today, birthdays_week = _dash_birthdays()
@@ -453,7 +454,7 @@ def students_list():
 
     # Teachers are further limited to their assigned classes. Other non-admin
     # roles (principal, HOD, bursar…) rely on branch/section/stream scoping above.
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     if is_teacher() and active_term:
         accessible_class_ids = get_accessible_class_ids()
         if accessible_class_ids:
@@ -543,7 +544,7 @@ def students_list():
     students = query.paginate(page=page, per_page=per_page, error_out=False)
     
     # Add current class info to each student (single query for the whole page)
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     class_map = {}
     page_ids = [s.id for s in students.items]
     if active_term and page_ids:
@@ -830,7 +831,7 @@ def bulk_add_subject():
         return jsonify({'error': 'Invalid student ids'}), 400
 
     # Which of the selected students are SSS3 (current/active term)?
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_q = (db.session.query(StudentEnrollment.student_id)
               .join(ClassArmAssignment,
                     StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
@@ -1085,7 +1086,7 @@ def api_dashboard_stats():
     """API endpoint for dashboard statistics"""
     from utils.calculations import get_attendance_statistics
 
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
 
     stats = {
         'total_students': Student.query.filter_by(is_active=True).count(),
@@ -1156,7 +1157,7 @@ def export_students_data():
             query = query.filter(Student.religion == religion)
         
         if class_id or arm_id:
-            active_term = Term.query.filter_by(is_active=True).first()
+            active_term = get_active_term()
             if active_term:
                 query = query.join(
                     StudentEnrollment, Student.id == StudentEnrollment.student_id
@@ -1177,7 +1178,7 @@ def export_students_data():
     
     # Pre-load current class + parent phone for every student in two queries
     # (instead of two per student) to avoid N+1 during export.
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     student_ids = [s.id for s in students]
 
     class_map = {}

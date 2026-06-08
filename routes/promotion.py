@@ -2,6 +2,7 @@
 Student Promotion Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+from utils.helpers import get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, PromotionRule, PromotionRecord,
     Term, AcademicSession, SchoolClass, StudentScore, ClassSubject, Subject,
@@ -46,7 +47,7 @@ def graduates_list():
 def mark_graduate(student_id):
     """Mark a single (SSS3) student as graduated."""
     student = Student.query.get_or_404(student_id)
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     try:
         student.is_graduated = True
         student.graduation_date = date.today()
@@ -83,7 +84,7 @@ def unmark_graduate(student_id):
 @admin_required
 def graduate_sss3():
     """Mark every current SSS3 student (active term) as a graduate in one click."""
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     students = get_sss3_enrolled_students()
     graduated = 0
     try:
@@ -155,7 +156,7 @@ def index():
     """Promotion dashboard"""
     # Get sessions
     sessions = AcademicSession.query.order_by(AcademicSession.id.desc()).all()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     
     # Get promotion rules count
     rules_count = PromotionRule.query.filter_by(is_active=True).count()

@@ -2,6 +2,7 @@
 Attendance management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from utils.helpers import get_active_term
 from datetime import datetime, date, timedelta
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, 
@@ -26,7 +27,7 @@ attendance_bp = Blueprint('attendance', __name__, url_prefix='/attendance')
 def index():
     """Attendance main page"""
     # Get active term
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     
     # Get all sessions and terms for selection
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
@@ -59,7 +60,7 @@ def mark_attendance_page():
     
     # Get active term if not specified
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
@@ -247,7 +248,7 @@ def daily_summary():
         target_date = date.today()
     
     # Get assignments for dropdown
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     assignments = []
     if active_term:
         assignments = filter_classes_for_user(
@@ -377,7 +378,7 @@ def weekly_summary():
         return redirect(url_for('attendance.weekly_summary'))
     
     # Get active term
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     
     assignments = []
     weeks = []
@@ -458,7 +459,7 @@ def termly_summary():
     ).all()
     
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
@@ -735,7 +736,7 @@ def attendance_alerts():
     
     # Get active term if not specified
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
@@ -934,7 +935,7 @@ def print_register():
     
     # Get active term if not specified
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     

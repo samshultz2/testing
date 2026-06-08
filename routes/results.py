@@ -3,6 +3,7 @@ Results management routes - WAEC, JAMB, and Analytics Dashboard
 Comprehensive academic performance tracking and analysis
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from utils.helpers import get_active_term, get_active_session
 from collections import defaultdict
 from models import (db, Student, WAECResult, JAMBResult, Term, AcademicSession, UniversityCutoff,
                     SchoolSettings, StudentEnrollment, ClassArmAssignment,
@@ -944,7 +945,7 @@ def student_report(student_id):
     mock_progress = [{'name': m.exam.display_name, 'date': m.exam.exam_date, 'score': m.total_score}
                      for m in mock_rows]
     prediction = None
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if active_session:
         prediction = MockJAMBAnalytics.predict_real_jamb(student_id, active_session.id)
 
@@ -1225,7 +1226,7 @@ def analytics_hub():
     class_compare = []
     internal_corr = None
     if year:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         arm_map = {}
         if active_term:
             enrs = StudentEnrollment.query.join(ClassArmAssignment).filter(
