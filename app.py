@@ -19,6 +19,7 @@ from routes.library import library_bp
 from routes.events import events_bp
 from routes.cbt import cbt_bp, cbt_portal_bp
 from routes.result_portal import scratchcards_bp, result_portal_bp
+from routes.parent_portal import parent_bp
 from routes.sales import sales_bp
 
 
@@ -84,6 +85,7 @@ def create_app(config_class=Config):
     app.register_blueprint(cbt_portal_bp)
     app.register_blueprint(scratchcards_bp)
     app.register_blueprint(result_portal_bp)
+    app.register_blueprint(parent_bp)
     app.register_blueprint(sales_bp)
     
     # Initialize database
