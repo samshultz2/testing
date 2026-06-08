@@ -33,6 +33,11 @@
 </div>
 <div class="form-row">
 <div class="form-group"><label class="form-label">New Password</label><input type="password" name="new_password" class="form-control" placeholder="Leave blank to keep current" minlength="6"></div>
+<div class="form-group"><label class="form-label">Quick preset</label>
+<select class="form-control" id="presetSelect" onchange="applyPreset()">
+<option value="">— Apply a role preset (optional) —</option>
+{% for key, p in presets.items() %}<option value="{{ key }}">{{ p.label }}</option>{% endfor %}
+</select></div>
 <div class="form-group"><label class="form-label">Role</label>
 <select name="role" class="form-control" id="roleSelect" onchange="toggleTeacherOptions()">
 <option value="teacher" {% if user.role == 'teacher' %}selected{% endif %}>Teacher</option>
@@ -92,6 +97,7 @@
 </form>
 
 <script>
+var PRESETS = {{ presets|tojson }};
 function toggleTeacherOptions(){
     const role = document.getElementById('roleSelect').value;
     document.getElementById('teacherPermissions').style.display = role === 'teacher' ? 'block' : 'none';
@@ -100,6 +106,15 @@ function toggleTeacherOptions(){
 function toggleScope(){
     const central = document.getElementById('scopeSelect').value === 'central';
     document.getElementById('branchPick').style.display = central ? 'none' : 'block';
+}
+function applyPreset(){
+    var p = PRESETS[document.getElementById('presetSelect').value];
+    if(!p) return;
+    document.getElementById('roleSelect').value = p.role;
+    document.getElementById('scopeSelect').value = p.scope;
+    var want = {}; (p.modules||[]).forEach(function(m){ want[m] = 1; });
+    document.querySelectorAll('input[name="modules"]').forEach(function(cb){ cb.checked = !!want[cb.value]; });
+    toggleTeacherOptions(); toggleScope();
 }
 toggleTeacherOptions(); toggleScope();
 </script>

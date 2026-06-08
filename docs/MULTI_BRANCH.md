@@ -22,9 +22,12 @@ branch users while central users bypass it.
    student/staff detail pages and auto branch-stamping on create. More modules
    (finance, CBT, results, attendance) adopt `scope_query`/`branch_for_new`
    incrementally.
-3. Role presets — the school's hierarchy (Director of Studies, Exams &
+3. **Role presets — DONE.** The school's hierarchy (Director of Studies, Exams &
    Standards, IT, Principal, Headmaster, HODs, Headteachers, Teachers, Bursar)
-   as configurable presets.
+   as configurable one-click presets in `utils/role_presets.py`. The user
+   add/edit form has a **Quick preset** picker that pre-fills role, branch scope
+   and module checkboxes (still fully editable). Presets are plain data — other
+   schools edit the dict or ignore it.
 4. Section/stream filters — Principal (secondary) vs Headmaster (nursery/primary);
    HOD Arts vs Sciences.
 5. Bursar Sales & Inventory module (textbooks, workbooks, uniforms…), branch-scoped.

@@ -40,6 +40,14 @@
                 </div>
             </div>
             <div class="form-group">
+                <label class="form-label">Quick preset</label>
+                <select class="form-control" id="presetSelect" onchange="applyPreset()">
+                    <option value="">— Choose a role preset (optional) —</option>
+                    {% for key, p in presets.items() %}<option value="{{ key }}">{{ p.label }}</option>{% endfor %}
+                </select>
+                <small class="text-muted" id="presetHelp">Pre-fills role, branch scope and module access — you can still tweak.</small>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Role <span class="text-danger">*</span></label>
                 <select name="role" class="form-control" id="roleSelect" onchange="toggleTeacherOptions()">
                     <option value="teacher">Teacher</option>
@@ -110,6 +118,7 @@
 </style>
 
 <script>
+var PRESETS = {{ presets|tojson }};
 function toggleTeacherOptions(){
     const role=document.getElementById('roleSelect').value;
     document.getElementById('teacherPermissions').style.display=role==='teacher'?'block':'none';
@@ -118,6 +127,16 @@ function toggleTeacherOptions(){
 function toggleScope(){
     const central=document.getElementById('scopeSelect').value==='central';
     document.getElementById('branchPick').style.display=central?'none':'block';
+}
+function applyPreset(){
+    var p=PRESETS[document.getElementById('presetSelect').value];
+    if(!p) return;
+    document.getElementById('roleSelect').value=p.role;
+    document.getElementById('scopeSelect').value=p.scope;
+    var want={}; (p.modules||[]).forEach(function(m){ want[m]=1; });
+    document.querySelectorAll('input[name="modules"]').forEach(function(cb){ cb.checked=!!want[cb.value]; });
+    document.getElementById('presetHelp').textContent=p.description||'';
+    toggleTeacherOptions(); toggleScope();
 }
 toggleTeacherOptions(); toggleScope();
 </script>

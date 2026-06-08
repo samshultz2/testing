@@ -152,8 +152,10 @@ def add_user():
             return redirect(url_for('users.add_user'))
     
     from models import Branch
+    from utils.role_presets import presets_for_form
     return render_template('users/add.html', modules=MODULES,
-                           branches=Branch.query.order_by(Branch.name).all())
+                           branches=Branch.query.order_by(Branch.name).all(),
+                           presets=presets_for_form())
 
 
 @users_bp.route('/<int:user_id>')
@@ -236,8 +238,10 @@ def edit_user(user_id):
             flash(f'Error updating user: {str(e)}', 'error')
     
     from models import Branch
+    from utils.role_presets import presets_for_form
     return render_template('users/edit.html', user=user, modules=MODULES,
-                           branches=Branch.query.order_by(Branch.name).all())
+                           branches=Branch.query.order_by(Branch.name).all(),
+                           presets=presets_for_form())
 
 
 @users_bp.route('/<int:user_id>/delete', methods=['POST'])
