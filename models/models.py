@@ -860,6 +860,9 @@ class User(db.Model):
     # JSON list of module keys this (non-admin) user may access. Empty/None =>
     # fall back to the role's default module set. Admins ignore this (see all).
     allowed_modules = db.Column(db.Text)
+    # JSON dict {module_key: 'view'|'edit'} — granular per-module access level.
+    # Supersedes allowed_modules; 'view' means read-only for that section.
+    permissions = db.Column(db.Text)
     # When True, the user may browse but cannot create/edit/delete anything
     # (enforced globally for unsafe HTTP methods). The 'readonly' role implies this too.
     view_only = db.Column(db.Boolean, default=False)
@@ -900,20 +903,50 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
     @property
-    def module_list(self):
-        """The explicit module keys granted to this user (may be empty)."""
+    def permission_map(self):
+        """Effective per-module access levels: {module_key: 'view'|'edit'}.
+
+        Reads the granular ``permissions`` column; falls back to the legacy
+        ``allowed_modules`` list (granting 'view' if globally view-only, else 'edit').
+        """
         import json
-        if not self.allowed_modules:
-            return []
-        try:
-            v = json.loads(self.allowed_modules)
-            return v if isinstance(v, list) else []
-        except (ValueError, TypeError):
-            return []
+        if self.permissions:
+            try:
+                v = json.loads(self.permissions)
+                if isinstance(v, dict):
+                    return {k: ('edit' if lvl == 'edit' else 'view')
+                            for k, lvl in v.items()}
+            except (ValueError, TypeError):
+                pass
+        if self.allowed_modules:
+            try:
+                lst = json.loads(self.allowed_modules)
+                if isinstance(lst, list):
+                    lvl = 'view' if self.view_only else 'edit'
+                    return {k: lvl for k in lst}
+            except (ValueError, TypeError):
+                pass
+        return {}
+
+    def set_permissions(self, perm_map):
+        """Store {module_key: 'view'|'edit'} (drops anything else)."""
+        import json
+        clean = {k: ('edit' if v == 'edit' else 'view')
+                 for k, v in (perm_map or {}).items() if v in ('view', 'edit')}
+        self.permissions = json.dumps(clean) if clean else None
+
+    def module_level(self, key):
+        """'view' / 'edit' / None for a module."""
+        return self.permission_map.get(key)
+
+    @property
+    def module_list(self):
+        """Module keys this user may access (any level)."""
+        return list(self.permission_map.keys())
 
     def set_modules(self, keys):
-        import json
-        self.allowed_modules = json.dumps(list(keys)) if keys else None
+        """Backward-compatible: grant full (edit) access on each key."""
+        self.set_permissions({k: 'edit' for k in (keys or [])})
 
     @property
     def is_super_admin(self):
@@ -1154,6 +1187,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN allowed_modules TEXT')
         if 'view_only' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN view_only BOOLEAN DEFAULT 0')
+        if 'permissions' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN permissions TEXT')
     except Exception:
         pass
 

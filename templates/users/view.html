@@ -54,11 +54,15 @@
 <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-th-large"></i> Module Access</h3></div>
     <div class="card-body">
-        {% set granted = user.module_list %}
+        {% set granted = user.permission_map %}
         {% if granted %}
         <div class="permission-list">
             {% for key, label in modules.items() %}
-            <div class="perm {% if key in granted %}active{% endif %}"><i class="fas fa-{% if key in granted %}check{% else %}times{% endif %}"></i> {{ label }}</div>
+            {% set lvl = granted.get(key) %}
+            <div class="perm {% if lvl %}active{% endif %}">
+                <i class="fas fa-{% if lvl == 'edit' %}pen{% elif lvl == 'view' %}eye{% else %}times{% endif %}"></i>
+                {{ label }}{% if lvl %} <span class="text-sm">({{ 'edit' if lvl == 'edit' else 'view' }})</span>{% endif %}
+            </div>
             {% endfor %}
         </div>
         {% else %}

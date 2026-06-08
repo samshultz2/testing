@@ -13,6 +13,7 @@ table.matrix thead th.rot span{writing-mode:vertical-rl;transform:rotate(180deg)
 table.matrix input{width:1.1rem;height:1.1rem;cursor:pointer}
 table.matrix tr.admin-row td{color:var(--text-muted);font-style:italic}
 .matrix-note{color:var(--text-muted);font-size:.8rem;margin:.5rem 0}
+.matrix-sel{padding:.1rem .2rem;font-size:.78rem;border:1px solid var(--border-color);border-radius:4px}
 </style>
 {% endblock %}
 {% block content %}
@@ -23,7 +24,7 @@ table.matrix tr.admin-row td{color:var(--text-muted);font-style:italic}
     </div>
 </div>
 
-<p class="matrix-note"><i class="fas fa-info-circle"></i> Tick a box to grant a user access to that section. A user with no boxes ticked falls back to their role's default access. <strong>Admins</strong> always have full access and are shown for reference only. Tick <strong>View only</strong> to let a user browse but not change anything.</p>
+<p class="matrix-note"><i class="fas fa-info-circle"></i> Per cell: <strong>—</strong> no access, <strong>V</strong> view only, <strong>E</strong> view &amp; edit. A user with no cells set falls back to their role's default. <strong>Admins</strong> always have full access (shown for reference). The <strong>View only</strong> column forces every section read-only.</p>
 
 <form method="POST" action="{{ url_for('users.matrix') }}">
 <div class="card">
@@ -45,12 +46,16 @@ table.matrix tr.admin-row td{color:var(--text-muted);font-style:italic}
             <td>—</td>
         </tr>
         {% else %}
-        {% set granted = u.module_list %}
+        {% set granted = u.permission_map %}
         <tr>
             <td class="user"><a href="{{ url_for('users.view_user', user_id=u.id) }}">{{ u.full_name or u.username }}</a>
                 <span class="badge badge-secondary">{{ u.get_display_role() }}</span></td>
             {% for key in modules %}
-            <td><input type="checkbox" name="mod_{{ u.id }}" value="{{ key }}" {% if key in granted %}checked{% endif %}></td>
+            <td><select name="perm_{{ u.id }}_{{ key }}" class="matrix-sel">
+                <option value="">—</option>
+                <option value="view" {% if granted.get(key) == 'view' %}selected{% endif %}>V</option>
+                <option value="edit" {% if granted.get(key) == 'edit' %}selected{% endif %}>E</option>
+            </select></td>
             {% endfor %}
             <td><input type="checkbox" name="view_{{ u.id }}" {% if u.view_only %}checked{% endif %}></td>
         </tr>

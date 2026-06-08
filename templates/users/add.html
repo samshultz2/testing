@@ -111,10 +111,16 @@
         <div class="card-body">
             <div class="permission-grid">
                 {% for key, label in modules.items() %}
-                <label class="permission-item"><input type="checkbox" name="modules" value="{{ key }}"> <span>{{ label }}</span></label>
+                <label class="permission-item perm-row"><span>{{ label }}</span>
+                    <select name="perm_{{ key }}" class="form-control perm-select" data-key="{{ key }}">
+                        <option value="">No access</option>
+                        <option value="view">View only</option>
+                        <option value="edit">View &amp; edit</option>
+                    </select>
+                </label>
                 {% endfor %}
             </div>
-            <p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Tick the sections this user may open. Leave all unticked to use the role's default access. Admins always have full access.</p>
+            <p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Choose each section's level — <strong>No access</strong>, <strong>View only</strong> (read, no changes) or <strong>View &amp; edit</strong>. Leave all on "No access" to use the role's default. Admins always have full access.</p>
             <label class="permission-item mt-2" style="display:inline-flex"><input type="checkbox" name="view_only"> <span>View only — can browse but not create, edit or delete</span></label>
         </div>
     </div>
@@ -126,8 +132,10 @@
 </form>
 
 <style>
-.permission-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
-@media(min-width:768px){.permission-grid{grid-template-columns:repeat(3,1fr)}}
+.permission-grid{display:grid;grid-template-columns:1fr;gap:.5rem}
+@media(min-width:768px){.permission-grid{grid-template-columns:repeat(2,1fr)}}
+.perm-row{justify-content:space-between;gap:.75rem}
+.perm-select{max-width:150px;padding:.3rem .4rem;height:auto}
 .permission-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--gray-50);border-radius:var(--radius-sm);cursor:pointer}
 .permission-item input{width:1.1rem;height:1.1rem}
 .form-row{display:grid;grid-template-columns:1fr;gap:1rem}
@@ -153,8 +161,8 @@ function applyPreset(){
     document.getElementById('scopeSelect').value=p.scope;
     document.getElementById('sectionSelect').value=p.section||'';
     document.getElementById('streamSelect').value=p.stream||'';
-    var want={}; (p.modules||[]).forEach(function(m){ want[m]=1; });
-    document.querySelectorAll('input[name="modules"]').forEach(function(cb){ cb.checked=!!want[cb.value]; });
+    var want={}; (p.modules||[]).forEach(function(m){ want[m]='edit'; });
+    document.querySelectorAll('.perm-select').forEach(function(sel){ sel.value=want[sel.dataset.key]||''; });
     document.getElementById('presetHelp').textContent=p.description||'';
     toggleTeacherOptions(); toggleScope();
 }

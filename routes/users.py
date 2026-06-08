@@ -31,6 +31,21 @@ def admin_required(f):
     return decorated_function
 
 
+def _read_perms(form, prefix='perm_'):
+    """Build {module_key: 'view'|'edit'} from per-module selects on a form."""
+    perms = {}
+    for key in MODULES:
+        lvl = form.get(f'{prefix}{key}')
+        if lvl in ('view', 'edit'):
+            perms[key] = lvl
+    # Legacy checkbox fallback (older form posts a 'modules' list = full access).
+    if not perms:
+        for key in form.getlist('modules'):
+            if key in MODULES:
+                perms[key] = 'edit'
+    return perms
+
+
 @users_bp.route('/')
 @admin_required
 def index():
@@ -49,15 +64,14 @@ def matrix():
     if request.method == 'POST':
         changed = 0
         for u in editable:
-            before = (sorted(u.module_list), bool(u.view_only))
-            selected = [m for m in request.form.getlist(f'mod_{u.id}') if m in MODULES]
-            u.set_modules(selected)
+            before = (dict(u.permission_map), bool(u.view_only))
+            u.set_permissions(_read_perms(request.form, prefix=f'perm_{u.id}_'))
             u.view_only = request.form.get(f'view_{u.id}') == 'on'
-            after = (sorted(u.module_list), bool(u.view_only))
+            after = (dict(u.permission_map), bool(u.view_only))
             if after != before:
                 changed += 1
                 log_action('user.permissions',
-                           f'{u.username} (matrix): modules {before[0]}→{after[0]}, '
+                           f'{u.username} (matrix): perms {before[0]}→{after[0]}, '
                            f'view_only {before[1]}→{after[1]}')
         db.session.commit()
         flash(f'Updated access for {changed} user(s).', 'success')
@@ -114,10 +128,9 @@ def add_user():
                 created_by_id=session.get('user_id')
             )
             user.set_password(password)
-            # Fine-grained module access (admins always have full access).
+            # Fine-grained per-module access levels (admins always have full access).
             if role != 'admin':
-                selected = [m for m in request.form.getlist('modules') if m in MODULES]
-                user.set_modules(selected)
+                user.set_permissions(_read_perms(request.form))
             user.view_only = request.form.get('view_only') == 'on'
             # Branch scope: central users see all branches; branch users one.
             user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
@@ -177,7 +190,7 @@ def edit_user(user_id):
     
     if request.method == 'POST':
         # Snapshot access-related fields so we can audit any change.
-        before = (user.role, sorted(user.module_list), bool(user.view_only),
+        before = (user.role, dict(user.permission_map), bool(user.view_only),
                   user.scope, user.branch_id)
 
         user.email = request.form.get('email', '').strip() or None
@@ -186,12 +199,11 @@ def edit_user(user_id):
         user.role = request.form.get('role', user.role)
         user.is_active = request.form.get('is_active') == 'on'
 
-        # Fine-grained module access (admins always have full access).
+        # Fine-grained per-module access levels (admins always have full access).
         if user.role == 'admin':
-            user.set_modules(None)
+            user.set_permissions({})
         else:
-            selected = [m for m in request.form.getlist('modules') if m in MODULES]
-            user.set_modules(selected)
+            user.set_permissions(_read_perms(request.form))
         user.view_only = request.form.get('view_only') == 'on'
         # Branch scope.
         user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
@@ -228,12 +240,12 @@ def edit_user(user_id):
 
         try:
             db.session.commit()
-            after = (user.role, sorted(user.module_list), bool(user.view_only),
+            after = (user.role, dict(user.permission_map), bool(user.view_only),
                      user.scope, user.branch_id)
             if after != before:
                 log_action('user.permissions',
                            f'{user.username}: role {before[0]}→{after[0]}, '
-                           f'modules {before[1]}→{after[1]}, '
+                           f'perms {before[1]}→{after[1]}, '
                            f'view_only {before[2]}→{after[2]}, '
                            f'scope {before[3]}→{after[3]}, branch {before[4]}→{after[4]}')
             flash('User updated successfully!', 'success')

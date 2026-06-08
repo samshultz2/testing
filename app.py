@@ -95,9 +95,11 @@ def create_app(config_class=Config):
     init_csrf(app)
 
     # Fine-grained module access for non-admin users.
-    from utils.access_control import enforce_module_access, enforce_read_only
+    from utils.access_control import (enforce_module_access, enforce_read_only,
+                                       enforce_write_level)
     app.before_request(enforce_module_access)
     app.before_request(enforce_read_only)
+    app.before_request(enforce_write_level)
 
     # Friendly error pages
     from utils.errors import register_error_handlers
@@ -167,6 +169,13 @@ def create_app(config_class=Config):
             except Exception:
                 return True
 
+        def can_write_module(key):
+            try:
+                from utils.access_control import can_write_module as _cwm
+                return _cwm(key)
+            except Exception:
+                return True
+
         def branch_context():
             """Header branch switcher state."""
             try:
@@ -194,6 +203,7 @@ def create_app(config_class=Config):
             'csrf_token': csrf_token,
             'user_permissions': get_user_permissions(),
             'can_access_module': can_access_module,
+            'can_write_module': can_write_module,
             'branch_ctx': branch_context(),
         }
     

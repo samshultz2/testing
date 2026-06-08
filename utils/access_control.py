@@ -65,19 +65,48 @@ ROLE_DEFAULT_MODULES = {
 }
 
 
+def user_module_levels():
+    """Effective {module_key: 'view'|'edit'} for the current user.
+
+    Admins get 'edit' on everything (a globally view-only admin gets 'view').
+    Otherwise the user's explicit per-module levels, falling back to the role's
+    default set (granted at 'view' for the readonly role, else 'edit').
+    """
+    if is_admin():
+        lvl = 'view' if is_read_only() else 'edit'
+        return {k: lvl for k in MODULES}
+    user = get_current_user()
+    if user:
+        pm = user.permission_map
+        if pm:
+            scoped = {k: v for k, v in pm.items() if k in MODULES}
+            if scoped:
+                if user.view_only:   # global override -> everything view
+                    scoped = {k: 'view' for k in scoped}
+                return scoped
+    role = session.get('role', 'teacher')
+    default = ROLE_DEFAULT_MODULES.get(role, ROLE_DEFAULT_MODULES['teacher'])
+    lvl = 'view' if role == 'readonly' else 'edit'
+    return {k: lvl for k in default}
+
+
 def user_modules():
     """Set of module keys the current user may access (admins => all)."""
-    if is_admin():
-        return set(MODULES.keys())
-    user = get_current_user()
-    if user and user.module_list:
-        return set(user.module_list) & set(MODULES.keys())
-    role = session.get('role', 'teacher')
-    return set(ROLE_DEFAULT_MODULES.get(role, ROLE_DEFAULT_MODULES['teacher']))
+    return set(user_module_levels().keys())
 
 
 def can_access_module(key):
-    return is_admin() or key in user_modules()
+    return is_admin() or key in user_module_levels()
+
+
+def module_level(key):
+    """The current user's level for a module: 'edit' / 'view' / None."""
+    return user_module_levels().get(key)
+
+
+def can_write_module(key):
+    """True if the current user may make changes in a module."""
+    return module_level(key) == 'edit'
 
 
 def enforce_module_access():
@@ -124,6 +153,26 @@ def enforce_read_only():
         abort(403)
     flash('Your account is view-only — you cannot make changes.', 'error')
     return redirect(request.referrer or url_for('main.dashboard'))
+
+
+def enforce_write_level():
+    """before_request gate: block writes to a module the user can only view."""
+    if not session.get('logged_in') or request.method in _SAFE_METHODS:
+        return None
+    if is_admin():
+        return None   # admins may write (global view-only handled by enforce_read_only)
+    endpoint = request.endpoint or ''
+    if endpoint in _ALWAYS_ALLOWED_ENDPOINTS or endpoint in _READONLY_WRITE_OK:
+        return None
+    module = BLUEPRINT_MODULE.get(endpoint.split('.')[0])
+    if not module:
+        return None
+    if module_level(module) != 'edit':
+        if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+            abort(403)
+        flash('You have view-only access to that section.', 'error')
+        return redirect(request.referrer or url_for('main.dashboard'))
+    return None
 
 
 def module_required(key):

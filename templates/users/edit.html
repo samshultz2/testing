@@ -7,8 +7,10 @@
 .form-row{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
 @media(min-width:576px){.form-row{grid-template-columns:repeat(2,1fr)}}
 .form-row .form-group{margin-bottom:0}
-.permission-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
-@media(min-width:576px){.permission-grid{grid-template-columns:repeat(3,1fr)}}
+.permission-grid{display:grid;grid-template-columns:1fr;gap:.5rem}
+@media(min-width:768px){.permission-grid{grid-template-columns:repeat(2,1fr)}}
+.perm-row{justify-content:space-between;gap:.75rem}
+.perm-select{max-width:150px;padding:.3rem .4rem;height:auto}
 .permission-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--gray-50);border-radius:6px;cursor:pointer}
 .permission-item input{width:1.1rem;height:1.1rem}
 .toggle-label{display:flex;align-items:center;gap:.5rem;padding:.5rem 0;cursor:pointer}
@@ -93,13 +95,19 @@
 <div class="card mb-3" id="moduleAccess">
 <div class="card-header"><h3><i class="fas fa-th-large"></i> Module Access</h3></div>
 <div class="card-body">
-{% set current = user.module_list %}
+{% set current = user.permission_map %}
 <div class="permission-grid">
 {% for key, label in modules.items() %}
-<label class="permission-item"><input type="checkbox" name="modules" value="{{ key }}" {% if key in current %}checked{% endif %}> <span>{{ label }}</span></label>
+<label class="permission-item perm-row"><span>{{ label }}</span>
+    <select name="perm_{{ key }}" class="form-control perm-select" data-key="{{ key }}">
+        <option value="">No access</option>
+        <option value="view" {% if current.get(key) == 'view' %}selected{% endif %}>View only</option>
+        <option value="edit" {% if current.get(key) == 'edit' %}selected{% endif %}>View &amp; edit</option>
+    </select>
+</label>
 {% endfor %}
 </div>
-<p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Tick the sections this user may open. Leave all unticked to use the role's default access. Admins always have full access.</p>
+<p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Choose each section's level — <strong>No access</strong>, <strong>View only</strong> or <strong>View &amp; edit</strong>. Admins always have full access.</p>
 <label class="permission-item mt-2" style="display:inline-flex"><input type="checkbox" name="view_only" {% if user.view_only %}checked{% endif %}> <span>View only — can browse but not create, edit or delete</span></label>
 </div>
 </div>
@@ -128,8 +136,8 @@ function applyPreset(){
     document.getElementById('scopeSelect').value = p.scope;
     document.getElementById('sectionSelect').value = p.section || '';
     document.getElementById('streamSelect').value = p.stream || '';
-    var want = {}; (p.modules||[]).forEach(function(m){ want[m] = 1; });
-    document.querySelectorAll('input[name="modules"]').forEach(function(cb){ cb.checked = !!want[cb.value]; });
+    var want = {}; (p.modules||[]).forEach(function(m){ want[m] = 'edit'; });
+    document.querySelectorAll('.perm-select').forEach(function(sel){ sel.value = want[sel.dataset.key] || ''; });
     toggleTeacherOptions(); toggleScope();
 }
 toggleTeacherOptions(); toggleScope();
