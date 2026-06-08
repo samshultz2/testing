@@ -109,151 +109,146 @@ def branch_overview():
 @main_bp.route('/')
 @login_required
 def dashboard():
-    """Main dashboard page with comprehensive statistics"""
-    from utils.branch_scope import scope_query, scope_by_student, viewing_branch_id
-    # Helper: every dashboard stat is scoped to the branch(es) in view.
-    def sq(query):
-        return scope_query(query, Student)
-    # Basic student statistics (branch-scoped for branch users)
-    total_students = sq(Student.query.filter_by(is_active=True)).count()
-    male_students = sq(Student.query.filter_by(is_active=True, gender='Male')).count()
-    female_students = sq(Student.query.filter_by(is_active=True, gender='Female')).count()
-
-    # Get active session and term
+    """Main dashboard page: assembles widget data from focused helpers."""
+    from utils.branch_scope import scope_query
     active_session = AcademicSession.query.filter_by(is_active=True).first()
     active_term = Term.query.filter_by(is_active=True).first()
 
-    # Get recent students
-    recent_students = sq(Student.query.filter_by(is_active=True)).order_by(
-        Student.created_at.desc()
-    ).limit(5).all()
+    active_enrollments, total_classes, class_stats = _dash_class_stats(active_term)
+    birthdays_today, birthdays_week = _dash_birthdays()
 
-    # Enrollments and class statistics
-    active_enrollments = 0
-    class_stats = []
-    total_classes = 0
-    
-    if active_term:
-        # Get enrollment count (branch-scoped via the class assignment)
-        active_enrollments = scope_query(
-            StudentEnrollment.query.join(ClassArmAssignment).filter(
-                ClassArmAssignment.term_id == active_term.id,
-                StudentEnrollment.is_active == True),
-            ClassArmAssignment).count()
+    return render_template('dashboard.html',
+        announcements=_dash_announcements(),
+        active_session=active_session,
+        active_term=active_term,
+        recent_students=scope_query(
+            Student.query.filter_by(is_active=True), Student).order_by(
+            Student.created_at.desc()).limit(5).all(),
+        active_enrollments=active_enrollments,
+        total_classes=total_classes,
+        class_stats=class_stats,
+        attendance_stats=_dash_attendance_stats(active_term),
+        birthdays_today=birthdays_today,
+        birthdays_week=birthdays_week,
+        age_distribution=_dash_age_distribution(),
+        religion_stats=_dash_religion_stats(),
+        total_subjects=Subject.query.filter_by(is_active=True).count(),
+        total_school_classes=SchoolClass.query.filter_by(is_active=True).count(),
+        stream_dist=_dash_stream_distribution(),
+        jamb_snapshot=_dash_jamb_snapshot(),
+        waec_snapshot=_dash_waec_snapshot(),
+        mock_snapshot=_dash_mock_snapshot(),
+        attendance_trend=_dash_attendance_trend(active_term),
+        recent_activity=_dash_recent_activity(),
+        **_dash_student_counts()
+    )
 
-        # Get class-wise enrollment stats
-        assignments = scope_query(
-            ClassArmAssignment.query.filter_by(term_id=active_term.id),
-            ClassArmAssignment).all()
-        total_classes = len(assignments)
-        
-        for assignment in assignments:
-            enrollment_count = StudentEnrollment.query.filter_by(
-                class_arm_assignment_id=assignment.id,
-                is_active=True
-            ).count()
-            
-            male_count = StudentEnrollment.query.join(Student).filter(
-                StudentEnrollment.class_arm_assignment_id == assignment.id,
-                StudentEnrollment.is_active == True,
-                Student.gender == 'Male'
-            ).count()
-            
-            female_count = enrollment_count - male_count
-            
-            class_stats.append({
-                'name': assignment.display_name,
-                'total': enrollment_count,
-                'male': male_count,
-                'female': female_count
-            })
-        
-        # Sort by name
-        class_stats.sort(key=lambda x: x['name'])
 
-    # Attendance statistics for current term
-    attendance_stats = {
-        'today_present': 0,
-        'today_absent': 0,
-        'today_percentage': 0,
-        'week_average': 0,
-        'term_average': 0
+def _dash_student_counts():
+    """Active-student headcounts (branch-scoped)."""
+    from utils.branch_scope import scope_query
+    def sq(query):
+        return scope_query(query, Student)
+    return {
+        'total_students': sq(Student.query.filter_by(is_active=True)).count(),
+        'male_students': sq(Student.query.filter_by(is_active=True, gender='Male')).count(),
+        'female_students': sq(Student.query.filter_by(is_active=True, gender='Female')).count(),
+        'graduates_count': sq(Student.query.filter_by(is_active=True, is_graduated=True)).count(),
     }
-    
-    if active_term:
-        today = date.today()
-        # Branch filter for attendance (via the enrolment's class assignment).
-        _bid = viewing_branch_id()
-        _branch_enr = None
-        if _bid is not None:
-            _branch_enr = (db.session.query(StudentEnrollment.id)
-                           .join(ClassArmAssignment,
-                                 StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                           .filter(ClassArmAssignment.branch_id == _bid))
 
-        # Get current week
-        current_week = Week.query.filter(
-            Week.term_id == active_term.id,
-            Week.start_date <= today,
-            Week.end_date >= today
-        ).first()
 
-        if current_week:
-            # Today's attendance
-            _q = Attendance.query.filter_by(week_id=current_week.id, date=today)
-            if _branch_enr is not None:
-                _q = _q.filter(Attendance.enrollment_id.in_(_branch_enr))
-            today_records = _q.all()
-            
-            attendance_stats['today_present'] = sum(
-                1 for a in today_records if a.morning_present or a.afternoon_present
-            )
-            attendance_stats['today_absent'] = sum(
-                1 for a in today_records if not a.morning_present and not a.afternoon_present
-            )
-            
-            total_today = len(today_records)
-            if total_today > 0:
-                present_marks = sum(
-                    (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
-                    for a in today_records
-                )
-                attendance_stats['today_percentage'] = round(
-                    (present_marks / (total_today * 2)) * 100, 1
-                )
-        
-        # Get all weeks for term average
-        term_weeks = Week.query.filter_by(term_id=active_term.id).all()
-        if term_weeks:
-            _tq = Attendance.query.filter(
-                Attendance.week_id.in_([w.id for w in term_weeks]))
-            if _branch_enr is not None:
-                _tq = _tq.filter(Attendance.enrollment_id.in_(_branch_enr))
-            term_records = _tq.all()
-            
-            if term_records:
-                total_marks = sum(
-                    (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
-                    for a in term_records
-                )
-                attendance_stats['term_average'] = round(
-                    (total_marks / (len(term_records) * 2)) * 100, 1
-                )
+def _dash_class_stats(active_term):
+    """Per-class enrolment breakdown for the active term."""
+    from utils.branch_scope import scope_query
+    if not active_term:
+        return 0, 0, []
+    active_enrollments = scope_query(
+        StudentEnrollment.query.join(ClassArmAssignment).filter(
+            ClassArmAssignment.term_id == active_term.id,
+            StudentEnrollment.is_active == True),
+        ClassArmAssignment).count()
+    assignments = scope_query(
+        ClassArmAssignment.query.filter_by(term_id=active_term.id),
+        ClassArmAssignment).all()
+    class_stats = []
+    for assignment in assignments:
+        enrollment_count = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment.id, is_active=True).count()
+        male_count = StudentEnrollment.query.join(Student).filter(
+            StudentEnrollment.class_arm_assignment_id == assignment.id,
+            StudentEnrollment.is_active == True,
+            Student.gender == 'Male').count()
+        class_stats.append({
+            'name': assignment.display_name,
+            'total': enrollment_count,
+            'male': male_count,
+            'female': enrollment_count - male_count,
+        })
+    class_stats.sort(key=lambda x: x['name'])
+    return active_enrollments, len(assignments), class_stats
 
-    # Birthdays
+
+def _dash_attendance_stats(active_term):
+    """Today + term attendance percentages for the active term (branch-scoped)."""
+    from utils.branch_scope import viewing_branch_id
+    stats = {'today_present': 0, 'today_absent': 0, 'today_percentage': 0,
+             'week_average': 0, 'term_average': 0}
+    if not active_term:
+        return stats
     today = date.today()
-    today_month = today.month
-    today_day = today.day
+    bid = viewing_branch_id()
+    branch_enr = None
+    if bid is not None:
+        branch_enr = (db.session.query(StudentEnrollment.id)
+                      .join(ClassArmAssignment,
+                            StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                      .filter(ClassArmAssignment.branch_id == bid))
 
-    # Birthdays today
+    current_week = Week.query.filter(
+        Week.term_id == active_term.id,
+        Week.start_date <= today,
+        Week.end_date >= today).first()
+    if current_week:
+        q = Attendance.query.filter_by(week_id=current_week.id, date=today)
+        if branch_enr is not None:
+            q = q.filter(Attendance.enrollment_id.in_(branch_enr))
+        today_records = q.all()
+        stats['today_present'] = sum(
+            1 for a in today_records if a.morning_present or a.afternoon_present)
+        stats['today_absent'] = sum(
+            1 for a in today_records if not a.morning_present and not a.afternoon_present)
+        total_today = len(today_records)
+        if total_today > 0:
+            present_marks = sum(
+                (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
+                for a in today_records)
+            stats['today_percentage'] = round((present_marks / (total_today * 2)) * 100, 1)
+
+    term_weeks = Week.query.filter_by(term_id=active_term.id).all()
+    if term_weeks:
+        tq = Attendance.query.filter(Attendance.week_id.in_([w.id for w in term_weeks]))
+        if branch_enr is not None:
+            tq = tq.filter(Attendance.enrollment_id.in_(branch_enr))
+        term_records = tq.all()
+        if term_records:
+            total_marks = sum(
+                (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
+                for a in term_records)
+            stats['term_average'] = round((total_marks / (len(term_records) * 2)) * 100, 1)
+    return stats
+
+
+def _dash_birthdays():
+    """Students whose birthday is today, and within the next 6 days."""
+    from utils.branch_scope import scope_query
+    def sq(query):
+        return scope_query(query, Student)
+    today = date.today()
     birthdays_today = sq(Student.query.filter(
         Student.is_active == True,
         Student.date_of_birth != None,
-        extract('month', Student.date_of_birth) == today_month,
-        extract('day', Student.date_of_birth) == today_day
-    )).all()
-
-    # Birthdays this week (next 7 days, excluding today)
+        extract('month', Student.date_of_birth) == today.month,
+        extract('day', Student.date_of_birth) == today.day)).all()
     birthdays_week = []
     for i in range(1, 7):
         check_date = today + timedelta(days=i)
@@ -261,181 +256,170 @@ def dashboard():
             Student.is_active == True,
             Student.date_of_birth != None,
             extract('month', Student.date_of_birth) == check_date.month,
-            extract('day', Student.date_of_birth) == check_date.day
-        )).all()
+            extract('day', Student.date_of_birth) == check_date.day)).all()
         for s in students:
             s.birthday_date = check_date
         birthdays_week.extend(students)
+    return birthdays_today, birthdays_week
 
-    # Age distribution
-    age_distribution = {'0-10': 0, '11-13': 0, '14-16': 0, '17-19': 0, '20+': 0}
-    students_with_dob = sq(Student.query.filter(
-        Student.is_active == True,
-        Student.date_of_birth != None
-    )).all()
-    
-    for student in students_with_dob:
+
+def _dash_age_distribution():
+    """Active students bucketed by age band."""
+    from utils.branch_scope import scope_query
+    dist = {'0-10': 0, '11-13': 0, '14-16': 0, '17-19': 0, '20+': 0}
+    students = scope_query(Student.query.filter(
+        Student.is_active == True, Student.date_of_birth != None), Student).all()
+    for student in students:
         age = student.age
         if age <= 10:
-            age_distribution['0-10'] += 1
+            dist['0-10'] += 1
         elif age <= 13:
-            age_distribution['11-13'] += 1
+            dist['11-13'] += 1
         elif age <= 16:
-            age_distribution['14-16'] += 1
+            dist['14-16'] += 1
         elif age <= 19:
-            age_distribution['17-19'] += 1
+            dist['17-19'] += 1
         else:
-            age_distribution['20+'] += 1
+            dist['20+'] += 1
+    return dist
 
-    # Religion distribution
-    religion_distribution = scope_query(db.session.query(
-        Student.religion, func.count(Student.id)
-    ).filter(
-        Student.is_active == True,
-        Student.religion != None
-    ), Student).group_by(Student.religion).all()
-    
-    religion_stats = {r[0]: r[1] for r in religion_distribution if r[0]}
 
-    # Get total subjects and classes configured
-    total_subjects = Subject.query.filter_by(is_active=True).count()
-    total_school_classes = SchoolClass.query.filter_by(is_active=True).count()
+def _dash_religion_stats():
+    """Active-student counts grouped by religion."""
+    from utils.branch_scope import scope_query
+    rows = scope_query(db.session.query(
+        Student.religion, func.count(Student.id)).filter(
+        Student.is_active == True, Student.religion != None),
+        Student).group_by(Student.religion).all()
+    return {r[0]: r[1] for r in rows if r[0]}
 
-    # --- Richer dashboard widgets ---
-    from models import WAECResult, JAMBResult, AuditLog
-    from models.mock_jamb import MockJAMBExam
 
-    # Stream distribution (active students)
-    stream_rows = scope_query(db.session.query(Student.stream, func.count(Student.id)).filter(
+def _dash_stream_distribution():
+    """Active-student counts grouped by stream (None -> 'Unset')."""
+    from utils.branch_scope import scope_query
+    rows = scope_query(db.session.query(
+        Student.stream, func.count(Student.id)).filter(
         Student.is_active == True), Student).group_by(Student.stream).all()
-    stream_dist = {(s or 'Unset'): c for s, c in stream_rows}
+    return {(s or 'Unset'): c for s, c in rows}
 
-    graduates_count = sq(Student.query.filter_by(is_active=True, is_graduated=True)).count()
 
-    # JAMB snapshot (latest year) — one scoped query, eager-load students for the top list.
-    jamb_snapshot = None
+def _dash_jamb_snapshot():
+    """Latest-year JAMB summary (branch-scoped), or None."""
+    from utils.branch_scope import scope_by_student
+    from models import JAMBResult
     jy = db.session.query(JAMBResult.exam_year).order_by(JAMBResult.exam_year.desc()).first()
-    if jy:
-        rows = scope_by_student(
-            JAMBResult.query.filter_by(exam_year=jy[0]).options(joinedload(JAMBResult.student)),
-            JAMBResult).order_by(JAMBResult.total_score.desc()).all()
-        scores = [r.total_score for r in rows]
-        if scores:
-            top = rows[:5]
-            jamb_snapshot = {
-                'year': jy[0], 'count': len(scores),
-                'mean': round(sum(scores) / len(scores), 1),
-                'max': max(scores),
-                'above_200': sum(1 for s in scores if s >= 200),
-                'above_200_pct': round(sum(1 for s in scores if s >= 200) / len(scores) * 100),
-                'distribution': {
-                    '0-149': sum(1 for s in scores if s < 150),
-                    '150-199': sum(1 for s in scores if 150 <= s < 200),
-                    '200-249': sum(1 for s in scores if 200 <= s < 250),
-                    '250-299': sum(1 for s in scores if 250 <= s < 300),
-                    '300+': sum(1 for s in scores if s >= 300),
-                },
-                'top': [{'name': r.student.full_name, 'score': r.total_score} for r in top],
-            }
+    if not jy:
+        return None
+    rows = scope_by_student(
+        JAMBResult.query.filter_by(exam_year=jy[0]).options(joinedload(JAMBResult.student)),
+        JAMBResult).order_by(JAMBResult.total_score.desc()).all()
+    scores = [r.total_score for r in rows]
+    if not scores:
+        return None
+    top = rows[:5]
+    return {
+        'year': jy[0], 'count': len(scores),
+        'mean': round(sum(scores) / len(scores), 1),
+        'max': max(scores),
+        'above_200': sum(1 for s in scores if s >= 200),
+        'above_200_pct': round(sum(1 for s in scores if s >= 200) / len(scores) * 100),
+        'distribution': {
+            '0-149': sum(1 for s in scores if s < 150),
+            '150-199': sum(1 for s in scores if 150 <= s < 200),
+            '200-249': sum(1 for s in scores if 200 <= s < 250),
+            '250-299': sum(1 for s in scores if 250 <= s < 300),
+            '300+': sum(1 for s in scores if s >= 300),
+        },
+        'top': [{'name': r.student.full_name, 'score': r.total_score} for r in top],
+    }
 
-    # WAEC snapshot (latest year)
-    waec_snapshot = None
+
+def _dash_waec_snapshot():
+    """Latest-year WAEC summary (branch-scoped), or None."""
+    from utils.branch_scope import scope_by_student
+    from models import WAECResult
     wy = db.session.query(WAECResult.exam_year).order_by(WAECResult.exam_year.desc()).first()
-    if wy:
-        rows = scope_by_student(WAECResult.query.filter_by(exam_year=wy[0]), WAECResult).all()
-        if rows:
-            credit = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
-            passes = sum(1 for r in rows if r.grade in credit)
-            waec_snapshot = {
-                'year': wy[0], 'entries': len(rows),
-                'students': len({r.student_id for r in rows}),
-                'pass_rate': round(passes / len(rows) * 100, 1),
-            }
+    if not wy:
+        return None
+    rows = scope_by_student(WAECResult.query.filter_by(exam_year=wy[0]), WAECResult).all()
+    if not rows:
+        return None
+    credit = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
+    passes = sum(1 for r in rows if r.grade in credit)
+    return {
+        'year': wy[0], 'entries': len(rows),
+        'students': len({r.student_id for r in rows}),
+        'pass_rate': round(passes / len(rows) * 100, 1),
+    }
 
-    # Mock JAMB latest exam average — scoped to the viewing branch (a branch user
-    # must not see other branches' mock results).
-    mock_snapshot = None
+
+def _dash_mock_snapshot():
+    """Latest Mock JAMB exam average, scoped to the viewing branch, or None."""
+    from utils.branch_scope import viewing_branch_id
+    from models.mock_jamb import MockJAMBExam, MockJAMBResult
     last_mock = MockJAMBExam.query.order_by(MockJAMBExam.exam_date.desc()).first()
-    if last_mock:
-        from models.mock_jamb import MockJAMBResult
-        res_q = last_mock.results
-        _mbid = viewing_branch_id()
-        if _mbid is not None:
-            res_q = res_q.join(Student, MockJAMBResult.student_id == Student.id) \
-                         .filter(Student.branch_id == _mbid)
-        ms = [r.total_score for r in res_q.all()]
-        if ms:
-            mock_snapshot = {'name': last_mock.display_name, 'count': len(ms),
-                             'mean': round(sum(ms) / len(ms), 1), 'max': max(ms)}
+    if not last_mock:
+        return None
+    res_q = last_mock.results
+    bid = viewing_branch_id()
+    if bid is not None:
+        res_q = res_q.join(Student, MockJAMBResult.student_id == Student.id) \
+                     .filter(Student.branch_id == bid)
+    ms = [r.total_score for r in res_q.all()]
+    if not ms:
+        return None
+    return {'name': last_mock.display_name, 'count': len(ms),
+            'mean': round(sum(ms) / len(ms), 1), 'max': max(ms)}
 
-    # Attendance trend — average % for the last 8 weeks of the active term
-    attendance_trend = []
-    if active_term:
-        _tbid = viewing_branch_id()
-        _tenr = None
-        if _tbid is not None:
-            _tenr = (db.session.query(StudentEnrollment.id)
-                     .join(ClassArmAssignment,
-                           StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                     .filter(ClassArmAssignment.branch_id == _tbid))
-        weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.start_date).all()[-8:]
-        for w in weeks:
-            _wq = Attendance.query.filter_by(week_id=w.id)
-            if _tenr is not None:
-                _wq = _wq.filter(Attendance.enrollment_id.in_(_tenr))
-            recs = _wq.all()
-            if recs:
-                marks = sum((1 if a.morning_present else 0) + (1 if a.afternoon_present else 0) for a in recs)
-                pct = round(marks / (len(recs) * 2) * 100, 1)
-            else:
-                pct = 0
-            attendance_trend.append({'label': getattr(w, 'week_number', None) or w.start_date.strftime('%d %b'),
-                                     'pct': pct})
 
-    # Recent admin activity (central admins only — it spans the whole system)
-    recent_activity = []
+def _dash_attendance_trend(active_term):
+    """Average attendance % for the last 8 weeks of the active term (branch-scoped)."""
+    from utils.branch_scope import viewing_branch_id
+    if not active_term:
+        return []
+    bid = viewing_branch_id()
+    branch_enr = None
+    if bid is not None:
+        branch_enr = (db.session.query(StudentEnrollment.id)
+                      .join(ClassArmAssignment,
+                            StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                      .filter(ClassArmAssignment.branch_id == bid))
+    weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.start_date).all()[-8:]
+    trend = []
+    for w in weeks:
+        wq = Attendance.query.filter_by(week_id=w.id)
+        if branch_enr is not None:
+            wq = wq.filter(Attendance.enrollment_id.in_(branch_enr))
+        recs = wq.all()
+        if recs:
+            marks = sum((1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
+                        for a in recs)
+            pct = round(marks / (len(recs) * 2) * 100, 1)
+        else:
+            pct = 0
+        trend.append({'label': getattr(w, 'week_number', None) or w.start_date.strftime('%d %b'),
+                      'pct': pct})
+    return trend
+
+
+def _dash_recent_activity():
+    """Recent audit entries (central admins only — spans the whole system)."""
     from utils.branch_scope import is_central
+    from models import AuditLog
     if is_admin() and is_central():
-        recent_activity = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(6).all()
+        return AuditLog.query.order_by(AuditLog.created_at.desc()).limit(6).all()
+    return []
 
-    # Active announcements for the dashboard banner.
-    announcements = []
+
+def _dash_announcements():
+    """Up to 5 active announcements for the dashboard banner."""
     try:
         from models import Announcement
-        for a in (Announcement.query.order_by(Announcement.is_pinned.desc(),
-                  Announcement.created_at.desc()).limit(15).all()):
-            if a.is_active:
-                announcements.append(a)
-        announcements = announcements[:5]
+        rows = Announcement.query.order_by(
+            Announcement.is_pinned.desc(), Announcement.created_at.desc()).limit(15).all()
+        return [a for a in rows if a.is_active][:5]
     except Exception:
-        announcements = []
-
-    return render_template('dashboard.html',
-        announcements=announcements,
-        total_students=total_students,
-        male_students=male_students,
-        female_students=female_students,
-        active_session=active_session,
-        active_term=active_term,
-        recent_students=recent_students,
-        active_enrollments=active_enrollments,
-        total_classes=total_classes,
-        class_stats=class_stats,
-        attendance_stats=attendance_stats,
-        birthdays_today=birthdays_today,
-        birthdays_week=birthdays_week,
-        age_distribution=age_distribution,
-        religion_stats=religion_stats,
-        total_subjects=total_subjects,
-        total_school_classes=total_school_classes,
-        stream_dist=stream_dist,
-        graduates_count=graduates_count,
-        jamb_snapshot=jamb_snapshot,
-        waec_snapshot=waec_snapshot,
-        mock_snapshot=mock_snapshot,
-        attendance_trend=attendance_trend,
-        recent_activity=recent_activity
-    )
+        return []
 
 
 # ============================================================================
