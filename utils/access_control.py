@@ -82,6 +82,19 @@ MODULE_SUBSECTIONS = {
         'attendance': 'Staff Attendance',
         'settings': 'HR Settings',
     },
+    'external_exams': {
+        'waec': 'WAEC Results',
+        'jamb': 'JAMB Results',
+        'analytics': 'Analytics & Reports',
+        'cutoffs': 'Cut-offs',
+        'imports': 'Bulk Import',
+    },
+    'communication': {
+        'announcements': 'Announcements',
+        'templates': 'Message Templates',
+        'messages': 'Messages & Compose',
+        'settings': 'SMS Settings',
+    },
 }
 
 # Which endpoints belong to each sub-section.
@@ -109,14 +122,43 @@ _SUBSECTION_ENDPOINTS = {
         'attendance': {'attendance', 'save_attendance'},
         'settings': {'settings', 'save_hr_settings'},
     },
+    'external_exams': {
+        'waec': {'waec_list', 'add_waec', 'scan_waec', 'view_waec_student', 'edit_waec',
+                 'delete_waec', 'delete_waec_single', 'export_waec', 'waec_analytics',
+                 'waec_student_analysis', 'api_waec_grade_distribution',
+                 'api_waec_subject_stats'},
+        'jamb': {'jamb_list', 'add_jamb', 'scan_jamb', 'scan_batch', 'view_jamb_student',
+                 'edit_jamb', 'delete_jamb', 'export_jamb', 'api_jamb_score_distribution',
+                 'predictions_dashboard', 'student_predictions', 'api_student_predictions',
+                 'api_predict_jamb', 'api_student_risk'},
+        'analytics': {'analytics_hub', 'analytics_export', 'readiness', 'api_yoy_trends',
+                      'api_waec_jamb_correlation', 'api_top_performers', 'subject_enrolment',
+                      'subject_enrolment_detail', 'student_report'},
+        'cutoffs': {'cutoffs_list', 'cutoffs_save', 'cutoffs_delete', 'cutoffs_reference'},
+        'imports': {'import_results', 'import_template', 'import_results_run'},
+    },
+    'communication': {
+        'announcements': {'announcements', 'add_announcement', 'edit_announcement',
+                          'delete_announcement'},
+        'templates': {'templates_list', 'add_template', 'edit_template', 'delete_template'},
+        'messages': {'compose', 'compose_preview', 'students_search', 'cancel_schedule',
+                     'process_scheduled', 'messages_list', 'message_detail', 'mark_sent',
+                     'mark_all_sent', 'export_recipients', 'delete_message', 'send_gateway'},
+        'settings': {'settings', 'save_settings', 'test_sms'},
+    },
 }
+
+# The blueprint each sub-sectioned module's endpoints live under (blueprint name
+# differs from the module key for these two).
+_SUBSECTION_BLUEPRINT = {'external_exams': 'results', 'communication': 'comms'}
 
 # Reverse map: 'finance.payments_list' -> ('finance', 'payments')
 _ENDPOINT_SUBSECTION = {}
 for _mod, _subs in _SUBSECTION_ENDPOINTS.items():
+    _bp = _SUBSECTION_BLUEPRINT.get(_mod, _mod)
     for _sub, _eps in _subs.items():
         for _ep in _eps:
-            _ENDPOINT_SUBSECTION[f'{_mod}.{_ep}'] = (_mod, _sub)
+            _ENDPOINT_SUBSECTION[f'{_bp}.{_ep}'] = (_mod, _sub)
 
 
 def subsection_for_endpoint(endpoint):

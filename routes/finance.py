@@ -553,6 +553,8 @@ def edit_payment(payment_id):
         payment.received_by = (request.form.get('received_by') or '').strip() or None
         payment.notes = (request.form.get('notes') or '').strip() or None
         db.session.commit()
+        from utils.audit import log_action
+        log_action('finance.payment_edit', detail=f'{payment.amount:g}', target=payment)
         flash(f'Payment {payment.receipt_no} updated.', 'success')
         return redirect(url_for('finance.receipt', payment_id=payment.id))
 
@@ -567,6 +569,9 @@ def edit_payment(payment_id):
 def delete_payment(payment_id):
     payment = FeePayment.query.get_or_404(payment_id)
     term_id = payment.term_id
+    from utils.audit import log_action
+    log_action('finance.payment_delete', detail=f'{payment.amount:g}',
+               target_type='feepayment', target_id=payment.id, target_label=payment.receipt_no)
     db.session.delete(payment)
     db.session.commit()
     flash('Payment deleted.', 'success')
@@ -779,6 +784,9 @@ def edit_expense(expense_id):
     e.reference = (request.form.get('reference') or '').strip() or None
     e.notes = (request.form.get('notes') or '').strip() or None
     db.session.commit()
+    from utils.audit import log_action
+    log_action('finance.expense_edit', detail=f'{amount:g} — {description}',
+               target_type='expense', target_id=e.id, target_label=description)
     flash('Expense updated.', 'success')
     return redirect(url_for('finance.expenses_list', term_id=e.term_id))
 
@@ -788,6 +796,9 @@ def edit_expense(expense_id):
 def delete_expense(expense_id):
     e = Expense.query.get_or_404(expense_id)
     term_id = e.term_id
+    from utils.audit import log_action
+    log_action('finance.expense_delete', detail=f'{e.amount:g} — {e.description}',
+               target_type='expense', target_id=e.id, target_label=e.description)
     db.session.delete(e)
     db.session.commit()
     flash('Expense deleted.', 'success')

@@ -59,3 +59,11 @@ def test_subsection_level_helper(app):
         assert subsection_level('finance', 'payments') == 'edit'
         assert subsection_level('finance', 'expenses') is None   # not granted
         assert module_level('finance') == 'edit'                 # module visible
+
+
+def test_results_subsection_scoping(app):
+    # WAEC/JAMB live under the 'external_exams' module (blueprint 'results').
+    _make(app, 'rwaec', {'external_exams.waec': 'view'})
+    c = _login(app, 'rwaec')
+    assert c.get('/results/waec').status_code == 200                       # waec granted (view)
+    assert c.get('/results/jamb', follow_redirects=False).status_code in (302, 303)  # jamb not granted

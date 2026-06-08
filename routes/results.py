@@ -404,6 +404,7 @@ def edit_waec(student_id, year):
                     db.session.add(result)
             
             db.session.commit()
+            log_action('results.waec_edit', detail=f'{year}', target=student)
             flash('WAEC results updated!', 'success')
             return redirect(url_for('results.view_waec_student', student_id=student_id))
             
@@ -438,6 +439,7 @@ def delete_waec(student_id, year):
         db.session.commit()
         
         if deleted:
+            log_action('results.waec_delete', detail=f'{deleted} result(s), {year}', target=student)
             flash(f'Deleted {deleted} WAEC results for {student.full_name} ({year}).', 'success')
         else:
             flash('No results found to delete.', 'warning')
@@ -1516,6 +1518,7 @@ def edit_jamb(student_id, year):
                 return redirect(url_for('results.edit_jamb', student_id=student_id, year=year))
             
             db.session.commit()
+            log_action('results.jamb_edit', detail=f'{year}', target=student)
             flash('JAMB result updated!', 'success')
             return redirect(url_for('results.view_jamb_student', student_id=student_id))
             
@@ -1543,6 +1546,7 @@ def delete_jamb(student_id, year):
         if result:
             db.session.delete(result)
             db.session.commit()
+            log_action('results.jamb_delete', detail=f'{year}', target=student)
             flash(f'Deleted JAMB result for {student.full_name} ({year}).', 'success')
         else:
             flash('No result found to delete.', 'warning')

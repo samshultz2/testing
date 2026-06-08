@@ -122,6 +122,8 @@ def edit_announcement(ann_id):
 @login_required
 def delete_announcement(ann_id):
     a = Announcement.query.get_or_404(ann_id)
+    from utils.audit import log_action
+    log_action('communication.announcement_delete', target=a)
     db.session.delete(a)
     db.session.commit()
     flash('Announcement deleted.', 'success')
@@ -475,6 +477,9 @@ def export_recipients(message_id):
 @admin_required
 def delete_message(message_id):
     msg = Message.query.get_or_404(message_id)
+    from utils.audit import log_action
+    log_action('communication.message_delete',
+               target_type='message', target_id=msg.id, target_label=getattr(msg, 'title', None))
     db.session.delete(msg)
     db.session.commit()
     flash('Campaign deleted.', 'success')

@@ -154,6 +154,8 @@ def edit_staff(staff_id):
     if request.method == 'POST':
         _read_staff_form(s)
         db.session.commit()
+        from utils.audit import log_action
+        log_action('hr.staff_edit', target=s)
         flash('Staff record updated.', 'success')
         return redirect(url_for('hr.staff_detail', staff_id=s.id))
     return render_template('hr/staff_form.html', staff=s,
@@ -177,6 +179,8 @@ def adjust_salary(staff_id):
         created_by=_current_user()))
     s.salary = new_salary
     db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.salary_adjust', detail=f'-> {new_salary:,.2f}', target=s)
     flash(f'Salary updated to {new_salary:,.2f}.', 'success')
     return redirect(url_for('hr.staff_detail', staff_id=staff_id))
 
@@ -187,6 +191,8 @@ def delete_staff(staff_id):
     s = StaffMember.query.get_or_404(staff_id)
     s.is_active = False
     db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.staff_delete', target=s)
     flash(f'{s.full_name} archived.', 'success')
     return redirect(url_for('hr.staff_list'))
 
