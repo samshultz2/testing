@@ -29,7 +29,17 @@
     <div class="mon-chip"><span><i class="fas fa-mobile-screen"></i> Mobile</span> <strong id="cMobile">—</strong></div>
     <div class="mon-chip" id="concChip" style="display:none;border-color:#e74a3b"><span><i class="fas fa-triangle-exclamation"></i> 2 devices</span> <strong id="cConc">0</strong></div>
     <div class="mon-chip"><span>Server</span> <strong id="cTime">—</strong></div>
+    {% if branches %}
+    <label class="text-sm" style="margin-left:auto;"><i class="fas fa-code-branch"></i>
+        <select id="branchFilter" class="form-control" style="display:inline-block;width:auto;padding:.2rem 1.6rem .2rem .4rem;">
+            <option value="">All branches</option>
+            {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+        </select>
+    </label>
+    <label class="text-sm"><input type="checkbox" id="mobileOnly"> <i class="fas fa-mobile-screen"></i> Mobile only</label>
+    {% else %}
     <label class="text-sm" style="margin-left:auto;"><input type="checkbox" id="mobileOnly"> <i class="fas fa-mobile-screen"></i> Mobile only</label>
+    {% endif %}
     <label class="text-sm"><input type="checkbox" id="auto" checked> Auto-refresh (5s)</label>
 </div>
 
@@ -93,8 +103,14 @@
                 +'<td data-label="Connection">'+conn+'</td></tr>';
         }).join('');
     }
-    function load(){ fetch(URL).then(function(r){return r.json();}).then(render).catch(function(){}); }
+    var branchSel=document.getElementById('branchFilter');
+    function load(){
+        var url=URL;
+        if(branchSel && branchSel.value){ url+=(url.indexOf('?')<0?'?':'&')+'branch='+encodeURIComponent(branchSel.value); }
+        fetch(url).then(function(r){return r.json();}).then(render).catch(function(){});
+    }
     document.getElementById('mobileOnly').addEventListener('change', function(){ if(last) render(last); });
+    if(branchSel) branchSel.addEventListener('change', load);
     load();
     var timer=setInterval(function(){ if(document.getElementById('auto').checked) load(); },5000);
 })();

@@ -471,16 +471,35 @@ def results(exam_id):
 @login_required
 def monitor(exam_id):
     e = CBTExam.query.get_or_404(exam_id)
-    return render_template('cbt/monitor.html', e=e)
+    # Central users get a branch filter (CBT is school-wide); branch users are
+    # already scoped to their own branch.
+    from utils.branch_scope import is_central
+    from models import Branch
+    branches = (Branch.query.filter_by(is_active=True).order_by(Branch.name).all()
+                if is_central() else [])
+    return render_template('cbt/monitor.html', e=e, branches=branches)
 
 
 @cbt_bp.route('/exams/<int:exam_id>/monitor/data')
 @login_required
 def monitor_data(exam_id):
-    """Live JSON snapshot of every attempt for the invigilator monitor."""
+    """Live JSON snapshot of every attempt for the invigilator monitor.
+
+    CBT exams are school-wide (set centrally for every branch), but the device
+    fingerprints/attempts can be filtered by branch to make tracking easier.
+    Branch users are always restricted to their own branch.
+    """
     e = CBTExam.query.get_or_404(exam_id)
     now = timeutil.now()
     qcount = e.question_count
+    # Resolve the branch filter: branch users -> their branch; a central user may
+    # pick one via the ?branch= param (else sees all branches).
+    from utils.branch_scope import viewing_branch_id
+    _vbid = viewing_branch_id()
+    if _vbid is not None:
+        branch_filter = _vbid
+    else:
+        branch_filter = request.args.get('branch', type=int)
     # answered counts per attempt (only saved answers with a choice)
     answered = dict(db.session.query(CBTAnswer.attempt_id, func.count(CBTAnswer.id))
                     .join(CBTAttempt, CBTAnswer.attempt_id == CBTAttempt.id)
@@ -502,7 +521,10 @@ def monitor_data(exam_id):
                        CBTDeviceSession.last_seen >= active_cut).all()):
         active_by_student.setdefault(ds.student_id, []).append(ds)
     rows = []
-    for a in e.attempts.join(Student).order_by(Student.surname, Student.first_name).all():
+    _attempts_q = e.attempts.join(Student)
+    if branch_filter:
+        _attempts_q = _attempts_q.filter(Student.branch_id == branch_filter)
+    for a in _attempts_q.order_by(Student.surname, Student.first_name).all():
         deadline = _deadline(a, e)
         remaining = int((deadline - now).total_seconds())
         seen_ago = int((now - a.last_seen).total_seconds()) if a.last_seen else None
