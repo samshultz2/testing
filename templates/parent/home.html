@@ -54,6 +54,17 @@
                 {% if bill %}
                 <div class="big {{ 'owe' if bill.balance > 0.005 else 'ok' }}">₦{{ '{:,.0f}'.format(bill.balance) }}</div>
                 <p class="muted">Billed ₦{{ '{:,.0f}'.format(bill.payable) }} · Paid ₦{{ '{:,.0f}'.format(bill.paid) }}</p>
+                {% if pay_enabled and bill.balance > 0.005 %}
+                <form method="POST" action="{{ url_for('parent.pay') }}" style="margin-top:.7rem">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="term_id" value="{{ term_id }}">
+                    <input type="number" name="amount" min="100" step="50" value="{{ '%.0f'|format(bill.balance) }}"
+                           class="form-control" style="padding:.45rem;margin-bottom:.4rem">
+                    <button type="submit" style="width:100%;padding:.6rem;background:#0d6a4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+                        <i class="fas fa-credit-card"></i> Pay online
+                    </button>
+                </form>
+                {% endif %}
                 {% else %}<p class="muted">No fee record for this term.</p>{% endif %}
             </div>
             <div class="card">

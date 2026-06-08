@@ -70,6 +70,10 @@ class Config:
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or "posyhubcomng"
     ENABLE_LEGACY_LOGIN = _as_bool(os.environ.get('ENABLE_LEGACY_LOGIN'), default=True)
 
+    # Online payments (Paystack). Empty keys => the feature stays disabled.
+    PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
+    PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY', '')
+
     # Login throttling
     LOGIN_MAX_ATTEMPTS = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '8'))
     LOGIN_LOCKOUT_MINUTES = int(os.environ.get('LOGIN_LOCKOUT_MINUTES', '15'))
