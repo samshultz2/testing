@@ -61,7 +61,8 @@ def applicants():
     class_id = request.args.get('class_id', type=int)
     q = (request.args.get('q') or '').strip()
 
-    query = Applicant.query
+    from utils.branch_scope import scope_query
+    query = scope_query(Applicant.query, Applicant)
     if status:
         query = query.filter_by(status=status)
     if session_id:
@@ -112,6 +113,8 @@ def add_applicant():
                       status=request.form.get('status') or 'Applied',
                       applied_date=date.today())
         _read_form(a)
+        from utils.branch_scope import branch_for_new
+        a.branch_id = branch_for_new()
         db.session.add(a)
         db.session.commit()
         flash(f'Application {a.application_no} created for {a.full_name}.', 'success')

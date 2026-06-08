@@ -16,6 +16,7 @@ class Applicant(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     application_no = db.Column(db.String(20), unique=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
 
     # Bio
     first_name = db.Column(db.String(60), nullable=False)

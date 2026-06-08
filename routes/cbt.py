@@ -94,6 +94,8 @@ def dashboard():
     else:
         term_id = request.args.get('term_id', type=int) or (active.id if active else None)
     q = CBTExam.query
+    from utils.branch_scope import scope_query
+    q = scope_query(q, CBTExam)
     if term_id:
         q = q.filter(CBTExam.term_id == term_id)
     exams = q.order_by(CBTExam.exam_date.desc(), CBTExam.id.desc()).all()
@@ -169,6 +171,8 @@ def add_exam():
         from flask import session as _s
         e = CBTExam(created_by=_s.get('username') or 'Admin')
         _read_exam(e)
+        from utils.branch_scope import branch_for_new
+        e.branch_id = branch_for_new()
         db.session.add(e)
         db.session.commit()
         flash('Exam created — now add questions.', 'success')
@@ -951,6 +955,9 @@ def home():
                                  CBTExam.exam_date == timeutil.today(),
                                  CBTExam.class_id == class_id)
         q = q.filter((CBTExam.arm_id == None) | (CBTExam.arm_id == arm_id))
+        # Only this student's branch (a shared class name must not leak across branches).
+        if student.branch_id:
+            q = q.filter((CBTExam.branch_id == student.branch_id) | (CBTExam.branch_id == None))
         exams = q.order_by(CBTExam.start_time, CBTExam.title).all()
     # attach this student's attempt status + availability window
     rows = []
@@ -968,6 +975,9 @@ def _student_can_access(student, exam):
     if not class_id or exam.class_id != class_id:
         return False
     if exam.arm_id and exam.arm_id != arm_id:
+        return False
+    # Branch isolation: an exam stamped to a branch is only for that branch.
+    if exam.branch_id and student.branch_id and exam.branch_id != student.branch_id:
         return False
     return True
 

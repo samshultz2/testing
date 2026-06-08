@@ -1189,6 +1189,14 @@ def _ensure_student_exam_columns():
                 statements.append(f'ALTER TABLE {tbl} ADD COLUMN branch_id INTEGER')
         except Exception:
             pass
+    # Stage 2b: branch_id on the remaining module root tables.
+    for tbl in ('fee_payments', 'expenses', 'cbt_exams', 'library_books', 'applicants'):
+        try:
+            cols = {c['name'] for c in inspect(db.engine).get_columns(tbl)}
+            if 'branch_id' not in cols:
+                statements.append(f'ALTER TABLE {tbl} ADD COLUMN branch_id INTEGER')
+        except Exception:
+            pass
     try:
         u_cols = {c['name'] for c in inspect(db.engine).get_columns('users')}
         if 'scope' not in u_cols:
@@ -1222,10 +1230,19 @@ def _seed_branches():
         bid = default.id
         with db.engine.begin() as conn:
             for tbl in ('students', 'teachers', 'class_arm_assignments',
-                        'staff_members', 'users'):
+                        'staff_members', 'users', 'expenses', 'cbt_exams',
+                        'library_books', 'applicants'):
                 conn.execute(text(
                     f'UPDATE {tbl} SET branch_id = :bid WHERE branch_id IS NULL'),
                     {'bid': bid})
+            # Records owned by a student inherit that student's branch.
+            conn.execute(text(
+                'UPDATE fee_payments SET branch_id = '
+                '(SELECT branch_id FROM students WHERE students.id = fee_payments.student_id) '
+                'WHERE branch_id IS NULL'))
+            conn.execute(text(
+                'UPDATE fee_payments SET branch_id = :bid WHERE branch_id IS NULL'),
+                {'bid': bid})
             # Existing admins keep cross-branch visibility.
             conn.execute(text(
                 "UPDATE users SET scope = 'central' "

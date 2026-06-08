@@ -95,3 +95,22 @@ def test_new_student_stamped_with_branch_users_branch(app):
         s = Student.query.filter_by(first_name='New', surname='Stamped').first()
         assert s is not None
         assert s.branch_id == b_id
+
+
+def test_cbt_exams_branch_scoped(app):
+    """A branch user's CBT dashboard shows only their branch's exams."""
+    from models import CBTExam
+    a_id, b_id, s_a, s_b = _setup(app)
+    with app.app_context():
+        if not CBTExam.query.filter_by(title='ExamA').first():
+            db.session.add(CBTExam(title='ExamA', branch_id=a_id))
+        if not CBTExam.query.filter_by(title='ExamB').first():
+            db.session.add(CBTExam(title='ExamB', branch_id=b_id))
+        # give the branch user the cbt module
+        u = User.query.filter_by(username='branchscope').first()
+        u.set_modules(['students', 'cbt'])
+        db.session.commit()
+    client = _login(app, 'branchscope')
+    html = client.get('/cbt/?term_id=all').get_data(as_text=True)
+    assert 'ExamB' in html
+    assert 'ExamA' not in html

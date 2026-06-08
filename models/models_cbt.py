@@ -18,6 +18,7 @@ class CBTExam(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
     class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'))
     arm_id = db.Column(db.Integer, db.ForeignKey('class_arms.id'))      # optional

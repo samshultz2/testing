@@ -118,13 +118,16 @@ def dashboard():
     recent = []
     defaulter_count = 0
 
+    from utils.branch_scope import scope_query
     if term_id:
         # Map each enrolled student to their class/arm for this term.
-        enrollments = (StudentEnrollment.query
-                       .join(ClassArmAssignment,
-                             StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                       .filter(StudentEnrollment.is_active == True,
-                               ClassArmAssignment.term_id == term_id).all())
+        enrollments = scope_query(
+            StudentEnrollment.query
+            .join(ClassArmAssignment,
+                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .filter(StudentEnrollment.is_active == True,
+                    ClassArmAssignment.term_id == term_id),
+            ClassArmAssignment).all()
 
         placement = {}        # student_id -> (class_id, arm_id, class_name)
         total_cache = {}      # (class_id, arm_id) -> per-student fee total
@@ -142,7 +145,7 @@ def dashboard():
         discounts = (db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
                      .filter(FeeDiscount.term_id == term_id).scalar()) or 0.0
 
-        payments = FeePayment.query.filter_by(term_id=term_id).all()
+        payments = scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment).all()
         for p in payments:
             collected += p.amount
             method_breakdown[p.method or 'Other'] = method_breakdown.get(p.method or 'Other', 0.0) + p.amount
@@ -150,7 +153,7 @@ def dashboard():
             if plc:
                 by_class.setdefault(plc[2], {'expected': 0.0, 'collected': 0.0})['collected'] += p.amount
 
-        recent = (FeePayment.query.filter_by(term_id=term_id)
+        recent = (scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment)
                   .order_by(FeePayment.created_at.desc()).limit(8).all())
 
         # Count students with an outstanding balance.
@@ -175,12 +178,12 @@ def dashboard():
     expense_breakdown = {}
     recent_expenses = []
     if term_id:
-        exp_rows = Expense.query.filter_by(term_id=term_id).all()
+        exp_rows = scope_query(Expense.query.filter_by(term_id=term_id), Expense).all()
         for e in exp_rows:
             expenses += e.amount
             cat = e.category.name if e.category else 'Uncategorised'
             expense_breakdown[cat] = expense_breakdown.get(cat, 0.0) + e.amount
-        recent_expenses = (Expense.query.filter_by(term_id=term_id)
+        recent_expenses = (scope_query(Expense.query.filter_by(term_id=term_id), Expense)
                            .order_by(Expense.created_at.desc()).limit(6).all())
     net = collected - expenses
 
@@ -394,8 +397,9 @@ def payments_list():
     terms = Term.query.order_by(Term.id.desc()).all()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
 
+    from utils.branch_scope import scope_query
     query = FeePayment.query.filter_by(term_id=term_id) if term_id else FeePayment.query
-    query = query.join(Student, FeePayment.student_id == Student.id)
+    query = scope_query(query, FeePayment).join(Student, FeePayment.student_id == Student.id)
     if q:
         like = f'%{q}%'
         query = query.filter(db.or_(Student.surname.ilike(like),
@@ -444,6 +448,9 @@ def record_payment():
             notes=(request.form.get('notes') or '').strip() or None,
             receipt_no=next_receipt_no(),
         )
+        # Inherit the paying student's branch.
+        stu = Student.query.get(student_id)
+        payment.branch_id = stu.branch_id if stu else None
         db.session.add(payment)
         db.session.commit()
         flash(f'Payment recorded — receipt {payment.receipt_no}.', 'success')
@@ -693,7 +700,8 @@ def expenses_list():
     terms = Term.query.order_by(Term.id.desc()).all()
     categories = ExpenseCategory.query.filter_by(is_active=True).order_by(ExpenseCategory.name).all()
 
-    query = Expense.query
+    from utils.branch_scope import scope_query
+    query = scope_query(Expense.query, Expense)
     if term_id:
         query = query.filter_by(term_id=term_id)
     if category_id:
@@ -723,8 +731,10 @@ def add_expense():
     if not (description and amount and amount > 0):
         flash('A description and positive amount are required.', 'error')
         return redirect(url_for('finance.expenses_list', term_id=term_id))
+    from utils.branch_scope import branch_for_new
     db.session.add(Expense(
         term_id=term_id or None,
+        branch_id=branch_for_new(),
         category_id=request.form.get('category_id', type=int) or None,
         description=description,
         amount=amount,

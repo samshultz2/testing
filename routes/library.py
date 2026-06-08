@@ -62,7 +62,8 @@ def books():
     q = (request.args.get('q') or '').strip()
     category = request.args.get('category')
     avail = request.args.get('avail')
-    query = Book.query.filter_by(is_active=True)
+    from utils.branch_scope import scope_query
+    query = scope_query(Book.query.filter_by(is_active=True), Book)
     if q:
         like = f'%{q}%'
         query = query.filter(db.or_(Book.title.ilike(like), Book.author.ilike(like),
@@ -98,6 +99,8 @@ def add_book():
         total = request.form.get('copies_total', type=int) or 1
         b = Book(copies_total=total, copies_available=total)
         _read_book(b)
+        from utils.branch_scope import branch_for_new
+        b.branch_id = branch_for_new()
         db.session.add(b)
         db.session.commit()
         flash(f'Added "{b.title}".', 'success')

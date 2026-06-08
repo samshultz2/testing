@@ -14,6 +14,7 @@ class Book(db.Model):
     __tablename__ = 'library_books'
 
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     title = db.Column(db.String(200), nullable=False)
     author = db.Column(db.String(150))
     isbn = db.Column(db.String(30))

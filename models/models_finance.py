@@ -58,6 +58,7 @@ class FeePayment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     amount = db.Column(db.Float, nullable=False)
     payment_date = db.Column(db.Date, nullable=False, default=local_now)
     method = db.Column(db.String(30), default='Cash')  # Cash, Transfer, POS, Cheque, Online
@@ -111,6 +112,7 @@ class Expense(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     category_id = db.Column(db.Integer, db.ForeignKey('expense_categories.id'), nullable=True)
     description = db.Column(db.String(200), nullable=False)
     amount = db.Column(db.Float, nullable=False, default=0)
