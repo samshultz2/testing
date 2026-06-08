@@ -250,8 +250,9 @@ def daily_summary():
     active_term = Term.query.filter_by(is_active=True).first()
     assignments = []
     if active_term:
-        assignments = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
-    
+        assignments = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=active_term.id).all())
+
     summary = None
     selected_assignment = None
     

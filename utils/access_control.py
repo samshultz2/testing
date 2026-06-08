@@ -194,15 +194,27 @@ def can_access_class(class_arm_assignment_id):
     """Check if current user can access a specific class"""
     if is_admin():
         return True
-    
+
     if class_arm_assignment_id is None:
         return True  # No class selected yet
-    
+
     teacher = get_teacher_profile()
     if teacher:
         return teacher.can_access_class(class_arm_assignment_id)
-    
-    return False
+
+    # Non-teacher branch/central staff (principal, HOD, exams officer): allow a
+    # class within their branch and section scope.
+    asg = ClassArmAssignment.query.get(class_arm_assignment_id)
+    if not asg:
+        return False
+    from utils.branch_scope import can_access_branch
+    from utils.org_scope import allowed_sections
+    if not can_access_branch(asg.branch_id):
+        return False
+    sections = allowed_sections()
+    if sections and (not asg.school_class or asg.school_class.section not in sections):
+        return False
+    return True
 
 
 def can_mark_attendance(class_arm_assignment_id=None):
@@ -253,15 +265,26 @@ def can_view_student_details():
 
 
 def filter_classes_for_user(assignments):
+    """Filter ClassArmAssignment objects to those the current user may access.
+
+    Composes branch scope (branch users / a central user viewing one branch),
+    section scope (Principal vs Headmaster) and, for actual teachers, their
+    assigned classes. Admins / central users viewing all branches see everything.
     """
-    Filter a list of ClassArmAssignment objects to only those accessible by current user.
-    Returns all if admin, filtered list if teacher.
-    """
-    if is_admin():
-        return assignments
-    
-    accessible_ids = get_accessible_class_ids()
-    return [a for a in assignments if a.id in accessible_ids]
+    from utils.branch_scope import viewing_branch_id
+    from utils.org_scope import allowed_sections
+    result = list(assignments)
+    bid = viewing_branch_id()
+    if bid is not None:
+        result = [a for a in result if getattr(a, 'branch_id', None) == bid]
+    sections = allowed_sections()
+    if sections:
+        result = [a for a in result
+                  if a.school_class and a.school_class.section in sections]
+    if is_teacher():
+        accessible = set(get_accessible_class_ids())
+        result = [a for a in result if a.id in accessible]
+    return result
 
 
 def filter_class_ids_for_user(class_ids):
@@ -270,7 +293,7 @@ def filter_class_ids_for_user(class_ids):
     """
     if is_admin():
         return class_ids
-    
+
     accessible_ids = set(get_accessible_class_ids())
     return [cid for cid in class_ids if cid in accessible_ids]
 

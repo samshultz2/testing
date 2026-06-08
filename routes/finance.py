@@ -40,9 +40,11 @@ def _parse_date(value, default=None):
 
 
 def _collections_query(from_date, to_date, term_id=None):
-    q = (FeePayment.query
-         .filter(FeePayment.payment_date >= from_date,
-                 FeePayment.payment_date <= to_date))
+    from utils.branch_scope import scope_query
+    q = scope_query(
+        FeePayment.query.filter(FeePayment.payment_date >= from_date,
+                                FeePayment.payment_date <= to_date),
+        FeePayment)
     if term_id:
         q = q.filter(FeePayment.term_id == term_id)
     return q.order_by(FeePayment.payment_date.desc(), FeePayment.id.desc())
@@ -645,11 +647,14 @@ def defaulters():
     rows = []
     totals = {'billed': 0.0, 'paid': 0.0, 'balance': 0.0}
     if term_id:
-        enr_q = (StudentEnrollment.query
-                 .join(ClassArmAssignment,
-                       StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                 .filter(StudentEnrollment.is_active == True,
-                         ClassArmAssignment.term_id == term_id))
+        from utils.branch_scope import scope_query
+        enr_q = scope_query(
+            StudentEnrollment.query
+            .join(ClassArmAssignment,
+                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .filter(StudentEnrollment.is_active == True,
+                    ClassArmAssignment.term_id == term_id),
+            ClassArmAssignment)
         if class_id:
             enr_q = enr_q.filter(ClassArmAssignment.class_id == class_id)
         enrollments = enr_q.all()
@@ -909,7 +914,8 @@ def export_report():
     ws = wb.active
     ws.title = 'Payments'
     write_head(ws, ['Receipt', 'Date', 'Student', 'Student ID', 'Method', 'Reference', 'Received By', 'Amount'])
-    payments = (FeePayment.query.filter_by(term_id=term_id)
+    from utils.branch_scope import scope_query
+    payments = (scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment)
                 .order_by(FeePayment.payment_date).all()) if term_id else []
     for p in payments:
         ws.append([p.receipt_no, p.payment_date.strftime('%Y-%m-%d'), p.student.full_name,
@@ -918,7 +924,7 @@ def export_report():
     # Expenses sheet
     ws2 = wb.create_sheet('Expenses')
     write_head(ws2, ['Date', 'Category', 'Description', 'Payee', 'Method', 'Reference', 'Amount'])
-    for e in (Expense.query.filter_by(term_id=term_id).order_by(Expense.expense_date).all() if term_id else []):
+    for e in (scope_query(Expense.query.filter_by(term_id=term_id), Expense).order_by(Expense.expense_date).all() if term_id else []):
         ws2.append([e.expense_date.strftime('%Y-%m-%d'), e.category.name if e.category else '',
                     e.description, e.payee or '', e.method, e.reference or '', e.amount])
 
@@ -930,11 +936,13 @@ def export_report():
                         .filter(FeePayment.term_id == term_id).group_by(FeePayment.student_id).all())
         disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
                         .filter(FeeDiscount.term_id == term_id).group_by(FeeDiscount.student_id).all())
-        enrollments = (StudentEnrollment.query
-                       .join(ClassArmAssignment,
-                             StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                       .filter(StudentEnrollment.is_active == True,
-                               ClassArmAssignment.term_id == term_id).all())
+        enrollments = scope_query(
+            StudentEnrollment.query
+            .join(ClassArmAssignment,
+                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .filter(StudentEnrollment.is_active == True,
+                    ClassArmAssignment.term_id == term_id),
+            ClassArmAssignment).all()
         cache = {}
         for e in enrollments:
             asg = e.class_arm_assignment

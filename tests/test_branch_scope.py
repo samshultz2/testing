@@ -114,3 +114,32 @@ def test_cbt_exams_branch_scoped(app):
     html = client.get('/cbt/?term_id=all').get_data(as_text=True)
     assert 'ExamB' in html
     assert 'ExamA' not in html
+
+
+def test_filter_classes_for_user_branch_scoped(app):
+    """filter_classes_for_user limits a branch user to their branch's classes."""
+    from flask import session
+    from models import SchoolClass, ClassArm, ClassArmAssignment, AcademicSession, Term
+    from utils.access_control import filter_classes_for_user
+    a_id, b_id, s_a, s_b = _setup(app)
+    with app.app_context():
+        sess = AcademicSession.query.filter_by(is_active=True).first() or \
+            AcademicSession(name='SC', is_active=True)
+        if sess.id is None:
+            db.session.add(sess); db.session.flush()
+        term = Term.query.filter_by(is_active=True).first() or \
+            Term(session_id=sess.id, term_number=1, name='T', is_active=True)
+        if term.id is None:
+            db.session.add(term); db.session.flush()
+        classes = SchoolClass.query.order_by(SchoolClass.level).all()
+        arm = ClassArm.query.first()
+        for cls, bid in ((classes[0], a_id), (classes[1], b_id)):
+            if not ClassArmAssignment.query.filter_by(term_id=term.id, branch_id=bid).first():
+                db.session.add(ClassArmAssignment(class_id=cls.id, arm_id=arm.id,
+                                                  term_id=term.id, branch_id=bid))
+        db.session.commit()
+        all_asg = ClassArmAssignment.query.all()
+    with app.test_request_context('/'):
+        session['scope'] = 'branch'; session['branch_id'] = b_id
+        result = filter_classes_for_user(all_asg)
+        assert result and all(a.branch_id == b_id for a in result)

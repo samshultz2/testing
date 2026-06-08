@@ -937,7 +937,8 @@ def import_scores():
     class_subject_id = request.args.get('class_subject_id', type=int)
     
     terms = Term.query.order_by(Term.id.desc()).all()
-    assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all() if term_id else []
+    assignments = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else []
     class_subjects = []
     
     if assignment_id:

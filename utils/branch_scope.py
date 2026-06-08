@@ -53,6 +53,20 @@ def scope_query(query, model):
     return query
 
 
+def scope_by_student(query, model):
+    """Branch-scope a query whose rows reference a student (``.student_id``).
+
+    For tables without their own ``branch_id`` (WAEC/JAMB results, scores) —
+    filters to rows whose student belongs to the branch in view.
+    """
+    bid = viewing_branch_id()
+    if bid is not None:
+        from models import db, Student
+        sub = db.session.query(Student.id).filter(Student.branch_id == bid)
+        return query.filter(model.student_id.in_(sub))
+    return query
+
+
 def can_access_branch(branch_id):
     """May the current user open a record belonging to ``branch_id``?"""
     if is_central():

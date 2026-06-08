@@ -77,8 +77,10 @@ def waec_list():
             grade_distribution = school_stats['grade_distribution']
             subject_stats = school_stats['subject_analysis']
         
-        # Get all results for the year for detailed analysis
-        all_results = WAECResult.query.filter_by(exam_year=exam_year).all()
+        # Get all results for the year for detailed analysis (branch-scoped)
+        from utils.branch_scope import scope_by_student
+        all_results = scope_by_student(
+            WAECResult.query.filter_by(exam_year=exam_year), WAECResult).all()
         
         # Build subject-grade matrix
         subject_grade_counts = defaultdict(lambda: {g: 0 for g in WAEC_GRADES})
