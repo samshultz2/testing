@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Bulk Score Entry — {{ app_name }}{% endblock %}
+{% block extra_css %}
+<style>
+.bulk-table th, .bulk-table td { padding:.3rem; text-align:center; white-space:nowrap; }
+.bulk-table input { width:48px; padding:.25rem; text-align:center; }
+.bulk-table th.subj { border-left:2px solid var(--border-color); }
+.bulk-table td.subj { border-left:2px solid var(--border-light); }
+.bulk-name { text-align:left !important; position:sticky; left:0; background:var(--bg-card); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Bulk Score Entry</h1>
+    <div class="page-header-actions">
+        {% if assignment_id %}<a href="{{ url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary"><i class="fas fa-table"></i> Broadsheet</a>{% endif %}
+    </div>
+</div>
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group"><label class="form-label">Term</label>
+            <select name="term_id" class="form-control" onchange="this.form.submit()">
+                {% for t in terms %}<option value="{{ t.id }}" {% if t.id==term_id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
+            </select></div>
+        <div class="form-group"><label class="form-label">Class</label>
+            <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <option value="">Select class…</option>
+                {% for a in assignments %}<option value="{{ a.id }}" {% if a.id==assignment_id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+            </select></div>
+    </form>
+</div></div>
+
+{% if selected and class_subjects and enrollments %}
+<form method="POST" action="{{ url_for('subjects.bulk_entry') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="term_id" value="{{ term_id }}">
+    <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+    <div class="card"><div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="data-table bulk-table">
+            <thead>
+                <tr><th class="bulk-name" rowspan="2">Student</th>
+                    {% for cs in class_subjects %}<th class="subj" colspan="{{ assessment_types|length }}">{{ cs.subject.name }}</th>{% endfor %}</tr>
+                <tr>
+                    {% for cs in class_subjects %}{% for at in assessment_types %}<th class="{{ 'subj' if loop.first }}" title="{{ at.name }}">{{ at.short_name or at.name }}</th>{% endfor %}{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in enrollments %}
+                <tr>
+                    <td class="bulk-name">{{ student.full_name }}</td>
+                    {% for cs in class_subjects %}{% for at in assessment_types %}
+                    <td class="{{ 'subj' if loop.first }}">
+                        <input type="number" step="0.01" min="0" max="{{ at.max_score }}"
+                               name="s_{{ student.id }}_{{ cs.id }}_{{ at.id }}"
+                               value="{{ scores.get((student.id, cs.id, at.id), '') }}">
+                    </td>
+                    {% endfor %}{% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+    <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save all scores</button>
+        <span class="text-muted text-sm">Leave a cell blank to clear it. Positions update automatically.</span>
+    </div>
+</form>
+{% elif selected %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-circle-info"></i><p>This class has no subjects or no enrolled students yet.</p></div></div></div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><p>Select a term and class to enter scores.</p></div></div></div>
+{% endif %}
+{% endblock %}

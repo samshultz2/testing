@@ -199,6 +199,11 @@
                     {% if can_access_module('results') %}
                     <li class="nav-section">Results</li>
                     <li class="nav-item">
+                        <a href="{{ url_for('subjects.workflow') }}" class="nav-link {% if request.endpoint == 'subjects.workflow' %}active{% endif %}">
+                            <i class="fas fa-list-check"></i><span>Results Workflow</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('subjects.subjects_list') }}" class="nav-link">
                             <i class="fas fa-book"></i><span>Subjects</span>
                         </a>

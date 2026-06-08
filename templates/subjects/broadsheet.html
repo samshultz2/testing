@@ -40,7 +40,9 @@
                 <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
                 <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-ranking-star"></i> Compute results &amp; positions</button>
             </form>
+            <a href="{{ url_for('subjects.bulk_entry', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-pen-to-square"></i> Bulk Entry</a>
             <a href="{{ url_for('subjects.affective', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-star-half-stroke"></i> Behaviour</a>
+            <a href="{{ url_for('subjects.comments', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-comment-dots"></i> Comments</a>
             <a href="{{ url_for('subjects.export_broadsheet', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-success btn-sm"><i class="fas fa-download"></i> Export</a>
             <span class="badge badge-info">{{ broadsheet_data|length }} Students</span>
         </div>

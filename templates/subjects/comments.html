@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Report Comments — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Report Comments</h1>
+    <div class="page-header-actions">
+        {% if assignment_id %}
+        <a href="{{ url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary"><i class="fas fa-table"></i> Broadsheet</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group"><label class="form-label">Term</label>
+            <select name="term_id" class="form-control" onchange="this.form.submit()">
+                {% for t in terms %}<option value="{{ t.id }}" {% if t.id==term_id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
+            </select></div>
+        <div class="form-group"><label class="form-label">Class</label>
+            <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <option value="">Select class…</option>
+                {% for a in assignments %}<option value="{{ a.id }}" {% if a.id==assignment_id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+            </select></div>
+    </form>
+</div></div>
+
+{% if selected_assignment and students %}
+<form method="POST" action="{{ url_for('subjects.comments') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="term_id" value="{{ term_id }}">
+    <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+    <div class="card"><div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="data-table">
+            <thead><tr><th style="min-width:160px;">Student</th><th>Form Teacher's Comment</th><th>Principal's Comment</th></tr></thead>
+            <tbody>
+                {% for row in students %}
+                <tr>
+                    <td style="white-space:nowrap;">{{ row.student.full_name }}</td>
+                    <td><textarea name="t_{{ row.student.id }}" class="form-control" rows="2" style="min-width:240px;">{{ row.teacher_comment or '' }}</textarea></td>
+                    <td><textarea name="p_{{ row.student.id }}" class="form-control" rows="2" style="min-width:240px;">{{ row.principal_comment or '' }}</textarea></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+    <div style="margin-top:1rem;"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save comments</button></div>
+</form>
+{% elif selected_assignment %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-users"></i><p>No students enrolled in this class for the term.</p></div></div></div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><p>Select a term and class to enter comments.</p></div></div></div>
+{% endif %}
+{% endblock %}

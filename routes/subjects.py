@@ -499,6 +499,12 @@ def save_scores():
                 ).delete()
         
         db.session.commit()
+        # Keep term results/positions fresh as scores change.
+        if term_id and assignment_id:
+            asg = ClassArmAssignment.query.get(assignment_id)
+            if asg:
+                from utils.report_card import compute_term_summaries
+                compute_term_summaries(term_id, asg.class_id)
         flash(f'{saved} scores saved!', 'success')
     except Exception as e:
         db.session.rollback()
@@ -513,6 +519,128 @@ def save_scores():
 # ============================================================================
 # VIEW SCORES / BROADSHEET
 # ============================================================================
+
+@subjects_bp.route('/workflow')
+@login_required
+def workflow():
+    """Guided results checklist for a class+term: setup → entry → finalize → print."""
+    term_id = request.args.get('term_id', type=int)
+    assignment_id = request.args.get('assignment_id', type=int)
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.workflow'))
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    terms = Term.query.order_by(Term.id.desc()).all()
+    assignments = (filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    selected = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+
+    steps = None
+    if selected and term_id:
+        enr = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True).all()
+        sids = [e.student_id for e in enr]
+        css = ClassSubject.query.filter_by(
+            term_id=term_id, class_id=selected.class_id, is_active=True).all()
+        n_assess = AssessmentType.query.filter_by(is_active=True).count()
+        entered = 0
+        if sids and css:
+            entered = (StudentScore.query.join(ClassSubject).filter(
+                ClassSubject.term_id == term_id,
+                ClassSubject.class_id == selected.class_id,
+                StudentScore.student_id.in_(sids)).count())
+        ts_rows = (TermSummary.query.filter(
+            TermSummary.term_id == term_id,
+            TermSummary.student_id.in_(sids or [-1])).all())
+        steps = {
+            'students': len(sids),
+            'subjects': len(css),
+            'scores_entered': entered,
+            'scores_expected': len(sids) * len(css) * (n_assess or 1),
+            'positions': sum(1 for t in ts_rows if t.position_in_class),
+            'comments': sum(1 for t in ts_rows if t.teacher_comment),
+            'behaviour': sum(1 for t in ts_rows if t.affective),
+        }
+    return render_template('subjects/workflow.html', terms=terms, term_id=term_id,
+        assignments=assignments, assignment_id=assignment_id, selected=selected, steps=steps)
+
+
+@subjects_bp.route('/bulk-entry', methods=['GET', 'POST'])
+@login_required
+def bulk_entry():
+    """Enter every subject's scores for a whole class on one screen."""
+    term_id = request.values.get('term_id', type=int)
+    assignment_id = request.values.get('assignment_id', type=int)
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.bulk_entry'))
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    terms = Term.query.order_by(Term.id.desc()).all()
+    assignments = (filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    selected = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
+
+    class_subjects, enrollments = [], []
+    if selected:
+        class_subjects = (ClassSubject.query.filter_by(
+            term_id=term_id, class_id=selected.class_id, is_active=True)
+            .filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected.arm_id))
+            .join(Subject).order_by(Subject.name).all())
+        enrollments = (StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True)
+            .join(Student).order_by(Student.surname, Student.first_name).all())
+
+    if request.method == 'POST' and selected and class_subjects and enrollments:
+        sids = [e.student_id for e in enrollments]
+        cs_ids = [cs.id for cs in class_subjects]
+        existing = {(s.student_id, s.class_subject_id, s.assessment_type_id): s
+                    for s in StudentScore.query.filter(
+                        StudentScore.student_id.in_(sids),
+                        StudentScore.class_subject_id.in_(cs_ids)).all()}
+        changed = 0
+        for e in enrollments:
+            for cs in class_subjects:
+                for at in assessment_types:
+                    raw = (request.form.get(f's_{e.student_id}_{cs.id}_{at.id}') or '').strip()
+                    obj = existing.get((e.student_id, cs.id, at.id))
+                    if raw:
+                        try:
+                            val = float(raw)
+                        except ValueError:
+                            continue
+                        if obj:
+                            if obj.score != val:
+                                obj.score = val; changed += 1
+                        else:
+                            db.session.add(StudentScore(student_id=e.student_id,
+                                class_subject_id=cs.id, assessment_type_id=at.id, score=val))
+                            changed += 1
+                    elif obj:
+                        db.session.delete(obj); changed += 1
+        db.session.commit()
+        from utils.report_card import compute_term_summaries
+        compute_term_summaries(term_id, selected.class_id)
+        flash(f'Saved — {changed} change(s).', 'success')
+        return redirect(url_for('subjects.bulk_entry', term_id=term_id, assignment_id=assignment_id))
+
+    scores = {}
+    if selected and class_subjects and enrollments:
+        sids = [e.student_id for e in enrollments]
+        cs_ids = [cs.id for cs in class_subjects]
+        for s in StudentScore.query.filter(StudentScore.student_id.in_(sids),
+                                           StudentScore.class_subject_id.in_(cs_ids)).all():
+            scores[(s.student_id, s.class_subject_id, s.assessment_type_id)] = s.score
+
+    return render_template('subjects/bulk_entry.html', terms=terms, term_id=term_id,
+        assignments=assignments, assignment_id=assignment_id, selected=selected,
+        class_subjects=class_subjects, assessment_types=assessment_types,
+        enrollments=[e.student for e in enrollments], scores=scores)
+
 
 @subjects_bp.route('/broadsheet')
 @login_required
@@ -693,6 +821,56 @@ def affective():
     return render_template('subjects/affective.html', terms=terms, term_id=term_id,
         assignments=assignments, assignment_id=assignment_id,
         selected_assignment=selected_assignment, students=students, traits=AFFECTIVE_TRAITS)
+
+
+@subjects_bp.route('/comments', methods=['GET', 'POST'])
+@login_required
+def comments():
+    """Enter form-teacher & principal comments for a class arm in a term."""
+    term_id = request.values.get('term_id', type=int)
+    assignment_id = request.values.get('assignment_id', type=int)
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.comments'))
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    terms = Term.query.order_by(Term.id.desc()).all()
+    assignments = (filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+
+    if request.method == 'POST' and selected_assignment and term_id:
+        enrollments = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True).all()
+        for e in enrollments:
+            ts = TermSummary.query.filter_by(student_id=e.student_id, term_id=term_id).first()
+            if not ts:
+                ts = TermSummary(student_id=e.student_id, term_id=term_id, enrollment_id=e.id)
+                db.session.add(ts)
+            ts.teacher_comment = (request.form.get(f't_{e.student_id}') or '').strip() or None
+            ts.principal_comment = (request.form.get(f'p_{e.student_id}') or '').strip() or None
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('results.comments', detail=f'term {term_id}, {selected_assignment.display_name}')
+        flash('Comments saved.', 'success')
+        return redirect(url_for('subjects.comments', term_id=term_id, assignment_id=assignment_id))
+
+    students = []
+    if selected_assignment:
+        enrollments = (StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True)
+            .join(Student).order_by(Student.surname, Student.first_name).all())
+        summ = {ts.student_id: ts for ts in TermSummary.query.filter_by(term_id=term_id).all()}
+        for e in enrollments:
+            ts = summ.get(e.student_id)
+            students.append({'student': e.student,
+                             'teacher_comment': ts.teacher_comment if ts else '',
+                             'principal_comment': ts.principal_comment if ts else ''})
+
+    return render_template('subjects/comments.html', terms=terms, term_id=term_id,
+        assignments=assignments, assignment_id=assignment_id,
+        selected_assignment=selected_assignment, students=students)
 
 
 # ============================================================================

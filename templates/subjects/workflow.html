@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Results Workflow — {{ app_name }}{% endblock %}
+{% block extra_css %}
+<style>
+.wf-step { display:flex; align-items:center; gap:1rem; padding:1rem; border-bottom:1px solid var(--border-light); }
+.wf-step:last-child { border-bottom:none; }
+.wf-ico { width:42px; height:42px; border-radius:10px; display:flex; align-items:center;
+          justify-content:center; font-size:1.1rem; flex-shrink:0; }
+.wf-done { background:var(--success-light); color:var(--success); }
+.wf-todo { background:var(--gray-100); color:var(--text-muted); }
+.wf-body { flex:1; } .wf-body h4 { margin:0; } .wf-body p { margin:.1rem 0 0; color:var(--text-muted); font-size:.85rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Results Workflow</h1></div>
+
+<div class="card mb-3"><div class="card-body">
+    <form method="GET" class="filter-form" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group"><label class="form-label">Term</label>
+            <select name="term_id" class="form-control" onchange="this.form.submit()">
+                {% for t in terms %}<option value="{{ t.id }}" {% if t.id==term_id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
+            </select></div>
+        <div class="form-group"><label class="form-label">Class</label>
+            <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <option value="">Select class…</option>
+                {% for a in assignments %}<option value="{{ a.id }}" {% if a.id==assignment_id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+            </select></div>
+    </form>
+</div></div>
+
+{% if steps %}
+{% macro step(done, total, icon, title, desc, link, label) %}
+    <div class="wf-step">
+        <div class="wf-ico {{ 'wf-done' if done and (total is none or done >= total) else 'wf-todo' }}">
+            <i class="fas fa-{{ 'check' if done and (total is none or done >= total) else icon }}"></i>
+        </div>
+        <div class="wf-body"><h4>{{ title }}</h4><p>{{ desc }}</p></div>
+        <a href="{{ link }}" class="btn btn-secondary btn-sm">{{ label }}</a>
+    </div>
+{% endmacro %}
+
+<div class="card"><div class="card-body" style="padding:0;">
+    {{ step(steps.subjects, none, 'book', 'Subjects configured',
+            steps.subjects ~ ' subject(s) assigned to this class',
+            url_for('subjects.class_subjects_list'), 'Manage') }}
+    {{ step(steps.students, none, 'users', 'Students enrolled',
+            steps.students ~ ' student(s) in this class',
+            url_for('academics.assignments_list'), 'Enrol') }}
+    {{ step(steps.scores_entered, steps.scores_expected, 'pen', 'Scores entered',
+            steps.scores_entered ~ ' of ' ~ steps.scores_expected ~ ' score cells filled',
+            url_for('subjects.bulk_entry', term_id=term_id, assignment_id=assignment_id), 'Enter') }}
+    {{ step(steps.positions, steps.students, 'ranking-star', 'Results & positions computed',
+            steps.positions ~ ' of ' ~ steps.students ~ ' student(s) ranked',
+            url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id), 'Broadsheet') }}
+    {{ step(steps.comments, steps.students, 'comment-dots', 'Comments entered',
+            steps.comments ~ ' of ' ~ steps.students ~ ' have a form-teacher comment',
+            url_for('subjects.comments', term_id=term_id, assignment_id=assignment_id), 'Comments') }}
+    {{ step(steps.behaviour, steps.students, 'star-half-stroke', 'Behaviour rated',
+            steps.behaviour ~ ' of ' ~ steps.students ~ ' have behaviour ratings',
+            url_for('subjects.affective', term_id=term_id, assignment_id=assignment_id), 'Behaviour') }}
+</div></div>
+
+<div class="card mt-3"><div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
+    <form method="POST" action="{{ url_for('subjects.compute_summaries') }}" style="display:inline">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="term_id" value="{{ term_id }}">
+        <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-ranking-star"></i> Finalize (compute results &amp; positions)</button>
+    </form>
+    <a href="{{ url_for('subjects.print_all_report_cards', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-success"><i class="fas fa-print"></i> Print all report cards</a>
+</div></div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><p>Select a term and class to see the results checklist.</p></div></div></div>
+{% endif %}
+{% endblock %}
