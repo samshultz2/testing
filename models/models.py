@@ -1300,6 +1300,57 @@ def _ensure_student_exam_columns():
             for stmt in statements:
                 conn.execute(text(stmt))
 
+    _ensure_indexes()
+
+
+# Indexes on hot filter / foreign-key / sort columns. Created idempotently on
+# startup so existing databases pick them up (student_id columns are deliberately
+# left to the composite unique constraints that already cover them).
+_INDEXES = [
+    ('ix_waec_exam_year', 'waec_results', 'exam_year'),
+    ('ix_waec_subject', 'waec_results', 'subject'),
+    ('ix_jamb_exam_year', 'jamb_results', 'exam_year'),
+    ('ix_attendance_enrollment', 'attendance', 'enrollment_id'),
+    ('ix_attendance_date', 'attendance', 'date'),
+    ('ix_attendance_week', 'attendance', 'week_id'),
+    ('ix_enrollment_caa', 'student_enrollments', 'class_arm_assignment_id'),
+    ('ix_enrollment_active', 'student_enrollments', 'is_active'),
+    ('ix_caa_term', 'class_arm_assignments', 'term_id'),
+    ('ix_caa_branch', 'class_arm_assignments', 'branch_id'),
+    ('ix_student_branch', 'students', 'branch_id'),
+    ('ix_student_active', 'students', 'is_active'),
+    ('ix_feepayment_term', 'fee_payments', 'term_id'),
+    ('ix_feepayment_branch', 'fee_payments', 'branch_id'),
+    ('ix_feepayment_receipt', 'fee_payments', 'receipt_no'),
+    ('ix_expense_term', 'expenses', 'term_id'),
+    ('ix_expense_branch', 'expenses', 'branch_id'),
+    ('ix_feediscount_term', 'fee_discounts', 'term_id'),
+    ('ix_cbt_attempt_exam', 'cbt_attempts', 'exam_id'),
+    ('ix_cbt_login_exam', 'cbt_login_events', 'exam_id'),
+    ('ix_audit_created', 'audit_logs', 'created_at'),
+    ('ix_audit_action', 'audit_logs', 'action'),
+    ('ix_mockresult_exam', 'mock_jamb_results', 'mock_exam_id'),
+]
+
+
+def _ensure_indexes():
+    """Create the performance indexes if they don't exist (best-effort)."""
+    from sqlalchemy import inspect, text
+    try:
+        inspector = inspect(db.engine)
+        tables = set(inspector.get_table_names())
+    except Exception:
+        return
+    for name, table, column in _INDEXES:
+        if table not in tables:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    f'CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})'))
+        except Exception:
+            pass
+
 
 def _classify_section(school_class):
     """Best-effort section for a class from its name, falling back to level."""
