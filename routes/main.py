@@ -14,6 +14,7 @@ from utils.access_control import (
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
 from sqlalchemy import extract, func
+from sqlalchemy.orm import joinedload
 from urllib.parse import urlparse
 
 
@@ -311,15 +312,16 @@ def dashboard():
 
     graduates_count = sq(Student.query.filter_by(is_active=True, is_graduated=True)).count()
 
-    # JAMB snapshot (latest year)
+    # JAMB snapshot (latest year) — one scoped query, eager-load students for the top list.
     jamb_snapshot = None
     jy = db.session.query(JAMBResult.exam_year).order_by(JAMBResult.exam_year.desc()).first()
     if jy:
-        scores = [r.total_score for r in scope_by_student(
-            JAMBResult.query.filter_by(exam_year=jy[0]), JAMBResult).all()]
+        rows = scope_by_student(
+            JAMBResult.query.filter_by(exam_year=jy[0]).options(joinedload(JAMBResult.student)),
+            JAMBResult).order_by(JAMBResult.total_score.desc()).all()
+        scores = [r.total_score for r in rows]
         if scores:
-            top = scope_by_student(JAMBResult.query.filter_by(exam_year=jy[0]), JAMBResult).order_by(
-                JAMBResult.total_score.desc()).limit(5).all()
+            top = rows[:5]
             jamb_snapshot = {
                 'year': jy[0], 'count': len(scores),
                 'mean': round(sum(scores) / len(scores), 1),
@@ -983,7 +985,8 @@ def global_search():
 
         try:
             from models import FeePayment
-            pays = FeePayment.query.filter(FeePayment.receipt_no.ilike(like)).limit(8).all()
+            pays = (FeePayment.query.filter(FeePayment.receipt_no.ilike(like))
+                    .options(joinedload(FeePayment.student)).limit(8).all())
             add('Fee receipts', 'fa-receipt', [
                 {'label': p.receipt_no, 'sub': (p.student.full_name if p.student else ''),
                  'url': url_for('finance.receipt', payment_id=p.id)} for p in pays])
@@ -1185,10 +1188,33 @@ def export_students_data():
         flash('No students to export.', 'error')
         return redirect(url_for('main.students_list'))
     
-    # Get current class and parent info for each student
+    # Pre-load current class + parent phone for every student in two queries
+    # (instead of two per student) to avoid N+1 during export.
     active_term = Term.query.filter_by(is_active=True).first()
+    student_ids = [s.id for s in students]
+
+    class_map = {}
+    if active_term:
+        enr = (StudentEnrollment.query
+               .join(ClassArmAssignment)
+               .filter(StudentEnrollment.student_id.in_(student_ids),
+                       ClassArmAssignment.term_id == active_term.id)
+               .options(joinedload(StudentEnrollment.class_arm_assignment)
+                        .joinedload(ClassArmAssignment.school_class),
+                        joinedload(StudentEnrollment.class_arm_assignment)
+                        .joinedload(ClassArmAssignment.arm))
+               .all())
+        for e in enr:
+            class_map[e.student_id] = e.class_arm_assignment.display_name
+
+    phone_map = {}
+    for pc in (ParentContact.query
+               .filter(ParentContact.student_id.in_(student_ids))
+               .order_by(ParentContact.is_primary.desc(), ParentContact.id).all()):
+        phone_map.setdefault(pc.student_id, pc.phone_number)
+
     student_data = []
-    
+
     for student in students:
         data = {}
         
@@ -1216,22 +1242,11 @@ def export_students_data():
         
         # Current class
         if 'current_class' in fields:
-            current_class = ''
-            if active_term:
-                enrollment = StudentEnrollment.query.join(
-                    ClassArmAssignment
-                ).filter(
-                    StudentEnrollment.student_id == student.id,
-                    ClassArmAssignment.term_id == active_term.id
-                ).first()
-                if enrollment:
-                    current_class = enrollment.class_arm_assignment.display_name
-            data['Class'] = current_class
-        
+            data['Class'] = class_map.get(student.id, '')
+
         # Parent phone
         if 'parent_phone' in fields:
-            parent = student.parent_contacts.first()
-            data['Parent Phone'] = parent.phone if parent else ''
+            data['Parent Phone'] = phone_map.get(student.id, '')
         
         student_data.append(data)
     

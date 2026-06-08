@@ -8,6 +8,7 @@ from datetime import date, datetime
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response)
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
@@ -180,13 +181,14 @@ def dashboard():
     expense_breakdown = {}
     recent_expenses = []
     if term_id:
-        exp_rows = scope_query(Expense.query.filter_by(term_id=term_id), Expense).all()
+        exp_rows = scope_query(
+            Expense.query.filter_by(term_id=term_id).options(joinedload(Expense.category)),
+            Expense).order_by(Expense.created_at.desc()).all()
         for e in exp_rows:
             expenses += e.amount
             cat = e.category.name if e.category else 'Uncategorised'
             expense_breakdown[cat] = expense_breakdown.get(cat, 0.0) + e.amount
-        recent_expenses = (scope_query(Expense.query.filter_by(term_id=term_id), Expense)
-                           .order_by(Expense.created_at.desc()).limit(6).all())
+        recent_expenses = exp_rows[:6]
     net = collected - expenses
 
     class_chart = [{'name': k, 'expected': round(v['expected'], 2),
