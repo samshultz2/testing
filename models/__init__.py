@@ -33,10 +33,11 @@ from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolati
                          QuestionBank, CBTLoginEvent, CBTDeviceSession)
 from .models_scratchcard import ScratchCard, ResultCheckLog
 from .models_branch import Branch
+from .models_sales import Product, Sale, SaleItem
 
 __all__ = [
     'db', 'local_now', 'init_db',
-    'Branch',
+    'Branch', 'Product', 'Sale', 'SaleItem',
     'ScratchCard', 'ResultCheckLog', 'CBTLoginEvent', 'CBTDeviceSession',
     'Student', 'ParentContact',
     'AcademicSession', 'Term', 'SchoolClass', 'ClassArm', 'ClassArmAssignment', 'StudentEnrollment',

@@ -35,7 +35,11 @@ branch users while central users bypass it.
    applied to the students list (by current enrolment's class section, and by
    `Student.stream`) and the subjects list (`Subject.category`). Also fixed: only
    actual teachers are limited to assigned classes — other staff use these scopes.
-5. Bursar Sales & Inventory module (textbooks, workbooks, uniforms…), branch-scoped.
+5. **Bursar Sales & Inventory — DONE.** A `sales` module (`models/models_sales.py`,
+   `routes/sales.py`): products + stock, point-of-sale (multi-item, optional
+   student buyer, auto stock decrement, can't oversell), receipts, history and a
+   low-stock dashboard — all branch-scoped. Added to the `bursar` preset and the
+   sidebar.
 
 ## Stage 1 details
 

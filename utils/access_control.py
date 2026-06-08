@@ -36,6 +36,7 @@ MODULES = {
     'hr': 'Staff / HR',
     'library': 'Library',
     'reports': 'Reports',
+    'sales': 'Sales & Inventory',
 }
 
 # Which module a blueprint belongs to (blueprints not listed are never gated).
@@ -46,6 +47,7 @@ BLUEPRINT_MODULE = {
     'timetable': 'timetable', 'generator': 'timetable', 'promotion': 'promotion',
     'finance': 'finance', 'comms': 'communication', 'hr': 'hr',
     'library': 'library', 'reports': 'reports', 'scratchcards': 'results',
+    'sales': 'sales',
 }
 
 # Endpoints always reachable by any logged-in user (the shell + own account).

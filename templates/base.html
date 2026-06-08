@@ -260,6 +260,29 @@
                     </li>
 
                     {% endif %}
+                    {% if can_access_module('sales') %}
+                    <li class="nav-section">Sales &amp; Inventory</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.dashboard') }}" class="nav-link {% if request.endpoint == 'sales.dashboard' %}active{% endif %}">
+                            <i class="fas fa-cart-shopping"></i><span>Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.new_sale') }}" class="nav-link {% if request.endpoint == 'sales.new_sale' %}active{% endif %}">
+                            <i class="fas fa-cart-plus"></i><span>New Sale</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.products') }}" class="nav-link {% if request.endpoint == 'sales.products' %}active{% endif %}">
+                            <i class="fas fa-boxes-stacked"></i><span>Products</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.history') }}" class="nav-link {% if request.endpoint == 'sales.history' %}active{% endif %}">
+                            <i class="fas fa-clock-rotate-left"></i><span>History</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if can_access_module('communication') %}
                     <li class="nav-section">Communication</li>
                     <li class="nav-item">

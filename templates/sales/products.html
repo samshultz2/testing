@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Products - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('sales.dashboard') }}">Sales</a> / <span>Products</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-boxes-stacked"></i> Products &amp; Stock</h1>
+    <div class="page-header-actions"><a href="{{ url_for('sales.new_sale') }}" class="btn btn-primary"><i class="fas fa-cart-plus"></i> New Sale</a></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Add product</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('sales.add_product') }}" class="filter-form" style="flex-wrap:wrap;gap:1rem;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label class="form-label">Name <span class="text-danger">*</span></label><input type="text" name="name" class="form-control" required></div>
+            <div class="form-group"><label class="form-label">Category</label><select name="category" class="form-control">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Price (₦)</label><input type="number" step="0.01" name="unit_price" class="form-control" value="0"></div>
+            <div class="form-group"><label class="form-label">Opening stock</label><input type="number" name="stock_qty" class="form-control" value="0"></div>
+            <div class="form-group"><label class="form-label">Reorder at</label><input type="number" name="reorder_level" class="form-control" value="0"></div>
+            <div class="form-group" style="align-self:flex-end;"><button class="btn btn-primary"><i class="fas fa-plus"></i> Add</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Products ({{ products|length }})</h3>
+        <form method="GET"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search…" onchange="this.form.submit()"></form>
+    </div>
+    <div class="card-body" style="padding:0;">
+        {% if products %}
+        <div class="table-container">
+        <table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Name</th><th>Category</th><th class="text-right">Price</th><th class="text-right">Stock</th><th>Restock</th></tr></thead>
+            <tbody>
+            {% for p in products %}
+            <tr>
+                <td data-label="Name">{{ p.name }}{% if p.sku %} <span class="text-muted text-sm">({{ p.sku }})</span>{% endif %}</td>
+                <td data-label="Category">{{ p.category }}</td>
+                <td data-label="Price" class="text-right">{{ p.unit_price|naira }}</td>
+                <td data-label="Stock" class="text-right"><strong {% if p.low_stock %}style="color:#e74a3b;"{% endif %}>{{ p.stock_qty }}</strong></td>
+                <td data-label="Restock">
+                    <form method="POST" action="{{ url_for('sales.restock', product_id=p.id) }}" style="display:flex;gap:.3rem;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <input type="number" name="qty" class="form-control" style="width:80px;" placeholder="+qty">
+                        <button class="btn btn-sm btn-secondary">Add</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}<div class="empty-state"><i class="fas fa-boxes-stacked"></i><h3>No products</h3><p>Add your first product above.</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

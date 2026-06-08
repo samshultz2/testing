@@ -77,7 +77,7 @@ ROLE_PRESETS = {
     'bursar': {
         'label': 'Bursar',
         'role': 'staff', 'scope': 'branch',
-        'modules': ['finance', 'communication'],
+        'modules': ['finance', 'sales', 'communication'],
         'description': 'Fees, expenses and sales for one branch.',
     },
 }
