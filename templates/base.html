@@ -586,7 +586,7 @@
             {% endif %}
             {% endwith %}
             
-            <div class="page-content">
+            <div class="page-content"{% if not page_can_write %} data-readonly="1"{% endif %}>
                 {% block content %}{% endblock %}
             </div>
         </main>

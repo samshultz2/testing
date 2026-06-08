@@ -224,11 +224,53 @@ function initFlashMessages() {
 }
 
 // =============================================================================
+// VIEW-ONLY PAGES — hide create / update / delete controls
+// =============================================================================
+// The server still blocks every write; this just removes the controls a
+// view-only user could otherwise click. Scoped to .page-content so the shared
+// sidebar/header are never touched.
+function hideWriteControls() {
+    var scope = document.querySelector('.page-content[data-readonly]');
+    if (!scope) return;
+
+    var WRITE_ICONS = '.fa-plus, .fa-trash, .fa-trash-can, .fa-trash-alt, .fa-pen, .fa-pen-to-square, .fa-edit, .fa-pencil, .fa-pencil-alt';
+    var WRITE_SEGMENTS = /\/(add|new|create|edit|update|delete|remove|assign|record)(\/|$|\?|-)/i;
+
+    function hide(el) {
+        if (!el || el.classList.contains('keep-on-readonly')) return;
+        // climb to the clickable control (a/button) if an inner icon matched
+        var ctl = el.closest ? (el.closest('a, button') || el) : el;
+        if (ctl.classList && ctl.classList.contains('keep-on-readonly')) return;
+        ctl.style.display = 'none';
+    }
+
+    // 1) Controls carrying a write icon (Add / Edit / Delete).
+    scope.querySelectorAll(WRITE_ICONS).forEach(hide);
+    // 2) Links pointing at a write endpoint.
+    scope.querySelectorAll('a[href]').forEach(function (a) {
+        try {
+            var path = new URL(a.href, window.location.origin).pathname;
+            if (WRITE_SEGMENTS.test(path)) hide(a);
+        } catch (e) {}
+    });
+    // 3) Destructive buttons + submit buttons inside non-GET forms.
+    scope.querySelectorAll('.btn-danger').forEach(hide);
+    scope.querySelectorAll('form').forEach(function (f) {
+        var m = (f.getAttribute('method') || 'get').toLowerCase();
+        if (m === 'get') return;
+        f.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])').forEach(hide);
+    });
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 document.addEventListener('DOMContentLoaded', function() {
     // Theme
     setTheme(getPreferredTheme());
+
+    // Hide write controls on view-only pages
+    hideWriteControls();
     
     // Mobile menu
     const menuBtn = document.getElementById('mobileMenuBtn');

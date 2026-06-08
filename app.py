@@ -197,6 +197,13 @@ def create_app(config_class=Config):
             except Exception:
                 return False
 
+        def page_can_write():
+            try:
+                from utils.access_control import page_can_write as _pcw
+                return _pcw()
+            except Exception:
+                return True
+
         def branch_context():
             """Header branch switcher state."""
             try:
@@ -226,6 +233,7 @@ def create_app(config_class=Config):
             'can_access_module': can_access_module,
             'can_write_module': can_write_module,
             'can_manage_users': can_manage_users(),
+            'page_can_write': page_can_write(),
             'branch_ctx': branch_context(),
             'current_theme': current_theme(),
             'themes': THEMES,

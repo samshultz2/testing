@@ -2320,3 +2320,22 @@ input:focus, select:focus, textarea:focus {
 .theme-check { color: var(--primary); opacity: 0; font-size: .8rem; }
 .theme-swatch.active .theme-check { opacity: 1; }
 .theme-swatch.active { background: var(--primary-light); }
+
+/* ===========================================
+   VIEW-ONLY PAGES — hide write controls (icon + destructive)
+   Scoped to .page-content so the sidebar/header are untouched.
+   JS (hideWriteControls) covers href links + non-GET form buttons.
+   =========================================== */
+.page-content[data-readonly] .btn-danger:not(.keep-on-readonly),
+.page-content[data-readonly] a:not(.keep-on-readonly):has(.fa-plus),
+.page-content[data-readonly] button:not(.keep-on-readonly):has(.fa-plus),
+.page-content[data-readonly] a:not(.keep-on-readonly):has(.fa-trash),
+.page-content[data-readonly] button:not(.keep-on-readonly):has(.fa-trash),
+.page-content[data-readonly] a:not(.keep-on-readonly):has(.fa-edit),
+.page-content[data-readonly] button:not(.keep-on-readonly):has(.fa-edit),
+.page-content[data-readonly] a:not(.keep-on-readonly):has(.fa-pen),
+.page-content[data-readonly] button:not(.keep-on-readonly):has(.fa-pen),
+.page-content[data-readonly] a:not(.keep-on-readonly):has(.fa-pen-to-square),
+.page-content[data-readonly] button:not(.keep-on-readonly):has(.fa-pen-to-square) {
+    display: none !important;
+}

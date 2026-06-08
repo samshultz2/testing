@@ -237,6 +237,28 @@ def can_write_module(key):
     return module_level(key) == 'edit'
 
 
+def page_can_write():
+    """Whether the current page's module/sub-section is writable for this user.
+
+    Used to hide create/update/delete controls on view-only pages (server-side
+    enforcement still applies regardless).
+    """
+    ep = request.endpoint or ''
+    if ep in _READONLY_WRITE_OK:
+        return True
+    if is_read_only():          # globally view-only account
+        return False
+    if is_admin():
+        return True
+    sub = subsection_for_endpoint(ep)
+    if sub:
+        return subsection_level(sub[0], sub[1]) == 'edit'
+    module = BLUEPRINT_MODULE.get(ep.split('.')[0])
+    if not module:
+        return True             # ungated page — nothing to hide
+    return module_level(module) == 'edit'
+
+
 def enforce_module_access():
     """before_request gate: block non-admins from modules they lack."""
     if not session.get('logged_in') or is_admin():
