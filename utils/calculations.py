@@ -3,7 +3,31 @@ Attendance calculation utilities
 All attendance-related calculations are performed here
 """
 from datetime import timedelta
+from sqlalchemy.orm import joinedload
 from models import db, Attendance, StudentEnrollment, Week, Holiday
+
+
+def _active_enrollments(class_arm_assignment_id):
+    """Active enrollments for a class arm, with each student eager-loaded."""
+    return (StudentEnrollment.query
+            .filter_by(class_arm_assignment_id=class_arm_assignment_id, is_active=True)
+            .options(joinedload(StudentEnrollment.student))
+            .all())
+
+
+def _load_attendance(enrollment_ids, *, dates=None, week_ids=None):
+    """All Attendance rows for the given enrollments, in a single batched query.
+
+    Avoids the per-student / per-day N+1 the summaries used to issue.
+    """
+    if not enrollment_ids:
+        return []
+    q = Attendance.query.filter(Attendance.enrollment_id.in_(enrollment_ids))
+    if dates is not None:
+        q = q.filter(Attendance.date.in_(list(dates)))
+    if week_ids is not None:
+        q = q.filter(Attendance.week_id.in_(list(week_ids)))
+    return q.all()
 
 
 def get_daily_attendance_summary(class_arm_assignment_id, target_date):
@@ -18,22 +42,19 @@ def get_daily_attendance_summary(class_arm_assignment_id, target_date):
     - afternoon_absent: Count absent in afternoon
     - students: List of student attendance records
     """
-    enrollments = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=class_arm_assignment_id,
-        is_active=True
-    ).all()
-    
+    enrollments = _active_enrollments(class_arm_assignment_id)
+    attendance_by_enrollment = {
+        a.enrollment_id: a for a in
+        _load_attendance([e.id for e in enrollments], dates=[target_date])
+    }
+
     total_students = len(enrollments)
     morning_present = 0
     afternoon_present = 0
     students_data = []
-    
+
     for enrollment in enrollments:
-        attendance = Attendance.query.filter_by(
-            enrollment_id=enrollment.id,
-            date=target_date
-        ).first()
-        
+        attendance = attendance_by_enrollment.get(enrollment.id)
         student = enrollment.student
         morning = attendance.morning_present if attendance else None
         afternoon = attendance.afternoon_present if attendance else None
@@ -92,12 +113,13 @@ def get_weekly_attendance_summary(class_arm_assignment_id, week_id):
     
     times_opened = len(school_days) * 2  # Morning and afternoon sessions
     
-    # Get enrollments
-    enrollments = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=class_arm_assignment_id,
-        is_active=True
-    ).all()
-    
+    # Get enrollments + all attendance for the week in one batched query.
+    enrollments = _active_enrollments(class_arm_assignment_id)
+    attendance_by_key = {
+        (a.enrollment_id, a.date): a for a in
+        _load_attendance([e.id for e in enrollments], dates=school_days)
+    }
+
     students_data = []
     total_male = 0
     total_female = 0
@@ -105,28 +127,25 @@ def get_weekly_attendance_summary(class_arm_assignment_id, week_id):
     female_attendance = 0
     total_morning = 0
     total_afternoon = 0
-    
+
     for enrollment in enrollments:
         student = enrollment.student
-        
+
         # Count gender
         if student.gender == 'Male':
             total_male += 1
         else:
             total_female += 1
-        
+
         # Get daily attendance for this week
         daily_data = []
         weekly_total = 0
         weekly_morning = 0
         weekly_afternoon = 0
-        
+
         for day in school_days:
-            attendance = Attendance.query.filter_by(
-                enrollment_id=enrollment.id,
-                date=day
-            ).first()
-            
+            attendance = attendance_by_key.get((enrollment.id, day))
+
             morning = attendance.morning_present if attendance else False
             afternoon = attendance.afternoon_present if attendance else False
             
@@ -221,12 +240,12 @@ def get_termly_attendance_summary(class_arm_assignment_id, term_id):
     
     total_times_opened = total_school_days * 2
     
-    # Get enrollments
-    enrollments = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=class_arm_assignment_id,
-        is_active=True
-    ).all()
-    
+    # Get enrollments + all term attendance in one batched query, grouped per student.
+    enrollments = _active_enrollments(class_arm_assignment_id)
+    records_by_enrollment = {}
+    for a in _load_attendance([e.id for e in enrollments], week_ids=[w.id for w in weeks]):
+        records_by_enrollment.setdefault(a.enrollment_id, []).append(a)
+
     students_data = []
     total_male_students = 0
     total_female_students = 0
@@ -234,25 +253,21 @@ def get_termly_attendance_summary(class_arm_assignment_id, term_id):
     total_female_attendance = 0
     total_morning_attendance = 0
     total_afternoon_attendance = 0
-    
+
     # Initialize weekly totals
     weekly_totals = [0] * len(weeks)
-    
+
     for enrollment in enrollments:
         student = enrollment.student
-        
+
         # Count by gender
         if student.gender == 'Male':
             total_male_students += 1
         else:
             total_female_students += 1
-        
-        # Get all attendance for this enrollment in this term
-        attendance_records = Attendance.query.filter(
-            Attendance.enrollment_id == enrollment.id,
-            Attendance.week_id.in_([w.id for w in weeks])
-        ).all()
-        
+
+        attendance_records = records_by_enrollment.get(enrollment.id, [])
+
         # Build attendance lookup by week_id
         attendance_by_week = {}
         for a in attendance_records:
