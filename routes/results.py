@@ -141,13 +141,19 @@ def waec_list():
             base_query = base_query.filter(WAECResult.grade == grade_filter)
         
         students = base_query.distinct().all()
-        
+
+        # Batch-load every matching student's results for the year in one query
+        # (instead of one query per student).
+        results_by_student = {}
+        if students:
+            for r in WAECResult.query.filter(
+                    WAECResult.student_id.in_([s.id for s in students]),
+                    WAECResult.exam_year == exam_year).all():
+                results_by_student.setdefault(r.student_id, []).append(r)
+
         for student in students:
-            results = WAECResult.query.filter_by(
-                student_id=student.id,
-                exam_year=exam_year
-            ).all()
-            
+            results = results_by_student.get(student.id, [])
+
             # Count each grade
             grade_counts = {g: sum(1 for r in results if r.grade == g) for g in WAEC_GRADES}
             a1_count = grade_counts['A1']

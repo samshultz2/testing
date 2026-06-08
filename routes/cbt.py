@@ -19,6 +19,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify, Response, current_app)
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
+from sqlalchemy.orm import contains_eager
 
 from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
                     QuestionBank, CBTLoginEvent, CBTDeviceSession, Subject, SchoolClass,
@@ -521,7 +522,8 @@ def monitor_data(exam_id):
                        CBTDeviceSession.last_seen >= active_cut).all()):
         active_by_student.setdefault(ds.student_id, []).append(ds)
     rows = []
-    _attempts_q = e.attempts.join(Student)
+    # join Student for filter/order AND map it onto each attempt (no per-row load).
+    _attempts_q = e.attempts.join(Student).options(contains_eager(CBTAttempt.student))
     if branch_filter:
         _attempts_q = _attempts_q.filter(Student.branch_id == branch_filter)
     for a in _attempts_q.order_by(Student.surname, Student.first_name).all():

@@ -563,10 +563,13 @@ def students_list():
     class_map = {}
     page_ids = [s.id for s in students.items]
     if active_term and page_ids:
-        enrollments = StudentEnrollment.query.join(ClassArmAssignment).filter(
+        enrollments = (StudentEnrollment.query.join(ClassArmAssignment).filter(
             StudentEnrollment.student_id.in_(page_ids),
             ClassArmAssignment.term_id == active_term.id
-        ).all()
+        ).options(
+            joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.school_class),
+            joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.arm),
+        ).all())
         for enrollment in enrollments:
             class_map.setdefault(enrollment.student_id, enrollment.class_arm_assignment.display_name)
     for student in students.items:
