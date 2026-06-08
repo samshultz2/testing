@@ -11,6 +11,11 @@
 @media(min-width:768px){.permission-grid{grid-template-columns:repeat(2,1fr)}}
 .perm-row{justify-content:space-between;gap:.75rem}
 .perm-select{max-width:150px;padding:.3rem .4rem;height:auto}
+.perm-block{display:flex;flex-direction:column;gap:.3rem}
+.perm-subs{margin:.1rem 0 .3rem .25rem;font-size:.85rem}
+.perm-subs summary{cursor:pointer;color:var(--text-muted);font-size:.78rem}
+.perm-sub{background:transparent;padding:.25rem .5rem}
+.perm-sub span{font-size:.85rem;color:var(--text-secondary)}
 .permission-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--gray-50);border-radius:6px;cursor:pointer}
 .permission-item input{width:1.1rem;height:1.1rem}
 .toggle-label{display:flex;align-items:center;gap:.5rem;padding:.5rem 0;cursor:pointer}
@@ -108,6 +113,7 @@
 {% set current = user.permission_map %}
 <div class="permission-grid">
 {% for key, label in modules.items() %}
+<div class="perm-block">
 <label class="permission-item perm-row"><span>{{ label }}</span>
     <select name="perm_{{ key }}" class="form-control perm-select" data-key="{{ key }}">
         <option value="">No access</option>
@@ -115,6 +121,23 @@
         <option value="edit" {% if current.get(key) == 'edit' %}selected{% endif %}>View &amp; edit</option>
     </select>
 </label>
+{% if subsections.get(key) %}
+{% set ns = namespace(open=false) %}
+{% for sub in subsections[key] %}{% if (key ~ '.' ~ sub) in current %}{% set ns.open = true %}{% endif %}{% endfor %}
+<details class="perm-subs" {% if ns.open %}open{% endif %}><summary>Detailed access ({{ subsections[key]|length }} parts)</summary>
+    {% for sub, slabel in subsections[key].items() %}
+    {% set sk = key ~ '.' ~ sub %}
+    <label class="permission-item perm-row perm-sub"><span>↳ {{ slabel }}</span>
+        <select name="perm_{{ sk }}" class="form-control perm-select">
+            <option value="">No access</option>
+            <option value="view" {% if current.get(sk) == 'view' %}selected{% endif %}>View only</option>
+            <option value="edit" {% if current.get(sk) == 'edit' %}selected{% endif %}>View &amp; edit</option>
+        </select>
+    </label>
+    {% endfor %}
+</details>
+{% endif %}
+</div>
 {% endfor %}
 </div>
 <p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Choose each section's level — <strong>No access</strong>, <strong>View only</strong> or <strong>View &amp; edit</strong>. Admins always have full access.</p>

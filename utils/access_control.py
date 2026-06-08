@@ -65,12 +65,70 @@ ROLE_DEFAULT_MODULES = {
 }
 
 
-def user_module_levels():
-    """Effective {module_key: 'view'|'edit'} for the current user.
+# Optional sub-sections within a module: {module: {sub_key: label}}. A user may
+# be granted access to specific sub-sections instead of the whole module.
+MODULE_SUBSECTIONS = {
+    'finance': {
+        'payments': 'Payments & Discounts',
+        'structure': 'Fee Structure',
+        'expenses': 'Expenses',
+        'defaulters': 'Defaulters',
+        'reports': 'Reports & Overview',
+    },
+    'hr': {
+        'staff': 'Staff & Departments',
+        'leave': 'Leave',
+        'payroll': 'Payroll',
+        'attendance': 'Staff Attendance',
+        'settings': 'HR Settings',
+    },
+}
 
-    Admins get 'edit' on everything (a globally view-only admin gets 'view').
-    Otherwise the user's explicit per-module levels, falling back to the role's
-    default set (granted at 'view' for the readonly role, else 'edit').
+# Which endpoints belong to each sub-section.
+_SUBSECTION_ENDPOINTS = {
+    'finance': {
+        'payments': {'collections', 'collections_export', 'payments_list',
+                     'record_payment', 'search_students', 'receipt', 'edit_payment',
+                     'delete_payment', 'statement', 'add_discount', 'edit_discount',
+                     'delete_discount'},
+        'structure': {'items_list', 'add_item', 'edit_item', 'delete_item',
+                      'structure', 'save_structure', 'copy_structure', 'clear_structure'},
+        'expenses': {'expenses_list', 'add_expense', 'edit_expense', 'delete_expense',
+                     'add_expense_category', 'delete_expense_category'},
+        'defaulters': {'defaulters'},
+        'reports': {'dashboard', 'reports', 'export_report'},
+    },
+    'hr': {
+        'staff': {'dashboard', 'staff_list', 'add_staff', 'staff_detail', 'edit_staff',
+                  'adjust_salary', 'delete_staff', 'export_staff', 'departments',
+                  'add_department', 'edit_department', 'delete_department'},
+        'leave': {'leave_list', 'add_leave', 'leave_status', 'delete_leave'},
+        'payroll': {'payroll_list', 'create_payroll', 'payroll_detail', 'edit_payslip',
+                    'finalize_payroll', 'mark_paid', 'delete_payroll', 'print_payslip',
+                    'sync_deductions'},
+        'attendance': {'attendance', 'save_attendance'},
+        'settings': {'settings', 'save_hr_settings'},
+    },
+}
+
+# Reverse map: 'finance.payments_list' -> ('finance', 'payments')
+_ENDPOINT_SUBSECTION = {}
+for _mod, _subs in _SUBSECTION_ENDPOINTS.items():
+    for _sub, _eps in _subs.items():
+        for _ep in _eps:
+            _ENDPOINT_SUBSECTION[f'{_mod}.{_ep}'] = (_mod, _sub)
+
+
+def subsection_for_endpoint(endpoint):
+    """('module','sub') for a gated endpoint, or None."""
+    return _ENDPOINT_SUBSECTION.get(endpoint or '')
+
+
+def effective_perms():
+    """Raw effective permission entries (may include 'module.sub' keys).
+
+    Admins => 'edit' on everything (view-only admins => 'view'); else the user's
+    stored map; else the role default.
     """
     if is_admin():
         lvl = 'view' if is_read_only() else 'edit'
@@ -79,9 +137,9 @@ def user_module_levels():
     if user:
         pm = user.permission_map
         if pm:
-            scoped = {k: v for k, v in pm.items() if k in MODULES}
+            scoped = {k: v for k, v in pm.items() if k.split('.', 1)[0] in MODULES}
             if scoped:
-                if user.view_only:   # global override -> everything view
+                if user.view_only:
                     scoped = {k: 'view' for k in scoped}
                 return scoped
     role = session.get('role', 'teacher')
@@ -90,18 +148,46 @@ def user_module_levels():
     return {k: lvl for k in default}
 
 
+def module_level(key):
+    """Broadest level the user has for a module (across module + sub keys)."""
+    perms = effective_perms()
+    best = None
+    for k, v in perms.items():
+        if k == key or k.startswith(key + '.'):
+            if v == 'edit':
+                return 'edit'
+            best = 'view'
+    return best
+
+
+def subsection_level(module, sub):
+    """Level for a specific sub-section: explicit > module grant > none."""
+    perms = effective_perms()
+    full = f'{module}.{sub}'
+    if full in perms:
+        return perms[full]
+    if module in perms:
+        return perms[module]
+    return None   # granular user without this sub-section (or no access)
+
+
+def user_module_levels():
+    """{module_key: broadest level} for modules the user can access."""
+    out = {}
+    for m in MODULES:
+        lvl = module_level(m)
+        if lvl:
+            out[m] = lvl
+    return out
+
+
 def user_modules():
     """Set of module keys the current user may access (admins => all)."""
     return set(user_module_levels().keys())
 
 
 def can_access_module(key):
-    return is_admin() or key in user_module_levels()
-
-
-def module_level(key):
-    """The current user's level for a module: 'edit' / 'view' / None."""
-    return user_module_levels().get(key)
+    return is_admin() or module_level(key) is not None
 
 
 def can_write_module(key):
@@ -155,6 +241,17 @@ def enforce_read_only():
     return redirect(request.referrer or url_for('main.dashboard'))
 
 
+def _deny_access(view_only=False):
+    """Standard block response for the access gates."""
+    if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+        abort(403)
+    if view_only:
+        flash('You have view-only access to that section.', 'error')
+    else:
+        flash('You do not have access to that section.', 'error')
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+
 def enforce_write_level():
     """before_request gate: block writes to a module the user can only view."""
     if not session.get('logged_in') or request.method in _SAFE_METHODS:
@@ -164,14 +261,29 @@ def enforce_write_level():
     endpoint = request.endpoint or ''
     if endpoint in _ALWAYS_ALLOWED_ENDPOINTS or endpoint in _READONLY_WRITE_OK:
         return None
+    if subsection_for_endpoint(endpoint):
+        return None   # handled by the finer sub-section gate
     module = BLUEPRINT_MODULE.get(endpoint.split('.')[0])
     if not module:
         return None
     if module_level(module) != 'edit':
-        if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
-            abort(403)
-        flash('You have view-only access to that section.', 'error')
-        return redirect(request.referrer or url_for('main.dashboard'))
+        return _deny_access(view_only=True)
+    return None
+
+
+def enforce_subsection_access():
+    """before_request gate: per-sub-section access/write for granular users."""
+    if not session.get('logged_in') or is_admin():
+        return None
+    res = subsection_for_endpoint(request.endpoint)
+    if not res:
+        return None
+    module, sub = res
+    lvl = subsection_level(module, sub)
+    if lvl is None:
+        return _deny_access()                              # no access to this part
+    if request.method not in _SAFE_METHODS and lvl != 'edit':
+        return _deny_access(view_only=True)                # view-only part
     return None
 
 

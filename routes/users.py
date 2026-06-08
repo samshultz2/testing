@@ -51,12 +51,17 @@ def _clamp_management_fields(user, role):
 
 
 def _read_perms(form, prefix='perm_'):
-    """Build {module_key: 'view'|'edit'} from per-module selects on a form."""
+    """Build {module_key|module.sub: 'view'|'edit'} from per-module selects."""
+    from utils.access_control import MODULE_SUBSECTIONS
     perms = {}
     for key in MODULES:
         lvl = form.get(f'{prefix}{key}')
         if lvl in ('view', 'edit'):
             perms[key] = lvl
+        for sub in MODULE_SUBSECTIONS.get(key, {}):
+            slvl = form.get(f'{prefix}{key}.{sub}')
+            if slvl in ('view', 'edit'):
+                perms[f'{key}.{sub}'] = slvl
     # Legacy checkbox fallback (older form posts a 'modules' list = full access).
     if not perms:
         for key in form.getlist('modules'):
@@ -187,7 +192,9 @@ def add_user():
     
     from models import Branch
     from utils.role_presets import presets_for_form
+    from utils.access_control import MODULE_SUBSECTIONS
     return render_template('users/add.html', modules=MODULES,
+                           subsections=MODULE_SUBSECTIONS,
                            branches=Branch.query.order_by(Branch.name).all(),
                            presets=presets_for_form())
 
@@ -278,7 +285,9 @@ def edit_user(user_id):
     
     from models import Branch
     from utils.role_presets import presets_for_form
+    from utils.access_control import MODULE_SUBSECTIONS
     return render_template('users/edit.html', user=user, modules=MODULES,
+                           subsections=MODULE_SUBSECTIONS,
                            branches=Branch.query.order_by(Branch.name).all(),
                            presets=presets_for_form())
 
