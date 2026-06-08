@@ -625,6 +625,25 @@ def broadsheet():
     )
 
 
+@subjects_bp.route('/broadsheet/compute', methods=['POST'])
+@login_required
+def compute_summaries():
+    """Compute & persist term results + class/arm positions for a class."""
+    term_id = request.form.get('term_id', type=int)
+    assignment_id = request.form.get('assignment_id', type=int)
+    asg = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    if not (term_id and asg):
+        flash('Select a term and class first.', 'error')
+        return redirect(url_for('subjects.broadsheet'))
+    from utils.report_card import compute_term_summaries
+    from utils.audit import log_action
+    count = compute_term_summaries(term_id, asg.class_id)
+    log_action('results.compute_summaries',
+               detail=f'term {term_id}, class {asg.class_id}: {count} student(s)')
+    flash(f'Computed results and positions for {count} student(s).', 'success')
+    return redirect(url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))
+
+
 # ============================================================================
 # STUDENT REPORT CARD
 # ============================================================================

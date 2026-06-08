@@ -34,6 +34,12 @@
     <div class="card-header">
         <h3>{{ selected_assignment.display_name }}</h3>
         <div class="page-header-actions">
+            <form method="POST" action="{{ url_for('subjects.compute_summaries') }}" style="display:inline"
+                  onsubmit="return confirm('Compute and save term results and class positions for this class? This updates each student\'s report card.');">
+                <input type="hidden" name="term_id" value="{{ term_id }}">
+                <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-ranking-star"></i> Compute results &amp; positions</button>
+            </form>
             <a href="{{ url_for('subjects.export_broadsheet', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-success btn-sm"><i class="fas fa-download"></i> Export</a>
             <span class="badge badge-info">{{ broadsheet_data|length }} Students</span>
         </div>
