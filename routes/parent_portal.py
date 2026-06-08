@@ -86,6 +86,25 @@ def home():
         pay_enabled=payments.is_configured())
 
 
+def _record_online_payment(student_id, term_id, amount, reference):
+    """Idempotently record a verified online payment. Returns the FeePayment."""
+    if not (student_id and term_id and reference):
+        return None
+    existing = FeePayment.query.filter_by(reference=reference).first()
+    if existing:
+        return existing
+    student = Student.query.get(student_id)
+    if not student:
+        return None
+    pay = FeePayment(
+        student_id=student.id, term_id=term_id, branch_id=student.branch_id,
+        amount=amount, method='Online', reference=reference,
+        receipt_no=next_receipt_no(), received_by='Online (Paystack)')
+    db.session.add(pay)
+    db.session.commit()
+    return pay
+
+
 @parent_bp.route('/pay', methods=['POST'])
 @parent_required
 def pay():
@@ -110,7 +129,8 @@ def pay():
     res = payments.initialize(
         email=request.form.get('email') or '',
         amount_naira=amount, reference=reference,
-        callback_url=url_for('parent.pay_callback', _external=True))
+        callback_url=url_for('parent.pay_callback', _external=True),
+        metadata={'student_id': student.id, 'term_id': term_id})
     if res.get('ok'):
         return redirect(res['authorization_url'])
     flash(res.get('error', 'Could not start the payment.'), 'error')
@@ -127,7 +147,6 @@ def pay_callback():
         flash('Payment could not be matched. If you were charged, contact the school.', 'error')
         return redirect(url_for('parent.home'))
 
-    # Idempotency: never record the same reference twice.
     if FeePayment.query.filter_by(reference=reference).first():
         session.pop('pay_ref', None)
         flash('Payment already recorded. Thank you.', 'success')
@@ -138,13 +157,40 @@ def pay_callback():
         flash(res.get('error') or 'Payment was not completed.', 'error')
         return redirect(url_for('parent.home', term_id=pending.get('term_id')))
 
-    student = Student.query.get(pending['student_id'])
     amount = res.get('amount_naira') or pending['amount']
-    db.session.add(FeePayment(
-        student_id=student.id, term_id=pending['term_id'], branch_id=student.branch_id,
-        amount=amount, method='Online', reference=reference,
-        receipt_no=next_receipt_no(), received_by='Online (Paystack)'))
-    db.session.commit()
+    _record_online_payment(pending['student_id'], pending['term_id'], amount, reference)
     session.pop('pay_ref', None)
     flash(f'Payment of ₦{amount:,.0f} received. Thank you!', 'success')
     return redirect(url_for('parent.home', term_id=pending['term_id']))
+
+
+@parent_bp.route('/pay/webhook', methods=['POST'])
+def pay_webhook():
+    """Paystack server-to-server webhook — the reliable record path (the browser
+    redirect callback can be dropped). Verifies the HMAC signature, then records
+    a successful charge from its metadata (idempotent by reference)."""
+    import hmac
+    import hashlib
+    from config import Config
+    secret = (Config.PAYSTACK_SECRET_KEY or '').encode()
+    signature = request.headers.get('x-paystack-signature', '')
+    body = request.get_data()
+    if not secret or not signature:
+        return ('', 400)
+    expected = hmac.new(secret, body, hashlib.sha512).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        return ('', 400)
+
+    event = request.get_json(silent=True) or {}
+    if event.get('event') == 'charge.success':
+        data = event.get('data') or {}
+        meta = data.get('metadata') or {}
+        try:
+            student_id = int(meta.get('student_id'))
+            term_id = int(meta.get('term_id'))
+        except (TypeError, ValueError):
+            student_id = term_id = None
+        amount = (data.get('amount', 0) or 0) / 100.0
+        if data.get('status') == 'success':
+            _record_online_payment(student_id, term_id, amount, data.get('reference'))
+    return ('', 200)

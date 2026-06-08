@@ -15,6 +15,8 @@ from flask import session, request, abort, g
 
 _SESSION_KEY = '_csrf_token'
 _SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS', 'TRACE'}
+# Endpoints called by external services (no session / CSRF token possible).
+_EXEMPT_ENDPOINTS = {'parent.pay_webhook'}
 
 
 def generate_csrf_token():
@@ -60,7 +62,7 @@ def init_csrf(app):
     def _csrf_before_request():
         if request.method in _SAFE_METHODS:
             return
-        if getattr(g, '_csrf_exempt', False):
+        if request.endpoint in _EXEMPT_ENDPOINTS or getattr(g, '_csrf_exempt', False):
             return
         if not validate_csrf():
             abort(400, description='Invalid or missing CSRF token. Please reload the page and try again.')

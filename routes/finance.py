@@ -616,9 +616,38 @@ def statement(student_id):
                 .order_by(FeePayment.payment_date).all()) if term_id else []
     discounts = (FeeDiscount.query.filter_by(student_id=student_id, term_id=term_id)
                  .order_by(FeeDiscount.created_at).all()) if term_id else []
+    from utils import payments as pay_gw
     return render_template('finance/statement.html',
         student=student, terms=terms, term_id=term_id, bill=bill,
-        payments=payments, discounts=discounts)
+        payments=payments, discounts=discounts,
+        pay_enabled=pay_gw.is_configured(), paylink=request.args.get('paylink'))
+
+
+@finance_bp.route('/students/<int:student_id>/payment-link', methods=['POST'])
+@login_required
+def payment_link(student_id):
+    """Staff: generate a Paystack link to send to a parent (recorded via webhook)."""
+    from utils import payments as pay_gw
+    student = Student.query.get_or_404(student_id)
+    term_id = request.form.get('term_id', type=int) or _active_term_id()
+    if not pay_gw.is_configured():
+        flash('Online payment is not configured (set Paystack keys).', 'error')
+        return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+    bill = student_bill(student_id, term_id) if term_id else None
+    amount = request.form.get('amount', type=float) or (bill['balance'] if bill else 0)
+    if not term_id or amount <= 0:
+        flash('No outstanding balance to collect.', 'info')
+        return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+    res = pay_gw.initialize(
+        email=request.form.get('email') or '', amount_naira=amount,
+        reference=pay_gw.new_reference('STF'),
+        callback_url=url_for('parent.pay_callback', _external=True),
+        metadata={'student_id': student_id, 'term_id': term_id})
+    if res.get('ok'):
+        return redirect(url_for('finance.statement', student_id=student_id,
+                                term_id=term_id, paylink=res['authorization_url']))
+    flash(res.get('error', 'Could not create payment link.'), 'error')
+    return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
 
 
 @finance_bp.route('/discounts/add', methods=['POST'])

@@ -26,19 +26,23 @@ def _headers():
             'Content-Type': 'application/json'}
 
 
-def initialize(email, amount_naira, reference, callback_url):
+def initialize(email, amount_naira, reference, callback_url, metadata=None):
     """Start a transaction. Returns {'ok': True, 'authorization_url': ...} or
     {'ok': False, 'error': ...}. Never raises."""
     if not is_configured():
         return {'ok': False, 'error': 'Online payment is not configured.'}
     try:
         import requests
-        resp = requests.post(f'{_API}/transaction/initialize', headers=_headers(), json={
+        payload = {
             'email': email or 'parent@example.com',
             'amount': int(round(amount_naira * 100)),   # kobo
             'reference': reference,
             'callback_url': callback_url,
-        }, timeout=20)
+        }
+        if metadata:
+            payload['metadata'] = metadata
+        resp = requests.post(f'{_API}/transaction/initialize', headers=_headers(),
+                             json=payload, timeout=20)
         data = resp.json()
         if data.get('status') and data.get('data', {}).get('authorization_url'):
             return {'ok': True, 'authorization_url': data['data']['authorization_url'],

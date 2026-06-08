@@ -56,3 +56,35 @@ def test_verified_callback_records_payment_once(app, monkeypatch):
     c.get(f'/parent/pay/callback?reference={ref}', follow_redirects=False)
     with app.app_context():
         assert FeePayment.query.filter_by(reference=ref).count() == 1
+
+
+def test_webhook_records_with_valid_signature(app, monkeypatch):
+    import hmac, hashlib, json
+    from config import Config
+    monkeypatch.setattr(Config, 'PAYSTACK_SECRET_KEY', 'sk_test_secret', raising=False)
+    sid, tid = _student_and_term(app)
+    ref = 'PSK-webhook-1'
+    payload = {'event': 'charge.success',
+               'data': {'status': 'success', 'reference': ref, 'amount': 750000,
+                        'metadata': {'student_id': sid, 'term_id': tid}}}
+    body = json.dumps(payload).encode()
+    sig = hmac.new(b'sk_test_secret', body, hashlib.sha512).hexdigest()
+    c = app.test_client()
+    # bad signature rejected
+    bad = c.post('/parent/pay/webhook', data=body, headers={'x-paystack-signature': 'deadbeef',
+                                                            'Content-Type': 'application/json'})
+    assert bad.status_code == 400
+    # good signature records once
+    ok = c.post('/parent/pay/webhook', data=body, headers={'x-paystack-signature': sig,
+                                                           'Content-Type': 'application/json'})
+    assert ok.status_code == 200
+    with app.app_context():
+        from models import FeePayment
+        rows = FeePayment.query.filter_by(reference=ref).all()
+        assert len(rows) == 1 and rows[0].amount == 7500.0 and rows[0].method == 'Online'
+    # replay is idempotent
+    c.post('/parent/pay/webhook', data=body, headers={'x-paystack-signature': sig,
+                                                      'Content-Type': 'application/json'})
+    with app.app_context():
+        from models import FeePayment
+        assert FeePayment.query.filter_by(reference=ref).count() == 1

@@ -6,9 +6,28 @@
     <h1>Fee Statement</h1>
     <div class="page-header-actions">
         <a href="{{ url_for('finance.record_payment', student_id=student.id, term_id=term_id) }}" class="btn btn-primary"><i class="fas fa-cash-register"></i> Record Payment</a>
+        {% if pay_enabled and bill and bill.balance > 0.005 %}
+        <form method="POST" action="{{ url_for('finance.payment_link', student_id=student.id) }}" style="display:inline">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="term_id" value="{{ term_id }}">
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-link"></i> Online Payment Link</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 {% include 'finance/_tabs.html' %}
+{% if paylink %}
+<div class="card mb-3"><div class="card-body">
+    <strong><i class="fas fa-link"></i> Share this secure payment link with the parent:</strong>
+    <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap;">
+        <input id="paylink" class="form-control" value="{{ paylink }}" readonly style="flex:1;min-width:240px;">
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('paylink').value);this.innerHTML='<i class=\'fas fa-check\'></i> Copied';">
+            <i class="fas fa-copy"></i> Copy</button>
+        <a class="btn btn-success" href="{{ paylink }}" target="_blank" rel="noopener"><i class="fas fa-up-right-from-square"></i> Open</a>
+    </div>
+    <p class="text-muted text-sm mt-2">The payment is recorded automatically once completed.</p>
+</div></div>
+{% endif %}
 
 <div class="card mb-3">
     <div class="card-body d-flex justify-between align-center flex-wrap gap-2">
