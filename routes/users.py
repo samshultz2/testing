@@ -12,20 +12,21 @@ users_bp = Blueprint('users', __name__, url_prefix='/users')
 
 
 def admin_required(f):
-    """Decorator to require admin access"""
+    """User/permission management is restricted to CENTRAL admins.
+
+    A branch admin is full-featured within their branch but cannot manage
+    accounts or permissions (which would let them escalate / cross branches).
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Check if logged in
         if not session.get('logged_in'):
             flash('Please login to access this page.', 'error')
             return redirect(url_for('auth.login'))
-        
-        # Check role from session (works for both legacy and user-based login)
+        from utils.branch_scope import is_central
         role = session.get('role')
-        if role not in ('super_admin', 'admin'):
-            flash('Admin access required.', 'error')
+        if role not in ('super_admin', 'admin') or not is_central():
+            flash('User management is for central administrators only.', 'error')
             return redirect(url_for('main.dashboard'))
-        
         return f(*args, **kwargs)
     return decorated_function
 

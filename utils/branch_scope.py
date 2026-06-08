@@ -22,8 +22,14 @@ VIEW_KEY = 'view_branch_id'      # the branch a central user is currently viewin
 
 
 def is_central():
-    """True if the user sees across every branch."""
-    if session.get('role') in ('super_admin', 'admin'):
+    """True if the user sees across every branch.
+
+    Scope — not role — decides this. A super_admin is always central; everyone
+    else is central only if their scope is explicitly 'central'. This means an
+    *admin* assigned to a branch is full-featured but still locked to that
+    branch's data.
+    """
+    if session.get('role') == 'super_admin':
         return True
     return session.get(SCOPE_KEY) == 'central'
 

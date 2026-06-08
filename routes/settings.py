@@ -11,7 +11,7 @@ from models import (
     Student, AcademicSession, Term, User
 )
 from utils.helpers import login_required
-from utils.access_control import admin_required
+from utils.access_control import admin_required, central_admin_required
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 
@@ -35,7 +35,7 @@ def index():
 # ---------------------------------------------------------------------------
 
 @settings_bp.route('/branches')
-@admin_required
+@central_admin_required
 def branches():
     from models import Branch
     rows = Branch.query.order_by(Branch.is_default.desc(), Branch.name).all()
@@ -43,7 +43,7 @@ def branches():
 
 
 @settings_bp.route('/branches/add', methods=['POST'])
-@admin_required
+@central_admin_required
 def add_branch():
     from models import db, Branch
     name = (request.form.get('name') or '').strip()
@@ -66,7 +66,7 @@ def add_branch():
 
 
 @settings_bp.route('/branches/<int:branch_id>/edit', methods=['POST'])
-@admin_required
+@central_admin_required
 def edit_branch(branch_id):
     from models import db, Branch
     b = Branch.query.get_or_404(branch_id)

@@ -884,8 +884,12 @@ class User(db.Model):
 
     @property
     def is_central(self):
-        """A central user sees across all branches (not limited to branch_id)."""
-        return self.scope == 'central' or self.role in ('super_admin', 'admin')
+        """A central user sees across all branches (not limited to branch_id).
+
+        Scope — not role — decides this, so an admin assigned to a branch stays
+        scoped to that branch. Super admins are always central.
+        """
+        return self.role == 'super_admin' or self.scope == 'central'
 
     def set_password(self, password):
         """Hash and set password"""

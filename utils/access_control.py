@@ -164,78 +164,82 @@ def get_teacher_profile():
 def get_accessible_class_ids():
     """
     Get list of class_arm_assignment_ids the current user can access.
-    Admins can access all classes, teachers only their assigned classes.
+
+    Teachers: only their assigned classes. Admins / non-teacher staff: every
+    class in the branch(es) currently in view (so a branch admin is limited to
+    their own branch, a central user sees all).
     """
-    if is_admin():
-        # Admins can access all classes in active term
-        active_term = Term.query.filter_by(is_active=True).first()
-        if active_term:
-            return [a.id for a in ClassArmAssignment.query.filter_by(term_id=active_term.id).all()]
+    active_term = Term.query.filter_by(is_active=True).first()
+    if not active_term:
         return []
-    
+
     teacher = get_teacher_profile()
-    if teacher:
+    if teacher and not is_admin():
         accessible = set()
-        
         # Form teacher classes
         for assignment in teacher.class_assignments.filter_by(is_active=True).all():
             accessible.add(assignment.class_arm_assignment_id)
-        
         # Subject teaching classes
         for assignment in teacher.subject_assignments.filter_by(is_active=True).all():
             accessible.add(assignment.class_arm_assignment_id)
-        
         return list(accessible)
-    
-    return []
+
+    # Admin / non-teacher staff: all classes in the branch(es) in view.
+    from utils.branch_scope import scope_query
+    q = scope_query(ClassArmAssignment.query.filter_by(term_id=active_term.id),
+                    ClassArmAssignment)
+    return [a.id for a in q.all()]
 
 
 def can_access_class(class_arm_assignment_id):
-    """Check if current user can access a specific class"""
-    if is_admin():
-        return True
-
+    """Check if current user can access a specific class (branch/section aware)."""
     if class_arm_assignment_id is None:
         return True  # No class selected yet
 
-    teacher = get_teacher_profile()
-    if teacher:
-        return teacher.can_access_class(class_arm_assignment_id)
-
-    # Non-teacher branch/central staff (principal, HOD, exams officer): allow a
-    # class within their branch and section scope.
     asg = ClassArmAssignment.query.get(class_arm_assignment_id)
     if not asg:
         return False
     from utils.branch_scope import can_access_branch
     from utils.org_scope import allowed_sections
+    # Branch gate applies to everyone except central users (can_access_branch
+    # returns True for them) — so even a branch *admin* is held to their branch.
     if not can_access_branch(asg.branch_id):
         return False
     sections = allowed_sections()
     if sections and (not asg.school_class or asg.school_class.section not in sections):
         return False
+    # Teachers are further limited to their own classes; admins/staff are not.
+    teacher = get_teacher_profile()
+    if teacher and not is_admin():
+        return teacher.can_access_class(class_arm_assignment_id)
     return True
 
 
 def can_mark_attendance(class_arm_assignment_id=None):
     """Check if current user can mark attendance for a class"""
+    # Branch/section gate first (applies to admins too).
+    if class_arm_assignment_id is not None and not can_access_class(class_arm_assignment_id):
+        return False
     if is_admin():
         return True
-    
+
     teacher = get_teacher_profile()
     if teacher and teacher.can_mark_attendance:
         if class_arm_assignment_id is None:
             return True
         return teacher.can_access_class(class_arm_assignment_id)
-    
+
     return False
 
 
 def can_enter_results(class_arm_assignment_id=None, subject_id=None):
     """Check if current user can enter results"""
+    # Branch/section gate first (applies to admins too).
+    if class_arm_assignment_id is not None and not can_access_class(class_arm_assignment_id):
+        return False
     if is_admin():
         return True
-    
+
     teacher = get_teacher_profile()
     if teacher and teacher.can_enter_results:
         if class_arm_assignment_id is None:
@@ -248,7 +252,7 @@ def can_enter_results(class_arm_assignment_id=None, subject_id=None):
                 is_active=True
             ).first() is not None
         return teacher.can_access_class(class_arm_assignment_id)
-    
+
     return False
 
 
@@ -324,7 +328,26 @@ def admin_required(f):
         if not is_admin():
             flash('Admin access required.', 'error')
             return redirect(url_for('main.dashboard'))
-        
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def central_admin_required(f):
+    """Require a CENTRAL admin (manages users, branches, system settings).
+
+    A branch-scoped admin is full-featured within their branch but must not be
+    able to manage accounts/permissions or cross-branch configuration.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('auth.login'))
+        from utils.branch_scope import is_central
+        if not (is_admin() and is_central()):
+            flash('That area is for central administrators only.', 'error')
+            return redirect(url_for('main.dashboard'))
         return f(*args, **kwargs)
     return decorated_function
 

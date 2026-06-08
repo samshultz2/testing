@@ -33,7 +33,7 @@ def test_branch_user_audience_excludes_other_branches(app):
 def test_central_user_audience_includes_all(app):
     a_id, b_id = _two_branch_students(app)
     with app.test_request_context('/'):
-        session['role'] = 'admin'   # central
+        session['role'] = 'admin'; session['scope'] = 'central'   # central admin
         targets = comms.resolve_audience('all', None)
         ids = {t['student'].student_id for t in targets}
         assert {'CMA1', 'CMB1'} <= ids
