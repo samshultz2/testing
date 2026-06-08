@@ -645,6 +645,7 @@ def add_student():
                     db.session.add(contact)
 
             db.session.commit()
+            log_action('student.create', target=student)
             flash(FlashMessages.STUDENT_CREATED, 'success')
             return redirect(url_for('main.view_student', student_id=student.id))
 
@@ -753,6 +754,7 @@ def edit_student(student_id):
                     db.session.add(contact)
 
             db.session.commit()
+            log_action('student.update', target=student)
             flash(FlashMessages.STUDENT_UPDATED, 'success')
             return redirect(_safe_next(
                 request.form.get('return_to'),
@@ -1012,7 +1014,8 @@ def audit_log():
         like = f'%{q}%'
         query = query.filter(db.or_(AuditLog.action.ilike(like),
                                     AuditLog.detail.ilike(like),
-                                    AuditLog.user.ilike(like)))
+                                    AuditLog.user.ilike(like),
+                                    AuditLog.target_label.ilike(like)))
     if action:
         query = query.filter(AuditLog.action == action)
     if user:

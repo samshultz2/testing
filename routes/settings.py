@@ -61,6 +61,8 @@ def add_branch():
         phone=(request.form.get('phone') or '').strip() or None,
         is_default=first))   # the very first branch is the default
     db.session.commit()
+    from utils.audit import log_action
+    log_action('branch.create', target_type='branch', target_label=name)
     flash(f'Branch "{name}" added.', 'success')
     return redirect(url_for('settings.branches'))
 
@@ -80,6 +82,8 @@ def edit_branch(branch_id):
         b.is_default = True
         b.is_active = True
     db.session.commit()
+    from utils.audit import log_action
+    log_action('branch.update', target=b)
     flash('Branch updated.', 'success')
     return redirect(url_for('settings.branches'))
 

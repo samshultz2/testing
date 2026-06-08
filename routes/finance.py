@@ -455,6 +455,10 @@ def record_payment():
         payment.branch_id = stu.branch_id if stu else None
         db.session.add(payment)
         db.session.commit()
+        from utils.audit import log_action
+        log_action('finance.payment',
+                   detail=f'{payment.amount:g} from {stu.full_name if stu else "—"}',
+                   target=payment)
         flash(f'Payment recorded — receipt {payment.receipt_no}.', 'success')
         return redirect(url_for('finance.receipt', payment_id=payment.id))
 
@@ -750,6 +754,9 @@ def add_expense():
         notes=(request.form.get('notes') or '').strip() or None,
     ))
     db.session.commit()
+    from utils.audit import log_action
+    log_action('finance.expense', detail=f'{amount:g} — {description}',
+               target_type='expense', target_label=description)
     flash('Expense recorded.', 'success')
     return redirect(url_for('finance.expenses_list', term_id=term_id))
 

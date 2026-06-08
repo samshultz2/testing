@@ -121,6 +121,8 @@ def add_staff():
         s.branch_id = branch_for_new(request.form.get('branch_id', type=int))
         db.session.add(s)
         db.session.commit()
+        from utils.audit import log_action
+        log_action('hr.staff_add', target=s)
         flash(f'Staff member {s.full_name} added ({s.staff_id}).', 'success')
         return redirect(url_for('hr.staff_detail', staff_id=s.id))
     return render_template('hr/staff_form.html', staff=None,

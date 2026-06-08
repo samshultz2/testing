@@ -26,6 +26,7 @@
                 <th style="text-align:left;padding:.5rem;">When</th>
                 <th style="text-align:left;padding:.5rem;">User</th>
                 <th style="text-align:left;padding:.5rem;">Action</th>
+                <th style="text-align:left;padding:.5rem;">On</th>
                 <th style="text-align:left;padding:.5rem;">Detail</th>
                 <th style="text-align:left;padding:.5rem;">IP</th>
             </tr></thead>
@@ -35,6 +36,7 @@
                 <td style="padding:.5rem;white-space:nowrap;">{{ l.created_at.strftime('%d %b %Y %H:%M') }}</td>
                 <td style="padding:.5rem;">{{ l.user }}{% if l.role %} <span class="text-muted">({{ l.role }})</span>{% endif %}</td>
                 <td style="padding:.5rem;"><span class="badge badge-primary">{{ l.action }}</span></td>
+                <td style="padding:.5rem;">{% if l.target_label %}<strong>{{ l.target_label }}</strong>{% if l.target_type %} <span class="text-muted text-sm">({{ l.target_type }}{% if l.target_id %} #{{ l.target_id }}{% endif %})</span>{% endif %}{% else %}—{% endif %}</td>
                 <td style="padding:.5rem;">{{ l.detail or '' }}</td>
                 <td style="padding:.5rem;color:var(--text-muted);">{{ l.ip_address or '' }}</td>
             </tr>

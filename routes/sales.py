@@ -154,6 +154,9 @@ def new_sale():
                                     unit_price=p.unit_price, line_total=line_total))
             p.stock_qty = (p.stock_qty or 0) - qty      # decrement stock
         db.session.commit()
+        from utils.audit import log_action
+        log_action('sales.sale', detail=f'{sale.total:g} ({len(lines)} item(s))',
+                   target=sale)
         flash(f'Sale recorded — receipt {sale.receipt_no}.', 'success')
         return redirect(url_for('sales.receipt', sale_id=sale.id))
 

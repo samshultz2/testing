@@ -1091,6 +1091,11 @@ class AuditLog(db.Model):
     user = db.Column(db.String(100))
     role = db.Column(db.String(30))
     action = db.Column(db.String(80), nullable=False)
+    # What the action was performed on (for "who did what to what").
+    target_type = db.Column(db.String(40))     # e.g. 'student', 'payment'
+    target_id = db.Column(db.Integer)
+    target_label = db.Column(db.String(150))   # human label, e.g. the name
+    branch_id = db.Column(db.Integer)          # branch context at the time
     detail = db.Column(db.Text)
     ip_address = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=local_now)
@@ -1226,6 +1231,16 @@ def _ensure_student_exam_columns():
                 statements.append(f'ALTER TABLE {tbl} ADD COLUMN image_url VARCHAR(300)')
         except Exception:
             pass
+
+    # audit_logs target tracking (who did what, to what).
+    try:
+        al_cols = {c['name'] for c in inspect(db.engine).get_columns('audit_logs')}
+        for col, ddl in (('target_type', 'VARCHAR(40)'), ('target_id', 'INTEGER'),
+                         ('target_label', 'VARCHAR(150)'), ('branch_id', 'INTEGER')):
+            if col not in al_cols:
+                statements.append(f'ALTER TABLE audit_logs ADD COLUMN {col} {ddl}')
+    except Exception:
+        pass
 
     # cbt_login_events.device_model (device name, e.g. Redmi 13C).
     try:

@@ -175,6 +175,8 @@ def add_exam():
         e.branch_id = branch_for_new()
         db.session.add(e)
         db.session.commit()
+        from utils.audit import log_action
+        log_action('cbt.exam_create', target=e)
         flash('Exam created — now add questions.', 'success')
         return redirect(url_for('cbt.exam_detail', exam_id=e.id))
     active = _active_term()
@@ -210,6 +212,8 @@ def toggle_publish(exam_id):
         return redirect(url_for('cbt.exam_detail', exam_id=e.id))
     e.is_published = not e.is_published
     db.session.commit()
+    from utils.audit import log_action
+    log_action('cbt.exam_publish' if e.is_published else 'cbt.exam_unpublish', target=e)
     flash('Exam published.' if e.is_published else 'Exam unpublished.', 'success')
     return redirect(url_for('cbt.exam_detail', exam_id=e.id))
 
