@@ -25,57 +25,67 @@ ROLE_PRESETS = {
     # ---- Central (cross-branch) ----
     'director_of_studies': {
         'label': 'Director of Studies',
+        'rank': 100, 'manage_scope': 'central',
         'role': 'admin', 'scope': 'central', 'modules': [],
         'description': 'Unfiltered access across every branch.',
     },
     'exams_standards': {
         'label': 'Exams & Standards',
+        'rank': 80, 'manage_scope': 'none',
         'role': 'staff', 'scope': 'central', 'modules': _EXAMS,
         'description': 'Academic & exam oversight across all branches.',
     },
     'it_department': {
         'label': 'IT Department',
+        'rank': 100, 'manage_scope': 'central',
         'role': 'admin', 'scope': 'central', 'modules': [],
         'description': 'System administration (users, settings) across branches.',
     },
     # ---- Branch ----
     'principal': {
         'label': 'Principal (Secondary)',
+        'rank': 60, 'manage_scope': 'branch',
         'role': 'staff', 'scope': 'branch', 'modules': _ACADEMIC + ['communication', 'hr'],
         'section': 'secondary',
         'description': 'Heads JSS + SSS for one branch.',
     },
     'headmaster': {
         'label': 'Headmaster / Headmistress (Nursery & Primary)',
+        'rank': 60, 'manage_scope': 'branch',
         'role': 'staff', 'scope': 'branch', 'modules': _ACADEMIC + ['communication', 'hr'],
         'section': 'primary',
         'description': 'Heads Nursery + Primary for one branch.',
     },
     'hod_arts': {
         'label': 'HOD — Arts & Commercial',
+        'rank': 40, 'manage_scope': 'branch',
         'role': 'staff', 'scope': 'branch', 'modules': _HOD,
         'stream': 'arts',
         'description': 'Heads Arts/Commercial subjects for one branch.',
     },
     'hod_sciences': {
         'label': 'HOD — Sciences',
+        'rank': 40, 'manage_scope': 'branch',
         'role': 'staff', 'scope': 'branch', 'modules': _HOD,
         'stream': 'science',
         'description': 'Heads Science subjects for one branch.',
     },
     'headteacher': {
         'label': 'Headteacher',
+        'rank': 30, 'manage_scope': 'none',
         'role': 'staff', 'scope': 'branch',
         'modules': ['students', 'attendance', 'results', 'cbt', 'timetable', 'events'],
         'description': 'Section head / coordinator for one branch.',
     },
     'teacher': {
         'label': 'Teacher',
+        'rank': 10, 'manage_scope': 'none',
         'role': 'teacher', 'scope': 'branch', 'modules': [],
         'description': 'Class/subject teacher (limited to assigned classes).',
     },
     'bursar': {
         'label': 'Bursar',
+        'rank': 20, 'manage_scope': 'none',
         'role': 'staff', 'scope': 'branch',
         'modules': ['finance', 'sales', 'communication'],
         'description': 'Fees, expenses and sales for one branch.',
@@ -87,5 +97,6 @@ def presets_for_form():
     """Compact dict the user form embeds as JSON to pre-fill fields."""
     return {k: {'role': p['role'], 'scope': p['scope'], 'modules': p['modules'],
                 'section': p.get('section', ''), 'stream': p.get('stream', ''),
+                'rank': p.get('rank', 0), 'manage_scope': p.get('manage_scope', 'none'),
                 'label': p['label'], 'description': p.get('description', '')}
             for k, p in ROLE_PRESETS.items()}

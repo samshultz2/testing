@@ -73,6 +73,16 @@
 <option value="science" {% if user.stream == 'science' %}selected{% endif %}>Sciences</option>
 </select></div>
 </div>
+<div class="form-row">
+<div class="form-group"><label class="form-label">Can manage users</label>
+<select name="manage_scope" id="manageScopeSelect" class="form-control">
+<option value="none" {% if user.manage_scope == 'none' or not user.manage_scope %}selected{% endif %}>No</option>
+<option value="branch" {% if user.manage_scope == 'branch' %}selected{% endif %}>Yes — their branch (lower ranks)</option>
+<option value="central" {% if user.manage_scope == 'central' %}selected{% endif %}>Yes — all branches</option>
+</select></div>
+<div class="form-group"><label class="form-label">Rank <span class="text-muted">(authority level)</span></label>
+<input type="number" name="rank" id="rankInput" class="form-control" value="{{ user.rank or 0 }}" min="0" max="100"></div>
+</div>
 <div class="form-group"><label class="toggle-label"><input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}> <span>Account Active</span></label></div>
 </div>
 </div>
@@ -136,6 +146,8 @@ function applyPreset(){
     document.getElementById('scopeSelect').value = p.scope;
     document.getElementById('sectionSelect').value = p.section || '';
     document.getElementById('streamSelect').value = p.stream || '';
+    document.getElementById('manageScopeSelect').value = p.manage_scope || 'none';
+    document.getElementById('rankInput').value = p.rank || 0;
     var want = {}; (p.modules||[]).forEach(function(m){ want[m] = 'edit'; });
     document.querySelectorAll('.perm-select').forEach(function(sel){ sel.value = want[sel.dataset.key] || ''; });
     toggleTeacherOptions(); toggleScope();

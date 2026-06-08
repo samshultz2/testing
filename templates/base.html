@@ -430,6 +430,14 @@
                     </li>
                     
                     {% endif %}
+                    {% if can_manage_users and session.get('role') not in ('super_admin', 'admin') %}
+                    <li class="nav-section">Administration</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('users.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('users.') %}active{% endif %}">
+                            <i class="fas fa-users-cog"></i><span>Manage Users</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if session.get('role') in ('super_admin', 'admin') %}
                     <li class="nav-section">Tools</li>
                     <li class="nav-item has-submenu">
@@ -455,12 +463,14 @@
                     </li>
 
                     <li class="nav-section">Settings</li>
-                    {% if branch_ctx.is_central %}
+                    {% if can_manage_users %}
                     <li class="nav-item">
                         <a href="{{ url_for('users.index') }}" class="nav-link">
                             <i class="fas fa-users-cog"></i><span>Users</span>
                         </a>
                     </li>
+                    {% endif %}
+                    {% if branch_ctx.is_central %}
                     <li class="nav-item">
                         <a href="{{ url_for('settings.branches') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') and 'branch' in request.endpoint %}active{% endif %}">
                             <i class="fas fa-code-branch"></i><span>Branches</span>

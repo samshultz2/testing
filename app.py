@@ -176,6 +176,13 @@ def create_app(config_class=Config):
             except Exception:
                 return True
 
+        def can_manage_users():
+            try:
+                from utils.access_control import can_manage_users as _cmu
+                return _cmu()
+            except Exception:
+                return False
+
         def branch_context():
             """Header branch switcher state."""
             try:
@@ -204,6 +211,7 @@ def create_app(config_class=Config):
             'user_permissions': get_user_permissions(),
             'can_access_module': can_access_module,
             'can_write_module': can_write_module,
+            'can_manage_users': can_manage_users(),
             'branch_ctx': branch_context(),
         }
     

@@ -2,33 +2,52 @@
 User Management Routes
 Handles user CRUD, role management, and teacher assignments
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from functools import wraps
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, abort
 from models import db, ClassArmAssignment, Term, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
-from utils.access_control import MODULES
+from utils.access_control import (MODULES, manage_users_required, can_manage,
+                                  current_manage_scope, current_rank, get_current_user)
 from utils.audit import log_action
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
+# Backwards-compatible alias: every users route requires manage capability;
+# per-target authority is checked with can_manage().
+admin_required = manage_users_required
 
-def admin_required(f):
-    """User/permission management is restricted to CENTRAL admins.
 
-    A branch admin is full-featured within their branch but cannot manage
-    accounts or permissions (which would let them escalate / cross branches).
+def _guard(target):
+    """403/redirect if the current user may not manage ``target``."""
+    if not can_manage(target):
+        flash('You are not allowed to manage that account.', 'error')
+        return redirect(url_for('users.index'))
+    return None
+
+
+def _clamp_management_fields(user, role):
+    """Apply branch/rank/manage-scope limits a branch manager cannot exceed.
+
+    Central managers may set anything. Branch managers can only create/edit
+    accounts in *their* branch, strictly below their own rank, and may not
+    grant central management.
     """
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not session.get('logged_in'):
-            flash('Please login to access this page.', 'error')
-            return redirect(url_for('auth.login'))
-        from utils.branch_scope import is_central
-        role = session.get('role')
-        if role not in ('super_admin', 'admin') or not is_central():
-            flash('User management is for central administrators only.', 'error')
-            return redirect(url_for('main.dashboard'))
-        return f(*args, **kwargs)
-    return decorated_function
+    scope = current_manage_scope()
+    if scope == 'central':
+        user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
+        user.branch_id = (None if user.scope == 'central'
+                          else request.form.get('branch_id', type=int))
+        user.rank = request.form.get('rank', type=int) or 0
+        user.manage_scope = request.form.get('manage_scope') or 'none'
+        if user.manage_scope not in ('none', 'branch', 'central'):
+            user.manage_scope = 'none'
+    else:   # branch manager
+        me = get_current_user()
+        user.scope = 'branch'
+        user.branch_id = me.branch_id if me else None
+        # strictly below the manager's rank
+        want = request.form.get('rank', type=int) or 0
+        user.rank = min(want, current_rank() - 1)
+        ms = request.form.get('manage_scope') or 'none'
+        user.manage_scope = ms if ms in ('none', 'branch') else 'none'
 
 
 def _read_perms(form, prefix='perm_'):
@@ -49,16 +68,17 @@ def _read_perms(form, prefix='perm_'):
 @users_bp.route('/')
 @admin_required
 def index():
-    """List all users"""
-    users = User.query.order_by(User.created_at.desc()).all()
+    """List the users the current manager may manage."""
+    users = [u for u in User.query.order_by(User.created_at.desc()).all()
+             if can_manage(u)]
     return render_template('users/index.html', users=users)
 
 
 @users_bp.route('/matrix', methods=['GET', 'POST'])
 @admin_required
 def matrix():
-    """Grid view of every non-admin user's module access, editable in one place."""
-    users = User.query.order_by(User.username).all()
+    """Grid view of module access for the users this manager may manage."""
+    users = [u for u in User.query.order_by(User.username).all() if can_manage(u)]
     editable = [u for u in users if u.role != 'admin']
 
     if request.method == 'POST':
@@ -132,12 +152,10 @@ def add_user():
             if role != 'admin':
                 user.set_permissions(_read_perms(request.form))
             user.view_only = request.form.get('view_only') == 'on'
-            # Branch scope: central users see all branches; branch users one.
-            user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
-            user.branch_id = (None if user.scope == 'central'
-                              else request.form.get('branch_id', type=int))
             user.section = request.form.get('section') or None
             user.stream = request.form.get('stream') or None
+            # Branch scope + delegated-management limits.
+            _clamp_management_fields(user, role)
             db.session.add(user)
             db.session.flush()  # Get user ID
 
@@ -179,6 +197,9 @@ def add_user():
 def view_user(user_id):
     """View user details"""
     user = User.query.get_or_404(user_id)
+    blocked = _guard(user)
+    if blocked:
+        return blocked
     return render_template('users/view.html', user=user, modules=MODULES)
 
 
@@ -187,7 +208,10 @@ def view_user(user_id):
 def edit_user(user_id):
     """Edit user"""
     user = User.query.get_or_404(user_id)
-    
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+
     if request.method == 'POST':
         # Snapshot access-related fields so we can audit any change.
         before = (user.role, dict(user.permission_map), bool(user.view_only),
@@ -205,13 +229,11 @@ def edit_user(user_id):
         else:
             user.set_permissions(_read_perms(request.form))
         user.view_only = request.form.get('view_only') == 'on'
-        # Branch scope.
-        user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
-        user.branch_id = (None if user.scope == 'central'
-                          else request.form.get('branch_id', type=int))
         user.section = request.form.get('section') or None
         user.stream = request.form.get('stream') or None
-        
+        # Branch scope + delegated-management limits.
+        _clamp_management_fields(user, user.role)
+
         # Update password if provided
         new_password = request.form.get('new_password', '')
         if new_password:
@@ -266,7 +288,10 @@ def edit_user(user_id):
 def delete_user(user_id):
     """Delete user"""
     user = User.query.get_or_404(user_id)
-    
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+
     # Prevent deleting self
     if user.id == session.get('user_id'):
         flash('You cannot delete your own account.', 'error')
@@ -295,7 +320,10 @@ def delete_user(user_id):
 def assign_class(user_id):
     """Assign teacher to a class as form teacher"""
     user = User.query.get_or_404(user_id)
-    
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+
     if not user.is_teacher or not user.teacher_profile:
         flash('User must be a teacher to assign classes.', 'error')
         return redirect(url_for('users.view_user', user_id=user_id))
@@ -352,7 +380,10 @@ def assign_class(user_id):
 def assign_subject(user_id):
     """Assign teacher to teach a subject in a class"""
     user = User.query.get_or_404(user_id)
-    
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+
     if not user.is_teacher or not user.teacher_profile:
         flash('User must be a teacher to assign subjects.', 'error')
         return redirect(url_for('users.view_user', user_id=user_id))
@@ -435,7 +466,10 @@ def remove_assignment(assignment_id):
 def toggle_status(user_id):
     """Toggle user active status"""
     user = User.query.get_or_404(user_id)
-    
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+
     if user.id == session.get('user_id'):
         flash('You cannot deactivate your own account.', 'error')
         return redirect(url_for('users.index'))

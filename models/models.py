@@ -874,6 +874,10 @@ class User(db.Model):
     # 'primary') and/or a subject stream ('arts'/'science') the user oversees.
     section = db.Column(db.String(20))
     stream = db.Column(db.String(20))
+    # Delegated user management: a manager can edit users below their rank.
+    # manage_scope: 'none' (can't), 'branch' (own branch, lower rank), 'central' (all).
+    rank = db.Column(db.Integer, default=0)
+    manage_scope = db.Column(db.String(10), default='none')
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -1189,6 +1193,10 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN view_only BOOLEAN DEFAULT 0')
         if 'permissions' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN permissions TEXT')
+        if 'rank' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN rank INTEGER DEFAULT 0')
+        if 'manage_scope' not in u_cols:
+            statements.append("ALTER TABLE users ADD COLUMN manage_scope VARCHAR(10) DEFAULT 'none'")
     except Exception:
         pass
 
@@ -1316,10 +1324,10 @@ def _seed_branches():
             conn.execute(text(
                 'UPDATE fee_payments SET branch_id = :bid WHERE branch_id IS NULL'),
                 {'bid': bid})
-            # Existing admins keep cross-branch visibility.
+            # Existing admins keep cross-branch visibility + can manage users.
             conn.execute(text(
-                "UPDATE users SET scope = 'central' "
-                "WHERE role IN ('super_admin', 'admin')"))
+                "UPDATE users SET scope = 'central', manage_scope = 'central', "
+                "rank = 100 WHERE role IN ('super_admin', 'admin')"))
         # Classify any unsectioned classes (junior/senior/primary/nursery).
         for c in SchoolClass.query.filter(SchoolClass.section.is_(None)).all():
             c.section = _classify_section(c)

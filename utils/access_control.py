@@ -352,6 +352,67 @@ def filter_class_ids_for_user(class_ids):
 
 
 # =============================================================================
+# DELEGATED USER MANAGEMENT (rank + branch hierarchy)
+# =============================================================================
+
+def current_manage_scope():
+    """'central' / 'branch' / 'none' — how widely the current user may manage."""
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return 'central'
+    user = get_current_user()
+    return (user.manage_scope or 'none') if user else 'none'
+
+
+def current_rank():
+    """Authority level of the current user (legacy/central admin = top)."""
+    user = get_current_user()
+    if user:
+        return user.rank or 0
+    return 9999   # legacy password admin
+
+
+def can_manage_users():
+    """True if the user may manage at least some other accounts."""
+    return current_manage_scope() in ('branch', 'central')
+
+
+def can_manage(target_user):
+    """May the current user edit ``target_user``'s account/permissions?
+
+    Never themselves. Central managers manage everyone; branch managers manage
+    strictly-lower-ranked users in their own branch.
+    """
+    if target_user is None:
+        return False
+    me = get_current_user()
+    if me and target_user.id == me.id:
+        return False                       # never manage yourself
+    scope = current_manage_scope()
+    if scope == 'central':
+        return True
+    if scope == 'branch':
+        if me is None or target_user.branch_id != me.branch_id:
+            return False
+        return current_rank() > (target_user.rank or 0)
+    return False
+
+
+def manage_users_required(f):
+    """Allow any user who can manage accounts (central admin, principal, HOD…)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('auth.login'))
+        if not can_manage_users():
+            flash('You are not allowed to manage user accounts.', 'error')
+            return redirect(url_for('main.dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# =============================================================================
 # DECORATORS
 # =============================================================================
 
