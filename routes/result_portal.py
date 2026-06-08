@@ -106,6 +106,9 @@ def publish(term_id):
     state = 'released' if term.results_published else 'hidden'
     log_action('results.publish', f'{term.full_name}: {state}')
     flash(f'Results for {term.full_name} are now {state}.', 'success')
+    nxt = request.form.get('next')
+    if nxt and nxt.startswith('/') and not nxt.startswith('//'):
+        return redirect(nxt)
     return redirect(url_for('scratchcards.index'))
 
 

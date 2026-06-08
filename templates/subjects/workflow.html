@@ -68,7 +68,21 @@
         <button type="submit" class="btn btn-primary"><i class="fas fa-ranking-star"></i> Finalize (compute results &amp; positions)</button>
     </form>
     <a href="{{ url_for('subjects.print_all_report_cards', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-success"><i class="fas fa-print"></i> Print all report cards</a>
+    <span style="margin-left:auto;display:inline-flex;align-items:center;gap:.6rem;">
+        <span class="badge {{ 'badge-success' if published else 'badge-secondary' }}">
+            <i class="fas fa-{{ 'eye' if published else 'eye-slash' }}"></i>
+            {{ 'Released to parents/checker' if published else 'Not released' }}
+        </span>
+        <form method="POST" action="{{ url_for('scratchcards.publish', term_id=term_id) }}" style="display:inline">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('subjects.workflow', term_id=term_id, assignment_id=assignment_id) }}">
+            <button type="submit" class="btn btn-sm {{ 'btn-danger' if published else 'btn-success' }}">
+                {{ 'Hide results' if published else 'Release results' }}
+            </button>
+        </form>
+    </span>
 </div></div>
+<p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Releasing makes this term's results visible on the Parent Portal and the public result checker (applies to the whole term).</p>
 {% else %}
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><p>Select a term and class to see the results checklist.</p></div></div></div>
 {% endif %}

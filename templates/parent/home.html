@@ -96,6 +96,18 @@
                 {% endfor %}
                 </tbody>
             </table>
+            {% set aff = report.term_summary.affective_map if report.term_summary else {} %}
+            {% if aff %}
+            <h2 style="margin-top:1.2rem">Behaviour</h2>
+            <table>
+                <thead><tr><th>Trait</th><th>Rating</th></tr></thead>
+                <tbody>
+                {% for key, label in affective_traits %}{% if aff.get(key) %}
+                    <tr><td>{{ label }}</td><td>{{ aff.get(key) }}/5 · {{ rating_labels.get(aff.get(key), '') }}</td></tr>
+                {% endif %}{% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
             {% if report.term_summary and (report.term_summary.teacher_comment or report.term_summary.principal_comment) %}
             <p style="margin-top:.8rem"><strong>Form teacher:</strong> {{ report.term_summary.teacher_comment or '—' }}</p>
             <p><strong>Principal:</strong> {{ report.term_summary.principal_comment or '—' }}</p>

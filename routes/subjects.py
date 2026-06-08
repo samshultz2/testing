@@ -461,17 +461,22 @@ def save_scores():
         
         student_ids = request.form.getlist('student_id[]')
         scores = request.form.getlist('score[]')
-        
+
+        at = AssessmentType.query.get(assessment_type_id)
+        max_score = at.max_score if at else None
         saved = 0
+        rejected = 0
         for i, student_id in enumerate(student_ids):
             score_value = scores[i].strip() if i < len(scores) else ''
-            
+
             if score_value:
                 try:
                     score_float = float(score_value)
                 except ValueError:
                     continue
-                
+                if max_score and score_float > max_score:
+                    rejected += 1
+                    continue
                 # Get or create score record
                 existing = StudentScore.query.filter_by(
                     student_id=int(student_id),
@@ -505,7 +510,10 @@ def save_scores():
             if asg:
                 from utils.report_card import compute_term_summaries
                 compute_term_summaries(term_id, asg.class_id)
-        flash(f'{saved} scores saved!', 'success')
+        msg = f'{saved} scores saved!'
+        if rejected:
+            msg += f' {rejected} skipped (above the {max_score:g} maximum).'
+        flash(msg, 'success' if not rejected else 'warning')
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
@@ -563,8 +571,10 @@ def workflow():
             'comments': sum(1 for t in ts_rows if t.teacher_comment),
             'behaviour': sum(1 for t in ts_rows if t.affective),
         }
+    selected_term = Term.query.get(term_id) if term_id else None
     return render_template('subjects/workflow.html', terms=terms, term_id=term_id,
-        assignments=assignments, assignment_id=assignment_id, selected=selected, steps=steps)
+        assignments=assignments, assignment_id=assignment_id, selected=selected,
+        steps=steps, published=bool(selected_term and selected_term.results_published))
 
 
 @subjects_bp.route('/bulk-entry', methods=['GET', 'POST'])
@@ -603,6 +613,7 @@ def bulk_entry():
                         StudentScore.student_id.in_(sids),
                         StudentScore.class_subject_id.in_(cs_ids)).all()}
         changed = 0
+        rejected = 0
         for e in enrollments:
             for cs in class_subjects:
                 for at in assessment_types:
@@ -612,6 +623,9 @@ def bulk_entry():
                         try:
                             val = float(raw)
                         except ValueError:
+                            continue
+                        if at.max_score and val > at.max_score:
+                            rejected += 1
                             continue
                         if obj:
                             if obj.score != val:
@@ -625,7 +639,10 @@ def bulk_entry():
         db.session.commit()
         from utils.report_card import compute_term_summaries
         compute_term_summaries(term_id, selected.class_id)
-        flash(f'Saved — {changed} change(s).', 'success')
+        msg = f'Saved — {changed} change(s).'
+        if rejected:
+            msg += f' {rejected} skipped (above the subject maximum).'
+        flash(msg, 'success' if not rejected else 'warning')
         return redirect(url_for('subjects.bulk_entry', term_id=term_id, assignment_id=assignment_id))
 
     scores = {}

@@ -58,16 +58,20 @@ def home():
         session.pop(PKEY, None)
         return redirect(url_for('parent.login'))
 
+    from utils.report_card import AFFECTIVE_TRAITS, RATING_LABELS
     term_id = request.args.get('term_id', type=int)
     if not term_id:
         active = get_active_term()
         term_id = active.id if active else None
     terms = Term.query.order_by(Term.id.desc()).all()
+    term = Term.query.get(term_id) if term_id else None
 
     bill = student_bill(student.id, term_id) if term_id else None
     enrollment, report = build_report_card(student.id, term_id) if term_id else (None, None)
-    # Only reveal results once they have been finalised (positions computed).
-    results_ready = bool(report and report.get('term_summary'))
+    # Results are visible to parents only when the term is RELEASED (published) by
+    # staff and finalised (positions computed).
+    results_ready = (bool(report and report.get('term_summary'))
+                     and bool(term and term.results_published))
 
     attendance = None
     if enrollment:
@@ -83,7 +87,8 @@ def home():
         student=student, terms=terms, term_id=term_id, bill=bill,
         report=report if results_ready else None, results_ready=results_ready,
         enrollment=enrollment, attendance=attendance, announcements=announcements,
-        pay_enabled=payments.is_configured())
+        pay_enabled=payments.is_configured(),
+        affective_traits=AFFECTIVE_TRAITS, rating_labels=RATING_LABELS)
 
 
 def _record_online_payment(student_id, term_id, amount, reference):
