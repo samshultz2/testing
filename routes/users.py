@@ -2,9 +2,9 @@
 User Management Routes
 Handles user CRUD, role management, and teacher assignments
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from utils.helpers import get_active_term
-from models import db, ClassArmAssignment, Term, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
+from models import db, ClassArmAssignment, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
 from utils.access_control import (MODULES, manage_users_required, can_manage,
                                   current_manage_scope, current_rank, get_current_user)
 from utils.audit import log_action

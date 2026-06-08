@@ -11,7 +11,7 @@ from sqlalchemy import func
 
 from models import (
     db, StaffMember, Department, LeaveRecord, PayrollRun, Payslip,
-    SalaryHistory, StaffAttendance, Term,
+    SalaryHistory, StaffAttendance,
 )
 from utils.access_control import login_required, admin_required
 from utils import hr

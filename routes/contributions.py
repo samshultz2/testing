@@ -5,8 +5,8 @@ Hidden module accessible only with special access code
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from utils.helpers import get_active_term, get_active_session
 from models import (
-    db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, Term, ContributionSettings,
-    ContributionPayment, ContributionExpense, AcademicSession
+    db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, ContributionSettings, ContributionPayment,
+    ContributionExpense
 )
 from functools import wraps
 from datetime import datetime, date, timedelta

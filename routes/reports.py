@@ -3,7 +3,7 @@ Reports and data management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify
 from utils.helpers import get_active_term, get_active_session
-from models import db, Student, ParentContact, Term, AcademicSession
+from models import db, Student, ParentContact, Term
 from utils.helpers import login_required
 from utils.excel_utils import (
     export_students_to_excel, create_student_import_template,

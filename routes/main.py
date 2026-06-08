@@ -5,8 +5,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from utils.helpers import get_active_term, get_active_session
 from datetime import date, timedelta
 from models import (
-    db, Student, ParentContact, AcademicSession, Term, StudentEnrollment, 
-    ClassArmAssignment, Attendance, Week, ClassArm, Subject, SchoolClass
+    db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, Attendance, 
+    Week, ClassArm, Subject, SchoolClass
 )
 from utils.access_control import (
     login_required, admin_required, central_admin_required, is_admin, is_teacher,

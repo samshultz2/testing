@@ -58,7 +58,6 @@ def scope_students(query, term=None):
     sections = allowed_sections()
     if sections:
         if term is None:
-            from models import Term
             term = get_active_term()
         sub = (db.session.query(StudentEnrollment.student_id)
                .join(ClassArmAssignment,

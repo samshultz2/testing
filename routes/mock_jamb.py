@@ -7,7 +7,7 @@ from utils.helpers import get_active_term, get_active_session
 from datetime import datetime
 from io import BytesIO
 
-from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass, Term
+from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass
 from models.mock_jamb import MockJAMBExam, MockJAMBResult, MockJAMBAnalytics
 from utils.helpers import login_required, WAEC_SUBJECTS, get_sss3_students, student_subject_map
 from utils.csrf import csrf_protect

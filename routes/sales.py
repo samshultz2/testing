@@ -3,7 +3,6 @@
 Bursars manage a branch's products/stock and ring up sales. All views are
 branch-scoped via utils.branch_scope.
 """
-from datetime import date
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session)

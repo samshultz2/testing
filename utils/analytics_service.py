@@ -8,8 +8,8 @@ from collections import defaultdict
 from typing import Dict, List, Tuple
 from sqlalchemy import func
 from models.models import (
-    db, Student, WAECResult, JAMBResult, Term, StudentEnrollment,
-    ClassArmAssignment, Attendance
+    db, Student, WAECResult, JAMBResult, StudentEnrollment, ClassArmAssignment,
+    Attendance
 )
 
 

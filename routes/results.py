@@ -5,9 +5,8 @@ Comprehensive academic performance tracking and analysis
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from utils.helpers import get_active_term, get_active_session
 from collections import defaultdict
-from models import (db, Student, WAECResult, JAMBResult, Term, AcademicSession, UniversityCutoff,
-                    SchoolSettings, StudentEnrollment, ClassArmAssignment,
-                    TermSummary)
+from models import (db, Student, WAECResult, JAMBResult, UniversityCutoff, SchoolSettings, StudentEnrollment,
+                    ClassArmAssignment, TermSummary)
 import json as _json
 from utils.access_control import login_required, admin_required
 from utils.audit import log_action

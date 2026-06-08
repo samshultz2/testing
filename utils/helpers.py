@@ -284,7 +284,7 @@ def infer_stream_from_jamb(student):
 def _sss3_enrolled_map():
     """Return {id: Student} for active SSS3 students enrolled in the active term."""
     from models import (
-        Student, SchoolClass, ClassArmAssignment, StudentEnrollment, Term
+        Student, SchoolClass, ClassArmAssignment, StudentEnrollment
     )
 
     active_term = get_active_term()
@@ -322,7 +322,7 @@ def get_sss3_students():
     the SSS3 class / active term has not been set up yet, so result entry never
     becomes impossible.
     """
-    from models import Student, AcademicSession
+    from models import Student
 
     students = _sss3_enrolled_map()
 

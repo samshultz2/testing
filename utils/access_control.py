@@ -5,7 +5,7 @@ Provides decorators and helper functions for role-based access control
 from functools import wraps
 from utils.helpers import get_active_term
 from flask import session, redirect, url_for, flash, request, abort
-from models import User, ClassArmAssignment, Term, StudentEnrollment
+from models import User, ClassArmAssignment, StudentEnrollment
 
 
 def get_current_user():
