@@ -86,5 +86,6 @@ ROLE_PRESETS = {
 def presets_for_form():
     """Compact dict the user form embeds as JSON to pre-fill fields."""
     return {k: {'role': p['role'], 'scope': p['scope'], 'modules': p['modules'],
+                'section': p.get('section', ''), 'stream': p.get('stream', ''),
                 'label': p['label'], 'description': p.get('description', '')}
             for k, p in ROLE_PRESETS.items()}

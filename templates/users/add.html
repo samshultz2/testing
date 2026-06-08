@@ -71,6 +71,24 @@
                     </select>
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Section <span class="text-muted">(optional)</span></label>
+                    <select name="section" id="sectionSelect" class="form-control">
+                        <option value="">All sections</option>
+                        <option value="secondary">Secondary (JSS + SSS)</option>
+                        <option value="primary">Nursery &amp; Primary</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Subject stream <span class="text-muted">(optional)</span></label>
+                    <select name="stream" id="streamSelect" class="form-control">
+                        <option value="">All streams</option>
+                        <option value="arts">Arts &amp; Commercial</option>
+                        <option value="science">Sciences</option>
+                    </select>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -133,6 +151,8 @@ function applyPreset(){
     if(!p) return;
     document.getElementById('roleSelect').value=p.role;
     document.getElementById('scopeSelect').value=p.scope;
+    document.getElementById('sectionSelect').value=p.section||'';
+    document.getElementById('streamSelect').value=p.stream||'';
     var want={}; (p.modules||[]).forEach(function(m){ want[m]=1; });
     document.querySelectorAll('input[name="modules"]').forEach(function(cb){ cb.checked=!!want[cb.value]; });
     document.getElementById('presetHelp').textContent=p.description||'';

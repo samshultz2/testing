@@ -63,7 +63,9 @@ def login():
                 session['user'] = user.full_name or user.username
                 session['role'] = user.role
                 from utils.branch_scope import set_session_scope
+                from utils.org_scope import set_session_org
                 set_session_scope(user)
+                set_session_org(user)
                 session.permanent = True
                 
                 # Update last login
@@ -85,7 +87,9 @@ def login():
             session['user'] = 'Admin'
             session['role'] = 'admin'
             from utils.branch_scope import set_session_scope
+            from utils.org_scope import set_session_org
             set_session_scope(None)   # legacy admin is central
+            set_session_org(None)
             session.permanent = True
             flash('Welcome back, Admin!', 'success')
             return redirect(url_for('main.dashboard'))

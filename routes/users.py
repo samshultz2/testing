@@ -122,6 +122,8 @@ def add_user():
             user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
             user.branch_id = (None if user.scope == 'central'
                               else request.form.get('branch_id', type=int))
+            user.section = request.form.get('section') or None
+            user.stream = request.form.get('stream') or None
             db.session.add(user)
             db.session.flush()  # Get user ID
 
@@ -194,6 +196,8 @@ def edit_user(user_id):
         user.scope = 'central' if request.form.get('scope') == 'central' else 'branch'
         user.branch_id = (None if user.scope == 'central'
                           else request.form.get('branch_id', type=int))
+        user.section = request.form.get('section') or None
+        user.stream = request.form.get('stream') or None
         
         # Update password if provided
         new_password = request.form.get('new_password', '')

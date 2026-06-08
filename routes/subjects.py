@@ -23,7 +23,10 @@ subjects_bp = Blueprint('subjects', __name__, url_prefix='/subjects')
 @login_required
 def subjects_list():
     """List all subjects"""
-    subjects = Subject.query.filter_by(is_active=True).order_by(Subject.category, Subject.name).all()
+    from utils.org_scope import scope_subjects
+    subjects = scope_subjects(
+        Subject.query.filter_by(is_active=True), Subject
+    ).order_by(Subject.category, Subject.name).all()
     
     # Group by category
     categories = {}

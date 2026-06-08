@@ -192,6 +192,7 @@ class SchoolClass(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(20), unique=True, nullable=False)
     level = db.Column(db.Integer, nullable=False)  # 1-6 for ordering
+    section = db.Column(db.String(20))  # nursery / primary / junior / senior
     description = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -866,6 +867,10 @@ class User(db.Model):
     # Exams & Standards, IT); 'branch' users are limited to their own branch_id.
     scope = db.Column(db.String(10), default='branch')
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    # Optional sub-branch scoping (Stage 4): a section group ('secondary' or
+    # 'primary') and/or a subject stream ('arts'/'science') the user oversees.
+    section = db.Column(db.String(20))
+    stream = db.Column(db.String(20))
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -1201,6 +1206,16 @@ def _ensure_student_exam_columns():
         u_cols = {c['name'] for c in inspect(db.engine).get_columns('users')}
         if 'scope' not in u_cols:
             statements.append("ALTER TABLE users ADD COLUMN scope VARCHAR(10) DEFAULT 'branch'")
+        if 'section' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN section VARCHAR(20)')
+        if 'stream' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN stream VARCHAR(20)')
+    except Exception:
+        pass
+    try:
+        sc_cols = {c['name'] for c in inspect(db.engine).get_columns('school_classes')}
+        if 'section' not in sc_cols:
+            statements.append('ALTER TABLE school_classes ADD COLUMN section VARCHAR(20)')
     except Exception:
         pass
 
@@ -1208,6 +1223,25 @@ def _ensure_student_exam_columns():
         with db.engine.begin() as conn:
             for stmt in statements:
                 conn.execute(text(stmt))
+
+
+def _classify_section(school_class):
+    """Best-effort section for a class from its name, falling back to level."""
+    name = (school_class.name or '').upper()
+    if name.startswith('SS'):
+        return 'senior'
+    if name.startswith('JS'):
+        return 'junior'
+    if 'NUR' in name or name.startswith('KG') or 'CREC' in name or name.startswith('PRE'):
+        return 'nursery'
+    if 'PRI' in name or name.startswith('BAS'):
+        return 'primary'
+    lvl = school_class.level or 0
+    if lvl >= 4:
+        return 'senior'
+    if lvl >= 1:
+        return 'junior'
+    return 'primary'
 
 
 def _seed_branches():
@@ -1247,6 +1281,10 @@ def _seed_branches():
             conn.execute(text(
                 "UPDATE users SET scope = 'central' "
                 "WHERE role IN ('super_admin', 'admin')"))
+        # Classify any unsectioned classes (junior/senior/primary/nursery).
+        for c in SchoolClass.query.filter(SchoolClass.section.is_(None)).all():
+            c.section = _classify_section(c)
+        db.session.commit()
     except Exception:
         db.session.rollback()
 
@@ -1277,8 +1315,16 @@ def init_db(app):
                 ('SSS3', 6, 'Senior Secondary School 3'),
             ]
             for name, level, desc in default_classes:
-                db.session.add(SchoolClass(name=name, level=level, description=desc))
-        
+                db.session.add(SchoolClass(
+                    name=name, level=level, description=desc,
+                    section='junior' if level <= 3 else 'senior'))
+            db.session.commit()
+
+        # Classify any class still missing a section (covers fresh installs where
+        # default classes are created after the branch seeder ran).
+        for c in SchoolClass.query.filter(SchoolClass.section.is_(None)).all():
+            c.section = _classify_section(c)
+
         # Create default arms if none exist
         if ClassArm.query.count() == 0:
             default_arms = ['Rose', 'Lily', 'Iris', 'Daisy', 'Ivy', 'Violet']

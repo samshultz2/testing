@@ -28,8 +28,13 @@ branch users while central users bypass it.
    add/edit form has a **Quick preset** picker that pre-fills role, branch scope
    and module checkboxes (still fully editable). Presets are plain data — other
    schools edit the dict or ignore it.
-4. Section/stream filters — Principal (secondary) vs Headmaster (nursery/primary);
-   HOD Arts vs Sciences.
+4. **Section/stream filters — DONE.** `utils/org_scope.py` narrows a branch user
+   to a section group (Principal = secondary, Headmaster = nursery/primary) and/or
+   a subject stream (HOD Arts = Arts+Commercial, HOD Sciences = Science).
+   `SchoolClass.section` (auto-classified) + `User.section`/`User.stream` drive it;
+   applied to the students list (by current enrolment's class section, and by
+   `Student.stream`) and the subjects list (`Subject.category`). Also fixed: only
+   actual teachers are limited to assigned classes — other staff use these scopes.
 5. Bursar Sales & Inventory module (textbooks, workbooks, uniforms…), branch-scoped.
 
 ## Stage 1 details

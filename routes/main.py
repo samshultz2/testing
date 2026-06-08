@@ -8,7 +8,7 @@ from models import (
     ClassArmAssignment, Attendance, Week, ClassArm, Subject, SchoolClass
 )
 from utils.access_control import (
-    login_required, admin_required, is_admin, get_accessible_class_ids
+    login_required, admin_required, is_admin, is_teacher, get_accessible_class_ids
 )
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
@@ -363,13 +363,16 @@ def students_list():
     sort_by = request.args.get('sort', 'surname')
     order = request.args.get('order', 'asc')
 
-    # Build query
+    # Build query (branch + section/stream scoped)
     from utils.branch_scope import scope_query
+    from utils.org_scope import scope_students
     query = scope_query(Student.query.filter_by(is_active=True), Student)
+    query = scope_students(query)
 
-    # For teachers, only show students from their assigned classes
+    # Teachers are further limited to their assigned classes. Other non-admin
+    # roles (principal, HOD, bursar…) rely on branch/section/stream scoping above.
     active_term = Term.query.filter_by(is_active=True).first()
-    if not is_admin() and active_term:
+    if is_teacher() and active_term:
         accessible_class_ids = get_accessible_class_ids()
         if accessible_class_ids:
             query = query.join(
