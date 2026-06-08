@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ current_theme }}">
 <head>
     <meta charset="UTF-8">
+    <meta name="user-theme" content="{{ current_theme }}">
+    {% if session.get('logged_in') %}<meta name="user-authed" content="1">{% endif %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <meta name="theme-color" content="#0d6a4e">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -537,7 +539,23 @@
                         <span>{{ get_active_term().name }}</span>
                     </div>
                     {% endif %}
-                    <button class="theme-toggle" id="themeToggle" title="Toggle dark mode"></button>
+                    <div class="theme-picker-wrap">
+                        <button type="button" class="header-icon-btn" id="themeBtn" title="Choose theme" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-palette"></i>
+                        </button>
+                        <div class="theme-menu" id="themeMenu" role="menu" aria-label="Theme">
+                            <div class="theme-menu-title">Theme</div>
+                            <div class="theme-swatches">
+                                {% for t in themes %}
+                                <button type="button" class="theme-swatch{% if t.dark %} is-dark{% endif %}" data-theme-key="{{ t.key }}" role="menuitemradio" title="{{ t.label }}" aria-checked="false">
+                                    <span class="theme-dot" style="background: {{ t.swatch }};"></span>
+                                    <span class="theme-name">{{ t.label }}</span>
+                                    <i class="fas fa-check theme-check"></i>
+                                </button>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
                     <button class="header-icon-btn header-install-btn" id="installBtn" title="Install app" style="display:none;">
                         <i class="fas fa-circle-down"></i>
                     </button>

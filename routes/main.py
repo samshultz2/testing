@@ -350,11 +350,18 @@ def dashboard():
                 'pass_rate': round(passes / len(rows) * 100, 1),
             }
 
-    # Mock JAMB latest exam average
+    # Mock JAMB latest exam average — scoped to the viewing branch (a branch user
+    # must not see other branches' mock results).
     mock_snapshot = None
     last_mock = MockJAMBExam.query.order_by(MockJAMBExam.exam_date.desc()).first()
     if last_mock:
-        ms = [r.total_score for r in last_mock.results.all()]
+        from models.mock_jamb import MockJAMBResult
+        res_q = last_mock.results
+        _mbid = viewing_branch_id()
+        if _mbid is not None:
+            res_q = res_q.join(Student, MockJAMBResult.student_id == Student.id) \
+                         .filter(Student.branch_id == _mbid)
+        ms = [r.total_score for r in res_q.all()]
         if ms:
             mock_snapshot = {'name': last_mock.display_name, 'count': len(ms),
                              'mean': round(sum(ms) / len(ms), 1), 'max': max(ms)}
@@ -994,6 +1001,23 @@ def global_search():
 
     return render_template('search.html', q=q, groups=groups,
                            count=sum(len(g['rows']) for g in groups))
+
+
+@main_bp.route('/set-theme', methods=['POST'])
+def set_theme():
+    """Persist the current user's chosen UI theme (per-account + session)."""
+    from utils.themes import normalize_theme
+    theme = normalize_theme((request.form.get('theme') or '').strip())
+    session['theme'] = theme
+    try:
+        from utils.access_control import get_current_user
+        u = get_current_user()
+        if u:
+            u.theme = theme
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return jsonify({'ok': True, 'theme': theme})
 
 
 @main_bp.route('/audit')

@@ -66,6 +66,8 @@ def login():
                 from utils.org_scope import set_session_org
                 set_session_scope(user)
                 set_session_org(user)
+                if user.theme:
+                    session['theme'] = user.theme
                 session.permanent = True
                 
                 # Update last login

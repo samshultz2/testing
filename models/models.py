@@ -878,6 +878,8 @@ class User(db.Model):
     # manage_scope: 'none' (can't), 'branch' (own branch, lower rank), 'central' (all).
     rank = db.Column(db.Integer, default=0)
     manage_scope = db.Column(db.String(10), default='none')
+    # Preferred UI colour theme (see utils/themes.py).
+    theme = db.Column(db.String(20))
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -1212,6 +1214,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN rank INTEGER DEFAULT 0')
         if 'manage_scope' not in u_cols:
             statements.append("ALTER TABLE users ADD COLUMN manage_scope VARCHAR(10) DEFAULT 'none'")
+        if 'theme' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN theme VARCHAR(20)')
     except Exception:
         pass
 

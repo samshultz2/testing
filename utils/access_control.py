@@ -52,7 +52,7 @@ BLUEPRINT_MODULE = {
 
 # Endpoints always reachable by any logged-in user (the shell + own account).
 _ALWAYS_ALLOWED_ENDPOINTS = {
-    'main.dashboard', 'main.global_search', 'main.set_view_branch',
+    'main.dashboard', 'main.global_search', 'main.set_view_branch', 'main.set_theme',
     'auth.logout', 'auth.change_password',
 }
 
@@ -255,7 +255,7 @@ def enforce_module_access():
 
 
 # Unsafe methods a read-only user may still call (managing their own account).
-_READONLY_WRITE_OK = {'auth.login', 'auth.logout', 'auth.change_password'}
+_READONLY_WRITE_OK = {'auth.login', 'auth.logout', 'auth.change_password', 'main.set_theme'}
 _SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS'}
 
 

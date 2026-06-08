@@ -131,7 +131,20 @@ def create_app(config_class=Config):
     def utility_processor():
         from models import AcademicSession, Term
         from datetime import date
-        
+        from utils.themes import THEMES, normalize_theme
+
+        def current_theme():
+            """The active UI theme: the logged-in user's saved choice, else default."""
+            try:
+                from utils.access_control import get_current_user
+                t = session.get('theme')
+                if not t:
+                    u = get_current_user()
+                    t = u.theme if u else None
+                return normalize_theme(t)
+            except Exception:
+                return 'light'
+
         def get_active_session():
             return AcademicSession.query.filter_by(is_active=True).first()
         
@@ -214,6 +227,8 @@ def create_app(config_class=Config):
             'can_write_module': can_write_module,
             'can_manage_users': can_manage_users(),
             'branch_ctx': branch_context(),
+            'current_theme': current_theme(),
+            'themes': THEMES,
         }
     
     # Custom Jinja filters
