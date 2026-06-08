@@ -67,6 +67,16 @@ def scope_by_student(query, model):
     return query
 
 
+def scope_by_staff(query, model):
+    """Branch-scope a query whose rows reference a staff member (``.staff_id``)."""
+    bid = viewing_branch_id()
+    if bid is not None:
+        from models import db, StaffMember
+        sub = db.session.query(StaffMember.id).filter(StaffMember.branch_id == bid)
+        return query.filter(model.staff_id.in_(sub))
+    return query
+
+
 def can_access_branch(branch_id):
     """May the current user open a record belonging to ``branch_id``?"""
     if is_central():

@@ -178,15 +178,20 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
     """
     students = []
     balances = {}
+    # Branch users only message their own branch's parents.
+    from utils.branch_scope import scope_query
 
     if audience == 'all':
-        students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+        students = scope_query(Student.query.filter_by(is_active=True),
+                               Student).order_by(Student.surname).all()
 
     elif audience in ('class', 'arm'):
-        q = (StudentEnrollment.query
-             .join(ClassArmAssignment,
-                   StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-             .filter(StudentEnrollment.is_active == True))
+        q = scope_query(
+            StudentEnrollment.query
+            .join(ClassArmAssignment,
+                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .filter(StudentEnrollment.is_active == True),
+            ClassArmAssignment)
         if term:
             q = q.filter(ClassArmAssignment.term_id == term.id)
         if class_id:
@@ -197,16 +202,19 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
 
     elif audience == 'students':
         if student_ids:
-            students = Student.query.filter(Student.id.in_(student_ids)).all()
+            students = scope_query(
+                Student.query.filter(Student.id.in_(student_ids)), Student).all()
 
     elif audience == 'defaulters':
         from utils.finance import student_bill
         if term:
-            enr = (StudentEnrollment.query
-                   .join(ClassArmAssignment,
-                         StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                   .filter(StudentEnrollment.is_active == True,
-                           ClassArmAssignment.term_id == term.id))
+            enr = scope_query(
+                StudentEnrollment.query
+                .join(ClassArmAssignment,
+                      StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                .filter(StudentEnrollment.is_active == True,
+                        ClassArmAssignment.term_id == term.id),
+                ClassArmAssignment)
             if class_id:
                 enr = enr.filter(ClassArmAssignment.class_id == class_id)
             for e in enr.all():

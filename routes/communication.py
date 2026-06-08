@@ -149,6 +149,8 @@ def contacts():
         base = Student.query.filter(Student.id.in_(ids or [-1]))
     else:
         base = Student.query.filter_by(is_active=True)
+    from utils.branch_scope import scope_query
+    base = scope_query(base, Student)
     if q:
         like = f'%{q}%'
         base = base.filter(db.or_(Student.surname.ilike(like),
@@ -363,7 +365,8 @@ def students_search():
     if len(q) < 2:
         return jsonify([])
     like = f'%{q}%'
-    rows = (Student.query.filter_by(is_active=True)
+    from utils.branch_scope import scope_query
+    rows = (scope_query(Student.query.filter_by(is_active=True), Student)
             .filter(db.or_(Student.surname.ilike(like), Student.first_name.ilike(like),
                            Student.student_id.ilike(like)))
             .order_by(Student.surname).limit(15).all())

@@ -37,10 +37,12 @@ def _current_user():
 @hr_bp.route('/')
 @login_required
 def dashboard():
+    from utils.branch_scope import scope_query, scope_by_staff
     stats = hr.dashboard_stats()
-    recent = StaffMember.query.filter_by(is_active=True).order_by(
+    recent = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(
         StaffMember.created_at.desc()).limit(6).all()
-    pending_leaves = LeaveRecord.query.filter_by(status='Pending').order_by(
+    pending_leaves = scope_by_staff(LeaveRecord.query.filter_by(status='Pending'),
+                                    LeaveRecord).order_by(
         LeaveRecord.created_at.desc()).limit(6).all()
     return render_template('hr/dashboard.html', stats=stats, recent=recent,
                            pending_leaves=pending_leaves)
@@ -195,7 +197,8 @@ def export_staff():
     w = csv.writer(out)
     w.writerow(['Staff ID', 'Name', 'Gender', 'Department', 'Designation', 'Type',
                 'Employment', 'Status', 'Phone', 'Email', 'Date Employed', 'Salary'])
-    for s in StaffMember.query.filter_by(is_active=True).order_by(StaffMember.surname).all():
+    from utils.branch_scope import scope_query
+    for s in scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(StaffMember.surname).all():
         w.writerow([s.staff_id, s.full_name, s.gender or '',
                     s.department.name if s.department else '', s.designation or '',
                     s.staff_type, s.employment_type, s.status, s.phone or '',
@@ -260,12 +263,13 @@ def delete_department(dept_id):
 @hr_bp.route('/leave')
 @login_required
 def leave_list():
+    from utils.branch_scope import scope_query, scope_by_staff
     status = request.args.get('status')
-    q = LeaveRecord.query
+    q = scope_by_staff(LeaveRecord.query, LeaveRecord)
     if status:
         q = q.filter_by(status=status)
     leaves = q.order_by(LeaveRecord.created_at.desc()).all()
-    staff = StaffMember.query.filter_by(is_active=True).order_by(StaffMember.surname).all()
+    staff = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(StaffMember.surname).all()
     return render_template('hr/leave.html', leaves=leaves, staff=staff,
                            status=status, leave_types=hr.LEAVE_TYPES)
 
@@ -454,9 +458,10 @@ def sync_deductions(run_id):
 @hr_bp.route('/attendance')
 @login_required
 def attendance():
+    from utils.branch_scope import scope_query
     day = _d(request.args.get('date')) or date.today()
     dept_id = request.args.get('department_id', type=int)
-    query = StaffMember.query.filter_by(is_active=True, status='Active')
+    query = scope_query(StaffMember.query.filter_by(is_active=True, status='Active'), StaffMember)
     if dept_id:
         query = query.filter_by(department_id=dept_id)
     staff = query.order_by(StaffMember.surname, StaffMember.first_name).all()

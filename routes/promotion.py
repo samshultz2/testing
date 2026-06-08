@@ -27,9 +27,10 @@ def graduates_list():
     session_id = request.args.get('session_id', type=int)
     
     sessions = AcademicSession.query.order_by(AcademicSession.id.desc()).all()
-    
-    query = Student.query.filter_by(is_graduated=True)
-    
+
+    from utils.branch_scope import scope_query
+    query = scope_query(Student.query.filter_by(is_graduated=True), Student)
+
     if session_id:
         query = query.filter_by(graduation_session_id=session_id)
     
