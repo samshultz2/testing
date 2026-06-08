@@ -164,6 +164,15 @@ def build_report_card(student_id, term_id):
     term_summary = TermSummary.query.filter_by(
         student_id=student_id, term_id=term_id).first()
 
+    # Marks obtainable/obtained + percentage (matches the printed report sheet).
+    obtainable_each = sum((at.max_score or 0) for at in assessment_types) or 100
+    scores_obtainable = len(class_subjects) * obtainable_each
+    average_pct = round(total_score / scores_obtainable * 100, 2) if scores_obtainable else 0
+    no_in_class = (StudentEnrollment.query.join(ClassArmAssignment).filter(
+        ClassArmAssignment.term_id == term_id,
+        ClassArmAssignment.class_id == assignment.class_id,
+        StudentEnrollment.is_active == True).count())
+
     report_data = {
         'enrollment': enrollment,
         'assignment': assignment,
@@ -176,5 +185,12 @@ def build_report_card(student_id, term_id):
         'subjects_failed': subjects_failed,
         'total_subjects': len(class_subjects),
         'term_summary': term_summary,
+        'scores_obtainable': scores_obtainable,
+        'scores_obtained': total_score,
+        'average_pct': average_pct,
+        'result_status': 'PASS' if average_pct >= pass_mark else 'FAIL',
+        'no_in_class': no_in_class,
+        'next_term_fees': SchoolSettings.get('next_term_fees'),
+        'next_term_begins': SchoolSettings.get('next_term_begins'),
     }
     return enrollment, report_data

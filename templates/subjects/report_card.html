@@ -57,11 +57,13 @@
         
         <div class="student-info-grid">
             <div class="student-info-item"><span>Name:</span><strong>{{ student.full_name }}</strong></div>
-            <div class="student-info-item"><span>Student ID:</span><strong>{{ student.student_id }}</strong></div>
+            <div class="student-info-item"><span>Exam No:</span><strong>{{ student.student_id }}</strong></div>
             <div class="student-info-item"><span>Class:</span><strong>{{ report_data.assignment.display_name }}</strong></div>
-            <div class="student-info-item"><span>Gender:</span><strong>{{ student.gender }}</strong></div>
             <div class="student-info-item"><span>Term:</span><strong>{{ selected_term.name }}</strong></div>
             <div class="student-info-item"><span>Session:</span><strong>{{ selected_term.session.name }}</strong></div>
+            <div class="student-info-item"><span>No. in Class:</span><strong>{{ report_data.no_in_class }}</strong></div>
+            <div class="student-info-item"><span>Class Position:</span><strong>{{ report_data.term_summary.position_in_class if report_data.term_summary and report_data.term_summary.position_in_class else '—' }}</strong></div>
+            <div class="student-info-item"><span>Attendance:</span><strong>{% if report_data.term_summary and report_data.term_summary.attendance_percentage is not none %}{{ report_data.term_summary.attendance_percentage }}%{% else %}—{% endif %}</strong></div>
         </div>
     </div>
 </div>
@@ -110,12 +112,16 @@
     <div class="card-header"><h3>Summary</h3></div>
     <div class="card-body">
         <div class="student-info-grid">
-            <div class="student-info-item"><span>Total Subjects:</span><strong>{{ report_data.total_subjects }}</strong></div>
+            <div class="student-info-item"><span>No. of Subjects:</span><strong>{{ report_data.total_subjects }}</strong></div>
+            <div class="student-info-item"><span>Scores Obtainable:</span><strong>{{ report_data.scores_obtainable }}</strong></div>
+            <div class="student-info-item"><span>Score Obtained:</span><strong>{{ report_data.scores_obtained|round(1) }}</strong></div>
+            <div class="student-info-item"><span>Average Mark:</span><strong>{{ report_data.average_pct }}%</strong></div>
+            <div class="student-info-item"><span>Result Status:</span><strong class="{{ 'text-success' if report_data.result_status == 'PASS' else 'text-danger' }}">{{ report_data.result_status }}</strong></div>
+            <div class="student-info-item"><span>Overall Grade:</span><strong>{{ report_data.overall_grade }}</strong></div>
             <div class="student-info-item"><span>Subjects Passed:</span><strong class="text-success">{{ report_data.subjects_passed }}</strong></div>
             <div class="student-info-item"><span>Subjects Failed:</span><strong class="text-danger">{{ report_data.subjects_failed }}</strong></div>
-            <div class="student-info-item"><span>Total Score:</span><strong>{{ report_data.total_score|round(1) }}</strong></div>
-            <div class="student-info-item"><span>Average:</span><strong>{{ report_data.average }}%</strong></div>
-            <div class="student-info-item"><span>Overall Grade:</span><strong>{{ report_data.overall_grade }}</strong></div>
+            {% if report_data.next_term_fees %}<div class="student-info-item"><span>Next Term Fees:</span><strong>{{ report_data.next_term_fees }}</strong></div>{% endif %}
+            {% if report_data.next_term_begins %}<div class="student-info-item"><span>Next Term Begins:</span><strong>{{ report_data.next_term_begins }}</strong></div>{% endif %}
         </div>
     </div>
 </div>
