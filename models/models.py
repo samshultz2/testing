@@ -1028,7 +1028,17 @@ class Teacher(db.Model):
             class_arm_assignment_id=class_arm_assignment_id,
             is_active=True
         ).first() is not None
-    
+
+    @property
+    def form_class_ids(self):
+        """class_arm_assignment_ids this teacher is the *form teacher* of."""
+        return {a.class_arm_assignment_id for a in
+                self.class_assignments.filter_by(is_active=True, is_form_teacher=True).all()}
+
+    def is_form_teacher_of(self, class_arm_assignment_id):
+        """True only where the teacher is the form teacher (attendance/parent comms)."""
+        return class_arm_assignment_id in self.form_class_ids
+
     def __repr__(self):
         return f'<Teacher {self.user.full_name if self.user else "Unknown"}>'
 

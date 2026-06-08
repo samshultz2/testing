@@ -150,7 +150,11 @@ def contacts():
     else:
         base = Student.query.filter_by(is_active=True)
     from utils.branch_scope import scope_query
+    from utils.access_control import teacher_form_student_ids
     base = scope_query(base, Student)
+    form_ids = teacher_form_student_ids()
+    if form_ids is not None:
+        base = base.filter(Student.id.in_(form_ids or [-1]))
     if q:
         like = f'%{q}%'
         base = base.filter(db.or_(Student.surname.ilike(like),

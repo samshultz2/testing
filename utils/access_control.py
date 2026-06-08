@@ -4,7 +4,7 @@ Provides decorators and helper functions for role-based access control
 """
 from functools import wraps
 from flask import session, redirect, url_for, flash, request, abort
-from models import User, ClassArmAssignment, Term
+from models import User, ClassArmAssignment, Term, StudentEnrollment
 
 
 def get_current_user():
@@ -265,7 +265,11 @@ def can_access_class(class_arm_assignment_id):
 
 
 def can_mark_attendance(class_arm_assignment_id=None):
-    """Check if current user can mark attendance for a class"""
+    """Check if current user can mark attendance for a class.
+
+    Teachers may mark attendance only for the class they are *form teacher* of
+    (not the subject classes they merely teach in).
+    """
     # Branch/section gate first (applies to admins too).
     if class_arm_assignment_id is not None and not can_access_class(class_arm_assignment_id):
         return False
@@ -276,7 +280,7 @@ def can_mark_attendance(class_arm_assignment_id=None):
     if teacher and teacher.can_mark_attendance:
         if class_arm_assignment_id is None:
             return True
-        return teacher.can_access_class(class_arm_assignment_id)
+        return teacher.is_form_teacher_of(class_arm_assignment_id)
 
     return False
 
@@ -305,6 +309,25 @@ def can_enter_results(class_arm_assignment_id=None, subject_id=None):
     return False
 
 
+def teacher_form_student_ids():
+    """Set of student ids in the current teacher's form classes (active term).
+
+    Returns None when the current user is not a teacher (no extra restriction).
+    """
+    if not is_teacher():
+        return None
+    teacher = get_teacher_profile()
+    if not teacher:
+        return set()
+    form_ids = teacher.form_class_ids
+    if not form_ids:
+        return set()
+    rows = StudentEnrollment.query.filter(
+        StudentEnrollment.class_arm_assignment_id.in_(form_ids),
+        StudentEnrollment.is_active == True).all()
+    return {e.student_id for e in rows}
+
+
 def can_view_student_details():
     """Check if current user can view student details"""
     if is_admin():
@@ -317,12 +340,15 @@ def can_view_student_details():
     return False
 
 
-def filter_classes_for_user(assignments):
+def filter_classes_for_user(assignments, form_only=False):
     """Filter ClassArmAssignment objects to those the current user may access.
 
     Composes branch scope (branch users / a central user viewing one branch),
     section scope (Principal vs Headmaster) and, for actual teachers, their
     assigned classes. Admins / central users viewing all branches see everything.
+
+    ``form_only`` limits a teacher to the class they are *form teacher* of (used
+    by attendance and parent communication, where subject-teaching is not enough).
     """
     from utils.branch_scope import viewing_branch_id
     from utils.org_scope import allowed_sections
@@ -335,8 +361,12 @@ def filter_classes_for_user(assignments):
         result = [a for a in result
                   if a.school_class and a.school_class.section in sections]
     if is_teacher():
-        accessible = set(get_accessible_class_ids())
-        result = [a for a in result if a.id in accessible]
+        teacher = get_teacher_profile()
+        if form_only:
+            allowed = teacher.form_class_ids if teacher else set()
+        else:
+            allowed = set(get_accessible_class_ids())
+        result = [a for a in result if a.id in allowed]
     return result
 
 

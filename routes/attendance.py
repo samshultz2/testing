@@ -82,7 +82,7 @@ def mark_attendance_page():
         selected_term = Term.query.get(term_id)
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
         # Filter classes for teachers
-        assignments = filter_classes_for_user(all_assignments)
+        assignments = filter_classes_for_user(all_assignments, form_only=True)
         weeks = Week.query.filter_by(term_id=term_id).order_by(Week.week_number).all()
         holidays = Holiday.query.filter_by(term_id=term_id).all()
     
@@ -251,7 +251,8 @@ def daily_summary():
     assignments = []
     if active_term:
         assignments = filter_classes_for_user(
-            ClassArmAssignment.query.filter_by(term_id=active_term.id).all())
+            ClassArmAssignment.query.filter_by(term_id=active_term.id).all(),
+            form_only=True)
 
     summary = None
     selected_assignment = None
@@ -382,7 +383,7 @@ def weekly_summary():
     weeks = []
     if active_term:
         all_assignments = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
-        assignments = filter_classes_for_user(all_assignments)
+        assignments = filter_classes_for_user(all_assignments, form_only=True)
         weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.week_number).all()
     
     summary = None
@@ -466,7 +467,7 @@ def termly_summary():
     if term_id:
         selected_term = Term.query.get(term_id)
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-        assignments = filter_classes_for_user(all_assignments)
+        assignments = filter_classes_for_user(all_assignments, form_only=True)
     
     summary = None
     selected_assignment = None

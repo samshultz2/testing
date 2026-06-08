@@ -225,6 +225,12 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
                     students.append(e.student)
                     balances[e.student_id] = bill['balance']
 
+    # Teachers may only message parents of their own form-class students.
+    from utils.access_control import teacher_form_student_ids
+    form_ids = teacher_form_student_ids()
+    if form_ids is not None:
+        students = [s for s in students if s.id in form_ids]
+
     # De-duplicate, attach the best contact.
     seen = set()
     out = []
