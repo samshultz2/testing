@@ -17,14 +17,11 @@ def _setup(app):
             return dict(uid=existing.id, bid=existing.branch_id,
                         form=form, subj=subj, student=st.id)
         bid = Branch.get_default().id
-        sess = AcademicSession.query.filter_by(is_active=True).first() or \
-            AcademicSession(name='TS', is_active=True)
-        if sess.id is None:
-            db.session.add(sess); db.session.flush()
-        term = Term.query.filter_by(is_active=True).first() or \
-            Term(session_id=sess.id, term_number=1, name='T1', is_active=True)
-        if term.id is None:
-            db.session.add(term); db.session.flush()
+        # Dedicated session/term so assignments never collide with other tests.
+        sess = AcademicSession(name='TS-Session')
+        db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name='TS-Term')
+        db.session.add(term); db.session.flush()
         classes = SchoolClass.query.order_by(SchoolClass.level).all()
         arm = ClassArm.query.first()
         # form class + a different subject-only class
