@@ -220,9 +220,18 @@ class AcademicAnalytics:
     # ========================================================================
     
     @staticmethod
-    def get_waec_school_statistics(exam_year: int) -> Dict:
+    def _by_branch(query, model, branch_id):
+        """Restrict a WAEC/JAMB result query to one branch (None = all branches)."""
+        if branch_id is not None:
+            sub = db.session.query(Student.id).filter(Student.branch_id == branch_id)
+            return query.filter(model.student_id.in_(sub))
+        return query
+
+    @staticmethod
+    def get_waec_school_statistics(exam_year: int, branch_id=None) -> Dict:
         """Get comprehensive school-wide WAEC statistics"""
-        results = WAECResult.query.filter_by(exam_year=exam_year).all()
+        results = AcademicAnalytics._by_branch(
+            WAECResult.query.filter_by(exam_year=exam_year), WAECResult, branch_id).all()
         if not results:
             return None
         
@@ -297,9 +306,10 @@ class AcademicAnalytics:
         }
     
     @staticmethod
-    def get_jamb_school_statistics(exam_year: int) -> Dict:
+    def get_jamb_school_statistics(exam_year: int, branch_id=None) -> Dict:
         """Get comprehensive school-wide JAMB statistics"""
-        results = JAMBResult.query.filter_by(exam_year=exam_year).all()
+        results = AcademicAnalytics._by_branch(
+            JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult, branch_id).all()
         if not results:
             return None
         
@@ -380,17 +390,20 @@ class AcademicAnalytics:
     # ========================================================================
     
     @staticmethod
-    def calculate_waec_jamb_correlation(exam_year: int) -> Dict:
+    def calculate_waec_jamb_correlation(exam_year: int, branch_id=None) -> Dict:
         """Calculate correlation between WAEC and JAMB performance"""
         # Get students with both WAEC and JAMB results for the year
-        students_with_both = db.session.query(Student).join(
+        q = db.session.query(Student).join(
             WAECResult, Student.id == WAECResult.student_id
         ).join(
             JAMBResult, Student.id == JAMBResult.student_id
         ).filter(
             WAECResult.exam_year == exam_year,
             JAMBResult.exam_year == exam_year
-        ).distinct().all()
+        )
+        if branch_id is not None:
+            q = q.filter(Student.branch_id == branch_id)
+        students_with_both = q.distinct().all()
         
         if len(students_with_both) < 5:
             return {'error': 'Insufficient data for correlation analysis', 'sample_size': len(students_with_both)}
@@ -463,17 +476,18 @@ class AcademicAnalytics:
     # ========================================================================
     
     @staticmethod
-    def get_year_over_year_comparison() -> Dict:
+    def get_year_over_year_comparison(branch_id=None) -> Dict:
         """Compare performance metrics across years"""
         years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
         years = [y[0] for y in years][:5]  # Last 5 years
-        
+
         waec_trends = []
         jamb_trends = []
-        
+
         for year in years:
             # WAEC metrics
-            waec_results = WAECResult.query.filter_by(exam_year=year).all()
+            waec_results = AcademicAnalytics._by_branch(
+                WAECResult.query.filter_by(exam_year=year), WAECResult, branch_id).all()
             if waec_results:
                 total = len(waec_results)
                 pass_count = sum(1 for r in waec_results if r.grade in AcademicAnalytics.PASS_GRADES)
@@ -488,7 +502,8 @@ class AcademicAnalytics:
                 })
             
             # JAMB metrics
-            jamb_results = JAMBResult.query.filter_by(exam_year=year).all()
+            jamb_results = AcademicAnalytics._by_branch(
+                JAMBResult.query.filter_by(exam_year=year), JAMBResult, branch_id).all()
             if jamb_results:
                 scores = [r.total_score for r in jamb_results]
                 jamb_trends.append({

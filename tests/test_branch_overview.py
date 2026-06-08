@@ -64,3 +64,30 @@ def test_sales_receipt_shows_branch(app):
     with app.app_context():
         bname = Branch.get_default().name
     assert bname in r.get_data(as_text=True)
+
+
+def test_waec_analytics_branch_scoped(app):
+    from models import WAECResult
+    from utils.analytics_service import AcademicAnalytics
+    with app.app_context():
+        a = Branch.get_default()
+        b = Branch.query.filter_by(name='AnB').first() or Branch(name='AnB', is_active=True)
+        if b.id is None:
+            db.session.add(b); db.session.commit()
+        sa = Student.query.filter_by(student_id='ANA1').first()
+        if not sa:
+            sa = Student(student_id='ANA1', first_name='An', surname='A', gender='Male',
+                         is_active=True, branch_id=a.id); db.session.add(sa); db.session.flush()
+            for subj in ['English Language', 'Mathematics', 'Biology']:
+                db.session.add(WAECResult(student_id=sa.id, exam_year=2024, subject=subj, grade='B2'))
+        sb = Student.query.filter_by(student_id='ANB1').first()
+        if not sb:
+            sb = Student(student_id='ANB1', first_name='An', surname='B', gender='Male',
+                         is_active=True, branch_id=b.id); db.session.add(sb); db.session.flush()
+            for subj in ['English Language', 'Mathematics']:
+                db.session.add(WAECResult(student_id=sb.id, exam_year=2024, subject=subj, grade='C4'))
+        db.session.commit()
+        all_stats = AcademicAnalytics.get_waec_school_statistics(2024, None)
+        b_stats = AcademicAnalytics.get_waec_school_statistics(2024, b.id)
+        assert all_stats['unique_students'] >= 2
+        assert b_stats['unique_students'] == 1     # only branch B's candidate

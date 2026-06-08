@@ -71,8 +71,9 @@ def waec_list():
     subjects_by_grade = []
     
     if exam_year:
-        school_stats = AcademicAnalytics.get_waec_school_statistics(exam_year)
-        
+        from utils.branch_scope import viewing_branch_id
+        school_stats = AcademicAnalytics.get_waec_school_statistics(exam_year, viewing_branch_id())
+
         if school_stats:
             grade_distribution = school_stats['grade_distribution']
             subject_stats = school_stats['subject_analysis']
@@ -200,7 +201,8 @@ def waec_list():
         else:
             students_data.sort(key=lambda x: x['name'], reverse=(sort_order == 'desc'))
     
-    yoy_data = AcademicAnalytics.get_year_over_year_comparison()
+    from utils.branch_scope import viewing_branch_id
+    yoy_data = AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
     
     return render_template('results/waec_dashboard.html',
         students=students_data,
@@ -495,8 +497,10 @@ def jamb_list():
     subject_performance = []
     
     if exam_year:
-        school_stats = AcademicAnalytics.get_jamb_school_statistics(exam_year)
-        correlation = AcademicAnalytics.calculate_waec_jamb_correlation(exam_year)
+        from utils.branch_scope import viewing_branch_id
+        _bid = viewing_branch_id()
+        school_stats = AcademicAnalytics.get_jamb_school_statistics(exam_year, _bid)
+        correlation = AcademicAnalytics.calculate_waec_jamb_correlation(exam_year, _bid)
         
         # Get all results for subject analysis
         all_results = JAMBResult.query.filter_by(exam_year=exam_year).all()
@@ -592,7 +596,8 @@ def jamb_list():
                 'performance_level': AcademicAnalytics._jamb_performance_level(r.total_score)
             })
     
-    yoy_data = AcademicAnalytics.get_year_over_year_comparison()
+    from utils.branch_scope import viewing_branch_id
+    yoy_data = AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
     
     return render_template('results/jamb_dashboard.html',
         students=students_data,
@@ -1108,10 +1113,12 @@ def analytics_hub():
     if not year and years:
         year = years[0]
 
-    waec_stats = AcademicAnalytics.get_waec_school_statistics(year) if year else None
-    jamb_stats = AcademicAnalytics.get_jamb_school_statistics(year) if year else None
-    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year) if year else None
-    yoy = AcademicAnalytics.get_year_over_year_comparison()
+    from utils.branch_scope import viewing_branch_id
+    bid = viewing_branch_id()
+    waec_stats = AcademicAnalytics.get_waec_school_statistics(year, bid) if year else None
+    jamb_stats = AcademicAnalytics.get_jamb_school_statistics(year, bid) if year else None
+    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year, bid) if year else None
+    yoy = AcademicAnalytics.get_year_over_year_comparison(bid)
 
     # Gender breakdowns for the selected year.
     def gender_split(model):
