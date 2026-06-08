@@ -8,7 +8,8 @@ from models import (
     ClassArmAssignment, Attendance, Week, ClassArm, Subject, SchoolClass
 )
 from utils.access_control import (
-    login_required, admin_required, is_admin, is_teacher, get_accessible_class_ids
+    login_required, admin_required, central_admin_required, is_admin, is_teacher,
+    get_accessible_class_ids
 )
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
@@ -994,7 +995,7 @@ def global_search():
 
 
 @main_bp.route('/audit')
-@admin_required
+@central_admin_required
 def audit_log():
     """View the audit trail of administrative actions (with filters)."""
     from models import AuditLog
