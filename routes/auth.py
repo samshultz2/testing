@@ -68,6 +68,7 @@ def login():
                 set_session_org(user)
                 if user.theme:
                     session['theme'] = user.theme
+                session['must_change_password'] = bool(user.must_change_password)
                 session.permanent = True
                 
                 # Update last login
@@ -143,8 +144,10 @@ def change_password():
             return redirect(url_for('auth.change_password'))
         
         user.set_password(new_password)
+        user.must_change_password = False
         db.session.commit()
-        
+        session.pop('must_change_password', None)
+
         flash('Password changed successfully!', 'success')
         return redirect(url_for('main.dashboard'))
     

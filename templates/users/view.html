@@ -11,6 +11,9 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ url_for('users.edit_user', user_id=user.id) }}" class="btn btn-warning"><i class="fas fa-edit"></i> Edit</a>
+        <form method="POST" action="{{ url_for('users.reset_password', user_id=user.id) }}" style="display:inline" onsubmit="return confirm('Reset this user\'s password to a temporary one? They will have to set a new password at next login.');">
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-key"></i> Reset Password</button>
+        </form>
         <a href="{{ url_for('users.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>

@@ -336,6 +336,43 @@ def enforce_write_level():
     return None
 
 
+def enforce_idle_timeout():
+    """Log a user out after a period of inactivity (Config.SESSION_IDLE_MINUTES)."""
+    if not session.get('logged_in'):
+        return None
+    from config import Config
+    mins = getattr(Config, 'SESSION_IDLE_MINUTES', 0)
+    if not mins or request.endpoint == 'static':
+        return None
+    import time
+    now = int(time.time())
+    last = session.get('last_seen')
+    session['last_seen'] = now
+    if last and (now - last) > mins * 60:
+        session.clear()
+        if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+            abort(401)
+        flash('Your session timed out due to inactivity. Please log in again.', 'warning')
+        return redirect(url_for('auth.login'))
+    return None
+
+
+# Endpoints a user who must change their password may still reach.
+_PW_CHANGE_ALLOWED = {'auth.change_password', 'auth.logout', 'static', 'main.set_theme'}
+
+
+def enforce_password_change():
+    """Force users flagged must_change_password onto the change-password page."""
+    if not session.get('logged_in') or not session.get('must_change_password'):
+        return None
+    if (request.endpoint or '') in _PW_CHANGE_ALLOWED:
+        return None
+    if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+        abort(403)
+    flash('Please set a new password to continue.', 'warning')
+    return redirect(url_for('auth.change_password'))
+
+
 def enforce_subsection_access():
     """before_request gate: per-sub-section access/write for granular users."""
     if not session.get('logged_in') or is_admin():

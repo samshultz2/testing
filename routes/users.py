@@ -154,6 +154,7 @@ def add_user():
                 created_by_id=session.get('user_id')
             )
             user.set_password(password)
+            user.must_change_password = request.form.get('require_pw_change') == 'on'
             # Fine-grained per-module access levels (admins always have full access).
             if role != 'admin':
                 user.set_permissions(_read_perms(request.form))
@@ -469,6 +470,25 @@ def remove_assignment(assignment_id):
         flash(f'Error: {str(e)}', 'error')
     
     return redirect(url_for('users.view_user', user_id=user_id))
+
+
+@users_bp.route('/<int:user_id>/reset-password', methods=['POST'])
+@admin_required
+def reset_password(user_id):
+    """Reset a managed user's password to a one-time temporary value."""
+    user = User.query.get_or_404(user_id)
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+    import secrets
+    temp = secrets.token_urlsafe(6)
+    user.set_password(temp)
+    user.must_change_password = True
+    db.session.commit()
+    log_action('user.password_reset', target=user)
+    flash(f'Temporary password for {user.username}: {temp} — '
+          f'they will be required to change it at next login.', 'success')
+    return redirect(url_for('users.view_user', user_id=user.id))
 
 
 @users_bp.route('/<int:user_id>/toggle-status', methods=['POST'])

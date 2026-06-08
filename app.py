@@ -96,7 +96,10 @@ def create_app(config_class=Config):
 
     # Fine-grained module access for non-admin users.
     from utils.access_control import (enforce_module_access, enforce_read_only,
-                                       enforce_write_level, enforce_subsection_access)
+                                       enforce_write_level, enforce_subsection_access,
+                                       enforce_idle_timeout, enforce_password_change)
+    app.before_request(enforce_idle_timeout)
+    app.before_request(enforce_password_change)
     app.before_request(enforce_module_access)
     app.before_request(enforce_read_only)
     app.before_request(enforce_write_level)

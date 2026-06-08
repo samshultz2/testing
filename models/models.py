@@ -880,6 +880,8 @@ class User(db.Model):
     manage_scope = db.Column(db.String(10), default='none')
     # Preferred UI colour theme (see utils/themes.py).
     theme = db.Column(db.String(20))
+    # Force a password change on next login (set for new accounts / admin resets).
+    must_change_password = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -1216,6 +1218,8 @@ def _ensure_student_exam_columns():
             statements.append("ALTER TABLE users ADD COLUMN manage_scope VARCHAR(10) DEFAULT 'none'")
         if 'theme' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN theme VARCHAR(20)')
+        if 'must_change_password' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0')
     except Exception:
         pass
 

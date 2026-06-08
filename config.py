@@ -84,6 +84,8 @@ class Config:
 
     # Session
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+    # Auto-logout after this many minutes of inactivity (0 disables).
+    SESSION_IDLE_MINUTES = int(os.environ.get('SESSION_IDLE_MINUTES', '60'))
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_SECURE = _as_bool(os.environ.get('SESSION_COOKIE_SECURE'), default=False)
