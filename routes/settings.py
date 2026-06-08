@@ -100,6 +100,8 @@ def school_settings():
             SchoolSettings.set('school_phone', request.form.get('school_phone', ''), 'string', 'School phone number')
             SchoolSettings.set('school_email', request.form.get('school_email', ''), 'string', 'School email')
             SchoolSettings.set('school_motto', request.form.get('school_motto', ''), 'string', 'School motto')
+            SchoolSettings.set('next_term_fees', request.form.get('next_term_fees', ''), 'string', 'Next term fees (shown on report cards)')
+            SchoolSettings.set('next_term_begins', request.form.get('next_term_begins', ''), 'string', 'Next term resumption date (shown on report cards)')
             tz = (request.form.get('timezone') or '').strip()
             if tz:
                 SchoolSettings.set('timezone', tz, 'string', 'Site-wide timezone')

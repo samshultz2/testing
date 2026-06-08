@@ -701,9 +701,28 @@ class TermSummary(db.Model):
     principal_comment = db.Column(db.Text)
     promoted = db.Column(db.Boolean, default=None)  # NULL = pending, True/False = decided
     next_class = db.Column(db.String(50))  # For tracking promotion destination
+    # JSON {trait_key: 1..5} of affective/behavioural ratings for the report sheet.
+    affective = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
-    
+
+    @property
+    def affective_map(self):
+        import json
+        if not self.affective:
+            return {}
+        try:
+            v = json.loads(self.affective)
+            return v if isinstance(v, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+    def set_affective(self, mapping):
+        import json
+        clean = {k: int(v) for k, v in (mapping or {}).items()
+                 if str(v).isdigit() and 1 <= int(v) <= 5}
+        self.affective = json.dumps(clean) if clean else None
+
     # Relationships
     student = db.relationship('Student', backref='term_summaries')
     term = db.relationship('Term', backref='term_summaries')
@@ -1296,6 +1315,12 @@ def _ensure_student_exam_columns():
         sc_cols = {c['name'] for c in inspect(db.engine).get_columns('school_classes')}
         if 'section' not in sc_cols:
             statements.append('ALTER TABLE school_classes ADD COLUMN section VARCHAR(20)')
+    except Exception:
+        pass
+    try:
+        ts_cols = {c['name'] for c in inspect(db.engine).get_columns('term_summaries')}
+        if 'affective' not in ts_cols:
+            statements.append('ALTER TABLE term_summaries ADD COLUMN affective TEXT')
     except Exception:
         pass
 

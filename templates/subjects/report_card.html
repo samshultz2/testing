@@ -139,6 +139,28 @@
     </div>
 </div>
 
+{% set aff = report_data.term_summary.affective_map if report_data.term_summary else {} %}
+{% if aff %}
+<div class="card mb-3">
+    <div class="card-header"><h3>Affective Domain</h3></div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="data-table">
+            <thead><tr><th>Trait</th><th style="text-align:center;">Rating</th><th>Remark</th></tr></thead>
+            <tbody>
+                {% for key, label in affective_traits %}
+                {% if aff.get(key) %}
+                <tr><td>{{ label }}</td>
+                    <td style="text-align:center;font-weight:bold;">{{ aff.get(key) }}/5</td>
+                    <td>{{ rating_labels.get(aff.get(key), '') }}</td></tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="text-muted text-sm" style="padding:.5rem;">Scale: 5 Excellent · 4 Very Good · 3 Good · 2 Fair · 1 Poor</p>
+    </div>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-header"><h3>Comments</h3></div>
     <div class="card-body">

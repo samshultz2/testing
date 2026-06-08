@@ -8,6 +8,18 @@ from models import (
     SchoolSettings, StudentScore, GradeScale, TermSummary, Attendance, Week,
 )
 
+# Affective / behavioural traits shown on the report sheet, rated 1–5.
+AFFECTIVE_TRAITS = [
+    ('punctuality', 'Punctuality'), ('organization', 'Organization'),
+    ('neatness', 'Neatness'), ('politeness', 'Politeness'), ('honesty', 'Honesty'),
+    ('relationship', 'Relationship with others'), ('self_control', 'Self Control'),
+    ('responsibility', 'Responsibility'), ('attentiveness', 'Attentiveness'),
+    ('cooperation', 'Cooperation'), ('perseverance', 'Perseverance'),
+    ('initiative', 'Initiative'),
+]
+AFFECTIVE_KEYS = [k for k, _ in AFFECTIVE_TRAITS]
+RATING_LABELS = {5: 'Excellent', 4: 'Very Good', 3: 'Good', 2: 'Fair', 1: 'Poor'}
+
 
 def _subject_totals(student_id, class_subjects, pass_mark):
     """(total_score, subjects_passed, subjects_failed) for one student."""

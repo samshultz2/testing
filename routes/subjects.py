@@ -6,7 +6,7 @@ from utils.helpers import get_active_term
 from models import (
     db, Subject, ClassSubject, AssessmentType, SubjectAssessmentOverride,
     StudentScore, StudentEnrollment, ClassArmAssignment, Term, SchoolClass,
-    ClassArm, Student, GradeScale, SchoolSettings
+    ClassArm, Student, GradeScale, SchoolSettings, TermSummary
 )
 from utils.access_control import (
     login_required, can_access_class, can_enter_results,
@@ -644,6 +644,57 @@ def compute_summaries():
     return redirect(url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))
 
 
+@subjects_bp.route('/affective', methods=['GET', 'POST'])
+@login_required
+def affective():
+    """Enter behavioural / affective ratings (1–5) for a class arm in a term."""
+    from utils.report_card import AFFECTIVE_TRAITS, AFFECTIVE_KEYS
+    term_id = request.values.get('term_id', type=int)
+    assignment_id = request.values.get('assignment_id', type=int)
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.affective'))
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    terms = Term.query.order_by(Term.id.desc()).all()
+    assignments = (filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+
+    if request.method == 'POST' and selected_assignment and term_id:
+        enrollments = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True).all()
+        for e in enrollments:
+            mapping = {k: request.form.get(f'r_{e.student_id}_{k}', type=int)
+                       for k in AFFECTIVE_KEYS}
+            ts = TermSummary.query.filter_by(student_id=e.student_id, term_id=term_id).first()
+            if not ts:
+                ts = TermSummary(student_id=e.student_id, term_id=term_id, enrollment_id=e.id)
+                db.session.add(ts)
+            ts.set_affective(mapping)
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('results.affective',
+                   detail=f'term {term_id}, {selected_assignment.display_name}')
+        flash('Behavioural ratings saved.', 'success')
+        return redirect(url_for('subjects.affective', term_id=term_id, assignment_id=assignment_id))
+
+    students = []
+    if selected_assignment:
+        enrollments = (StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True)
+            .join(Student).order_by(Student.surname, Student.first_name).all())
+        ratings = {ts.student_id: ts.affective_map
+                   for ts in TermSummary.query.filter_by(term_id=term_id).all()}
+        for e in enrollments:
+            students.append({'student': e.student, 'ratings': ratings.get(e.student_id, {})})
+
+    return render_template('subjects/affective.html', terms=terms, term_id=term_id,
+        assignments=assignments, assignment_id=assignment_id,
+        selected_assignment=selected_assignment, students=students, traits=AFFECTIVE_TRAITS)
+
+
 # ============================================================================
 # STUDENT REPORT CARD
 # ============================================================================
@@ -667,13 +718,15 @@ def student_report_card(student_id):
     report_data = None
     enrollment = None
 
+    from utils.report_card import AFFECTIVE_TRAITS, RATING_LABELS
     if selected_term:
         from utils.report_card import build_report_card
         enrollment, report_data = build_report_card(student_id, term_id)
 
     return render_template('subjects/report_card.html',
         student=student, terms=terms, term_id=term_id, selected_term=selected_term,
-        report_data=report_data, enrollment=enrollment
+        report_data=report_data, enrollment=enrollment,
+        affective_traits=AFFECTIVE_TRAITS, rating_labels=RATING_LABELS
     )
 
 
