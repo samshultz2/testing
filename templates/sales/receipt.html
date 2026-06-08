@@ -8,6 +8,8 @@
 </div>
 <div class="card" style="max-width:560px;">
     <div class="card-body">
+        {% if sale.branch %}<h3 style="margin:0 0 .2rem;">{{ sale.branch.name }} Branch</h3>
+        {% if sale.branch.address %}<p class="text-muted text-sm" style="margin:0;">{{ sale.branch.address }}{% if sale.branch.phone %} · {{ sale.branch.phone }}{% endif %}</p>{% endif %}{% endif %}
         <p class="text-muted text-sm">{{ sale.created_at.strftime('%d %b %Y, %I:%M %p') if sale.created_at }} · {{ sale.payment_method }}</p>
         <p><strong>Buyer:</strong> {{ sale.buyer }}{% if sale.sold_by %} &middot; <span class="text-muted">by {{ sale.sold_by }}</span>{% endif %}</p>
         <table class="data-table no-mobile-scroll" style="width:100%;">

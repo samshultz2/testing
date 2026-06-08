@@ -44,7 +44,14 @@
                             <i class="fas fa-home"></i><span>Dashboard</span>
                         </a>
                     </li>
-                    
+                    {% if branch_ctx.is_central %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.branch_overview') }}" class="nav-link {% if request.endpoint == 'main.branch_overview' %}active{% endif %}">
+                            <i class="fas fa-code-compare"></i><span>Branch Overview</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
                     {% if can_access_module('students') or can_access_module('admissions') %}
                     <li class="nav-section">Students</li>
                     {% if can_access_module('students') %}

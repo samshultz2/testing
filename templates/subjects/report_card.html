@@ -51,6 +51,7 @@
     <div class="card-body">
         <div class="report-header">
             <h2>{{ config.get('school_name', 'School Name') if config else 'School Name' }}</h2>
+            {% if student.branch %}<p style="font-weight:600;margin:.1rem 0;">{{ student.branch.name }} Branch{% if student.branch.address %} · {{ student.branch.address }}{% endif %}</p>{% endif %}
             <p>{{ selected_term.full_name }} Academic Report</p>
         </div>
         

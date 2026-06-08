@@ -35,8 +35,12 @@
 <div class="receipt">
     <div class="r-head">
         <h2>{{ school.name }}</h2>
+        {% set br = payment.student.branch if payment.student else None %}
+        {% if br %}<div class="branch-name" style="font-weight:600;">{{ br.name }} Branch</div>{% endif %}
         {% if school.motto %}<div class="motto">{{ school.motto }}</div>{% endif %}
-        {% if school.address %}<div class="addr">{{ school.address }}{% if school.phone %} · {{ school.phone }}{% endif %}</div>{% endif %}
+        {% set addr = (br.address if br and br.address else school.address) %}
+        {% set phone = (br.phone if br and br.phone else school.phone) %}
+        {% if addr %}<div class="addr">{{ addr }}{% if phone %} · {{ phone }}{% endif %}</div>{% endif %}
     </div>
     <div class="r-title">Fee Payment Receipt</div>
     <div class="r-body">

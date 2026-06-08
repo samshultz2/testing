@@ -51,6 +51,7 @@ class Sale(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
 
     student = db.relationship('Student')
+    branch = db.relationship('Branch')
     items = db.relationship('SaleItem', backref='sale', lazy='dynamic',
                             cascade='all, delete-orphan')
 
