@@ -103,6 +103,33 @@ def login():
     return render_template('auth/login.html')
 
 
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Self-service reset: emails a one-time password the user must change."""
+    from utils import mailer
+    if session.get('logged_in'):
+        return redirect(url_for('main.dashboard'))
+    if request.method == 'POST':
+        ident = (request.form.get('identifier') or '').strip()
+        if ident:
+            user = User.query.filter((User.username == ident) | (User.email == ident)).first()
+            if user and user.email and user.is_active and mailer.is_configured():
+                import secrets
+                temp = secrets.token_urlsafe(6)
+                user.set_password(temp)
+                user.must_change_password = True
+                db.session.commit()
+                school = 'PosyHub'
+                mailer.send_email(user.email, f'{school} password reset',
+                                  f'Hello {user.full_name or user.username},\n\n'
+                                  f'Your temporary password is: {temp}\n\n'
+                                  f'Please sign in and set a new password.\n')
+        # Generic response (avoid revealing whether an account exists).
+        flash('If a matching account exists, a reset email has been sent.', 'info')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/forgot_password.html')
+
+
 @auth_bp.route('/logout')
 def logout():
     """Handle user logout"""

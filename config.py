@@ -74,6 +74,14 @@ class Config:
     PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
     PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY', '')
 
+    # Email (SMTP). Empty host/from => email features stay disabled.
+    SMTP_HOST = os.environ.get('SMTP_HOST', '')
+    SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+    SMTP_USER = os.environ.get('SMTP_USER', '')
+    SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+    SMTP_FROM = os.environ.get('SMTP_FROM', '')
+    SMTP_USE_TLS = _as_bool(os.environ.get('SMTP_USE_TLS'), default=True)
+
     # Login throttling
     LOGIN_MAX_ATTEMPTS = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '8'))
     LOGIN_LOCKOUT_MINUTES = int(os.environ.get('LOGIN_LOCKOUT_MINUTES', '15'))
