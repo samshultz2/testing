@@ -1302,7 +1302,8 @@ def run_generation():
         # Use global generation
         from routes.generator_global import run_global_generation
         
-        result = run_global_generation(class_ids, periods_per_day, break_after, num_attempts=25)
+        # More attempts = fuller timetable (keeps the best, stops early at 0 empty).
+        result = run_global_generation(class_ids, periods_per_day, break_after, num_attempts=100)
         
         # Save results
         batch_id = str(uuid.uuid4())[:8]
