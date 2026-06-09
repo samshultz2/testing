@@ -555,37 +555,41 @@ def export_json():
 @settings_bp.route('/backup/restore', methods=['POST'])
 @login_required
 def restore_backup():
-    """Restore database from backup"""
+    """Restore database from an uploaded backup (SQLite .db or Postgres .sql)."""
+    import tempfile
+    from flask import current_app
+    from utils.backup import restore_database
+
     if 'file' not in request.files:
         flash('No file selected.', 'error')
         return redirect(url_for('settings.backup_page'))
-    
+
     file = request.files['file']
-    
-    if file.filename == '':
+    if not file.filename:
         flash('No file selected.', 'error')
         return redirect(url_for('settings.backup_page'))
-    
-    if not file.filename.endswith('.db'):
-        flash('Please upload a .db file', 'error')
+
+    if not file.filename.lower().endswith(('.db', '.sql')):
+        flash('Please upload a .db (SQLite) or .sql (PostgreSQL) backup file.', 'error')
         return redirect(url_for('settings.backup_page'))
-    
+
+    # Stage the upload to a temp file, then let the backend-aware helper apply it.
+    suffix = '.sql' if file.filename.lower().endswith('.sql') else '.db'
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
     try:
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'school.db')
-        
-        # Create backup of current database first
-        if os.path.exists(db_path):
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_path = db_path.replace('.db', f'_pre_restore_{timestamp}.db')
-            shutil.copy2(db_path, backup_path)
-        
-        # Save uploaded file
-        file.save(db_path)
-        
-        flash('Database restored successfully! Please restart the application.', 'success')
+        file.save(tmp_path)
+        ok, message = restore_database(current_app, tmp_path, file.filename)
+        flash(message, 'success' if ok else 'error')
     except Exception as e:
         flash(f'Error restoring backup: {str(e)}', 'error')
-    
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
     return redirect(url_for('settings.backup_page'))
 
 

@@ -75,8 +75,26 @@ duplicate background threads — only do that after moving those jobs to a
 separate process.
 
 **Backups** run automatically (one `pg_dump` per day under `instance/backups`,
-pruned to `BACKUP_RETENTION`). Manual: `bash scripts/backup_db.sh`. Restore:
-`bash scripts/restore_db.sh instance/backups/school_XXXX.sql`.
+pruned to `BACKUP_RETENTION`). Manual: `bash scripts/backup_db.sh`. Restore via
+script: `bash scripts/restore_db.sh instance/backups/school_XXXX.sql`, or from
+the **Settings → Backup** page (upload the `.sql` dump — it is applied with
+`psql`; a pre-restore snapshot is taken automatically).
+
+### Optional: nginx on Termux/proot
+
+You do **not** have to wait for a Linux server to put nginx in front — it runs
+in proot too, and is worth it for serving static files and (later) TLS:
+
+```bash
+apt install -y nginx
+```
+
+Use the same reverse-proxy config as Stage 2 below (proxy to
+`127.0.0.1:5000`), set `GUNICORN_BIND=127.0.0.1:5000` and `TRUST_PROXY=1`, then
+start nginx with `nginx` (or `service nginx start`). There's no systemd in
+proot, so run nginx and gunicorn under `tmux` (or a small supervisor script).
+HTTPS via certbot needs a public domain, so on a LAN you'd typically stay on
+plain HTTP until you move to a server with a domain name.
 
 ---
 
@@ -153,10 +171,27 @@ Once TLS is live, `SESSION_COOKIE_SECURE=1` and `ENABLE_HSTS=1` take effect.
 
 ### 4. Scaling beyond one process
 
-Before raising `WEB_CONCURRENCY` above 1, move the background jobs
-(`utils/comms.dispatch_due_scheduled` and `utils/backup.auto_backup`) out of
-the web process — e.g. a small `systemd` timer or cron calling a management
-command — so they run exactly once regardless of worker count.
+The web app runs scheduled messages + daily backup in an in-process thread,
+which is correct for a single worker. To run multiple workers, move those jobs
+to one separate process:
+
+```ini
+# .env
+WEB_CONCURRENCY=4
+RUN_INPROCESS_JOBS=0
+```
+
+Run the web app and the jobs worker side by side:
+
+```bash
+gunicorn -c gunicorn.conf.py wsgi:app     # web, 4 workers
+python scripts/run_jobs.py                # jobs, exactly one process
+```
+
+As a systemd unit (`posyhub-jobs.service`), mirror `posyhub.service` but with
+`ExecStart=.../python scripts/run_jobs.py`. The worker forces
+`RUN_INPROCESS_JOBS=0` itself, so the jobs fire exactly once regardless of how
+many web workers are running.
 
 ---
 

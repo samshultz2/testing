@@ -40,12 +40,17 @@ def _libpq_url(uri):
 
 
 def _pg_dump(app, dest):
-    """Run pg_dump to ``dest``. Returns dest on success, else None."""
+    """Run pg_dump to ``dest``. Returns dest on success, else None.
+
+    Dumps are self-restoring (``--clean --if-exists``): restoring one drops and
+    recreates the objects, so it can be applied over an existing schema.
+    """
     url = _libpq_url(_uri(app))
     try:
         with open(dest, 'wb') as fh:
             proc = subprocess.run(
-                ['pg_dump', '--no-owner', '--no-privileges', url],
+                ['pg_dump', '--no-owner', '--no-privileges',
+                 '--clean', '--if-exists', url],
                 stdout=fh, stderr=subprocess.PIPE, timeout=300,
             )
         if proc.returncode != 0:
@@ -114,6 +119,61 @@ def list_backups(app):
         return sorted(out, key=lambda x: x['name'], reverse=True)
     except Exception:
         return []
+
+
+def restore_database(app, upload_path, original_filename):
+    """
+    Restore the database from an uploaded backup. Backend-aware:
+
+    * SQLite  — accepts a ``.db`` file and swaps it into place (app restart
+      required afterwards).
+    * Postgres — accepts a ``.sql`` dump (as produced here, with
+      ``--clean --if-exists``) and applies it with ``psql``. A pre-restore
+      backup is taken first.
+
+    Returns (ok: bool, message: str).
+    """
+    name = (original_filename or '').lower()
+    if _is_postgres(app):
+        if not name.endswith('.sql'):
+            return False, 'On PostgreSQL, please upload a .sql backup file.'
+        # Safety snapshot before we overwrite anything.
+        make_backup(app, label='pre_restore')
+        url = _libpq_url(_uri(app))
+        # Release pooled connections so DROP/CREATE in the dump aren't blocked.
+        try:
+            from models import db
+            db.engine.dispose()
+        except Exception:
+            pass
+        try:
+            proc = subprocess.run(
+                ['psql', '-v', 'ON_ERROR_STOP=1', '-f', upload_path, url],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600,
+            )
+            if proc.returncode != 0:
+                tail = proc.stdout.decode('utf-8', 'replace')[-800:]
+                return False, f'Restore failed: {tail}'
+            return True, 'Database restored from backup.'
+        except FileNotFoundError:
+            return False, 'psql not found on PATH; cannot restore on this host.'
+        except Exception as exc:
+            return False, f'Restore error: {exc}'
+
+    # SQLite path: swap the file in.
+    if not name.endswith('.db'):
+        return False, 'On SQLite, please upload a .db backup file.'
+    db_path = _sqlite_path(app)
+    if not db_path:
+        return False, 'Could not determine SQLite database path.'
+    try:
+        if os.path.exists(db_path):
+            stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            shutil.copy2(db_path, db_path.replace('.db', f'_pre_restore_{stamp}.db'))
+        shutil.move(upload_path, db_path)
+        return True, 'Database restored. Please restart the application.'
+    except Exception as exc:
+        return False, f'Restore error: {exc}'
 
 
 def auto_backup(app):

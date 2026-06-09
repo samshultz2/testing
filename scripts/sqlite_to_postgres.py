@@ -42,6 +42,14 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Load DATABASE_URL (and friends) from a .env in the repo root if present, so
+# this script "just works" the same way the app does. Real env vars win.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+except Exception:
+    pass
+
 from sqlalchemy import create_engine, select, func, text, inspect as sa_inspect  # noqa: E402
 
 from models import db  # noqa: E402  (registers all tables on db.metadata)

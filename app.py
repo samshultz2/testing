@@ -123,7 +123,12 @@ def create_app(config_class=None):
     auto_backup(app)
 
     # Background worker: dispatch due scheduled parent-communication campaigns.
-    if os.environ.get('POSYHUB_TESTING') != '1':
+    # Runs in-process by default (fine for a single worker). When scaling to
+    # multiple gunicorn workers, set RUN_INPROCESS_JOBS=0 and run the jobs in a
+    # separate process (scripts/run_jobs.py) so they fire exactly once.
+    _run_jobs = os.environ.get('RUN_INPROCESS_JOBS', '1').strip().lower() \
+        not in ('0', 'false', 'no', 'off')
+    if os.environ.get('POSYHUB_TESTING') != '1' and _run_jobs:
         _start_scheduled_messages_worker(app)
 
     # Serve the service worker from the root so its scope covers the whole app
