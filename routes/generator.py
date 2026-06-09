@@ -5,7 +5,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from models import (
     db, GenSubject, GenTeacher, GenTeacherSubject, GenTeacherAvailability, GenSubjectConfig,
     GenClassSubjectConfig, GenClassStreamSubject, GenStream, GenStreamSubject, GenClassConfig, GenClassArmStream, GenRoom,
-    GenTeacherAssignment, GenTimetableRule, GenTimetableResult, GenSettings
+    GenTeacherAssignment, GenTimetableRule, GenTimetableResult, GenSettings,
+    Subject
 )
 from utils.helpers import login_required
 from io import BytesIO
@@ -372,6 +373,48 @@ def add_gen_subject():
             flash(f'Error: {str(e)}', 'error')
     
     return render_template('generator/add_subject.html', level=level)
+
+
+@generator_bp.route('/subjects/sync', methods=['POST'])
+@login_required
+def sync_gen_subjects():
+    """One-way, non-destructive import of academic subjects into this level's
+    timetable subjects. Creates any GenSubject that doesn't already exist (by
+    name, mirroring add_gen_subject's dedupe); never deletes or edits existing
+    gen subjects, their periods, streams, or teacher assignments."""
+    level = get_current_level()
+    # Map academic categories to the generator's category vocabulary.
+    cat_map = {'science': 'science', 'arts': 'arts',
+               'commercial': 'commercial', 'general': 'core'}
+    try:
+        academic = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+        # Existing gen subject names for this level (case-insensitive).
+        existing = {s.name.strip().lower() for s in GenSubject.query.filter_by(
+            school_level=level, is_active=True).all()}
+        created = 0
+        for subj in academic:
+            name = (subj.name or '').strip()
+            if not name or name.lower() in existing:
+                continue
+            db.session.add(GenSubject(
+                name=name,
+                short_name=(subj.short_name or '').strip() or None,
+                school_level=level,
+                category=cat_map.get((subj.category or '').strip().lower(), 'core')
+            ))
+            existing.add(name.lower())
+            created += 1
+        db.session.commit()
+        if created:
+            flash(f'Imported {created} subject(s) from academic subjects into '
+                  f'{level.upper()}. Set their periods and teachers to include '
+                  f'them in generation.', 'success')
+        else:
+            flash(f'All academic subjects are already present in {level.upper()}.', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('generator.subjects_config'))
 
 
 @generator_bp.route('/subjects/<int:subject_id>/delete', methods=['POST'])

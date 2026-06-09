@@ -21,9 +21,18 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="fas fa-book"></i> {{ level|upper }} Subjects</h1>
-    <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
-        <i class="fas fa-plus"></i> Add Subject
-    </a>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <form method="POST" action="{{ url_for('generator.sync_gen_subjects') }}" style="display:inline"
+              onsubmit="return confirm('Import academic subjects not already listed here into {{ level|upper }}? This only adds subjects; it never changes or removes existing ones, their periods, or teachers.');">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary" title="Add academic subjects that aren't here yet (one-way, non-destructive)">
+                <i class="fas fa-sync"></i> Sync from Academic Subjects
+            </button>
+        </form>
+        <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Subject
+        </a>
+    </div>
 </div>
 
 <p class="text-muted mb-3">Manage {{ level|upper }} subjects. These are separate from {{ 'SSS' if level == 'jss' else 'JSS' }} subjects.</p>
