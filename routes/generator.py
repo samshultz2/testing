@@ -13,6 +13,114 @@ import uuid
 
 generator_bp = Blueprint('generator', __name__, url_prefix='/generator')
 
+
+@generator_bp.route('/import-school-data', methods=['POST'])
+@login_required
+def import_school_data():
+    """Populate the generator from the school's existing Subjects / Class Subjects
+    / classes / teachers so they don't have to be re-entered here. Purely additive:
+    it creates anything missing and never deletes or overwrites your tweaks."""
+    from models import Subject, SchoolClass, ClassArm, ClassSubject, ClassArmAssignment
+    from utils.helpers import get_active_term
+    term = get_active_term()
+    if not term:
+        flash('Set an active term first, then import.', 'error')
+        return redirect(url_for('generator.index'))
+
+    def level_of(section):
+        s = (section or '').lower()
+        return 'jss' if s == 'junior' else 'sss' if s == 'senior' else None
+
+    # Arms used by each class this term (for GenClassConfig.arm_names).
+    arms_by_class = {}
+    for caa in ClassArmAssignment.query.filter_by(term_id=term.id).all():
+        if caa.arm:
+            arms_by_class.setdefault(caa.class_id, set()).add(caa.arm.name)
+
+    gsub, gcls, gtea = {}, {}, {}
+    added = {'subjects': 0, 'classes': 0, 'teachers': 0, 'class_subjects': 0, 'assignments': 0}
+
+    def get_subject(name, level):
+        key = (name.lower(), level)
+        if key in gsub:
+            return gsub[key]
+        o = GenSubject.query.filter_by(name=name, school_level=level).first()
+        if not o:
+            o = GenSubject(name=name, school_level=level, is_active=True)
+            db.session.add(o); db.session.flush(); added['subjects'] += 1
+        gsub[key] = o
+        return o
+
+    def get_class(sc, level):
+        key = (sc.name.lower(), level)
+        if key in gcls:
+            return gcls[key]
+        o = GenClassConfig.query.filter_by(class_name=sc.name, school_level=level).first()
+        if not o:
+            arms = sorted(arms_by_class.get(sc.id, []))
+            o = GenClassConfig(class_name=sc.name, school_level=level,
+                               num_arms=len(arms) or 1,
+                               arm_names=','.join(arms) or None, is_active=True)
+            db.session.add(o); db.session.flush(); added['classes'] += 1
+        gcls[key] = o
+        return o
+
+    def get_teacher(name, level):
+        key = (name.lower(), level)
+        if key in gtea:
+            return gtea[key]
+        o = GenTeacher.query.filter_by(name=name, school_level=level).first()
+        if not o:
+            o = GenTeacher(name=name, school_level=level, is_active=True)
+            db.session.add(o); db.session.flush(); added['teachers'] += 1
+        gtea[key] = o
+        return o
+
+    try:
+        rows = ClassSubject.query.filter_by(term_id=term.id, is_active=True).all()
+        for cs in rows:
+            sc = db.session.get(SchoolClass, cs.class_id)
+            subj = db.session.get(Subject, cs.subject_id)
+            if not (sc and subj):
+                continue
+            level = level_of(getattr(sc, 'section', None))
+            if not level:
+                continue
+            gs = get_subject(subj.name, level)
+            gc = get_class(sc, level)
+            arm = db.session.get(ClassArm, cs.arm_id) if cs.arm_id else None
+            arm_name = arm.name if arm else None
+
+            # Class takes this subject.
+            if not GenClassSubjectConfig.query.filter_by(
+                    class_config_id=gc.id, subject_id=gs.id).first():
+                db.session.add(GenClassSubjectConfig(
+                    class_config_id=gc.id, subject_id=gs.id, is_enabled=True, is_active=True))
+                added['class_subjects'] += 1
+
+            # Teacher who teaches it -> can-teach + assignment.
+            tname = (cs.teacher_name or '').strip()
+            if tname:
+                gt = get_teacher(tname, level)
+                if not GenTeacherSubject.query.filter_by(
+                        teacher_id=gt.id, subject_id=gs.id).first():
+                    db.session.add(GenTeacherSubject(teacher_id=gt.id, subject_id=gs.id))
+                if not GenTeacherAssignment.query.filter_by(
+                        teacher_id=gt.id, subject_id=gs.id,
+                        class_config_id=gc.id, arm_name=arm_name).first():
+                    db.session.add(GenTeacherAssignment(
+                        teacher_id=gt.id, subject_id=gs.id, class_config_id=gc.id,
+                        arm_name=arm_name, is_active=True))
+                    added['assignments'] += 1
+        db.session.commit()
+        flash('Imported from school setup — added {subjects} subjects, {classes} classes, '
+              '{teachers} teachers, {class_subjects} class-subjects, {assignments} assignments. '
+              'Adjust periods/availability below, then generate.'.format(**added), 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Import failed: {e}', 'error')
+    return redirect(url_for('generator.index'))
+
 DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 SUBJECT_COLORS = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
