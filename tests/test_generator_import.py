@@ -59,3 +59,25 @@ def test_import_is_idempotent(app):
         gc = GenClassConfig.query.filter_by(class_name='SSS1-G', school_level='sss').first()
         gs = GenSubject.query.filter_by(name='Further Maths G', school_level='sss').first()
         assert GenClassSubjectConfig.query.filter_by(class_config_id=gc.id, subject_id=gs.id).count() == 1
+
+
+def test_import_then_generate_produces_timetable(app):
+    """Guard the engine: import school data, then a generation run schedules slots."""
+    import re as _re
+    from models import GenClassConfig, GenTimetableResult
+    _seed(app)
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    pt = _re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                    c.get('/').get_data(as_text=True)).group(1)
+    c.post('/generator/import-school-data', data={'_csrf_token': pt})
+    c.get('/generator/level/sss')   # set the working level
+    with app.app_context():
+        gc = GenClassConfig.query.filter_by(class_name='SSS1-G', school_level='sss').first()
+        cid = gc.id
+        before = GenTimetableResult.query.count()
+    r = c.post('/generator/generate/run',
+               data={'_csrf_token': pt, 'class_ids[]': str(cid)}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert GenTimetableResult.query.count() > before    # a timetable was produced

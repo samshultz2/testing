@@ -450,7 +450,7 @@ def run_generation_v2(class_ids, periods_per_day, break_after, db_models):
     Run the V2 generator using data from database models
     """
     from models import (
-        GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
+        db, GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
         GenClassSubjectConfig, GenTeacher, GenTeacherAssignment, GenTeacherAvailability,
         GenTimetableRule
     )

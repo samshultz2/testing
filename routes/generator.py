@@ -48,6 +48,10 @@ def import_school_data():
         if not o:
             o = GenSubject(name=name, school_level=level, is_active=True)
             db.session.add(o); db.session.flush(); added['subjects'] += 1
+        # The generator schedules from GenSubjectConfig (periods per week) — make
+        # sure one exists so imported subjects actually appear on the timetable.
+        if not GenSubjectConfig.query.filter_by(subject_id=o.id, school_level=level).first():
+            db.session.add(GenSubjectConfig(subject_id=o.id, school_level=level, periods_per_week=4))
         gsub[key] = o
         return o
 

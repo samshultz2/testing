@@ -26,7 +26,7 @@ def generate_global_timetable(class_ids, periods_per_day, break_after, db_sessio
     class_arms = []  # List of (class_name, arm) tuples
     
     for class_id in class_ids:
-        cc = db.session.get(GenClassConfig, class_id)
+        cc = db_session.get(GenClassConfig, class_id)
         if not cc:
             continue
         
