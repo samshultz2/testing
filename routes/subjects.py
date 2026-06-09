@@ -793,7 +793,9 @@ def compute_summaries():
 @login_required
 def affective():
     """Enter behavioural / affective ratings (1–5) for a class arm in a term."""
-    from utils.report_card import AFFECTIVE_TRAITS, AFFECTIVE_KEYS
+    from utils.report_card import active_traits
+    AFFECTIVE_TRAITS = active_traits()
+    AFFECTIVE_KEYS = [k for k, _ in AFFECTIVE_TRAITS]
     term_id = request.values.get('term_id', type=int)
     assignment_id = request.values.get('assignment_id', type=int)
     if assignment_id and not can_access_class(assignment_id):
@@ -913,7 +915,7 @@ def student_report_card(student_id):
     report_data = None
     enrollment = None
 
-    from utils.report_card import AFFECTIVE_TRAITS, RATING_LABELS
+    from utils.report_card import active_traits, RATING_LABELS
     if selected_term:
         from utils.report_card import build_report_card
         enrollment, report_data = build_report_card(student_id, term_id)
@@ -921,7 +923,7 @@ def student_report_card(student_id):
     return render_template('subjects/report_card.html',
         student=student, terms=terms, term_id=term_id, selected_term=selected_term,
         report_data=report_data, enrollment=enrollment,
-        affective_traits=AFFECTIVE_TRAITS, rating_labels=RATING_LABELS
+        affective_traits=active_traits(), rating_labels=RATING_LABELS
     )
 
 

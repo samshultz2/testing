@@ -191,6 +191,61 @@ def save_grades():
 
 
 # ============================================================================
+# BEHAVIOURAL TRAITS
+# ============================================================================
+
+def _slugify(text):
+    import re
+    s = re.sub(r'[^a-z0-9]+', '_', (text or '').lower()).strip('_')
+    return s or 'trait'
+
+
+@settings_bp.route('/traits')
+@login_required
+def traits_list():
+    from models import BehaviouralTrait
+    traits = BehaviouralTrait.query.order_by(BehaviouralTrait.order, BehaviouralTrait.id).all()
+    return render_template('settings/traits.html', traits=traits)
+
+
+@settings_bp.route('/traits/save', methods=['POST'])
+@login_required
+def save_traits():
+    from models import BehaviouralTrait
+    keys = request.form.getlist('key[]')
+    labels = request.form.getlist('label[]')
+    active_set = set(request.form.getlist('active[]'))   # values are row indices
+    seen = set()
+    try:
+        for i, label in enumerate(labels):
+            label = label.strip()
+            if not label:
+                continue
+            key = (keys[i].strip() if i < len(keys) and keys[i].strip() else _slugify(label))
+            # avoid colliding with a different existing trait's key
+            base, n = key, 1
+            while key in seen:
+                n += 1; key = f'{base}_{n}'
+            is_active = str(i) in active_set
+            trait = BehaviouralTrait.query.filter_by(key=key).first()
+            if trait:
+                trait.label, trait.order, trait.is_active = label, i, is_active
+            else:
+                db.session.add(BehaviouralTrait(key=key, label=label, order=i, is_active=is_active))
+            seen.add(key)
+        # Traits dropped from the form are deactivated (keys kept so ratings survive).
+        for t in BehaviouralTrait.query.all():
+            if t.key not in seen:
+                t.is_active = False
+        db.session.commit()
+        flash('Behavioural traits saved!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('settings.traits_list'))
+
+
+# ============================================================================
 # ASSESSMENT TYPES
 # ============================================================================
 

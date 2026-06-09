@@ -528,6 +528,20 @@ class GradeScale(db.Model):
         return f'<GradeScale {self.grade} ({self.min_score}-{self.max_score})>'
 
 
+class BehaviouralTrait(db.Model):
+    """Configurable affective/behavioural traits shown on the report sheet."""
+    __tablename__ = 'behavioural_traits'
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(40), unique=True, nullable=False)   # stable id used in ratings
+    label = db.Column(db.String(80), nullable=False)
+    order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+
+    def __repr__(self):
+        return f'<BehaviouralTrait {self.key}>'
+
+
 # ============================================================================
 # SUBJECTS & ASSESSMENT SYSTEM
 # ============================================================================
@@ -1451,6 +1465,16 @@ def init_db(app):
         db.create_all()
         _ensure_student_exam_columns()
         _seed_branches()
+
+        # Seed the default behavioural traits (idempotent).
+        try:
+            if BehaviouralTrait.query.count() == 0:
+                from utils.report_card import AFFECTIVE_TRAITS
+                for i, (key, label) in enumerate(AFFECTIVE_TRAITS):
+                    db.session.add(BehaviouralTrait(key=key, label=label, order=i, is_active=True))
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
 
         # Seed standard course admission requirements (idempotent).
         try:

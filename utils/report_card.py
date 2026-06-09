@@ -21,6 +21,14 @@ AFFECTIVE_KEYS = [k for k, _ in AFFECTIVE_TRAITS]
 RATING_LABELS = {5: 'Excellent', 4: 'Very Good', 3: 'Good', 2: 'Fair', 1: 'Poor'}
 
 
+def active_traits():
+    """Configured behavioural traits as [(key, label)] — falls back to defaults."""
+    from models import BehaviouralTrait
+    rows = (BehaviouralTrait.query.filter_by(is_active=True)
+            .order_by(BehaviouralTrait.order, BehaviouralTrait.id).all())
+    return [(r.key, r.label) for r in rows] if rows else AFFECTIVE_TRAITS
+
+
 def _subject_totals(student_id, class_subjects, pass_mark):
     """(total_score, subjects_passed, subjects_failed) for one student."""
     total = passed = failed = 0

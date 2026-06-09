@@ -58,7 +58,7 @@ def home():
         session.pop(PKEY, None)
         return redirect(url_for('parent.login'))
 
-    from utils.report_card import AFFECTIVE_TRAITS, RATING_LABELS
+    from utils.report_card import active_traits, RATING_LABELS
     term_id = request.args.get('term_id', type=int)
     if not term_id:
         active = get_active_term()
@@ -88,7 +88,7 @@ def home():
         report=report if results_ready else None, results_ready=results_ready,
         enrollment=enrollment, attendance=attendance, announcements=announcements,
         pay_enabled=payments.is_configured(),
-        affective_traits=AFFECTIVE_TRAITS, rating_labels=RATING_LABELS)
+        affective_traits=active_traits(), rating_labels=RATING_LABELS)
 
 
 def _record_online_payment(student_id, term_id, amount, reference):
