@@ -67,6 +67,9 @@ def parse_args():
                    help='Report what would be copied without writing anything')
     p.add_argument('--force', action='store_true',
                    help='TRUNCATE target tables first if the target is not empty')
+    p.add_argument('--if-empty', action='store_true',
+                   help='Exit successfully without copying if the target already '
+                        'has data (use for automated/idempotent startup).')
     p.add_argument('--batch', type=int, default=1000,
                    help='Insert batch size (default: 1000)')
     return p.parse_args()
@@ -126,6 +129,10 @@ def main():
                 n = 0
             if n:
                 nonempty.append((table.name, n))
+    if nonempty and args.if_empty:
+        print('Target already contains data — nothing to do (--if-empty).')
+        return
+
     if nonempty and not args.force:
         print('\nERROR: target already contains data:')
         for name, n in nonempty:

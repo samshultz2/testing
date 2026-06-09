@@ -109,7 +109,35 @@ psql "postgresql://posyhub@localhost:5432/posyhub" -c "\conninfo"
 > `initdb` defaults to `trust` auth for local connections, so the password may
 > not be checked locally — fine for local dev.
 
-## Every session afterwards
+## One-command startup (recommended)
+
+After the **first-time** setup above (steps 1–3: install, socket dir, cluster
+created once), you don't need to run any of it by hand again. Use the bundled
+launcher, which runs every step automatically:
+
+```bash
+./scripts/start.sh
+```
+
+It will, in order:
+
+1. start the PostgreSQL cluster if it isn't already running,
+2. wait until Postgres accepts connections,
+3. create the `posyhub` role + database if they don't exist (idempotent),
+4. export `DATABASE_URL`,
+5. migrate your SQLite data **the first time only** (no-op on later runs),
+6. launch the Flask app on port 5000.
+
+Override defaults from the environment if needed:
+
+```bash
+PORT=8000 DB_PASSWORD=secret PG_VERSION=16 ./scripts/start.sh
+```
+
+If a `.env` already defines `DATABASE_URL`, the script respects it instead of
+building the default.
+
+## Every session afterwards (manual equivalent)
 
 There is no systemd, so Postgres does **not** auto-start. Each time you
 re-enter proot:
