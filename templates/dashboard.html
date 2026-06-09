@@ -88,7 +88,10 @@
         <h1>Welcome back{% if session.get('user') %}, {{ session.get('user').split()[0] }}{% endif %} 👋</h1>
         <p>{{ today.strftime('%A, %d %B %Y') }}{% if active_session %} · {{ active_session.name }}{% endif %}</p>
     </div>
-    {% if active_term %}<div class="term-chip"><i class="fas fa-calendar-day"></i> {{ active_term.name }}</div>{% endif %}
+    <div style="display:flex;align-items:center;gap:.6rem;">
+        {% if active_term %}<div class="term-chip"><i class="fas fa-calendar-day"></i> {{ active_term.name }}</div>{% endif %}
+        <a href="{{ url_for('main.dashboard_customize') }}" class="btn btn-secondary btn-sm" title="Choose widgets"><i class="fas fa-sliders"></i> Customize</a>
+    </div>
 </div>
 
 {% if announcements %}
@@ -104,14 +107,29 @@
 {% endif %}
 
 <!-- KPI strip -->
+{% if 'kpi' in enabled %}
 <div class="kpi-row">
     <div class="kpi"><div class="ic blue"><i class="fas fa-users"></i></div><div><div class="v">{{ total_students }}</div><div class="l">Students</div></div></div>
     <div class="kpi"><div class="ic green"><i class="fas fa-user-check"></i></div><div><div class="v">{{ active_enrollments }}</div><div class="l">Enrolled</div></div></div>
     <div class="kpi"><div class="ic teal"><i class="fas fa-percent"></i></div><div><div class="v">{{ attendance_stats.today_percentage }}%</div><div class="l">Attendance today</div></div></div>
     <div class="kpi"><div class="ic purple"><i class="fas fa-user-graduate"></i></div><div><div class="v">{{ graduates_count }}</div><div class="l">Graduates</div></div></div>
 </div>
+{% endif %}
+
+<!-- Cross-module KPIs -->
+{% if finance_stat or sales_stat or hr_stat or cbt_stat or library_stat %}
+<div class="kpi-row">
+    {% if finance_stat %}<div class="kpi"><div class="ic green"><i class="fas fa-coins"></i></div><div><div class="v">₦{{ '{:,.0f}'.format(finance_stat.collected) }}</div><div class="l">Fees collected (term)</div></div></div>
+    <div class="kpi"><div class="ic teal"><i class="fas fa-scale-balanced"></i></div><div><div class="v">₦{{ '{:,.0f}'.format(finance_stat.net) }}</div><div class="l">Net (term)</div></div></div>{% endif %}
+    {% if sales_stat %}<div class="kpi"><div class="ic blue"><i class="fas fa-cash-register"></i></div><div><div class="v">₦{{ '{:,.0f}'.format(sales_stat.today) }}</div><div class="l">Sales today ({{ sales_stat.count_today }})</div></div></div>{% endif %}
+    {% if hr_stat %}<div class="kpi"><div class="ic purple"><i class="fas fa-id-badge"></i></div><div><div class="v">{{ hr_stat.total }}</div><div class="l">Staff ({{ hr_stat.teaching }} teaching)</div></div></div>{% endif %}
+    {% if cbt_stat %}<div class="kpi"><div class="ic blue"><i class="fas fa-laptop-code"></i></div><div><div class="v">{{ cbt_stat.published }}</div><div class="l">CBT exams · {{ cbt_stat.attempts }} attempts</div></div></div>{% endif %}
+    {% if library_stat %}<div class="kpi"><div class="ic teal"><i class="fas fa-book"></i></div><div><div class="v">{{ library_stat.books }}</div><div class="l">Books · {{ library_stat.on_loan }} on loan</div></div></div>{% endif %}
+</div>
+{% endif %}
 
 <!-- Exam snapshots -->
+{% if 'exams' in enabled %}
 <div class="dash-grid c3">
     <div class="exam-card jamb">
         <div class="top"><span><i class="fas fa-file-contract"></i> JAMB {% if jamb_snapshot %}{{ jamb_snapshot.year }}{% endif %}</span>{% if jamb_snapshot %}<a href="{{ url_for('results.jamb_list') }}" style="color:#fff;opacity:.85;"><i class="fas fa-arrow-right"></i></a>{% endif %}</div>
@@ -135,15 +153,19 @@
         {% else %}<div class="big">—</div><div class="sub">No mock exams yet</div>{% endif %}
     </div>
 </div>
+{% endif %}
 
 <!-- Charts row -->
+{% if 'charts' in enabled %}
 <div class="dash-grid c3">
     <div class="widget"><div class="wh"><h3><i class="fas fa-venus-mars"></i> Gender</h3></div><div class="wb"><div class="chart-box"><canvas id="genderChart"></canvas></div></div></div>
     <div class="widget"><div class="wh"><h3><i class="fas fa-route"></i> Streams</h3></div><div class="wb"><div class="chart-box"><canvas id="streamChart"></canvas></div></div></div>
     <div class="widget"><div class="wh"><h3><i class="fas fa-birthday-cake"></i> Age groups</h3></div><div class="wb"><div class="chart-box"><canvas id="ageChart"></canvas></div></div></div>
 </div>
+{% endif %}
 
 <!-- Attendance trend + JAMB distribution -->
+{% if 'attendance_trend' in enabled %}
 <div class="dash-grid split">
     <div class="widget">
         <div class="wh"><h3><i class="fas fa-chart-line"></i> Attendance trend</h3><a href="{{ url_for('attendance.weekly_summary') }}" class="btn btn-secondary btn-sm">Details</a></div>
@@ -162,8 +184,10 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Class enrollment + religion -->
+{% if 'class_religion' in enabled %}
 <div class="dash-grid split">
     <div class="widget">
         <div class="wh"><h3><i class="fas fa-school"></i> Class enrollment</h3><a href="{{ url_for('academics.classes_list') }}" class="btn btn-secondary btn-sm">Manage</a></div>
@@ -180,8 +204,10 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Birthdays + Recent students + Activity -->
+{% if 'people' in enabled %}
 <div class="dash-grid {% if recent_activity %}c3{% else %}c2{% endif %}">
     <div class="widget">
         <div class="wh"><h3><i class="fas fa-gift"></i> Birthdays</h3></div>
@@ -221,6 +247,7 @@
     </div>
     {% endif %}
 </div>
+{% endif %}
 
 <!-- Quick actions -->
 <div class="widget">

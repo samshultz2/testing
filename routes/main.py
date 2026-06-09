@@ -107,21 +107,55 @@ def branch_overview():
                            active_term=active_term)
 
 
+# Selectable dashboard widgets: (key, label, category, default-on).
+DASHBOARD_WIDGETS = [
+    ('kpi', 'Student KPIs', 'Students', True),
+    ('charts', 'Gender / Stream / Age charts', 'Students', True),
+    ('class_religion', 'Class enrolment & Religion', 'Students', True),
+    ('people', 'Birthdays, Recent students, Activity', 'Students', True),
+    ('attendance_trend', 'Attendance trend', 'Academics', True),
+    ('exams', 'WAEC / JAMB / Mock snapshots', 'Academics', True),
+    ('finance', 'Finance — fees this term', 'Finance', True),
+    ('sales', 'Sales — today & term', 'Finance', False),
+    ('hr', 'Staff / HR', 'Operations', False),
+    ('cbt', 'CBT activity', 'Academics', False),
+    ('library', 'Library', 'Operations', False),
+]
+DASHBOARD_DEFAULTS = [k for k, _, _, d in DASHBOARD_WIDGETS if d]
+
+
+def enabled_widgets():
+    """The set of dashboard widget keys enabled for the current user."""
+    from utils.access_control import get_current_user
+    try:
+        user = get_current_user()
+        if user and user.dashboard_widgets is not None:
+            return set(user.dashboard_widgets)
+    except Exception:
+        pass
+    sp = session.get('dashboard_prefs')
+    if sp is not None:
+        return set(sp)
+    return set(DASHBOARD_DEFAULTS)
+
+
 @main_bp.route('/')
 @login_required
 def dashboard():
-    """Main dashboard page: assembles widget data from focused helpers."""
+    """Main dashboard page: assembles enabled widget data from focused helpers."""
     from utils.branch_scope import scope_query
     active_session = get_active_session()
     active_term = get_active_term()
+    enabled = enabled_widgets()
 
     active_enrollments, total_classes, class_stats = _dash_class_stats(active_term)
     birthdays_today, birthdays_week = _dash_birthdays()
 
-    return render_template('dashboard.html',
+    ctx = dict(
         announcements=_dash_announcements(),
         active_session=active_session,
         active_term=active_term,
+        enabled=enabled,
         recent_students=scope_query(
             Student.query.filter_by(is_active=True), Student).order_by(
             Student.created_at.desc()).limit(5).all(),
@@ -136,13 +170,106 @@ def dashboard():
         total_subjects=Subject.query.filter_by(is_active=True).count(),
         total_school_classes=SchoolClass.query.filter_by(is_active=True).count(),
         stream_dist=_dash_stream_distribution(),
-        jamb_snapshot=_dash_jamb_snapshot(),
-        waec_snapshot=_dash_waec_snapshot(),
-        mock_snapshot=_dash_mock_snapshot(),
+        jamb_snapshot=_dash_jamb_snapshot() if 'exams' in enabled else None,
+        waec_snapshot=_dash_waec_snapshot() if 'exams' in enabled else None,
+        mock_snapshot=_dash_mock_snapshot() if 'exams' in enabled else None,
         attendance_trend=_dash_attendance_trend(active_term),
         recent_activity=_dash_recent_activity(),
+        # Cross-module widgets (computed only when enabled).
+        finance_stat=_dash_finance(active_term) if 'finance' in enabled else None,
+        sales_stat=_dash_sales(active_term) if 'sales' in enabled else None,
+        hr_stat=_dash_hr() if 'hr' in enabled else None,
+        cbt_stat=_dash_cbt() if 'cbt' in enabled else None,
+        library_stat=_dash_library() if 'library' in enabled else None,
         **_dash_student_counts()
     )
+    return render_template('dashboard.html', **ctx)
+
+
+@main_bp.route('/dashboard/customize', methods=['GET', 'POST'])
+@login_required
+def dashboard_customize():
+    """Choose which dashboard widgets to show."""
+    from utils.access_control import get_current_user
+    user = get_current_user()
+    if request.method == 'POST':
+        chosen = [k for k, _, _, _ in DASHBOARD_WIDGETS if request.form.get(f'w_{k}') == 'on']
+        if user:
+            user.set_dashboard_widgets(chosen)
+            db.session.commit()
+        else:
+            session['dashboard_prefs'] = chosen
+        flash('Dashboard updated.', 'success')
+        return redirect(url_for('main.dashboard'))
+    return render_template('dashboard_customize.html',
+                           widgets=DASHBOARD_WIDGETS, enabled=enabled_widgets())
+
+
+def _dash_finance(active_term):
+    """Fees collected/expenses/net for the active term (branch-scoped)."""
+    if not active_term:
+        return None
+    try:
+        from utils.branch_scope import scope_query
+        from models import FeePayment
+        from models.models_finance import Expense
+        collected = sum(p.amount for p in scope_query(
+            FeePayment.query.filter_by(term_id=active_term.id), FeePayment).all())
+        expenses = sum(e.amount for e in scope_query(
+            Expense.query.filter_by(term_id=active_term.id), Expense).all())
+        return {'collected': collected, 'expenses': expenses, 'net': collected - expenses}
+    except Exception:
+        return None
+
+
+def _dash_sales(active_term):
+    """Sales totals today and (active term window) — branch-scoped."""
+    try:
+        from utils.branch_scope import scope_query
+        from models import Sale
+        today = date.today()
+        rows = scope_query(Sale.query, Sale).all()
+        today_total = sum(s.total for s in rows if getattr(s, 'created_at', None)
+                          and s.created_at.date() == today)
+        return {'today': today_total, 'count_today': sum(
+            1 for s in rows if getattr(s, 'created_at', None) and s.created_at.date() == today)}
+    except Exception:
+        return None
+
+
+def _dash_hr():
+    """Active staff headcount."""
+    try:
+        from utils.branch_scope import scope_query
+        from models import StaffMember
+        rows = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).all()
+        return {'total': len(rows),
+                'teaching': sum(1 for s in rows if (getattr(s, 'staff_type', '') or '').lower().startswith('teach'))}
+    except Exception:
+        return None
+
+
+def _dash_cbt():
+    """CBT exam + attempt counts (branch-scoped on the attempt's student)."""
+    try:
+        from models import CBTExam
+        from models.models_cbt import CBTAttempt
+        published = CBTExam.query.filter_by(is_published=True).count()
+        attempts = CBTAttempt.query.count()
+        return {'published': published, 'attempts': attempts}
+    except Exception:
+        return None
+
+
+def _dash_library():
+    """Library books + active/overdue loans."""
+    try:
+        from models import Book, BookLoan
+        books = Book.query.count()
+        active = BookLoan.query.filter_by(returned_at=None).count() if hasattr(BookLoan, 'returned_at') else 0
+        return {'books': books, 'on_loan': active}
+    except Exception:
+        return None
 
 
 def _dash_student_counts():

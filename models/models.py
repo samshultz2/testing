@@ -915,6 +915,23 @@ class User(db.Model):
     theme = db.Column(db.String(20))
     # Force a password change on next login (set for new accounts / admin resets).
     must_change_password = db.Column(db.Boolean, default=False)
+    # JSON list of dashboard widget keys this user has enabled (None => defaults).
+    dashboard_prefs = db.Column(db.Text)
+
+    @property
+    def dashboard_widgets(self):
+        import json
+        if not self.dashboard_prefs:
+            return None
+        try:
+            v = json.loads(self.dashboard_prefs)
+            return v if isinstance(v, list) else None
+        except (ValueError, TypeError):
+            return None
+
+    def set_dashboard_widgets(self, keys):
+        import json
+        self.dashboard_prefs = json.dumps(list(keys)) if keys is not None else None
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -1253,6 +1270,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN theme VARCHAR(20)')
         if 'must_change_password' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0')
+        if 'dashboard_prefs' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN dashboard_prefs TEXT')
     except Exception:
         pass
 
