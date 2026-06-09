@@ -76,6 +76,7 @@
         <form method="POST" action="{{ url_for('scratchcards.publish', term_id=term_id) }}" style="display:inline">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ url_for('subjects.workflow', term_id=term_id, assignment_id=assignment_id) }}">
+            {% if not published %}<label class="text-sm" style="margin-right:.4rem;"><input type="checkbox" name="notify"> Notify parents</label>{% endif %}
             <button type="submit" class="btn btn-sm {{ 'btn-danger' if published else 'btn-success' }}">
                 {{ 'Hide results' if published else 'Release results' }}
             </button>

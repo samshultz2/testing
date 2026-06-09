@@ -37,7 +37,16 @@
             <h1>{{ student.full_name }}</h1>
             <p>{{ student.student_id }}{% if enrollment %} · {{ enrollment.class_arm_assignment.display_name }}{% endif %}</p>
         </div>
-        <a class="logout" href="{{ url_for('parent.logout') }}"><i class="fas fa-right-from-bracket"></i> Sign out</a>
+        <div style="display:flex;align-items:center;gap:.6rem;">
+            {% if siblings and siblings|length > 1 %}
+            <select onchange="if(this.value)location.href=this.value;" style="padding:.4rem;border-radius:8px;border:none;">
+                {% for s in siblings %}
+                <option value="{{ url_for('parent.switch_child', student_id=s.id) }}" {% if s.id==student.id %}selected{% endif %}>{{ s.full_name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <a class="logout" href="{{ url_for('parent.logout') }}"><i class="fas fa-right-from-bracket"></i> Sign out</a>
+        </div>
     </div></div>
 
     <div class="wrap">

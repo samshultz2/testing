@@ -9,13 +9,26 @@ from utils.helpers import get_active_term
 from utils import payments
 
 parent_bp = Blueprint('parent', __name__, url_prefix='/parent')
-PKEY = 'parent_student_id'
+PKEY = 'parent_student_id'      # the child currently being viewed
+AUTHKEY = 'parent_auth_id'      # the child whose password was used to sign in
 
 
 def parent_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get(PKEY):
+            return redirect(url_for('parent.login'))
+        # Idle timeout for the parent session (mirrors the staff one).
+        import time
+        from config import Config
+        mins = getattr(Config, 'SESSION_IDLE_MINUTES', 0)
+        now = int(time.time())
+        last = session.get('parent_seen')
+        session['parent_seen'] = now
+        if mins and last and (now - last) > mins * 60:
+            for k in (PKEY, AUTHKEY, 'parent_seen'):
+                session.pop(k, None)
+            flash('Your session timed out. Please sign in again.', 'warning')
             return redirect(url_for('parent.login'))
         return f(*args, **kwargs)
     return wrapper
@@ -24,6 +37,20 @@ def parent_required(f):
 def _current_student():
     sid = session.get(PKEY)
     return Student.query.get(sid) if sid else None
+
+
+def _siblings(student):
+    """Active students who share a parent phone number with this child."""
+    phones = {c.phone_number for c in student.parent_contacts.all() if c.phone_number}
+    if not phones:
+        return [student]
+    from models import ParentContact
+    ids = {pc.student_id for pc in ParentContact.query.filter(
+        ParentContact.phone_number.in_(phones)).all()}
+    ids.add(student.id)
+    sibs = (Student.query.filter(Student.id.in_(ids), Student.is_active == True)
+            .order_by(Student.surname, Student.first_name).all())
+    return sibs or [student]
 
 
 @parent_bp.route('/login', methods=['GET', 'POST'])
@@ -36,6 +63,7 @@ def login():
         student = Student.query.filter_by(student_id=sid).first()
         if student and student.is_active and student.check_portal_password(pw):
             session[PKEY] = student.id
+            session[AUTHKEY] = student.id
             session.permanent = True
             return redirect(url_for('parent.home'))
         flash('Invalid Student ID or password.', 'error')
@@ -45,9 +73,22 @@ def login():
 
 @parent_bp.route('/logout')
 def logout():
-    session.pop(PKEY, None)
+    for k in (PKEY, AUTHKEY, 'parent_seen'):
+        session.pop(k, None)
     flash('You have been signed out.', 'info')
     return redirect(url_for('parent.login'))
+
+
+@parent_bp.route('/child/<int:student_id>')
+@parent_required
+def switch_child(student_id):
+    """Switch the viewed child (only among the signed-in family's children)."""
+    auth = Student.query.get(session.get(AUTHKEY))
+    if auth and student_id in {s.id for s in _siblings(auth)}:
+        session[PKEY] = student_id
+    else:
+        flash('That child is not linked to your account.', 'error')
+    return redirect(url_for('parent.home'))
 
 
 @parent_bp.route('/')
@@ -83,11 +124,13 @@ def home():
         Announcement.is_pinned.desc(), Announcement.created_at.desc()).limit(10).all()
         if a.is_active][:5]
 
+    auth = Student.query.get(session.get(AUTHKEY)) or student
+    siblings = _siblings(auth)
     return render_template('parent/home.html',
         student=student, terms=terms, term_id=term_id, bill=bill,
         report=report if results_ready else None, results_ready=results_ready,
         enrollment=enrollment, attendance=attendance, announcements=announcements,
-        pay_enabled=payments.is_configured(),
+        pay_enabled=payments.is_configured(), siblings=siblings,
         affective_traits=active_traits(), rating_labels=RATING_LABELS)
 
 

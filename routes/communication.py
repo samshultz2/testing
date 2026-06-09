@@ -310,6 +310,12 @@ def compose():
                                          MessageTemplate.is_active == True).first()
         if t:
             pre_tpl, pre_body = t.id, t.body
+    elif request.args.get('notice') == 'results':
+        # Pre-select the result-notification template when releasing results.
+        t = MessageTemplate.query.filter(MessageTemplate.name.ilike('%result%'),
+                                         MessageTemplate.is_active == True).first()
+        if t:
+            pre_tpl, pre_body = t.id, t.body
 
     from utils import sms_gateway
     gw = sms_gateway.get_config()
