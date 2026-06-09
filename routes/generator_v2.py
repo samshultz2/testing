@@ -450,7 +450,7 @@ def run_generation_v2(class_ids, periods_per_day, break_after, db_models):
     Run the V2 generator using data from database models
     """
     from models import (
-        db, GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
+        GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
         GenClassSubjectConfig, GenTeacher, GenTeacherAssignment, GenTeacherAvailability,
         GenTimetableRule
     )
@@ -481,7 +481,7 @@ def run_generation_v2(class_ids, periods_per_day, break_after, db_models):
     
     # Load events (teaching assignments)
     for class_id in class_ids:
-        cc = db.session.get(GenClassConfig, class_id)
+        cc = GenClassConfig.query.get(class_id)
         if not cc:
             continue
         

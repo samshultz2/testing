@@ -13,118 +13,6 @@ import uuid
 
 generator_bp = Blueprint('generator', __name__, url_prefix='/generator')
 
-
-@generator_bp.route('/import-school-data', methods=['POST'])
-@login_required
-def import_school_data():
-    """Populate the generator from the school's existing Subjects / Class Subjects
-    / classes / teachers so they don't have to be re-entered here. Purely additive:
-    it creates anything missing and never deletes or overwrites your tweaks."""
-    from models import Subject, SchoolClass, ClassArm, ClassSubject, ClassArmAssignment
-    from utils.helpers import get_active_term
-    term = get_active_term()
-    if not term:
-        flash('Set an active term first, then import.', 'error')
-        return redirect(url_for('generator.index'))
-
-    def level_of(section):
-        s = (section or '').lower()
-        return 'jss' if s == 'junior' else 'sss' if s == 'senior' else None
-
-    # Arms used by each class this term (for GenClassConfig.arm_names).
-    arms_by_class = {}
-    for caa in ClassArmAssignment.query.filter_by(term_id=term.id).all():
-        if caa.arm:
-            arms_by_class.setdefault(caa.class_id, set()).add(caa.arm.name)
-
-    gsub, gcls, gtea = {}, {}, {}
-    added = {'subjects': 0, 'classes': 0, 'teachers': 0, 'class_subjects': 0, 'assignments': 0}
-
-    def get_subject(name, level):
-        key = (name.lower(), level)
-        if key in gsub:
-            return gsub[key]
-        o = GenSubject.query.filter_by(name=name, school_level=level).first()
-        if not o:
-            o = GenSubject(name=name, school_level=level, is_active=True)
-            db.session.add(o); db.session.flush(); added['subjects'] += 1
-        # The generator schedules from GenSubjectConfig (periods per week) — make
-        # sure one exists so imported subjects actually appear on the timetable.
-        if not GenSubjectConfig.query.filter_by(subject_id=o.id, school_level=level).first():
-            db.session.add(GenSubjectConfig(subject_id=o.id, school_level=level, periods_per_week=4))
-        gsub[key] = o
-        return o
-
-    def get_class(sc, level):
-        key = (sc.name.lower(), level)
-        if key in gcls:
-            return gcls[key]
-        o = GenClassConfig.query.filter_by(class_name=sc.name, school_level=level).first()
-        if not o:
-            arms = sorted(arms_by_class.get(sc.id, []))
-            o = GenClassConfig(class_name=sc.name, school_level=level,
-                               num_arms=len(arms) or 1,
-                               arm_names=','.join(arms) or None, is_active=True)
-            db.session.add(o); db.session.flush(); added['classes'] += 1
-        gcls[key] = o
-        return o
-
-    def get_teacher(name, level):
-        key = (name.lower(), level)
-        if key in gtea:
-            return gtea[key]
-        o = GenTeacher.query.filter_by(name=name, school_level=level).first()
-        if not o:
-            o = GenTeacher(name=name, school_level=level, is_active=True)
-            db.session.add(o); db.session.flush(); added['teachers'] += 1
-        gtea[key] = o
-        return o
-
-    try:
-        rows = ClassSubject.query.filter_by(term_id=term.id, is_active=True).all()
-        for cs in rows:
-            sc = db.session.get(SchoolClass, cs.class_id)
-            subj = db.session.get(Subject, cs.subject_id)
-            if not (sc and subj):
-                continue
-            level = level_of(getattr(sc, 'section', None))
-            if not level:
-                continue
-            gs = get_subject(subj.name, level)
-            gc = get_class(sc, level)
-            arm = db.session.get(ClassArm, cs.arm_id) if cs.arm_id else None
-            arm_name = arm.name if arm else None
-
-            # Class takes this subject.
-            if not GenClassSubjectConfig.query.filter_by(
-                    class_config_id=gc.id, subject_id=gs.id).first():
-                db.session.add(GenClassSubjectConfig(
-                    class_config_id=gc.id, subject_id=gs.id, is_enabled=True, is_active=True))
-                added['class_subjects'] += 1
-
-            # Teacher who teaches it -> can-teach + assignment.
-            tname = (cs.teacher_name or '').strip()
-            if tname:
-                gt = get_teacher(tname, level)
-                if not GenTeacherSubject.query.filter_by(
-                        teacher_id=gt.id, subject_id=gs.id).first():
-                    db.session.add(GenTeacherSubject(teacher_id=gt.id, subject_id=gs.id))
-                if not GenTeacherAssignment.query.filter_by(
-                        teacher_id=gt.id, subject_id=gs.id,
-                        class_config_id=gc.id, arm_name=arm_name).first():
-                    db.session.add(GenTeacherAssignment(
-                        teacher_id=gt.id, subject_id=gs.id, class_config_id=gc.id,
-                        arm_name=arm_name, is_active=True))
-                    added['assignments'] += 1
-        db.session.commit()
-        flash('Imported from school setup — added {subjects} subjects, {classes} classes, '
-              '{teachers} teachers, {class_subjects} class-subjects, {assignments} assignments. '
-              'Adjust periods/availability below, then generate.'.format(**added), 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Import failed: {e}', 'error')
-    return redirect(url_for('generator.index'))
-
 DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 SUBJECT_COLORS = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
@@ -295,7 +183,7 @@ def add_teacher():
 @generator_bp.route('/teachers/<int:teacher_id>')
 @login_required
 def edit_teacher(teacher_id):
-    teacher = db.get_or_404(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get_or_404(teacher_id)
     level = teacher.school_level
     all_subjects = GenSubject.query.filter_by(is_active=True, school_level=level).order_by(GenSubject.name).all()
     assigned_ids = [ts.subject_id for ts in teacher.subjects]
@@ -316,7 +204,7 @@ def edit_teacher(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/update', methods=['POST'])
 @login_required
 def update_teacher(teacher_id):
-    teacher = db.get_or_404(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get_or_404(teacher_id)
     try:
         teacher.name = request.form.get('name', '').strip()
         teacher.staff_id = request.form.get('staff_id', '').strip() or None
@@ -338,7 +226,7 @@ def update_teacher(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/subjects', methods=['POST'])
 @login_required
 def update_teacher_subjects(teacher_id):
-    teacher = db.get_or_404(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get_or_404(teacher_id)
     try:
         subject_ids = [int(x) for x in request.form.getlist('subject_ids[]') if x]
         GenTeacherSubject.query.filter_by(teacher_id=teacher_id).delete()
@@ -355,7 +243,7 @@ def update_teacher_subjects(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/availability', methods=['POST'])
 @login_required
 def update_teacher_availability(teacher_id):
-    teacher = db.get_or_404(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get_or_404(teacher_id)
     try:
         GenTeacherAvailability.query.filter_by(teacher_id=teacher_id).delete()
         for slot in request.form.getlist('unavailable[]'):
@@ -375,7 +263,7 @@ def update_teacher_availability(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/delete', methods=['POST'])
 @login_required
 def delete_teacher(teacher_id):
-    teacher = db.get_or_404(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get_or_404(teacher_id)
     try:
         teacher.is_active = False
         db.session.commit()
@@ -488,7 +376,7 @@ def add_gen_subject():
 @login_required
 def delete_gen_subject(subject_id):
     """Delete a subject"""
-    subject = db.get_or_404(GenSubject, subject_id)
+    subject = GenSubject.query.get_or_404(subject_id)
     try:
         subject.is_active = False
         # Also deactivate related configs
@@ -505,7 +393,7 @@ def delete_gen_subject(subject_id):
 @login_required
 def edit_gen_subject(subject_id):
     """Edit a subject"""
-    subject = db.get_or_404(GenSubject, subject_id)
+    subject = GenSubject.query.get_or_404(subject_id)
     level = subject.school_level
     
     if request.method == 'POST':
@@ -591,7 +479,7 @@ def class_subjects_list():
 @login_required
 def class_subjects_config(class_id):
     """Configure subject periods for a specific class"""
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     level = class_config.school_level
     
     # Get all subjects for this level with global defaults
@@ -652,7 +540,7 @@ def class_subjects_config(class_id):
 @login_required
 def save_class_subjects_config(class_id):
     """Save per-class subject configuration"""
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     
     try:
         for subject_id in request.form.getlist('subject_id[]'):
@@ -695,7 +583,7 @@ def save_class_subjects_config(class_id):
 @login_required
 def class_stream_subjects(class_id):
     """Configure subject periods for each stream in this class"""
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     
     if not class_config.has_streams:
         flash('This class does not use streams.', 'warning')
@@ -709,7 +597,7 @@ def class_stream_subjects(class_id):
     
     streams_data = []
     for stream_id in stream_ids:
-        stream = db.session.get(GenStream, stream_id)
+        stream = GenStream.query.get(stream_id)
         if not stream:
             continue
         
@@ -777,7 +665,7 @@ def class_stream_subjects(class_id):
 @login_required
 def save_class_stream_subjects(class_id):
     """Save class-stream subject configuration"""
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     
     try:
         stream_id = int(request.form.get('stream_id'))
@@ -820,7 +708,7 @@ def save_class_stream_subjects(class_id):
                 ))
         
         db.session.commit()
-        stream = db.session.get(GenStream, stream_id)
+        stream = GenStream.query.get(stream_id)
         flash(f'Saved {stream.name} subjects for {class_config.class_name}!', 'success')
     except Exception as e:
         db.session.rollback()
@@ -867,7 +755,7 @@ def add_room():
 @generator_bp.route('/rooms/<int:room_id>/delete', methods=['POST'])
 @login_required
 def delete_room(room_id):
-    room = db.get_or_404(GenRoom, room_id)
+    room = GenRoom.query.get_or_404(room_id)
     try:
         room.is_active = False
         db.session.commit()
@@ -919,7 +807,7 @@ def add_stream():
 @generator_bp.route('/streams/<int:stream_id>')
 @login_required
 def edit_stream(stream_id):
-    stream = db.get_or_404(GenStream, stream_id)
+    stream = GenStream.query.get_or_404(stream_id)
     # Streams are SSS-only
     all_subjects = GenSubject.query.filter_by(is_active=True, school_level='sss').order_by(GenSubject.name).all()
     assigned = {ss.subject_id: ss for ss in stream.subjects}
@@ -933,7 +821,7 @@ def edit_stream(stream_id):
 @generator_bp.route('/streams/<int:stream_id>/update', methods=['POST'])
 @login_required
 def update_stream(stream_id):
-    stream = db.get_or_404(GenStream, stream_id)
+    stream = GenStream.query.get_or_404(stream_id)
     try:
         stream.name = request.form.get('name', '').strip()
         stream.short_name = request.form.get('short_name', '').strip() or None
@@ -949,7 +837,7 @@ def update_stream(stream_id):
 @generator_bp.route('/streams/<int:stream_id>/subjects', methods=['POST'])
 @login_required
 def update_stream_subjects(stream_id):
-    stream = db.get_or_404(GenStream, stream_id)
+    stream = GenStream.query.get_or_404(stream_id)
     try:
         subject_ids = [int(x) for x in request.form.getlist('subject_ids[]') if x]
         compulsory_ids = [int(x) for x in request.form.getlist('compulsory_ids[]') if x]
@@ -979,7 +867,7 @@ def update_stream_subjects(stream_id):
 @generator_bp.route('/streams/<int:stream_id>/delete', methods=['POST'])
 @login_required
 def delete_stream(stream_id):
-    stream = db.get_or_404(GenStream, stream_id)
+    stream = GenStream.query.get_or_404(stream_id)
     try:
         stream.is_active = False
         db.session.commit()
@@ -1039,7 +927,7 @@ def add_class_config():
 @generator_bp.route('/classes/<int:class_id>')
 @login_required
 def edit_class_config(class_id):
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     streams = GenStream.query.filter_by(is_active=True).all()
     arm_streams = {cas.arm_name: cas for cas in class_config.arm_streams}
     return render_template('generator/edit_class_config.html',
@@ -1050,7 +938,7 @@ def edit_class_config(class_id):
 @generator_bp.route('/classes/<int:class_id>/update', methods=['POST'])
 @login_required
 def update_class_config(class_id):
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     try:
         class_config.class_name = request.form.get('class_name', '').strip()
         class_config.num_arms = request.form.get('num_arms', type=int) or 1
@@ -1067,7 +955,7 @@ def update_class_config(class_id):
 @generator_bp.route('/classes/<int:class_id>/arm-streams', methods=['POST'])
 @login_required
 def update_arm_streams(class_id):
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     try:
         GenClassArmStream.query.filter_by(class_config_id=class_id).delete()
         for arm_name in class_config.arm_list:
@@ -1087,7 +975,7 @@ def update_arm_streams(class_id):
 @generator_bp.route('/classes/<int:class_id>/delete', methods=['POST'])
 @login_required
 def delete_class_config(class_id):
-    class_config = db.get_or_404(GenClassConfig, class_id)
+    class_config = GenClassConfig.query.get_or_404(class_id)
     try:
         class_config.is_active = False
         db.session.commit()
@@ -1158,7 +1046,7 @@ def add_teacher_assignment():
 @generator_bp.route('/assignments/<int:assignment_id>/delete', methods=['POST'])
 @login_required
 def delete_teacher_assignment(assignment_id):
-    assignment = db.get_or_404(GenTeacherAssignment, assignment_id)
+    assignment = GenTeacherAssignment.query.get_or_404(assignment_id)
     try:
         assignment.is_active = False
         db.session.commit()
@@ -1302,8 +1190,7 @@ def run_generation():
         # Use global generation
         from routes.generator_global import run_global_generation
         
-        # More attempts = fuller timetable (keeps the best, stops early at 0 empty).
-        result = run_global_generation(class_ids, periods_per_day, break_after, num_attempts=100)
+        result = run_global_generation(class_ids, periods_per_day, break_after, num_attempts=25)
         
         # Save results
         batch_id = str(uuid.uuid4())[:8]
@@ -1588,7 +1475,7 @@ def generate_for_class(batch_id, cc, arm, periods_per_day, break_after, no_repea
         """Check if teacher can take more periods on this day and week"""
         if not tid:
             return True
-        teacher = db.session.get(GenTeacher, tid)
+        teacher = GenTeacher.query.get(tid)
         if not teacher:
             return True
         # Check daily limit
@@ -2315,7 +2202,7 @@ def clash_report(batch_id):
     
     clashes = []
     for tid, slots in teacher_slots.items():
-        teacher = db.session.get(GenTeacher, tid)
+        teacher = GenTeacher.query.get(tid)
         for (day, period), entries in slots.items():
             if len(entries) > 1:
                 clashes.append({
@@ -2386,7 +2273,7 @@ def teacher_timetable():
     }
     
     if teacher_id and batch_id:
-        selected_teacher = db.session.get(GenTeacher, teacher_id)
+        selected_teacher = GenTeacher.query.get(teacher_id)
         results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id).all()
         
         rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
@@ -2517,21 +2404,21 @@ def master_timetable():
 @generator_bp.route('/api/teacher/<int:teacher_id>/subjects')
 @login_required
 def api_teacher_subjects(teacher_id):
-    teacher = db.get_or_404(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get_or_404(teacher_id)
     return jsonify([{'id': ts.subject_id, 'name': ts.subject.name} for ts in teacher.subjects])
 
 
 @generator_bp.route('/api/class/<int:class_id>/arms')
 @login_required
 def api_class_arms(class_id):
-    cc = db.get_or_404(GenClassConfig, class_id)
+    cc = GenClassConfig.query.get_or_404(class_id)
     return jsonify(cc.arm_list)
 
 
 @generator_bp.route('/api/stream/<int:stream_id>/subjects')
 @login_required
 def api_stream_subjects(stream_id):
-    stream = db.get_or_404(GenStream, stream_id)
+    stream = GenStream.query.get_or_404(stream_id)
     return jsonify([{'id': ss.subject_id, 'name': ss.subject.name, 'compulsory': ss.is_compulsory} for ss in stream.subjects])
 
 
@@ -3210,7 +3097,7 @@ def export_teacher_image(batch_id, teacher_id):
         flash('No results found for this teacher.', 'error')
         return redirect(url_for('generator.teacher_timetable', batch_id=batch_id))
     
-    teacher = db.session.get(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get(teacher_id)
     filename = f'timetable_{teacher.name.replace(" ", "_")}_{batch_id}.png'
     
     return image_to_response(img, filename)
@@ -3220,7 +3107,7 @@ def export_teacher_image(batch_id, teacher_id):
 @login_required
 def print_teacher_timetable(batch_id, teacher_id):
     """Printable view for individual teacher timetable"""
-    teacher = db.get_or_404(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get_or_404(teacher_id)
     results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id).all()
     
     if not results:
@@ -3310,7 +3197,7 @@ def toggle_clash_rule(rule_id):
     """Toggle a clash rule active/inactive"""
     from models import GenSubjectClashRule
     
-    rule = db.get_or_404(GenSubjectClashRule, rule_id)
+    rule = GenSubjectClashRule.query.get_or_404(rule_id)
     rule.is_active = not rule.is_active
     db.session.commit()
     
@@ -3325,7 +3212,7 @@ def delete_clash_rule(rule_id):
     """Delete a clash rule"""
     from models import GenSubjectClashRule
     
-    rule = db.get_or_404(GenSubjectClashRule, rule_id)
+    rule = GenSubjectClashRule.query.get_or_404(rule_id)
     db.session.delete(rule)
     db.session.commit()
     
@@ -3376,7 +3263,7 @@ def toggle_combined_rule(rule_id):
     """Toggle a combined rule active/inactive"""
     from models import GenCombinedClassRule
     
-    rule = db.get_or_404(GenCombinedClassRule, rule_id)
+    rule = GenCombinedClassRule.query.get_or_404(rule_id)
     rule.is_active = not rule.is_active
     db.session.commit()
     
@@ -3391,7 +3278,7 @@ def delete_combined_rule(rule_id):
     """Delete a combined rule"""
     from models import GenCombinedClassRule
     
-    rule = db.get_or_404(GenCombinedClassRule, rule_id)
+    rule = GenCombinedClassRule.query.get_or_404(rule_id)
     db.session.delete(rule)
     db.session.commit()
     

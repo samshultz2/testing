@@ -35,18 +35,6 @@
     <p>Select a school level to configure and generate timetables</p>
 </div>
 
-<div class="card" style="margin-bottom:1rem;"><div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-    <div>
-        <strong><i class="fas fa-wand-magic-sparkles"></i> Import from school setup</strong>
-        <div class="text-muted text-sm">Pull your existing Subjects, Class Subjects, classes and teachers into the generator so you don't enter them twice. Adds anything missing — never overwrites your generator tweaks.</div>
-    </div>
-    <form method="POST" action="{{ url_for('generator.import_school_data') }}"
-          onsubmit="return confirm('Import subjects, classes, teachers and assignments from your school setup (current term)? This only adds what is missing.');">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-download"></i> Import now</button>
-    </form>
-</div></div>
-
 <div class="level-selector">
     <!-- JSS Card -->
     <a href="{{ url_for('generator.level_dashboard', level='jss') }}" class="level-card jss">

@@ -4,7 +4,7 @@ Generates high-quality JPG images of timetables using Pillow
 V3: JPG format, correct abbreviations, school watermark
 """
 from flask import Response
-from models import db, GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
+from models import GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
@@ -355,7 +355,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
                               fill='white', outline=color_border, width=scale)
                 
                 if result:
-                    subj = db.session.get(GenSubject, result.subject_id)
+                    subj = GenSubject.query.get(result.subject_id)
                     if subj:
                         subj_name = subj.name
                         abbrev = SUBJECT_ABBREV.get(subj_name, subj_name[:6] if len(subj_name) > 6 else subj_name)
@@ -390,7 +390,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
                               fill='white', outline=color_border, width=scale)
                 
                 if result:
-                    subj = db.session.get(GenSubject, result.subject_id)
+                    subj = GenSubject.query.get(result.subject_id)
                     if subj:
                         subj_name = subj.name
                         abbrev = SUBJECT_ABBREV.get(subj_name, subj_name[:6] if len(subj_name) > 6 else subj_name)
@@ -422,7 +422,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
 def generate_teacher_timetable_image(batch_id, teacher_id):
     """Generate high-quality timetable image for a single teacher"""
     results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id).all()
-    teacher = db.session.get(GenTeacher, teacher_id)
+    teacher = GenTeacher.query.get(teacher_id)
     
     if not results or not teacher:
         return None
@@ -537,7 +537,7 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
                           fill='white', outline=color_border, width=scale)
             
             if result:
-                subj = db.session.get(GenSubject, result.subject_id)
+                subj = GenSubject.query.get(result.subject_id)
                 subj_text = SUBJECT_ABBREV.get(subj.name, subj.name[:8]) if subj else ""
                 short_class = get_short_code(result.class_name, result.arm_name)
                 
