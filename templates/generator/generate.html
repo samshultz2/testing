@@ -77,7 +77,7 @@
 </div>
 
 <!-- Generate Form -->
-<form method="POST" action="{{ url_for('generator.run_generation') }}">
+<form method="POST" action="{{ url_for('generator.run_generation') }}" id="generate-form">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card mb-3">
         <div class="card-header"><h3>Select Classes to Generate</h3></div>
@@ -169,7 +169,7 @@ function selectAll(checked) {
 }
 
 function updateFormAction(radio) {
-    const form = document.querySelector('form');
+    const form = document.getElementById('generate-form');
     const ortoolsOptions = document.getElementById('ortools-options');
     const btn = document.getElementById('generate-btn');
     
@@ -187,5 +187,18 @@ function updateFormAction(radio) {
         btn.classList.add('btn-primary');
     }
 }
+
+// Sync the form action with whatever method is actually selected, so a
+// browser-restored radio (which does not fire onchange) can't post to the
+// wrong endpoint. Runs on load and again right before submit.
+function syncSelectedMethod() {
+    const checked = document.querySelector('input[name="method"]:checked');
+    if (checked) updateFormAction(checked);
+}
+document.addEventListener('DOMContentLoaded', syncSelectedMethod);
+(function () {
+    const form = document.getElementById('generate-form');
+    if (form) form.addEventListener('submit', syncSelectedMethod);
+})();
 </script>
 {% endblock %}
