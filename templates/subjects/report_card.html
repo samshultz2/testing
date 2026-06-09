@@ -130,11 +130,13 @@
     <div class="card-header"><h3>Grade Key</h3></div>
     <div class="card-body">
         <div class="grade-key">
-            <span><strong>A+</strong> (80-100) Excellent</span>
-            <span><strong>A</strong> (70-79) Very Good</span>
-            <span><strong>B</strong> (60-69) Good</span>
-            <span><strong>C</strong> (50-59) Fair</span>
-            <span><strong>F</strong> (0-49) Fail</span>
+            {% if report_data.grade_scale %}
+            {% for b in report_data.grade_scale %}
+            <span><strong>{{ b.grade }}</strong> ({{ b.min_score }}-{{ b.max_score }}){% if b.remark %} {{ b.remark }}{% endif %}</span>
+            {% endfor %}
+            {% else %}
+            <span class="text-muted">No grade scale configured — set one in Settings ▸ Grade Scale.</span>
+            {% endif %}
         </div>
     </div>
 </div>

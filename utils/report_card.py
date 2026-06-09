@@ -51,6 +51,17 @@ def _attendance_pct(enrollment_id, week_ids):
     return round(marks / (len(recs) * 2) * 100, 1)
 
 
+def _assign_ranks(rows, pos_key):
+    """Competition ranking by average (ties share a rank: 1, 1, 3…)."""
+    last_avg = None
+    rank = 0
+    for i, r in enumerate(sorted(rows, key=lambda x: x['average'], reverse=True)):
+        if r['average'] != last_avg:
+            rank = i + 1
+            last_avg = r['average']
+        r[pos_key] = rank
+
+
 def compute_term_summaries(term_id, class_id):
     """Compute & persist TermSummary (totals, class/arm positions, attendance) for
     every active student in a class (across all its arms) for a term.
@@ -92,15 +103,14 @@ def compute_term_summaries(term_id, class_id):
             'attendance': _attendance_pct(e.id, week_ids),
         })
 
-    # Class position (whole class) + arm position (within each arm), by average.
-    for i, r in enumerate(sorted(rows, key=lambda x: x['average'], reverse=True)):
-        r['pos_class'] = i + 1
+    # Class position (whole class) + arm position (within each arm), by average,
+    # with competition ranking so ties share a position (e.g. 1, 1, 3).
+    _assign_ranks(rows, 'pos_class')
     by_arm = {}
     for r in rows:
         by_arm.setdefault(r['enrollment'].class_arm_assignment_id, []).append(r)
     for arm_rows in by_arm.values():
-        for i, r in enumerate(sorted(arm_rows, key=lambda x: x['average'], reverse=True)):
-            r['pos_arm'] = i + 1
+        _assign_ranks(arm_rows, 'pos_arm')
 
     for r in rows:
         e = r['enrollment']
@@ -143,6 +153,15 @@ def build_report_card(student_id, term_id):
     assessment_types = (AssessmentType.query.filter_by(is_active=True)
                         .order_by(AssessmentType.order).all())
     pass_mark = SchoolSettings.get('pass_mark', 50)
+    # Load the configured grade scale once (avoids a per-subject DB lookup) and
+    # use it for both the printed grade key and grade/remark resolution.
+    grade_bands = GradeScale.query.order_by(GradeScale.order, GradeScale.min_score.desc()).all()
+
+    def grade_for(score):
+        for b in grade_bands:
+            if b.min_score <= score <= b.max_score:
+                return b.grade, (b.remark or '')
+        return '-', '-'
 
     subjects_data = []
     total_score = 0
@@ -163,8 +182,7 @@ def build_report_card(student_id, term_id):
                 subject_total += score
         row['total'] = subject_total
         if subject_total > 0:
-            row['grade'] = GradeScale.get_grade(subject_total)
-            row['remark'] = GradeScale.get_remark(subject_total)
+            row['grade'], row['remark'] = grade_for(subject_total)
             total_score += subject_total
             if subject_total >= pass_mark:
                 subjects_passed += 1
@@ -192,7 +210,8 @@ def build_report_card(student_id, term_id):
         'assessment_types': assessment_types,
         'total_score': total_score,
         'average': average,
-        'overall_grade': GradeScale.get_grade(average) if average else '-',
+        'overall_grade': grade_for(average)[0] if average else '-',
+        'grade_scale': grade_bands,
         'subjects_passed': subjects_passed,
         'subjects_failed': subjects_failed,
         'total_subjects': len(class_subjects),

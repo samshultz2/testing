@@ -50,3 +50,10 @@ def test_compute_positions(app):
         assert ts_hi.position_in_class == 1 and ts_lo.position_in_class == 2
         assert ts_hi.average_score == 85 and ts_lo.average_score == 40
         assert ts_hi.subjects_passed == 1 and ts_lo.subjects_failed == 1
+
+
+def test_competition_ranking_ties():
+    from utils.report_card import _assign_ranks
+    rows = [{'average': 90}, {'average': 80}, {'average': 80}, {'average': 50}]
+    _assign_ranks(rows, 'pos')
+    assert sorted(r['pos'] for r in rows) == [1, 2, 2, 4]   # ties share a rank
