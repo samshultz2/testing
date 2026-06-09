@@ -263,6 +263,86 @@ function hideWriteControls() {
 }
 
 // =============================================================================
+// SIDEBAR ACCORDION + BOTTOM NAV
+// =============================================================================
+// Groups the sidebar into collapsible sections; on mobile only the section for
+// the current page is expanded (and scrolled into view) so you don't hunt for it.
+// Also builds a bottom nav of the current section's key items on mobile.
+function initSidebarNav() {
+    var list = document.querySelector('.sidebar-nav > ul');
+    if (!list) return;
+
+    // Build groups: a .nav-section header + the items until the next header.
+    var groups = [];
+    var current = { header: null, items: [] };
+    Array.prototype.forEach.call(list.children, function (li) {
+        if (li.classList.contains('nav-section')) {
+            if (current.header || current.items.length) groups.push(current);
+            current = { header: li, items: [] };
+        } else {
+            current.items.push(li);
+        }
+    });
+    if (current.header || current.items.length) groups.push(current);
+
+    // Active link = the longest nav href that prefixes the current path.
+    var path = window.location.pathname, bestLink = null, bestLen = -1;
+    list.querySelectorAll('a.nav-link[href]').forEach(function (a) {
+        var p;
+        try { p = new URL(a.href).pathname; } catch (e) { return; }
+        if (p === '/') { if (path === '/' && bestLen < 0) { bestLink = a; bestLen = 0; } return; }
+        if (path === p || path.indexOf(p + '/') === 0 || path.indexOf(p) === 0) {
+            if (p.length > bestLen) { bestLink = a; bestLen = p.length; }
+        }
+    });
+    var activeLi = bestLink ? bestLink.closest('li') : null;
+    var activeGroup = null;
+    groups.forEach(function (g) { if (activeLi && g.items.indexOf(activeLi) >= 0) activeGroup = g; });
+
+    var mobile = window.innerWidth < 1024;
+    groups.forEach(function (g) {
+        if (!g.header) return;                 // items before the first header stay visible
+        g.header.classList.add('nav-section-toggle');
+        if (!g.header.querySelector('.nav-sec-chev')) {
+            var chev = document.createElement('i');
+            chev.className = 'fas fa-chevron-down nav-sec-chev';
+            g.header.appendChild(chev);
+        }
+        var setOpen = function (open) {
+            g.header.classList.toggle('open', open);
+            g.items.forEach(function (i) { i.style.display = open ? '' : 'none'; });
+        };
+        setOpen(mobile ? (g === activeGroup) : true);
+        g.header.addEventListener('click', function () {
+            setOpen(!g.header.classList.contains('open'));
+        });
+    });
+    if (bestLink) { try { bestLink.scrollIntoView({ block: 'center' }); } catch (e) {} }
+
+    buildBottomNav(activeGroup ? activeGroup.items : []);
+}
+
+function buildBottomNav(items) {
+    var bar = document.getElementById('bottomNav');
+    if (!bar) return;
+    var html = '<a href="/" class="bn-item"><i class="fas fa-home"></i><span>Home</span></a>';
+    items.slice(0, 4).forEach(function (li) {
+        var a = li.querySelector('a.nav-link[href]');
+        if (!a) return;
+        var icon = a.querySelector('i');
+        var label = a.querySelector('span');
+        var href = a.getAttribute('href');
+        var active = a.classList.contains('active') || href === window.location.pathname;
+        html += '<a href="' + href + '" class="bn-item' + (active ? ' active' : '') + '">'
+              + (icon ? icon.outerHTML : '') + '<span>' + (label ? label.textContent : '') + '</span></a>';
+    });
+    html += '<button type="button" class="bn-item" id="bnMore"><i class="fas fa-bars"></i><span>Menu</span></button>';
+    bar.innerHTML = html;
+    var more = document.getElementById('bnMore');
+    if (more) more.addEventListener('click', openSidebar);
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 document.addEventListener('DOMContentLoaded', function() {
@@ -275,6 +355,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mobile menu
     const menuBtn = document.getElementById('mobileMenuBtn');
     if (menuBtn) menuBtn.addEventListener('click', openSidebar);
+
+    // Accordion sidebar + mobile bottom nav (scoped to the current section)
+    initSidebarNav();
     
     // Sidebar toggle
     const sidebarToggle = document.getElementById('sidebarToggle');

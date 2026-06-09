@@ -5,9 +5,9 @@
      have already visited stay viewable with no connection.
    Note: cached pages live on the device; suitable for a single-user, phone-
    hosted install. Mutations (POST/etc.) always require the network. */
-const STATIC_CACHE = 'posyhub-static-v5';
-const RUNTIME_CACHE = 'posyhub-runtime-v5';
-const CDN_CACHE = 'posyhub-cdn-v5';
+const STATIC_CACHE = 'posyhub-static-v6';
+const RUNTIME_CACHE = 'posyhub-runtime-v6';
+const CDN_CACHE = 'posyhub-cdn-v6';
 const OFFLINE_URL = '/static/offline.html';
 // Third-party libraries loaded from CDNs — cached so the app stays fast and works
 // under poor/no network instead of re-downloading them on every page load.
