@@ -9,6 +9,7 @@
 <p class="text-muted mb-3">Select which subjects {{ class_config.class_name }} takes and set periods per week for each.</p>
 
 <form method="POST" action="{{ url_for('generator.save_class_subjects_config', class_id=class_config.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card">
         <div class="card-header">
             <h3>Core Subjects</h3>

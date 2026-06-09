@@ -11,6 +11,7 @@
     <div class="card-header"><h3>Teacher Details</h3></div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('generator.update_teacher', teacher_id=teacher.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Name <span class="required">*</span></label>
                 <input type="text" name="name" class="form-control" required value="{{ teacher.name }}">
@@ -83,6 +84,7 @@
     <div class="card-header"><h3>Subjects {{ teacher.name }} Can Teach</h3></div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('generator.update_teacher_subjects', teacher_id=teacher.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
                 {% for subject in all_subjects %}
                 <label class="checkbox-label" style="padding: 0.5rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
@@ -104,6 +106,7 @@
     <div class="card-body">
         <p class="text-muted mb-3">Uncheck periods when this teacher is NOT available:</p>
         <form method="POST" action="{{ url_for('generator.update_teacher_availability', teacher_id=teacher.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <table class="data-table">
                 <thead>
                     <tr>
@@ -138,6 +141,7 @@
     <div class="card-header"><h3>Danger Zone</h3></div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('generator.delete_teacher', teacher_id=teacher.id) }}" data-confirm="Remove this teacher?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Remove Teacher</button>
         </form>
     </div>

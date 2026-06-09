@@ -9,6 +9,7 @@
 <p class="text-muted mb-3">Configure constraints and rules for timetable generation.</p>
 
 <form method="POST" action="{{ url_for('generator.save_rules') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card mb-3">
         <div class="card-header"><h3>General Settings</h3></div>
         <div class="card-body">

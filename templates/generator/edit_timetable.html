@@ -7,6 +7,7 @@
 </div>
 
 <form method="POST" action="{{ url_for('generator.save_timetable_edit', batch_id=batch_id, class_name=class_name, arm_name=arm_name) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card">
         <div class="card-body" style="padding: 0; overflow-x: auto;">
             <table class="data-table">

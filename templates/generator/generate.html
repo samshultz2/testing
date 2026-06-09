@@ -78,6 +78,7 @@
 
 <!-- Generate Form -->
 <form method="POST" action="{{ url_for('generator.run_generation') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card mb-3">
         <div class="card-header"><h3>Select Classes to Generate</h3></div>
         <div class="card-body">

@@ -73,6 +73,7 @@
                                 <i class="fas fa-edit"></i>
                             </a>
                             <form method="POST" action="{{ url_for('generator.delete_gen_subject', subject_id=item.subject.id) }}" 
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                   style="display:inline" onsubmit="return confirm('Delete {{ item.subject.name }}?')">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                     <i class="fas fa-trash"></i>
@@ -96,6 +97,7 @@
         <p class="text-muted">Configure how many periods each subject should have per week for timetable generation.</p>
         
         <form method="POST" action="{{ url_for('generator.save_subjects_config') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="table-responsive">
                 <table class="data-table">
                     <thead>

@@ -15,6 +15,7 @@
     <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chalkboard-teacher"></i> Teacher View</a>
     <a href="{{ url_for('generator.reports_index') }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Reports</a>
     <form method="POST" action="{{ url_for('generator.delete_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Delete this batch?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>
     </form>
 </div>

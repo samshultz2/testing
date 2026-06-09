@@ -12,6 +12,7 @@
 <div class="card">
     <div class="card-body">
         <form method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Rule Name *</label>
                 <input type="text" name="name" class="form-control" required placeholder="e.g., Literature teacher shadows Geography SSS3 Iris">

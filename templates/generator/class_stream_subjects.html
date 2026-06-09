@@ -20,6 +20,7 @@
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('generator.save_class_stream_subjects', class_id=class_config.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="stream_id" value="{{ data.stream.id }}">
             
             <table class="data-table">
