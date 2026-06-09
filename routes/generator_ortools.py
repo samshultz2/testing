@@ -19,6 +19,7 @@ try:
     from ortools.sat.python import cp_model
     ORTOOLS_AVAILABLE = True
 except ImportError:
+    cp_model = None
     ORTOOLS_AVAILABLE = False
     print("Warning: OR-Tools not installed. Run: pip install ortools --break-system-packages")
 
@@ -49,7 +50,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     """
     Generate timetable using OR-Tools constraint programming solver.
     """
-    if not ORTOOLS_AVAILABLE:
+    if not check_ortools_available():
         return {'success': False, 'message': 'OR-Tools not installed'}
     
     # Valid double period start positions (cannot cross break)
@@ -739,4 +740,15 @@ def save_ortools_result(result):
 
 
 def check_ortools_available():
+    # Re-check the import at call time so a freshly-installed ortools is picked
+    # up without needing a full server restart (the module-level flag is only a
+    # fast path / first-load hint).
+    global ORTOOLS_AVAILABLE, cp_model
+    if not ORTOOLS_AVAILABLE:
+        try:
+            from ortools.sat.python import cp_model as _cp_model
+            cp_model = _cp_model
+            ORTOOLS_AVAILABLE = True
+        except ImportError:
+            ORTOOLS_AVAILABLE = False
     return ORTOOLS_AVAILABLE
