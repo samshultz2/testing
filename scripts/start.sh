@@ -82,5 +82,16 @@ else
 fi
 
 # --- 5. launch the app -------------------------------------------------------
-say "Launching PosyHub (DATABASE_URL -> ${DB_NAME} on ${DB_HOST}:${DB_PORT})"
-exec python app.py
+APP_ENV="${APP_ENV:-production}"
+export APP_ENV
+PORT="${PORT:-5000}"
+export PORT
+
+if [ "$APP_ENV" = "production" ]; then
+  say "Launching PosyHub (production / gunicorn) on port ${PORT}"
+  say "DATABASE_URL -> ${DB_NAME} on ${DB_HOST}:${DB_PORT}"
+  exec gunicorn -c gunicorn.conf.py wsgi:app
+else
+  say "Launching PosyHub (development / Flask) on port ${PORT}"
+  exec python app.py
+fi

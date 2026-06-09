@@ -1,13 +1,20 @@
 """
 Lightweight automatic database backups.
 
-On startup we keep one timestamped copy of the SQLite database per day under
-``instance/backups`` and prune to the configured retention count. This needs no
-scheduler and is safe to call on every boot.
+Supports both backends:
+
+* **SQLite** — keep one timestamped copy of the database file per day under
+  ``instance/backups`` (a fast file copy, no tooling required).
+* **PostgreSQL** — keep one ``pg_dump`` (plain SQL) per day under the same
+  folder. Requires ``pg_dump`` on PATH (provided by the postgresql client).
+
+Both are pruned to the configured retention count and are safe to call on
+every boot — backups must never block startup.
 """
 import os
 import glob
 import shutil
+import subprocess
 from datetime import datetime
 
 
@@ -17,19 +24,80 @@ def _backup_dir(app):
     return d
 
 
+def _uri(app):
+    return app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+
+
+def _is_postgres(app):
+    return _uri(app).startswith('postgresql')
+
+
+def _libpq_url(uri):
+    """Convert a SQLAlchemy Postgres URL to a libpq URL pg_dump understands."""
+    # postgresql+psycopg://user:pass@host/db -> postgresql://user:pass@host/db
+    scheme, _, rest = uri.partition('://')
+    return scheme.split('+', 1)[0] + '://' + rest
+
+
+def _pg_dump(app, dest):
+    """Run pg_dump to ``dest``. Returns dest on success, else None."""
+    url = _libpq_url(_uri(app))
+    try:
+        with open(dest, 'wb') as fh:
+            proc = subprocess.run(
+                ['pg_dump', '--no-owner', '--no-privileges', url],
+                stdout=fh, stderr=subprocess.PIPE, timeout=300,
+            )
+        if proc.returncode != 0:
+            app.logger.warning('pg_dump failed: %s',
+                               proc.stderr.decode('utf-8', 'replace')[:500])
+            _safe_remove(dest)
+            return None
+        return dest
+    except FileNotFoundError:
+        app.logger.warning('pg_dump not found on PATH; skipping Postgres backup.')
+        return None
+    except Exception as exc:
+        app.logger.warning('Postgres backup error: %s', exc)
+        _safe_remove(dest)
+        return None
+
+
+def _safe_remove(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _sqlite_path(app):
+    uri = _uri(app)
+    if not uri.startswith('sqlite:///'):
+        return None
+    return uri[len('sqlite:///'):]
+
+
+def _prune(backup_dir, pattern, retention):
+    existing = sorted(glob.glob(os.path.join(backup_dir, pattern)))
+    for old in (existing[:-retention] if retention > 0 else []):
+        _safe_remove(old)
+
+
 def make_backup(app, label='manual'):
     """Create an on-demand timestamped backup. Returns the path, or None."""
     try:
-        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-        if not uri.startswith('sqlite:///'):
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if _is_postgres(app):
+            dest = os.path.join(_backup_dir(app), f"school_{stamp}_{label}.sql")
+            return _pg_dump(app, dest)
+        db_path = _sqlite_path(app)
+        if not db_path or not os.path.exists(db_path):
             return None
-        db_path = uri[len('sqlite:///'):]
-        if not os.path.exists(db_path):
-            return None
-        dest = os.path.join(_backup_dir(app), f"school_{datetime.now():%Y%m%d_%H%M%S}_{label}.db")
+        dest = os.path.join(_backup_dir(app), f"school_{stamp}_{label}.db")
         shutil.copy2(db_path, dest)
         return dest
-    except Exception:
+    except Exception as exc:
+        app.logger.warning('make_backup error: %s', exc)
         return None
 
 
@@ -38,38 +106,37 @@ def list_backups(app):
     try:
         d = _backup_dir(app)
         out = []
-        for p in glob.glob(os.path.join(d, 'school_*.db')):
-            st = os.stat(p)
-            out.append({'name': os.path.basename(p), 'size': st.st_size,
-                        'modified': datetime.fromtimestamp(st.st_mtime)})
+        for pat in ('school_*.db', 'school_*.sql'):
+            for p in glob.glob(os.path.join(d, pat)):
+                st = os.stat(p)
+                out.append({'name': os.path.basename(p), 'size': st.st_size,
+                            'modified': datetime.fromtimestamp(st.st_mtime)})
         return sorted(out, key=lambda x: x['name'], reverse=True)
     except Exception:
         return []
 
 
 def auto_backup(app):
+    """Keep one backup per day, pruned to BACKUP_RETENTION. Never raises."""
     try:
-        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-        if not uri.startswith('sqlite:///'):
-            return None
-        db_path = uri[len('sqlite:///'):]
-        if not os.path.exists(db_path):
-            return None
+        backup_dir = _backup_dir(app)
+        retention = int(app.config.get('BACKUP_RETENTION', 10))
+        today = datetime.now().strftime('%Y%m%d')
 
-        backup_dir = os.path.join(app.config['BASE_DIR'], 'instance', 'backups')
-        os.makedirs(backup_dir, exist_ok=True)
+        if _is_postgres(app):
+            dest = os.path.join(backup_dir, f"school_{today}.sql")
+            if not os.path.exists(dest):
+                _pg_dump(app, dest)
+            _prune(backup_dir, 'school_*.sql', retention)
+            return dest if os.path.exists(dest) else None
 
-        dest = os.path.join(backup_dir, f"school_{datetime.now():%Y%m%d}.db")
+        db_path = _sqlite_path(app)
+        if not db_path or not os.path.exists(db_path):
+            return None
+        dest = os.path.join(backup_dir, f"school_{today}.db")
         if not os.path.exists(dest):
             shutil.copy2(db_path, dest)
-
-        retention = int(app.config.get('BACKUP_RETENTION', 10))
-        existing = sorted(glob.glob(os.path.join(backup_dir, 'school_*.db')))
-        for old in existing[:-retention] if retention > 0 else []:
-            try:
-                os.remove(old)
-            except OSError:
-                pass
+        _prune(backup_dir, 'school_*.db', retention)
         return dest
     except Exception:
         # Backups must never block app startup.

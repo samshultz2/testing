@@ -26,6 +26,9 @@ ortools==9.15.6755
 # PyMuPDF (fitz) reads PDFs and renders scanned pages for OCR (pure pip, no
 # system deps).
 
+# Production WSGI server (used by wsgi.py / scripts/start.sh in production).
+gunicorn==23.0.0
+
 # Dev/test
 pytest==8.3.3
 

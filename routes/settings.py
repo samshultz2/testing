@@ -461,14 +461,15 @@ def download_backup_file(name):
     import os as _os
     from flask import current_app
     safe = _os.path.basename(name)
-    if not (safe.startswith('school_') and safe.endswith('.db')):
+    if not (safe.startswith('school_') and safe.endswith(('.db', '.sql'))):
         flash('Invalid backup file.', 'error')
         return redirect(url_for('settings.backup_page'))
     path = _os.path.join(current_app.config['BASE_DIR'], 'instance', 'backups', safe)
     if not _os.path.exists(path):
         flash('Backup not found.', 'error')
         return redirect(url_for('settings.backup_page'))
-    return send_file(path, as_attachment=True, download_name=safe, mimetype='application/x-sqlite3')
+    mimetype = 'application/sql' if safe.endswith('.sql') else 'application/x-sqlite3'
+    return send_file(path, as_attachment=True, download_name=safe, mimetype=mimetype)
 
 
 @settings_bp.route('/backup/download')
