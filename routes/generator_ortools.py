@@ -7,11 +7,12 @@ V7: Added constraint to prevent same teacher teaching same class back-to-back
 from models import (
     db, GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
     GenClassSubjectConfig, GenClassStreamSubject, GenTeacher, GenTeacherAssignment,
-    GenTeacherAvailability, GenTimetableResult, GenSubject, GenSubjectClashRule,
-    GenCombinedClassRule
+    GenTeacherAvailability, GenTimetableRule, GenTimetableResult, GenSubject,
+    GenSubjectClashRule, GenCombinedClassRule
 )
 from collections import defaultdict
 import uuid
+import random
 import time
 
 try:
