@@ -5,9 +5,14 @@
      have already visited stay viewable with no connection.
    Note: cached pages live on the device; suitable for a single-user, phone-
    hosted install. Mutations (POST/etc.) always require the network. */
-const STATIC_CACHE = 'posyhub-static-v4';
-const RUNTIME_CACHE = 'posyhub-runtime-v4';
+const STATIC_CACHE = 'posyhub-static-v5';
+const RUNTIME_CACHE = 'posyhub-runtime-v5';
+const CDN_CACHE = 'posyhub-cdn-v5';
 const OFFLINE_URL = '/static/offline.html';
+// Third-party libraries loaded from CDNs — cached so the app stays fast and works
+// under poor/no network instead of re-downloading them on every page load.
+const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com',
+                   'fonts.googleapis.com', 'fonts.gstatic.com'];
 const ASSETS = [
   '/static/css/style.css',
   '/static/js/app.js',
@@ -28,7 +33,7 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  const keep = [STATIC_CACHE, RUNTIME_CACHE];
+  const keep = [STATIC_CACHE, RUNTIME_CACHE, CDN_CACHE];
   e.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => !keep.includes(k)).map((k) => caches.delete(k))))
@@ -47,7 +52,20 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;                    // never cache mutations
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;     // only same-origin
+
+  // Third-party CDN libraries/fonts: cache-first (works offline once fetched).
+  if (CDN_HOSTS.includes(url.hostname)) {
+    e.respondWith(
+      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CDN_CACHE).then((c) => c.put(req, copy));
+        return res;
+      }).catch(() => hit))
+    );
+    return;
+  }
+
+  if (url.origin !== self.location.origin) return;     // only same-origin beyond this
 
   // Static assets: cache-first.
   if (url.pathname.startsWith('/static/')) {

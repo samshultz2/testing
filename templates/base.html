@@ -25,6 +25,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <div id="navProgress" aria-hidden="true"></div>
     <div class="app-container">
         <div class="sidebar-overlay" id="sidebarOverlay"></div>
         
@@ -813,6 +814,28 @@
                 window.location.replace(u.toString());
             });
         });
+    })();
+    </script>
+    <style>
+    #navProgress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--primary);
+        z-index:9999;opacity:0;transition:width .25s ease,opacity .25s ease;box-shadow:0 0 8px var(--primary);}
+    </style>
+    <script>
+    // Lightweight navigation progress bar — better perceived speed on slow networks.
+    (function(){
+        var bar=document.getElementById('navProgress'); if(!bar) return;
+        var timer;
+        function start(){ bar.style.opacity='1'; bar.style.width='30%';
+            clearTimeout(timer); timer=setTimeout(function(){bar.style.width='70%';},220); }
+        document.addEventListener('click', function(e){
+            var a=e.target.closest && e.target.closest('a'); if(!a||!a.href) return;
+            if(a.target==='_blank'||a.hasAttribute('download')||a.getAttribute('href').indexOf('#')===0) return;
+            try{ if(new URL(a.href).origin===location.origin) start(); }catch(_){}
+        });
+        document.addEventListener('submit', function(e){
+            if((e.target.getAttribute('method')||'get').toLowerCase()!=='get') start(); });
+        window.addEventListener('pageshow', function(){ bar.style.width='100%';
+            setTimeout(function(){bar.style.opacity='0';bar.style.width='0';},200); });
     })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
