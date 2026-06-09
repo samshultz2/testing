@@ -5,7 +5,7 @@ Main Flask application entry point
 import os
 import secrets
 from flask import Flask, session
-from config import Config
+from config import Config, get_config
 from models import db, init_db
 from routes import auth_bp, main_bp, academics_bp, attendance_bp, results_bp, reports_bp, settings_bp, subjects_bp, timetable_bp, promotion_bp, users_bp
 from routes.generator import generator_bp
@@ -48,8 +48,15 @@ def _start_scheduled_messages_worker(app):
     threading.Thread(target=_loop, daemon=True).start()
 
 
-def create_app(config_class=Config):
-    """Application factory pattern"""
+def create_app(config_class=None):
+    """Application factory pattern.
+
+    When no config class is passed, the environment selects it via APP_ENV /
+    FLASK_ENV (development | production | testing). Tests pass an explicit
+    TestConfig, so their behaviour is unchanged.
+    """
+    if config_class is None:
+        config_class = get_config()
     app = Flask(__name__)
     app.config.from_object(config_class)
     
@@ -293,7 +300,12 @@ def create_app(config_class=Config):
         if value and len(value) == 11:
             return f"{value[:4]} {value[4:7]} {value[7:]}"
         return value or ''
-    
+
+    # Production hardening: proxy support, security headers, logging,
+    # /healthz. Safe in every environment.
+    from utils.production import harden
+    harden(app, config_class)
+
     return app
 
 
@@ -304,4 +316,6 @@ if os.environ.get('POSYHUB_TESTING') != '1':
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Local development server only. In production use a WSGI server
+    # (gunicorn) via wsgi.py / scripts/start.sh — never app.run().
+    app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)

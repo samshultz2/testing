@@ -62,6 +62,36 @@ class Config:
         'sqlite:///' + os.path.join(BASE_DIR, 'instance', 'school.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Connection-pool hardening. pool_pre_ping transparently recovers from
+    # dropped connections (important for Postgres, which closes idle ones);
+    # pool_recycle avoids stale sockets. Sizing only applies to real pools
+    # (Postgres) — SQLite ignores it.
+    _IS_POSTGRES = SQLALCHEMY_DATABASE_URI.startswith('postgresql')
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': int(os.environ.get('DB_POOL_RECYCLE', '1800')),
+    }
+    if _IS_POSTGRES:
+        SQLALCHEMY_ENGINE_OPTIONS.update({
+            'pool_size': int(os.environ.get('DB_POOL_SIZE', '5')),
+            'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '10')),
+            'pool_timeout': int(os.environ.get('DB_POOL_TIMEOUT', '30')),
+        })
+
+    # Reverse-proxy awareness. Set TRUST_PROXY=1 when running behind nginx so
+    # the app honours X-Forwarded-For/-Proto (correct client IPs + https).
+    TRUST_PROXY = _as_bool(os.environ.get('TRUST_PROXY'), default=False)
+
+    # Security headers. CSP is opt-in because a too-strict policy can break
+    # inline scripts/styles in existing templates — enable once verified.
+    SECURITY_HEADERS = _as_bool(os.environ.get('SECURITY_HEADERS'), default=True)
+    ENABLE_HSTS = _as_bool(os.environ.get('ENABLE_HSTS'), default=False)
+    CONTENT_SECURITY_POLICY = os.environ.get('CONTENT_SECURITY_POLICY', '')
+
+    # Logging
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    LOG_FILE = os.environ.get('LOG_FILE', '')  # empty => stderr only
+
     # Application settings
     APP_NAME = "PosyHub Student Manager"
     # Legacy shared-password login (kept for backwards compatibility). Set
@@ -119,11 +149,49 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
+    # In production, sessions should not survive a secret-key change, and we
+    # want secure defaults. Cookies are only marked Secure when served over
+    # HTTPS — keep SESSION_COOKIE_SECURE=1 in the environment once TLS is in
+    # front (e.g. behind nginx). It is left configurable because LAN/Termux
+    # deployments may run plain HTTP initially.
+    ENABLE_HSTS = _as_bool(os.environ.get('ENABLE_HSTS'), default=True)
+
+    @staticmethod
+    def warnings():
+        """Return a list of production-readiness warnings (non-fatal)."""
+        msgs = []
+        if not os.environ.get('SECRET_KEY'):
+            msgs.append('SECRET_KEY is not set in the environment; using a '
+                        'generated/persisted key. Set SECRET_KEY for production.')
+        if Config.ENABLE_LEGACY_LOGIN and not os.environ.get('ADMIN_PASSWORD'):
+            msgs.append('Legacy shared-password login is enabled with the '
+                        'default password. Set ADMIN_PASSWORD or '
+                        'ENABLE_LEGACY_LOGIN=0.')
+        if not Config._IS_POSTGRES:
+            msgs.append('Running on SQLite. PostgreSQL is recommended for '
+                        'production (set DATABASE_URL).')
+        return msgs
+
+
+class TestingConfig(Config):
+    """Testing configuration"""
+    TESTING = True
+    DEBUG = False
+    WTF_CSRF_ENABLED = False
 
 
 # Configuration dictionary
 config = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
-    'default': DevelopmentConfig
+    'testing': TestingConfig,
+    'default': DevelopmentConfig,
 }
+
+
+def get_config():
+    """Select a config class from APP_ENV / FLASK_ENV (default: development)."""
+    name = (os.environ.get('APP_ENV')
+            or os.environ.get('FLASK_ENV')
+            or 'default').strip().lower()
+    return config.get(name, config['default'])
