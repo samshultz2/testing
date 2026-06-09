@@ -31,7 +31,7 @@ def _active_term():
 
 def _term_from(tid):
     """Term for an id (None-safe), falling back to the active term."""
-    return (Term.query.get(tid) if tid else None) or _active_term()
+    return (db.session.get(Term, tid) if tid else None) or _active_term()
 
 
 def _dt(value):
@@ -112,7 +112,7 @@ def add_announcement():
 @comms_bp.route('/announcements/<int:ann_id>/edit', methods=['POST'])
 @login_required
 def edit_announcement(ann_id):
-    a = Announcement.query.get_or_404(ann_id)
+    a = db.get_or_404(Announcement, ann_id)
     _read_announcement(a)
     db.session.commit()
     flash('Announcement updated.', 'success')
@@ -122,7 +122,7 @@ def edit_announcement(ann_id):
 @comms_bp.route('/announcements/<int:ann_id>/delete', methods=['POST'])
 @login_required
 def delete_announcement(ann_id):
-    a = Announcement.query.get_or_404(ann_id)
+    a = db.get_or_404(Announcement, ann_id)
     from utils.audit import log_action
     log_action('communication.announcement_delete', target=a)
     db.session.delete(a)
@@ -208,7 +208,7 @@ def add_template():
 @comms_bp.route('/templates/<int:template_id>/edit', methods=['POST'])
 @login_required
 def edit_template(template_id):
-    t = MessageTemplate.query.get_or_404(template_id)
+    t = db.get_or_404(MessageTemplate, template_id)
     t.name = (request.form.get('name') or t.name).strip()
     t.body = (request.form.get('body') or t.body).strip()
     t.category = (request.form.get('category') or t.category or 'General').strip()
@@ -221,7 +221,7 @@ def edit_template(template_id):
 @comms_bp.route('/templates/<int:template_id>/delete', methods=['POST'])
 @login_required
 def delete_template(template_id):
-    t = MessageTemplate.query.get_or_404(template_id)
+    t = db.get_or_404(MessageTemplate, template_id)
     db.session.delete(t)
     db.session.commit()
     flash('Template deleted.', 'success')
@@ -301,7 +301,7 @@ def compose():
     pre_tpl = request.args.get('tpl', type=int)
     pre_body = ''
     if pre_tpl:
-        t = MessageTemplate.query.get(pre_tpl)
+        t = db.session.get(MessageTemplate, pre_tpl)
         if t:
             pre_body = t.body
     elif pre_audience == 'defaulters':
@@ -389,7 +389,7 @@ def students_search():
 @comms_bp.route('/messages/<int:message_id>/cancel-schedule', methods=['POST'])
 @login_required
 def cancel_schedule(message_id):
-    msg = Message.query.get_or_404(message_id)
+    msg = db.get_or_404(Message, message_id)
     msg.status = 'Draft'
     msg.scheduled_at = None
     db.session.commit()
@@ -420,7 +420,7 @@ def messages_list():
 @comms_bp.route('/messages/<int:message_id>')
 @login_required
 def message_detail(message_id):
-    msg = Message.query.get_or_404(message_id)
+    msg = db.get_or_404(Message, message_id)
     recips = msg.recipients.order_by(MessageRecipient.parent_name).all()
     rows = []
     for r in recips:
@@ -437,7 +437,7 @@ def message_detail(message_id):
 @comms_bp.route('/messages/<int:message_id>/recipient/<int:rid>/sent', methods=['POST'])
 @login_required
 def mark_sent(message_id, rid):
-    r = MessageRecipient.query.get_or_404(rid)
+    r = db.get_or_404(MessageRecipient, rid)
     if r.message_id != message_id:
         return ('', 404)
     if r.status != 'Sent':
@@ -453,7 +453,7 @@ def mark_sent(message_id, rid):
 @comms_bp.route('/messages/<int:message_id>/mark-all-sent', methods=['POST'])
 @login_required
 def mark_all_sent(message_id):
-    msg = Message.query.get_or_404(message_id)
+    msg = db.get_or_404(Message, message_id)
     n = 0
     for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
         r.status = 'Sent'
@@ -468,7 +468,7 @@ def mark_all_sent(message_id):
 @comms_bp.route('/messages/<int:message_id>/export')
 @login_required
 def export_recipients(message_id):
-    msg = Message.query.get_or_404(message_id)
+    msg = db.get_or_404(Message, message_id)
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['Parent', 'Phone', 'Phone (intl)', 'Student', 'Message', 'Status'])
@@ -483,7 +483,7 @@ def export_recipients(message_id):
 @comms_bp.route('/messages/<int:message_id>/delete', methods=['POST'])
 @admin_required
 def delete_message(message_id):
-    msg = Message.query.get_or_404(message_id)
+    msg = db.get_or_404(Message, message_id)
     from utils.audit import log_action
     log_action('communication.message_delete',
                target_type='message', target_id=msg.id, target_label=getattr(msg, 'title', None))
@@ -498,7 +498,7 @@ def delete_message(message_id):
 def send_gateway(message_id):
     """Dispatch all pending recipients through the configured SMS gateway."""
     from utils import sms_gateway
-    msg = Message.query.get_or_404(message_id)
+    msg = db.get_or_404(Message, message_id)
     cfg = sms_gateway.get_config()
     if not sms_gateway.is_configured(cfg):
         flash('No SMS gateway is configured. Add your provider key in Settings.', 'error')

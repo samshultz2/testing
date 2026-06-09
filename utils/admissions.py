@@ -72,7 +72,7 @@ def convert_to_student(applicant, assignment_id=None):
             is_primary=True))
 
     if assignment_id:
-        asg = ClassArmAssignment.query.get(assignment_id)
+        asg = db.session.get(ClassArmAssignment, assignment_id)
         if asg:
             db.session.add(StudentEnrollment(
                 student_id=student.id, class_arm_assignment_id=asg.id, is_active=True))

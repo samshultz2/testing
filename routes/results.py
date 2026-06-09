@@ -370,7 +370,7 @@ def scan_waec():
 @login_required
 def view_waec_student(student_id):
     """View comprehensive WAEC profile for a student"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
     risk_assessment = AcademicAnalytics.calculate_student_risk_score(student_id)
     jamb_prediction = AcademicAnalytics.predict_jamb_score(student_id)
@@ -390,7 +390,7 @@ def view_waec_student(student_id):
 @login_required
 def edit_waec(student_id, year):
     """Edit WAEC results for a student/year"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     
     if request.method == 'POST':
         try:
@@ -438,7 +438,7 @@ def edit_waec(student_id, year):
 @admin_required
 def delete_waec(student_id, year):
     """Delete all WAEC results for a student in a given year"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     
     try:
         deleted = WAECResult.query.filter_by(student_id=student_id, exam_year=year).delete()
@@ -461,7 +461,7 @@ def delete_waec(student_id, year):
 @admin_required
 def delete_waec_single(result_id):
     """Delete a single WAEC result entry"""
-    result = WAECResult.query.get_or_404(result_id)
+    result = db.get_or_404(WAECResult, result_id)
     student_id = result.student_id
     year = result.exam_year
     subject = result.subject
@@ -854,7 +854,7 @@ def scan_batch():
 @login_required
 def view_jamb_student(student_id):
     """View JAMB results for a student"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     jamb_summary = AcademicAnalytics.get_student_jamb_summary(student_id)
     waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
     
@@ -910,7 +910,7 @@ def student_report(student_id):
     """A consolidated, print/PDF-ready exam report for one student."""
     from models.mock_jamb import MockJAMBResult, MockJAMBExam, MockJAMBAnalytics
 
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     pass_grades = set(AcademicAnalytics.PASS_GRADES)
     distinction_grades = set(AcademicAnalytics.DISTINCTION_GRADES)
 
@@ -1503,7 +1503,7 @@ def subject_enrolment_detail(exam, subject):
 @login_required
 def edit_jamb(student_id, year):
     """Edit JAMB results for a student/year"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     result = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first_or_404()
     
     if request.method == 'POST':
@@ -1544,7 +1544,7 @@ def edit_jamb(student_id, year):
 @admin_required
 def delete_jamb(student_id, year):
     """Delete JAMB result for a student in a given year"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     
     try:
         result = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first()
@@ -1853,7 +1853,7 @@ def waec_student_analysis(student_id):
     """Detailed WAEC analysis for a specific student"""
     from utils.exam_analytics import WAECAnalytics, WAECJAMBCorrelation
     
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     year = request.args.get('year', type=int)
     
     waec_analysis = WAECAnalytics.get_student_waec_analysis(student_id, year)
@@ -1890,7 +1890,7 @@ def student_predictions(student_id):
     from utils.exam_analytics import WAECJAMBCorrelation, MockJAMBAnalytics
     from models.mock_jamb import MockJAMBResult
     
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     
     # Get mock exam history first to check data
     mock_results = MockJAMBResult.query.filter_by(student_id=student_id).all()

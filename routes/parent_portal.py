@@ -36,7 +36,7 @@ def parent_required(f):
 
 def _current_student():
     sid = session.get(PKEY)
-    return Student.query.get(sid) if sid else None
+    return db.session.get(Student, sid) if sid else None
 
 
 def _siblings(student):
@@ -83,7 +83,7 @@ def logout():
 @parent_required
 def switch_child(student_id):
     """Switch the viewed child (only among the signed-in family's children)."""
-    auth = Student.query.get(session.get(AUTHKEY))
+    auth = db.session.get(Student, session.get(AUTHKEY))
     if auth and student_id in {s.id for s in _siblings(auth)}:
         session[PKEY] = student_id
     else:
@@ -105,7 +105,7 @@ def home():
         active = get_active_term()
         term_id = active.id if active else None
     terms = Term.query.order_by(Term.id.desc()).all()
-    term = Term.query.get(term_id) if term_id else None
+    term = db.session.get(Term, term_id) if term_id else None
 
     bill = student_bill(student.id, term_id) if term_id else None
     enrollment, report = build_report_card(student.id, term_id) if term_id else (None, None)
@@ -124,7 +124,7 @@ def home():
         Announcement.is_pinned.desc(), Announcement.created_at.desc()).limit(10).all()
         if a.is_active][:5]
 
-    auth = Student.query.get(session.get(AUTHKEY)) or student
+    auth = db.session.get(Student, session.get(AUTHKEY)) or student
     siblings = _siblings(auth)
     return render_template('parent/home.html',
         student=student, terms=terms, term_id=term_id, bill=bill,
@@ -141,7 +141,7 @@ def _record_online_payment(student_id, term_id, amount, reference):
     existing = FeePayment.query.filter_by(reference=reference).first()
     if existing:
         return existing
-    student = Student.query.get(student_id)
+    student = db.session.get(Student, student_id)
     if not student:
         return None
     pay = FeePayment(
@@ -166,7 +166,7 @@ def report_pdf():
         return redirect(url_for('parent.login'))
     term_id = request.args.get('term_id', type=int) or (
         get_active_term().id if get_active_term() else None)
-    term = Term.query.get(term_id) if term_id else None
+    term = db.session.get(Term, term_id) if term_id else None
     _, report = build_report_card(student.id, term_id) if term_id else (None, None)
     if not (report and report.get('term_summary') and term and term.results_published):
         flash('Your child\'s results are not available for download yet.', 'error')

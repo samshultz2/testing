@@ -165,7 +165,7 @@ class MockJAMBAnalytics:
     
     @staticmethod
     def get_exam_statistics(mock_exam_id):
-        exam = MockJAMBExam.query.get(mock_exam_id)
+        exam = db.session.get(MockJAMBExam, mock_exam_id)
         if not exam:
             return None
         

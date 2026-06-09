@@ -134,7 +134,7 @@ def add_staff():
 @hr_bp.route('/staff/<int:staff_id>')
 @login_required
 def staff_detail(staff_id):
-    s = StaffMember.query.get_or_404(staff_id)
+    s = db.get_or_404(StaffMember, staff_id)
     from utils.branch_scope import can_access_branch
     if not can_access_branch(s.branch_id):
         flash('That staff member belongs to another branch.', 'error')
@@ -151,7 +151,7 @@ def staff_detail(staff_id):
 @hr_bp.route('/staff/<int:staff_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_staff(staff_id):
-    s = StaffMember.query.get_or_404(staff_id)
+    s = db.get_or_404(StaffMember, staff_id)
     if request.method == 'POST':
         _read_staff_form(s)
         db.session.commit()
@@ -168,7 +168,7 @@ def edit_staff(staff_id):
 @admin_required
 def adjust_salary(staff_id):
     """Record a salary increment / adjustment and update the current salary."""
-    s = StaffMember.query.get_or_404(staff_id)
+    s = db.get_or_404(StaffMember, staff_id)
     new_salary = request.form.get('new_salary', type=float)
     if new_salary is None or new_salary < 0:
         flash('Enter a valid new salary.', 'error')
@@ -189,7 +189,7 @@ def adjust_salary(staff_id):
 @hr_bp.route('/staff/<int:staff_id>/delete', methods=['POST'])
 @admin_required
 def delete_staff(staff_id):
-    s = StaffMember.query.get_or_404(staff_id)
+    s = db.get_or_404(StaffMember, staff_id)
     s.is_active = False
     db.session.commit()
     from utils.audit import log_action
@@ -243,7 +243,7 @@ def add_department():
 @hr_bp.route('/departments/<int:dept_id>/edit', methods=['POST'])
 @admin_required
 def edit_department(dept_id):
-    d = Department.query.get_or_404(dept_id)
+    d = db.get_or_404(Department, dept_id)
     d.name = (request.form.get('name') or d.name).strip()
     d.is_active = bool(request.form.get('is_active'))
     db.session.commit()
@@ -254,7 +254,7 @@ def edit_department(dept_id):
 @hr_bp.route('/departments/<int:dept_id>/delete', methods=['POST'])
 @admin_required
 def delete_department(dept_id):
-    d = Department.query.get_or_404(dept_id)
+    d = db.get_or_404(Department, dept_id)
     if StaffMember.query.filter_by(department_id=dept_id).count():
         d.is_active = False
         flash('Department has staff; deactivated instead of deleted.', 'info')
@@ -304,7 +304,7 @@ def add_leave():
 @hr_bp.route('/leave/<int:leave_id>/status', methods=['POST'])
 @login_required
 def leave_status(leave_id):
-    lv = LeaveRecord.query.get_or_404(leave_id)
+    lv = db.get_or_404(LeaveRecord, leave_id)
     new_status = request.form.get('status')
     if new_status in ('Approved', 'Rejected', 'Pending'):
         lv.status = new_status
@@ -319,7 +319,7 @@ def leave_status(leave_id):
 @hr_bp.route('/leave/<int:leave_id>/delete', methods=['POST'])
 @login_required
 def delete_leave(leave_id):
-    lv = LeaveRecord.query.get_or_404(leave_id)
+    lv = db.get_or_404(LeaveRecord, leave_id)
     db.session.delete(lv)
     db.session.commit()
     flash('Leave record removed.', 'success')
@@ -362,7 +362,7 @@ def create_payroll():
 @hr_bp.route('/payroll/<int:run_id>')
 @login_required
 def payroll_detail(run_id):
-    run = PayrollRun.query.get_or_404(run_id)
+    run = db.get_or_404(PayrollRun, run_id)
     slips = run.payslips.join(StaffMember).order_by(StaffMember.surname).all()
     return render_template('hr/payroll_detail.html', run=run, slips=slips,
                            total=hr.run_total(run))
@@ -371,7 +371,7 @@ def payroll_detail(run_id):
 @hr_bp.route('/payroll/<int:run_id>/payslip/<int:slip_id>/edit', methods=['POST'])
 @admin_required
 def edit_payslip(run_id, slip_id):
-    ps = Payslip.query.get_or_404(slip_id)
+    ps = db.get_or_404(Payslip, slip_id)
     if ps.run_id != run_id:
         return ('', 404)
     ps.basic = request.form.get('basic', type=float) or 0
@@ -386,7 +386,7 @@ def edit_payslip(run_id, slip_id):
 @hr_bp.route('/payroll/<int:run_id>/finalize', methods=['POST'])
 @admin_required
 def finalize_payroll(run_id):
-    run = PayrollRun.query.get_or_404(run_id)
+    run = db.get_or_404(PayrollRun, run_id)
     run.status = 'Finalized'
     # Post the salary run to Finance as a single expense (once).
     if request.form.get('post_expense') and not run.posted_expense_id:
@@ -420,7 +420,7 @@ def finalize_payroll(run_id):
 @hr_bp.route('/payroll/<int:run_id>/mark-paid', methods=['POST'])
 @admin_required
 def mark_paid(run_id):
-    run = PayrollRun.query.get_or_404(run_id)
+    run = db.get_or_404(PayrollRun, run_id)
     run.status = 'Paid'
     db.session.commit()
     flash('Payroll marked as paid.', 'success')
@@ -430,7 +430,7 @@ def mark_paid(run_id):
 @hr_bp.route('/payroll/<int:run_id>/delete', methods=['POST'])
 @admin_required
 def delete_payroll(run_id):
-    run = PayrollRun.query.get_or_404(run_id)
+    run = db.get_or_404(PayrollRun, run_id)
     db.session.delete(run)
     db.session.commit()
     flash('Payroll run deleted.', 'success')
@@ -440,7 +440,7 @@ def delete_payroll(run_id):
 @hr_bp.route('/payroll/<int:run_id>/payslip/<int:slip_id>/print')
 @login_required
 def print_payslip(run_id, slip_id):
-    ps = Payslip.query.get_or_404(slip_id)
+    ps = db.get_or_404(Payslip, slip_id)
     if ps.run_id != run_id:
         return ('', 404)
     from models import SchoolSettings
@@ -453,7 +453,7 @@ def print_payslip(run_id, slip_id):
 @hr_bp.route('/payroll/<int:run_id>/sync-deductions', methods=['POST'])
 @admin_required
 def sync_deductions(run_id):
-    run = PayrollRun.query.get_or_404(run_id)
+    run = db.get_or_404(PayrollRun, run_id)
     n = hr.sync_attendance_deductions(run)
     db.session.commit()
     flash(f'Refreshed deductions from attendance ({n} payslip(s) updated).', 'success')

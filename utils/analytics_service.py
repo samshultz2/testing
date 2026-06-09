@@ -110,7 +110,7 @@ class AcademicAnalytics:
     @staticmethod
     def calculate_student_risk_score(student_id: int) -> Dict:
         """Calculate comprehensive risk assessment for a student"""
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         if not student:
             return None
         
@@ -614,7 +614,7 @@ class AcademicAnalytics:
     @staticmethod
     def predict_jamb_score(student_id: int) -> Dict:
         """Predict JAMB score based on WAEC performance"""
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         if not student:
             return None
         

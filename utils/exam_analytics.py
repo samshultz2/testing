@@ -502,7 +502,7 @@ class MockJAMBAnalytics(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         progress = {
             'student_id': student_id,
@@ -591,7 +591,7 @@ class WAECAnalytics(ExamAnalytics):
         student_stats = []
         for sid in student_ids:
             student_results = [r for r in results if r.student_id == sid]
-            student = Student.query.get(sid)
+            student = db.session.get(Student, sid)
             
             grades = [r.grade for r in student_results]
             points = [ExamAnalytics.WAEC_GRADE_POINTS.get(g, 9) for g in grades]
@@ -657,7 +657,7 @@ class WAECAnalytics(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         # Group by year
         by_year = defaultdict(list)
@@ -765,7 +765,7 @@ class WAECJAMBCorrelation(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         # Aggregate scores by subject
         subject_scores = defaultdict(list)
@@ -921,7 +921,7 @@ class WAECJAMBCorrelation(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         # Group by subject
         subject_grades = {}

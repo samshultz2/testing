@@ -118,7 +118,7 @@ def create_exam():
                 return redirect(url_for('mock_jamb.create_exam'))
             
             # Create exam
-            session_obj = AcademicSession.query.get(session_id)
+            session_obj = db.session.get(AcademicSession, session_id)
             if not name:
                 ordinals = {1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth'}
                 name = f"{ordinals.get(exam_number, str(exam_number))} Mock JAMB {session_obj.name}"
@@ -156,7 +156,7 @@ def create_exam():
 @login_required
 def view_exam(exam_id):
     """View a specific mock exam with detailed statistics"""
-    exam = MockJAMBExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(MockJAMBExam, exam_id)
     statistics = MockJAMBAnalytics.get_exam_statistics(exam_id)
     
     # Get sort and filter parameters
@@ -227,7 +227,7 @@ def view_exam(exam_id):
 @csrf_protect
 def edit_exam(exam_id):
     """Edit mock exam details"""
-    exam = MockJAMBExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(MockJAMBExam, exam_id)
     
     if request.method == 'POST':
         try:
@@ -256,7 +256,7 @@ def edit_exam(exam_id):
 @csrf_protect
 def delete_exam(exam_id):
     """Delete a mock exam and all its results"""
-    exam = MockJAMBExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(MockJAMBExam, exam_id)
     session_id = exam.session_id
     exam_name = exam.display_name
     
@@ -280,7 +280,7 @@ def delete_exam(exam_id):
 @csrf_protect
 def add_result(exam_id):
     """Add results for a student"""
-    exam = MockJAMBExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(MockJAMBExam, exam_id)
     
     # SSS3 students who don't already have a result for this exam.
     existing_student_ids = {r.student_id for r in exam.results}
@@ -353,7 +353,7 @@ def add_result(exam_id):
 @csrf_protect
 def bulk_entry(exam_id):
     """Bulk entry of results for multiple students"""
-    exam = MockJAMBExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(MockJAMBExam, exam_id)
     
     # Get active term to find enrolled students
     active_term = get_active_term()
@@ -455,7 +455,7 @@ def bulk_entry(exam_id):
 @csrf_protect
 def edit_result(result_id):
     """Edit a specific result"""
-    result = MockJAMBResult.query.get_or_404(result_id)
+    result = db.get_or_404(MockJAMBResult, result_id)
     
     if request.method == 'POST':
         try:
@@ -500,7 +500,7 @@ def edit_result(result_id):
 @csrf_protect
 def delete_result(result_id):
     """Delete a result"""
-    result = MockJAMBResult.query.get_or_404(result_id)
+    result = db.get_or_404(MockJAMBResult, result_id)
     exam_id = result.mock_exam_id
     student_name = result.student.full_name
     
@@ -523,7 +523,7 @@ def delete_result(result_id):
 @login_required
 def student_progress(student_id):
     """View a student's progress across all mock exams"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     
     session_id = request.args.get('session_id', type=int)
     active_session = get_active_session()
@@ -587,7 +587,7 @@ def export_results(exam_id):
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
     
-    exam = MockJAMBExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(MockJAMBExam, exam_id)
     results = MockJAMBResult.query.filter_by(mock_exam_id=exam_id).join(Student).order_by(
         MockJAMBResult.total_score.desc()
     ).all()

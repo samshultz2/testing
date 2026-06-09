@@ -5,14 +5,14 @@ Provides decorators and helper functions for role-based access control
 from functools import wraps
 from utils.helpers import get_active_term
 from flask import session, redirect, url_for, flash, request, abort
-from models import User, ClassArmAssignment, StudentEnrollment
+from models import db, User, ClassArmAssignment, StudentEnrollment
 
 
 def get_current_user():
     """Get the current logged-in user object"""
     user_id = session.get('user_id')
     if user_id:
-        return User.query.get(user_id)
+        return db.session.get(User, user_id)
     return None
 
 
@@ -460,7 +460,7 @@ def can_access_class(class_arm_assignment_id):
     if class_arm_assignment_id is None:
         return True  # No class selected yet
 
-    asg = ClassArmAssignment.query.get(class_arm_assignment_id)
+    asg = db.session.get(ClassArmAssignment, class_arm_assignment_id)
     if not asg:
         return False
     from utils.branch_scope import can_access_branch

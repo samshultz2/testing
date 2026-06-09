@@ -114,7 +114,7 @@ def collections_export():
 def dashboard():
     term_id = request.args.get('term_id', type=int) or _active_term_id()
     terms = Term.query.order_by(Term.id.desc()).all()
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
 
     fees = _term_fee_summary(term_id)
     exp = _term_expense_summary(term_id)
@@ -263,7 +263,7 @@ def add_item():
 @finance_bp.route('/items/<int:item_id>/edit', methods=['POST'])
 @admin_required
 def edit_item(item_id):
-    item = FeeItem.query.get_or_404(item_id)
+    item = db.get_or_404(FeeItem, item_id)
     name = (request.form.get('name') or '').strip()
     if name:
         item.name = name
@@ -277,7 +277,7 @@ def edit_item(item_id):
 @finance_bp.route('/items/<int:item_id>/delete', methods=['POST'])
 @admin_required
 def delete_item(item_id):
-    item = FeeItem.query.get_or_404(item_id)
+    item = db.get_or_404(FeeItem, item_id)
     used = FeeStructure.query.filter_by(fee_item_id=item_id).count()
     if used:
         item.is_active = False
@@ -474,7 +474,7 @@ def record_payment():
             receipt_no=next_receipt_no(),
         )
         # Inherit the paying student's branch.
-        stu = Student.query.get(student_id)
+        stu = db.session.get(Student, student_id)
         payment.branch_id = stu.branch_id if stu else None
         db.session.add(payment)
         db.session.commit()
@@ -486,7 +486,7 @@ def record_payment():
         return redirect(url_for('finance.receipt', payment_id=payment.id))
 
     terms = Term.query.order_by(Term.id.desc()).all()
-    student = Student.query.get(student_id) if student_id else None
+    student = db.session.get(Student, student_id) if student_id else None
     bill = student_bill(student_id, term_id) if (student and term_id) else None
 
     # Class/arm roster picker — lets the user browse a class arm and pick a
@@ -546,7 +546,7 @@ def search_students():
 @finance_bp.route('/payments/<int:payment_id>/receipt')
 @login_required
 def receipt(payment_id):
-    payment = FeePayment.query.get_or_404(payment_id)
+    payment = db.get_or_404(FeePayment, payment_id)
     bill = student_bill(payment.student_id, payment.term_id)
     from models import SchoolSettings
     school = {
@@ -562,7 +562,7 @@ def receipt(payment_id):
 @login_required
 def edit_payment(payment_id):
     """Correct a recorded payment (amount, date, method, reference, notes)."""
-    payment = FeePayment.query.get_or_404(payment_id)
+    payment = db.get_or_404(FeePayment, payment_id)
 
     if request.method == 'POST':
         amount = request.form.get('amount', type=float)
@@ -590,7 +590,7 @@ def edit_payment(payment_id):
 @finance_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
 @admin_required
 def delete_payment(payment_id):
-    payment = FeePayment.query.get_or_404(payment_id)
+    payment = db.get_or_404(FeePayment, payment_id)
     term_id = payment.term_id
     from utils.audit import log_action
     log_action('finance.payment_delete', detail=f'{payment.amount:g}',
@@ -608,7 +608,7 @@ def delete_payment(payment_id):
 @finance_bp.route('/students/<int:student_id>/statement')
 @login_required
 def statement(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     term_id = request.args.get('term_id', type=int) or _active_term_id()
     terms = Term.query.order_by(Term.id.desc()).all()
     bill = student_bill(student_id, term_id) if term_id else None
@@ -628,7 +628,7 @@ def statement(student_id):
 def payment_link(student_id):
     """Staff: generate a Paystack link to send to a parent (recorded via webhook)."""
     from utils import payments as pay_gw
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     term_id = request.form.get('term_id', type=int) or _active_term_id()
     if not pay_gw.is_configured():
         flash('Online payment is not configured (set Paystack keys).', 'error')
@@ -670,7 +670,7 @@ def add_discount():
 @finance_bp.route('/discounts/<int:discount_id>/edit', methods=['POST'])
 @admin_required
 def edit_discount(discount_id):
-    d = FeeDiscount.query.get_or_404(discount_id)
+    d = db.get_or_404(FeeDiscount, discount_id)
     amount = request.form.get('amount', type=float)
     if not amount or amount <= 0:
         flash('Enter a positive amount.', 'error')
@@ -685,7 +685,7 @@ def edit_discount(discount_id):
 @finance_bp.route('/discounts/<int:discount_id>/delete', methods=['POST'])
 @admin_required
 def delete_discount(discount_id):
-    d = FeeDiscount.query.get_or_404(discount_id)
+    d = db.get_or_404(FeeDiscount, discount_id)
     student_id, term_id = d.student_id, d.term_id
     db.session.delete(d)
     db.session.commit()
@@ -821,7 +821,7 @@ def add_expense():
 @finance_bp.route('/expenses/<int:expense_id>/edit', methods=['POST'])
 @login_required
 def edit_expense(expense_id):
-    e = Expense.query.get_or_404(expense_id)
+    e = db.get_or_404(Expense, expense_id)
     amount = request.form.get('amount', type=float)
     description = (request.form.get('description') or '').strip()
     if not (description and amount and amount > 0):
@@ -846,7 +846,7 @@ def edit_expense(expense_id):
 @finance_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
 @admin_required
 def delete_expense(expense_id):
-    e = Expense.query.get_or_404(expense_id)
+    e = db.get_or_404(Expense, expense_id)
     term_id = e.term_id
     from utils.audit import log_action
     log_action('finance.expense_delete', detail=f'{e.amount:g} — {e.description}',
@@ -871,7 +871,7 @@ def add_expense_category():
 @finance_bp.route('/expense-categories/<int:category_id>/delete', methods=['POST'])
 @admin_required
 def delete_expense_category(category_id):
-    cat = ExpenseCategory.query.get_or_404(category_id)
+    cat = db.get_or_404(ExpenseCategory, category_id)
     if Expense.query.filter_by(category_id=category_id).count():
         cat.is_active = False
         flash('Category is in use; deactivated instead of deleted.', 'info')
@@ -891,7 +891,7 @@ def delete_expense_category(category_id):
 def reports():
     term_id = request.args.get('term_id', type=int) or _active_term_id()
     terms = Term.query.order_by(Term.id.desc()).all()
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
 
     # Expected (per-class) and collected.
     expected = collected = discounts = expenses = 0.0
@@ -968,7 +968,7 @@ def export_report():
     import io
 
     term_id = request.args.get('term_id', type=int) or _active_term_id()
-    term = Term.query.get(term_id) if term_id else None
+    term = db.session.get(Term, term_id) if term_id else None
 
     wb = Workbook()
     head_fill = PatternFill(start_color='0d6a4e', end_color='0d6a4e', fill_type='solid')

@@ -111,7 +111,7 @@ def add_book():
 @library_bp.route('/books/<int:book_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_book(book_id):
-    b = Book.query.get_or_404(book_id)
+    b = db.get_or_404(Book, book_id)
     if request.method == 'POST':
         new_total = request.form.get('copies_total', type=int)
         _read_book(b)
@@ -131,7 +131,7 @@ def edit_book(book_id):
 @library_bp.route('/books/<int:book_id>/delete', methods=['POST'])
 @admin_required
 def delete_book(book_id):
-    b = Book.query.get_or_404(book_id)
+    b = db.get_or_404(Book, book_id)
     if b.loans.filter_by(status='Borrowed').count():
         flash('Cannot delete: copies are still on loan.', 'error')
         return redirect(url_for('library.books'))
@@ -152,8 +152,8 @@ def issue():
     if request.method == 'POST':
         book_id = request.form.get('book_id', type=int)
         student_id = request.form.get('student_id', type=int)
-        book = Book.query.get(book_id) if book_id else None
-        student = Student.query.get(student_id) if student_id else None
+        book = db.session.get(Book, book_id) if book_id else None
+        student = db.session.get(Student, student_id) if student_id else None
         if not (book and student):
             flash('Select a book and a student.', 'error')
             return redirect(url_for('library.issue'))
@@ -168,7 +168,7 @@ def issue():
         db.session.commit()
         flash(f'Issued "{book.title}" to {student.full_name} (due {due.strftime("%d %b %Y")}).', 'success')
         return redirect(url_for('library.loans'))
-    preset = Book.query.get(request.args.get('book_id', type=int)) if request.args.get('book_id') else None
+    preset = db.session.get(Book, request.args.get('book_id', type=int)) if request.args.get('book_id') else None
     return render_template('library/issue.html', settings=s, preset=preset,
         default_due=(date.today() + timedelta(days=s['loan_days'])))
 
@@ -176,7 +176,7 @@ def issue():
 @library_bp.route('/loans/<int:loan_id>/return', methods=['POST'])
 @login_required
 def return_loan(loan_id):
-    loan = BookLoan.query.get_or_404(loan_id)
+    loan = db.get_or_404(BookLoan, loan_id)
     if loan.status == 'Returned':
         flash('Already returned.', 'info')
         return redirect(request.referrer or url_for('library.loans'))

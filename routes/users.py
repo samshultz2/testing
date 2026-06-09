@@ -205,7 +205,7 @@ def add_user():
 @admin_required
 def view_user(user_id):
     """View user details"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     blocked = _guard(user)
     if blocked:
         return blocked
@@ -216,7 +216,7 @@ def view_user(user_id):
 @admin_required
 def edit_user(user_id):
     """Edit user"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     blocked = _guard(user)
     if blocked:
         return blocked
@@ -298,7 +298,7 @@ def edit_user(user_id):
 @admin_required
 def delete_user(user_id):
     """Delete user"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     blocked = _guard(user)
     if blocked:
         return blocked
@@ -309,7 +309,7 @@ def delete_user(user_id):
         return redirect(url_for('users.index'))
     
     # Prevent deleting super_admin if not super_admin
-    current_user = User.query.get(session.get('user_id'))
+    current_user = db.session.get(User, session.get('user_id'))
     if user.is_super_admin and not current_user.is_super_admin:
         flash('Only super admins can delete other super admins.', 'error')
         return redirect(url_for('users.index'))
@@ -330,7 +330,7 @@ def delete_user(user_id):
 @admin_required
 def assign_class(user_id):
     """Assign teacher to a class as form teacher"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     blocked = _guard(user)
     if blocked:
         return blocked
@@ -390,7 +390,7 @@ def assign_class(user_id):
 @admin_required
 def assign_subject(user_id):
     """Assign teacher to teach a subject in a class"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     blocked = _guard(user)
     if blocked:
         return blocked
@@ -457,9 +457,9 @@ def remove_assignment(assignment_id):
     user_id = request.form.get('user_id', type=int)
     
     if assignment_type == 'class':
-        assignment = TeacherClassAssignment.query.get_or_404(assignment_id)
+        assignment = db.get_or_404(TeacherClassAssignment, assignment_id)
     else:
-        assignment = TeacherSubjectAssignment.query.get_or_404(assignment_id)
+        assignment = db.get_or_404(TeacherSubjectAssignment, assignment_id)
     
     try:
         db.session.delete(assignment)
@@ -476,7 +476,7 @@ def remove_assignment(assignment_id):
 @admin_required
 def reset_password(user_id):
     """Reset a managed user's password to a one-time temporary value."""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     blocked = _guard(user)
     if blocked:
         return blocked
@@ -495,7 +495,7 @@ def reset_password(user_id):
 @admin_required
 def toggle_status(user_id):
     """Toggle user active status"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     blocked = _guard(user)
     if blocked:
         return blocked

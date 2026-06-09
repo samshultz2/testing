@@ -86,7 +86,7 @@ def add_subject():
 @login_required
 def edit_subject(subject_id):
     """Edit a subject"""
-    subject = Subject.query.get_or_404(subject_id)
+    subject = db.get_or_404(Subject, subject_id)
     
     if request.method == 'POST':
         try:
@@ -112,7 +112,7 @@ def edit_subject(subject_id):
 @login_required
 def delete_subject(subject_id):
     """Delete (deactivate) a subject"""
-    subject = Subject.query.get_or_404(subject_id)
+    subject = db.get_or_404(Subject, subject_id)
     
     try:
         subject.is_active = False
@@ -184,11 +184,11 @@ def class_subjects_list():
     selected_class = None
     
     if term_id:
-        selected_term = Term.query.get(term_id)
+        selected_term = db.session.get(Term, term_id)
         query = ClassSubject.query.filter_by(term_id=term_id, is_active=True)
         
         if class_id:
-            selected_class = SchoolClass.query.get(class_id)
+            selected_class = db.session.get(SchoolClass, class_id)
             query = query.filter_by(class_id=class_id)
         
         class_subjects = query.join(Subject).order_by(Subject.name).all()
@@ -298,7 +298,7 @@ def assign_class_subjects():
 @login_required
 def edit_class_subject(cs_id):
     """Edit class-subject assignment (mainly teacher name)"""
-    cs = ClassSubject.query.get_or_404(cs_id)
+    cs = db.get_or_404(ClassSubject, cs_id)
     
     if request.method == 'POST':
         try:
@@ -317,7 +317,7 @@ def edit_class_subject(cs_id):
 @login_required
 def delete_class_subject(cs_id):
     """Remove class-subject assignment"""
-    cs = ClassSubject.query.get_or_404(cs_id)
+    cs = db.get_or_404(ClassSubject, cs_id)
     term_id = cs.term_id
     class_id = cs.class_id
     
@@ -363,7 +363,7 @@ def scores_entry():
         if active_term:
             term_id = active_term.id
     
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
     
     # Get class arm assignments for selected term (filtered for teachers)
     assignments = []
@@ -371,7 +371,7 @@ def scores_entry():
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
         assignments = filter_classes_for_user(all_assignments)
     
-    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     # Get subjects for selected class (filter by teacher's assigned subjects if not admin)
     class_subjects = []
@@ -401,11 +401,11 @@ def scores_entry():
         else:
             class_subjects = all_class_subjects
     
-    selected_class_subject = ClassSubject.query.get(class_subject_id) if class_subject_id else None
+    selected_class_subject = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
     
     # Get assessment types
     assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
-    selected_assessment = AssessmentType.query.get(assessment_type_id) if assessment_type_id else None
+    selected_assessment = db.session.get(AssessmentType, assessment_type_id) if assessment_type_id else None
     
     # Get students and existing scores
     students_data = []
@@ -462,7 +462,7 @@ def save_scores():
         student_ids = request.form.getlist('student_id[]')
         scores = request.form.getlist('score[]')
 
-        at = AssessmentType.query.get(assessment_type_id)
+        at = db.session.get(AssessmentType, assessment_type_id)
         max_score = at.max_score if at else None
         saved = 0
         rejected = 0
@@ -506,7 +506,7 @@ def save_scores():
         db.session.commit()
         # Keep term results/positions fresh as scores change.
         if term_id and assignment_id:
-            asg = ClassArmAssignment.query.get(assignment_id)
+            asg = db.session.get(ClassArmAssignment, assignment_id)
             if asg:
                 from utils.report_card import compute_term_summaries
                 compute_term_summaries(term_id, asg.class_id)
@@ -543,7 +543,7 @@ def workflow():
     terms = Term.query.order_by(Term.id.desc()).all()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
-    selected = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
 
     steps = None
     if selected and term_id:
@@ -571,7 +571,7 @@ def workflow():
             'comments': sum(1 for t in ts_rows if t.teacher_comment),
             'behaviour': sum(1 for t in ts_rows if t.affective),
         }
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
     return render_template('subjects/workflow.html', terms=terms, term_id=term_id,
         assignments=assignments, assignment_id=assignment_id, selected=selected,
         steps=steps, published=bool(selected_term and selected_term.results_published))
@@ -592,7 +592,7 @@ def bulk_entry():
     terms = Term.query.order_by(Term.id.desc()).all()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
-    selected = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
 
     class_subjects, enrollments = [], []
@@ -678,7 +678,7 @@ def broadsheet():
         if active_term:
             term_id = active_term.id
     
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
     
     # Filter assignments for teachers
     assignments = []
@@ -686,7 +686,7 @@ def broadsheet():
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
         assignments = filter_classes_for_user(all_assignments)
     
-    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     # Build broadsheet data
     broadsheet_data = []
@@ -776,7 +776,7 @@ def compute_summaries():
     """Compute & persist term results + class/arm positions for a class."""
     term_id = request.form.get('term_id', type=int)
     assignment_id = request.form.get('assignment_id', type=int)
-    asg = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    asg = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     if not (term_id and asg):
         flash('Select a term and class first.', 'error')
         return redirect(url_for('subjects.broadsheet'))
@@ -807,7 +807,7 @@ def affective():
     terms = Term.query.order_by(Term.id.desc()).all()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
-    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
 
     if request.method == 'POST' and selected_assignment and term_id:
         enrollments = StudentEnrollment.query.filter_by(
@@ -857,7 +857,7 @@ def comments():
     terms = Term.query.order_by(Term.id.desc()).all()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
-    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
 
     if request.method == 'POST' and selected_assignment and term_id:
         enrollments = StudentEnrollment.query.filter_by(
@@ -900,7 +900,7 @@ def comments():
 @login_required
 def student_report_card(student_id):
     """View student report card"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     term_id = request.args.get('term_id', type=int)
     
     terms = Term.query.order_by(Term.id.desc()).all()
@@ -910,7 +910,7 @@ def student_report_card(student_id):
         if active_term:
             term_id = active_term.id
     
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
 
     report_data = None
     enrollment = None
@@ -934,14 +934,14 @@ def report_card_pdf(student_id):
     from flask import send_file
     from utils.report_card import build_report_card, active_traits, RATING_LABELS
     from utils.report_pdf import report_card_pdf as build_pdf
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     term_id = request.args.get('term_id', type=int) or (
         get_active_term().id if get_active_term() else None)
     _, report_data = build_report_card(student_id, term_id) if term_id else (None, None)
     if not report_data:
         flash('No results to export for this term.', 'error')
         return redirect(url_for('subjects.student_report_card', student_id=student_id, term_id=term_id))
-    term = Term.query.get(term_id)
+    term = db.session.get(Term, term_id)
     buf = build_pdf(student, report_data, term,
                     SchoolSettings.get('school_name', 'School'),
                     active_traits(), RATING_LABELS)
@@ -1007,8 +1007,8 @@ def export_broadsheet():
         flash('Select term and class first.', 'error')
         return redirect(url_for('subjects.broadsheet'))
     
-    selected_term = Term.query.get(term_id)
-    selected_assignment = ClassArmAssignment.query.get(assignment_id)
+    selected_term = db.session.get(Term, term_id)
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
     
     if not selected_term or not selected_assignment:
         flash('Invalid selection.', 'error')
@@ -1234,7 +1234,7 @@ def import_scores():
     class_subjects = []
     
     if assignment_id:
-        assignment = ClassArmAssignment.query.get(assignment_id)
+        assignment = db.session.get(ClassArmAssignment, assignment_id)
         if assignment:
             class_subjects = ClassSubject.query.filter_by(
                 term_id=term_id,
@@ -1265,7 +1265,7 @@ def score_import_template():
         flash('Select a class first.', 'error')
         return redirect(url_for('subjects.import_scores'))
     
-    assignment = ClassArmAssignment.query.get(assignment_id)
+    assignment = db.session.get(ClassArmAssignment, assignment_id)
     assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
     
     # Get students
@@ -1340,7 +1340,7 @@ def _scan_selector_context():
         assignments = filter_classes_for_user(all_assignments)
 
     class_subjects = []
-    assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     if assignment:
         class_subjects = ClassSubject.query.filter_by(
             term_id=term_id, class_id=assignment.class_id, is_active=True
@@ -1375,8 +1375,8 @@ def scoresheet_scan():
         assignment_id = ctx['assignment_id']
         class_subject_id = ctx['class_subject_id']
 
-        assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
-        class_subject = ClassSubject.query.get(class_subject_id) if class_subject_id else None
+        assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+        class_subject = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
 
         if not (assignment and class_subject):
             flash('Select a class and subject before uploading.', 'error')
@@ -1463,8 +1463,8 @@ def scoresheet_save():
     class_subject_id = request.form.get('class_subject_id', type=int)
     row_count = request.form.get('row_count', type=int) or 0
 
-    assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
-    class_subject = ClassSubject.query.get(class_subject_id) if class_subject_id else None
+    assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+    class_subject = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
 
     if not (assignment and class_subject):
         flash('Missing class/subject context.', 'error')
@@ -1487,7 +1487,7 @@ def scoresheet_save():
             student_pk = request.form.get(f'student_{r}', type=int)
             if not student_pk:
                 continue  # row skipped by the user
-            student = Student.query.get(student_pk)
+            student = db.session.get(Student, student_pk)
             if not student:
                 continue
 
@@ -1569,13 +1569,13 @@ def print_all_report_cards():
         if active_term:
             term_id = active_term.id
     
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
     
     assignments = []
     if term_id:
         assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
     
-    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     all_reports = []
     

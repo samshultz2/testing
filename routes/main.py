@@ -785,7 +785,7 @@ def add_student():
 @login_required
 def view_student(student_id):
     """View student details"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     from utils.branch_scope import can_access_branch
     if not can_access_branch(student.branch_id):
         flash('That student belongs to another branch.', 'error')
@@ -814,7 +814,7 @@ def view_student(student_id):
 @login_required
 def edit_student(student_id):
     """Edit student details"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
 
     if request.method == 'POST':
         try:
@@ -900,7 +900,7 @@ def edit_student(student_id):
 @admin_required
 def delete_student(student_id):
     """Delete a student (soft delete)"""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
 
     try:
         student.is_active = False
@@ -1014,7 +1014,7 @@ def students_trash():
 @main_bp.route('/students/<int:student_id>/restore', methods=['POST'])
 @admin_required
 def restore_student(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     student.is_active = True
     db.session.commit()
     log_action('restore_student', f'{student.full_name} ({student.student_id})')
@@ -1026,7 +1026,7 @@ def restore_student(student_id):
 @admin_required
 def purge_student(student_id):
     """Permanently delete a soft-deleted student and their related records."""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     if student.is_active:
         flash('Only deleted students can be permanently removed.', 'error')
         return redirect(url_for('main.students_trash'))

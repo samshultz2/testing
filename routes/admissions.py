@@ -130,7 +130,7 @@ def add_applicant():
 @adm_bp.route('/applicants/<int:applicant_id>')
 @login_required
 def applicant_detail(applicant_id):
-    a = Applicant.query.get_or_404(applicant_id)
+    a = db.get_or_404(Applicant, applicant_id)
     # class arms for the intended class (for enrolment on conversion)
     assignments = []
     if a.intended_class_id:
@@ -149,7 +149,7 @@ def applicant_detail(applicant_id):
 @adm_bp.route('/applicants/<int:applicant_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_applicant(applicant_id):
-    a = Applicant.query.get_or_404(applicant_id)
+    a = db.get_or_404(Applicant, applicant_id)
     if request.method == 'POST':
         _read_form(a)
         db.session.commit()
@@ -165,7 +165,7 @@ def edit_applicant(applicant_id):
 @adm_bp.route('/applicants/<int:applicant_id>/status', methods=['POST'])
 @login_required
 def set_status(applicant_id):
-    a = Applicant.query.get_or_404(applicant_id)
+    a = db.get_or_404(Applicant, applicant_id)
     new_status = request.form.get('status')
     if new_status in admissions.ALL_STATUSES:
         a.status = new_status
@@ -182,9 +182,9 @@ def set_status(applicant_id):
 @adm_bp.route('/applicants/<int:applicant_id>/convert', methods=['POST'])
 @admin_required
 def convert(applicant_id):
-    a = Applicant.query.get_or_404(applicant_id)
+    a = db.get_or_404(Applicant, applicant_id)
     assignment_id = request.form.get('assignment_id', type=int)
-    if assignment_id and not ClassArmAssignment.query.get(assignment_id):
+    if assignment_id and not db.session.get(ClassArmAssignment, assignment_id):
         flash('Selected class arm no longer exists — admitting without enrolment.', 'warning')
         assignment_id = None
     student, err = admissions.convert_to_student(a, assignment_id)
@@ -201,7 +201,7 @@ def convert(applicant_id):
 @adm_bp.route('/applicants/<int:applicant_id>/delete', methods=['POST'])
 @admin_required
 def delete_applicant(applicant_id):
-    a = Applicant.query.get_or_404(applicant_id)
+    a = db.get_or_404(Applicant, applicant_id)
     db.session.delete(a)
     db.session.commit()
     flash('Application deleted.', 'success')

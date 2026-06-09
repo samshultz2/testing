@@ -35,14 +35,14 @@ def index():
         if active_term:
             term_id = active_term.id
     
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
     
     # Get class assignments for selected term
     assignments = []
     if term_id:
         assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
     
-    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     # Get timetable slots
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
@@ -89,7 +89,7 @@ def index():
 @login_required
 def edit_timetable(assignment_id):
     """Edit timetable for a class"""
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
     
@@ -121,7 +121,7 @@ def edit_timetable(assignment_id):
 @login_required
 def save_timetable(assignment_id):
     """Save timetable entries"""
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     
     try:
         slots = TimetableSlot.query.filter_by(is_active=True).all()
@@ -183,8 +183,8 @@ def copy_timetable():
             flash('Select both source and destination classes.', 'error')
             return redirect(url_for('timetable.index'))
         
-        from_assignment = ClassArmAssignment.query.get(from_assignment_id)
-        to_assignment = ClassArmAssignment.query.get(to_assignment_id)
+        from_assignment = db.session.get(ClassArmAssignment, from_assignment_id)
+        to_assignment = db.session.get(ClassArmAssignment, to_assignment_id)
         
         if not from_assignment or not to_assignment:
             flash('Invalid class selection.', 'error')
@@ -228,7 +228,7 @@ def copy_timetable():
 @login_required
 def print_timetable(assignment_id):
     """Print-friendly timetable view"""
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
     

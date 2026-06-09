@@ -71,7 +71,7 @@ def add_branch():
 @central_admin_required
 def edit_branch(branch_id):
     from models import db, Branch
-    b = Branch.query.get_or_404(branch_id)
+    b = db.get_or_404(Branch, branch_id)
     b.name = (request.form.get('name') or b.name).strip()
     b.code = (request.form.get('code') or '').strip() or None
     b.address = (request.form.get('address') or '').strip() or None
@@ -390,7 +390,7 @@ def save_timetable_slots():
         
         for i, slot_id in enumerate(slot_ids):
             if slot_id:
-                slot = TimetableSlot.query.get(int(slot_id))
+                slot = db.session.get(TimetableSlot, int(slot_id))
                 if slot:
                     slot.name = names[i] if i < len(names) else slot.name
                     
@@ -645,7 +645,7 @@ def add_user():
 @login_required
 def edit_user(user_id):
     """Edit user"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     
     if request.method == 'POST':
         try:
@@ -673,7 +673,7 @@ def edit_user(user_id):
 @login_required
 def delete_user(user_id):
     """Delete user"""
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     
     # Prevent deleting last admin
     if user.role == 'admin':

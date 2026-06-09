@@ -119,7 +119,7 @@ def add_event():
 @events_bp.route('/<int:event_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_event(event_id):
-    e = SchoolEvent.query.get_or_404(event_id)
+    e = db.get_or_404(SchoolEvent, event_id)
     if request.method == 'POST':
         _read(e)
         db.session.commit()
@@ -133,7 +133,7 @@ def edit_event(event_id):
 @events_bp.route('/<int:event_id>/delete', methods=['POST'])
 @login_required
 def delete_event(event_id):
-    e = SchoolEvent.query.get_or_404(event_id)
+    e = db.get_or_404(SchoolEvent, event_id)
     db.session.delete(e)
     db.session.commit()
     flash('Event deleted.', 'success')

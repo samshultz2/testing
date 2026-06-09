@@ -89,7 +89,7 @@ def print_cards():
 @scratchcards_bp.route('/<int:card_id>/toggle', methods=['POST'])
 @login_required
 def toggle(card_id):
-    card = ScratchCard.query.get_or_404(card_id)
+    card = db.get_or_404(ScratchCard, card_id)
     card.is_active = not card.is_active
     db.session.commit()
     flash(f'Card {card.serial} {"activated" if card.is_active else "disabled"}.',
@@ -100,7 +100,7 @@ def toggle(card_id):
 @scratchcards_bp.route('/publish/<int:term_id>', methods=['POST'])
 @login_required
 def publish(term_id):
-    term = Term.query.get_or_404(term_id)
+    term = db.get_or_404(Term, term_id)
     term.results_published = not term.results_published
     db.session.commit()
     state = 'released' if term.results_published else 'hidden'
@@ -176,9 +176,9 @@ def check():
         # Resolve term: a card-bound term wins, else the chosen published term.
         term = None
         if card.term_id:
-            term = Term.query.get(card.term_id)
+            term = db.session.get(Term, card.term_id)
         elif term_id:
-            term = Term.query.get(term_id)
+            term = db.session.get(Term, term_id)
         if not term or not term.results_published:
             _log_check(card, student, term, False, 'term not published')
             flash('Please choose a term whose results have been released.', 'error')

@@ -68,7 +68,7 @@ def export_class_students():
             terms=terms, term_id=term_id, assignments=assignments)
     
     # Export the class
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     
     enrollments = StudentEnrollment.query.filter_by(
         class_arm_assignment_id=assignment_id,

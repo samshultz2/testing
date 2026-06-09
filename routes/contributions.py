@@ -246,7 +246,7 @@ def add_payment():
             payment = ContributionPayment(session_id=active_session.id, student_id=student_id, amount=amount, payment_date=payment_date, received_by=received_by, notes=notes)
             db.session.add(payment)
             db.session.commit()
-            student = Student.query.get(student_id)
+            student = db.session.get(Student, student_id)
             flash(f'Payment of ₦{amount:,.0f} added for {student.full_name}', 'success')
             return redirect(url_for('contributions.dashboard'))
         except Exception as e:
@@ -276,7 +276,7 @@ def payments_list():
 @contributions_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
 @contributions_access_required
 def delete_payment(payment_id):
-    payment = ContributionPayment.query.get_or_404(payment_id)
+    payment = db.get_or_404(ContributionPayment, payment_id)
     student_name = payment.student.full_name
     amount = payment.amount
     db.session.delete(payment)
@@ -288,7 +288,7 @@ def delete_payment(payment_id):
 @contributions_bp.route('/student/<int:student_id>')
 @contributions_access_required
 def student_detail(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     payments = ContributionPayment.query.filter_by(student_id=student_id, session_id=active_session.id if active_session else None).order_by(ContributionPayment.payment_date.desc()).all()
@@ -372,7 +372,7 @@ def add_expense():
 @contributions_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
 @contributions_access_required
 def delete_expense(expense_id):
-    expense = ContributionExpense.query.get_or_404(expense_id)
+    expense = db.get_or_404(ContributionExpense, expense_id)
     db.session.delete(expense)
     db.session.commit()
     flash('Expense deleted', 'success')
@@ -510,7 +510,7 @@ def export_excel():
 @contributions_bp.route('/api/student/<int:student_id>/info')
 @contributions_access_required
 def api_student_info(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
@@ -935,7 +935,7 @@ def view_session(session_id):
     """View contributions for a specific session"""
     from models import AcademicSession
     
-    session = AcademicSession.query.get_or_404(session_id)
+    session = db.get_or_404(AcademicSession, session_id)
     
     # Get all payments for this session
     payments = ContributionPayment.query.filter_by(session_id=session_id).order_by(

@@ -77,7 +77,7 @@ def add_product():
 @sales_bp.route('/products/<int:product_id>/edit', methods=['POST'])
 @login_required
 def edit_product(product_id):
-    p = Product.query.get_or_404(product_id)
+    p = db.get_or_404(Product, product_id)
     if not can_access_branch(p.branch_id):
         flash('That product belongs to another branch.', 'error')
         return redirect(url_for('sales.products'))
@@ -96,7 +96,7 @@ def edit_product(product_id):
 @sales_bp.route('/products/<int:product_id>/restock', methods=['POST'])
 @login_required
 def restock(product_id):
-    p = Product.query.get_or_404(product_id)
+    p = db.get_or_404(Product, product_id)
     if not can_access_branch(p.branch_id):
         flash('That product belongs to another branch.', 'error')
         return redirect(url_for('sales.products'))
@@ -122,7 +122,7 @@ def new_sale():
         for pid, qty in zip(product_ids, quantities):
             if not pid or not qty or qty <= 0:
                 continue
-            p = Product.query.get(pid)
+            p = db.session.get(Product, pid)
             if not p or not can_access_branch(p.branch_id):
                 continue
             if qty > (p.stock_qty or 0):
@@ -180,7 +180,7 @@ def history():
 @sales_bp.route('/receipt/<int:sale_id>')
 @login_required
 def receipt(sale_id):
-    sale = Sale.query.get_or_404(sale_id)
+    sale = db.get_or_404(Sale, sale_id)
     if not can_access_branch(sale.branch_id):
         flash('That sale belongs to another branch.', 'error')
         return redirect(url_for('sales.history'))

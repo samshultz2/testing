@@ -188,7 +188,7 @@ def add_exam():
 @cbt_bp.route('/exams/<int:exam_id>')
 @login_required
 def exam_detail(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     questions = e.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     return render_template('cbt/exam_detail.html', e=e, questions=questions)
 
@@ -196,7 +196,7 @@ def exam_detail(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_exam(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     if request.method == 'POST':
         _read_exam(e)
         db.session.commit()
@@ -208,7 +208,7 @@ def edit_exam(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/publish', methods=['POST'])
 @login_required
 def toggle_publish(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     if not e.is_published and e.question_count == 0:
         flash('Add at least one question before publishing.', 'error')
         return redirect(url_for('cbt.exam_detail', exam_id=e.id))
@@ -223,7 +223,7 @@ def toggle_publish(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/delete', methods=['POST'])
 @admin_required
 def delete_exam(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     db.session.delete(e)
     db.session.commit()
     flash('Exam deleted.', 'success')
@@ -233,7 +233,7 @@ def delete_exam(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/questions/add', methods=['POST'])
 @login_required
 def add_question(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     text = (request.form.get('question_text') or '').strip()
     correct = (request.form.get('correct_option') or '').strip().upper()
     if not text or correct not in ('A', 'B', 'C', 'D'):
@@ -260,7 +260,7 @@ def add_question(exam_id):
 def import_questions_file(exam_id):
     """Bulk-add questions to an exam from an uploaded Excel/CSV file."""
     from utils import cbt_import
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     f = request.files.get('file')
     if not f or not f.filename:
         flash('Choose an Excel or CSV file.', 'error')
@@ -288,7 +288,7 @@ def import_questions_file(exam_id):
 @login_required
 def import_from_bank(exam_id):
     """Pick questions from the bank to copy into an exam."""
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     if request.method == 'POST':
         ids = request.form.getlist('bank_id', type=int)
         nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
@@ -321,7 +321,7 @@ def import_from_bank(exam_id):
 @cbt_bp.route('/questions/<int:question_id>/delete', methods=['POST'])
 @login_required
 def delete_question(question_id):
-    q = CBTQuestion.query.get_or_404(question_id)
+    q = db.get_or_404(CBTQuestion, question_id)
     exam_id = q.exam_id
     db.session.delete(q)
     db.session.commit()
@@ -382,7 +382,7 @@ def bank_add():
 @cbt_bp.route('/bank/<int:bank_id>/delete', methods=['POST'])
 @login_required
 def bank_delete(bank_id):
-    bq = QuestionBank.query.get_or_404(bank_id)
+    bq = db.get_or_404(QuestionBank, bank_id)
     bq.is_active = False
     db.session.commit()
     flash('Question removed from the bank.', 'success')
@@ -447,7 +447,7 @@ def bank_template():
 @cbt_bp.route('/exams/<int:exam_id>/results')
 @login_required
 def results(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     attempts = (e.attempts.join(Student).order_by(Student.surname, Student.first_name).all())
     submitted = [a for a in attempts if a.status == 'Submitted']
     avg = round(sum(a.score for a in submitted) / len(submitted), 1) if submitted else 0
@@ -472,7 +472,7 @@ def results(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/monitor')
 @login_required
 def monitor(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     # Central users get a branch filter (CBT is school-wide); branch users are
     # already scoped to their own branch.
     from utils.branch_scope import is_central
@@ -491,7 +491,7 @@ def monitor_data(exam_id):
     fingerprints/attempts can be filtered by branch to make tracking easier.
     Branch users are always restricted to their own branch.
     """
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     now = timeutil.now()
     qcount = e.question_count
     # Resolve the branch filter: branch users -> their branch; a central user may
@@ -588,7 +588,7 @@ def _review_rows(exam, attempt):
 @cbt_bp.route('/attempts/<int:attempt_id>/review')
 @login_required
 def attempt_review(attempt_id):
-    attempt = CBTAttempt.query.get_or_404(attempt_id)
+    attempt = db.get_or_404(CBTAttempt, attempt_id)
     rows = _review_rows(attempt.exam, attempt)
     violations = attempt.violation_log.order_by(CBTViolation.created_at).all()
     total_away = sum(v.away_seconds or 0 for v in violations)
@@ -650,7 +650,7 @@ def _safe_sheet_title(text):
 @login_required
 def results_export(exam_id):
     from openpyxl import Workbook
-    e = CBTExam.query.get_or_404(exam_id)
+    e = db.get_or_404(CBTExam, exam_id)
     wb = Workbook()
     ws = wb.active
     ws.title = _safe_sheet_title(e.subject.name if e.subject else 'Results')
@@ -713,7 +713,7 @@ def passwords():
         if action == 'set_individual':
             sid = request.form.get('one_student_id', type=int)
             pw = (request.form.get('one_password') or '').strip()
-            s = Student.query.get(sid) if sid else None
+            s = db.session.get(Student, sid) if sid else None
             if s and pw:
                 s.set_portal_password(pw)
                 db.session.commit()
@@ -883,7 +883,7 @@ def cbt_login_required(f):
 
 def _current_student():
     sid = session.get(PORTAL_KEY)
-    return Student.query.get(sid) if sid else None
+    return db.session.get(Student, sid) if sid else None
 
 
 def _record_login_event(student, event='login', exam_id=None):
@@ -1015,7 +1015,7 @@ def _student_can_access(student, exam):
 @cbt_login_required
 def start(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     if not exam.is_published or not _student_can_access(student, exam):
         flash('This exam is not available for your class.', 'error')
         return redirect(url_for('cbt_portal.home'))
@@ -1073,7 +1073,7 @@ def _finalize(attempt, exam):
 @cbt_login_required
 def take(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     if not _student_can_access(student, exam):
         flash('This exam is not available for your class.', 'error')
         return redirect(url_for('cbt_portal.home'))
@@ -1124,7 +1124,7 @@ def flag(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status != 'In progress':
         return jsonify({'ok': False}), 400
-    exam = CBTExam.query.get(exam_id)
+    exam = db.session.get(CBTExam, exam_id)
     vtype = (request.form.get('type') or 'tab_switch').strip()[:30]
     away = request.form.get('away', type=int) or 0
     detail = (request.form.get('detail') or '').strip()[:500] or None
@@ -1255,7 +1255,7 @@ def answer(exam_id):
 @cbt_login_required
 def submit(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt:
         return redirect(url_for('cbt_portal.home'))
@@ -1280,7 +1280,7 @@ def submit(exam_id):
 @cbt_login_required
 def result(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt or attempt.status != 'Submitted':
         return redirect(url_for('cbt_portal.home'))

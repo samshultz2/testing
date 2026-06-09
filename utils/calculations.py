@@ -95,7 +95,7 @@ def get_weekly_attendance_summary(class_arm_assignment_id, week_id):
     - students: List of students with daily breakdown and weekly totals
     - class_totals: Class-level statistics
     """
-    week = Week.query.get(week_id)
+    week = db.session.get(Week, week_id)
     if not week:
         return None
     

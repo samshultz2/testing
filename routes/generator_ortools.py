@@ -70,7 +70,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     subject_info = {}
     
     for class_id in class_ids:
-        cc = GenClassConfig.query.get(class_id)
+        cc = db.session.get(GenClassConfig, class_id)
         if not cc or not cc.is_active:
             continue
         
@@ -165,7 +165,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                 for cfg in class_configs.values():
                     if not cfg.is_enabled:
                         continue
-                    subj = GenSubject.query.get(cfg.subject_id)
+                    subj = db.session.get(GenSubject, cfg.subject_id)
                     if not subj:
                         print(f"Warning: Subject ID {cfg.subject_id} not found, skipping...")
                         continue
@@ -443,7 +443,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         source_groups[key].append(rule)
     
     for (source_class, source_arm, source_subj_id), rules in source_groups.items():
-        source_subj = GenSubject.query.get(source_subj_id)
+        source_subj = db.session.get(GenSubject, source_subj_id)
         if not source_subj:
             print(f"  Warning: Source subject ID {source_subj_id} not found, skipping...")
             continue
@@ -461,7 +461,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         print(f"  {source_class} {source_arm or '(All)'} {source_subj.name} ({len(source_reqs)} periods) must not clash with:")
         
         for rule in rules:
-            target_subj = GenSubject.query.get(rule.target_subject_id)
+            target_subj = db.session.get(GenSubject, rule.target_subject_id)
             if not target_subj:
                 print(f"    Warning: Target subject ID {rule.target_subject_id} not found, skipping...")
                 continue
@@ -497,8 +497,8 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         print("  No combined class rules configured")
     
     for rule in combined_rules:
-        shadow_subj = GenSubject.query.get(rule.shadow_subject_id)
-        teacher_subj = GenSubject.query.get(rule.teacher_subject_id)
+        shadow_subj = db.session.get(GenSubject, rule.shadow_subject_id)
+        teacher_subj = db.session.get(GenSubject, rule.teacher_subject_id)
         
         if not shadow_subj:
             print(f"  Warning: Shadow subject ID {rule.shadow_subject_id} not found, skipping...")
@@ -520,7 +520,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         # Find the teacher who teaches the teacher_subject to the specified class
         shadow_teacher_id = None
         for ta in GenTeacherAssignment.query.filter_by(subject_id=rule.teacher_subject_id, is_active=True).all():
-            cc = GenClassConfig.query.get(ta.class_config_id)
+            cc = db.session.get(GenClassConfig, ta.class_config_id)
             if cc and cc.class_name == rule.teacher_class_name:
                 if ta.arm_name is None or ta.arm_name == rule.teacher_arm_name:
                     shadow_teacher_id = ta.teacher_id
@@ -530,7 +530,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             print(f"  Warning: No teacher found for {teacher_subj.name} in {rule.teacher_class_name} {rule.teacher_arm_name or '(All)'}")
             continue
         
-        shadow_teacher = GenTeacher.query.get(shadow_teacher_id)
+        shadow_teacher = db.session.get(GenTeacher, shadow_teacher_id)
         print(f"  {rule.shadow_class_name} {rule.shadow_arm_name or '(All)'} {shadow_subj.name}: {shadow_teacher.name} also teaching during these slots")
         
         # Get all of the shadow teacher's own requirements

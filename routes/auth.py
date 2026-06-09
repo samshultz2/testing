@@ -149,7 +149,7 @@ def change_password():
         flash('Password change not available for legacy login.', 'info')
         return redirect(url_for('main.dashboard'))
     
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return redirect(url_for('auth.logout'))
     
@@ -185,7 +185,7 @@ def get_current_user():
     """Get the current logged-in user object"""
     user_id = session.get('user_id')
     if user_id:
-        return User.query.get(user_id)
+        return db.session.get(User, user_id)
     return None
 
 

@@ -46,7 +46,7 @@ def graduates_list():
 @admin_required
 def mark_graduate(student_id):
     """Mark a single (SSS3) student as graduated."""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     active_session = get_active_session()
     try:
         student.is_graduated = True
@@ -66,7 +66,7 @@ def mark_graduate(student_id):
 @admin_required
 def unmark_graduate(student_id):
     """Reverse a graduation (in case it was marked by mistake)."""
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     try:
         student.is_graduated = False
         student.graduation_date = None
@@ -113,7 +113,7 @@ def graduate_profile(student_id):
     """View graduate profile with all external results"""
     from models import WAECResult, JAMBResult
     
-    student = Student.query.get_or_404(student_id)
+    student = db.get_or_404(Student, student_id)
     
     # Get WAEC results
     waec_results = WAECResult.query.filter_by(student_id=student_id).order_by(
@@ -140,7 +140,7 @@ def graduate_profile(student_id):
     # Get graduation info
     graduation_session = None
     if student.graduation_session_id:
-        graduation_session = AcademicSession.query.get(student.graduation_session_id)
+        graduation_session = db.session.get(AcademicSession, student.graduation_session_id)
     
     return render_template('promotion/graduate_profile.html',
         student=student,
@@ -232,7 +232,7 @@ def add_rule():
 @login_required
 def delete_rule(rule_id):
     """Delete promotion rule"""
-    rule = PromotionRule.query.get_or_404(rule_id)
+    rule = db.get_or_404(PromotionRule, rule_id)
     
     try:
         rule.is_active = False
@@ -267,9 +267,9 @@ def process_promotion():
     promotion_threshold = SchoolSettings.get('promotion_threshold', 50)
     
     if from_session_id and class_id:
-        from_session = AcademicSession.query.get(from_session_id)
-        to_session = AcademicSession.query.get(to_session_id) if to_session_id else None
-        selected_class = SchoolClass.query.get(class_id)
+        from_session = db.session.get(AcademicSession, from_session_id)
+        to_session = db.session.get(AcademicSession, to_session_id) if to_session_id else None
+        selected_class = db.session.get(SchoolClass, class_id)
         
         # Get third term for the session
         third_term = Term.query.filter_by(
@@ -355,7 +355,7 @@ def execute_promotion():
             if action == 'skip':
                 continue
             
-            student = Student.query.get(int(student_id))
+            student = db.session.get(Student, int(student_id))
             if not student:
                 continue
             
@@ -446,7 +446,7 @@ def enroll_promoted():
             flash('Select destination session.', 'error')
             return redirect(url_for('promotion.index'))
         
-        to_session = AcademicSession.query.get(to_session_id)
+        to_session = db.session.get(AcademicSession, to_session_id)
         
         # Get first term of new session
         first_term = Term.query.filter_by(
@@ -577,7 +577,7 @@ def get_promotion_recommendation(student_id, class_id, average, threshold):
     if average is None:
         return {'status': 'unknown', 'message': 'No scores', 'to_class': None, 'stream': None}
     
-    current_class = SchoolClass.query.get(class_id)
+    current_class = db.session.get(SchoolClass, class_id)
     
     # Check if graduating (SSS3) - always graduate, no repeating
     if current_class and current_class.level == 6:

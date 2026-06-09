@@ -79,7 +79,7 @@ def activate_session(session_id):
         AcademicSession.query.update({AcademicSession.is_active: False})
         
         # Activate selected session
-        session = AcademicSession.query.get_or_404(session_id)
+        session = db.get_or_404(AcademicSession, session_id)
         session.is_active = True
         db.session.commit()
         
@@ -95,7 +95,7 @@ def activate_session(session_id):
 @login_required
 def edit_session(session_id):
     """Edit an academic session"""
-    session = AcademicSession.query.get_or_404(session_id)
+    session = db.get_or_404(AcademicSession, session_id)
     
     if request.method == 'POST':
         try:
@@ -224,7 +224,7 @@ def activate_term(term_id):
     try:
         Term.query.update({Term.is_active: False})
         
-        term = Term.query.get_or_404(term_id)
+        term = db.get_or_404(Term, term_id)
         term.is_active = True
         
         # Also activate the parent session
@@ -244,7 +244,7 @@ def activate_term(term_id):
 @login_required
 def view_term(term_id):
     """View term details including weeks and holidays"""
-    term = Term.query.get_or_404(term_id)
+    term = db.get_or_404(Term, term_id)
     weeks = term.weeks.order_by(Week.week_number).all()
     holidays = term.holidays.order_by(Holiday.date).all()
     class_assignments = term.class_arm_assignments.all()
@@ -261,7 +261,7 @@ def view_term(term_id):
 @login_required
 def edit_term(term_id):
     """Edit a term's dates"""
-    term = Term.query.get_or_404(term_id)
+    term = db.get_or_404(Term, term_id)
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
     
     if request.method == 'POST':
@@ -308,7 +308,7 @@ def edit_term(term_id):
 @login_required
 def add_next_week(term_id):
     """Add the next week to a term"""
-    term = Term.query.get_or_404(term_id)
+    term = db.get_or_404(Term, term_id)
     
     try:
         # Get the last week for this term
@@ -364,7 +364,7 @@ def add_next_week(term_id):
 @login_required
 def delete_week(week_id):
     """Delete a week (only the last week can be deleted)"""
-    week = Week.query.get_or_404(week_id)
+    week = db.get_or_404(Week, week_id)
     term_id = week.term_id
     
     try:
@@ -394,7 +394,7 @@ def delete_week(week_id):
 @login_required
 def generate_weeks(term_id):
     """Generate weeks for a term"""
-    term = Term.query.get_or_404(term_id)
+    term = db.get_or_404(Term, term_id)
     
     if not term.start_date or not term.end_date:
         flash('Please set term start and end dates first.', 'error')
@@ -468,7 +468,7 @@ def add_holiday(term_id):
 @login_required
 def delete_holiday(holiday_id):
     """Delete a holiday"""
-    holiday = Holiday.query.get_or_404(holiday_id)
+    holiday = db.get_or_404(Holiday, holiday_id)
     term_id = holiday.term_id
     
     try:
@@ -592,7 +592,7 @@ def assignments_list():
     assignments = []
     selected_term = None
     if term_id:
-        selected_term = Term.query.get(term_id)
+        selected_term = db.session.get(Term, term_id)
         assignments = ClassArmAssignment.query.filter_by(term_id=term_id).join(
             SchoolClass
         ).order_by(SchoolClass.level).all()
@@ -656,7 +656,7 @@ def add_assignment():
 @login_required
 def view_assignment(assignment_id):
     """View class arm assignment and enrolled students"""
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     enrollments = assignment.enrollments.filter_by(is_active=True).all()
     
     # Get students not enrolled in this assignment
@@ -677,7 +677,7 @@ def view_assignment(assignment_id):
 @login_required
 def enroll_student(assignment_id):
     """Enroll a student in a class arm"""
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     
     try:
         student_ids = request.form.getlist('student_ids[]')
@@ -709,7 +709,7 @@ def enroll_student(assignment_id):
 @login_required
 def remove_enrollment(enrollment_id):
     """Remove a student from a class arm"""
-    enrollment = StudentEnrollment.query.get_or_404(enrollment_id)
+    enrollment = db.get_or_404(StudentEnrollment, enrollment_id)
     assignment_id = enrollment.class_arm_assignment_id
     
     try:
@@ -790,8 +790,8 @@ def copy_term_setup():
                 flash('Source and destination must be different.', 'error')
                 return redirect(url_for('academics.copy_term_setup'))
             
-            from_term = Term.query.get(from_term_id)
-            to_term = Term.query.get(to_term_id)
+            from_term = db.session.get(Term, from_term_id)
+            to_term = db.session.get(Term, to_term_id)
             
             # Get source assignments
             source_assignments = ClassArmAssignment.query.filter_by(term_id=from_term_id).all()

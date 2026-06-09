@@ -80,7 +80,7 @@ def mark_attendance_page():
     current_week = None
     
     if term_id:
-        selected_term = Term.query.get(term_id)
+        selected_term = db.session.get(Term, term_id)
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
         # Filter classes for teachers
         assignments = filter_classes_for_user(all_assignments, form_only=True)
@@ -88,7 +88,7 @@ def mark_attendance_page():
         holidays = Holiday.query.filter_by(term_id=term_id).all()
     
     if assignment_id:
-        selected_assignment = ClassArmAssignment.query.get(assignment_id)
+        selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id,
             is_active=True
@@ -259,7 +259,7 @@ def daily_summary():
     selected_assignment = None
     
     if assignment_id:
-        selected_assignment = ClassArmAssignment.query.get(assignment_id)
+        selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
         summary = get_daily_attendance_summary(assignment_id, target_date)
     
     return render_template('attendance/daily.html',
@@ -392,8 +392,8 @@ def weekly_summary():
     selected_week = None
     
     if assignment_id and week_id:
-        selected_assignment = ClassArmAssignment.query.get(assignment_id)
-        selected_week = Week.query.get(week_id)
+        selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
+        selected_week = db.session.get(Week, week_id)
         summary = get_weekly_attendance_summary(assignment_id, week_id)
     
     return render_template('attendance/weekly.html',
@@ -416,8 +416,8 @@ def export_weekly():
         flash('Please select a class and week.', 'error')
         return redirect(url_for('attendance.weekly_summary'))
     
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    week = Week.query.get_or_404(week_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
+    week = db.get_or_404(Week, week_id)
     
     summary = get_weekly_attendance_summary(assignment_id, week_id)
     
@@ -466,7 +466,7 @@ def termly_summary():
     assignments = []
     selected_term = None
     if term_id:
-        selected_term = Term.query.get(term_id)
+        selected_term = db.session.get(Term, term_id)
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
         assignments = filter_classes_for_user(all_assignments, form_only=True)
     
@@ -474,7 +474,7 @@ def termly_summary():
     selected_assignment = None
     
     if assignment_id and term_id:
-        selected_assignment = ClassArmAssignment.query.get(assignment_id)
+        selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
         summary = get_termly_attendance_summary(assignment_id, term_id)
     
     return render_template('attendance/termly.html',
@@ -497,8 +497,8 @@ def export_termly():
         flash('Please select a class and term.', 'error')
         return redirect(url_for('attendance.termly_summary'))
     
-    assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    term = Term.query.get_or_404(term_id)
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
+    term = db.get_or_404(Term, term_id)
     
     summary = get_termly_attendance_summary(assignment_id, term_id)
     
@@ -703,7 +703,7 @@ def api_check_attendance():
 @login_required
 def api_school_days(week_id):
     """Get school days for a week"""
-    week = Week.query.get_or_404(week_id)
+    week = db.get_or_404(Week, week_id)
     holidays = Holiday.query.filter_by(term_id=week.term_id).all()
     holiday_dates = set(h.date for h in holidays)
     
@@ -740,7 +740,7 @@ def attendance_alerts():
         if active_term:
             term_id = active_term.id
     
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
     
     # Default threshold from settings or 75%
     if threshold is None:
@@ -824,7 +824,7 @@ def export_alerts():
         flash('Select a term first.', 'error')
         return redirect(url_for('attendance.attendance_alerts'))
     
-    selected_term = Term.query.get(term_id)
+    selected_term = db.session.get(Term, term_id)
     
     # Get alerts (same logic as above)
     enrollments = StudentEnrollment.query.join(ClassArmAssignment).filter(
@@ -939,21 +939,21 @@ def print_register():
         if active_term:
             term_id = active_term.id
     
-    selected_term = Term.query.get(term_id) if term_id else None
+    selected_term = db.session.get(Term, term_id) if term_id else None
     
     # Get assignments for term
     assignments = []
     if term_id:
         assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
     
-    selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     # Get weeks for term
     weeks = []
     if term_id:
         weeks = Week.query.filter_by(term_id=term_id).order_by(Week.week_number).all()
     
-    selected_week = Week.query.get(week_id) if week_id else None
+    selected_week = db.session.get(Week, week_id) if week_id else None
     
     register_data = []
     school_days = []
