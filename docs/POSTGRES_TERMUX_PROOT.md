@@ -140,6 +140,37 @@ EOF
 chmod +x ~/start-db.sh
 ```
 
+## Migrating existing SQLite data into Postgres
+
+Once the Postgres server is running and `DATABASE_URL` is set, copy your
+existing data across with the bundled script. It drives off the app's models,
+so it covers every table, converts types correctly, and resets sequences.
+
+```bash
+# from the repo root, with the venv active and Postgres running
+pip install -r requirements.txt          # pulls in psycopg
+export DATABASE_URL="postgresql+psycopg://posyhub:posyhub@localhost:5432/posyhub"
+
+# 1. preview row counts (no writes)
+python scripts/sqlite_to_postgres.py --dry-run
+
+# 2. do the migration (source defaults to instance/school.db)
+python scripts/sqlite_to_postgres.py
+```
+
+Notes:
+
+- The script **refuses to run if the target already has data** — re-run with
+  `--force` to `TRUNCATE` the target tables first.
+- It creates the schema in Postgres automatically (`create_all`), so you do
+  not need to run the app first.
+- After copying it resets all integer-PK sequences, so the next insert won't
+  collide on primary keys.
+- Use `--sqlite <path>` / `--postgres <url>` to override source/target.
+
+After migrating, start the app with `DATABASE_URL` set and confirm your data
+is present. You can then keep `instance/school.db` as a backup.
+
 ## Troubleshooting
 
 - **`has wrong ownership` even as postgres** → proot UID emulation issue; relaunch
