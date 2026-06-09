@@ -927,6 +927,28 @@ def student_report_card(student_id):
     )
 
 
+@subjects_bp.route('/report-card/<int:student_id>/pdf')
+@login_required
+def report_card_pdf(student_id):
+    """Download the student's term report card as a PDF."""
+    from flask import send_file
+    from utils.report_card import build_report_card, active_traits, RATING_LABELS
+    from utils.report_pdf import report_card_pdf as build_pdf
+    student = Student.query.get_or_404(student_id)
+    term_id = request.args.get('term_id', type=int) or (
+        get_active_term().id if get_active_term() else None)
+    _, report_data = build_report_card(student_id, term_id) if term_id else (None, None)
+    if not report_data:
+        flash('No results to export for this term.', 'error')
+        return redirect(url_for('subjects.student_report_card', student_id=student_id, term_id=term_id))
+    term = Term.query.get(term_id)
+    buf = build_pdf(student, report_data, term,
+                    SchoolSettings.get('school_name', 'School'),
+                    active_traits(), RATING_LABELS)
+    name = f"{student.student_id}_{term.name.replace(' ', '_')}_report.pdf"
+    return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=name)
+
+
 # ============================================================================
 # API ENDPOINTS
 # ============================================================================

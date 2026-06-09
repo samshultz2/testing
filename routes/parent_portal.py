@@ -110,6 +110,31 @@ def _record_online_payment(student_id, term_id, amount, reference):
     return pay
 
 
+@parent_bp.route('/report.pdf')
+@parent_required
+def report_pdf():
+    """Download the child's report card (only when released + finalised)."""
+    from flask import send_file
+    from models import SchoolSettings
+    from utils.report_pdf import report_card_pdf
+    from utils.report_card import active_traits, RATING_LABELS
+    student = _current_student()
+    if not student:
+        return redirect(url_for('parent.login'))
+    term_id = request.args.get('term_id', type=int) or (
+        get_active_term().id if get_active_term() else None)
+    term = Term.query.get(term_id) if term_id else None
+    _, report = build_report_card(student.id, term_id) if term_id else (None, None)
+    if not (report and report.get('term_summary') and term and term.results_published):
+        flash('Your child\'s results are not available for download yet.', 'error')
+        return redirect(url_for('parent.home', term_id=term_id))
+    buf = report_card_pdf(student, report, term,
+                          SchoolSettings.get('school_name', 'School'),
+                          active_traits(), RATING_LABELS)
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'{student.student_id}_report.pdf')
+
+
 @parent_bp.route('/pay', methods=['POST'])
 @parent_required
 def pay():

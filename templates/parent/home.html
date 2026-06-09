@@ -82,7 +82,9 @@
         </div>
 
         <div class="sec">
-            <h2>Results</h2>
+            <h2 style="display:flex;align-items:center;justify-content:space-between;">Results
+                {% if report %}<a href="{{ url_for('parent.report_pdf', term_id=term_id) }}" style="font-size:.8rem;background:#0d6a4e;color:#fff;padding:.35rem .7rem;border-radius:8px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Download PDF</a>{% endif %}
+            </h2>
             {% if report %}
             <table>
                 <thead><tr><th>Subject</th>{% for at in report.assessment_types %}<th>{{ at.short_name or at.name }}</th>{% endfor %}<th>Total</th><th>Grade</th><th>Remark</th></tr></thead>

@@ -26,6 +26,7 @@
     <h1>Report Card</h1>
     <div class="page-header-actions no-print">
         <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+        {% if report_data %}<a href="{{ url_for('subjects.report_card_pdf', student_id=student.id, term_id=term_id) }}" class="btn btn-success"><i class="fas fa-file-pdf"></i> Download PDF</a>{% endif %}
         <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary">Back to Student</a>
     </div>
 </div>

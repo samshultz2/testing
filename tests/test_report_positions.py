@@ -57,3 +57,20 @@ def test_competition_ranking_ties():
     rows = [{'average': 90}, {'average': 80}, {'average': 80}, {'average': 50}]
     _assign_ranks(rows, 'pos')
     assert sorted(r['pos'] for r in rows) == [1, 2, 2, 4]   # ties share a rank
+
+
+def test_report_card_pdf_download(app):
+    from config import Config
+    from models import Student
+    from utils.report_card import compute_term_summaries
+    from tests.conftest import login_token
+    term_id, class_id = _setup(app)
+    with app.app_context():
+        compute_term_summaries(term_id, class_id)
+        sid = Student.query.filter_by(student_id='RC1').first().id
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    r = c.get(f'/subjects/report-card/{sid}/pdf?term_id={term_id}')
+    assert r.status_code == 200
+    assert r.headers['Content-Type'] == 'application/pdf'
+    assert r.data[:5] == b'%PDF-'
