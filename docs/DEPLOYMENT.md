@@ -85,16 +85,30 @@ the **Settings → Backup** page (upload the `.sql` dump — it is applied with
 You do **not** have to wait for a Linux server to put nginx in front — it runs
 in proot too, and is worth it for serving static files and (later) TLS:
 
+A ready-to-use config lives at
+[`deploy/nginx-posyhub.conf`](../deploy/nginx-posyhub.conf):
+
 ```bash
 apt install -y nginx
+cp deploy/nginx-posyhub.conf /etc/nginx/sites-available/posyhub
+ln -sf /etc/nginx/sites-available/posyhub /etc/nginx/sites-enabled/posyhub
+rm -f /etc/nginx/sites-enabled/default
+# edit the /static/ alias path in the config to your repo location, then:
+nginx -t && nginx          # reload later with: nginx -s reload
 ```
 
-Use the same reverse-proxy config as Stage 2 below (proxy to
-`127.0.0.1:5000`), set `GUNICORN_BIND=127.0.0.1:5000` and `TRUST_PROXY=1`, then
-start nginx with `nginx` (or `service nginx start`). There's no systemd in
-proot, so run nginx and gunicorn under `tmux` (or a small supervisor script).
-HTTPS via certbot needs a public domain, so on a LAN you'd typically stay on
-plain HTTP until you move to a server with a domain name.
+In `.env` set:
+
+```ini
+GUNICORN_BIND=127.0.0.1:5000   # gunicorn local-only; nginx is public-facing
+TRUST_PROXY=1                  # honour X-Forwarded-* from nginx
+```
+
+`start.sh` loads `.env`, so gunicorn picks these up automatically. There's no
+systemd in proot, so run nginx (it daemonizes) and gunicorn under `tmux`. Reach
+it from another LAN device at `http://<phone-LAN-ip>/` (port 80). HTTPS via
+certbot needs a public domain, so on a LAN you'd stay on plain HTTP until you
+move to a server with a domain name.
 
 ---
 

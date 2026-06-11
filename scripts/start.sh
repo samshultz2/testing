@@ -34,6 +34,18 @@ DB_PORT="${DB_PORT:-5432}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Load .env into the environment so both this script and gunicorn.conf.py
+# (which reads os.environ directly) see settings like GUNICORN_BIND,
+# WEB_CONCURRENCY, APP_ENV, DATABASE_URL, etc. Real env vars still win because
+# set -a only exports; existing values are overwritten by the file, so we guard
+# below with :- defaults for anything not defined.
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 # DATABASE_URL: respect an existing value (e.g. from .env), else build a default.
 export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}}"
 
