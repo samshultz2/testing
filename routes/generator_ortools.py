@@ -14,6 +14,9 @@ from collections import defaultdict
 import uuid
 import random
 import time
+import logging
+
+logger = logging.getLogger('posyhub.timetable')
 
 try:
     from ortools.sat.python import cp_model
@@ -21,7 +24,7 @@ try:
 except ImportError:
     cp_model = None
     ORTOOLS_AVAILABLE = False
-    print("Warning: OR-Tools not installed. Run: pip install ortools --break-system-packages")
+    logger.warning("OR-Tools not installed. Run: pip install ortools")
 
 
 # Class-specific period restrictions
@@ -59,8 +62,8 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         if p != break_after:
             valid_double_starts.append(p)
     
-    print(f"Valid double period starts: {valid_double_starts}")
-    print(f"Break after period: {break_after}")
+    logger.debug(f"Valid double period starts: {valid_double_starts}")
+    logger.debug(f"Break after period: {break_after}")
     
     global_subject_configs = {
         sc.subject_id: sc for sc in GenSubjectConfig.query.filter_by(is_active=True).all()
@@ -169,7 +172,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                         continue
                     subj = GenSubject.query.get(cfg.subject_id)
                     if not subj:
-                        print(f"Warning: Subject ID {cfg.subject_id} not found, skipping...")
+                        logger.debug(f"Warning: Subject ID {cfg.subject_id} not found, skipping...")
                         continue
                     
                     needs_double = cfg.needs_double_period
@@ -239,7 +242,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     if not requirements:
         return {'success': False, 'message': 'No requirements found'}
     
-    print(f"Loaded {len(requirements)} requirements for {len(class_arms)} class-arms")
+    logger.debug(f"Loaded {len(requirements)} requirements for {len(class_arms)} class-arms")
     
     teachers = {t.id: t for t in GenTeacher.query.filter_by(is_active=True).all()}
     
@@ -270,7 +273,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     num_days = 5
     
     # ========== BUILD MODEL ==========
-    print("Building OR-Tools model...")
+    logger.debug("Building OR-Tools model...")
     model = cp_model.CpModel()
     
     x = {}
@@ -311,27 +314,27 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             model.Add(sum(x[r['req_id'], slot] for r in t_reqs for slot in day_slots) <= t.max_periods_per_day)
     
     # Constraint 6: Period restrictions (not first/last period)
-    print("Adding period restrictions...")
+    logger.debug("Adding period restrictions...")
     for key, info in subject_info.items():
         class_name, arm, subject_id = key
         reqs = subject_ca_reqs[key]
         
         if info['not_first_period']:
-            print(f"  {class_name} {arm} {info['name']}: not first period")
+            logger.debug(f"  {class_name} {arm} {info['name']}: not first period")
             for day in range(num_days):
                 first_period_slot = day * num_periods
                 for req in reqs:
                     model.Add(x[req['req_id'], first_period_slot] == 0)
         
         if info['not_last_period']:
-            print(f"  {class_name} {arm} {info['name']}: not last period")
+            logger.debug(f"  {class_name} {arm} {info['name']}: not last period")
             for day in range(num_days):
                 last_period_slot = day * num_periods + (num_periods - 1)
                 for req in reqs:
                     model.Add(x[req['req_id'], last_period_slot] == 0)
     
     # Constraint 7: No subject spanning break
-    print(f"Adding no-subject-spanning-break constraint (break after P{break_after})...")
+    logger.debug(f"Adding no-subject-spanning-break constraint (break after P{break_after})...")
     for key, reqs in subject_ca_reqs.items():
         for day in range(num_days):
             slot_before_break = day * num_periods + (break_after - 1)
@@ -341,7 +344,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             model.Add(sum_around_break <= 1)
     
     # Constraint 8: Teacher max 2 consecutive periods
-    print("Adding teacher max 2 consecutive constraint...")
+    logger.debug("Adding teacher max 2 consecutive constraint...")
     constraint_count = 0
     
     for tid, t_reqs in teacher_reqs.items():
@@ -383,11 +386,11 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                     model.Add(sum(teacher_in_3_slots) <= 2)
                     constraint_count += 1
     
-    print(f"  Added {constraint_count} consecutive period constraints")
+    logger.debug(f"  Added {constraint_count} consecutive period constraints")
     
     # Constraint 9: No same teacher teaching same class-arm back-to-back with different subjects
     # (unless it's a double period of the same subject)
-    print("Adding no-same-teacher-same-class-back-to-back constraint...")
+    logger.debug("Adding no-same-teacher-same-class-back-to-back constraint...")
     back_to_back_count = 0
     
     for (tid, class_name, arm), reqs in teacher_classarm_reqs.items():
@@ -426,17 +429,17 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                                     model.Add(x[r2['req_id'], slot1] + x[r1['req_id'], slot2] <= 1)
                                     back_to_back_count += 2
     
-    print(f"  Added {back_to_back_count} back-to-back constraints")
+    logger.debug(f"  Added {back_to_back_count} back-to-back constraints")
     
     # Constraint 10: Subject clash avoidance (database-driven)
     # Reads rules from GenSubjectClashRule table
-    print("Adding subject clash constraints (from database)...")
+    logger.debug("Adding subject clash constraints (from database)...")
     clash_count = 0
     
     clash_rules = GenSubjectClashRule.query.filter_by(is_active=True).all()
     
     if not clash_rules:
-        print("  No subject clash rules configured")
+        logger.debug("  No subject clash rules configured")
     
     # Group rules by source (to consolidate output)
     source_groups = defaultdict(list)
@@ -447,7 +450,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     for (source_class, source_arm, source_subj_id), rules in source_groups.items():
         source_subj = GenSubject.query.get(source_subj_id)
         if not source_subj:
-            print(f"  Warning: Source subject ID {source_subj_id} not found, skipping...")
+            logger.debug(f"  Warning: Source subject ID {source_subj_id} not found, skipping...")
             continue
         
         # Find source subject requirements
@@ -457,15 +460,15 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                       and r['subject_id'] == source_subj_id]
         
         if not source_reqs:
-            print(f"  Warning: No {source_subj.name} found for {source_class} {source_arm or '(All)'}")
+            logger.debug(f"  Warning: No {source_subj.name} found for {source_class} {source_arm or '(All)'}")
             continue
         
-        print(f"  {source_class} {source_arm or '(All)'} {source_subj.name} ({len(source_reqs)} periods) must not clash with:")
+        logger.debug(f"  {source_class} {source_arm or '(All)'} {source_subj.name} ({len(source_reqs)} periods) must not clash with:")
         
         for rule in rules:
             target_subj = GenSubject.query.get(rule.target_subject_id)
             if not target_subj:
-                print(f"    Warning: Target subject ID {rule.target_subject_id} not found, skipping...")
+                logger.debug(f"    Warning: Target subject ID {rule.target_subject_id} not found, skipping...")
                 continue
             
             # Find all target requirements
@@ -477,7 +480,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             if not target_reqs:
                 continue
             
-            print(f"    - {rule.target_class_name or '(All)'} {rule.target_arm_name or '(All)'} {target_subj.name} ({len(target_reqs)} periods)")
+            logger.debug(f"    - {rule.target_class_name or '(All)'} {rule.target_arm_name or '(All)'} {target_subj.name} ({len(target_reqs)} periods)")
             
             # For each slot, source and target cannot both be scheduled
             for slot in range(num_slots):
@@ -486,27 +489,27 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                         model.Add(x[s_req['req_id'], slot] + x[t_req['req_id'], slot] <= 1)
                         clash_count += 1
     
-    print(f"  Added {clash_count} subject clash constraints")
+    logger.debug(f"  Added {clash_count} subject clash constraints")
     
     # Constraint 11: Combined class teacher consecutive period limit (database-driven)
     # Reads rules from GenCombinedClassRule table
-    print("Adding combined class teacher consecutive constraints (from database)...")
+    logger.debug("Adding combined class teacher consecutive constraints (from database)...")
     combined_consecutive_count = 0
     
     combined_rules = GenCombinedClassRule.query.filter_by(is_active=True).all()
     
     if not combined_rules:
-        print("  No combined class rules configured")
+        logger.debug("  No combined class rules configured")
     
     for rule in combined_rules:
         shadow_subj = GenSubject.query.get(rule.shadow_subject_id)
         teacher_subj = GenSubject.query.get(rule.teacher_subject_id)
         
         if not shadow_subj:
-            print(f"  Warning: Shadow subject ID {rule.shadow_subject_id} not found, skipping...")
+            logger.debug(f"  Warning: Shadow subject ID {rule.shadow_subject_id} not found, skipping...")
             continue
         if not teacher_subj:
-            print(f"  Warning: Teacher subject ID {rule.teacher_subject_id} not found, skipping...")
+            logger.debug(f"  Warning: Teacher subject ID {rule.teacher_subject_id} not found, skipping...")
             continue
         
         # Find the shadow subject requirements (e.g., Geography SSS3 Iris)
@@ -516,7 +519,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                       and r['subject_id'] == rule.shadow_subject_id]
         
         if not source_reqs:
-            print(f"  Warning: No {shadow_subj.name} found for {rule.shadow_class_name} {rule.shadow_arm_name or '(All)'}")
+            logger.debug(f"  Warning: No {shadow_subj.name} found for {rule.shadow_class_name} {rule.shadow_arm_name or '(All)'}")
             continue
         
         # Find the teacher who teaches the teacher_subject to the specified class
@@ -529,11 +532,11 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                     break
         
         if not shadow_teacher_id:
-            print(f"  Warning: No teacher found for {teacher_subj.name} in {rule.teacher_class_name} {rule.teacher_arm_name or '(All)'}")
+            logger.debug(f"  Warning: No teacher found for {teacher_subj.name} in {rule.teacher_class_name} {rule.teacher_arm_name or '(All)'}")
             continue
         
         shadow_teacher = GenTeacher.query.get(shadow_teacher_id)
-        print(f"  {rule.shadow_class_name} {rule.shadow_arm_name or '(All)'} {shadow_subj.name}: {shadow_teacher.name} also teaching during these slots")
+        logger.debug(f"  {rule.shadow_class_name} {rule.shadow_arm_name or '(All)'} {shadow_subj.name}: {shadow_teacher.name} also teaching during these slots")
         
         # Get all of the shadow teacher's own requirements
         shadow_teacher_reqs = teacher_reqs.get(shadow_teacher_id, [])
@@ -585,12 +588,12 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                     model.Add(sum(combined_slots) <= 2)
                     combined_consecutive_count += 1
     
-    print(f"  Added {combined_consecutive_count} combined consecutive constraints")
+    logger.debug(f"  Added {combined_consecutive_count} combined consecutive constraints")
 
 
     
     # ========== DOUBLE PERIOD CONSTRAINTS ==========
-    print("Adding double period constraints...")
+    logger.debug("Adding double period constraints...")
     double_vars = {}
     
     for key, reqs in subject_ca_reqs.items():
@@ -600,7 +603,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         num_doubles = info['double_count'] if info['needs_double'] else 0
         
         if num_doubles > 0:
-            print(f"  {class_name} {arm} {info['name']}: {num_doubles} double(s)")
+            logger.debug(f"  {class_name} {arm} {info['name']}: {num_doubles} double(s)")
             
             for day in range(num_days):
                 for start_p in valid_double_starts:
@@ -650,7 +653,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                 model.Add(sum(x[r['req_id'], slot] for r in reqs for slot in day_slots) <= 1)
     
     # ========== SOLVE WITH RANDOMIZATION ==========
-    print("Solving with randomization...")
+    logger.debug("Solving with randomization...")
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit
     solver.parameters.num_search_workers = 8
@@ -658,14 +661,14 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     # Add randomization - use current time as seed for different solutions
     random_seed = int(time.time() * 1000) % (2**31)
     solver.parameters.random_seed = random_seed
-    print(f"  Random seed: {random_seed}")
+    logger.debug(f"  Random seed: {random_seed}")
     
     # Randomize variable selection and value selection
     solver.parameters.search_branching = cp_model.AUTOMATIC_SEARCH
     
     status = solver.Solve(model)
     
-    print(f"Status: {solver.StatusName(status)}")
+    logger.debug(f"Status: {solver.StatusName(status)}")
     
     if status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
         return {'success': False, 'message': f'No solution found. Status: {solver.StatusName(status)}'}

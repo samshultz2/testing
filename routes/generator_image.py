@@ -19,11 +19,11 @@ def get_font(size, bold=False):
     for path in font_paths:
         try:
             return ImageFont.truetype(path, size)
-        except:
+        except (OSError, IOError):
             continue
     try:
         return ImageFont.load_default()
-    except:
+    except (OSError, IOError):
         return None
 
 
@@ -76,7 +76,7 @@ def get_school_name():
     """Get school name from GenSettings"""
     try:
         return GenSettings.get('school_name', 'School Timetable')
-    except:
+    except Exception:
         return "School Timetable"
 
 
@@ -122,7 +122,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     # Get school address
     try:
         school_address = GenSettings.get('school_address', '')
-    except:
+    except Exception:
         school_address = ''
     
     # Calculate period times (8:20 AM start, 40 min each, 30 min break after P5)
