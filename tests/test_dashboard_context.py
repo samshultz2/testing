@@ -48,7 +48,12 @@ def _seed(app):
         if not User.query.filter_by(username='dsh_user').first():
             u = User(username='dsh_user', role='staff', scope='branch', branch_id=bid,
                      full_name='Dash User')
-            u.set_password('secret123'); db.session.add(u)
+            u.set_password('secret123')
+            # Grant the modules whose dashboard cards this test inspects, so the
+            # per-permission dashboard shows them.
+            u.set_permissions({'students': 'edit', 'external_exams': 'edit',
+                               'attendance': 'edit'})
+            db.session.add(u)
         db.session.commit()
         return bid
 

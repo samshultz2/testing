@@ -124,19 +124,39 @@ DASHBOARD_WIDGETS = [
 DASHBOARD_DEFAULTS = [k for k, _, _, d in DASHBOARD_WIDGETS if d]
 
 
+# Each widget needs access to a module to be shown — a user only ever sees the
+# cards whose module they're permitted to access, regardless of their saved
+# widget preferences.
+WIDGET_MODULE = {
+    'kpi': 'students', 'charts': 'students', 'class_religion': 'students',
+    'people': 'students', 'attendance_trend': 'attendance',
+    'exams': 'external_exams', 'finance': 'finance', 'sales': 'sales',
+    'hr': 'hr', 'cbt': 'cbt', 'library': 'library',
+}
+
+
+def permitted_widgets():
+    """Widget keys the current user is allowed to see (by module permission)."""
+    from utils.access_control import can_access_module
+    return {k for k in WIDGET_MODULE
+            if can_access_module(WIDGET_MODULE[k])}
+
+
 def enabled_widgets():
-    """The set of dashboard widget keys enabled for the current user."""
+    """Widget keys enabled for the user: their preference ∩ what they may see."""
     from utils.access_control import get_current_user
+    chosen = None
     try:
         user = get_current_user()
         if user and user.dashboard_widgets is not None:
-            return set(user.dashboard_widgets)
+            chosen = set(user.dashboard_widgets)
     except Exception:
-        pass
-    sp = session.get('dashboard_prefs')
-    if sp is not None:
-        return set(sp)
-    return set(DASHBOARD_DEFAULTS)
+        chosen = None
+    if chosen is None:
+        sp = session.get('dashboard_prefs')
+        chosen = set(sp) if sp is not None else set(DASHBOARD_DEFAULTS)
+    # Never show a card the user has no permission for.
+    return chosen & permitted_widgets()
 
 
 @main_bp.route('/')
@@ -147,8 +167,9 @@ def dashboard():
     active_session = get_active_session()
     active_term = get_active_term()
     enabled = enabled_widgets()
+    tscope = _teacher_scope()   # teacher: limit student stats to their classes
 
-    active_enrollments, total_classes, class_stats = _dash_class_stats(active_term)
+    active_enrollments, total_classes, class_stats = _dash_class_stats(active_term, tscope)
     birthdays_today, birthdays_week = _dash_birthdays()
 
     ctx = dict(
@@ -162,7 +183,7 @@ def dashboard():
         active_enrollments=active_enrollments,
         total_classes=total_classes,
         class_stats=class_stats,
-        attendance_stats=_dash_attendance_stats(active_term),
+        attendance_stats=_dash_attendance_stats(active_term, tscope),
         birthdays_today=birthdays_today,
         birthdays_week=birthdays_week,
         age_distribution=_dash_age_distribution(),
@@ -181,7 +202,7 @@ def dashboard():
         hr_stat=_dash_hr() if 'hr' in enabled else None,
         cbt_stat=_dash_cbt() if 'cbt' in enabled else None,
         library_stat=_dash_library() if 'library' in enabled else None,
-        **_dash_student_counts()
+        **_dash_student_counts(tscope)
     )
     return render_template('dashboard.html', **ctx)
 
@@ -272,10 +293,28 @@ def _dash_library():
         return None
 
 
-def _dash_student_counts():
-    """Active-student headcounts (branch-scoped)."""
+def _teacher_scope():
+    """For a teacher (non-admin), the class assignments + student ids they may
+    see on their dashboard; None for admins/non-teachers (full branch view)."""
+    from utils.access_control import is_admin, is_teacher, get_accessible_class_ids
+    if is_admin() or not is_teacher():
+        return None
+    aids = get_accessible_class_ids()
+    if not aids:
+        return ([], [])
+    sids = [r[0] for r in db.session.query(StudentEnrollment.student_id)
+            .filter(StudentEnrollment.class_arm_assignment_id.in_(aids),
+                    StudentEnrollment.is_active == True).distinct().all()]
+    return (aids, sids)
+
+
+def _dash_student_counts(tscope=None):
+    """Active-student headcounts (branch-scoped, or teacher's classes only)."""
     from utils.branch_scope import scope_query
     def sq(query):
+        if tscope is not None:
+            # restrict to the teacher's own students ([-1] => match nothing)
+            return query.filter(Student.id.in_(tscope[1] or [-1]))
         return scope_query(query, Student)
     return {
         'total_students': sq(Student.query.filter_by(is_active=True)).count(),
@@ -285,19 +324,20 @@ def _dash_student_counts():
     }
 
 
-def _dash_class_stats(active_term):
-    """Per-class enrolment breakdown for the active term."""
+def _dash_class_stats(active_term, tscope=None):
+    """Per-class enrolment breakdown for the active term (teacher: own classes)."""
     from utils.branch_scope import scope_query
     if not active_term:
         return 0, 0, []
-    active_enrollments = scope_query(
-        StudentEnrollment.query.join(ClassArmAssignment).filter(
-            ClassArmAssignment.term_id == active_term.id,
-            StudentEnrollment.is_active == True),
-        ClassArmAssignment).count()
     assignments = scope_query(
         ClassArmAssignment.query.filter_by(term_id=active_term.id),
         ClassArmAssignment).all()
+    if tscope is not None:
+        aidset = set(tscope[0])
+        assignments = [a for a in assignments if a.id in aidset]
+    active_enrollments = StudentEnrollment.query.filter(
+        StudentEnrollment.class_arm_assignment_id.in_([a.id for a in assignments] or [-1]),
+        StudentEnrollment.is_active == True).count()
     class_stats = []
     for assignment in assignments:
         enrollment_count = StudentEnrollment.query.filter_by(
@@ -316,21 +356,27 @@ def _dash_class_stats(active_term):
     return active_enrollments, len(assignments), class_stats
 
 
-def _dash_attendance_stats(active_term):
-    """Today + term attendance percentages for the active term (branch-scoped)."""
+def _dash_attendance_stats(active_term, tscope=None):
+    """Today + term attendance percentages (branch-scoped, or teacher's classes)."""
     from utils.branch_scope import viewing_branch_id
     stats = {'today_present': 0, 'today_absent': 0, 'today_percentage': 0,
              'week_average': 0, 'term_average': 0}
     if not active_term:
         return stats
     today = date.today()
-    bid = viewing_branch_id()
     branch_enr = None
-    if bid is not None:
+    if tscope is not None:
+        # Restrict to enrolments in the teacher's own class assignments.
         branch_enr = (db.session.query(StudentEnrollment.id)
-                      .join(ClassArmAssignment,
-                            StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                      .filter(ClassArmAssignment.branch_id == bid))
+                      .filter(StudentEnrollment.class_arm_assignment_id.in_(
+                          tscope[0] or [-1])))
+    else:
+        bid = viewing_branch_id()
+        if bid is not None:
+            branch_enr = (db.session.query(StudentEnrollment.id)
+                          .join(ClassArmAssignment,
+                                StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                          .filter(ClassArmAssignment.branch_id == bid))
 
     current_week = Week.query.filter(
         Week.term_id == active_term.id,
