@@ -96,7 +96,22 @@ MODULE_SUBSECTIONS = {
         'messages': 'Messages & Compose',
         'settings': 'SMS Settings',
     },
+    'results': {
+        'cards': 'Generate Result Cards',
+    },
+    'timetable': {
+        'generate': 'Generate Timetable',
+    },
 }
+
+# Some sub-sections are standalone CAPABILITIES (an explicit action grant), not
+# slices of a module: granting one must NOT unlock the whole module, and the
+# capability is required explicitly (broad module access does not imply it).
+CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate'}
+
+# Capabilities only certain managers may grant. key -> who may set it.
+# 'central' => only a central admin may grant/revoke this capability.
+RESTRICTED_GRANTS = {'results.cards': 'central'}
 
 # Which endpoints belong to each sub-section.
 _SUBSECTION_ENDPOINTS = {
@@ -192,15 +207,67 @@ def effective_perms():
 
 
 def module_level(key):
-    """Broadest level the user has for a module (across module + sub keys)."""
+    """Broadest level the user has for a module (across module + sub keys).
+
+    Standalone capability sub-sections (CAPABILITY_SUBSECTIONS) are ignored here
+    so that granting e.g. 'results.cards' does not unlock the whole module.
+    """
     perms = effective_perms()
     best = None
     for k, v in perms.items():
+        if k in CAPABILITY_SUBSECTIONS:
+            continue
         if k == key or k.startswith(key + '.'):
             if v == 'edit':
                 return 'edit'
             best = 'view'
     return best
+
+
+def has_capability(key):
+    """True if the user holds an explicit capability grant (e.g. results.cards).
+
+    Capabilities are never implied by module-level access — they must be granted
+    explicitly. Admin module defaults don't include sub-section keys, so admins
+    only pass via the dedicated can_generate_* helpers below.
+    """
+    return effective_perms().get(key) in ('view', 'edit')
+
+
+def can_generate_result_cards():
+    """Only a central admin, or a user explicitly granted 'results.cards'."""
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return True
+    return has_capability('results.cards')
+
+
+def can_generate_timetable():
+    """Central admin, a branch principal/HOD (branch manager), or a user
+    explicitly granted 'timetable.generate' by their branch principal/HOD."""
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return True
+    if current_manage_scope() == 'branch':
+        return True
+    return has_capability('timetable.generate')
+
+
+def restrict_grant_perms(new_perms, target_user):
+    """Drop capability grants the current user isn't allowed to set, preserving
+    the target's existing value so a non-privileged manager can't add/remove
+    them. Used wherever permissions are saved."""
+    from utils.branch_scope import is_central
+    central = is_admin() and is_central()
+    existing = dict(target_user.permission_map) if target_user else {}
+    out = dict(new_perms)
+    for key, who in RESTRICTED_GRANTS.items():
+        if who == 'central' and not central:
+            if key in existing:
+                out[key] = existing[key]
+            else:
+                out.pop(key, None)
+    return out
 
 
 def subsection_level(module, sub):
@@ -713,6 +780,36 @@ def central_admin_required(f):
             return redirect(url_for('main.dashboard'))
         return f(*args, **kwargs)
     return decorated_function
+
+
+def result_card_required(f):
+    """Gate an endpoint behind the 'generate result cards' capability."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('auth.login'))
+        if not can_generate_result_cards():
+            if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+                abort(403)
+            flash('You do not have permission to generate result cards.', 'error')
+            return redirect(url_for('main.dashboard'))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def timetable_generate_required(f):
+    """Gate an endpoint behind the 'generate timetable' capability."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('auth.login'))
+        if not can_generate_timetable():
+            if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+                abort(403)
+            flash('You do not have permission to generate the timetable.', 'error')
+            return redirect(url_for('main.dashboard'))
+        return f(*args, **kwargs)
+    return wrapper
 
 
 def class_access_required(f):

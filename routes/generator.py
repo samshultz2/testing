@@ -9,6 +9,7 @@ from models import (
     Subject
 )
 from utils.helpers import login_required
+from utils.access_control import timetable_generate_required
 from io import BytesIO
 from datetime import datetime
 import uuid
@@ -1219,6 +1220,7 @@ def generate_page():
 
 @generator_bp.route('/generate/run', methods=['POST'])
 @login_required
+@timetable_generate_required
 def run_generation():
     """Generate timetable using global scheduling approach"""
     level = get_current_level()
@@ -1286,6 +1288,7 @@ def run_generation():
 
 @generator_bp.route('/generate/ortools', methods=['POST'])
 @login_required
+@timetable_generate_required
 def run_ortools_generation():
     """Generate timetable using OR-Tools constraint programming solver (optimal)"""
     try:

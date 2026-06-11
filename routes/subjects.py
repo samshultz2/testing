@@ -10,7 +10,7 @@ from models import (
 )
 from utils.access_control import (
     login_required, can_access_class, can_enter_results,
-    filter_classes_for_user, is_admin
+    filter_classes_for_user, is_admin, result_card_required
 )
 
 subjects_bp = Blueprint('subjects', __name__, url_prefix='/subjects')
@@ -898,6 +898,7 @@ def comments():
 
 @subjects_bp.route('/report-card/<int:student_id>')
 @login_required
+@result_card_required
 def student_report_card(student_id):
     """View student report card"""
     student = db.get_or_404(Student, student_id)
@@ -929,6 +930,7 @@ def student_report_card(student_id):
 
 @subjects_bp.route('/report-card/<int:student_id>/pdf')
 @login_required
+@result_card_required
 def report_card_pdf(student_id):
     """Download the student's term report card as a PDF."""
     from flask import send_file
@@ -1557,6 +1559,7 @@ def scoresheet_save():
 
 @subjects_bp.route('/report-cards/print-all')
 @login_required
+@result_card_required
 def print_all_report_cards():
     """Print all report cards for a class"""
     term_id = request.args.get('term_id', type=int)

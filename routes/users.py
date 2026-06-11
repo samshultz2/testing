@@ -6,7 +6,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from utils.helpers import get_active_term
 from models import db, ClassArmAssignment, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
 from utils.access_control import (MODULES, manage_users_required, can_manage,
-                                  current_manage_scope, current_rank, get_current_user)
+                                  current_manage_scope, current_rank, get_current_user,
+                                  restrict_grant_perms, CAPABILITY_SUBSECTIONS)
 from utils.audit import log_action
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
@@ -91,7 +92,13 @@ def matrix():
         changed = 0
         for u in editable:
             before = (dict(u.permission_map), bool(u.view_only))
-            u.set_permissions(_read_perms(request.form, prefix=f'perm_{u.id}_'))
+            new_perms = _read_perms(request.form, prefix=f'perm_{u.id}_')
+            # The matrix grid doesn't manage capability sub-sections — keep any
+            # the user already has so a coarse save can't wipe them.
+            for ck in CAPABILITY_SUBSECTIONS:
+                if ck in u.permission_map:
+                    new_perms[ck] = u.permission_map[ck]
+            u.set_permissions(restrict_grant_perms(new_perms, u))
             u.view_only = request.form.get(f'view_{u.id}') == 'on'
             after = (dict(u.permission_map), bool(u.view_only))
             if after != before:
@@ -157,7 +164,7 @@ def add_user():
             user.must_change_password = request.form.get('require_pw_change') == 'on'
             # Fine-grained per-module access levels (admins always have full access).
             if role != 'admin':
-                user.set_permissions(_read_perms(request.form))
+                user.set_permissions(restrict_grant_perms(_read_perms(request.form), user))
             user.view_only = request.form.get('view_only') == 'on'
             user.section = request.form.get('section') or None
             user.stream = request.form.get('stream') or None
@@ -236,7 +243,7 @@ def edit_user(user_id):
         if user.role == 'admin':
             user.set_permissions({})
         else:
-            user.set_permissions(_read_perms(request.form))
+            user.set_permissions(restrict_grant_perms(_read_perms(request.form), user))
         user.view_only = request.form.get('view_only') == 'on'
         user.section = request.form.get('section') or None
         user.stream = request.form.get('stream') or None

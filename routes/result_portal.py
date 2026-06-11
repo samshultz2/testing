@@ -8,7 +8,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash)
 
 from models import db, ScratchCard, ResultCheckLog, Term, Student
-from utils.access_control import login_required
+from utils.access_control import login_required, result_card_required
 from utils.audit import log_action
 from utils.report_card import build_report_card
 
@@ -42,6 +42,7 @@ def index():
 
 @scratchcards_bp.route('/generate', methods=['POST'])
 @login_required
+@result_card_required
 def generate():
     try:
         count = max(1, min(int(request.form.get('count', 10)), 500))
@@ -99,6 +100,7 @@ def toggle(card_id):
 
 @scratchcards_bp.route('/publish/<int:term_id>', methods=['POST'])
 @login_required
+@result_card_required
 def publish(term_id):
     term = db.get_or_404(Term, term_id)
     term.results_published = not term.results_published
