@@ -563,6 +563,8 @@ def receipt(payment_id):
 def edit_payment(payment_id):
     """Correct a recorded payment (amount, date, method, reference, notes)."""
     payment = db.get_or_404(FeePayment, payment_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(payment.branch_id)
 
     if request.method == 'POST':
         amount = request.form.get('amount', type=float)
@@ -822,6 +824,8 @@ def add_expense():
 @login_required
 def edit_expense(expense_id):
     e = db.get_or_404(Expense, expense_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(e.branch_id)
     amount = request.form.get('amount', type=float)
     description = (request.form.get('description') or '').strip()
     if not (description and amount and amount > 0):

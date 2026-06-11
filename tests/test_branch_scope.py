@@ -67,6 +67,14 @@ def test_branch_user_blocked_from_other_branch_student(app):
     assert ok.status_code == 200            # own branch is fine
 
 
+def test_branch_user_cannot_edit_other_branch_student(app):
+    """IDOR guard: editing another branch's student by id is forbidden."""
+    a_id, b_id, s_a, s_b = _setup(app)
+    client = _login(app, 'branchscope')
+    assert client.get(f'/students/{s_a}/edit').status_code == 403   # other branch
+    assert client.get(f'/students/{s_b}/edit').status_code != 403   # own branch ok
+
+
 def test_central_admin_sees_all_and_can_filter(app):
     a_id, b_id, s_a, s_b = _setup(app)
     client = _legacy_admin(app)

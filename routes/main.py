@@ -859,6 +859,8 @@ def view_student(student_id):
 def edit_student(student_id):
     """Edit student details"""
     student = db.get_or_404(Student, student_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(student.branch_id)
 
     if request.method == 'POST':
         try:

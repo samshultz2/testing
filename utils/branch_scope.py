@@ -92,6 +92,17 @@ def can_access_branch(branch_id):
     return branch_id == session.get(BRANCH_KEY)
 
 
+def require_branch_access(branch_id):
+    """Abort 403 if the current user may not touch a record in ``branch_id``.
+
+    Guards object-level routes (edit/delete by id) against cross-branch IDOR —
+    a branch user changing the id in the URL to reach another branch's record.
+    """
+    if not can_access_branch(branch_id):
+        from flask import abort
+        abort(403)
+
+
 def branch_for_new(form_branch_id=None):
     """The branch a newly-created record should belong to.
 

@@ -152,6 +152,8 @@ def staff_detail(staff_id):
 @login_required
 def edit_staff(staff_id):
     s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)
     if request.method == 'POST':
         _read_staff_form(s)
         db.session.commit()

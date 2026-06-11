@@ -950,15 +950,23 @@ def login():
     if session.get(PORTAL_KEY):
         return redirect(url_for('cbt_portal.home'))
     if request.method == 'POST':
+        from utils.security import login_limiter
+        rkey = f"cbt_login:{request.remote_addr or 'unknown'}"
+        if login_limiter.is_rate_limited(rkey, max_attempts=15, window_minutes=15):
+            wait = login_limiter.get_remaining_time(rkey, 15) // 60 + 1
+            flash(f'Too many attempts. Try again in about {wait} minute(s).', 'error')
+            return render_template('cbt/portal_login.html')
         student_id = (request.form.get('student_id') or '').strip()
         password = request.form.get('password') or ''
         student = Student.query.filter_by(student_id=student_id, is_active=True).first()
         if student and student.check_portal_password(password):
+            login_limiter.clear_attempts(rkey)
             session[PORTAL_KEY] = student.id
             ev_id = _record_login_event(student, event='login')
             if ev_id:
                 session['cbt_login_event'] = ev_id
             return redirect(url_for('cbt_portal.home'))
+        login_limiter.record_attempt(rkey)
         flash('Invalid student ID or password.', 'error')
     return render_template('cbt/portal_login.html')
 
