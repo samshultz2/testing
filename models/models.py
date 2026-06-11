@@ -6,8 +6,28 @@ import os
 from datetime import datetime, date
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.types import TypeDecorator, Text
 
 db = SQLAlchemy()
+
+
+class EncryptedString(TypeDecorator):
+    """A text column transparently AES-256-GCM encrypted at rest.
+
+    Crypto helpers are imported lazily to avoid a circular import at model load
+    time (the utils package imports models). When FIELD_ENCRYPTION_KEY is unset
+    the helpers pass values through unchanged.
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        from utils.crypto import encrypt
+        return encrypt(value)
+
+    def process_result_value(self, value, dialect):
+        from utils.crypto import decrypt
+        return decrypt(value)
 
 
 def local_now():
@@ -56,10 +76,11 @@ class Student(db.Model):
     graduation_date = db.Column(db.Date)
     graduation_session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
 
-    # CBT / student portal login password (plaintext kept so it can be
-    # re-printed/exported by class — these are low-sensitivity exam passwords).
+    # CBT / student portal login password. The hash is for verification; the
+    # recoverable copy (so staff can re-print/export class passwords) is stored
+    # AES-256-GCM-encrypted at rest when FIELD_ENCRYPTION_KEY is configured.
     portal_password_hash = db.Column(db.String(256))
-    portal_password_plain = db.Column(db.String(60))
+    portal_password_plain = db.Column(EncryptedString())
 
     # Relationships
     parent_contacts = db.relationship('ParentContact', backref='student', lazy='dynamic', cascade='all, delete-orphan')
@@ -1249,7 +1270,7 @@ def _ensure_student_exam_columns():
     # students.portal_password_plain (export student portal passwords later).
     try:
         if 'portal_password_plain' not in existing:
-            statements.append('ALTER TABLE students ADD COLUMN portal_password_plain VARCHAR(60)')
+            statements.append('ALTER TABLE students ADD COLUMN portal_password_plain TEXT')
     except Exception:
         pass
 

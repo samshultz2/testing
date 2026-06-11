@@ -92,6 +92,14 @@ class Config:
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
     LOG_FILE = os.environ.get('LOG_FILE', '')  # empty => stderr only
 
+    # Field-level encryption at rest (AES-256-GCM). When set, sensitive
+    # recoverable fields (e.g. student portal passwords) are encrypted in the
+    # database. Generate a key with:
+    #   python -c "import base64,os; print(base64.b64encode(os.urandom(32)).decode())"
+    # Losing the key makes those fields unrecoverable (portal passwords can be
+    # regenerated, so the blast radius is small). Empty => feature disabled.
+    FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', '')
+
     # Application settings
     APP_NAME = "PosyHub Student Manager"
     # Legacy shared-password login (kept for backwards compatibility). Set

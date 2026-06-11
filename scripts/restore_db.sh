@@ -9,8 +9,9 @@ cd "$REPO_ROOT"
 DUMP="${1:?Usage: bash scripts/restore_db.sh <dump.sql>}"
 [ -f "$DUMP" ] || { echo "Dump not found: $DUMP" >&2; exit 1; }
 
-if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
-  DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2-)"
+if [ -f .env ]; then
+  [ -z "${DATABASE_URL:-}" ] && DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2-)"
+  [ -z "${BACKUP_ENCRYPTION_KEY:-}" ] && BACKUP_ENCRYPTION_KEY="$(grep -E '^BACKUP_ENCRYPTION_KEY=' .env | tail -1 | cut -d= -f2-)"
 fi
 : "${DATABASE_URL:?Set DATABASE_URL (or put it in .env)}"
 
@@ -24,5 +25,13 @@ read -r -p "This will DROP and recreate database '$DB_NAME'. Type the db name to
 su postgres -c "psql -c \"DROP DATABASE IF EXISTS ${DB_NAME};\""
 su postgres -c "psql -c \"CREATE DATABASE ${DB_NAME} OWNER ${DB_OWNER};\""
 LIBPQ_URL="$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgresql\+[a-z0-9]+://#postgresql://#')"
-psql "$LIBPQ_URL" -f "$DUMP"
+
+case "$DUMP" in
+  *.enc)
+    : "${BACKUP_ENCRYPTION_KEY:?Encrypted dump needs BACKUP_ENCRYPTION_KEY}"
+    openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:${BACKUP_ENCRYPTION_KEY}" -in "$DUMP" \
+      | psql "$LIBPQ_URL" ;;
+  *)
+    psql "$LIBPQ_URL" -f "$DUMP" ;;
+esac
 echo "Restore complete from: $DUMP"
