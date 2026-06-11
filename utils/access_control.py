@@ -606,7 +606,15 @@ def current_manage_scope():
     if is_admin() and is_central():
         return 'central'
     user = get_current_user()
-    return (user.manage_scope or 'none') if user else 'none'
+    if not user:
+        return 'none'
+    ms = user.manage_scope or 'none'
+    # A branch-scoped user must never manage centrally, even if their stored
+    # manage_scope says 'central' (stale data or misconfig). Otherwise they
+    # could edit accounts in other branches. Clamp them to their own branch.
+    if ms == 'central' and not user.is_central:
+        ms = 'branch'
+    return ms
 
 
 def current_rank():
