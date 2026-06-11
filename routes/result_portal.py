@@ -9,6 +9,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 
 from models import db, ScratchCard, ResultCheckLog, Term, Student
 from utils.access_control import login_required, result_card_required
+from utils.security import login_limiter
 from utils.audit import log_action
 from utils.report_card import build_report_card
 
@@ -151,6 +152,16 @@ def check():
     ctx = {'published_terms': published_terms}
 
     if request.method == 'POST':
+        # Throttle PIN/Student-ID guessing by client IP. A successful check
+        # clears the counter, so genuine parents checking several children are
+        # unaffected while brute-forcing is shut down.
+        rkey = f"result_check:{request.remote_addr or 'unknown'}"
+        if login_limiter.is_rate_limited(rkey, max_attempts=20, window_minutes=15):
+            wait = login_limiter.get_remaining_time(rkey, 15) // 60 + 1
+            flash(f'Too many attempts. Please try again in about {wait} minute(s).', 'error')
+            return render_template('scratchcards/check.html', **ctx)
+        login_limiter.record_attempt(rkey)
+
         student_id = (request.form.get('student_id') or '').strip()
         pin = (request.form.get('pin') or '').strip()
         term_id = request.form.get('term_id', type=int)
@@ -194,6 +205,7 @@ def check():
 
         # Consume a use only on a successful lookup.
         card.used_count = (card.used_count or 0) + 1
+        login_limiter.clear_attempts(rkey)
         _log_check(card, student, term, True, f'viewed; {card.uses_left} left')
 
         return render_template('scratchcards/result.html', student=student,

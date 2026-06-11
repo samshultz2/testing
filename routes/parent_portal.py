@@ -7,6 +7,7 @@ from utils.finance import student_bill, next_receipt_no
 from utils.report_card import build_report_card, _attendance_pct
 from utils.helpers import get_active_term
 from utils import payments
+from utils.security import login_limiter
 
 parent_bp = Blueprint('parent', __name__, url_prefix='/parent')
 PKEY = 'parent_student_id'      # the child currently being viewed
@@ -58,14 +59,22 @@ def login():
     if session.get(PKEY):
         return redirect(url_for('parent.home'))
     if request.method == 'POST':
+        # Throttle credential guessing by client IP.
+        rkey = f"parent_login:{request.remote_addr or 'unknown'}"
+        if login_limiter.is_rate_limited(rkey, max_attempts=10, window_minutes=15):
+            wait = login_limiter.get_remaining_time(rkey, 15) // 60 + 1
+            flash(f'Too many attempts. Please try again in about {wait} minute(s).', 'error')
+            return redirect(url_for('parent.login'))
         sid = (request.form.get('student_id') or '').strip()
         pw = request.form.get('password') or ''
         student = Student.query.filter_by(student_id=sid).first()
         if student and student.is_active and student.check_portal_password(pw):
+            login_limiter.clear_attempts(rkey)
             session[PKEY] = student.id
             session[AUTHKEY] = student.id
             session.permanent = True
             return redirect(url_for('parent.home'))
+        login_limiter.record_attempt(rkey)
         flash('Invalid Student ID or password.', 'error')
         return redirect(url_for('parent.login'))
     return render_template('parent/login.html')
