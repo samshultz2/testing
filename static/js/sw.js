@@ -5,9 +5,13 @@
      have already visited stay viewable with no connection.
    Note: cached pages live on the device; suitable for a single-user, phone-
    hosted install. Mutations (POST/etc.) always require the network. */
-const STATIC_CACHE = 'posyhub-static-v6';
-const RUNTIME_CACHE = 'posyhub-runtime-v6';
-const CDN_CACHE = 'posyhub-cdn-v6';
+// Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
+// pick them up promptly. Static assets also use stale-while-revalidate below,
+// so they self-heal on the next load even without a bump.
+const CACHE_VERSION = 'v7';
+const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
+const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
 const OFFLINE_URL = '/static/offline.html';
 // Third-party libraries loaded from CDNs — cached so the app stays fast and works
 // under poor/no network instead of re-downloading them on every page load.
@@ -67,14 +71,20 @@ self.addEventListener('fetch', (e) => {
 
   if (url.origin !== self.location.origin) return;     // only same-origin beyond this
 
-  // Static assets: cache-first.
+  // Static assets: stale-while-revalidate. Serve the cached copy instantly for
+  // speed, but always fetch a fresh copy in the background and update the cache,
+  // so replaced icons/CSS/JS appear on the next load without a manual clear.
   if (url.pathname.startsWith('/static/')) {
     e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(STATIC_CACHE).then((c) => c.put(req, copy));
-        return res;
-      }).catch(() => hit))
+      caches.open(STATIC_CACHE).then((cache) =>
+        cache.match(req).then((hit) => {
+          const network = fetch(req).then((res) => {
+            if (res && res.status === 200) cache.put(req, res.clone());
+            return res;
+          }).catch(() => hit);
+          return hit || network;
+        })
+      )
     );
     return;
   }
