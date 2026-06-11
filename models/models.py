@@ -1409,7 +1409,12 @@ _INDEXES = [
     ('ix_expense_branch', 'expenses', 'branch_id'),
     ('ix_feediscount_term', 'fee_discounts', 'term_id'),
     ('ix_cbt_attempt_exam', 'cbt_attempts', 'exam_id'),
+    ('ix_cbt_attempt_student', 'cbt_attempts', 'student_id'),
+    ('ix_cbt_answer_attempt', 'cbt_answers', 'attempt_id'),      # autosave lookup
+    ('ix_cbt_violation_attempt', 'cbt_violations', 'attempt_id'),
     ('ix_cbt_login_exam', 'cbt_login_events', 'exam_id'),
+    ('ix_cbt_login_exam_created', 'cbt_login_events', 'exam_id, created_at'),
+    ('ix_cbt_device_exam', 'cbt_device_sessions', 'exam_id'),
     ('ix_audit_created', 'audit_logs', 'created_at'),
     ('ix_audit_action', 'audit_logs', 'action'),
     ('ix_mockresult_exam', 'mock_jamb_results', 'mock_exam_id'),
