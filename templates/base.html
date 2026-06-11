@@ -501,6 +501,11 @@
                             <i class="fas fa-database"></i><span>Backup</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.share_app') }}" class="nav-link {% if request.endpoint == 'main.share_app' %}active{% endif %}">
+                            <i class="fas fa-qrcode"></i><span>Share App</span>
+                        </a>
+                    </li>
                     {% endif %}
                 </ul>
             </nav>

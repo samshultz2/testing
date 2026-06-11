@@ -33,6 +33,9 @@ gunicorn==23.0.0
 # launcher). Cross-platform and easy to install on Termux.
 waitress>=3.0.0
 
+# QR code for the in-app "Share App" panel (pure Python, SVG output — no Pillow).
+qrcode>=7.4
+
 # AES-256-GCM field encryption at rest (utils/crypto.py). Only used when
 # FIELD_ENCRYPTION_KEY is configured.
 cryptography>=41.0.7

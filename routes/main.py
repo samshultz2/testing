@@ -1,6 +1,7 @@
 """
 Main routes for dashboard and general pages
 """
+import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from utils.helpers import get_active_term, get_active_session
 from datetime import date, timedelta
@@ -1157,6 +1158,32 @@ def bulk_purge_students():
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('main.students_trash'))
+
+
+@main_bp.route('/share')
+@login_required
+def share_app():
+    """A shareable panel: the app's current public URL + a QR code, so teachers
+    can scan and open the demo on their own phones (no shared Wi-Fi needed)."""
+    # Behind the Cloudflare tunnel (TRUST_PROXY/ProxyFix) this is the external
+    # https URL; locally it's the LAN address. Either way it's what visitors use.
+    url = request.url_root.rstrip('/') or request.host_url.rstrip('/')
+
+    qr_svg = None
+    try:
+        import io as _io
+        import qrcode
+        import qrcode.image.svg as _svg
+        buf = _io.BytesIO()
+        qrcode.make(url, image_factory=_svg.SvgPathImage, box_size=12, border=2).save(buf)
+        svg = buf.getvalue().decode('utf-8')
+        # Drop the fixed mm size so it scales to its container.
+        svg = re.sub(r'(<svg[^>]*?)\s+width="[^"]*"\s+height="[^"]*"', r'\1', svg, count=1)
+        qr_svg = svg
+    except Exception:
+        qr_svg = None  # library missing — page still shows the URL
+
+    return render_template('share.html', share_url=url, qr_svg=qr_svg)
 
 
 @main_bp.route('/search')
