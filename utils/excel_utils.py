@@ -260,7 +260,15 @@ def _normalise_gender(value):
     return None
 
 
-def import_students_from_excel(file_stream, db, Student, ParentContact, branch_id=None):
+def _dup_key(surname, first_name, dob):
+    """Identity key for duplicate detection: name (case-insensitive) + DOB."""
+    return ((surname or '').strip().lower(),
+            (first_name or '').strip().lower(),
+            dob)
+
+
+def import_students_from_excel(file_stream, db, Student, ParentContact,
+                               branch_id=None, skip_duplicates=True):
     """
     Import students from an Excel file.
 
@@ -310,7 +318,20 @@ def import_students_from_excel(file_stream, db, Student, ParentContact, branch_i
             return None
         return row[idx]
 
+    # Preload existing students' identity keys so re-running an import doesn't
+    # create duplicates. Scoped to the target branch. Keys added during this run
+    # are tracked too, so duplicate rows within the same file are also caught.
+    seen_keys = set()
+    if skip_duplicates:
+        q = Student.query
+        if branch_id is not None:
+            q = q.filter(Student.branch_id == branch_id)
+        for sn, fn, d in q.with_entities(
+                Student.surname, Student.first_name, Student.date_of_birth):
+            seen_keys.add(_dup_key(sn, fn, d))
+
     gender_defaulted = 0
+    duplicates_skipped = 0
 
     for row_num, row in enumerate(rows[1:], start=2):
         surname = _cell_str(get(row, 'surname'))
@@ -324,6 +345,17 @@ def import_students_from_excel(file_stream, db, Student, ParentContact, branch_i
         if not surname or not first_name:
             errors.append(f"Row {row_num}: missing Surname or First Name — skipped")
             continue
+
+        dob = _parse_dob(get(row, 'dob'), errors, row_num)
+
+        if skip_duplicates:
+            key = _dup_key(surname, first_name, dob)
+            if key in seen_keys:
+                duplicates_skipped += 1
+                errors.append(
+                    f"Row {row_num}: {surname} {first_name} already exists — skipped")
+                continue
+            seen_keys.add(key)
 
         gender = _normalise_gender(get(row, 'gender'))
         defaulted = gender is None
@@ -340,7 +372,7 @@ def import_students_from_excel(file_stream, db, Student, ParentContact, branch_i
                     first_name=first_name,
                     middle_name=_cell_str(get(row, 'middle_name')),
                     gender=gender,
-                    date_of_birth=_parse_dob(get(row, 'dob'), errors, row_num),
+                    date_of_birth=dob,
                     religion=_cell_str(get(row, 'religion')),
                     home_address=_cell_str(get(row, 'address')),
                     hobbies=_cell_str(get(row, 'hobbies')),
@@ -372,6 +404,9 @@ def import_students_from_excel(file_stream, db, Student, ParentContact, branch_i
     if success_count > 0:
         db.session.commit()
 
+    if duplicates_skipped:
+        errors.insert(0, f"{duplicates_skipped} row(s) skipped as duplicates "
+                         "(same name + date of birth already on record).")
     if gender_defaulted:
         errors.insert(0, f"{gender_defaulted} student(s) had no Gender column/value "
                          "and were set to 'Unknown' — edit them to set Male/Female.")

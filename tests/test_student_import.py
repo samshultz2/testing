@@ -62,6 +62,26 @@ def test_missing_required_headers_rejected(app):
         assert n == 0 and any('Surname' in m for m in msgs)
 
 
+def test_duplicate_guard_skips_reimport(app):
+    """Re-importing the same sheet adds nobody the second time."""
+    sheet_rows = [
+        ['Surname', 'First Name', 'Date of Birth'],
+        ['Dupe', 'Tester', '2011-01-02'],
+    ]
+    with app.app_context():
+        n1, _ = import_students_from_excel(_xlsx(sheet_rows), db, Student, ParentContact)
+        assert n1 == 1
+        n2, msgs = import_students_from_excel(_xlsx(sheet_rows), db, Student, ParentContact)
+        assert n2 == 0
+        assert any('duplicate' in m.lower() for m in msgs)
+        # in-file duplicate (same row twice) is also caught
+        n3, _ = import_students_from_excel(
+            _xlsx(sheet_rows[:1] + [sheet_rows[1], sheet_rows[1]]),
+            db, Student, ParentContact)
+        assert n3 == 0
+        db.session.rollback()
+
+
 def test_generated_template_imports_without_junk(app):
     """The downloadable template's EXAMPLE row must not create a student."""
     with app.app_context():
