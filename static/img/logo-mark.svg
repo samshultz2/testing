@@ -1,10 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs>
-<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0" stop-color="#20a06b"/>
-<stop offset="1" stop-color="#0a5236"/>
-</linearGradient>
-</defs>
-<rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
-<g transform="translate(256,256) scale(1.0) translate(-256,-256)"><polygon points="116,228 256,166 396,228 256,290" fill="#ffffff"/><polygon points="256,290 116,228 256,256 396,228" fill="#ffffff" opacity="0.0"/><path d="M200,248 L312,248 L300,312 Q256,336 212,312 Z" fill="#ffffff" opacity="0.92"/><circle cx="256" cy="231" r="11" fill="#ffffff"/><path d="M256,231 Q372,236 372,250 L372,300" fill="none" stroke="#ffd34d" stroke-width="9" stroke-linecap="round"/><circle cx="372" cy="312" r="13" fill="#ffd34d"/></g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PosyHub">
+  <defs>
+    <linearGradient id="pm-badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset=".55" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <radialGradient id="pm-petal" cx="50%" cy="34%" r="68%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cdeede"/>
+    </radialGradient>
+    <radialGradient id="pm-hub" cx="40%" cy="36%" r="72%">
+      <stop offset="0" stop-color="#fff7d6"/>
+      <stop offset=".5" stop-color="#fcd34d"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </radialGradient>
+    <radialGradient id="pm-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".30"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pm-gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- badge -->
+  <rect x="16" y="16" width="480" height="480" rx="118" fill="url(#pm-badge)"/>
+  <ellipse cx="256" cy="150" rx="210" ry="116" fill="url(#pm-gloss)"/>
+  <circle cx="256" cy="256" r="172" fill="url(#pm-glow)"/>
+
+  <!-- accent buds (posy petals + network nodes) -->
+  <g fill="#fb7185">
+    <circle cx="325" cy="136" r="11"/>
+    <circle cx="394" cy="256" r="11"/>
+    <circle cx="325" cy="376" r="11"/>
+    <circle cx="187" cy="376" r="11"/>
+    <circle cx="118" cy="256" r="11"/>
+    <circle cx="187" cy="136" r="11"/>
+  </g>
+
+  <!-- six-petal bloom -->
+  <g fill="url(#pm-petal)">
+    <path d="M256 104 C306 158 308 214 256 256 C204 214 206 158 256 104 Z" transform="rotate(0 256 256)"/>
+    <path d="M256 104 C306 158 308 214 256 256 C204 214 206 158 256 104 Z" transform="rotate(60 256 256)"/>
+    <path d="M256 104 C306 158 308 214 256 256 C204 214 206 158 256 104 Z" transform="rotate(120 256 256)"/>
+    <path d="M256 104 C306 158 308 214 256 256 C204 214 206 158 256 104 Z" transform="rotate(180 256 256)"/>
+    <path d="M256 104 C306 158 308 214 256 256 C204 214 206 158 256 104 Z" transform="rotate(240 256 256)"/>
+    <path d="M256 104 C306 158 308 214 256 256 C204 214 206 158 256 104 Z" transform="rotate(300 256 256)"/>
+  </g>
+
+  <!-- golden hub -->
+  <circle cx="256" cy="256" r="42" fill="url(#pm-hub)"/>
+  <circle cx="243" cy="243" r="11" fill="#ffffff" opacity=".75"/>
 </svg>
