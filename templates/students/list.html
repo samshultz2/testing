@@ -550,6 +550,7 @@
                 {% for sub in subject_options %}<option value="{{ sub }}">{{ sub }}</option>{% endfor %}
             </select>
             <button type="button" id="applyBulkSubject" class="btn btn-primary btn-sm" title="SSS3 students only"><i class="fas fa-plus"></i> Add (SSS3)</button>
+            <button type="button" id="applyBulkDelete" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Delete selected</button>
         </div>
     </div>
     
@@ -801,6 +802,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(err => console.error('Bulk subject error:', err))
                 .finally(() => { applyBulkSubjectBtn.disabled = false; });
+        });
+    }
+
+    // Bulk delete (soft delete) selected students
+    const applyBulkDeleteBtn = document.getElementById('applyBulkDelete');
+    if (applyBulkDeleteBtn) {
+        applyBulkDeleteBtn.addEventListener('click', function () {
+            const ids = Array.from(window.selectedStudents);
+            if (!ids.length) { alert('Select at least one student.'); return; }
+            if (!confirm(`Delete ${ids.length} selected student(s)? They will be moved to the trash, where you can restore or permanently remove them.`)) return;
+
+            const body = new URLSearchParams();
+            ids.forEach(id => body.append('student_ids', id));
+
+            applyBulkDeleteBtn.disabled = true;
+            fetch("{{ url_for('main.bulk_delete_students') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
+            })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.error) { alert(d.error); return; }
+                    window.selectedStudents.clear();
+                    document.getElementById('selectAll').checked = false;
+                    fetchStudents();
+                })
+                .catch(err => console.error('Bulk delete error:', err))
+                .finally(() => { applyBulkDeleteBtn.disabled = false; });
         });
     }
 

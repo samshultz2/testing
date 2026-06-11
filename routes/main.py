@@ -1046,6 +1046,37 @@ def apply_stream_waec():
     return redirect(request.referrer or url_for('main.students_list'))
 
 
+def _int_ids(raw_ids):
+    """Coerce a list of form values to a clean list of ints (drops bad values)."""
+    out = []
+    for i in raw_ids:
+        try:
+            out.append(int(i))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+@main_bp.route('/students/bulk-delete', methods=['POST'])
+@admin_required
+def bulk_delete_students():
+    """Soft-delete several students at once (sends them to the trash)."""
+    student_ids = request.form.getlist('student_ids')
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+
+    deleted = Student.query.filter(
+        Student.id.in_(ids), Student.is_active == True
+    ).update({Student.is_active: False}, synchronize_session=False)
+    db.session.commit()
+    log_action('bulk_delete_students', f'{deleted} students soft-deleted')
+    return jsonify({'deleted': deleted})
+
+
 @main_bp.route('/students/trash')
 @admin_required
 def students_trash():
@@ -1080,6 +1111,48 @@ def purge_student(student_id):
         db.session.commit()
         log_action('purge_student', f'{name} ({sid})')
         flash(f'{name} permanently deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('main.students_trash'))
+
+
+@main_bp.route('/students/bulk-restore', methods=['POST'])
+@admin_required
+def bulk_restore_students():
+    """Restore several soft-deleted students at once."""
+    ids = _int_ids(request.form.getlist('student_ids'))
+    if not ids:
+        flash('No students selected.', 'error')
+        return redirect(url_for('main.students_trash'))
+    restored = Student.query.filter(
+        Student.id.in_(ids), Student.is_active == False
+    ).update({Student.is_active: True}, synchronize_session=False)
+    db.session.commit()
+    log_action('bulk_restore_students', f'{restored} students restored')
+    flash(f'{restored} student(s) restored.', 'success')
+    return redirect(url_for('main.students_trash'))
+
+
+@main_bp.route('/students/bulk-purge', methods=['POST'])
+@admin_required
+def bulk_purge_students():
+    """Permanently delete several soft-deleted students at once."""
+    ids = _int_ids(request.form.getlist('student_ids'))
+    if not ids:
+        flash('No students selected.', 'error')
+        return redirect(url_for('main.students_trash'))
+    students = Student.query.filter(
+        Student.id.in_(ids), Student.is_active == False
+    ).all()
+    purged = 0
+    try:
+        for student in students:
+            db.session.delete(student)
+            purged += 1
+        db.session.commit()
+        log_action('bulk_purge_students', f'{purged} students permanently deleted')
+        flash(f'{purged} student(s) permanently deleted.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
