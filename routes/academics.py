@@ -658,14 +658,26 @@ def view_assignment(assignment_id):
     """View class arm assignment and enrolled students"""
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     enrollments = assignment.enrollments.filter_by(is_active=True).all()
-    
-    # Get students not enrolled in this assignment
-    enrolled_ids = [e.student_id for e in enrollments]
-    available_students = Student.query.filter(
+
+    # Available = active students NOT already actively enrolled in ANY class
+    # for this term. A student must be removed from their current class before
+    # they can be reassigned, so they only reappear here once freed up.
+    active_elsewhere = (
+        db.session.query(StudentEnrollment.student_id)
+        .join(ClassArmAssignment,
+              StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .filter(StudentEnrollment.is_active == True,
+                ClassArmAssignment.term_id == assignment.term_id)
+    )
+    q = Student.query.filter(
         Student.is_active == True,
-        ~Student.id.in_(enrolled_ids) if enrolled_ids else True
-    ).order_by(Student.surname).all()
-    
+        ~Student.id.in_(active_elsewhere.scalar_subquery()),
+    )
+    # Keep the list to this class's branch when the assignment is branch-bound.
+    if assignment.branch_id is not None:
+        q = q.filter(Student.branch_id == assignment.branch_id)
+    available_students = q.order_by(Student.surname, Student.first_name).all()
+
     return render_template('academics/view_assignment.html',
         assignment=assignment,
         enrollments=enrollments,
@@ -680,28 +692,46 @@ def enroll_student(assignment_id):
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     
     try:
-        student_ids = request.form.getlist('student_ids[]')
-        
-        for student_id in student_ids:
-            # Check if already enrolled
+        # Accept both "student_ids[]" and "student_ids" field names.
+        student_ids = (request.form.getlist('student_ids[]')
+                       or request.form.getlist('student_ids'))
+
+        added = 0          # brand-new enrollments
+        reactivated = 0    # previously-removed enrollments brought back
+        for raw in student_ids:
+            try:
+                sid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            # A soft-removed enrollment leaves a row (unique student+assignment),
+            # so re-enrolling must REACTIVATE it rather than insert a duplicate.
             existing = StudentEnrollment.query.filter_by(
-                student_id=int(student_id),
+                student_id=sid,
                 class_arm_assignment_id=assignment_id
             ).first()
-            
-            if not existing:
-                enrollment = StudentEnrollment(
-                    student_id=int(student_id),
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    reactivated += 1
+                # already active -> nothing to do
+            else:
+                db.session.add(StudentEnrollment(
+                    student_id=sid,
                     class_arm_assignment_id=assignment_id
-                )
-                db.session.add(enrollment)
-        
+                ))
+                added += 1
+
         db.session.commit()
-        flash(f'{len(student_ids)} student(s) enrolled successfully!', 'success')
+        total = added + reactivated
+        if total:
+            flash(f'{total} student(s) enrolled.', 'success')
+        else:
+            flash('No new students to enroll — the selected students were '
+                  'already in this class.', 'info')
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
-    
+
     return redirect(url_for('academics.view_assignment', assignment_id=assignment_id))
 
 

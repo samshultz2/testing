@@ -31,22 +31,115 @@
 </div>
 
 <div class="card">
-    <div class="card-header"><h3>Add Students</h3></div>
+    <div class="card-header">
+        <h3>Add Students</h3>
+        <span class="text-muted" style="font-size:0.8rem;">Only students not currently in a class for this term are shown.</span>
+    </div>
     <div class="card-body">
         {% if available_students %}
-        <form method="POST" action="{{ url_for('academics.enroll_student', assignment_id=assignment.id) }}">
-            <div class="form-group">
-                <label class="form-label">Select Students</label>
-                <select name="student_ids[]" class="form-control" multiple size="8">
-                    {% for s in available_students %}<option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>{% endfor %}
-                </select>
-                <span class="form-hint">Hold Ctrl/Cmd to select multiple</span>
+        <form method="POST" action="{{ url_for('academics.enroll_student', assignment_id=assignment.id) }}" id="enroll-form">
+            <div class="enroll-toolbar">
+                <div class="enroll-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="student-search" class="form-control" placeholder="Search name or ID…" autocomplete="off">
+                </div>
+                <div class="enroll-toolbar-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="select-all-btn"><i class="fas fa-check-double"></i> Select all</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="clear-btn"><i class="fas fa-eraser"></i> Clear</button>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Enroll</button>
+
+            <div class="student-picker" id="student-picker">
+                {% for s in available_students %}
+                <label class="student-option" data-search="{{ (s.full_name ~ ' ' ~ s.student_id)|lower }}">
+                    <input type="checkbox" name="student_ids[]" value="{{ s.id }}">
+                    <span class="student-option-body">
+                        <span class="student-option-name">{{ s.full_name }}</span>
+                        <span class="badge badge-light">{{ s.student_id }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+                <p class="text-muted text-center" id="no-results" style="display:none; padding:1rem;">No students match your search.</p>
+            </div>
+
+            <div class="enroll-footer">
+                <span class="text-muted" id="selected-count">0 selected</span>
+                <button type="submit" class="btn btn-primary" id="enroll-btn" disabled><i class="fas fa-plus"></i> Enroll selected</button>
+            </div>
         </form>
         {% else %}
-        <p class="text-muted">All students are enrolled</p>
+        <div class="empty-state"><p>Every active student is already assigned to a class this term. Remove a student from their class to reassign them.</p></div>
         {% endif %}
     </div>
 </div>
+
+<style>
+.enroll-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:.75rem;}
+.enroll-search{position:relative;flex:1 1 220px;}
+.enroll-search i{position:absolute;left:.6rem;top:50%;transform:translateY(-50%);color:var(--text-muted,#888);font-size:.8rem;}
+.enroll-search input{padding-left:1.9rem;}
+.enroll-toolbar-actions{display:flex;gap:.4rem;}
+.student-picker{max-height:340px;overflow-y:auto;border:1px solid var(--border-color,#e3e3e3);border-radius:8px;}
+.student-option{display:flex;align-items:center;gap:.7rem;padding:.6rem .8rem;border-bottom:1px solid var(--border-color,#f0f0f0);cursor:pointer;margin:0;user-select:none;}
+.student-option:last-of-type{border-bottom:none;}
+.student-option:hover{background:var(--hover-bg,#f6f8fa);}
+.student-option input{width:18px;height:18px;flex:0 0 auto;cursor:pointer;}
+.student-option-body{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex:1;}
+.student-option-name{font-weight:500;}
+.student-option.checked{background:var(--primary-light,#eef4ff);}
+.enroll-footer{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-top:.85rem;}
+.badge-light{background:var(--badge-light-bg,#eef1f5);color:var(--text,#444);}
+</style>
+
+<script>
+(function(){
+  var form = document.getElementById('enroll-form');
+  if(!form) return;
+  var picker = document.getElementById('student-picker');
+  var search = document.getElementById('student-search');
+  var countEl = document.getElementById('selected-count');
+  var enrollBtn = document.getElementById('enroll-btn');
+  var noResults = document.getElementById('no-results');
+  var options = Array.prototype.slice.call(picker.querySelectorAll('.student-option'));
+
+  function refresh(){
+    var n = 0;
+    options.forEach(function(opt){
+      var cb = opt.querySelector('input');
+      if(cb.checked){ n++; opt.classList.add('checked'); }
+      else { opt.classList.remove('checked'); }
+    });
+    countEl.textContent = n + ' selected';
+    enrollBtn.disabled = (n === 0);
+  }
+
+  function visibleOptions(){
+    return options.filter(function(o){ return o.style.display !== 'none'; });
+  }
+
+  picker.addEventListener('change', refresh);
+
+  search.addEventListener('input', function(){
+    var q = this.value.trim().toLowerCase();
+    var shown = 0;
+    options.forEach(function(opt){
+      var match = !q || opt.getAttribute('data-search').indexOf(q) !== -1;
+      opt.style.display = match ? '' : 'none';
+      if(match) shown++;
+    });
+    noResults.style.display = shown ? 'none' : 'block';
+  });
+
+  document.getElementById('select-all-btn').addEventListener('click', function(){
+    visibleOptions().forEach(function(o){ o.querySelector('input').checked = true; });
+    refresh();
+  });
+  document.getElementById('clear-btn').addEventListener('click', function(){
+    options.forEach(function(o){ o.querySelector('input').checked = false; });
+    refresh();
+  });
+
+  refresh();
+})();
+</script>
 {% endblock %}
