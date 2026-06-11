@@ -687,24 +687,21 @@ def students_list():
                    Student.waec_subjects.ilike(f'%, {subject}, %'),
                    Student.waec_subjects.ilike(f'%, {subject}')))
 
-    # Apply class/arm filter - need to join with enrollments (only if admin since teacher already filtered)
-    if (class_id or arm_id) and is_admin():
+    # Apply class/arm filter for ANY user (not just admins). A subquery keeps it
+    # independent of the teacher-scoping / subject joins above, so it composes
+    # cleanly and also narrows a teacher's list within their own classes.
+    if class_id or arm_id:
+        enr_q = (db.session.query(StudentEnrollment.student_id)
+                 .join(ClassArmAssignment,
+                       StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                 .filter(StudentEnrollment.is_active == True))
         if active_term:
-            # Join with enrollments for current term
-            query = query.join(
-                StudentEnrollment,
-                Student.id == StudentEnrollment.student_id
-            ).join(
-                ClassArmAssignment,
-                StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id
-            ).filter(
-                ClassArmAssignment.term_id == active_term.id
-            )
-            
-            if class_id:
-                query = query.filter(ClassArmAssignment.class_id == class_id)
-            if arm_id:
-                query = query.filter(ClassArmAssignment.arm_id == arm_id)
+            enr_q = enr_q.filter(ClassArmAssignment.term_id == active_term.id)
+        if class_id:
+            enr_q = enr_q.filter(ClassArmAssignment.class_id == class_id)
+        if arm_id:
+            enr_q = enr_q.filter(ClassArmAssignment.arm_id == arm_id)
+        query = query.filter(Student.id.in_(enr_q))
 
     # Apply sorting
     sort_column = getattr(Student, sort_by, Student.surname)
