@@ -115,9 +115,11 @@ def waec_list():
         else:
             subjects_by_grade.sort(key=lambda x: x['a1_count'], reverse=True)
         
-        base_query = db.session.query(Student).join(WAECResult).filter(
-            WAECResult.exam_year == exam_year
-        )
+        from utils.branch_scope import scope_query
+        base_query = scope_query(
+            db.session.query(Student).join(WAECResult).filter(
+                WAECResult.exam_year == exam_year),
+            Student)
 
         if search:
             term = f"%{search}%"
@@ -1678,9 +1680,10 @@ def export_waec():
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.waec_list'))
     
-    students_with_results = db.session.query(Student).join(WAECResult).filter(
-        WAECResult.exam_year == year
-    ).distinct().order_by(Student.surname).all()
+    from utils.branch_scope import scope_query
+    students_with_results = scope_query(
+        db.session.query(Student).join(WAECResult).filter(WAECResult.exam_year == year),
+        Student).distinct().order_by(Student.surname).all()
     
     wb = Workbook()
     ws = wb.active

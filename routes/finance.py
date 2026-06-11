@@ -182,8 +182,10 @@ def _term_fee_summary(term_id):
     summary['expected'] = expected
     summary['enrolled'] = len(placement)
 
-    summary['discounts'] = (db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
-                            .filter(FeeDiscount.term_id == term_id).scalar()) or 0.0
+    from utils.branch_scope import scope_by_student
+    summary['discounts'] = (scope_by_student(
+        db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
+        .filter(FeeDiscount.term_id == term_id), FeeDiscount).scalar()) or 0.0
 
     payments = scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment).all()
     collected = 0.0
