@@ -267,10 +267,45 @@ def _dup_key(surname, first_name, dob):
             dob)
 
 
+def _rows_from_xlsx(file_stream):
+    wb = load_workbook(file_stream, data_only=True)
+    return list(wb.active.iter_rows(values_only=True))
+
+
+def _rows_from_csv(file_stream):
+    import csv
+    data = file_stream.read()
+    if isinstance(data, bytes):
+        data = data.decode('utf-8-sig', errors='replace')   # tolerate a BOM
+    return [tuple(r) for r in csv.reader(io.StringIO(data))]
+
+
 def import_students_from_excel(file_stream, db, Student, ParentContact,
-                               branch_id=None, skip_duplicates=True):
+                               branch_id=None, skip_duplicates=True,
+                               class_arm_assignment_id=None):
+    """Import students from an .xlsx stream (thin wrapper over import_student_rows)."""
+    return import_student_rows(_rows_from_xlsx(file_stream), db, Student, ParentContact,
+                               branch_id=branch_id, skip_duplicates=skip_duplicates,
+                               class_arm_assignment_id=class_arm_assignment_id)
+
+
+def import_students_from_upload(file_storage, db, Student, ParentContact, **kwargs):
+    """Import from an uploaded .xlsx/.xls/.csv file (auto-detected by name)."""
+    name = (getattr(file_storage, 'filename', '') or '').lower()
+    if name.endswith('.csv'):
+        rows = _rows_from_csv(file_storage.stream)
+    elif name.endswith(('.xlsx', '.xls')):
+        rows = _rows_from_xlsx(file_storage.stream)
+    else:
+        return 0, ['Unsupported file type — please upload a .xlsx or .csv file.']
+    return import_student_rows(rows, db, Student, ParentContact, **kwargs)
+
+
+def import_student_rows(rows, db, Student, ParentContact,
+                        branch_id=None, skip_duplicates=True,
+                        class_arm_assignment_id=None):
     """
-    Import students from an Excel file.
+    Import students from a list of rows (header row + data rows).
 
     Columns are matched by **header name** (row 1), in any order, so a register
     typed as Surname / First Name / Middle Name / Date of Birth / Address /
@@ -279,23 +314,25 @@ def import_students_from_excel(file_stream, db, Student, ParentContact,
     'Unknown' (flagged so you can fill it in later).
 
     Args:
-        file_stream: File stream of the Excel file
-        db: SQLAlchemy database instance
-        Student: Student model class
-        ParentContact: ParentContact model class
+        rows: list of row tuples (first row is the header)
+        db, Student, ParentContact: SQLAlchemy db + model classes
         branch_id: branch to stamp on every imported student (optional)
+        skip_duplicates: skip rows whose name + DOB already exist (default True)
+        class_arm_assignment_id: if set, enroll every imported student into this
+            class-arm assignment for the active term
 
     Returns:
         Tuple of (success_count, messages) — messages are per-row notes/errors.
     """
-    wb = load_workbook(file_stream, data_only=True)
-    ws = wb.active
-
     success_count = 0
     errors = []
+    enrolled = 0
+    StudentEnrollment = None
+    if class_arm_assignment_id is not None:
+        from models import StudentEnrollment as _SE
+        StudentEnrollment = _SE
 
     # Build {canonical_field: column_index} from the header row.
-    rows = list(ws.iter_rows(values_only=True))
     if not rows:
         return 0, ['The sheet is empty.']
     header = rows[0]
@@ -394,9 +431,19 @@ def import_students_from_excel(file_stream, db, Student, ParentContact,
                         is_primary=True,
                     ))
 
+                # Optionally enrol the new student in the chosen class arm.
+                if StudentEnrollment is not None:
+                    db.session.add(StudentEnrollment(
+                        student_id=student.id,
+                        class_arm_assignment_id=class_arm_assignment_id,
+                        is_active=True,
+                    ))
+
             success_count += 1
             if defaulted:
                 gender_defaulted += 1
+            if StudentEnrollment is not None:
+                enrolled += 1
 
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")
@@ -404,6 +451,8 @@ def import_students_from_excel(file_stream, db, Student, ParentContact,
     if success_count > 0:
         db.session.commit()
 
+    if enrolled:
+        errors.insert(0, f"{enrolled} student(s) enrolled in the selected class.")
     if duplicates_skipped:
         errors.insert(0, f"{duplicates_skipped} row(s) skipped as duplicates "
                          "(same name + date of birth already on record).")

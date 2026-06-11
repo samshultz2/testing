@@ -4,8 +4,10 @@ import io
 
 from openpyxl import Workbook
 
-from models import db, Student, ParentContact
-from utils.excel_utils import import_students_from_excel, create_student_import_template
+from models import (db, Student, ParentContact, StudentEnrollment,
+                    SchoolClass, ClassArm, ClassArmAssignment, Term)
+from utils.excel_utils import (import_students_from_excel, import_student_rows,
+                               _rows_from_csv, create_student_import_template)
 
 
 def _xlsx(rows):
@@ -79,6 +81,43 @@ def test_duplicate_guard_skips_reimport(app):
             _xlsx(sheet_rows[:1] + [sheet_rows[1], sheet_rows[1]]),
             db, Student, ParentContact)
         assert n3 == 0
+        db.session.rollback()
+
+
+def test_csv_parsing(app):
+    csv_text = ("Surname,First Name,Phone Number\n"
+                "Okoro,Chidi,8031234567\n")
+    rows = _rows_from_csv(io.BytesIO(csv_text.encode()))
+    assert rows[0] == ('Surname', 'First Name', 'Phone Number')
+    with app.app_context():
+        n, _ = import_student_rows(rows, db, Student, ParentContact)
+        assert n == 1
+        s = Student.query.filter_by(surname='Okoro').order_by(Student.id.desc()).first()
+        assert s.parent_contacts.first().phone_number == '08031234567'
+        db.session.rollback()
+
+
+def test_class_arm_enrollment(app):
+    with app.app_context():
+        term = Term.query.first()
+        sc = SchoolClass.query.first()
+        arm = ClassArm.query.first()
+        if not (term and sc and arm):
+            import pytest
+            pytest.skip("no class/arm/term seeded")
+        a = ClassArmAssignment.query.filter_by(
+            class_id=sc.id, arm_id=arm.id, term_id=term.id).first()
+        if not a:
+            a = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id)
+            db.session.add(a); db.session.commit()
+        rows = [['Surname', 'First Name'], ['Enrol', 'Me']]
+        n, msgs = import_student_rows(
+            rows, db, Student, ParentContact, class_arm_assignment_id=a.id)
+        assert n == 1
+        s = Student.query.filter_by(surname='Enrol').order_by(Student.id.desc()).first()
+        assert StudentEnrollment.query.filter_by(
+            student_id=s.id, class_arm_assignment_id=a.id).first() is not None
+        assert any('enrolled' in m.lower() for m in msgs)
         db.session.rollback()
 
 

@@ -158,7 +158,8 @@ def export_template():
 @reports_bp.route('/import/students', methods=['GET', 'POST'])
 @login_required
 def import_students():
-    """Import students from Excel"""
+    """Import students from Excel or CSV, optionally enrolling into a class arm."""
+    from models import ClassArmAssignment, SchoolClass, ClassArm
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('No file selected.', 'error')
@@ -170,18 +171,43 @@ def import_students():
             flash('No file selected.', 'error')
             return redirect(url_for('reports.import_students'))
         
-        if not file.filename.endswith(('.xlsx', '.xls')):
-            flash('Please upload an Excel file (.xlsx or .xls)', 'error')
+        if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+            flash('Please upload a .xlsx or .csv file.', 'error')
             return redirect(url_for('reports.import_students'))
-        
+
         try:
             from utils.branch_scope import branch_for_new
-            success_count, errors = import_students_from_excel(
-                file.stream,
+            from utils.helpers import get_active_term
+            from utils.excel_utils import import_students_from_upload
+
+            # Optional: enrol all imported students into a chosen class + arm.
+            assignment_id = None
+            class_id = request.form.get('class_id', type=int)
+            arm_id = request.form.get('arm_id', type=int)
+            if class_id and arm_id:
+                term = get_active_term()
+                if not term:
+                    flash('No active term set — students imported without a class.', 'warning')
+                else:
+                    # The (class, arm, term) combo is unique; reuse it if class
+                    # management already created it, otherwise make it now.
+                    assignment = ClassArmAssignment.query.filter_by(
+                        class_id=class_id, arm_id=arm_id, term_id=term.id).first()
+                    if not assignment:
+                        assignment = ClassArmAssignment(
+                            class_id=class_id, arm_id=arm_id, term_id=term.id,
+                            branch_id=branch_for_new())
+                        db.session.add(assignment)
+                        db.session.commit()
+                    assignment_id = assignment.id
+
+            success_count, errors = import_students_from_upload(
+                file,
                 db,
                 Student,
                 ParentContact,
-                branch_id=branch_for_new()
+                branch_id=branch_for_new(),
+                class_arm_assignment_id=assignment_id,
             )
             
             if success_count > 0:
@@ -197,8 +223,10 @@ def import_students():
             flash(f'Error importing file: {str(e)}', 'error')
         
         return redirect(url_for('reports.import_students'))
-    
-    return render_template('reports/import_students.html')
+
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    return render_template('reports/import_students.html', classes=classes, arms=arms)
 
 
 # ============================================================================
