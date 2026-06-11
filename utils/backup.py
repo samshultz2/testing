@@ -148,7 +148,11 @@ def restore_database(app, upload_path, original_filename):
             pass
         try:
             proc = subprocess.run(
-                ['psql', '-v', 'ON_ERROR_STOP=1', '-f', upload_path, url],
+                # --single-transaction: the whole restore is one transaction, so
+                # a mid-restore failure rolls back instead of leaving a
+                # half-dropped/half-loaded database.
+                ['psql', '--single-transaction', '-v', 'ON_ERROR_STOP=1',
+                 '-f', upload_path, url],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600,
             )
             if proc.returncode != 0:

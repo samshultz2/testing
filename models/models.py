@@ -1501,6 +1501,11 @@ def _seed_branches():
 
 def init_db(app):
     """Initialize database with default data"""
+    # Pure-Alembic deployments (and the Alembic baseline-generation step) set
+    # SKIP_CREATE_ALL=1: Alembic owns the schema, so don't create_all or seed
+    # here (seeding runs against a schema that may not exist yet).
+    if os.environ.get('SKIP_CREATE_ALL') == '1':
+        return
     with app.app_context():
         db.create_all()
         _ensure_student_exam_columns()

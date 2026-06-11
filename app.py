@@ -66,6 +66,15 @@ def create_app(config_class=None):
     
     # Initialize extensions
     db.init_app(app)
+
+    # Alembic migrations (flask db ...). create_all (below) still builds fresh
+    # dev/test databases; Alembic is for controlled schema changes to existing
+    # databases. See docs/MIGRATIONS.md.
+    try:
+        from flask_migrate import Migrate
+        Migrate(app, db, directory='db_migrations')
+    except ImportError:
+        pass
     
     # Register blueprints
     app.register_blueprint(auth_bp)

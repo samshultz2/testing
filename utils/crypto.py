@@ -64,15 +64,37 @@ def decrypt(token):
         return token
     key = _key()
     if key is None:
-        return None   # encrypted data but no key — unrecoverable
+        # Encrypted data but no key — unrecoverable. Warn loudly rather than
+        # silently returning None (which looks like "no password set").
+        _log().warning('Encrypted field present but FIELD_ENCRYPTION_KEY is not '
+                       'set — value cannot be decrypted.')
+        return None
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     try:
         blob = base64.b64decode(token[len(_PREFIX):])
         nonce, ct = blob[:12], blob[12:]
         return AESGCM(key).decrypt(nonce, ct, None).decode('utf-8')
     except Exception:
+        # Wrong key or corrupt data — likely the key changed since this was
+        # written. Log the key fingerprint so a mismatch is diagnosable.
+        _log().warning('Failed to decrypt a field (key fingerprint %s). The '
+                       'FIELD_ENCRYPTION_KEY may have changed.', key_fingerprint())
         return None
 
 
 def looks_encrypted(value):
     return isinstance(value, str) and value.startswith(_PREFIX)
+
+
+def key_fingerprint():
+    """Short, non-secret fingerprint of the active key, for ops to confirm the
+    same key is configured across deployments. Returns '' when disabled."""
+    key = _key()
+    if key is None:
+        return ''
+    return hashlib.sha256(b'fp:' + key).hexdigest()[:8]
+
+
+def _log():
+    import logging
+    return logging.getLogger('posyhub.crypto')

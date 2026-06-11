@@ -26,12 +26,14 @@ su postgres -c "psql -c \"DROP DATABASE IF EXISTS ${DB_NAME};\""
 su postgres -c "psql -c \"CREATE DATABASE ${DB_NAME} OWNER ${DB_OWNER};\""
 LIBPQ_URL="$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgresql\+[a-z0-9]+://#postgresql://#')"
 
+# --single-transaction + ON_ERROR_STOP: the data load is atomic — a failure
+# rolls the whole thing back rather than leaving a half-restored database.
 case "$DUMP" in
   *.enc)
     : "${BACKUP_ENCRYPTION_KEY:?Encrypted dump needs BACKUP_ENCRYPTION_KEY}"
     openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:${BACKUP_ENCRYPTION_KEY}" -in "$DUMP" \
-      | psql "$LIBPQ_URL" ;;
+      | psql --single-transaction -v ON_ERROR_STOP=1 "$LIBPQ_URL" ;;
   *)
-    psql "$LIBPQ_URL" -f "$DUMP" ;;
+    psql --single-transaction -v ON_ERROR_STOP=1 "$LIBPQ_URL" -f "$DUMP" ;;
 esac
 echo "Restore complete from: $DUMP"

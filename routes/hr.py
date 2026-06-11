@@ -397,9 +397,11 @@ def finalize_payroll(run_id):
             cat = ExpenseCategory.query.filter(
                 ExpenseCategory.name.ilike('%salar%')).first()
             term = get_active_term()
+            from utils.branch_scope import branch_for_new
             exp = Expense(
                 term_id=term.id if term else None,
                 category_id=cat.id if cat else None,
+                branch_id=branch_for_new(),
                 description=f'Payroll — {run.period_label}',
                 amount=hr.run_total(run),
                 expense_date=date.today(),
@@ -409,10 +411,15 @@ def finalize_payroll(run_id):
             db.session.flush()
             run.posted_expense_id = exp.id
             flash('Payroll finalized and posted to Finance expenses.', 'success')
-        except Exception:
+        except Exception as e:
+            # Posting to Finance failed; still finalize the payroll itself, but
+            # log the cause and tell the user it can be re-posted.
             db.session.rollback()
+            from flask import current_app
+            current_app.logger.exception('Payroll #%s: posting to Finance failed', run.id)
             run.status = 'Finalized'
-            flash('Payroll finalized (could not post to Finance).', 'warning')
+            flash(f'Payroll finalized, but posting to Finance failed ({e}). '
+                  'You can post it again later.', 'warning')
     else:
         flash('Payroll finalized.', 'success')
     db.session.commit()

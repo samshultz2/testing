@@ -1074,7 +1074,15 @@ def _finalize(attempt, exam):
     attempt.score = exam.scale(raw_score)
     attempt.status = 'Submitted'
     attempt.submitted_at = timeutil.now()
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        from flask import current_app
+        current_app.logger.exception(
+            'CBT grading failed to commit for attempt %s (exam %s)',
+            getattr(attempt, 'id', '?'), getattr(exam, 'id', '?'))
+        raise   # surface the failure instead of leaving a half-graded attempt
 
 
 @cbt_portal_bp.route('/<int:exam_id>/take')
