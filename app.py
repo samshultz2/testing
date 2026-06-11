@@ -321,6 +321,7 @@ if os.environ.get('POSYHUB_TESTING') != '1':
 
 
 if __name__ == '__main__':
-    # Local development server only. In production use a WSGI server
-    # (gunicorn) via wsgi.py / scripts/start.sh — never app.run().
-    app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000)
+    # Local run (no Cloudflare): `python app.py`. Uses Flask's built-in server.
+    # For the public demo (app + Cloudflare tunnel) run `python app_production.py`.
+    port = int(os.environ.get('PORT', '5000'))
+    app.run(debug=app.config.get('DEBUG', False), host='0.0.0.0', port=port)

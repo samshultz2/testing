@@ -77,15 +77,37 @@ Then run the portal-password encryption once:
 ## 2. Daily start — one command
 
 ```bash
-./scripts/phone_serve.sh
+python app_production.py     # app + Cloudflare tunnel, prints the demo URL
 ```
 
-This starts PostgreSQL + gunicorn (via `scripts/start.sh`) and then the
-Cloudflare tunnel, and restarts the tunnel if it drops. Stop everything with
-Ctrl-C.
+It serves the app and starts the tunnel, prints the public URL in a banner, and
+restarts the tunnel if it drops. Stop everything with Ctrl-C.
 
-Verify from another device (mobile data, not the same Wi-Fi):
-`https://school.yourdomain.com/healthz` → `ok`.
+To run **without** Cloudflare (local / same-Wi-Fi only):
+
+```bash
+python app.py                # just the app on http://<phone-ip>:5000
+```
+
+> If you use PostgreSQL, start it first (e.g. `./scripts/start.sh` brings up
+> Postgres) or set `DATABASE_URL`. With neither, the app falls back to its local
+> database — fine for a quick demo, but use your real DB for teacher testing.
+
+### Short URL vs instant URL
+
+`app_production.py` picks the mode automatically:
+
+| Mode | You get | Setup |
+|------|---------|-------|
+| **Instant** (default) | `https://<random-words>.trycloudflare.com` — longer, changes each run | none — works immediately, no account or domain |
+| **Short + stable** | `https://posy.yourschool.ng` (your domain, your choice of subdomain) | the one-time named-tunnel setup in section 1, then set `CLOUDFLARE_TUNNEL` + `CLOUDFLARE_HOSTNAME` in `.env` |
+
+For the shortest possible link, route a short subdomain (or the apex) of your
+domain in section 1c (`cloudflared tunnel route dns posyhub posy.yourschool.ng`)
+and set `CLOUDFLARE_HOSTNAME=posy.yourschool.ng`.
+
+Verify from another device on mobile data: open the printed URL, or hit
+`<that-url>/healthz` → `ok`.
 
 ---
 

@@ -29,6 +29,10 @@ ortools==9.15.6755
 # Production WSGI server (used by wsgi.py / scripts/start.sh in production).
 gunicorn==23.0.0
 
+# Pure-Python WSGI server used by app_production.py (the phone/Cloudflare
+# launcher). Cross-platform and easy to install on Termux.
+waitress>=3.0.0
+
 # AES-256-GCM field encryption at rest (utils/crypto.py). Only used when
 # FIELD_ENCRYPTION_KEY is configured.
 cryptography>=41.0.7
