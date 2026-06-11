@@ -471,7 +471,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script>
 {% if waec_summary %}
 {% set years_list = waec_summary.keys()|list|sort(reverse=true) %}

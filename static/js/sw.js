@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
 // pick them up promptly. Static assets also use stale-while-revalidate below,
 // so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
@@ -28,6 +28,11 @@ const ASSETS = [
   '/static/icons/icon-512-maskable.png',
   '/static/icons/apple-touch-icon.png',
   '/static/icons/favicon-32.png',
+  // Self-hosted icon font + chart libs (no CDN dependency for core UI).
+  '/static/vendor/fontawesome/css/all.min.css',
+  '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
+  '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
+  '/static/vendor/chart.umd.min.js',
   '/static/manifest.webmanifest',
   OFFLINE_URL
 ];
@@ -57,14 +62,21 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;                    // never cache mutations
   const url = new URL(req.url);
 
-  // Third-party CDN libraries/fonts: cache-first (works offline once fetched).
+  // Remaining third-party CDN assets (Google Fonts, MathJax): cache-first with
+  // background refresh. Only successful (or opaque cross-origin) responses are
+  // cached — caching an error response here is what used to permanently blank
+  // the icons until users manually cleared the cache.
   if (CDN_HOSTS.includes(url.hostname)) {
     e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CDN_CACHE).then((c) => c.put(req, copy));
-        return res;
-      }).catch(() => hit))
+      caches.open(CDN_CACHE).then((cache) =>
+        cache.match(req).then((hit) => {
+          const network = fetch(req).then((res) => {
+            if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+            return res;
+          }).catch(() => hit);
+          return hit || network;
+        })
+      )
     );
     return;
   }

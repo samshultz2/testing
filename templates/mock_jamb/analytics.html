@@ -215,7 +215,7 @@
 </div>
 {% endif %}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script>
 {% if comparison and comparison|length > 0 %}
 const ctx = document.getElementById('comparisonChart').getContext('2d');

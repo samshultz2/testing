@@ -244,7 +244,7 @@
 </div>
 {% endif %}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script>
 {% if progress and progress.progress|length > 0 %}
 const ctx = document.getElementById('progressChart').getContext('2d');
