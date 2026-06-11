@@ -175,11 +175,13 @@ def import_students():
             return redirect(url_for('reports.import_students'))
         
         try:
+            from utils.branch_scope import branch_for_new
             success_count, errors = import_students_from_excel(
                 file.stream,
                 db,
                 Student,
-                ParentContact
+                ParentContact,
+                branch_id=branch_for_new()
             )
             
             if success_count > 0:
