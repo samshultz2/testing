@@ -35,17 +35,17 @@ cloudflared --version
 
 ```bash
 cloudflared tunnel login                 # opens a browser → authorize your domain
-cloudflared tunnel create posyhub        # prints a Tunnel ID, writes a credentials .json
+cloudflared tunnel create edusyncra        # prints a Tunnel ID, writes a credentials .json
 mkdir -p ~/.cloudflared
 cat > ~/.cloudflared/config.yml <<EOF
-tunnel: posyhub
+tunnel: edusyncra
 credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
 ingress:
-  - hostname: school.yourdomain.com      # or yourdomain.com
+  - hostname: edusyncra.site      # or yourdomain.com
     service: http://localhost:8000       # gunicorn port (PORT in .env)
   - service: http_status:404
 EOF
-cloudflared tunnel route dns posyhub school.yourdomain.com
+cloudflared tunnel route dns edusyncra edusyncra.site
 ```
 
 ### d) Production settings in `.env`
@@ -100,11 +100,11 @@ python app.py                # just the app on http://<phone-ip>:5000
 | Mode | You get | Setup |
 |------|---------|-------|
 | **Instant** (default) | `https://<random-words>.trycloudflare.com` — longer, changes each run | none — works immediately, no account or domain |
-| **Short + stable** | `https://posy.yourschool.ng` (your domain, your choice of subdomain) | the one-time named-tunnel setup in section 1, then set `CLOUDFLARE_TUNNEL` + `CLOUDFLARE_HOSTNAME` in `.env` |
+| **Short + stable** | `https://edusyncra.site` (your domain, your choice of subdomain) | the one-time named-tunnel setup in section 1, then set `CLOUDFLARE_TUNNEL` + `CLOUDFLARE_HOSTNAME` in `.env` |
 
 For the shortest possible link, route a short subdomain (or the apex) of your
-domain in section 1c (`cloudflared tunnel route dns posyhub posy.yourschool.ng`)
-and set `CLOUDFLARE_HOSTNAME=posy.yourschool.ng`.
+domain in section 1c (`cloudflared tunnel route dns edusyncra edusyncra.site`)
+and set `CLOUDFLARE_HOSTNAME=edusyncra.site`.
 
 Verify from another device on mobile data: open the printed URL, or hit
 `<that-url>/healthz` → `ok`.

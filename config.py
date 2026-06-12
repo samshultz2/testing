@@ -104,7 +104,7 @@ class Config:
     FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', '')
 
     # Application settings
-    APP_NAME = "PosyHub Student Manager"
+    APP_NAME = "EduSyncra"
     # Legacy shared-password login (kept for backwards compatibility). Set
     # ADMIN_PASSWORD via the environment in production and disable legacy login
     # once real user accounts exist (ENABLE_LEGACY_LOGIN=0).

@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <meta name="theme-color" content="#0d6a4e">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="PosyHub">
+    <meta name="apple-mobile-web-app-title" content="EduSyncra">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
@@ -33,8 +33,8 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="PosyHub" class="logo-mark">
-                    <span>PosyHub</span>
+                    <img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="EduSyncra" class="logo-mark">
+                    <span>EduSyncra</span>
                 </div>
                 <button class="sidebar-toggle" id="sidebarToggle">
                     <i class="fas fa-times"></i>
@@ -793,9 +793,9 @@
                 deferred.prompt();
                 deferred.userChoice.finally(function () { deferred = null; btn.style.display = 'none'; });
             } else if (isIOS) {
-                alert('To install PosyHub:\n\n1. Tap the Share button (the square with an up-arrow).\n2. Choose "Add to Home Screen".\n3. Tap Add.');
+                alert('To install EduSyncra:\n\n1. Tap the Share button (the square with an up-arrow).\n2. Choose "Add to Home Screen".\n3. Tap Add.');
             } else {
-                alert('To install PosyHub:\n\nOpen your browser menu (⋮) and choose "Install app" or "Add to Home screen".\n\nIf you don\'t see it yet, reload this page and try again.');
+                alert('To install EduSyncra:\n\nOpen your browser menu (⋮) and choose "Install app" or "Add to Home screen".\n\nIf you don\'t see it yet, reload this page and try again.');
             }
         });
     })();

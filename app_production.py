@@ -57,19 +57,41 @@ def _wait_until_up(timeout=60):
     return False
 
 
+# The school's domain (already on Cloudflare). Override via .env if it changes.
+DOMAIN = os.environ.get('CLOUDFLARE_HOSTNAME', 'edusyncra.site')
+TUNNEL = os.environ.get('CLOUDFLARE_TUNNEL', 'edusyncra')
+
+
+def _tunnel_exists(exe, name):
+    """True if a named cloudflared tunnel exists on this machine's account."""
+    try:
+        out = subprocess.run([exe, 'tunnel', 'list'], capture_output=True,
+                             text=True, timeout=20).stdout
+        return name in out
+    except Exception:
+        return False
+
+
+def _print_named_setup():
+    print('\nTo serve at https://%s you need a ONE-TIME tunnel setup:' % DOMAIN)
+    print('  cloudflared tunnel login                # authorize %s in the browser' % DOMAIN)
+    print('  cloudflared tunnel create %s' % TUNNEL)
+    print('  cloudflared tunnel route dns %s %s' % (TUNNEL, DOMAIN))
+    print('Then run this script again. Falling back to a temporary URL for now...\n')
+
+
 def _cloudflared_command():
     """Return (cmd, hostname_for_banner) or (None, None) if cloudflared missing."""
     exe = shutil.which('cloudflared')
     if not exe:
         return None, None
-    tunnel = os.environ.get('CLOUDFLARE_TUNNEL')
-    hostname = os.environ.get('CLOUDFLARE_HOSTNAME')
     config = os.path.expanduser('~/.cloudflared/config.yml')
-    if tunnel:                       # named tunnel by name
-        return [exe, 'tunnel', 'run', tunnel], hostname
+    if _tunnel_exists(exe, TUNNEL):  # the named tunnel for the school domain
+        return [exe, 'tunnel', 'run', '--url', f'http://{HOST}:{PORT}', TUNNEL], DOMAIN
     if os.path.exists(config):       # named tunnel via config.yml
-        return [exe, 'tunnel', '--config', config, 'run'], hostname
-    # Quick tunnel — no Cloudflare account or domain required.
+        return [exe, 'tunnel', '--config', config, 'run'], os.environ.get('CLOUDFLARE_HOSTNAME')
+    # Named tunnel not set up yet: print the exact commands, use a quick tunnel.
+    _print_named_setup()
     return [exe, 'tunnel', '--url', f'http://{HOST}:{PORT}', '--no-autoupdate'], None
 
 

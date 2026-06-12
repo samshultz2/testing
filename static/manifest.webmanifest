@@ -1,6 +1,6 @@
 {
-  "name": "PosyHub Student Manager",
-  "short_name": "PosyHub",
+  "name": "EduSyncra",
+  "short_name": "EduSyncra",
   "description": "School student, attendance, results and exam management.",
   "start_url": "/",
   "scope": "/",

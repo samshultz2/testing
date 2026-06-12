@@ -35,7 +35,7 @@
 <body>
     <div class="portal-wrap">
         <div class="portal-top">
-            <div class="brand"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> PosyHub CBT</div>
+            <div class="brand"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> EduSyncra CBT</div>
             {% if student is defined and student %}
             <div>{{ student.full_name }} ({{ student.student_id }}) · <a href="{{ url_for('cbt_portal.logout') }}">Logout</a></div>
             {% else %}
