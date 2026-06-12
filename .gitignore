@@ -44,3 +44,4 @@ Thumbs.db
 
 # CBT question image uploads (user content)
 static/uploads/
+loadtest/students.csv
