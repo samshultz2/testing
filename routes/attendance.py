@@ -110,10 +110,12 @@ def mark_attendance_page():
                 current_week = week
                 break
     
-    # Check if it's a school day
+    # Check if it's a school day, and if not, why (so the page can be specific).
     holiday_dates = set(h.date for h in holidays)
     is_valid_school_day = is_school_day(target_date, holidays)
-    
+    holiday_for_date = next((h for h in holidays if h.date == target_date), None)
+    is_weekend = target_date.weekday() >= 5
+
     # Get existing attendance for this date
     if enrollments and target_date:
         for enrollment in enrollments:
@@ -138,6 +140,8 @@ def mark_attendance_page():
         existing_attendance=existing_attendance,
         current_week=current_week,
         is_valid_school_day=is_valid_school_day,
+        holiday_for_date=holiday_for_date,
+        is_weekend=is_weekend,
         holidays=holidays
     )
 
@@ -199,6 +203,126 @@ def save_attendance():
         date=request.form.get('date'),
         session=session_type
     ))
+
+
+def _week_school_days(week, holidays):
+    """The school weekdays (Mon–Fri, minus holidays) within a week."""
+    holiday_dates = {h.date for h in holidays}
+    days, d = [], week.start_date
+    while d <= week.end_date:
+        if d.weekday() < 5 and d not in holiday_dates:
+            days.append(d)
+        d += timedelta(days=1)
+    return days
+
+
+@attendance_bp.route('/week')
+@login_required
+def week_grid():
+    """Mark a whole week at once: a students × school-days grid (backlog-friendly)."""
+    if not can_mark_attendance():
+        flash('You do not have permission to mark attendance.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    term_id = request.args.get('term_id', type=int)
+    assignment_id = request.args.get('assignment_id', type=int)
+    week_id = request.args.get('week_id', type=int)
+
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+
+    terms = Term.query.join(AcademicSession).order_by(
+        AcademicSession.name.desc(), Term.term_number).all()
+    selected_term = db.session.get(Term, term_id) if term_id else None
+    assignments, weeks, holidays = [], [], []
+    if term_id:
+        assignments = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term_id).all(), form_only=True)
+        weeks = Week.query.filter_by(term_id=term_id).order_by(Week.week_number).all()
+        holidays = Holiday.query.filter_by(term_id=term_id).all()
+
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('attendance.week_grid'))
+
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+    selected_week = db.session.get(Week, week_id) if week_id else (weeks[0] if weeks else None)
+
+    enrollments, school_days, existing = [], [], {}
+    if selected_assignment and selected_week:
+        enrollments = (StudentEnrollment.query
+                       .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                       .join(Student).order_by(Student.surname, Student.first_name).all())
+        school_days = _week_school_days(selected_week, holidays)
+        if enrollments and school_days:
+            recs = Attendance.query.filter(
+                Attendance.enrollment_id.in_([e.id for e in enrollments]),
+                Attendance.date.in_(school_days)).all()
+            # existing[enrollment_id][iso_date] = present? (present if either session)
+            for r in recs:
+                existing.setdefault(r.enrollment_id, {})[r.date.isoformat()] = bool(
+                    r.morning_present or r.afternoon_present)
+
+    return render_template('attendance/week.html',
+        terms=terms, selected_term=selected_term, assignments=assignments,
+        selected_assignment=selected_assignment, weeks=weeks,
+        selected_week=selected_week, enrollments=enrollments,
+        school_days=school_days, existing=existing)
+
+
+@attendance_bp.route('/week/save', methods=['POST'])
+@login_required
+def week_save():
+    """Batch-save a whole week's attendance from the grid (one transaction)."""
+    assignment_id = request.form.get('assignment_id', type=int)
+    week_id = request.form.get('week_id', type=int)
+    term_id = request.form.get('term_id', type=int)
+    if not can_mark_attendance(assignment_id):
+        flash('You do not have permission to mark attendance for this class.', 'error')
+        return redirect(url_for('attendance.week_grid'))
+
+    week = db.session.get(Week, week_id)
+    if not week:
+        flash('Select a week first.', 'error')
+        return redirect(url_for('attendance.week_grid', term_id=term_id, assignment_id=assignment_id))
+
+    holidays = Holiday.query.filter_by(term_id=week.term_id).all()
+    school_days = _week_school_days(week, holidays)
+    enrollments = StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=assignment_id, is_active=True).all()
+    day_isos = [d.isoformat() for d in school_days]
+
+    # Existing records keyed by (enrollment_id, date) so we upsert.
+    existing = {(r.enrollment_id, r.date): r for r in Attendance.query.filter(
+        Attendance.enrollment_id.in_([e.id for e in enrollments]),
+        Attendance.date.in_(school_days)).all()}
+
+    marked_by = request.form.get('marked_by') or 'Admin'
+    saved = 0
+    try:
+        for e in enrollments:
+            for d, iso in zip(school_days, day_isos):
+                present = request.form.get(f'p_{e.id}_{iso}') == 'on'
+                rec = existing.get((e.id, d))
+                if rec is None:
+                    rec = Attendance(enrollment_id=e.id, week_id=week.id, date=d)
+                    db.session.add(rec)
+                rec.week_id = week.id
+                rec.morning_present = present
+                rec.afternoon_present = present
+                rec.marked_by = marked_by
+                saved += 1
+        db.session.commit()
+        flash(f'Saved attendance for {len(enrollments)} student(s) across '
+              f'{len(school_days)} day(s) of {week.week_number and "Week %d" % week.week_number}.',
+              'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error saving attendance: {str(e)}', 'error')
+
+    return redirect(url_for('attendance.week_grid',
+        term_id=term_id, assignment_id=assignment_id, week_id=week_id))
 
 
 @attendance_bp.route('/mark/all-present', methods=['POST'])

@@ -431,36 +431,52 @@ def generate_weeks(term_id):
 @academics_bp.route('/terms/<int:term_id>/holidays/add', methods=['POST'])
 @login_required
 def add_holiday(term_id):
-    """Add a holiday to a term"""
+    """Add a holiday (single day or a date range, e.g. a one-week mid-term break)."""
     try:
-        holiday_date = parse_date(request.form.get('date'))
+        from datetime import timedelta
+        start = parse_date(request.form.get('date'))
+        end = parse_date(request.form.get('end_date')) or start
         reason = request.form.get('reason', '').strip()
         holiday_type = request.form.get('holiday_type', 'Public Holiday')
-        
-        if not holiday_date or not reason:
+
+        if not start or not reason:
             flash('Date and reason are required.', 'error')
             return redirect(url_for('academics.view_term', term_id=term_id))
-        
-        # Check for duplicate
-        existing = Holiday.query.filter_by(term_id=term_id, date=holiday_date).first()
-        if existing:
-            flash('A holiday already exists for this date.', 'error')
+        if end < start:
+            start, end = end, start
+        if (end - start).days > 60:
+            flash('That range is longer than 60 days — please check the dates.', 'error')
             return redirect(url_for('academics.view_term', term_id=term_id))
-        
-        holiday = Holiday(
-            term_id=term_id,
-            date=holiday_date,
-            reason=reason,
-            holiday_type=holiday_type
-        )
-        db.session.add(holiday)
+
+        taken = {h.date for h in Holiday.query.filter_by(term_id=term_id).all()}
+        added = skipped = 0
+        d = start
+        while d <= end:
+            if d.weekday() >= 5:          # weekends are already non-school days
+                pass
+            elif d in taken:
+                skipped += 1
+            else:
+                db.session.add(Holiday(term_id=term_id, date=d, reason=reason,
+                                       holiday_type=holiday_type))
+                added += 1
+            d += timedelta(days=1)
         db.session.commit()
-        
-        flash('Holiday added successfully!', 'success')
+
+        if added and end != start:
+            msg = (f'{reason}: {added} day(s) marked '
+                   f'({start.strftime("%d %b")} – {end.strftime("%d %b %Y")}).')
+        elif added:
+            msg = 'Holiday added successfully!'
+        else:
+            msg = 'No new days to add — those dates are already holidays or weekends.'
+        if skipped:
+            msg += f' {skipped} already-marked day(s) skipped.'
+        flash(msg, 'success' if added else 'warning')
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
-    
+
     return redirect(url_for('academics.view_term', term_id=term_id))
 
 

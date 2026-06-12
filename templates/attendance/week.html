@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Mark a Week - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('attendance.index') }}">Attendance</a> / <span>Mark a Week</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .wk-grid-wrap { overflow-x:auto; }
+  table.wk-grid { border-collapse:collapse; min-width:100%; }
+  table.wk-grid th, table.wk-grid td { border:1px solid var(--border-color,#e5e7eb); padding:.4rem .5rem; text-align:center; white-space:nowrap; }
+  table.wk-grid thead th { background:var(--bg-subtle,#f8fafc); position:sticky; top:0; z-index:2; font-size:.82rem; }
+  table.wk-grid td.name, table.wk-grid th.name { text-align:left; position:sticky; left:0; background:var(--bg-card,#fff); z-index:1; min-width:180px; }
+  table.wk-grid thead th.name { z-index:3; }
+  table.wk-grid input[type=checkbox] { width:20px; height:20px; cursor:pointer; }
+  .wk-legend { font-size:.85rem; }
+  .wk-actions { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.75rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-calendar-week"></i> Mark a Whole Week</h1></div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-filter"></i> Select Class & Week</h3></div>
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('attendance.week_grid') }}" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    {% for t in terms %}<option value="{{ t.id }}" {% if selected_term and t.id==selected_term.id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">— Select class —</option>
+                    {% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id==selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Week</label>
+                <select name="week_id" class="form-control" onchange="this.form.submit()">
+                    {% for w in weeks %}<option value="{{ w.id }}" {% if selected_week and w.id==selected_week.id %}selected{% endif %}>Week {{ w.week_number }} ({{ w.start_date.strftime('%d %b') }} – {{ w.end_date.strftime('%d %b') }})</option>{% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_assignment and selected_week %}
+  {% if not enrollments %}
+  <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-users-slash"></i><p>No students enrolled in this class.</p></div></div></div>
+  {% elif not school_days %}
+  <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-calendar-times"></i><p>Week {{ selected_week.week_number }} has no school days (all weekend/holiday).</p></div></div></div>
+  {% else %}
+  <form method="POST" action="{{ url_for('attendance.week_save') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="term_id" value="{{ selected_term.id }}">
+    <input type="hidden" name="assignment_id" value="{{ selected_assignment.id }}">
+    <input type="hidden" name="week_id" value="{{ selected_week.id }}">
+
+    <div class="card">
+        <div class="card-header">
+            <h3>{{ selected_assignment.display_name }} — Week {{ selected_week.week_number }}</h3>
+            <span class="wk-legend text-muted">Ticked = present. Untick absentees, then Save.</span>
+        </div>
+        <div class="card-body">
+            <div class="wk-actions">
+                <button type="button" class="btn btn-secondary btn-sm" data-all="1"><i class="fas fa-check-double"></i> All present</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-all="0"><i class="fas fa-xmark"></i> All absent</button>
+                <span class="text-muted wk-legend">Tip: tap a day heading to toggle that whole day, or a name to toggle that student's week.</span>
+            </div>
+            <div class="wk-grid-wrap">
+                <table class="wk-grid">
+                    <thead>
+                        <tr>
+                            <th class="name">Student</th>
+                            {% for d in school_days %}
+                            <th><a href="#" class="col-toggle" data-iso="{{ d.isoformat() }}" title="Toggle whole day">{{ d.strftime('%a') }}<br>{{ d.strftime('%d %b') }}</a></th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in enrollments %}
+                        <tr>
+                            <td class="name"><a href="#" class="row-toggle" data-eid="{{ e.id }}">{{ e.student.full_name }}</a></td>
+                            {% for d in school_days %}
+                            {% set present = existing.get(e.id, {}).get(d.isoformat(), True) %}
+                            <td><input type="checkbox" name="p_{{ e.id }}_{{ d.isoformat() }}"
+                                       data-eid="{{ e.id }}" data-iso="{{ d.isoformat() }}"
+                                       {% if present %}checked{% endif %}></td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top:1rem;">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save whole week</button>
+            </div>
+        </div>
+    </div>
+  </form>
+  {% endif %}
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><p>Choose a class and week above to start marking.</p></div></div></div>
+{% endif %}
+
+<script>
+(function(){
+    function boxes(){ return Array.prototype.slice.call(document.querySelectorAll('table.wk-grid input[type=checkbox]')); }
+    document.querySelectorAll('[data-all]').forEach(function(btn){
+        btn.addEventListener('click', function(){ var v=btn.dataset.all==='1'; boxes().forEach(function(b){b.checked=v;}); });
+    });
+    document.querySelectorAll('.col-toggle').forEach(function(a){
+        a.addEventListener('click', function(e){ e.preventDefault();
+            var col=boxes().filter(function(b){return b.dataset.iso===a.dataset.iso;});
+            var anyOn=col.some(function(b){return b.checked;});
+            col.forEach(function(b){b.checked=!anyOn;});
+        });
+    });
+    document.querySelectorAll('.row-toggle').forEach(function(a){
+        a.addEventListener('click', function(e){ e.preventDefault();
+            var row=boxes().filter(function(b){return b.dataset.eid===a.dataset.eid;});
+            var anyOn=row.some(function(b){return b.checked;});
+            row.forEach(function(b){b.checked=!anyOn;});
+        });
+    });
+})();
+</script>
+{% endblock %}

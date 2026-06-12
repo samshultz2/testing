@@ -52,6 +52,9 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="fas fa-clipboard-check"></i> Mark Attendance</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('attendance.week_grid', term_id=selected_term.id if selected_term else None, assignment_id=selected_assignment.id if selected_assignment else None) }}" class="btn btn-secondary btn-sm"><i class="fas fa-calendar-week"></i> Mark a whole week</a>
+    </div>
 </div>
 
 <div class="card mb-3">
@@ -97,7 +100,15 @@
         <div class="empty-state">
             <i class="fas fa-calendar-times text-warning"></i>
             <h3>Not a School Day</h3>
-            <p>{{ target_date.strftime('%A, %d %B %Y') }} is a weekend or holiday.</p>
+            {% if holiday_for_date %}
+            <p>{{ target_date.strftime('%A, %d %B %Y') }} was marked as
+                {% if holiday_for_date.holiday_type %}a {{ holiday_for_date.holiday_type|lower }}{% else %}a holiday{% endif %}:
+                <strong>{{ holiday_for_date.reason }}</strong>.</p>
+            {% elif is_weekend %}
+            <p>{{ target_date.strftime('%A, %d %B %Y') }} is a weekend.</p>
+            {% else %}
+            <p>{{ target_date.strftime('%A, %d %B %Y') }} is not a school day.</p>
+            {% endif %}
         </div>
     </div></div>
     {% else %}
