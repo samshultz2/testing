@@ -227,6 +227,7 @@ def week_grid():
     term_id = request.args.get('term_id', type=int)
     assignment_id = request.args.get('assignment_id', type=int)
     week_id = request.args.get('week_id', type=int)
+    split = request.args.get('sessions') == 'split'
 
     if not term_id:
         active = get_active_term()
@@ -259,14 +260,14 @@ def week_grid():
             recs = Attendance.query.filter(
                 Attendance.enrollment_id.in_([e.id for e in enrollments]),
                 Attendance.date.in_(school_days)).all()
-            # existing[enrollment_id][iso_date] = present? (present if either session)
+            # existing[enrollment_id][iso_date] = (morning_present, afternoon_present)
             for r in recs:
-                existing.setdefault(r.enrollment_id, {})[r.date.isoformat()] = bool(
-                    r.morning_present or r.afternoon_present)
+                existing.setdefault(r.enrollment_id, {})[r.date.isoformat()] = (
+                    bool(r.morning_present), bool(r.afternoon_present))
 
     return render_template('attendance/week.html',
         terms=terms, selected_term=selected_term, assignments=assignments,
-        selected_assignment=selected_assignment, weeks=weeks,
+        selected_assignment=selected_assignment, weeks=weeks, split=split,
         selected_week=selected_week, enrollments=enrollments,
         school_days=school_days, existing=existing)
 
@@ -299,18 +300,23 @@ def week_save():
         Attendance.date.in_(school_days)).all()}
 
     marked_by = request.form.get('marked_by') or 'Admin'
+    split = request.form.get('sessions') == 'split'   # AM/PM ticks vs whole-day
     saved = 0
     try:
         for e in enrollments:
             for d, iso in zip(school_days, day_isos):
-                present = request.form.get(f'p_{e.id}_{iso}') == 'on'
+                if split:
+                    morning = request.form.get(f'am_{e.id}_{iso}') == 'on'
+                    afternoon = request.form.get(f'pm_{e.id}_{iso}') == 'on'
+                else:
+                    morning = afternoon = request.form.get(f'p_{e.id}_{iso}') == 'on'
                 rec = existing.get((e.id, d))
                 if rec is None:
                     rec = Attendance(enrollment_id=e.id, week_id=week.id, date=d)
                     db.session.add(rec)
                 rec.week_id = week.id
-                rec.morning_present = present
-                rec.afternoon_present = present
+                rec.morning_present = morning
+                rec.afternoon_present = afternoon
                 rec.marked_by = marked_by
                 saved += 1
         db.session.commit()

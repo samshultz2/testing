@@ -89,6 +89,20 @@ def _class_week(app):
         return t.id, caa.id, wk.id, eids
 
 
+def test_week_batch_save_split_sessions(app):
+    tid, aid, wid, eids = _class_week(app)
+    c = _admin(app)
+    tok = _ptoken(c, f'/attendance/week?term_id={tid}&assignment_id={aid}&week_id={wid}&sessions=split')
+    # Student present in the morning but absent in the afternoon on Monday.
+    data = {'term_id': tid, 'assignment_id': aid, 'week_id': wid, 'sessions': 'split',
+            '_csrf_token': tok, f'am_{eids[0]}_2026-05-18': 'on'}  # no pm_ -> afternoon absent
+    c.post('/attendance/week/save', data=data, follow_redirects=True)
+    with app.app_context():
+        rec = Attendance.query.filter_by(enrollment_id=eids[0], date=date(2026, 5, 18)).first()
+        assert rec.morning_present is True
+        assert rec.afternoon_present is False
+
+
 def test_week_batch_save(app):
     tid, aid, wid, eids = _class_week(app)
     c = _admin(app)

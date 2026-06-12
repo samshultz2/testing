@@ -11,6 +11,9 @@
   table.wk-grid td.name, table.wk-grid th.name { text-align:left; position:sticky; left:0; background:var(--bg-card,#fff); z-index:1; min-width:180px; }
   table.wk-grid thead th.name { z-index:3; }
   table.wk-grid input[type=checkbox] { width:20px; height:20px; cursor:pointer; }
+  label.ampm { display:inline-flex; flex-direction:column; align-items:center; gap:2px; margin:0 4px; cursor:pointer; }
+  label.ampm span { font-size:.62rem; color:var(--text-muted,#94a3b8); letter-spacing:.04em; }
+  label.ampm input { width:18px; height:18px; }
   .wk-legend { font-size:.85rem; }
   .wk-actions { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.75rem 0; }
 </style>
@@ -42,6 +45,12 @@
                     {% for w in weeks %}<option value="{{ w.id }}" {% if selected_week and w.id==selected_week.id %}selected{% endif %}>Week {{ w.week_number }} ({{ w.start_date.strftime('%d %b') }} – {{ w.end_date.strftime('%d %b') }})</option>{% endfor %}
                 </select>
             </div>
+            <div class="form-group">
+                <label class="form-label" style="display:flex; align-items:center; gap:.4rem;">
+                    <input type="checkbox" name="sessions" value="split" {% if split %}checked{% endif %} onchange="this.form.submit()">
+                    Morning &amp; afternoon separately
+                </label>
+            </div>
         </form>
     </div>
 </div>
@@ -57,11 +66,12 @@
     <input type="hidden" name="term_id" value="{{ selected_term.id }}">
     <input type="hidden" name="assignment_id" value="{{ selected_assignment.id }}">
     <input type="hidden" name="week_id" value="{{ selected_week.id }}">
+    {% if split %}<input type="hidden" name="sessions" value="split">{% endif %}
 
     <div class="card">
         <div class="card-header">
             <h3>{{ selected_assignment.display_name }} — Week {{ selected_week.week_number }}</h3>
-            <span class="wk-legend text-muted">Ticked = present. Untick absentees, then Save.</span>
+            <span class="wk-legend text-muted">Ticked = present. Untick absentees, then Save.{% if split %} Each day has a morning (AM) and afternoon (PM) tick.{% endif %}</span>
         </div>
         <div class="card-body">
             <div class="wk-actions">
@@ -84,10 +94,16 @@
                         <tr>
                             <td class="name"><a href="#" class="row-toggle" data-eid="{{ e.id }}">{{ e.student.full_name }}</a></td>
                             {% for d in school_days %}
-                            {% set present = existing.get(e.id, {}).get(d.isoformat(), True) %}
+                            {% set rec = existing.get(e.id, {}).get(d.isoformat()) %}
+                            {% if split %}
+                            {% set am = rec[0] if rec else True %}{% set pm = rec[1] if rec else True %}
+                            <td><label class="ampm" title="Morning"><input type="checkbox" name="am_{{ e.id }}_{{ d.isoformat() }}" data-eid="{{ e.id }}" data-iso="{{ d.isoformat() }}" {% if am %}checked{% endif %}><span>AM</span></label><label class="ampm" title="Afternoon"><input type="checkbox" name="pm_{{ e.id }}_{{ d.isoformat() }}" data-eid="{{ e.id }}" data-iso="{{ d.isoformat() }}" {% if pm %}checked{% endif %}><span>PM</span></label></td>
+                            {% else %}
+                            {% set present = (rec[0] or rec[1]) if rec else True %}
                             <td><input type="checkbox" name="p_{{ e.id }}_{{ d.isoformat() }}"
                                        data-eid="{{ e.id }}" data-iso="{{ d.isoformat() }}"
                                        {% if present %}checked{% endif %}></td>
+                            {% endif %}
                             {% endfor %}
                         </tr>
                         {% endfor %}
