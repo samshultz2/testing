@@ -1,4 +1,4 @@
-/* PosyHub service worker.
+/* EduSyncra service worker.
    - Static assets: cache-first (fast repeat loads, installability).
    - Page navigations: network-first with an offline fallback to the last
      cached copy of that page, then a generic offline page. This lets pages you
@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
 // pick them up promptly. Static assets also use stale-while-revalidate below,
 // so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
