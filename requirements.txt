@@ -40,6 +40,9 @@ qrcode>=7.4
 # schema is tracked in db_migrations/. See docs/MIGRATIONS.md.
 Flask-Migrate>=4.0
 
+# Response compression (gzip) — much smaller pages on slow/poor connections.
+Flask-Compress>=1.14
+
 # AES-256-GCM field encryption at rest (utils/crypto.py). Only used when
 # FIELD_ENCRYPTION_KEY is configured.
 cryptography>=41.0.7

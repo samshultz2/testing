@@ -132,8 +132,17 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     var token=document.querySelector('meta[name=csrf-token]').content;
     var ANSWERS_URL="{{ url_for('cbt_portal.answers_batch', exam_id=exam.id) }}";
     var pendingAns={}, flushTimer=null;
-    function queueAnswer(inp){ pendingAns['q_'+inp.dataset.qid]=inp.value;
-        if(!flushTimer) flushTimer=setTimeout(flushAnswers, 3000); }
+    // Local (on-device) copy of every chosen answer, so a reload, crash, or a
+    // network drop mid-exam never loses progress. Keyed per exam.
+    var STORE_KEY='cbt_ans_{{ exam.id }}';
+    var localAns={};
+    function loadLocal(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'{}'); }catch(e){ return {}; } }
+    function saveLocal(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(localAns)); }catch(e){} }
+    function queueAnswer(inp){
+        localAns[inp.dataset.qid]=inp.value; saveLocal();          // persist on device first
+        pendingAns['q_'+inp.dataset.qid]=inp.value;                // then sync to server
+        if(!flushTimer) flushTimer=setTimeout(flushAnswers, 3000);
+    }
     function _ansBody(batch){
         var b='_csrf_token='+encodeURIComponent(token);
         Object.keys(batch).forEach(function(k){ b+='&'+encodeURIComponent(k)+'='+encodeURIComponent(batch[k]); });
@@ -168,6 +177,23 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         inp.addEventListener('change',function(){refresh();queueAnswer(inp);});
     });
     document.addEventListener('visibilitychange',function(){ if(document.hidden) flushBeacon(); });
+
+    // On load: merge server-saved + on-device answers (device wins, it's newest),
+    // re-tick the radios, then push everything to the server so it catches up.
+    (function restoreAnswers(){
+        localAns=loadLocal();
+        document.querySelectorAll('.opt input:checked').forEach(function(inp){
+            if(!(inp.dataset.qid in localAns)) localAns[inp.dataset.qid]=inp.value;
+        });
+        Object.keys(localAns).forEach(function(qid){
+            var r=document.querySelector('.opt input[data-qid="'+qid+'"][value="'+localAns[qid]+'"]');
+            if(r){ r.checked=true; pendingAns['q_'+qid]=localAns[qid]; }
+        });
+        saveLocal();
+        if(Object.keys(pendingAns).length && !flushTimer) flushTimer=setTimeout(flushAnswers, 1500);
+    })();
+    // Retry syncing whenever the connection comes back.
+    window.addEventListener('online', function(){ Object.keys(localAns).forEach(function(qid){ pendingAns['q_'+qid]=localAns[qid]; }); flushAnswers(); });
     refresh();
 
     var STRICT={{ 'true' if strict else 'false' }};

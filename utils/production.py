@@ -102,10 +102,29 @@ def register_healthcheck(app):
             return {'status': 'error', 'detail': 'database unavailable'}, 503
 
 
+def enable_compression(app):
+    """Gzip/brotli-compress responses — big win on slow/poor connections.
+
+    No-op if flask-compress isn't installed, so it never breaks startup.
+    """
+    try:
+        from flask_compress import Compress
+    except ImportError:
+        return
+    # Compress HTML/CSS/JS/JSON/SVG; skip already-compressed media.
+    app.config.setdefault('COMPRESS_MIMETYPES', [
+        'text/html', 'text/css', 'text/xml', 'application/json',
+        'application/javascript', 'text/javascript', 'image/svg+xml',
+    ])
+    app.config.setdefault('COMPRESS_MIN_SIZE', 1024)
+    Compress(app)
+
+
 def harden(app, config_class=None):
     """Apply all production hardening. Safe to call in every environment."""
     configure_logging(app)
     apply_proxy_fix(app)
+    enable_compression(app)
     register_security_headers(app)
     register_healthcheck(app)
 
