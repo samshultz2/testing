@@ -1386,10 +1386,21 @@ def _ensure_student_exam_columns():
     _ensure_indexes()
 
 
+class RateLimitHit(db.Model):
+    """One row per throttled attempt (login/abuse). Shared across workers so the
+    rate limit can't be bypassed by spreading attempts. `ts` is epoch seconds."""
+    __tablename__ = 'rate_limit_hits'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rkey = db.Column(db.String(120), nullable=False)
+    ts = db.Column(db.Float, nullable=False)
+
+
 # Indexes on hot filter / foreign-key / sort columns. Created idempotently on
 # startup so existing databases pick them up (student_id columns are deliberately
 # left to the composite unique constraints that already cover them).
 _INDEXES = [
+    ('ix_ratelimit_key_ts', 'rate_limit_hits', 'rkey, ts'),
     ('ix_waec_exam_year', 'waec_results', 'exam_year'),
     ('ix_waec_subject', 'waec_results', 'subject'),
     ('ix_jamb_exam_year', 'jamb_results', 'exam_year'),

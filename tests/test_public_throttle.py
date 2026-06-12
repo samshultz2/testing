@@ -18,7 +18,8 @@ def test_parent_login_throttled(app):
                         gender='Male', is_active=True)
             s.set_portal_password('right-pass')
             db.session.add(s); db.session.commit()
-    login_limiter.clear_attempts('parent_login:127.0.0.1')
+    with app.app_context():
+        login_limiter.clear_attempts('parent_login:127.0.0.1')
     c = app.test_client()
     for _ in range(10):           # 10 wrong attempts are allowed
         c.post('/parent/login',
@@ -27,11 +28,13 @@ def test_parent_login_throttled(app):
                data={'student_id': 'THR1', 'password': 'wrong', '_csrf_token': _tok(c, '/parent/login')},
                follow_redirects=True)
     assert 'Too many attempts' in r.get_data(as_text=True)
-    login_limiter.clear_attempts('parent_login:127.0.0.1')
+    with app.app_context():
+        login_limiter.clear_attempts('parent_login:127.0.0.1')
 
 
 def test_result_checker_throttled(app):
-    login_limiter.clear_attempts('result_check:127.0.0.1')
+    with app.app_context():
+        login_limiter.clear_attempts('result_check:127.0.0.1')
     c = app.test_client()
     for _ in range(20):           # 20 attempts allowed
         c.post('/check-result/',
@@ -39,4 +42,5 @@ def test_result_checker_throttled(app):
     r = c.post('/check-result/',  # the 21st is throttled
                data={'student_id': 'NOPE', 'pin': 'x', '_csrf_token': _tok(c, '/check-result/')})
     assert 'Too many attempts' in r.get_data(as_text=True)
-    login_limiter.clear_attempts('result_check:127.0.0.1')
+    with app.app_context():
+        login_limiter.clear_attempts('result_check:127.0.0.1')

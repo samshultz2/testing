@@ -18,42 +18,109 @@ import threading
 # =============================================================================
 
 class RateLimiter:
-    """Simple in-memory rate limiter for login attempts"""
-    
+    """Rate limiter for login/abuse protection.
+
+    Uses the database when an app context is available, so the limit is shared
+    across all gunicorn workers (a per-process in-memory counter is bypassable
+    by spreading attempts across workers). Falls back to an in-memory counter
+    when there's no app/DB context (e.g. outside a request). DB access goes
+    through an independent engine connection so it never commits or rolls back
+    the request's own session.
+    """
+
     def __init__(self):
         self._attempts = defaultdict(list)
         self._lock = threading.Lock()
-    
-    def is_rate_limited(self, key: str, max_attempts: int = 5, window_minutes: int = 15) -> bool:
-        """Check if a key (IP/username) is rate limited"""
+
+    # -- DB backend -----------------------------------------------------------
+    def _engine(self):
+        try:
+            from flask import has_app_context
+            if not has_app_context():
+                return None
+            from models import db
+            return db.engine
+        except Exception:
+            return None
+
+    def is_rate_limited(self, key, max_attempts=5, window_minutes=15):
+        import time as _t
+        from sqlalchemy import text
+        eng = self._engine()
+        if eng is not None:
+            try:
+                cutoff = _t.time() - window_minutes * 60
+                with eng.connect() as conn:
+                    n = conn.execute(text(
+                        'SELECT COUNT(*) FROM rate_limit_hits WHERE rkey=:k AND ts>=:c'),
+                        {'k': key, 'c': cutoff}).scalar()
+                return (n or 0) >= max_attempts
+            except Exception:
+                pass  # table missing / db hiccup → fall back
         with self._lock:
             now = datetime.now()
             cutoff = now - timedelta(minutes=window_minutes)
-            
-            # Clean old attempts
             self._attempts[key] = [t for t in self._attempts[key] if t > cutoff]
-            
             return len(self._attempts[key]) >= max_attempts
-    
-    def record_attempt(self, key: str):
-        """Record an attempt for a key"""
+
+    def record_attempt(self, key):
+        import os
+        import time as _t
+        from sqlalchemy import text
+        eng = self._engine()
+        if eng is not None:
+            try:
+                now = _t.time()
+                with eng.begin() as conn:
+                    conn.execute(text(
+                        'INSERT INTO rate_limit_hits (rkey, ts) VALUES (:k, :t)'),
+                        {'k': key, 't': now})
+                    # Opportunistic cleanup of old rows (~1 in 20 inserts).
+                    if os.urandom(1)[0] < 13:
+                        conn.execute(text('DELETE FROM rate_limit_hits WHERE ts < :c'),
+                                     {'c': now - 3600})
+                return
+            except Exception:
+                pass
         with self._lock:
             self._attempts[key].append(datetime.now())
-    
-    def clear_attempts(self, key: str):
-        """Clear attempts for a key (after successful login)"""
+
+    def clear_attempts(self, key):
+        from sqlalchemy import text
+        eng = self._engine()
+        if eng is not None:
+            try:
+                with eng.begin() as conn:
+                    conn.execute(text('DELETE FROM rate_limit_hits WHERE rkey=:k'),
+                                 {'k': key})
+            except Exception:
+                pass
         with self._lock:
             self._attempts[key] = []
-    
-    def get_remaining_time(self, key: str, window_minutes: int = 15) -> int:
-        """Get remaining lockout time in seconds"""
+
+    def get_remaining_time(self, key, window_minutes=15):
+        import time as _t
+        from sqlalchemy import text
+        eng = self._engine()
+        if eng is not None:
+            try:
+                now = _t.time()
+                cutoff = now - window_minutes * 60
+                with eng.connect() as conn:
+                    oldest = conn.execute(text(
+                        'SELECT MIN(ts) FROM rate_limit_hits WHERE rkey=:k AND ts>=:c'),
+                        {'k': key, 'c': cutoff}).scalar()
+                if not oldest:
+                    return 0
+                return max(0, int(oldest + window_minutes * 60 - now))
+            except Exception:
+                pass
         with self._lock:
             if not self._attempts[key]:
                 return 0
             oldest = min(self._attempts[key])
             unlock_time = oldest + timedelta(minutes=window_minutes)
-            remaining = (unlock_time - datetime.now()).total_seconds()
-            return max(0, int(remaining))
+            return max(0, int((unlock_time - datetime.now()).total_seconds()))
 
 
 # Global rate limiter instance
