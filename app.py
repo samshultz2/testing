@@ -1,5 +1,5 @@
 """
-PosyHub Student Management System
+EduSyncra School Management System
 Main Flask application entry point
 """
 import os

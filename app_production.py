@@ -1,5 +1,5 @@
 """
-PosyHub — public launcher (app + Cloudflare tunnel) in one command:
+EduSyncra — public launcher (app + Cloudflare tunnel) in one command:
 
     python app_production.py
 
@@ -105,7 +105,7 @@ def _banner(url):
 
 
 def main():
-    print('Starting PosyHub app server...')
+    print('Starting EduSyncra app server...')
     threading.Thread(target=_serve_app, daemon=True).start()
     if not _wait_until_up():
         sys.exit(f'ERROR: the app did not start on http://{HOST}:{PORT}')
