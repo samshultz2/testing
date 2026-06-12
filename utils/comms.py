@@ -123,6 +123,33 @@ def dispatch_campaign(msg, cfg=None):
     return sent, failed
 
 
+def dispatch_campaign_async(app, message_id, cfg=None):
+    """Send a campaign in a background thread so the request returns at once.
+
+    Each SMS gateway call can take seconds; sending a large batch inline blocks a
+    web worker for minutes. The campaign should already be claimed ('Sending')
+    before calling this. Marks the message 'Sent' when done.
+    """
+    import threading
+
+    def _run():
+        with app.app_context():
+            from models import db, Message
+            try:
+                msg = db.session.get(Message, message_id)
+                if msg is None:
+                    return
+                dispatch_campaign(msg, cfg)
+                msg.status = 'Sent'
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception('Background SMS dispatch failed for message %s',
+                                     message_id)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _claim_message(message_id, from_status='Scheduled'):
     """Atomically flip a campaign's status to 'Sending'. Returns True if THIS
     caller won the claim — guards against the worker and a manual send racing."""

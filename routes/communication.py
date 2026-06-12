@@ -509,13 +509,15 @@ def send_gateway(message_id):
         flash('This campaign is already being sent.', 'warning')
         return redirect(url_for('comms.message_detail', message_id=message_id))
 
-    sent, failed = comms.dispatch_campaign(msg, cfg)
-    msg.status = 'Sent'
+    # Send in the background: each gateway call can take seconds, so sending a
+    # whole batch inline would tie up this web worker for minutes.
+    from flask import current_app
+    pending = msg.recipients.filter(MessageRecipient.status != 'Sent').count()
+    msg.status = 'Sending'
     db.session.commit()
-    if sent:
-        flash(f'Sent {sent} message(s) via {sms_gateway.provider_label(cfg)}.', 'success')
-    if failed:
-        flash(f'{failed} message(s) failed — see the recipient list for details.', 'warning')
+    comms.dispatch_campaign_async(current_app._get_current_object(), msg.id, cfg)
+    flash(f'Sending {pending} message(s) via {sms_gateway.provider_label(cfg)} in the '
+          'background. Refresh this page to see delivery progress.', 'success')
     return redirect(url_for('comms.message_detail', message_id=message_id))
 
 

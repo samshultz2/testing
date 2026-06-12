@@ -10,6 +10,18 @@ simultaneous exam.
   lookup), `cbt_attempts.exam_id/student_id`, `cbt_device_sessions.exam_id`,
   `cbt_login_events(exam_id, created_at)`, `cbt_violations.attempt_id`.
 - **Connection pool** defaults raised (10 + 20 overflow), env-tunable.
+- **Batched answer autosave** — the exam page queues changes and flushes to
+  `/exam/<id>/answers` every ~3s (and via `sendBeacon` when hidden) in one commit,
+  instead of a DB write per click. The final submit still posts every answer.
+- **Coalesced heartbeats** — `ping()` only writes `last_seen` when it's >25s
+  stale; client pings every 30s.
+- **Bounded monitor query** — the invigilator monitor no longer loads the whole
+  login-event history each refresh (this exam + recent logins, capped).
+- **Shared rate limiter** — now DB-backed (`rate_limit_hits`), so the limit holds
+  across all gunicorn workers instead of being per-process/bypassable.
+- **Background SMS** — "Send now" dispatches the campaign in a background thread
+  and returns immediately, instead of blocking a worker for ~20s per recipient.
+- **Load-test harness** — `loadtest/` (locust + seeder). See `loadtest/README.md`.
 
 ## Must do before a real 800-student exam
 
@@ -27,18 +39,16 @@ simultaneous exam.
    → heartbeat → submit) with a tool like `locust`/`k6` at target concurrency on
    the actual VPS. The first real exam must not be the first stress test.
 
-## Strongly recommended (throughput / worker starvation)
+## Remaining (lower impact)
 
-6. **Batch the write-heavy CBT paths** (currently one DB commit each):
-   - answer autosave (`cbt.py` `POST /exam/<id>/answer`) — accumulate a few
-     answers client-side per POST;
-   - heartbeat `ping` — send every 60–90s, not every 30s;
-   - login/start events at synchronized exam start.
-7. **Paginate / cache the live monitor** (`cbt.py monitor_data`) — it currently
-   loads all attempts + login events + device sessions into one JSON per refresh.
-8. **Move blocking work off the request thread** — PDF report generation, SMS/
-   email sending, large Excel exports tie up a worker for hundreds of ms to 20s.
-   Queue them (RQ/Celery) and return immediately.
+- **PDF report / large Excel export generation** is still synchronous (a few
+  hundred ms each). Fine at normal load; if invigilators bulk-download during an
+  exam, move these to a background queue (RQ/Celery) too. SMS — the worst
+  offender (20s/recipient) — is already backgrounded.
+- **Login/exam-start event writes** at a synchronized start are still one insert
+  each (cheap and indexed); batch only if the load test shows it's a hotspot.
+- For multiple workers, run the scheduled-jobs process separately
+  (`RUN_INPROCESS_JOBS=0` + `scripts/run_jobs.py`) — see item 3 above.
 
-Items 6–8 are app changes that need their own pass + the load test in #5 to
-validate; they're deliberately not done blind.
+Validate everything with the load test (`loadtest/`) on the real VPS before the
+first big exam.
