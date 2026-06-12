@@ -25,6 +25,9 @@
             </div>
             <strong>{{ done }} / {{ required }} done</strong>
         </div>
+        {% if not can_write_module('academics') %}
+        <p class="text-muted text-sm" style="margin:-0.5rem 0 1rem;"><i class="fas fa-eye"></i> View-only — you can see setup progress but not make changes.</p>
+        {% endif %}
 
         <div class="data-cards">
             {% for s in steps %}
@@ -36,11 +39,13 @@
                     </div>
                 </div>
                 <div class="data-card-row"><span class="data-card-label">Status</span><span>{{ s.detail }}</span></div>
+                {% if can_write_module('academics') %}
                 <div class="data-card-actions">
                     <a href="{{ s.url }}" class="btn btn-{% if s.done and not s.optional %}secondary{% else %}primary{% endif %} btn-sm w-100">
                         <i class="fas fa-arrow-right"></i> {{ s.cta }}
                     </a>
                 </div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
