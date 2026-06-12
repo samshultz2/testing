@@ -126,16 +126,48 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         });
         document.getElementById('answered').textContent=done;
     }
-    // Autosave each answer immediately so a refresh / disconnect resumes here.
+    // Autosave answers in batches (one request per few seconds) so 800 students
+    // don't hammer the DB with a write per click. The final submit posts every
+    // answer from the form, so a missed/late batch never loses progress.
     var token=document.querySelector('meta[name=csrf-token]').content;
-    var ANSWER_URL="{{ url_for('cbt_portal.answer', exam_id=exam.id) }}";
-    function autosave(inp){
-        var body=new URLSearchParams({question_id:inp.dataset.qid, option:inp.value, _csrf_token:token});
-        fetch(ANSWER_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:body}).catch(function(){});
+    var ANSWERS_URL="{{ url_for('cbt_portal.answers_batch', exam_id=exam.id) }}";
+    var pendingAns={}, flushTimer=null;
+    function queueAnswer(inp){ pendingAns['q_'+inp.dataset.qid]=inp.value;
+        if(!flushTimer) flushTimer=setTimeout(flushAnswers, 3000); }
+    function _ansBody(batch){
+        var b='_csrf_token='+encodeURIComponent(token);
+        Object.keys(batch).forEach(function(k){ b+='&'+encodeURIComponent(k)+'='+encodeURIComponent(batch[k]); });
+        return b;
+    }
+    function flushAnswers(){
+        if(flushTimer){clearTimeout(flushTimer); flushTimer=null;}
+        var keys=Object.keys(pendingAns); if(!keys.length) return;
+        var batch=pendingAns; pendingAns={};
+        fetch(ANSWERS_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:_ansBody(batch)})
+            .catch(function(){ // network blip: requeue and retry on the next tick
+                Object.keys(batch).forEach(function(k){ if(!(k in pendingAns)) pendingAns[k]=batch[k]; });
+                if(!flushTimer) flushTimer=setTimeout(flushAnswers, 3000);
+            });
+    }
+    // Best-effort flush that survives the page being hidden/closed.
+    function flushBeacon(){
+        var keys=Object.keys(pendingAns); if(!keys.length) return;
+        var batch=pendingAns; pendingAns={};
+        try{
+            if(navigator.sendBeacon){
+                navigator.sendBeacon(ANSWERS_URL, new Blob([_ansBody(batch)],
+                    {type:'application/x-www-form-urlencoded'}));
+                return;
+            }
+        }catch(e){}
+        // Fallback: requeue so a normal flush picks it up.
+        Object.keys(batch).forEach(function(k){ if(!(k in pendingAns)) pendingAns[k]=batch[k]; });
+        flushAnswers();
     }
     document.querySelectorAll('.opt input').forEach(function(inp){
-        inp.addEventListener('change',function(){refresh();autosave(inp);});
+        inp.addEventListener('change',function(){refresh();queueAnswer(inp);});
     });
+    document.addEventListener('visibilitychange',function(){ if(document.hidden) flushBeacon(); });
     refresh();
 
     var STRICT={{ 'true' if strict else 'false' }};
@@ -223,8 +255,8 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         }
         {% endif %}
 
-        // heartbeat so admins can spot disconnects
-        setInterval(function(){ if(!submitted) fetch(PING_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token+'&client_token='+encodeURIComponent(window.__cbtDevTok||'')}).catch(function(){}); }, 20000);
+        // heartbeat so admins can spot disconnects (every 30s; server coalesces writes)
+        setInterval(function(){ if(!submitted) fetch(PING_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token+'&client_token='+encodeURIComponent(window.__cbtDevTok||'')}).catch(function(){}); }, 30000);
     }
 
     form.addEventListener('submit',function(e){

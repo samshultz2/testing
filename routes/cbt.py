@@ -509,10 +509,16 @@ def monitor_data(exam_id):
                             CBTAnswer.selected_option != None)
                     .group_by(CBTAnswer.attempt_id).all())
     # Latest device fingerprint per student for this exam (login or start event).
+    # Bound the scan: this exam's events, plus recent global-login events only,
+    # newest first, capped — so the monitor never loads the full history table.
     fp_by_student = {}
+    _recent_cut = now - timedelta(days=1)
     fps = (CBTLoginEvent.query
-           .filter((CBTLoginEvent.exam_id == exam_id) | (CBTLoginEvent.exam_id == None))
-           .order_by(CBTLoginEvent.created_at.desc()).all())
+           .filter(db.or_(CBTLoginEvent.exam_id == exam_id,
+                          db.and_(CBTLoginEvent.exam_id == None,
+                                  CBTLoginEvent.created_at >= _recent_cut)))
+           .order_by(CBTLoginEvent.created_at.desc())
+           .limit(6000).all())
     for fp in fps:
         fp_by_student.setdefault(fp.student_id, fp)
     # Live devices per student (pinged recently) -> flag concurrent sessions.
@@ -1193,9 +1199,14 @@ def ping(exam_id):
     student = _current_student()
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if attempt and attempt.status == 'In progress':
-        attempt.last_seen = timeutil.now()
-        db.session.commit()
-        _touch_device_session(student, exam_id)
+        # Coalesce: only persist last_seen if it's gone stale. Clients ping
+        # often (~every 30s); writing on every ping is the main heartbeat write
+        # load at scale. A <25s-old last_seen is fresh enough for monitoring.
+        now = timeutil.now()
+        if not attempt.last_seen or (now - attempt.last_seen).total_seconds() >= 25:
+            attempt.last_seen = now
+            db.session.commit()
+            _touch_device_session(student, exam_id)
     return jsonify({'ok': True})
 
 
@@ -1265,6 +1276,46 @@ def answer(exam_id):
     ans.is_correct = (sel == q.correct_option)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+@cbt_portal_bp.route('/<int:exam_id>/answers', methods=['POST'])
+@cbt_login_required
+def answers_batch(exam_id):
+    """Autosave several answers in ONE request/commit (the scalable autosave path).
+
+    The client batches changes and flushes here periodically; the final submit
+    still posts every answer from the form, so a missed batch never loses data.
+    Accepts form fields named ``q_<question_id>=<option>``.
+    """
+    student = _current_student()
+    attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
+    if not attempt or attempt.status == 'Submitted':
+        return jsonify({'ok': False}), 400
+    correct = {q.id: q.correct_option
+               for q in CBTQuestion.query.filter_by(exam_id=exam_id).all()}
+    existing = {a.question_id: a for a in attempt.answers}
+    changed = 0
+    for key, val in request.form.items():
+        if not key.startswith('q_'):
+            continue
+        try:
+            qid = int(key[2:])
+        except ValueError:
+            continue
+        if qid not in correct:
+            continue
+        sel = (val or '').strip().upper() or None
+        ans = existing.get(qid)
+        if ans is None:
+            ans = CBTAnswer(attempt_id=attempt.id, question_id=qid)
+            db.session.add(ans)
+            existing[qid] = ans
+        ans.selected_option = sel
+        ans.is_correct = (sel == correct[qid])
+        changed += 1
+    if changed:
+        db.session.commit()
+    return jsonify({'ok': True, 'saved': changed})
 
 
 @cbt_portal_bp.route('/<int:exam_id>/submit', methods=['POST'])
