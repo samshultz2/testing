@@ -17,7 +17,8 @@
 .kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
 @media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
 .kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
-    padding:1rem;display:flex;align-items:center;gap:.85rem;transition:transform var(--transition),box-shadow var(--transition)}
+    padding:1rem;display:flex;align-items:center;gap:.85rem;overflow:hidden;transition:transform var(--transition),box-shadow var(--transition)}
+.kpi>div:last-child{min-width:0}
 .kpi:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
 .kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
 .kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
@@ -26,7 +27,7 @@
 .kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
 .kpi .ic.purple{background:linear-gradient(135deg,#7e6cf0,#5a48c9)}
 .kpi .ic.teal{background:linear-gradient(135deg,#11998e,#38ef7d)}
-.kpi .v{font-size:1.55rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.kpi .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-family:var(--font-display);overflow-wrap:anywhere}
 .kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
 
 .dash-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
@@ -145,9 +146,9 @@
 <!-- Cross-module KPIs -->
 {% if finance_stat or sales_stat or hr_stat or cbt_stat or library_stat %}
 <div class="kpi-row">
-    {% if finance_stat %}<div class="kpi"><div class="ic green"><i class="fas fa-coins"></i></div><div><div class="v">₦{{ '{:,.0f}'.format(finance_stat.collected) }}</div><div class="l">Fees collected (term)</div></div></div>
-    <div class="kpi"><div class="ic teal"><i class="fas fa-scale-balanced"></i></div><div><div class="v">₦{{ '{:,.0f}'.format(finance_stat.net) }}</div><div class="l">Net (term)</div></div></div>{% endif %}
-    {% if sales_stat %}<div class="kpi"><div class="ic blue"><i class="fas fa-cash-register"></i></div><div><div class="v">₦{{ '{:,.0f}'.format(sales_stat.today) }}</div><div class="l">Sales today ({{ sales_stat.count_today }})</div></div></div>{% endif %}
+    {% if finance_stat %}<div class="kpi"><div class="ic green"><i class="fas fa-coins"></i></div><div><div class="v" title="₦{{ '{:,.0f}'.format(finance_stat.collected) }}">{{ finance_stat.collected|naira_short }}</div><div class="l">Fees collected (term)</div></div></div>
+    <div class="kpi"><div class="ic teal"><i class="fas fa-scale-balanced"></i></div><div><div class="v" title="₦{{ '{:,.0f}'.format(finance_stat.net) }}">{{ finance_stat.net|naira_short }}</div><div class="l">Net (term)</div></div></div>{% endif %}
+    {% if sales_stat %}<div class="kpi"><div class="ic blue"><i class="fas fa-cash-register"></i></div><div><div class="v" title="₦{{ '{:,.0f}'.format(sales_stat.today) }}">{{ sales_stat.today|naira_short }}</div><div class="l">Sales today ({{ sales_stat.count_today }})</div></div></div>{% endif %}
     {% if hr_stat %}<div class="kpi"><div class="ic purple"><i class="fas fa-id-badge"></i></div><div><div class="v">{{ hr_stat.total }}</div><div class="l">Staff ({{ hr_stat.teaching }} teaching)</div></div></div>{% endif %}
     {% if cbt_stat %}<div class="kpi"><div class="ic blue"><i class="fas fa-laptop-code"></i></div><div><div class="v">{{ cbt_stat.published }}</div><div class="l">CBT exams · {{ cbt_stat.attempts }} attempts</div></div></div>{% endif %}
     {% if library_stat %}<div class="kpi"><div class="ic teal"><i class="fas fa-book"></i></div><div><div class="v">{{ library_stat.books }}</div><div class="l">Books · {{ library_stat.on_loan }} on loan</div></div></div>{% endif %}
