@@ -90,6 +90,11 @@
                     {% endif %}
                     {% if can_access_module('academics') %}
                     <li class="nav-item">
+                        <a href="{{ url_for('academics.term_setup') }}" class="nav-link {% if request.endpoint == 'academics.term_setup' %}active{% endif %}">
+                            <i class="fas fa-list-check"></i><span>Term Setup</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('academics.sessions_list') }}" class="nav-link">
                             <i class="fas fa-calendar-alt"></i><span>Sessions</span>
                         </a>

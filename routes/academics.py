@@ -240,6 +240,52 @@ def activate_term(term_id):
     return redirect(url_for('academics.terms_list'))
 
 
+@academics_bp.route('/setup')
+@login_required
+def term_setup():
+    """Guided checklist for setting up a term, with each step's status + a link."""
+    term_id = request.args.get('term_id', type=int)
+    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    term = db.session.get(Term, term_id) if term_id else get_active_term()
+    terms = Term.query.join(AcademicSession).order_by(
+        AcademicSession.name.desc(), Term.term_number).all()
+
+    weeks = assignments = enrolled = holidays = 0
+    if term:
+        weeks = Week.query.filter_by(term_id=term.id).count()
+        aids = [a.id for a in ClassArmAssignment.query.filter_by(term_id=term.id).all()]
+        assignments = len(aids)
+        holidays = Holiday.query.filter_by(term_id=term.id).count()
+        enrolled = StudentEnrollment.query.filter(
+            StudentEnrollment.class_arm_assignment_id.in_(aids or [-1]),
+            StudentEnrollment.is_active == True).count()
+
+    term_url = (url_for('academics.view_term', term_id=term.id) if term
+                else url_for('academics.terms_list'))
+    steps = [
+        {'title': 'Active academic session', 'done': active_session is not None,
+         'detail': active_session.name if active_session else 'None active yet',
+         'url': url_for('academics.sessions_list'), 'cta': 'Sessions'},
+        {'title': 'Active term', 'done': bool(term and term.is_active),
+         'detail': term.full_name if term else 'None selected',
+         'url': url_for('academics.terms_list'), 'cta': 'Terms'},
+        {'title': 'Weeks created', 'done': weeks > 0,
+         'detail': f'{weeks} week(s)', 'url': term_url, 'cta': 'Add weeks'},
+        {'title': 'Holidays & breaks', 'optional': True, 'done': True,
+         'detail': f'{holidays} marked (optional)', 'url': term_url, 'cta': 'Manage'},
+        {'title': 'Classes set up for the term', 'done': assignments > 0,
+         'detail': f'{assignments} class-arm(s)',
+         'url': url_for('academics.assignments_list'), 'cta': 'Class assignments'},
+        {'title': 'Students enrolled', 'done': enrolled > 0,
+         'detail': f'{enrolled} enrolled',
+         'url': url_for('academics.assignments_list'), 'cta': 'Enrol / Import'},
+    ]
+    required = [s for s in steps if not s.get('optional')]
+    done = sum(1 for s in required if s['done'])
+    return render_template('academics/setup.html', steps=steps, term=term,
+                           terms=terms, done=done, required=len(required))
+
+
 @academics_bp.route('/terms/<int:term_id>')
 @login_required
 def view_term(term_id):
