@@ -35,6 +35,10 @@ cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
 
 PORTAL_KEY = 'cbt_student_id'
 MAX_VIOLATIONS = 3   # leave-page events allowed before the test auto-submits
+# After the timer expires, how long a returning student's device still gets the
+# chance to sync its locally-saved answers and submit them, before the server
+# force-grades the attempt from what it already has (network-outage recovery).
+OFFLINE_GRACE_SECONDS = 30 * 60
 
 
 def _d(value, default=None):
@@ -480,6 +484,24 @@ def monitor(exam_id):
     branches = (Branch.query.filter_by(is_active=True).order_by(Branch.name).all()
                 if is_central() else [])
     return render_template('cbt/monitor.html', e=e, branches=branches)
+
+
+@cbt_bp.route('/attempts/<int:attempt_id>/force-submit', methods=['POST'])
+@login_required
+def force_submit(attempt_id):
+    """Invigilator action: end an in-progress attempt and grade it from the
+    answers already saved on the server. The recovery tool for a student whose
+    device died / went offline and never came back to submit."""
+    attempt = db.get_or_404(CBTAttempt, attempt_id)
+    if attempt.status == 'Submitted':
+        return jsonify({'ok': True, 'already': True})
+    exam = db.session.get(CBTExam, attempt.exam_id)
+    _finalize(attempt, exam)
+    from utils.audit import log_action
+    log_action('cbt.force_submit',
+               f'attempt {attempt.id} ({attempt.student.full_name if attempt.student else "?"}) '
+               f'exam {exam.id}')
+    return jsonify({'ok': True, 'score': attempt.score, 'total': attempt.total})
 
 
 @cbt_bp.route('/exams/<int:exam_id>/monitor/data')
@@ -1104,12 +1126,16 @@ def take(exam_id):
         return redirect(url_for('cbt_portal.start', exam_id=exam.id))
     if attempt.status == 'Submitted':
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
-    # Timer already expired while away -> auto-submit from saved answers.
+    # Timer already expired while away. Give a grace window first: if the
+    # student went offline mid-exam, their latest answers may exist only on
+    # their device — rendering the page (at 00:00) lets the browser restore
+    # them and submit, instead of grading from stale server-side answers.
     remaining = int((_deadline(attempt, exam) - timeutil.now()).total_seconds())
-    if remaining <= 0:
+    if remaining <= -OFFLINE_GRACE_SECONDS:
         _finalize(attempt, exam)
         flash('Time was up — your test was submitted automatically.', 'info')
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
+    remaining = max(remaining, 0)
     questions = exam.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     if exam.shuffle:
         random.Random(attempt.id).shuffle(questions)   # stable per attempt

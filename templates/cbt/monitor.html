@@ -46,8 +46,8 @@
 <div class="card"><div class="card-body" style="padding:0;">
     <div class="table-container">
         <table class="data-table table-stack no-mobile-scroll">
-            <thead><tr><th>Student</th><th>Status</th><th>Progress</th><th>Time left</th><th>Flags</th><th>Device</th><th>Connection</th></tr></thead>
-            <tbody id="monBody"><tr><td colspan="7" class="text-muted" style="padding:1.2rem;">Loading…</td></tr></tbody>
+            <thead><tr><th>Student</th><th>Status</th><th>Progress</th><th>Time left</th><th>Flags</th><th>Device</th><th>Connection</th><th></th></tr></thead>
+            <tbody id="monBody"><tr><td colspan="8" class="text-muted" style="padding:1.2rem;">Loading…</td></tr></tbody>
         </table>
     </div>
 </div></div>
@@ -79,7 +79,7 @@
         document.getElementById('concChip').style.display=nConc?'':'none';
         var body=document.getElementById('monBody');
         var rows=mobileOnly ? d.rows.filter(function(r){return r.device&&r.device.is_mobile;}) : d.rows;
-        if(!rows.length){ body.innerHTML='<tr><td colspan="7" class="text-muted" style="padding:1.2rem;">'+(mobileOnly?'No mobile devices.':'No one has started yet.')+'</td></tr>'; return; }
+        if(!rows.length){ body.innerHTML='<tr><td colspan="8" class="text-muted" style="padding:1.2rem;">'+(mobileOnly?'No mobile devices.':'No one has started yet.')+'</td></tr>'; return; }
         body.innerHTML=rows.map(function(r){
             var pct=r.questions? Math.round(r.answered/r.questions*100):0;
             var conn = r.status!=='In progress' ? '<span class="dot done"></span>—'
@@ -100,9 +100,22 @@
                 +'<td data-label="Time left">'+(r.status==='In progress'?fmt(r.remaining):'—')+'</td>'
                 +'<td data-label="Flags">'+(r.violations?'<span class="badge badge-danger"><i class="fas fa-flag"></i> '+r.violations+'</span>':'—')+'</td>'
                 +'<td data-label="Device">'+deviceCell(r.device)+'</td>'
-                +'<td data-label="Connection">'+conn+'</td></tr>';
+                +'<td data-label="Connection">'+conn+'</td>'
+                +'<td data-label="Action">'+(r.status==='In progress'
+                    ? '<button class="btn btn-danger btn-sm end-grade" data-aid="'+r.id+'" data-name="'+esc(r.name)+'" title="End this attempt and grade it from the answers already saved — use for a student whose device went offline and never came back."><i class="fas fa-flag-checkered"></i> End &amp; grade</button>'
+                    : '—')+'</td></tr>';
         }).join('');
     }
+    document.getElementById('monBody').addEventListener('click', function(ev){
+        var btn=ev.target.closest && ev.target.closest('.end-grade');
+        if(!btn) return;
+        if(!confirm('End the exam for '+btn.dataset.name+' and grade from the answers saved so far?')) return;
+        btn.disabled=true;
+        fetch('/cbt/attempts/'+btn.dataset.aid+'/force-submit',{method:'POST'})
+            .then(function(r){return r.json();})
+            .then(function(){ load(); })
+            .catch(function(){ btn.disabled=false; alert('Could not end the attempt — try again.'); });
+    });
     var branchSel=document.getElementById('branchFilter');
     function load(){
         var url=URL;

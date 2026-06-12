@@ -64,6 +64,15 @@
 
   // ---- replay ---------------------------------------------------------------
   var flushing = false;
+  function freshBody(body) {
+    // Queued items may be days old; the session CSRF token they captured can be
+    // stale. Swap in the current page's token so the replay isn't rejected.
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (!meta) return body;
+    var p = new URLSearchParams(body);
+    if (p.has('_csrf_token')) p.set('_csrf_token', meta.content);
+    return p.toString();
+  }
   function flush() {
     if (flushing) return;
     var q = load();
@@ -71,14 +80,21 @@
     flushing = true;
     var item = q[0];
     fetch(item.url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                      body: item.body, redirect: 'follow' })
+                      body: freshBody(item.body), redirect: 'follow' })
       .then(function (res) {
-        if (res.status >= 500) throw new Error('server');
+        // Session expired → the POST bounces to the login page. KEEP the item:
+        // it syncs after the user logs back in (we retry on every page load).
+        if (res.redirected && res.url.indexOf('/login') !== -1) {
+          flushing = false;
+          toast('Please log in to sync your saved changes.');
+          return;
+        }
+        if (res.status >= 400) throw new Error('http ' + res.status);
         var rest = load(); rest.shift(); save(rest);
         flushing = false;
         if (rest.length) flush(); else toast('All offline changes have been synced.');
       })
-      .catch(function () { flushing = false; /* still offline; try again later */ });
+      .catch(function () { flushing = false; /* still offline / rejected; retry later */ });
   }
 
   window.addEventListener('online', flush);

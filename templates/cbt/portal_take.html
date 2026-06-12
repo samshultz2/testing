@@ -105,7 +105,42 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
 (function(){
     var remaining={{ remaining }}, el=document.getElementById('timer'), box=document.getElementById('timerBox');
     var form=document.getElementById('examForm'), submitted=false;
-    function doSubmit(){ if(submitted)return; submitted=true; form.submit(); }
+    function lockInputs(){ document.querySelectorAll('.opt input').forEach(function(i){ i.disabled=true; }); }
+    // Offline-safe submit: a plain form.submit() with no network would land on a
+    // browser error page and strand the attempt. Instead we keep the exam page
+    // alive, show a banner, and auto-submit the moment the connection returns
+    // (syncing any device-only answers first). The server holds a grace window
+    // before force-grading, so nothing is lost.
+    function showWaitBanner(){
+        if(document.getElementById('netWait'))return;
+        var b=document.createElement('div');
+        b.id='netWait';
+        b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:10000;background:#b45309;color:#fff;'
+            +'padding:.7rem 1rem;text-align:center;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+        b.textContent='No connection — your answers are saved on this device. '
+            +'The exam will submit automatically as soon as the network returns. Do not close this page.';
+        document.body.appendChild(b);
+    }
+    function flushThenSubmit(){
+        try{ flushAnswers(); }catch(e){}
+        // small head start for the batch sync; the form itself carries every
+        // ticked answer anyway, so this is belt-and-braces, not load-bearing.
+        setTimeout(function(){ form.submit(); }, 800);
+    }
+    function queueSubmit(){
+        lockInputs(); showWaitBanner();
+        var t=setInterval(function(){
+            if(navigator.onLine!==false){ clearInterval(t); flushThenSubmit(); }
+        }, 5000);
+        window.addEventListener('online', function once(){
+            window.removeEventListener('online', once); clearInterval(t); flushThenSubmit();
+        });
+    }
+    function doSubmit(){
+        if(submitted)return; submitted=true; lockInputs();
+        if(navigator.onLine===false){ queueSubmit(); return; }
+        form.submit();
+    }
     function tick(){
         if(remaining<=0){el.textContent='00:00';doSubmit();return;}
         var m=Math.floor(remaining/60),s=remaining%60;
@@ -113,7 +148,6 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         if(remaining<=60)box.classList.add('warn');
         remaining--;
     }
-    tick(); setInterval(tick,1000);
 
     // option selection styling + answered tracking
     function refresh(){
@@ -195,6 +229,9 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     // Retry syncing whenever the connection comes back.
     window.addEventListener('online', function(){ Object.keys(localAns).forEach(function(qid){ pendingAns['q_'+qid]=localAns[qid]; }); flushAnswers(); });
     refresh();
+    // Start the timer only after answers are restored, so a page that loads at
+    // 00:00 (e.g. reconnecting after an outage) submits WITH the device answers.
+    tick(); setInterval(tick,1000);
 
     var STRICT={{ 'true' if strict else 'false' }};
     var FLAG_URL="{{ url_for('cbt_portal.flag', exam_id=exam.id) }}";
@@ -291,6 +328,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
             var done=document.querySelectorAll('.q-card input:checked').length;
             if(done<total && !confirm('You answered '+done+' of '+total+' questions. Submit now?')){ e.preventDefault(); return; }
         }
+        if(navigator.onLine===false){ e.preventDefault(); submitted=true; queueSubmit(); return; }
         submitted=true;
     });
     if(window.innerWidth<=860){document.querySelector('.mini-submit').style.display='block';}
