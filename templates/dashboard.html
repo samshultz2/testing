@@ -94,6 +94,32 @@
     </div>
 </div>
 
+{% if teacher_classes is not none %}
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-chalkboard-teacher"></i> My Classes</h3>
+        <a href="{{ url_for('attendance.week_grid') }}" class="btn btn-secondary btn-sm"><i class="fas fa-calendar-week"></i> Mark a week</a></div>
+    <div class="card-body">
+        {% if teacher_classes %}
+        <div class="data-cards">
+            {% for c in teacher_classes %}
+            <div class="data-card">
+                <div class="data-card-header"><div class="data-card-title">{{ c.name }}</div>
+                    <span class="badge badge-info">{{ c.count }} student{{ '' if c.count == 1 else 's' }}</span></div>
+                <div class="data-card-actions" style="display:flex;gap:.4rem;flex-wrap:wrap;">
+                    <a href="{{ url_for('attendance.mark_attendance_page', term_id=active_term.id, assignment_id=c.id) }}" class="btn btn-primary btn-sm" style="flex:1;"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                    <a href="{{ url_for('attendance.week_grid', term_id=active_term.id, assignment_id=c.id) }}" class="btn btn-secondary btn-sm" style="flex:1;"><i class="fas fa-calendar-week"></i> Week</a>
+                    {% if can_access_module('results') %}<a href="{{ url_for('subjects.bulk_entry') }}" class="btn btn-secondary btn-sm" style="flex:1;"><i class="fas fa-pen"></i> Scores</a>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-chalkboard"></i><p>You have no classes assigned for {{ active_term.name if active_term else 'this term' }}. Ask an admin to set you as a form teacher.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% if announcements %}
 <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem;">
     {% for a in announcements %}

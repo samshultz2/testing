@@ -172,6 +172,7 @@ def dashboard():
 
     active_enrollments, total_classes, class_stats = _dash_class_stats(active_term, tscope)
     birthdays_today, birthdays_week = _dash_birthdays()
+    teacher_classes = _teacher_today(active_term, tscope)
 
     ctx = dict(
         announcements=_dash_announcements(),
@@ -203,9 +204,32 @@ def dashboard():
         hr_stat=_dash_hr() if 'hr' in enabled else None,
         cbt_stat=_dash_cbt() if 'cbt' in enabled else None,
         library_stat=_dash_library() if 'library' in enabled else None,
+        teacher_classes=teacher_classes,
         **_dash_student_counts(tscope)
     )
     return render_template('dashboard.html', **ctx)
+
+
+def _teacher_today(active_term, tscope):
+    """For a teacher, their classes in the active term with per-class quick
+    actions (mark attendance, mark a week). None for admins / non-teachers."""
+    if tscope is None or not active_term:
+        return None
+    aidset = set(tscope[0])
+    if not aidset:
+        return []
+    rows = []
+    for a in (ClassArmAssignment.query
+              .filter(ClassArmAssignment.id.in_(aidset),
+                      ClassArmAssignment.term_id == active_term.id).all()):
+        rows.append({
+            'id': a.id,
+            'name': a.display_name,
+            'count': StudentEnrollment.query.filter_by(
+                class_arm_assignment_id=a.id, is_active=True).count(),
+        })
+    rows.sort(key=lambda r: r['name'])
+    return rows
 
 
 @main_bp.route('/dashboard/customize', methods=['GET', 'POST'])
