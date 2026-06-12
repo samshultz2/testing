@@ -43,3 +43,23 @@ def test_graduate_preview_lists_then_commits(app):
     c.post('/promotion/graduate-sss3', data={'_csrf_token': tok})
     with app.app_context():
         assert db.session.get(Student, sid).is_graduated is True
+
+
+def test_receipt_pdf_downloads(app):
+    from datetime import date
+    from models import FeePayment, AcademicSession, Term, Student
+    with app.app_context():
+        s = Student(student_id='RCPTDL', first_name='Pay', surname='Dl', gender='Male', is_active=True)
+        db.session.add(s); db.session.flush()
+        sess = AcademicSession.query.first() or AcademicSession(name='RD 24/25', is_active=True)
+        db.session.add(sess); db.session.flush()
+        term = Term.query.filter_by(session_id=sess.id, term_number=1).first() or Term(
+            session_id=sess.id, term_number=1, name='First Term')
+        db.session.add(term); db.session.flush()
+        p = FeePayment(student_id=s.id, term_id=term.id, amount=1000, payment_date=date.today(),
+                       method='Cash', receipt_no='DL-1')
+        db.session.add(p); db.session.commit(); pid = p.id
+    r = _admin(app).get(f'/finance/payments/{pid}/receipt.pdf')
+    assert r.status_code == 200
+    assert r.headers['Content-Type'] == 'application/pdf'
+    assert r.get_data()[:4] == b'%PDF'

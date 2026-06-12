@@ -560,6 +560,28 @@ def receipt(payment_id):
     return render_template('finance/receipt.html', payment=payment, bill=bill, school=school)
 
 
+@finance_bp.route('/payments/<int:payment_id>/receipt.pdf')
+@login_required
+def receipt_pdf(payment_id):
+    """Download the receipt as a real PDF (reliable on any device)."""
+    payment = db.get_or_404(FeePayment, payment_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(payment.branch_id)
+    bill = student_bill(payment.student_id, payment.term_id)
+    from models import SchoolSettings
+    school = {
+        'name': SchoolSettings.get('school_name', 'My School'),
+        'address': SchoolSettings.get('school_address', ''),
+        'phone': SchoolSettings.get('school_phone', ''),
+        'motto': SchoolSettings.get('school_motto', ''),
+    }
+    from utils.receipt_pdf import receipt_pdf as _make_pdf
+    buf, filename = _make_pdf(payment, bill, school)
+    from flask import send_file
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=filename)
+
+
 @finance_bp.route('/payments/<int:payment_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_payment(payment_id):
