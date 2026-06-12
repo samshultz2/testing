@@ -174,4 +174,71 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Discipline / incident log -->
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-gavel"></i> Discipline ({{ student.discipline_records.count() }})</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('welfare.add_discipline', student_id=student.id) }}" class="filter-form mb-3" style="align-items:flex-end;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ today.strftime('%Y-%m-%d') }}"></div>
+            <div class="form-group"><label class="form-label">Category</label>
+                <select name="category" class="form-control">
+                    {% for cat in ['Lateness','Truancy','Uniform','Fighting','Rudeness','Bullying','Property damage','Exam misconduct','Other'] %}<option>{{ cat }}</option>{% endfor %}
+                </select></div>
+            <div class="form-group"><label class="form-label">Severity</label>
+                <select name="severity" class="form-control"><option>Minor</option><option>Major</option></select></div>
+            <div class="form-group" style="flex:2;min-width:200px;"><label class="form-label">What happened</label><input type="text" name="description" class="form-control" placeholder="Describe the incident" required></div>
+            <div class="form-group" style="flex:2;min-width:200px;"><label class="form-label">Action taken</label><input type="text" name="action_taken" class="form-control" placeholder="e.g., Warning, parent called"></div>
+            <div class="filter-actions"><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</button></div>
+        </form>
+        {% set drecs = student.discipline_records.all()|sort(attribute='date', reverse=true) %}
+        {% if drecs %}
+        <div class="table-container" style="border:none;"><table class="data-table">
+            <thead><tr><th>Date</th><th>Category</th><th>Severity</th><th>Incident</th><th>Action</th><th>By</th><th></th></tr></thead>
+            <tbody>
+            {% for r in drecs %}
+            <tr>
+                <td>{{ r.date|format_date }}</td><td>{{ r.category or '—' }}</td>
+                <td>{% if r.severity %}<span class="badge {% if r.severity=='Major' %}badge-danger{% else %}badge-warning{% endif %}">{{ r.severity }}</span>{% endif %}</td>
+                <td>{{ r.description }}</td><td>{{ r.action_taken or '—' }}</td><td class="text-muted">{{ r.reported_by or '' }}</td>
+                <td><form method="POST" action="{{ url_for('welfare.delete_discipline', record_id=r.id) }}" data-confirm="Remove this record?"><button class="btn btn-danger btn-sm"><i class="fas fa-times"></i></button></form></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+        {% else %}<p class="text-muted">No discipline records.</p>{% endif %}
+    </div>
+</div>
+
+<!-- Sick bay / clinic -->
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-briefcase-medical"></i> Sick Bay ({{ student.clinic_visits.count() }})</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('welfare.add_clinic', student_id=student.id) }}" class="filter-form mb-3" style="align-items:flex-end;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ today.strftime('%Y-%m-%d') }}"></div>
+            <div class="form-group" style="flex:2;min-width:200px;"><label class="form-label">Complaint / symptom</label><input type="text" name="complaint" class="form-control" placeholder="e.g., Headache, fever" required></div>
+            <div class="form-group" style="flex:2;min-width:200px;"><label class="form-label">Treatment given</label><input type="text" name="treatment" class="form-control" placeholder="e.g., Paracetamol, rest"></div>
+            <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" name="parent_notified"> Parent notified</label></div>
+            <div class="filter-actions"><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</button></div>
+        </form>
+        {% set visits = student.clinic_visits.all()|sort(attribute='date', reverse=true) %}
+        {% if visits %}
+        <div class="table-container" style="border:none;"><table class="data-table">
+            <thead><tr><th>Date</th><th>Complaint</th><th>Treatment</th><th>Parent told</th><th>By</th><th></th></tr></thead>
+            <tbody>
+            {% for v in visits %}
+            <tr>
+                <td>{{ v.date|format_date }}</td><td>{{ v.complaint }}</td><td>{{ v.treatment or '—' }}</td>
+                <td>{% if v.parent_notified %}<span class="badge badge-success">Yes</span>{% else %}<span class="badge badge-warning">No</span>{% endif %}</td>
+                <td class="text-muted">{{ v.attended_by or '' }}</td>
+                <td><form method="POST" action="{{ url_for('welfare.delete_clinic', visit_id=v.id) }}" data-confirm="Remove this visit?"><button class="btn btn-danger btn-sm"><i class="fas fa-times"></i></button></form></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+        {% else %}<p class="text-muted">No clinic visits.</p>{% endif %}
+    </div>
+</div>
 {% endblock %}

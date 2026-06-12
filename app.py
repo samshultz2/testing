@@ -21,6 +21,7 @@ from routes.cbt import cbt_bp, cbt_portal_bp
 from routes.result_portal import scratchcards_bp, result_portal_bp
 from routes.parent_portal import parent_bp
 from routes.sales import sales_bp
+from routes.welfare import welfare_bp
 
 
 _scheduler_started = False
@@ -103,6 +104,7 @@ def create_app(config_class=None):
     app.register_blueprint(result_portal_bp)
     app.register_blueprint(parent_bp)
     app.register_blueprint(sales_bp)
+    app.register_blueprint(welfare_bp)
     
     # Initialize database
     with app.app_context():
