@@ -32,7 +32,7 @@
 </div></div>
 
 {% if selected and class_subjects and enrollments %}
-<form method="POST" action="{{ url_for('subjects.bulk_entry') }}">
+<form method="POST" action="{{ url_for('subjects.bulk_entry') }}" data-offline data-offline-label="Scores">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="term_id" value="{{ term_id }}">
     <input type="hidden" name="assignment_id" value="{{ assignment_id }}">

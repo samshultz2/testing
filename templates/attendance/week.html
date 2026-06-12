@@ -61,7 +61,7 @@
   {% elif not school_days %}
   <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-calendar-times"></i><p>Week {{ selected_week.week_number }} has no school days (all weekend/holiday).</p></div></div></div>
   {% else %}
-  <form method="POST" action="{{ url_for('attendance.week_save') }}">
+  <form method="POST" action="{{ url_for('attendance.week_save') }}" data-offline data-offline-label="Week attendance">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="term_id" value="{{ selected_term.id }}">
     <input type="hidden" name="assignment_id" value="{{ selected_assignment.id }}">

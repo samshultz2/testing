@@ -140,7 +140,7 @@
                 </div>
             </div>
             
-            <form method="POST" action="{{ url_for('attendance.save_attendance') }}">
+            <form method="POST" action="{{ url_for('attendance.save_attendance') }}" data-offline data-offline-label="Attendance">
                 <input type="hidden" name="term_id" value="{{ selected_term.id }}">
                 <input type="hidden" name="assignment_id" value="{{ selected_assignment.id }}">
                 <input type="hidden" name="date" value="{{ target_date.strftime('%Y-%m-%d') }}">
