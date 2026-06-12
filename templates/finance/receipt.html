@@ -26,7 +26,12 @@
 <div class="page-header no-print">
     <h1>Receipt</h1>
     <div class="page-header-actions">
-        <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+        <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print / Save PDF</button>
+        {% set pc = payment.student.parent_contacts.filter_by(is_primary=True).first() or payment.student.parent_contacts.first() %}
+        {% if pc and pc.phone_number %}
+        {% set wamsg = 'Receipt ' ~ payment.receipt_no ~ ': ' ~ payment.student.full_name ~ ' — ' ~ (payment.amount|naira) ~ ' paid for ' ~ payment.term.full_name ~ '. Outstanding balance: ' ~ (bill.balance|naira) ~ '. — ' ~ school.name %}
+        <a href="https://wa.me/{{ pc.phone_number|wa_intl }}?text={{ wamsg|urlencode }}" target="_blank" rel="noopener" class="btn btn-success"><i class="fab fa-whatsapp"></i> Send to parent</a>
+        {% endif %}
         <a href="{{ url_for('finance.edit_payment', payment_id=payment.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>
         <a href="{{ url_for('finance.record_payment', term_id=payment.term_id) }}" class="btn btn-secondary"><i class="fas fa-plus"></i> New Payment</a>
     </div>

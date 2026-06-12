@@ -16,7 +16,8 @@
 {% include 'communication/_tabs.html' %}
 
 {% if configured %}
-<div class="status-banner ok"><i class="fas fa-circle-check"></i><div><strong>SMS sending is active</strong> via {{ provider_label }}. Campaigns can now be sent automatically from the server.</div></div>
+<div class="status-banner ok"><i class="fas fa-circle-check"></i><div><strong>SMS sending is active</strong> via {{ provider_label }}. Campaigns can now be sent automatically from the server.
+{% if balance_ok %}<br><strong>Balance:</strong> {{ balance }}{% else %}<br><span class="text-muted">Balance unavailable{% if balance %} ({{ balance }}){% endif %}.</span>{% endif %}</div></div>
 {% else %}
 <div class="status-banner off"><i class="fas fa-circle-info"></i><div><strong>SMS auto-send is off.</strong> Messages currently use manual WhatsApp / SMS links. Add your provider key below and it starts working immediately — no other changes needed.</div></div>
 {% endif %}

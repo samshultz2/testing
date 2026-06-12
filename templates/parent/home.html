@@ -91,9 +91,10 @@
         </div>
 
         <div class="sec">
-            <h2 style="display:flex;align-items:center;justify-content:space-between;">Results
+            <h2 style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">Results
                 {% if report %}<a href="{{ url_for('parent.report_pdf', term_id=term_id) }}" style="font-size:.8rem;background:#0d6a4e;color:#fff;padding:.35rem .7rem;border-radius:8px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Download PDF</a>{% endif %}
             </h2>
+            {% if report %}<p class="muted" style="font-size:.78rem;margin-top:-.4rem;"><i class="fas fa-wifi"></i> Tip: once opened, this page works offline — and the PDF can be saved to your phone.</p>{% endif %}
             {% if report %}
             <table>
                 <thead><tr><th>Subject</th>{% for at in report.assessment_types %}<th>{{ at.short_name or at.name }}</th>{% endfor %}<th>Total</th><th>Grade</th><th>Remark</th></tr></thead>

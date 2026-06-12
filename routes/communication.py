@@ -431,6 +431,7 @@ def message_detail(message_id):
         msg=msg, rows=rows, segments=comms.sms_segments(msg.body),
         gateway_ready=sms_gateway.is_configured(gw),
         gateway_label=sms_gateway.provider_label(gw),
+        failed_count=msg.recipients.filter(MessageRecipient.status == 'Failed').count(),
         pending_count=msg.recipients.filter(MessageRecipient.status != 'Sent').count())
 
 
@@ -530,9 +531,12 @@ def send_gateway(message_id):
 def settings():
     from utils import sms_gateway
     cfg = sms_gateway.get_config()
+    configured = sms_gateway.is_configured(cfg)
+    balance_ok, balance = (sms_gateway.get_balance(cfg) if configured else (False, ''))
     return render_template('communication/settings.html',
         cfg=cfg, providers=sms_gateway.PROVIDERS,
-        configured=sms_gateway.is_configured(cfg),
+        configured=configured,
+        balance_ok=balance_ok, balance=balance,
         provider_label=sms_gateway.provider_label(cfg))
 
 

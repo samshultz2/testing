@@ -80,6 +80,17 @@ def unmark_graduate(student_id):
     return redirect(request.referrer or url_for('main.view_student', student_id=student.id))
 
 
+@promotion_bp.route('/graduate-sss3/preview')
+@admin_required
+def graduate_sss3_preview():
+    """Review which SSS3 students will be graduated before committing."""
+    enrolled = get_sss3_enrolled_students()
+    students = [s for s in enrolled if not s.is_graduated]
+    already = [s for s in enrolled if s.is_graduated]
+    return render_template('promotion/graduate_preview.html',
+                           students=students, already=already)
+
+
 @promotion_bp.route('/graduate-sss3', methods=['POST'])
 @admin_required
 def graduate_sss3():
