@@ -14,6 +14,10 @@
     <a href="{{ url_for('generator.export_image', batch_id=batch_id) }}" class="btn btn-warning"><i class="fas fa-image"></i> Image (PNG)</a>
     <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chalkboard-teacher"></i> Teacher View</a>
     <a href="{{ url_for('generator.reports_index') }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Reports</a>
+    <form method="POST" action="{{ url_for('generator.apply_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Publish this timetable into the class timetable views for the ACTIVE term? This replaces any existing entries for the classes it covers.">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-dark"><i class="fas fa-share-square"></i> Apply to Class Timetables</button>
+    </form>
     <form method="POST" action="{{ url_for('generator.delete_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Delete this batch?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>

@@ -1792,6 +1792,103 @@ def view_results(batch_id):
     )
 
 
+@generator_bp.route('/results/<batch_id>/apply', methods=['POST'])
+@timetable_generate_required
+def apply_results(batch_id):
+    """Publish a generated batch into the per-class timetable views
+    (ClassTimetable) for the active term. Replaces existing entries for the
+    classes it covers (one button, all classes)."""
+    from models import (SchoolClass, ClassArm, ClassArmAssignment, ClassTimetable,
+                        TimetableSlot)
+    from utils.helpers import get_active_term
+    from utils.branch_scope import can_access_branch
+    from utils.audit import log_action
+
+    level = get_current_level()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level).all()
+    if not results:
+        flash('No results found for this batch.', 'error')
+        return redirect(url_for('generator.results_list'))
+
+    term = get_active_term()
+    if not term:
+        flash('Set an active term first — class timetables are stored per term.', 'error')
+        return redirect(url_for('generator.view_results', batch_id=batch_id))
+
+    # Teaching periods keyed by period number (breaks excluded).
+    teaching_slots = {s.slot_number: s for s in
+                      TimetableSlot.query.filter_by(is_active=True, is_break=False).all()}
+    if not teaching_slots:
+        flash('No class periods are configured. Set them up under '
+              'Settings → Timetable Slots, then apply again.', 'error')
+        return redirect(url_for('generator.view_results', batch_id=batch_id))
+
+    classes_by_name = {c.name.lower(): c for c in SchoolClass.query.all()}
+    arms_by_name = {a.name.lower(): a for a in ClassArm.query.all()}
+    subjects_by_name = {s.name.lower(): s for s in Subject.query.filter_by(is_active=True).all()}
+
+    groups = {}
+    for r in results:
+        groups.setdefault((r.class_name, r.arm_name), []).append(r)
+
+    applied = written = skipped_branch = 0
+    unmatched_classes, unmatched_subjects, missing_slots = set(), set(), set()
+
+    for (cname, aname), rows in groups.items():
+        sc = classes_by_name.get((cname or '').lower())
+        arm = arms_by_name.get((aname or '').lower())
+        caa = None
+        if sc and arm:
+            caa = ClassArmAssignment.query.filter_by(
+                class_id=sc.id, arm_id=arm.id, term_id=term.id).first()
+        if not caa:
+            unmatched_classes.add(f'{cname} {aname}')
+            continue
+        if not can_access_branch(caa.branch_id):
+            skipped_branch += 1
+            continue
+        # Replace existing entries for this class arm.
+        ClassTimetable.query.filter_by(class_arm_assignment_id=caa.id).delete()
+        seen = set()
+        for r in rows:
+            slot = teaching_slots.get(r.period_number)
+            if not slot:
+                missing_slots.add(r.period_number)
+                continue
+            key = (slot.id, r.day_of_week)
+            if key in seen:                       # unique (caa, slot, day)
+                continue
+            seen.add(key)
+            subj = subjects_by_name.get((r.subject.name or '').lower()) if r.subject else None
+            if r.subject and not subj:
+                unmatched_subjects.add(r.subject.name)
+            db.session.add(ClassTimetable(
+                class_arm_assignment_id=caa.id, slot_id=slot.id,
+                day_of_week=r.day_of_week,
+                subject_id=subj.id if subj else None,
+                teacher_name=(r.teacher.name if r.teacher else None),
+                room=getattr(r.room, 'name', None),
+                is_active=True))
+            written += 1
+        applied += 1
+
+    db.session.commit()
+    log_action('timetable.apply_batch',
+               f'batch {batch_id}: {applied} class(es), {written} entries -> {term.full_name}')
+
+    msg = f'Applied to {applied} class timetable(s) for {term.full_name} ({written} entries).'
+    if unmatched_classes:
+        msg += ' No class/arm match for this term: ' + ', '.join(sorted(unmatched_classes)) + '.'
+    if unmatched_subjects:
+        msg += ' Subjects not found in academic subjects (left blank): ' + ', '.join(sorted(unmatched_subjects)) + '.'
+    if missing_slots:
+        msg += ' No period slot for period(s): ' + ', '.join(str(p) for p in sorted(missing_slots)) + '.'
+    if skipped_branch:
+        msg += f' Skipped {skipped_branch} class(es) outside your branch.'
+    flash(msg, 'success' if applied else 'warning')
+    return redirect(url_for('generator.view_results', batch_id=batch_id))
+
+
 @generator_bp.route('/results/<batch_id>/edit/<class_name>/<arm_name>')
 @login_required
 def edit_timetable(batch_id, class_name, arm_name):
