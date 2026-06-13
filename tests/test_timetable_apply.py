@@ -84,6 +84,41 @@ def test_apply_batch_fills_class_timetable(app):
         assert {r.day_of_week for r in rows} == {0}
 
 
+def test_apply_autocreates_subject_on_name_mismatch(app):
+    """A generated subject with no academic match is created (cell not dropped)."""
+    base = _setup(app)
+    with app.app_context():
+        sc = SchoolClass.query.get(
+            ClassArmAssignment.query.get(base['caa']).class_id)
+        arm = ClassArm.query.get(ClassArmAssignment.query.get(base['caa']).arm_id)
+        assert Subject.query.filter_by(name='Astro-Nav 9000').first() is None
+        gsub = GenSubject.query.filter_by(name='Astro-Nav 9000', school_level='sss').first()
+        if not gsub:
+            gsub = GenSubject(name='Astro-Nav 9000', school_level='sss')
+            db.session.add(gsub)
+        gteach = GenTeacher.query.filter_by(name='TTA Teacher', school_level='sss').first()
+        db.session.flush()
+        batch = 'TTAB2'
+        if not GenTimetableResult.query.filter_by(batch_id=batch).first():
+            db.session.add(GenTimetableResult(
+                batch_id=batch, school_level='sss', class_name=sc.name, arm_name=arm.name,
+                day_of_week=1, period_number=1, subject_id=gsub.id,
+                teacher_id=gteach.id if gteach else None))
+        db.session.commit()
+
+    client = _admin(app)
+    page = client.get('/generator/results/TTAB2').get_data(as_text=True)
+    token = re.search(r'name="csrf-token" content="([0-9a-f]+)"', page).group(1)
+    client.post('/generator/results/TTAB2/apply', data={'_csrf_token': token})
+
+    with app.app_context():
+        created = Subject.query.filter_by(name='Astro-Nav 9000').first()
+        assert created is not None       # auto-created so the cell isn't blank
+        entry = ClassTimetable.query.filter_by(
+            class_arm_assignment_id=base['caa'], day_of_week=1).first()
+        assert entry is not None and entry.subject_id == created.id
+
+
 def test_apply_replaces_existing_entries(app):
     ids = _setup(app)
     # Pre-seed a stale entry that should be wiped by the replace-mode apply.

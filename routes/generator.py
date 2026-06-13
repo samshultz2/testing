@@ -1815,24 +1815,60 @@ def apply_results(batch_id):
         flash('Set an active term first — class timetables are stored per term.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
 
-    # Teaching periods keyed by period number (breaks excluded).
-    teaching_slots = {s.slot_number: s for s in
-                      TimetableSlot.query.filter_by(is_active=True, is_break=False).all()}
-    if not teaching_slots:
+    # Teaching periods, in school-day order (breaks excluded). The generator
+    # numbers periods 1..N positionally, so we map a result's period_number to
+    # the N-th teaching slot rather than relying on slot_number values matching.
+    teaching = (TimetableSlot.query.filter_by(is_active=True, is_break=False)
+                .order_by(TimetableSlot.order, TimetableSlot.slot_number).all())
+    if not teaching:
         flash('No class periods are configured. Set them up under '
               'Settings → Timetable Slots, then apply again.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
 
+    def slot_for_period(p):
+        return teaching[p - 1] if isinstance(p, int) and 1 <= p <= len(teaching) else None
+
     classes_by_name = {c.name.lower(): c for c in SchoolClass.query.all()}
     arms_by_name = {a.name.lower(): a for a in ClassArm.query.all()}
-    subjects_by_name = {s.name.lower(): s for s in Subject.query.filter_by(is_active=True).all()}
+
+    # Lenient subject lookup: normalise case/spacing/punctuation, and index both
+    # full name and short name so generator subjects line up with academic ones
+    # even when they differ cosmetically.
+    import re as _re
+
+    def norm(s):
+        return _re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+    subject_index = {}
+    for s in Subject.query.all():
+        for key in (norm(s.name), norm(s.short_name)):
+            if key:
+                subject_index.setdefault(key, s)
+
+    def resolve_subject(gs):
+        """Academic Subject for a generator subject, creating one if there's no
+        reasonable match — so no generated cell is dropped for a name mismatch."""
+        if not gs:
+            return None, False
+        s = subject_index.get(norm(gs.name)) or subject_index.get(norm(gs.short_name))
+        if s:
+            return s, False
+        s = Subject(name=gs.name, short_name=gs.short_name,
+                    category=gs.category, is_active=True)
+        db.session.add(s)
+        db.session.flush()
+        for key in (norm(s.name), norm(s.short_name)):
+            if key:
+                subject_index.setdefault(key, s)
+        return s, True
 
     groups = {}
     for r in results:
         groups.setdefault((r.class_name, r.arm_name), []).append(r)
 
     applied = written = skipped_branch = 0
-    unmatched_classes, unmatched_subjects, missing_slots = set(), set(), set()
+    unmatched_classes, missing_slots = set(), set()
+    created_subjects = set()
 
     for (cname, aname), rows in groups.items():
         sc = classes_by_name.get((cname or '').lower())
@@ -1851,7 +1887,7 @@ def apply_results(batch_id):
         ClassTimetable.query.filter_by(class_arm_assignment_id=caa.id).delete()
         seen = set()
         for r in rows:
-            slot = teaching_slots.get(r.period_number)
+            slot = slot_for_period(r.period_number)
             if not slot:
                 missing_slots.add(r.period_number)
                 continue
@@ -1859,9 +1895,9 @@ def apply_results(batch_id):
             if key in seen:                       # unique (caa, slot, day)
                 continue
             seen.add(key)
-            subj = subjects_by_name.get((r.subject.name or '').lower()) if r.subject else None
-            if r.subject and not subj:
-                unmatched_subjects.add(r.subject.name)
+            subj, created = resolve_subject(r.subject)
+            if created:
+                created_subjects.add(subj.name)
             db.session.add(ClassTimetable(
                 class_arm_assignment_id=caa.id, slot_id=slot.id,
                 day_of_week=r.day_of_week,
@@ -1877,12 +1913,15 @@ def apply_results(batch_id):
                f'batch {batch_id}: {applied} class(es), {written} entries -> {term.full_name}')
 
     msg = f'Applied to {applied} class timetable(s) for {term.full_name} ({written} entries).'
+    if created_subjects:
+        msg += (f' Added {len(created_subjects)} new academic subject(s) that '
+                f'weren\'t in the list yet: ' + ', '.join(sorted(created_subjects)) + '.')
     if unmatched_classes:
         msg += ' No class/arm match for this term: ' + ', '.join(sorted(unmatched_classes)) + '.'
-    if unmatched_subjects:
-        msg += ' Subjects not found in academic subjects (left blank): ' + ', '.join(sorted(unmatched_subjects)) + '.'
     if missing_slots:
-        msg += ' No period slot for period(s): ' + ', '.join(str(p) for p in sorted(missing_slots)) + '.'
+        msg += (' These generated period numbers have no matching class period '
+                '(check that Settings → Timetable Slots has enough periods): '
+                + ', '.join(str(p) for p in sorted(missing_slots)) + '.')
     if skipped_branch:
         msg += f' Skipped {skipped_branch} class(es) outside your branch.'
     flash(msg, 'success' if applied else 'warning')
