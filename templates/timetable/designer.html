@@ -28,23 +28,29 @@
 .bulk-box textarea{width:100%;margin:.5rem 0;padding:.7rem;font-size:.95rem;border:1px solid var(--gray-300,#cbd5e1);border-radius:9px;font-family:inherit}
 
 /* ---- the printable sheet ---- */
-.tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1100px;margin:0 auto;overflow-x:auto}
+.tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1100px;margin:0 auto;overflow-x:auto;font-size:17px}
 .tt-sheet .tt-head{text-align:center;margin-bottom:14px}
-.tt-sheet .tt-school{font-size:1.5rem;font-weight:800;letter-spacing:.5px}
-.tt-sheet .tt-title{font-size:1.15rem;font-weight:700;margin-top:2px}
-.tt-sheet .tt-sub{font-size:.95rem;color:#555;margin-top:2px}
-.tt-sheet table{width:100%;border-collapse:collapse;margin-top:10px}
+.tt-sheet .tt-school{font-size:2em;font-weight:800;letter-spacing:.5px}
+.tt-sheet .tt-title{font-size:1.4em;font-weight:700;margin-top:2px}
+.tt-sheet .tt-sub{font-size:1.05em;color:#555;margin-top:2px}
+.tt-sheet table{width:100%;border-collapse:collapse;margin-top:10px;font-size:1em}
 .tt-sheet th,.tt-sheet td{padding:10px 12px;text-align:left;vertical-align:top}
 .tt-sheet td.empty{height:34px}
 .tt-sheet .sig-col{min-width:160px}
 /* day grid cells: subject + teacher together, centred */
 .tt-sheet table.grid-tt th,.tt-sheet table.grid-tt td{text-align:center}
-.tt-sheet table.grid-tt th.day-cell{vertical-align:middle;font-weight:800}
+.tt-sheet table.grid-tt th{font-size:1em}
+.tt-sheet table.grid-tt th.day-cell{vertical-align:middle;font-weight:800;font-size:1.05em}
 .tt-sheet table.grid-tt td.grp-cell{font-weight:700;white-space:nowrap}
-.tt-sheet .c-date{display:block;font-weight:400;font-size:.78em;opacity:.85;margin-top:2px}
-.tt-sheet .c-subj{display:block;font-weight:700}
-.tt-sheet .c-tchr{display:block;font-size:.78em;opacity:.85;margin-top:2px}
+.tt-sheet .c-date{display:block;font-weight:400;font-size:.82em;opacity:.85;margin-top:2px}
+.tt-sheet .c-subj{display:block;font-weight:700;font-size:1.18em;line-height:1.15}
+.tt-sheet .c-tchr{display:block;font-size:.85em;opacity:.85;margin-top:2px}
 .tt-sheet .c-sep{border:none;border-top:1px dashed currentColor;opacity:.3;margin:.3rem 0}
+.tt-sheet td.banner{text-align:center;vertical-align:middle;background:rgba(0,0,0,.04)}
+.tt-sheet td.banner .c-subj{font-size:1.5em;letter-spacing:2px;text-transform:uppercase}
+.tt-sheet td.merged{vertical-align:middle}
+/* bigger again when rendering the downloadable image/PDF */
+.tt-sheet.exporting{font-size:22px}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
@@ -319,20 +325,24 @@ function addMinutes(hhmm, mins){
     return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
 }
 function fmtT(hhmm){ if(!hhmm) return ''; var p=hhmm.split(':'); return p.length<2?hhmm:(parseInt(p[0],10)+':'+p[1]); }
-function dayFromDate(d){
-    if(!d) return '';
-    var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    var dt=new Date(d+'T00:00'); return isNaN(dt)?'':days[dt.getDay()];
+// Flexible date parsing: ISO (YYYY-MM-DD) and D/M/YY or D/M/YYYY (also - or .).
+function parseDateAny(s){
+    s=(s||'').trim(); if(!s) return null;
+    var y,m,d, a=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(a){ y=+a[1]; m=+a[2]; d=+a[3]; }
+    else { var b=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+        if(b){ d=+b[1]; m=+b[2]; y=+b[3]; if(y<100) y+=2000; } else return null; }
+    var dt=new Date(y, m-1, d); if(isNaN(dt)) return null;
+    return {iso:y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2), dt:dt, y:y, m:m, d:d};
 }
-function fmtDate(d){
-    if(!d) return '';
-    var dt=new Date(d+'T00:00'); if(isNaN(dt)) return d;
-    var mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return dt.getDate()+' '+mon[dt.getMonth()]+' '+dt.getFullYear();
-}
+function toISO(s){ var p=parseDateAny(s); return p?p.iso:s; }
+function dayFromDate(d){ var p=parseDateAny(d);
+    return p?['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][p.dt.getDay()]:''; }
+function fmtDate(d){ var p=parseDateAny(d); return p ? (p.d+'/'+p.m+'/'+String(p.y).slice(-2)) : (d||''); }
 function periodLabel(r){ if(!r.time) return ''; var s=fmtT(r.time); return r.dur?(s+' – '+fmtT(addMinutes(r.time,r.dur))):s; }
 function periodKey(r){ return r.time+'|'+(r.dur||''); }
 function dayRank(d){ var i=DAY_ORDER.indexOf(d); return i<0?99:i; }
+function isAll(g){ return (g||'').trim().toLowerCase()==='all'; }
 
 // ---------- mobile-first session editor ----------
 function fieldInput(r,c){
@@ -404,7 +414,7 @@ function bulkAdd(){
         fields.forEach(function(f,idx){
             if(idx<parts.length){
                 var val=(parts[idx]||'').trim();
-                r[f] = (f==='time') ? normTime(val) : val;
+                r[f] = (f==='time') ? normTime(val) : (f==='date' ? toISO(val) : val);
             }
         });
         if(r.date && !r.day){ var a=dayFromDate(r.date); if(a) r.day=a; }
@@ -448,7 +458,7 @@ function gridPaste(){
         var first = (cells[0] || '').trim();
         if(!first) continue;
         var day = first, date = '';
-        if(/^\d{4}-\d{2}-\d{2}$/.test(first)){ date = first; day = dayFromDate(first) || first; }
+        if(parseDateAny(first)){ date = toISO(first); day = dayFromDate(first) || first; }
         for(var pi = 0; pi < periods.length; pi++){
             var p = periods[pi]; if(!p) continue;
             var sc = parseSubjectCell(cells[pi + 1] || '');
@@ -483,51 +493,85 @@ function renderHead(){
     var sub=el('subtitle').value; el('pSub').textContent=sub; el('pSub').style.display=sub?'block':'none';
 }
 
-// Day × time-period grid: rows = days (then stream rows within a day),
-// columns = time slots, each cell holds the subject with its teacher.
+// Day/Date × time-period grid: rows are days (or dates), each day may hold
+// several Class/Stream sub-rows, columns are the time slots. Cells identical
+// across every group in a period are merged vertically; a "All" group makes a
+// full-width band (e.g. Mock Examination).
+function cellInner(arr){
+    return arr.map(function(r){
+        return (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+             + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'');
+    }).join('<hr class="c-sep">');
+}
 function renderGridModeSheet(){
+    // period columns come from real sessions (banners/All excluded)
     var pmap={}, periods=[];
-    rows.forEach(function(r){ if(r.time){ var k=periodKey(r);
+    rows.forEach(function(r){ if(r.time && !isAll(r.group)){ var k=periodKey(r);
         if(!pmap[k]){ pmap[k]={k:k,label:periodLabel(r),start:r.time}; periods.push(pmap[k]); } } });
     periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
 
-    var anyGroup = rows.some(function(r){ return (r.group||'').trim(); });
-    var dayMap={}, days=[], cells={};
+    var anyGroup = rows.some(function(r){ return (r.group||'').trim() && !isAll(r.group); });
+    var dmap={}, order=[];
     rows.forEach(function(r){
-        var day=(r.day||'').trim()||'—', g=(r.group||'').trim();
-        if(!dayMap[day]){ dayMap[day]={groups:[], gset:{}, date:''}; days.push(day); }
-        if(r.date && !dayMap[day].date){ dayMap[day].date=r.date; }   // date sits with its day
-        if(!(g in dayMap[day].gset)){ dayMap[day].gset[g]=1; dayMap[day].groups.push(g); }
-        if(r.time){ var key=day+'§'+g+'§'+periodKey(r); (cells[key]=cells[key]||[]).push(r); }
+        var date=r.date||'';
+        var day=(date?dayFromDate(date):'') || (r.day||'').trim() || '—';
+        var key=date||day;
+        if(!dmap[key]){ dmap[key]={day:day, date:date,
+            sort:(parseDateAny(date)?parseDateAny(date).iso:('zz'+('0'+dayRank(day)).slice(-2))),
+            groups:[], gset:{}, cells:{}, banners:[]}; order.push(key); }
+        var d=dmap[key];
+        if(date && !d.date) d.date=date;
+        if(isAll(r.group)){ if(r.subject||r.teacher) d.banners.push(r); return; }
+        var g=(r.group||'').trim();
+        if(!(g in d.gset)){ d.gset[g]=1; d.groups.push(g); }
+        if(r.time){ var ck=g+'§'+periodKey(r); (d.cells[ck]=d.cells[ck]||[]).push(r); }
     });
-    days.sort(function(a,b){ return dayRank(a)-dayRank(b); });
+    order.sort(function(a,b){ return String(dmap[a].sort).localeCompare(String(dmap[b].sort)); });
 
-    if(!periods.length || !days.length){
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
         el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the grid.</p>';
         return;
     }
+    var spanAll = (anyGroup?1:0) + periods.length;
     var thead='<tr><th>Day</th>'+(anyGroup?'<th>Class / Stream</th>':'')
             + periods.map(function(p){ return '<th>'+esc(p.label)+'</th>'; }).join('')+'</tr>';
+
     var body='';
-    days.forEach(function(day){
-        var groups = anyGroup ? dayMap[day].groups : [''];
+    order.forEach(function(key){
+        var d=dmap[key];
+        // dates with only a banner (e.g. Mock Examination) get no empty group row
+        var groups = anyGroup ? d.groups.slice() : [''];
+        var totalRows = groups.length + d.banners.length;
+        if(totalRows===0) totalRows=1;
+        var dlabel=esc(d.day || dayFromDate(d.date) || '—');
+        if(d.date){ dlabel+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>'; }
+        var first=true;
+        // precompute, per period, whether all groups share identical content (→ merge)
+        var mergeOf={};
+        periods.forEach(function(p){
+            var vals=groups.map(function(g){ return cellInner(d.cells[g+'§'+p.k]||[]); });
+            mergeOf[p.k] = (groups.length>1 && vals[0] && vals.every(function(v){ return v===vals[0]; })) ? vals[0] : null;
+        });
         groups.forEach(function(g, gi){
             body+='<tr>';
-            if(gi===0){
-                var dlabel=esc(day);
-                if(dayMap[day].date){ dlabel+='<br><span class="c-date">'+esc(fmtDate(dayMap[day].date))+'</span>'; }
-                body+='<th rowspan="'+groups.length+'" class="day-cell">'+dlabel+'</th>';
-            }
+            if(first){ body+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
             if(anyGroup) body+='<td class="grp-cell">'+esc(g||'—')+'</td>';
             periods.forEach(function(p){
-                var arr=cells[day+'§'+g+'§'+p.k]||[];
-                var inner=arr.map(function(r){
-                    return (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
-                         + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'');
-                }).join('<hr class="c-sep">');
-                body+='<td class="cell">'+inner+'</td>';
+                if(mergeOf[p.k]!==null){
+                    if(gi===0) body+='<td class="cell merged" rowspan="'+groups.length+'">'+mergeOf[p.k]+'</td>';
+                    return;   // other group rows skip this column
+                }
+                body+='<td class="cell">'+cellInner(d.cells[g+'§'+p.k]||[])+'</td>';
             });
             body+='</tr>';
+        });
+        d.banners.forEach(function(b){
+            body+='<tr>';
+            if(first){ body+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
+            body+='<td class="cell banner" colspan="'+spanAll+'">'
+                + (b.subject?'<span class="c-subj">'+esc(b.subject)+'</span>':'')
+                + (b.teacher?'<span class="c-tchr">'+esc(b.teacher)+'</span>':'')
+                + '</td></tr>';
         });
     });
     el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
@@ -544,7 +588,7 @@ function renderListSheet(){
         return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''); });
     var body=sorted.map(function(r){
         return '<tr>'+printCols.map(function(c){
-            var v = c==='time' ? periodLabel(r) : (r[c]||'');
+            var v = c==='time' ? periodLabel(r) : (c==='date' ? fmtDate(r[c]) : (r[c]||''));
             return '<td>'+esc(v)+'</td>';
         }).join('')+'<td class="empty sig-col"></td></tr>';
     }).join('');
