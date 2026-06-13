@@ -37,14 +37,32 @@ PORT = int(os.environ.get('PORT', '5000'))
 
 
 def _serve_app():
-    """Run the WSGI app. Prefer waitress; fall back to Flask's server."""
+    """Run the WSGI app. Prefer waitress; fall back to Flask's server.
+
+    A bind failure (e.g. the port already in use) is recorded in
+    ``_serve_error`` so the main thread can fail loudly instead of carrying on
+    and pointing the tunnel at a stale instance.
+    """
+    global _serve_error
     try:
-        from waitress import serve
-        serve(app, host=HOST, port=PORT, threads=8)
-    except ImportError:
-        print("(waitress not installed — using the built-in server; "
-              "`pip install waitress` for a sturdier demo)")
-        app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
+        try:
+            from waitress import serve
+            serve(app, host=HOST, port=PORT, threads=8)
+        except ImportError:
+            print("(waitress not installed — using the built-in server; "
+                  "`pip install waitress` for a sturdier demo)")
+            app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
+    except OSError as e:
+        _serve_error = e
+
+
+def _port_in_use():
+    with socket.socket() as s:
+        s.settimeout(1)
+        return s.connect_ex((HOST, PORT)) == 0
+
+
+_serve_error = None
 
 
 def _wait_until_up(timeout=60):
@@ -106,9 +124,21 @@ def _banner(url):
 
 def main():
     print('Starting EduSyncra app server...')
-    threading.Thread(target=_serve_app, daemon=True).start()
-    if not _wait_until_up():
-        sys.exit(f'ERROR: the app did not start on http://{HOST}:{PORT}')
+    # If the port is already taken, another instance is almost certainly still
+    # running. Bail out clearly rather than start a tunnel to the stale app.
+    if _port_in_use():
+        sys.exit(
+            f"ERROR: port {PORT} is already in use — another EduSyncra instance "
+            f"is probably still running.\n"
+            f"Free it and try again:  fuser -k {PORT}/tcp"
+            f"   (or: pkill -f app_production.py)")
+    server = threading.Thread(target=_serve_app, daemon=True)
+    server.start()
+    if not _wait_until_up() or _serve_error is not None or not server.is_alive():
+        msg = f'ERROR: the app did not start on http://{HOST}:{PORT}'
+        if _serve_error is not None:
+            msg += f'\n{type(_serve_error).__name__}: {_serve_error}'
+        sys.exit(msg)
     print(f'App is running locally at http://{HOST}:{PORT}')
 
     cmd, hostname = _cloudflared_command()
