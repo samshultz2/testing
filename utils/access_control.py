@@ -48,7 +48,7 @@ BLUEPRINT_MODULE = {
     'timetable': 'timetable', 'generator': 'timetable', 'promotion': 'promotion',
     'finance': 'finance', 'comms': 'communication', 'hr': 'hr',
     'library': 'library', 'reports': 'reports', 'scratchcards': 'results',
-    'sales': 'sales',
+    'sales': 'sales', 'welfare': 'students',
 }
 
 # Endpoints always reachable by any logged-in user (the shell + own account).

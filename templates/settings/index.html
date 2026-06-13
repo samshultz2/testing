@@ -47,13 +47,15 @@
         <div class="data-card-row">Period times and breaks</div>
     </a>
     
+    {% if branch_ctx.is_central %}
     <a href="{{ url_for('settings.users_list') }}" class="data-card" style="text-decoration: none; color: inherit;">
         <div class="data-card-header">
             <div class="data-card-title"><i class="fas fa-users-cog"></i> Users</div>
         </div>
         <div class="data-card-row">Manage admin and teacher accounts</div>
     </a>
-    
+    {% endif %}
+
     <a href="{{ url_for('settings.backup_page') }}" class="data-card" style="text-decoration: none; color: inherit;">
         <div class="data-card-header">
             <div class="data-card-title"><i class="fas fa-database"></i> Backup & Restore</div>

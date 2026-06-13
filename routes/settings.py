@@ -1,7 +1,7 @@
 """
 Settings, Backup, and Configuration routes
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, send_file, session
 from datetime import datetime
 import os
 import shutil
@@ -11,9 +11,25 @@ from models import (
     Student, AcademicSession, Term, User
 )
 from utils.helpers import login_required
-from utils.access_control import admin_required, central_admin_required
+from utils.access_control import admin_required, central_admin_required, is_admin
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
+
+
+@settings_bp.before_request
+def _settings_admin_only():
+    """The whole settings area — school config, grading scale, assessment
+    weights, timetable slots, database backup/restore and user management — is
+    an administrative surface. Gate every route (GET pages included) behind
+    admin so none of it can be reached by URL by a non-admin staff member, even
+    though the nav already hides the section. Routes that manage user accounts
+    or branches layer a stricter central-admin check on top of this."""
+    if not session.get('logged_in'):
+        return redirect(url_for('auth.login'))
+    if not is_admin():
+        flash('That area is for administrators only.', 'error')
+        return redirect(url_for('main.dashboard'))
+    return None
 
 
 # ============================================================================
@@ -598,7 +614,7 @@ def restore_backup():
 # ============================================================================
 
 @settings_bp.route('/users')
-@login_required
+@central_admin_required
 def users_list():
     """List all users"""
     users = User.query.order_by(User.role, User.username).all()
@@ -606,7 +622,7 @@ def users_list():
 
 
 @settings_bp.route('/users/add', methods=['GET', 'POST'])
-@login_required
+@central_admin_required
 def add_user():
     """Add new user"""
     if request.method == 'POST':
@@ -647,7 +663,7 @@ def add_user():
 
 
 @settings_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
-@login_required
+@central_admin_required
 def edit_user(user_id):
     """Edit user"""
     user = db.get_or_404(User, user_id)
@@ -675,7 +691,7 @@ def edit_user(user_id):
 
 
 @settings_bp.route('/users/<int:user_id>/delete', methods=['POST'])
-@login_required
+@central_admin_required
 def delete_user(user_id):
     """Delete user"""
     user = db.get_or_404(User, user_id)
