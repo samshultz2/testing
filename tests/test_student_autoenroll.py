@@ -9,13 +9,20 @@ from tests.conftest import login_token
 
 def _active_term_id(app):
     with app.app_context():
-        t = Term.query.filter_by(is_active=True).first()
-        if not t:
+        active = Term.query.filter_by(is_active=True).all()
+        if active:
+            # Normalise to a single active term so get_active_term() is
+            # deterministic regardless of what other tests left behind.
+            term = active[0]
+            for extra in active[1:]:
+                extra.is_active = False
+        else:
             s = AcademicSession(name='AE-Sess', is_active=True)
             db.session.add(s); db.session.flush()
-            t = Term(session_id=s.id, term_number=1, name='AE-Term', is_active=True)
-            db.session.add(t); db.session.commit()
-        return t.id
+            term = Term(session_id=s.id, term_number=1, name='AE-Term', is_active=True)
+            db.session.add(term)
+        db.session.commit()
+        return term.id
 
 
 def _setup_form_teacher(app):
@@ -34,6 +41,10 @@ def _setup_form_teacher(app):
             caa = ClassArmAssignment(class_id=sc.id, arm_id=arm.id,
                                      term_id=tid, branch_id=bid)
             db.session.add(caa); db.session.flush()
+        else:
+            # A reused assignment (e.g. created branchless by another test) must
+            # sit in the teacher's branch to count as their form class.
+            caa.branch_id = bid
         u = User(username='ae_teacher', role='teacher', scope='branch', branch_id=bid)
         u.set_password('secret123'); u.set_modules(['students'])
         db.session.add(u); db.session.flush()
