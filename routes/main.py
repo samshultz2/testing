@@ -836,17 +836,66 @@ def add_student():
                     )
                     db.session.add(contact)
 
+            # Enrol the student into a class+arm for the active term. A form
+            # teacher who doesn't pick a class gets their own form class by
+            # default, so "a teacher adds a student" lands them in the right
+            # class automatically.
+            enrolled_label = None
+            from utils.access_control import (get_teacher_profile, can_access_class,
+                                              filter_classes_for_user)
+            caa_id = request.form.get('class_arm_assignment_id', type=int)
+            active_term = get_active_term()
+            teacher = get_teacher_profile()
+            if not caa_id and teacher and not is_admin() and active_term:
+                form_ids = list(teacher.form_class_ids or [])
+                if form_ids:
+                    match = (ClassArmAssignment.query
+                             .filter(ClassArmAssignment.term_id == active_term.id,
+                                     ClassArmAssignment.id.in_(form_ids)).first())
+                    if match:
+                        caa_id = match.id
+            if caa_id:
+                caa = db.session.get(ClassArmAssignment, caa_id)
+                if caa and can_access_class(caa.id):
+                    exists = StudentEnrollment.query.filter_by(
+                        student_id=student.id, class_arm_assignment_id=caa.id).first()
+                    if not exists:
+                        db.session.add(StudentEnrollment(
+                            student_id=student.id, class_arm_assignment_id=caa.id,
+                            is_active=True))
+                    enrolled_label = caa.display_name
+
             db.session.commit()
             log_action('student.create', target=student)
-            flash(FlashMessages.STUDENT_CREATED, 'success')
+            if enrolled_label:
+                flash(f'{FlashMessages.STUDENT_CREATED} Enrolled in {enrolled_label}.', 'success')
+            else:
+                flash(FlashMessages.STUDENT_CREATED, 'success')
             return redirect(url_for('main.view_student', student_id=student.id))
 
         except Exception as e:
             db.session.rollback()
             flash(f'Error creating student: {str(e)}', 'error')
 
+    # Class-enrolment options for the active term, scoped to what this user may
+    # access; a form teacher's own class is pre-selected.
+    from utils.access_control import get_teacher_profile, filter_classes_for_user
+    active_term = get_active_term()
+    class_options, default_caa_id = [], None
+    if active_term:
+        caas = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
+        class_options = filter_classes_for_user(caas)
+        teacher = get_teacher_profile()
+        if teacher and not is_admin():
+            form_ids = teacher.form_class_ids or set()
+            for c in class_options:
+                if c.id in form_ids:
+                    default_caa_id = c.id
+                    break
     return render_template('students/add.html', religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS,
-                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS)
+                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS,
+                           class_options=class_options, default_caa_id=default_caa_id,
+                           active_term=active_term)
 
 
 @main_bp.route('/students/<int:student_id>')
