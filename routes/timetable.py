@@ -20,6 +20,20 @@ DAYS_OF_WEEK = [
 ]
 
 
+@timetable_bp.route('/designer')
+@login_required
+def designer():
+    """Stand-alone designer for special, one-off timetables (Saturday classes,
+    holiday lessons, exams, or a blank custom grid). Everything is entered and
+    rendered in the browser and printed/saved as PDF — nothing is stored."""
+    from models import SchoolSettings
+    school_name = SchoolSettings.get('school_name', '') or ''
+    subjects = [s.name for s in
+                Subject.query.filter_by(is_active=True).order_by(Subject.name).all()]
+    return render_template('timetable/designer.html',
+                           school_name=school_name, subjects=subjects)
+
+
 @timetable_bp.route('/')
 @login_required
 def index():
