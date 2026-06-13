@@ -120,6 +120,23 @@
    by default, which is why the print used to look plain) */
 .tt-sheet, .tt-sheet *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
 
+/* While exporting we size the sheet to an A4-landscape canvas off-screen and
+   stretch the table to fill it (both horizontally and vertically). */
+.tt-sheet.exporting{position:fixed;left:-10000px;top:0;width:1480px;height:1040px;
+    max-width:none;overflow:visible;display:flex;flex-direction:column;border:none;border-radius:0}
+.tt-sheet.exporting #pBody{flex:1 1 auto;display:flex;flex-direction:column}
+.tt-sheet.exporting #pBody table{height:100%}
+
+/* export preview modal */
+.export-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;
+    align-items:center;justify-content:center;padding:1rem}
+.export-modal .box{background:#fff;border-radius:12px;max-width:96vw;max-height:95vh;overflow:auto;
+    padding:1rem;display:flex;flex-direction:column;gap:.75rem}
+.export-modal .box h3{margin:0;font-size:1rem}
+.export-modal img{max-width:100%;max-height:68vh;border:1px solid var(--gray-200);align-self:center}
+.export-actions{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end}
+.export-spinner{padding:1rem;text-align:center;color:var(--text-muted)}
+
 @media print{
     body *{visibility:hidden}
     #sheet, #sheet *{visibility:visible;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
@@ -177,7 +194,7 @@
                 <input id="subtitle" class="form-control" placeholder="e.g. First Term 2025/2026 — SSS 3">
             </div>
             <div class="form-group" style="align-self:end">
-                <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print / Save as PDF</button>
+                <button class="btn btn-primary" onclick="openExport()"><i class="fas fa-download"></i> Download (PDF / image)</button>
             </div>
         </div>
 
@@ -239,6 +256,22 @@ Break
     <option value="Thursday"><option value="Friday"><option value="Saturday"><option value="Sunday">
 </datalist>
 
+<!-- Export preview modal -->
+<div class="export-modal no-print" id="exportModal">
+    <div class="box">
+        <h3><i class="fas fa-eye"></i> Preview</h3>
+        <div id="exportSpinner" class="export-spinner"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
+        <img id="exportImg" alt="Timetable preview" style="display:none">
+        <div class="export-actions">
+            <button class="btn btn-primary" onclick="downloadPDF()"><i class="fas fa-file-pdf"></i> Download PDF</button>
+            <button class="btn btn-success" onclick="downloadImage()"><i class="fas fa-image"></i> Download image (Full HD)</button>
+            <button class="btn btn-secondary" onclick="closeExport()">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script>
 var LAYOUTS = {
     saturday: {title:'Saturday Class Timetable', mode:'grid',
@@ -478,6 +511,54 @@ function onLayoutChange(){
 el('layout').addEventListener('change', onLayoutChange);
 el('theme').addEventListener('change', renderSheet);
 el('title').addEventListener('input', function(){ this.dataset.touched='1'; });
+
+// ---------- export (Full-HD image / PDF) with preview ----------
+var _exportCanvas = null;
+function exportName(){
+    return (el('title').value || layout().title || 'timetable').replace(/[^\w]+/g, '_');
+}
+function openExport(){
+    var sheet = el('sheet');
+    el('exportImg').style.display = 'none';
+    el('exportSpinner').style.display = 'block';
+    el('exportModal').style.display = 'flex';
+    sheet.classList.add('exporting');           // size to A4 landscape, fill it
+    var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
+    html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
+                        windowWidth: sheet.scrollWidth, windowHeight: sheet.scrollHeight})
+        .then(function(canvas){
+            sheet.classList.remove('exporting');
+            _exportCanvas = canvas;
+            var img = el('exportImg');
+            img.src = canvas.toDataURL('image/png');
+            img.style.display = 'block';
+            el('exportSpinner').style.display = 'none';
+        })
+        .catch(function(e){
+            sheet.classList.remove('exporting');
+            el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
+        });
+}
+function closeExport(){ el('exportModal').style.display = 'none'; }
+function downloadImage(){
+    if(!_exportCanvas) return;
+    var a = document.createElement('a');
+    a.href = _exportCanvas.toDataURL('image/png');
+    a.download = exportName() + '.png';
+    a.click();
+}
+function downloadPDF(){
+    if(!_exportCanvas) return;
+    var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var pdf = new JsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    pdf.addImage(_exportCanvas.toDataURL('image/png'), 'PNG', 0, 0, pw, ph);
+    pdf.save(exportName() + '.pdf');
+}
+// click outside the box closes the preview
+document.getElementById('exportModal').addEventListener('click', function(e){
+    if(e.target === this) closeExport();
+});
 
 // seed with a couple of sessions so the tool is immediately usable
 addRow(); addRow();
