@@ -4,18 +4,26 @@
 
 {% block extra_css %}
 <style>
-/* ---- editor (screen only) ---- */
+/* ---- controls (screen only) ---- */
 .tt-controls{display:grid;gap:1rem}
 .tt-controls .row3{display:grid;grid-template-columns:1fr;gap:.75rem}
 @media(min-width:768px){.tt-controls .row3{grid-template-columns:repeat(3,1fr)}}
-.tt-editor table{width:100%;border-collapse:collapse;font-size:.9rem}
-.tt-editor th,.tt-editor td{padding:.35rem;border-bottom:1px solid var(--gray-100)}
-.tt-editor input,.tt-editor select{width:100%;padding:.3rem .4rem;border:1px solid var(--gray-200);border-radius:6px;font-size:.85rem}
-.tt-editor .del{color:var(--danger,#dc2626);cursor:pointer;background:none;border:none;font-size:1rem}
-.theme-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:.35rem}
+
+/* mobile-first session editor: big, full-width, stacked fields */
+.sess-card{border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.85rem;background:var(--gray-50)}
+.sess-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem}
+.sess-top strong{font-size:.95rem}
+.sess-del{background:#fff;border:1px solid var(--gray-200);color:var(--danger,#dc2626);border-radius:8px;padding:.4rem .7rem;cursor:pointer;font-size:.85rem}
+.sess-grid{display:grid;grid-template-columns:1fr;gap:.75rem}
+@media(min-width:560px){.sess-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:920px){.sess-grid{grid-template-columns:repeat(3,1fr)}}
+.sess-grid label{display:flex;flex-direction:column;gap:.35rem;font-size:.8rem;font-weight:600;color:var(--text-secondary)}
+.sess-grid input{width:100%;padding:.7rem .75rem;font-size:1rem;border:1px solid var(--gray-300,#cbd5e1);border-radius:9px;background:#fff}
+.sess-grid input:focus{outline:none;border-color:var(--primary,#2563eb);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.sess-hint{font-size:.82rem;color:var(--text-muted);margin:.25rem 0 .6rem}
 
 /* ---- the printable sheet ---- */
-.tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1000px;margin:0 auto}
+.tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1100px;margin:0 auto;overflow-x:auto}
 .tt-sheet .tt-head{text-align:center;margin-bottom:14px}
 .tt-sheet .tt-school{font-size:1.5rem;font-weight:800;letter-spacing:.5px}
 .tt-sheet .tt-title{font-size:1.15rem;font-weight:700;margin-top:2px}
@@ -24,6 +32,13 @@
 .tt-sheet th,.tt-sheet td{padding:10px 12px;text-align:left;vertical-align:top}
 .tt-sheet td.empty{height:34px}
 .tt-sheet .sig-col{min-width:160px}
+/* day grid cells: subject + teacher together, centred */
+.tt-sheet table.grid-tt th,.tt-sheet table.grid-tt td{text-align:center}
+.tt-sheet table.grid-tt th.day-cell{vertical-align:middle;font-weight:800}
+.tt-sheet table.grid-tt td.grp-cell{font-weight:700;white-space:nowrap}
+.tt-sheet .c-subj{display:block;font-weight:700}
+.tt-sheet .c-tchr{display:block;font-size:.78em;opacity:.85;margin-top:2px}
+.tt-sheet .c-sep{border:none;border-top:1px dashed currentColor;opacity:.3;margin:.3rem 0}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
@@ -31,8 +46,8 @@
 .tt-sheet[data-theme="classic"] th{background:#f0f0f0;text-transform:uppercase;font-size:.82rem;letter-spacing:.5px}
 
 .tt-sheet[data-theme="modern"]{font-family:'Segoe UI',system-ui,sans-serif}
-.tt-sheet[data-theme="modern"] th{background:#0f766e;color:#fff;border:none}
-.tt-sheet[data-theme="modern"] td{border-bottom:1px solid #e2e8f0}
+.tt-sheet[data-theme="modern"] th{background:#0f766e;color:#fff;border:1px solid #115e59}
+.tt-sheet[data-theme="modern"] td{border:1px solid #e2e8f0}
 .tt-sheet[data-theme="modern"] .tt-school{color:#0f766e}
 
 .tt-sheet[data-theme="colour"]{font-family:'Trebuchet MS',system-ui,sans-serif}
@@ -43,8 +58,8 @@
 .tt-sheet[data-theme="colour"] .tt-sub{color:#e0e7ff}
 
 .tt-sheet[data-theme="minimal"]{font-family:system-ui,sans-serif}
+.tt-sheet[data-theme="minimal"] th,.tt-sheet[data-theme="minimal"] td{border:1px solid #e5e7eb}
 .tt-sheet[data-theme="minimal"] th{border-bottom:2px solid #111;font-size:.82rem;text-transform:uppercase;letter-spacing:.6px}
-.tt-sheet[data-theme="minimal"] td{border-bottom:1px solid #e5e7eb}
 
 /* elegant — dark band with gold accents */
 .tt-sheet[data-theme="elegant"]{font-family:'Garamond','Georgia',serif}
@@ -97,12 +112,11 @@
 .tt-sheet[data-theme="mono"] td{border:1px solid #000}
 
 @media print{
-    /* hide everything but the sheet */
     body *{visibility:hidden}
     #sheet, #sheet *{visibility:visible}
-    #sheet{position:absolute;left:0;top:0;width:100%;border:none;border-radius:0;padding:0}
+    #sheet{position:absolute;left:0;top:0;width:100%;border:none;border-radius:0;padding:0;overflow:visible}
     .no-print{display:none !important}
-    @page{margin:14mm}
+    @page{margin:12mm;size:landscape}
 }
 </style>
 {% endblock %}
@@ -151,23 +165,19 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Subtitle <span class="text-muted">(optional)</span></label>
-                <input id="subtitle" class="form-control" placeholder="e.g. First Term 2025/2026 — JSS 1">
+                <input id="subtitle" class="form-control" placeholder="e.g. First Term 2025/2026 — SSS 3">
             </div>
             <div class="form-group" style="align-self:end">
                 <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print / Save as PDF</button>
             </div>
         </div>
 
-        <!-- Row-based editor (Saturday / Holiday / Exam) -->
+        <!-- Session editor (Saturday / Holiday / Exam) -->
         <div id="rowEditor">
             <label class="form-label">Sessions</label>
-            <div class="tt-editor" style="overflow-x:auto">
-                <table id="rowTable">
-                    <thead><tr id="editorHead"></tr></thead>
-                    <tbody id="rowBody"></tbody>
-                </table>
-            </div>
-            <button class="btn btn-secondary btn-sm mt-2" onclick="addRow()"><i class="fas fa-plus"></i> Add row</button>
+            <p class="sess-hint" id="sessHint"></p>
+            <div id="rowBody"></div>
+            <button class="btn btn-secondary" onclick="addRow()"><i class="fas fa-plus"></i> Add session</button>
         </div>
 
         <!-- Blank grid editor -->
@@ -179,13 +189,12 @@
                 </div>
                 <div class="form-group" style="grid-column:span 2">
                     <label class="form-label">Row labels — one per line (e.g. period times)</label>
-                    <textarea id="gridRows" class="form-control" rows="4">8:00 - 8:40
-8:40 - 9:20
-9:20 - 10:00
-10:00 - 10:40
+                    <textarea id="gridRows" class="form-control" rows="4">8:00 - 9:00
+9:00 - 10:00
+10:00 - 11:00
 Break
-11:00 - 11:40
-11:40 - 12:20</textarea>
+11:00 - 12:00
+12:00 - 1:00</textarea>
                 </div>
             </div>
         </div>
@@ -205,19 +214,39 @@ Break
 <datalist id="subjectList">
     {% for s in subjects %}<option value="{{ s }}">{% endfor %}
 </datalist>
+<datalist id="dayList">
+    <option value="Monday"><option value="Tuesday"><option value="Wednesday">
+    <option value="Thursday"><option value="Friday"><option value="Saturday"><option value="Sunday">
+</datalist>
 
 <script>
 var LAYOUTS = {
-    saturday: {title:'Saturday Class Timetable', cols:['day','time','dur','subject','teacher']},
-    holiday:  {title:'Holiday Lesson Timetable', cols:['date','day','time','dur','subject','teacher']},
-    exam:     {title:'Examination Timetable',    cols:['date','day','time','dur','subject','venue','teacher']},
+    saturday: {title:'Saturday Class Timetable', mode:'grid',
+               fields:['day','group','time','dur','subject','teacher'],
+               hint:'Each day becomes a row and each time slot a column, with the teacher shown under the subject. Use “Class / Stream” to stack more than one group under the same day (e.g. SSS3 and JSS3).'},
+    holiday:  {title:'Holiday Lesson Timetable', mode:'grid',
+               fields:['day','group','time','dur','subject','teacher'],
+               hint:'Each day is a row and each time slot a column. Use “Class / Stream” when a day has different subjects per group — e.g. on Monday, Science vs Arts/Social-Science get their own rows.'},
+    exam:     {title:'Examination Timetable', mode:'list',
+               fields:['date','time','dur','subject','venue','teacher'],
+               hint:'Each exam is one row, listed by date and time. A blank “Invigilator’s Signature” column is added on the printout.'},
 };
-var FIELD_LABEL = {date:'Date', day:'Day', time:'Start', dur:'Mins', subject:'Subject',
-                   teacher:'Teacher / Invigilator', venue:'Venue'};
-var rows = [];   // each: {date,day,time,dur,subject,teacher,venue}
+var FIELD = {
+    date:   {label:'Date'},
+    day:    {label:'Day'},
+    group:  {label:'Class / Stream (optional)'},
+    time:   {label:'Start time'},
+    dur:    {label:'Duration (minutes)'},
+    subject:{label:'Subject'},
+    teacher:{label:'Teacher (optional)'},
+    venue:  {label:'Venue'},
+};
+var DAY_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+var rows = [];   // each: {date,day,group,time,dur,subject,teacher,venue}
 
 function el(id){ return document.getElementById(id); }
 function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+function layout(){ return LAYOUTS[el('layout').value] || LAYOUTS.saturday; }
 
 function addMinutes(hhmm, mins){
     if(!hhmm) return '';
@@ -226,127 +255,164 @@ function addMinutes(hhmm, mins){
     d.setMinutes(d.getMinutes()+(parseInt(mins,10)||0));
     return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
 }
+function fmtT(hhmm){ if(!hhmm) return ''; var p=hhmm.split(':'); return p.length<2?hhmm:(parseInt(p[0],10)+':'+p[1]); }
 function dayFromDate(d){
     if(!d) return '';
     var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     var dt=new Date(d+'T00:00'); return isNaN(dt)?'':days[dt.getDay()];
 }
-function timeRange(r){
-    if(!r.time) return '';
-    return r.dur ? (r.time+' – '+addMinutes(r.time, r.dur)) : r.time;
-}
+function periodLabel(r){ if(!r.time) return ''; var s=fmtT(r.time); return r.dur?(s+' – '+fmtT(addMinutes(r.time,r.dur))):s; }
+function periodKey(r){ return r.time+'|'+(r.dur||''); }
+function dayRank(d){ var i=DAY_ORDER.indexOf(d); return i<0?99:i; }
 
-function curCols(){ var l=el('layout').value; return (LAYOUTS[l]||LAYOUTS.saturday).cols; }
-
-// ---- editor ----
-function buildEditorHead(){
-    var cols=curCols(), h='';
-    cols.forEach(function(c){ h+='<th>'+FIELD_LABEL[c]+'</th>'; });
-    h+='<th></th>';
-    el('editorHead').innerHTML=h;
+// ---------- mobile-first session editor ----------
+function fieldInput(r,c){
+    var v=esc(r[c]||'');
+    switch(c){
+        case 'date':    return '<input type="date" data-f="date" value="'+v+'">';
+        case 'day':     return '<input data-f="day" list="dayList" value="'+v+'" placeholder="e.g. Monday">';
+        case 'time':    return '<input type="time" data-f="time" value="'+v+'">';
+        case 'dur':     return '<input type="number" min="0" step="5" inputmode="numeric" data-f="dur" value="'+v+'" placeholder="60">';
+        case 'subject': return '<input data-f="subject" list="subjectList" value="'+v+'" placeholder="e.g. Mathematics">';
+        case 'teacher': return '<input data-f="teacher" value="'+v+'" placeholder="e.g. Mr Bello">';
+        case 'group':   return '<input data-f="group" value="'+v+'" placeholder="e.g. Science / Arts / SSS3">';
+        case 'venue':   return '<input data-f="venue" value="'+v+'" placeholder="Hall / Room">';
+    }
+    return '';
 }
-function rowEditorMarkup(r, i){
-    var cols=curCols(), h='<tr data-i="'+i+'">';
-    cols.forEach(function(c){
-        if(c==='date') h+='<td><input type="date" data-f="date" value="'+esc(r.date)+'"></td>';
-        else if(c==='day') h+='<td><input data-f="day" list="dayList" value="'+esc(r.day)+'" placeholder="Day"></td>';
-        else if(c==='time') h+='<td><input type="time" data-f="time" value="'+esc(r.time)+'"></td>';
-        else if(c==='dur') h+='<td><input type="number" min="0" step="5" data-f="dur" value="'+esc(r.dur)+'" placeholder="40"></td>';
-        else if(c==='subject') h+='<td><input data-f="subject" list="subjectList" value="'+esc(r.subject)+'" placeholder="Subject"></td>';
-        else if(c==='teacher') h+='<td><input data-f="teacher" value="'+esc(r.teacher)+'" placeholder="Optional"></td>';
-        else if(c==='venue') h+='<td><input data-f="venue" value="'+esc(r.venue)+'" placeholder="Hall / Room"></td>';
-    });
-    h+='<td><button class="del" title="Remove" onclick="delRow('+i+')">&times;</button></td></tr>';
-    return h;
+function sessCard(r,i){
+    var inner=layout().fields.map(function(c){
+        return '<label><span>'+FIELD[c].label+'</span>'+fieldInput(r,c)+'</label>';
+    }).join('');
+    return '<div class="sess-card" data-i="'+i+'">'
+         + '<div class="sess-top"><strong>Session '+(i+1)+'</strong>'
+         + '<button type="button" class="sess-del" onclick="delRow('+i+')"><i class="fas fa-trash"></i> Remove</button></div>'
+         + '<div class="sess-grid">'+inner+'</div></div>';
 }
 function renderEditor(){
-    buildEditorHead();
-    el('rowBody').innerHTML = rows.map(rowEditorMarkup).join('');
+    el('sessHint').textContent = layout().hint || '';
+    el('rowBody').innerHTML = rows.map(sessCard).join('');
 }
-function addRow(){ rows.push({date:'',day:'',time:'',dur:'40',subject:'',teacher:'',venue:''}); renderEditor(); renderSheet(); }
+function addRow(){ rows.push({date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}); renderEditor(); renderSheet(); }
 function delRow(i){ rows.splice(i,1); renderEditor(); renderSheet(); }
 
-// keep model in sync as the user types
 document.addEventListener('input', function(e){
-    var tr=e.target.closest && e.target.closest('#rowBody tr');
-    if(tr){
-        var i=parseInt(tr.dataset.i,10), f=e.target.dataset.f;
-        rows[i][f]=e.target.value;
-        if(f==='date'){ var auto=dayFromDate(e.target.value);
-            if(auto){ rows[i].day=auto; var di=tr.querySelector('[data-f="day"]'); if(di) di.value=auto; } }
+    var card=e.target.closest && e.target.closest('#rowBody .sess-card');
+    if(card){
+        var i=parseInt(card.dataset.i,10), f=e.target.dataset.f;
+        if(f){ rows[i][f]=e.target.value;
+            if(f==='date'){ var auto=dayFromDate(e.target.value); if(auto){ rows[i].day=auto;
+                var di=card.querySelector('[data-f="day"]'); if(di) di.value=auto; } } }
         renderSheet();
     } else if(['title','subtitle','school','gridCols','gridRows'].indexOf(e.target.id)>=0){
         renderSheet();
     }
 });
 
-// ---- printable sheet ----
+// ---------- printable sheet ----------
 function renderHead(){
     el('pSchool').textContent = el('school').value || '';
-    var l=el('layout').value;
-    el('pTitle').textContent = el('title').value || (LAYOUTS[l]?LAYOUTS[l].title:'Timetable');
+    el('pTitle').textContent = el('title').value || layout().title || 'Timetable';
     var sub=el('subtitle').value; el('pSub').textContent=sub; el('pSub').style.display=sub?'block':'none';
 }
-function renderRowsSheet(){
-    var l=el('layout').value, cols=curCols();
-    // header cells (friendlier labels on the printout)
-    var labels={date:'Date', day:'Day', time:'Time', dur:'', subject:'Subject',
-                teacher:(l==='exam'?'Invigilator':'Teacher'), venue:'Venue'};
-    var printCols = cols.filter(function(c){ return c!=='dur'; });   // time column already shows the range
-    // Per-layout extra columns rendered as blank cells to fill in on paper.
-    var extras = l==='exam' ? ["Invigilator's Signature"]
-               : (l==='saturday' || l==='holiday') ? ['Remarks'] : [];
-    var thead='<tr>'+printCols.map(function(c){ return '<th>'+labels[c]+'</th>'; }).join('')
-            + extras.map(function(x){ return '<th class="sig-col">'+x+'</th>'; }).join('')+'</tr>';
-    // sort by date then time for a tidy sheet
-    var sorted=rows.slice().sort(function(a,b){
-        return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'');
+
+// Day × time-period grid: rows = days (then stream rows within a day),
+// columns = time slots, each cell holds the subject with its teacher.
+function renderGridModeSheet(){
+    var pmap={}, periods=[];
+    rows.forEach(function(r){ if(r.time){ var k=periodKey(r);
+        if(!pmap[k]){ pmap[k]={k:k,label:periodLabel(r),start:r.time}; periods.push(pmap[k]); } } });
+    periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
+
+    var anyGroup = rows.some(function(r){ return (r.group||'').trim(); });
+    var dayMap={}, days=[], cells={};
+    rows.forEach(function(r){
+        var day=(r.day||'').trim()||'—', g=(r.group||'').trim();
+        if(!dayMap[day]){ dayMap[day]={groups:[], gset:{}}; days.push(day); }
+        if(!(g in dayMap[day].gset)){ dayMap[day].gset[g]=1; dayMap[day].groups.push(g); }
+        if(r.time){ var key=day+'§'+g+'§'+periodKey(r); (cells[key]=cells[key]||[]).push(r); }
     });
+    days.sort(function(a,b){ return dayRank(a)-dayRank(b); });
+
+    if(!periods.length || !days.length){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the grid.</p>';
+        return;
+    }
+    var thead='<tr><th>Day</th>'+(anyGroup?'<th>Class / Stream</th>':'')
+            + periods.map(function(p){ return '<th>'+esc(p.label)+'</th>'; }).join('')+'</tr>';
+    var body='';
+    days.forEach(function(day){
+        var groups = anyGroup ? dayMap[day].groups : [''];
+        groups.forEach(function(g, gi){
+            body+='<tr>';
+            if(gi===0) body+='<th rowspan="'+groups.length+'" class="day-cell">'+esc(day)+'</th>';
+            if(anyGroup) body+='<td class="grp-cell">'+esc(g||'—')+'</td>';
+            periods.forEach(function(p){
+                var arr=cells[day+'§'+g+'§'+p.k]||[];
+                var inner=arr.map(function(r){
+                    return (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+                         + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'');
+                }).join('<hr class="c-sep">');
+                body+='<td class="cell">'+inner+'</td>';
+            });
+            body+='</tr>';
+        });
+    });
+    el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+}
+
+// Exam list: one row per exam, with a blank signature column.
+function renderListSheet(){
+    var fields=layout().fields;
+    var labels={date:'Date', time:'Time', subject:'Subject', teacher:'Invigilator', venue:'Venue'};
+    var printCols=fields.filter(function(c){ return c!=='dur'; });
+    var thead='<tr>'+printCols.map(function(c){ return '<th>'+labels[c]+'</th>'; }).join('')
+            + '<th class="sig-col">Invigilator&#39;s Signature</th></tr>';
+    var sorted=rows.slice().sort(function(a,b){
+        return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''); });
     var body=sorted.map(function(r){
         return '<tr>'+printCols.map(function(c){
-            var v = c==='time' ? timeRange(r) : (r[c]||'');
+            var v = c==='time' ? periodLabel(r) : (r[c]||'');
             return '<td>'+esc(v)+'</td>';
-        }).join('') + extras.map(function(){ return '<td class="empty sig-col"></td>'; }).join('')+'</tr>';
+        }).join('')+'<td class="empty sig-col"></td></tr>';
     }).join('');
-    var span = printCols.length + extras.length;
-    if(!body) body='<tr><td colspan="'+span+'" style="text-align:center;color:#888">Add rows above to build the timetable.</td></tr>';
+    if(!body) body='<tr><td colspan="'+(printCols.length+1)+'" style="text-align:center;color:#888">Add exams above to build the timetable.</td></tr>';
     el('pBody').innerHTML='<table><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
-function renderGridSheet(){
+
+function renderBlankGridSheet(){
     var cols=(el('gridCols').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
     var rws=(el('gridRows').value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
     var thead='<tr><th></th>'+cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr>';
     var body=rws.map(function(rl){
         return '<tr><th>'+esc(rl)+'</th>'+cols.map(function(){return '<td class="empty"></td>';}).join('')+'</tr>';
     }).join('');
-    el('pBody').innerHTML='<table><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+    el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
-    if(el('layout').value==='grid') renderGridSheet(); else renderRowsSheet();
+    var l=el('layout').value;
+    if(l==='grid') renderBlankGridSheet();
+    else if(layout().mode==='grid') renderGridModeSheet();
+    else renderListSheet();
 }
 
 function onLayoutChange(){
-    var grid = el('layout').value==='grid';
-    el('gridEditor').style.display = grid?'block':'none';
-    el('rowEditor').style.display = grid?'none':'block';
-    // refresh the default title if the user hasn't typed one
+    var blank = el('layout').value==='grid';
+    el('gridEditor').style.display = blank?'block':'none';
+    el('rowEditor').style.display = blank?'none':'block';
     if(!el('title').dataset.touched){ el('title').value=''; }
-    if(!grid) renderEditor();
+    if(!blank) renderEditor();
     renderSheet();
 }
 el('layout').addEventListener('change', onLayoutChange);
 el('theme').addEventListener('change', renderSheet);
 el('title').addEventListener('input', function(){ this.dataset.touched='1'; });
 
-// seed with a couple of empty rows so the tool is immediately usable
+// seed with a couple of sessions so the tool is immediately usable
 addRow(); addRow();
 onLayoutChange();
 </script>
-
-<datalist id="dayList">
-    <option value="Monday"><option value="Tuesday"><option value="Wednesday">
-    <option value="Thursday"><option value="Friday"><option value="Saturday"><option value="Sunday">
-</datalist>
 {% endblock %}
