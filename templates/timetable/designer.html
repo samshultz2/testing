@@ -49,6 +49,11 @@
 .tt-sheet td.banner{text-align:center;vertical-align:middle;background:rgba(0,0,0,.04)}
 .tt-sheet td.banner .c-subj{font-size:1.5em;letter-spacing:2px;text-transform:uppercase}
 .tt-sheet td.merged{vertical-align:middle}
+/* days-as-columns: time on the left, group blocks side by side in a cell */
+.tt-sheet table.grid-tt th.time-cell{vertical-align:middle;font-weight:700;white-space:nowrap;font-size:.95em}
+.tt-sheet .g-row{display:flex;gap:5px;align-items:stretch;justify-content:center}
+.tt-sheet .g-block{flex:1 1 0;min-width:0;border-radius:7px;padding:5px 6px;background:rgba(0,0,0,.04)}
+.tt-sheet .g-tag{display:block;font-size:.72em;font-weight:800;text-transform:uppercase;opacity:.75;letter-spacing:.4px}
 /* bigger again when rendering the downloadable image/PDF */
 .tt-sheet.exporting{font-size:22px}
 
@@ -187,6 +192,13 @@
             <div class="form-group">
                 <label class="form-label">School name</label>
                 <input id="school" class="form-control" value="{{ school_name }}" placeholder="School name">
+            </div>
+            <div class="form-group" id="orientWrap">
+                <label class="form-label">Table orientation</label>
+                <select id="orient" class="form-control">
+                    <option value="rows">Days as rows (time across the top)</option>
+                    <option value="cols">Days as columns (time down the left)</option>
+                </select>
             </div>
         </div>
         <div class="row3">
@@ -339,7 +351,21 @@ function toISO(s){ var p=parseDateAny(s); return p?p.iso:s; }
 function dayFromDate(d){ var p=parseDateAny(d);
     return p?['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][p.dt.getDay()]:''; }
 function fmtDate(d){ var p=parseDateAny(d); return p ? (p.d+'/'+p.m+'/'+String(p.y).slice(-2)) : (d||''); }
-function periodLabel(r){ if(!r.time) return ''; var s=fmtT(r.time); return r.dur?(s+' – '+fmtT(addMinutes(r.time,r.dur))):s; }
+// 12-hour clock label, e.g. "9", "9:30", "12", with optional am/pm suffix.
+function clock12(hhmm, suffix){
+    var p=(hhmm||'').split(':'); if(p.length<2) return hhmm||'';
+    var h=+p[0], m=+p[1], hh=h%12; if(hh===0) hh=12;
+    var s=hh+(m?(':'+('0'+m).slice(-2)):'');
+    return suffix ? s+(h<12?'am':'pm') : s;
+}
+function periodLabel(r){
+    if(!r.time) return '';
+    if(!r.dur) return clock12(r.time, true);
+    var end=addMinutes(r.time, r.dur);
+    var sh=+r.time.split(':')[0], eh=+end.split(':')[0];
+    var diffMer=(sh<12)!==(eh<12);                 // show am/pm on start only if it differs from end
+    return clock12(r.time, diffMer)+' – '+clock12(end, true);
+}
 function periodKey(r){ return r.time+'|'+(r.dur||''); }
 function dayRank(d){ var i=DAY_ORDER.indexOf(d); return i<0?99:i; }
 function isAll(g){ return (g||'').trim().toLowerCase()==='all'; }
@@ -577,6 +603,65 @@ function renderGridModeSheet(){
     el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 
+function groupTint(g){ var h=0; for(var i=0;i<g.length;i++){ h=(h*31+g.charCodeAt(i))%360; } return 'hsl('+h+',70%,90%)'; }
+function groupBlock(r){
+    var g=(r.group||'').trim();
+    return '<div class="g-block"'+(g?(' style="background:'+groupTint(g)+'"'):'')+'>'
+        + (g?'<span class="g-tag">'+esc(g)+'</span>':'')
+        + (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+        + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'')
+        + '</div>';
+}
+// Days as COLUMNS (time down the left). Multiple groups in a (period, day) cell
+// sit side by side; an "All" group at a period makes a full-width band (BREAK).
+function renderGridColumnsSheet(){
+    var pmap={}, periods=[];
+    rows.forEach(function(r){ if(!r.time) return; var k=periodKey(r);
+        if(!pmap[k]){ pmap[k]={k:k,label:periodLabel(r),start:r.time,allText:''}; periods.push(pmap[k]); }
+        if(isAll(r.group) && (r.subject||r.teacher)){
+            var sig=(r.subject||'')+'|'+(r.teacher||'');
+            pmap[k]._seen = pmap[k]._seen || {};
+            if(!pmap[k]._seen[sig]){ pmap[k]._seen[sig]=1;
+                pmap[k].allText += (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+                                 + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':''); } }
+    });
+    periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
+
+    var dseen={}, dayList=[];
+    rows.forEach(function(r){ if(isAll(r.group)) return;
+        var date=r.date||'', day=(date?dayFromDate(date):'')||(r.day||'').trim()||'—', key=date||day;
+        if(!(key in dseen)){ dseen[key]={day:day,date:date,
+            sort:(parseDateAny(date)?parseDateAny(date).iso:('zz'+('0'+dayRank(day)).slice(-2)))}; dayList.push(key); } });
+    dayList.sort(function(a,b){ return String(dseen[a].sort).localeCompare(String(dseen[b].sort)); });
+
+    if(!periods.length || !dayList.length){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the grid.</p>';
+        return;
+    }
+    var cells={};
+    rows.forEach(function(r){ if(!r.time||isAll(r.group)) return;
+        var date=r.date||'', day=(date?dayFromDate(date):'')||(r.day||'').trim()||'—', dk=date||day, pk=periodKey(r);
+        (cells[pk]=cells[pk]||{}); (cells[pk][dk]=cells[pk][dk]||[]).push(r); });
+
+    var thead='<tr><th>Time</th>'+dayList.map(function(dk){ var d=dseen[dk];
+        var lbl=esc(d.day||'—'); if(d.date) lbl+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>';
+        return '<th>'+lbl+'</th>'; }).join('')+'</tr>';
+    var body='';
+    periods.forEach(function(p){
+        body+='<tr><th class="time-cell">'+esc(p.label)+'</th>';
+        if(p.allText){
+            body+='<td class="cell banner" colspan="'+dayList.length+'">'+p.allText+'</td>';
+        } else {
+            dayList.forEach(function(dk){
+                var arr=(cells[p.k] && cells[p.k][dk]) || [];
+                body+='<td class="cell">'+(arr.length?('<div class="g-row">'+arr.map(groupBlock).join('')+'</div>'):'')+'</td>';
+            });
+        }
+        body+='</tr>';
+    });
+    el('pBody').innerHTML='<table class="grid-tt cols"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+}
+
 // Exam list: one row per exam, with a blank signature column.
 function renderListSheet(){
     var fields=layout().fields;
@@ -611,22 +696,25 @@ function renderSheet(){
     renderHead();
     var l=el('layout').value;
     if(l==='grid') renderBlankGridSheet();
-    else if(layout().mode==='grid') renderGridModeSheet();
+    else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
 
 function onLayoutChange(){
     var blank = el('layout').value==='grid';
+    var isGridMode = !blank && layout().mode==='grid';
     el('gridEditor').style.display = blank?'block':'none';
     el('rowEditor').style.display = blank?'none':'block';
-    // grid paste only makes sense for the day×period layouts
-    el('gridPasteBox').style.display = (!blank && layout().mode==='grid') ? 'block':'none';
+    // grid paste & the orientation choice only apply to the day×period layouts
+    el('gridPasteBox').style.display = isGridMode ? 'block':'none';
+    el('orientWrap').style.display = isGridMode ? 'block':'none';
     if(!el('title').dataset.touched){ el('title').value=''; }
     if(!blank) renderEditor();
     renderSheet();
 }
 el('layout').addEventListener('change', onLayoutChange);
 el('theme').addEventListener('change', renderSheet);
+el('orient').addEventListener('change', renderSheet);
 el('title').addEventListener('input', function(){ this.dataset.touched='1'; });
 
 // ---------- export (Full-HD image / PDF) with preview ----------
