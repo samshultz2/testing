@@ -46,6 +46,56 @@
 .tt-sheet[data-theme="minimal"] th{border-bottom:2px solid #111;font-size:.82rem;text-transform:uppercase;letter-spacing:.6px}
 .tt-sheet[data-theme="minimal"] td{border-bottom:1px solid #e5e7eb}
 
+/* elegant — dark band with gold accents */
+.tt-sheet[data-theme="elegant"]{font-family:'Garamond','Georgia',serif}
+.tt-sheet[data-theme="elegant"] .tt-head{background:#1f2937;color:#fbbf24;padding:16px;border-radius:6px;border-bottom:3px solid #fbbf24}
+.tt-sheet[data-theme="elegant"] .tt-sub{color:#e5e7eb}
+.tt-sheet[data-theme="elegant"] th{background:#111827;color:#fbbf24;border:1px solid #374151;letter-spacing:.5px}
+.tt-sheet[data-theme="elegant"] td{border:1px solid #d1d5db}
+.tt-sheet[data-theme="elegant"] tbody tr:nth-child(even) td{background:#faf7ef}
+
+/* corporate — navy + grey, crisp */
+.tt-sheet[data-theme="corporate"]{font-family:'Arial',system-ui,sans-serif}
+.tt-sheet[data-theme="corporate"] .tt-school{color:#1e3a8a}
+.tt-sheet[data-theme="corporate"] th{background:#1e3a8a;color:#fff;border:1px solid #1e3a8a;font-size:.82rem;text-transform:uppercase}
+.tt-sheet[data-theme="corporate"] td{border:1px solid #cbd5e1}
+.tt-sheet[data-theme="corporate"] tbody tr:nth-child(even) td{background:#f1f5f9}
+
+/* chalkboard — dark green board, white chalk text */
+.tt-sheet[data-theme="chalkboard"]{font-family:'Comic Sans MS','Segoe Print',cursive;background:#1b3a2b;color:#f8fafc;border-color:#0f2a1d}
+.tt-sheet[data-theme="chalkboard"] .tt-school,.tt-sheet[data-theme="chalkboard"] .tt-title{color:#fff}
+.tt-sheet[data-theme="chalkboard"] .tt-sub{color:#bbf7d0}
+.tt-sheet[data-theme="chalkboard"] th{border:1px solid #4ade80;color:#fde68a}
+.tt-sheet[data-theme="chalkboard"] td{border:1px solid #2f5d45;color:#ecfdf5}
+
+/* sunset — warm gradient header */
+.tt-sheet[data-theme="sunset"]{font-family:'Verdana',system-ui,sans-serif}
+.tt-sheet[data-theme="sunset"] .tt-head{background:linear-gradient(90deg,#f97316,#db2777);color:#fff;padding:16px;border-radius:10px}
+.tt-sheet[data-theme="sunset"] .tt-sub{color:#ffe4e6}
+.tt-sheet[data-theme="sunset"] th{background:#fb923c;color:#7c2d12;border:1px solid #fdba74}
+.tt-sheet[data-theme="sunset"] td{border:1px solid #fed7aa}
+.tt-sheet[data-theme="sunset"] tbody tr:nth-child(even) td{background:#fff7ed}
+
+/* ocean — teal/cyan gradient, rounded */
+.tt-sheet[data-theme="ocean"]{font-family:'Segoe UI',system-ui,sans-serif}
+.tt-sheet[data-theme="ocean"] .tt-head{background:linear-gradient(90deg,#0891b2,#2563eb);color:#fff;padding:16px;border-radius:10px}
+.tt-sheet[data-theme="ocean"] .tt-sub{color:#cffafe}
+.tt-sheet[data-theme="ocean"] th{background:#0e7490;color:#fff;border:1px solid #155e75}
+.tt-sheet[data-theme="ocean"] td{border:1px solid #bae6fd}
+.tt-sheet[data-theme="ocean"] tbody tr:nth-child(even) td{background:#f0f9ff}
+
+/* rose — maroon header, soft pink rows */
+.tt-sheet[data-theme="rose"]{font-family:'Georgia',serif}
+.tt-sheet[data-theme="rose"] .tt-school{color:#9f1239}
+.tt-sheet[data-theme="rose"] th{background:#9f1239;color:#fff;border:1px solid #881337}
+.tt-sheet[data-theme="rose"] td{border:1px solid #fecdd3}
+.tt-sheet[data-theme="rose"] tbody tr:nth-child(even) td{background:#fff1f2}
+
+/* mono — high-contrast black & white, compact (great for photocopies) */
+.tt-sheet[data-theme="mono"]{font-family:'Courier New',monospace}
+.tt-sheet[data-theme="mono"] th{background:#000;color:#fff;border:1px solid #000;font-size:.8rem}
+.tt-sheet[data-theme="mono"] td{border:1px solid #000}
+
 @media print{
     /* hide everything but the sheet */
     body *{visibility:hidden}
@@ -80,6 +130,13 @@
                     <option value="modern" selected>Modern (teal header)</option>
                     <option value="colour">Colourful (indigo, striped)</option>
                     <option value="minimal">Minimal (clean lines)</option>
+                    <option value="elegant">Elegant (dark &amp; gold)</option>
+                    <option value="corporate">Corporate (navy)</option>
+                    <option value="chalkboard">Chalkboard (green board)</option>
+                    <option value="sunset">Sunset (orange–pink)</option>
+                    <option value="ocean">Ocean (cyan–blue)</option>
+                    <option value="rose">Rose (maroon &amp; pink)</option>
+                    <option value="mono">Mono (B&amp;W, photocopy-friendly)</option>
                 </select>
             </div>
             <div class="form-group">
