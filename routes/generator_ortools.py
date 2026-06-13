@@ -720,10 +720,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
 def save_ortools_result(result):
     if not result.get('success'):
         return None
-    
-    GenTimetableResult.query.delete()
-    db.session.commit()
-    
+
+    # Keep previous batches — each generation is saved under its own batch_id so
+    # an in-use timetable is never wiped and can be re-applied later.
     batch_id = str(uuid.uuid4())[:8]
     
     for ca, days_data in result['timetable'].items():

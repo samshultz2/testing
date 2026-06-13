@@ -828,6 +828,27 @@ class ClassTimetable(db.Model):
         return f'<ClassTimetable {self.class_arm_assignment.display_name} - {self.day_name} {self.slot.name}>'
 
 
+class TimetableBackup(db.Model):
+    """A point-in-time snapshot of the per-class timetables (ClassTimetable),
+    taken before a destructive change (e.g. applying a generated batch) so the
+    previous timetable can always be restored. Stored as JSON to stay
+    schema-light."""
+    __tablename__ = 'timetable_backups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=True)
+    label = db.Column(db.String(200))
+    entry_count = db.Column(db.Integer, default=0)
+    data = db.Column(db.Text)  # JSON list of entry dicts
+    created_at = db.Column(db.DateTime, default=local_now)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    term = db.relationship('Term')
+
+    def __repr__(self):
+        return f'<TimetableBackup {self.id} {self.label!r} ({self.entry_count})>'
+
+
 # ============================================================================
 # PROMOTION SYSTEM
 # ============================================================================

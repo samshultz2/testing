@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Timetable Backups - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('timetable.index') }}">Timetable</a> / <span>Backups &amp; Restore</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-clock-rotate-left"></i> Timetable Backups &amp; Restore</h1>
+        <p class="text-muted text-sm">A snapshot is saved automatically each time a generated timetable is applied. Restore one to bring back a previous timetable.</p>
+    </div>
+    {% if terms %}
+    <form method="GET" class="filter-form">
+        <select name="term_id" class="form-control" onchange="this.form.submit()">
+            {% for t in terms %}<option value="{{ t.id }}" {% if term_id and t.id==term_id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
+        </select>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('timetable.create_backup') }}" class="filter-form" style="gap:.5rem;align-items:end;flex-wrap:wrap">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="term_id" value="{{ term_id or '' }}">
+            <div class="form-group" style="flex:1;min-width:220px;margin:0">
+                <label class="form-label">Back up the current timetable now</label>
+                <input name="label" class="form-control" placeholder="Label (e.g. 'Working timetable — Term 1')">
+            </div>
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-floppy-disk"></i> Back up now</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if backups %}
+        <div class="table-responsive">
+        <table class="table">
+            <thead><tr><th>When</th><th>Label</th><th>Entries</th><th class="text-right">Actions</th></tr></thead>
+            <tbody>
+                {% for b in backups %}
+                <tr>
+                    <td>{{ b.created_at.strftime('%d %b %Y, %H:%M') }}</td>
+                    <td>{{ b.label }}</td>
+                    <td>{{ b.entry_count }}</td>
+                    <td class="text-right">
+                        <form method="POST" action="{{ url_for('timetable.restore_backup_route', backup_id=b.id) }}" style="display:inline" data-confirm="Restore this backup? Your current timetable for this term will be backed up first, then replaced with this one.">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-rotate-left"></i> Restore</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('timetable.delete_backup', backup_id=b.id) }}" style="display:inline" data-confirm="Delete this backup permanently?">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center" style="padding:1.5rem"><i class="fas fa-info-circle"></i> No backups yet for this term. One is created automatically when you apply a generated timetable, or use “Back up now” above.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

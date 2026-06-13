@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Generator Setup - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Setup Guide</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-list-check"></i> Timetable Generator — Setup Guide</h1>
+        <p class="text-muted text-sm">The steps to generate a timetable and publish it to your class timetables. Currently set up for <strong>{{ level|upper }}</strong>.</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;">
+            <div style="flex:1;height:10px;background:var(--bg-subtle,#eef2f7);border-radius:6px;overflow:hidden;">
+                <div style="height:100%;width:{{ (done / required * 100) if required else 0 }}%;background:#10b981;"></div>
+            </div>
+            <strong>{{ done }} / {{ required }} done</strong>
+        </div>
+
+        <div class="data-cards">
+            {% for s in steps %}
+            <div class="data-card" style="border-left:4px solid {% if s.done %}#10b981{% elif s.optional %}#94a3b8{% else %}#f59e0b{% endif %};">
+                <div class="data-card-header">
+                    <div class="data-card-title">
+                        <i class="fas {% if s.done and not s.optional %}fa-circle-check text-success{% elif s.optional %}fa-circle-dot text-muted{% else %}fa-circle-exclamation text-warning{% endif %}"></i>
+                        <span style="margin-left:.35rem">{{ loop.index }}. {{ s.title }}</span>{% if s.optional %} <span class="text-muted text-sm">(optional)</span>{% endif %}
+                    </div>
+                </div>
+                <div class="data-card-row"><span class="data-card-label">Status</span><span>{{ s.detail }}</span></div>
+                <div class="data-card-actions">
+                    <a href="{{ s.url }}" class="btn btn-{% if s.done and not s.optional %}secondary{% else %}primary{% endif %} btn-sm w-100">
+                        <i class="fas fa-arrow-right"></i> {{ s.cta }}
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if done == required %}
+        <div class="alert alert-success" style="margin-top:1rem;"><i class="fas fa-check"></i> You're ready — generate a timetable, review it, then apply it to the class timetables. Applying always backs up the current timetable first, so it can be restored.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

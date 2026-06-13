@@ -119,6 +119,43 @@ def test_apply_autocreates_subject_on_name_mismatch(app):
         assert entry is not None and entry.subject_id == created.id
 
 
+def test_apply_backs_up_live_timetable_and_restore_works(app):
+    ids = _setup(app)
+    from models import TimetableBackup
+    with app.app_context():
+        slot = TimetableSlot.query.filter_by(slot_number=1, is_break=False).first()
+        db.session.add(ClassTimetable(
+            class_arm_assignment_id=ids['caa'], slot_id=slot.id, day_of_week=2,
+            teacher_name='LIVE-KEEP', is_active=True))
+        db.session.commit()
+        term_id = ClassArmAssignment.query.get(ids['caa']).term_id
+        before = TimetableBackup.query.filter_by(term_id=term_id).count()
+
+    client = _admin(app)
+    page = client.get(f'/generator/results/{ids["batch"]}').get_data(as_text=True)
+    token = re.search(r'name="csrf-token" content="([0-9a-f]+)"', page).group(1)
+    client.post(f'/generator/results/{ids["batch"]}/apply', data={'_csrf_token': token})
+
+    with app.app_context():
+        backups = (TimetableBackup.query.filter_by(term_id=term_id)
+                   .order_by(TimetableBackup.id.desc()).all())
+        assert len(backups) > before                     # apply made a backup
+        latest = backups[0]
+        assert latest.entry_count >= 1
+        # the live entry was replaced by the applied batch
+        assert ClassTimetable.query.filter_by(
+            class_arm_assignment_id=ids['caa'], teacher_name='LIVE-KEEP').first() is None
+        bid = latest.id
+
+    bpage = client.get(f'/timetable/backups?term_id={term_id}').get_data(as_text=True)
+    btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', bpage).group(1)
+    client.post(f'/timetable/backups/{bid}/restore', data={'_csrf_token': btok})
+
+    with app.app_context():
+        assert ClassTimetable.query.filter_by(
+            class_arm_assignment_id=ids['caa'], teacher_name='LIVE-KEEP').first() is not None
+
+
 def test_apply_replaces_existing_entries(app):
     ids = _setup(app)
     # Pre-seed a stale entry that should be wiped by the replace-mode apply.

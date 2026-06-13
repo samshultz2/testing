@@ -34,6 +34,73 @@ def designer():
                            school_name=school_name, subjects=subjects)
 
 
+@timetable_bp.route('/backups')
+@login_required
+def backups():
+    """List timetable backups so a previous (e.g. replaced) timetable can be
+    restored."""
+    from models import TimetableBackup
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    terms = Term.query.order_by(Term.id.desc()).all()
+    q = TimetableBackup.query
+    if term_id:
+        q = q.filter_by(term_id=term_id)
+    backups = q.order_by(TimetableBackup.created_at.desc()).all()
+    selected_term = Term.query.get(term_id) if term_id else None
+    return render_template('timetable/backups.html', backups=backups, terms=terms,
+                           selected_term=selected_term, term_id=term_id)
+
+
+@timetable_bp.route('/backups/create', methods=['POST'])
+@login_required
+def create_backup():
+    """Manually snapshot the current timetable for a term."""
+    from utils.timetable_backup import snapshot_term
+    term_id = request.form.get('term_id', type=int)
+    active = get_active_term()
+    term_id = term_id or (active.id if active else None)
+    if not term_id:
+        flash('Pick a term to back up.', 'error')
+        return redirect(url_for('timetable.backups'))
+    label = (request.form.get('label') or '').strip() or 'Manual backup'
+    backup = snapshot_term(term_id, label, skip_if_empty=False)
+    db.session.commit()
+    flash(f'Backed up {backup.entry_count} timetable entr(y/ies).', 'success')
+    return redirect(url_for('timetable.backups', term_id=term_id))
+
+
+@timetable_bp.route('/backups/<int:backup_id>/restore', methods=['POST'])
+@login_required
+def restore_backup_route(backup_id):
+    """Restore a backup. The current timetable is itself backed up first, so the
+    restore can be undone."""
+    from models import TimetableBackup
+    from utils.timetable_backup import snapshot_term, restore_backup
+    backup = db.get_or_404(TimetableBackup, backup_id)
+    if backup.term_id:
+        snapshot_term(backup.term_id,
+                      f'Auto-backup before restoring "{backup.label}"')
+    n = restore_backup(backup)
+    db.session.commit()
+    flash(f'Restored {n} timetable entr(y/ies) from "{backup.label}".', 'success')
+    return redirect(url_for('timetable.backups', term_id=backup.term_id))
+
+
+@timetable_bp.route('/backups/<int:backup_id>/delete', methods=['POST'])
+@login_required
+def delete_backup(backup_id):
+    from models import TimetableBackup
+    backup = db.get_or_404(TimetableBackup, backup_id)
+    term_id = backup.term_id
+    db.session.delete(backup)
+    db.session.commit()
+    flash('Backup deleted.', 'success')
+    return redirect(url_for('timetable.backups', term_id=term_id))
+
+
 @timetable_bp.route('/')
 @login_required
 def index():

@@ -81,6 +81,67 @@ def index():
     )
 
 
+@generator_bp.route('/setup')
+@login_required
+def setup_guide():
+    """Guided checklist for the timetable-generation process (mirrors term setup).
+    Shows each step's status and a link, for the currently selected level."""
+    from models import TimetableSlot
+    level = get_current_level()
+
+    teachers = GenTeacher.query.filter_by(is_active=True, school_level=level).count()
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level).count()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level).count()
+    try:
+        streams = GenStream.query.filter_by(school_level=level).count()
+    except Exception:
+        streams = GenStream.query.count()
+    assignments = GenTeacherAssignment.query.join(GenClassConfig).filter(
+        GenTeacherAssignment.is_active == True,
+        GenClassConfig.school_level == level).count()
+    rules = GenTimetableRule.query.filter_by(is_active=True, school_level=level).count()
+    periods = TimetableSlot.query.filter_by(is_active=True, is_break=False).count()
+    latest = (GenTimetableResult.query.filter_by(school_level=level)
+              .order_by(GenTimetableResult.generated_at.desc()).first())
+
+    steps = [
+        {'title': 'Add teachers', 'done': teachers > 0,
+         'detail': f'{teachers} teacher(s)',
+         'url': url_for('generator.teachers_list'), 'cta': 'Teachers'},
+        {'title': 'Add subjects', 'done': subjects > 0,
+         'detail': f'{subjects} subject(s) — keep names matching your academic subjects',
+         'url': url_for('generator.subjects_config'), 'cta': 'Subjects'},
+        {'title': 'Configure classes & arms', 'done': classes > 0,
+         'detail': f'{classes} class(es)',
+         'url': url_for('generator.classes_config'), 'cta': 'Classes'},
+        {'title': 'Streams (Arts/Science groupings)', 'optional': True, 'done': True,
+         'detail': f'{streams} stream(s) (optional)',
+         'url': url_for('generator.streams_list'), 'cta': 'Streams'},
+        {'title': 'Assign teachers to class subjects', 'done': assignments > 0,
+         'detail': f'{assignments} assignment(s)',
+         'url': url_for('generator.teacher_assignments'), 'cta': 'Assignments'},
+        {'title': 'Generation rules', 'optional': True, 'done': True,
+         'detail': f'{rules} custom rule(s) (sensible defaults otherwise)',
+         'url': url_for('generator.rules_config'), 'cta': 'Rules'},
+        {'title': 'Class periods configured', 'done': periods > 0,
+         'detail': (f'{periods} teaching period(s) — required before applying to '
+                    f'class timetables'),
+         'url': url_for('settings.timetable_slots'), 'cta': 'Periods'},
+        {'title': 'Generate the timetable', 'done': latest is not None,
+         'detail': ('Last generated ' + latest.generated_at.strftime('%d %b %Y')
+                    if latest else 'Not generated yet'),
+         'url': url_for('generator.generate_page'), 'cta': 'Generate'},
+        {'title': 'Review & apply to class timetables', 'optional': True,
+         'done': latest is not None,
+         'detail': 'Open a result, review it, then "Apply to Class Timetables"',
+         'url': url_for('generator.results_list'), 'cta': 'Results'},
+    ]
+    done = sum(1 for s in steps if s['done'] and not s.get('optional'))
+    required = sum(1 for s in steps if not s.get('optional'))
+    return render_template('generator/setup.html', steps=steps, done=done,
+                           required=required, level=level)
+
+
 @generator_bp.route('/level/<level>')
 @login_required
 def level_dashboard(level):
@@ -1242,12 +1303,10 @@ def run_generation():
         # Save results
         batch_id = str(uuid.uuid4())[:8]
         
-        # Clear old results
-        for class_name, arm, _ in result['class_arms']:
-            GenTimetableResult.query.filter_by(
-                class_name=class_name, arm_name=arm, school_level=level, is_locked=False
-            ).delete()
-        
+        # NOTE: previous batches are intentionally kept (each generation is its
+        # own saved batch under a new batch_id), so a timetable already in use is
+        # never wiped by a regeneration and can always be re-applied.
+
         # Save new results
         for (class_name, arm), days in result['timetables'].items():
             for day, periods in days.items():
@@ -1828,6 +1887,11 @@ def apply_results(batch_id):
     def slot_for_period(p):
         return teaching[p - 1] if isinstance(p, int) and 1 <= p <= len(teaching) else None
 
+    # Back up whatever is currently published for this term BEFORE we replace it,
+    # so an in-use timetable can be restored if this apply isn't wanted.
+    from utils.timetable_backup import snapshot_term
+    backup = snapshot_term(term.id, f'Auto-backup before applying batch {batch_id}')
+
     classes_by_name = {c.name.lower(): c for c in SchoolClass.query.all()}
     arms_by_name = {a.name.lower(): a for a in ClassArm.query.all()}
 
@@ -1913,6 +1977,9 @@ def apply_results(batch_id):
                f'batch {batch_id}: {applied} class(es), {written} entries -> {term.full_name}')
 
     msg = f'Applied to {applied} class timetable(s) for {term.full_name} ({written} entries).'
+    if backup:
+        msg += (f' The previous timetable ({backup.entry_count} entries) was backed '
+                f'up first — you can restore it from Timetable → Backups & Restore.')
     if created_subjects:
         msg += (f' Added {len(created_subjects)} new academic subject(s) that '
                 f'weren\'t in the list yet: ' + ', '.join(sorted(created_subjects)) + '.')
