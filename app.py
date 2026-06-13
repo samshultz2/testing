@@ -232,6 +232,20 @@ def create_app(config_class=None):
             except Exception:
                 return True
 
+        def can_generate_timetable():
+            try:
+                from utils.access_control import can_generate_timetable as _f
+                return _f()
+            except Exception:
+                return False
+
+        def can_generate_result_cards():
+            try:
+                from utils.access_control import can_generate_result_cards as _f
+                return _f()
+            except Exception:
+                return False
+
         def branch_context():
             """Header branch switcher state."""
             try:
@@ -262,6 +276,8 @@ def create_app(config_class=None):
             'can_write_module': can_write_module,
             'can_manage_users': can_manage_users(),
             'page_can_write': page_can_write(),
+            'can_generate_timetable': can_generate_timetable(),
+            'can_generate_result_cards': can_generate_result_cards(),
             'branch_ctx': branch_context(),
             'current_theme': current_theme(),
             'themes': THEMES,

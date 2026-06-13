@@ -50,7 +50,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Role <span class="text-danger">*</span></label>
-                <select name="role" class="form-control" id="roleSelect" onchange="toggleTeacherOptions()">
+                <select name="role" class="form-control" id="roleSelect" onchange="onRoleChange()">
                     <option value="teacher">Teacher</option>
                     <option value="staff">Staff (restricted)</option>
                     <option value="admin">Admin</option>
@@ -135,10 +135,11 @@
                     </select>
                 </label>
                 {% if subsections.get(key) %}
-                <details class="perm-subs"><summary>Detailed access ({{ subsections[key]|length }} parts)</summary>
+                <details class="perm-subs" {% if key in cap_modules %}open{% endif %}><summary>{% if key in cap_modules %}<i class="fas fa-key"></i> Special capabilities{% else %}Detailed access ({{ subsections[key]|length }} parts){% endif %}</summary>
                     {% for sub, slabel in subsections[key].items() %}
-                    <label class="permission-item perm-row perm-sub"><span>↳ {{ slabel }}</span>
-                        <select name="perm_{{ key }}.{{ sub }}" class="form-control perm-select">
+                    {% set sk = key ~ '.' ~ sub %}
+                    <label class="permission-item perm-row perm-sub {% if sk in capabilities %}perm-cap{% endif %}"><span>{% if sk in capabilities %}<i class="fas fa-key"></i> {% else %}↳ {% endif %}{{ slabel }}</span>
+                        <select name="perm_{{ sk }}" class="form-control perm-select">
                             <option value="">No access</option>
                             <option value="view">View only</option>
                             <option value="edit">View &amp; edit</option>
@@ -151,6 +152,7 @@
                 {% endfor %}
             </div>
             <p class="text-muted text-sm mt-2"><i class="fas fa-info-circle"></i> Choose each section's level — <strong>No access</strong>, <strong>View only</strong> or <strong>View &amp; edit</strong>. Modules with <em>Detailed access</em> let you grant only certain parts (e.g. Finance → Payments but not Expenses). A part's level overrides the whole-module level. Admins always have full access.</p>
+            <p class="text-muted text-sm mt-1"><i class="fas fa-key"></i> <strong>Special capabilities</strong> (e.g. <em>Generate Timetable</em> under Timetable, <em>Generate Result Cards</em> under Subjects &amp; Scores) are extra powers that are <em>not</em> implied by module access — grant them explicitly under the module's expander.</p>
             <label class="permission-item mt-2" style="display:inline-flex"><input type="checkbox" name="view_only"> <span>View only — can browse but not create, edit or delete</span></label>
         </div>
     </div>
@@ -171,6 +173,8 @@
 .perm-subs summary{cursor:pointer;color:var(--text-muted);font-size:.78rem}
 .perm-sub{background:transparent;padding:.25rem .5rem}
 .perm-sub span{font-size:.85rem;color:var(--text-secondary)}
+.perm-cap{background:rgba(245,158,11,.12);border-radius:var(--radius-sm)}
+.perm-cap span{color:var(--text-primary);font-weight:600}
 .permission-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--gray-50);border-radius:var(--radius-sm);cursor:pointer}
 .permission-item input{width:1.1rem;height:1.1rem}
 .form-row{display:grid;grid-template-columns:1fr;gap:1rem}
@@ -180,6 +184,7 @@
 
 <script>
 var PRESETS = {{ presets|tojson }};
+var ROLE_DEFAULTS = {{ role_defaults|tojson }};
 function toggleTeacherOptions(){
     const role=document.getElementById('roleSelect').value;
     document.getElementById('teacherPermissions').style.display=role==='teacher'?'block':'none';
@@ -189,6 +194,19 @@ function toggleScope(){
     const central=document.getElementById('scopeSelect').value==='central';
     document.getElementById('branchPick').style.display=central?'none':'block';
 }
+// Fill the module dropdowns with the chosen role's default access set, so e.g.
+// picking "Teacher" immediately ticks the standard teacher modules. Only the
+// whole-module selects (those carrying data-key) are touched — special
+// capabilities and detailed sub-parts keep whatever was set.
+function applyRoleDefaults(role){
+    var mods=ROLE_DEFAULTS[role]||[];
+    var lvl=role==='readonly'?'view':'edit';
+    var want={}; mods.forEach(function(m){ want[m]=lvl; });
+    document.querySelectorAll('.perm-select[data-key]').forEach(function(sel){
+        sel.value=want[sel.dataset.key]||'';
+    });
+}
+function onRoleChange(){ toggleTeacherOptions(); applyRoleDefaults(document.getElementById('roleSelect').value); }
 function applyPreset(){
     var p=PRESETS[document.getElementById('presetSelect').value];
     if(!p) return;
@@ -198,11 +216,18 @@ function applyPreset(){
     document.getElementById('streamSelect').value=p.stream||'';
     document.getElementById('manageScopeSelect').value=p.manage_scope||'none';
     document.getElementById('rankInput').value=p.rank||0;
-    var want={}; (p.modules||[]).forEach(function(m){ want[m]='edit'; });
-    document.querySelectorAll('.perm-select').forEach(function(sel){ sel.value=want[sel.dataset.key]||''; });
+    // A preset's explicit module list wins; an empty list falls back to the
+    // role's defaults (e.g. the plain "Teacher" preset).
+    if((p.modules||[]).length){
+        var want={}; p.modules.forEach(function(m){ want[m]='edit'; });
+        document.querySelectorAll('.perm-select[data-key]').forEach(function(sel){ sel.value=want[sel.dataset.key]||''; });
+    } else {
+        applyRoleDefaults(p.role);
+    }
     document.getElementById('presetHelp').textContent=p.description||'';
     toggleTeacherOptions(); toggleScope();
 }
-toggleTeacherOptions(); toggleScope();
+// New user: start with the default role's standard access already filled in.
+toggleTeacherOptions(); toggleScope(); applyRoleDefaults(document.getElementById('roleSelect').value);
 </script>
 {% endblock %}

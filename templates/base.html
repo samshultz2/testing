@@ -453,7 +453,7 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% if session.get('role') in ('super_admin', 'admin') %}
+                    {% if session.get('role') in ('super_admin', 'admin') or can_generate_timetable %}
                     <li class="nav-section">Tools</li>
                     <li class="nav-item has-submenu">
                         <a href="#" class="nav-link submenu-toggle">
@@ -476,7 +476,9 @@
                             <li><a href="{{ url_for('generator.generator_settings') }}"><i class="fas fa-cog"></i> Settings</a></li>
                         </ul>
                     </li>
+                    {% endif %}
 
+                    {% if session.get('role') in ('super_admin', 'admin') %}
                     <li class="nav-section">Settings</li>
                     {% if can_manage_users %}
                     <li class="nav-item">

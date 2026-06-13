@@ -201,9 +201,13 @@ def add_user():
     
     from models import Branch
     from utils.role_presets import presets_for_form
-    from utils.access_control import MODULE_SUBSECTIONS
+    from utils.access_control import (MODULE_SUBSECTIONS, ROLE_DEFAULT_MODULES,
+                                      CAPABILITY_SUBSECTIONS)
     return render_template('users/add.html', modules=MODULES,
                            subsections=MODULE_SUBSECTIONS,
+                           role_defaults={r: sorted(m) for r, m in ROLE_DEFAULT_MODULES.items()},
+                           capabilities=sorted(CAPABILITY_SUBSECTIONS),
+                           cap_modules=sorted({c.split('.')[0] for c in CAPABILITY_SUBSECTIONS}),
                            branches=Branch.query.order_by(Branch.name).all(),
                            presets=presets_for_form())
 
@@ -294,9 +298,13 @@ def edit_user(user_id):
     
     from models import Branch
     from utils.role_presets import presets_for_form
-    from utils.access_control import MODULE_SUBSECTIONS
+    from utils.access_control import (MODULE_SUBSECTIONS, ROLE_DEFAULT_MODULES,
+                                      CAPABILITY_SUBSECTIONS)
     return render_template('users/edit.html', user=user, modules=MODULES,
                            subsections=MODULE_SUBSECTIONS,
+                           role_defaults={r: sorted(m) for r, m in ROLE_DEFAULT_MODULES.items()},
+                           capabilities=sorted(CAPABILITY_SUBSECTIONS),
+                           cap_modules=sorted({c.split('.')[0] for c in CAPABILITY_SUBSECTIONS}),
                            branches=Branch.query.order_by(Branch.name).all(),
                            presets=presets_for_form())
 
