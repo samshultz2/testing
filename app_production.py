@@ -54,8 +54,26 @@ def _local_pg_target(uri):
     return host, (p.port or 5432)
 
 
-def _start_postgres():
-    """Best-effort start of a local PostgreSQL (Debian/Ubuntu layouts)."""
+def _have_user(name):
+    try:
+        import pwd
+        pwd.getpwnam(name)
+        return True
+    except KeyError:
+        return False
+
+
+def _start_postgres(port):
+    """Best-effort start of a local PostgreSQL.
+
+    First the Debian/Ubuntu registered-cluster path (service / pg_ctlcluster).
+    If that doesn't bind the port — common on phone/proot installs where
+    /etc/postgresql has no cluster registered — fall back to starting an
+    existing data directory directly as the 'postgres' user, mirroring the
+    manual recovery (recreate the tmpfs socket dir, clear a stale lock, run
+    pg_ctl as postgres). We only reach here when nothing is listening, so
+    removing a leftover postmaster.pid is safe.
+    """
     import glob
     cmds = [['service', 'postgresql', 'start']]
     for d in sorted(glob.glob('/etc/postgresql/*/main')):
@@ -68,6 +86,37 @@ def _start_postgres():
             subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         except Exception:
             continue
+
+    if _tcp_open('127.0.0.1', port) or not _have_user('postgres'):
+        return
+
+    # Fallback: an unregistered data dir at the standard path. Ensure the
+    # runtime socket dir exists (it lives on tmpfs and vanishes on restart).
+    try:
+        os.makedirs('/var/run/postgresql', exist_ok=True)
+        shutil.chown('/var/run/postgresql', 'postgres', 'postgres')
+    except Exception:
+        pass
+    for d in sorted(glob.glob('/var/lib/postgresql/*/main')):
+        if not os.path.exists(os.path.join(d, 'PG_VERSION')):
+            continue
+        pg_ctl = f"/usr/lib/postgresql/{d.split('/')[3]}/bin/pg_ctl"
+        if not os.path.exists(pg_ctl):
+            continue
+        try:
+            os.remove(os.path.join(d, 'postmaster.pid'))  # stale lock
+        except OSError:
+            pass
+        print(f'Starting unregistered PostgreSQL data dir {d} as postgres...')
+        try:
+            subprocess.run(
+                ['su', '-s', '/bin/sh', 'postgres', '-c',
+                 f'{pg_ctl} -D {d} -l {d}/server.log start'],
+                capture_output=True, text=True, timeout=30)
+        except Exception:
+            pass
+        if _tcp_open('127.0.0.1', port):
+            return
 
 
 def _ensure_database():
@@ -85,7 +134,7 @@ def _ensure_database():
     if _tcp_open(host, port):
         return                           # already running
     print(f'PostgreSQL not reachable on {host}:{port} — starting it...')
-    _start_postgres()
+    _start_postgres(port)
     for _ in range(60):                  # wait up to ~30s for it to accept conns
         if _tcp_open(host, port):
             print('PostgreSQL is up.')
@@ -96,8 +145,8 @@ def _ensure_database():
         f'Start it manually and retry:\n'
         f'  service postgresql start      (or: pg_ctlcluster <version> main start)\n'
         f'  pg_isready -h {host} -p {port}\n'
-        f'If it refuses to start, check the cluster log under '
-        f'/var/log/postgresql/.')
+        f'If it refuses to start, check the log: '
+        f'/var/lib/postgresql/<version>/main/server.log')
 
 
 # Bring the database up first, then import the app (which connects on import).
