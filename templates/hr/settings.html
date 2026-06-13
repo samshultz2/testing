@@ -33,6 +33,39 @@
 </div>
 
 <div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-money-bill-trend-up"></i> Recurring Deductions</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm" style="margin-top:0;">Deductions applied to <strong>every</strong> staff member's payslip each month — e.g. pension (a % of basic) or welfare (a fixed amount).</p>
+        <form method="POST" action="{{ url_for('hr.add_deduction_type') }}" class="d-flex gap-2 align-end flex-wrap mb-3">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group mb-0" style="flex:2;min-width:160px;"><label class="form-label">Name</label><input type="text" name="name" class="form-control" placeholder="e.g. Pension, Welfare, Union dues" required></div>
+            <div class="form-group mb-0"><label class="form-label">Type</label>
+                <select name="kind" class="form-control"><option value="percent">% of basic</option><option value="fixed">Fixed ₦</option></select></div>
+            <div class="form-group mb-0"><label class="form-label">Value</label><input type="number" name="value" class="form-control" min="0" step="0.5" placeholder="5 or 500" required></div>
+            <button class="btn btn-primary"><i class="fas fa-plus"></i> Add</button>
+        </form>
+        {% if deductions %}
+        <table class="data-table table-stack">
+            <thead><tr><th>Name</th><th>Deduction</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for d in deductions %}
+            <tr {% if not d.is_active %}style="opacity:.55;"{% endif %}>
+                <td data-label="Name">{{ d.name }}</td>
+                <td data-label="Deduction">{% if d.kind == 'percent' %}{{ d.value|round(2) }}% of basic{% else %}{{ d.value|naira }} fixed{% endif %}</td>
+                <td data-label="Status">{% if d.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-warning">Inactive</span>{% endif %}</td>
+                <td class="actions"><div class="d-flex gap-1 justify-end">
+                    <form method="POST" action="{{ url_for('hr.toggle_deduction_type', type_id=d.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-secondary btn-sm" title="Toggle active"><i class="fas fa-power-off"></i></button></form>
+                    <form method="POST" action="{{ url_for('hr.delete_deduction_type', type_id=d.id) }}" data-confirm="Remove this deduction?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm" title="Delete"><i class="fas fa-trash"></i></button></form>
+                </div></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}<p class="text-muted text-sm">No recurring deductions yet.</p>{% endif %}
+    </div>
+</div>
+
+<div class="card mt-3">
     <div class="card-body">
         <h4 style="margin-top:0;"><i class="fas fa-circle-question"></i> How deductions work</h4>
         <ul class="text-sm text-muted" style="margin:0;padding-left:1.1rem;line-height:1.7;">

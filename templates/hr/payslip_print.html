@@ -37,8 +37,10 @@
         {% endif %}
         <div class="r"><span class="k">Basic salary</span><span>{{ ps.basic|naira }}</span></div>
         <div class="r"><span class="k">Allowances</span><span>+ {{ ps.allowances|naira }}</span></div>
-        <div class="r"><span class="k">Deductions</span><span>− {{ ps.deductions|naira }}</span></div>
+        {% if ps.deductions %}<div class="r"><span class="k">Deductions (manual)</span><span>− {{ ps.deductions|naira }}</span></div>{% endif %}
+        {% for i in ps.items %}<div class="r"><span class="k">{{ i.name }}</span><span>− {{ i.amount|naira }}</span></div>{% endfor %}
         {% if ps.attendance_deduction %}<div class="r"><span class="k">Lateness / absence</span><span>− {{ ps.attendance_deduction|naira }}</span></div>{% endif %}
+        <div class="r"><span class="k"><strong>Total deductions</strong></span><span><strong>− {{ ps.total_deductions|naira }}</strong></span></div>
         <div class="net"><div class="text-muted text-sm">Net Pay</div><div class="big">{{ ps.net|naira }}</div></div>
         <div class="r" style="border:none;"><span class="k">Status</span><span>{{ run.status }}</span></div>
     </div>

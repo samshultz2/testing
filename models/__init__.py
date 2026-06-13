@@ -25,7 +25,8 @@ from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
                              ExpenseCategory, Expense)
 from .models_comms import MessageTemplate, Message, MessageRecipient, Announcement
 from .models_hr import (Department, StaffMember, LeaveRecord, PayrollRun, Payslip,
-                        SalaryHistory, StaffAttendance)
+                        SalaryHistory, StaffAttendance, PayrollDeductionType,
+                        PayslipDeduction)
 from .models_admissions import Applicant
 from .models_library import Book, BookLoan
 from .models_events import SchoolEvent
@@ -61,7 +62,7 @@ __all__ = [
     'ExpenseCategory', 'Expense',
     'MessageTemplate', 'Message', 'MessageRecipient', 'Announcement',
     'Department', 'StaffMember', 'LeaveRecord', 'PayrollRun', 'Payslip',
-    'SalaryHistory', 'StaffAttendance',
+    'SalaryHistory', 'StaffAttendance', 'PayrollDeductionType', 'PayslipDeduction',
     'Applicant',
     'Book', 'BookLoan',
     'SchoolEvent',

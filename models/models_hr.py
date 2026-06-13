@@ -150,15 +150,60 @@ class Payslip(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
 
     staff = db.relationship('StaffMember')
+    items = db.relationship('PayslipDeduction', backref='payslip',
+                            lazy='selectin', cascade='all, delete-orphan')
+
+    @property
+    def recurring_deductions(self):
+        """Sum of the itemised recurring deductions (pension, welfare, …)."""
+        return sum((i.amount or 0) for i in self.items)
 
     @property
     def total_deductions(self):
-        return (self.deductions or 0) + (self.attendance_deduction or 0)
+        return ((self.deductions or 0) + (self.attendance_deduction or 0)
+                + self.recurring_deductions)
 
     def recompute(self):
         self.net = ((self.basic or 0) + (self.allowances or 0)
-                    - (self.deductions or 0) - (self.attendance_deduction or 0))
+                    - self.total_deductions)
         return self.net
+
+
+class PayrollDeductionType(db.Model):
+    """A recurring payroll deduction definition (applied to every payslip).
+
+    ``kind='percent'`` deducts ``value``% of the staff member's basic pay;
+    ``kind='fixed'`` deducts a flat ``value`` amount each month.
+    """
+    __tablename__ = 'payroll_deduction_types'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    name = db.Column(db.String(80), nullable=False)
+    kind = db.Column(db.String(10), nullable=False, default='fixed')  # 'percent' | 'fixed'
+    value = db.Column(db.Float, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    def amount_for(self, basic):
+        if self.kind == 'percent':
+            return round((basic or 0) * (self.value or 0) / 100.0, 2)
+        return self.value or 0
+
+    @property
+    def label(self):
+        return (f'{self.name} ({self.value:g}%)' if self.kind == 'percent'
+                else self.name)
+
+
+class PayslipDeduction(db.Model):
+    """A single recurring deduction line snapshotted onto a payslip."""
+    __tablename__ = 'payslip_deductions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    payslip_id = db.Column(db.Integer, db.ForeignKey('payslips.id'), nullable=False)
+    name = db.Column(db.String(100))
+    amount = db.Column(db.Float, default=0)
 
     def __repr__(self):
         return f'<Payslip run{self.run_id} staff{self.staff_id} net{self.net}>'

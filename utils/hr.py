@@ -105,12 +105,33 @@ def dashboard_stats():
     }
 
 
+def active_deduction_types():
+    """Recurring payroll deductions (pension, welfare, …) currently in force."""
+    from models import PayrollDeductionType
+    return (PayrollDeductionType.query.filter_by(is_active=True)
+            .order_by(PayrollDeductionType.name).all())
+
+
+def apply_recurring_deductions(ps, types=None):
+    """(Re)build a payslip's recurring-deduction line items from the active
+    definitions, based on its current basic pay. Replaces any existing lines."""
+    from models import PayslipDeduction
+    types = active_deduction_types() if types is None else types
+    ps.items[:] = []
+    for t in types:
+        amt = t.amount_for(ps.basic or 0)
+        if amt:
+            ps.items.append(PayslipDeduction(name=t.label, amount=amt))
+
+
 def generate_payslips(run):
     """Create a payslip for every active staff member on the run (idempotent).
 
-    Deductions are pre-filled from that month's attendance (lateness/absence)."""
+    Pre-fills attendance (lateness/absence) deductions AND the recurring
+    deduction definitions (pension, welfare, …)."""
     existing = {p.staff_id for p in run.payslips}
     staff = StaffMember.query.filter_by(is_active=True, status='Active').all()
+    types = active_deduction_types()
     created = 0
     for s in staff:
         if s.id in existing:
@@ -119,22 +140,26 @@ def generate_payslips(run):
         ps = Payslip(run_id=run.id, staff_id=s.id, staff_name=s.full_name,
                      basic=s.salary or 0, allowances=0, deductions=0,
                      attendance_deduction=ded)
-        ps.recompute()
         db.session.add(ps)
+        db.session.flush()
+        apply_recurring_deductions(ps, types)
+        ps.recompute()
         created += 1
     return created
 
 
 def sync_attendance_deductions(run):
-    """Refresh the auto attendance-deduction on each payslip (manual deductions
-    in ``deductions`` are preserved)."""
+    """Refresh each payslip's auto attendance-deduction AND its recurring
+    deductions (pension, welfare, …) from the current definitions. Manual
+    deductions in ``deductions`` are preserved."""
+    types = active_deduction_types()
     n = 0
     for ps in run.payslips:
         ded = month_attendance_deduction(ps.staff_id, run.year, run.month)
-        if ps.attendance_deduction != ded:
-            ps.attendance_deduction = ded
-            ps.recompute()
-            n += 1
+        ps.attendance_deduction = ded
+        apply_recurring_deductions(ps, types)
+        ps.recompute()
+        n += 1
     return n
 
 

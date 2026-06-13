@@ -379,6 +379,7 @@ def edit_payslip(run_id, slip_id):
     ps.basic = request.form.get('basic', type=float) or 0
     ps.allowances = request.form.get('allowances', type=float) or 0
     ps.deductions = request.form.get('deductions', type=float) or 0
+    hr.apply_recurring_deductions(ps)   # percentage lines follow the new basic
     ps.recompute()
     db.session.commit()
     flash('Payslip updated.', 'success')
@@ -532,7 +533,52 @@ def save_attendance():
 @hr_bp.route('/settings')
 @login_required
 def settings():
-    return render_template('hr/settings.html', settings=hr.get_settings())
+    from models import PayrollDeductionType
+    deductions = PayrollDeductionType.query.order_by(PayrollDeductionType.name).all()
+    return render_template('hr/settings.html', settings=hr.get_settings(),
+                           deductions=deductions)
+
+
+@hr_bp.route('/settings/deductions/add', methods=['POST'])
+@admin_required
+def add_deduction_type():
+    from models import PayrollDeductionType
+    from utils.branch_scope import branch_for_new
+    name = (request.form.get('name') or '').strip()
+    kind = request.form.get('kind') if request.form.get('kind') in ('percent', 'fixed') else 'fixed'
+    value = request.form.get('value', type=float) or 0
+    if not name or value <= 0:
+        flash('A name and a positive value are required.', 'error')
+        return redirect(url_for('hr.settings'))
+    if kind == 'percent' and value > 100:
+        flash('A percentage deduction cannot exceed 100%.', 'error')
+        return redirect(url_for('hr.settings'))
+    db.session.add(PayrollDeductionType(name=name, kind=kind, value=value,
+                                        is_active=True, branch_id=branch_for_new()))
+    db.session.commit()
+    flash(f'Deduction "{name}" added. It applies to payroll generated from now on.', 'success')
+    return redirect(url_for('hr.settings'))
+
+
+@hr_bp.route('/settings/deductions/<int:type_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_deduction_type(type_id):
+    from models import PayrollDeductionType
+    t = db.get_or_404(PayrollDeductionType, type_id)
+    t.is_active = not t.is_active
+    db.session.commit()
+    flash(f'"{t.name}" is now {"active" if t.is_active else "inactive"}.', 'success')
+    return redirect(url_for('hr.settings'))
+
+
+@hr_bp.route('/settings/deductions/<int:type_id>/delete', methods=['POST'])
+@admin_required
+def delete_deduction_type(type_id):
+    from models import PayrollDeductionType
+    t = db.get_or_404(PayrollDeductionType, type_id)
+    db.session.delete(t); db.session.commit()
+    flash('Deduction removed (existing payslips keep their recorded lines).', 'success')
+    return redirect(url_for('hr.settings'))
 
 
 @hr_bp.route('/settings/save', methods=['POST'])
