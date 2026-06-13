@@ -41,6 +41,7 @@
 .tt-sheet table.grid-tt th,.tt-sheet table.grid-tt td{text-align:center}
 .tt-sheet table.grid-tt th.day-cell{vertical-align:middle;font-weight:800}
 .tt-sheet table.grid-tt td.grp-cell{font-weight:700;white-space:nowrap}
+.tt-sheet .c-date{display:block;font-weight:400;font-size:.78em;opacity:.85;margin-top:2px}
 .tt-sheet .c-subj{display:block;font-weight:700}
 .tt-sheet .c-tchr{display:block;font-size:.78em;opacity:.85;margin-top:2px}
 .tt-sheet .c-sep{border:none;border-top:1px dashed currentColor;opacity:.3;margin:.3rem 0}
@@ -120,12 +121,10 @@
    by default, which is why the print used to look plain) */
 .tt-sheet, .tt-sheet *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
 
-/* While exporting we size the sheet to an A4-landscape canvas off-screen and
-   stretch the table to fill it (both horizontally and vertically). */
-.tt-sheet.exporting{position:fixed;left:-10000px;top:0;width:1480px;height:1040px;
-    max-width:none;overflow:visible;display:flex;flex-direction:column;border:none;border-radius:0}
-.tt-sheet.exporting #pBody{flex:1 1 auto;display:flex;flex-direction:column}
-.tt-sheet.exporting #pBody table{height:100%}
+/* While exporting we widen the sheet to a fixed canvas width so it fills the
+   page horizontally; height stays natural (no vertical stretching). */
+.tt-sheet.exporting{position:fixed;left:-10000px;top:0;width:1480px;max-width:none;
+    height:auto;overflow:visible;border:none;border-radius:0}
 
 /* export preview modal */
 .export-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;
@@ -203,8 +202,19 @@
             <label class="form-label">Sessions</label>
             <p class="sess-hint" id="sessHint"></p>
 
+            <details class="bulk-box" id="gridPasteBox">
+                <summary><i class="fas fa-table"></i> Fastest: paste a whole grid (days × periods)</summary>
+                <p class="sess-hint" style="margin-top:.5rem">
+                    Paste the whole week as a table. <b>First line</b> = the period times (leave the first cell blank or write “Day”).
+                    <b>Each next line</b> = the day, then a subject per period. Separate cells with a comma, a | or a tab (copy straight from Excel/Sheets).
+                    Put a teacher in brackets, e.g. <code>Maths (Mr A)</code>. Leave a cell blank for a free period or a break.
+                </p>
+                <textarea id="gridPasteText" rows="6" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday, Maths (Mr A), English, Physics&#10;Tuesday, English, Physics, Maths&#10;Wednesday, Physics, Maths, English"></textarea>
+                <button class="btn btn-primary btn-sm" onclick="gridPaste()"><i class="fas fa-bolt"></i> Build timetable from grid</button>
+            </details>
+
             <details class="bulk-box">
-                <summary><i class="fas fa-bolt"></i> Quick add many at once (type or paste from a spreadsheet)</summary>
+                <summary><i class="fas fa-list"></i> Quick add (one session per line)</summary>
                 <p class="sess-hint" id="bulkHint" style="margin-top:.5rem"></p>
                 <textarea id="bulkText" rows="6" placeholder=""></textarea>
                 <button class="btn btn-primary btn-sm" onclick="bulkAdd()"><i class="fas fa-plus"></i> Add these</button>
@@ -275,11 +285,11 @@ Break
 <script>
 var LAYOUTS = {
     saturday: {title:'Saturday Class Timetable', mode:'grid',
-               fields:['day','group','time','dur','subject','teacher'],
-               hint:'Each day becomes a row and each time slot a column, with the teacher shown under the subject. Use “Class / Stream” to stack more than one group under the same day (e.g. SSS3 and JSS3).'},
+               fields:['date','day','group','time','dur','subject','teacher'],
+               hint:'Each day becomes a row and each time slot a column, with the teacher shown under the subject. Enter a Date and the Day fills in automatically (both show together in the day column). Use “Class / Stream” to stack more than one group under the same day (e.g. SSS3 and JSS3).'},
     holiday:  {title:'Holiday Lesson Timetable', mode:'grid',
-               fields:['day','group','time','dur','subject','teacher'],
-               hint:'Each day is a row and each time slot a column. Use “Class / Stream” when a day has different subjects per group — e.g. on Monday, Science vs Arts/Social-Science get their own rows.'},
+               fields:['date','day','group','time','dur','subject','teacher'],
+               hint:'Each day is a row and each time slot a column. Enter a Date and the Day fills in automatically (both show together in the day column). Use “Class / Stream” when a day has different subjects per group — e.g. on Monday, Science vs Arts/Social-Science get their own rows.'},
     exam:     {title:'Examination Timetable', mode:'list',
                fields:['date','time','dur','subject','venue','teacher'],
                hint:'Each exam is one row, listed by date and time. A blank “Invigilator’s Signature” column is added on the printout.'},
@@ -313,6 +323,12 @@ function dayFromDate(d){
     if(!d) return '';
     var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     var dt=new Date(d+'T00:00'); return isNaN(dt)?'':days[dt.getDay()];
+}
+function fmtDate(d){
+    if(!d) return '';
+    var dt=new Date(d+'T00:00'); if(isNaN(dt)) return d;
+    var mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return dt.getDate()+' '+mon[dt.getMonth()]+' '+dt.getFullYear();
 }
 function periodLabel(r){ if(!r.time) return ''; var s=fmtT(r.time); return r.dur?(s+' – '+fmtT(addMinutes(r.time,r.dur))):s; }
 function periodKey(r){ return r.time+'|'+(r.dur||''); }
@@ -397,6 +413,56 @@ function bulkAdd(){
     if(added){ el('bulkText').value=''; renderEditor(); renderSheet(); }
 }
 
+// ---------- fastest: paste a whole day×period grid ----------
+function splitCells(line){
+    return line.indexOf('\t') >= 0 ? line.split('\t') : line.split(/\s*[|,]\s*/);
+}
+function parsePeriodCell(s){
+    s = (s || '').trim(); if(!s) return null;
+    var m = s.split(/\s*[-–—]\s*/);
+    var start = normTime(m[0]), dur = '60';
+    if(m.length > 1){
+        var end = normTime(m[1]), a = start.split(':'), b = end.split(':');
+        if(a.length === 2 && b.length === 2){
+            var d = (+b[0] * 60 + +b[1]) - (+a[0] * 60 + +a[1]);
+            if(d > 0) dur = String(d);
+        }
+    }
+    return {time: start, dur: dur};
+}
+function parseSubjectCell(s){
+    s = (s || '').trim(); var teacher = '';
+    var m = s.match(/^(.*?)\s*[\(（](.+?)[\)）]\s*$/);     // "Subject (Teacher)"
+    if(m){ s = m[1].trim(); teacher = m[2].trim(); }
+    else { var sl = s.split(/\s*\/\s*/); if(sl.length > 1){ s = sl[0].trim(); teacher = sl.slice(1).join('/').trim(); } }
+    return {subject: s, teacher: teacher};
+}
+function gridPaste(){
+    var lines = (el('gridPasteText').value || '').split('\n').filter(function(s){ return s.trim(); });
+    if(lines.length < 2){ alert('Add a header line of period times and at least one day row.'); return; }
+    var header = splitCells(lines[0]);
+    var periods = header.slice(1).map(parsePeriodCell);   // first cell = the "Day" label
+    var added = 0;
+    for(var li = 1; li < lines.length; li++){
+        var cells = splitCells(lines[li]);
+        var first = (cells[0] || '').trim();
+        if(!first) continue;
+        var day = first, date = '';
+        if(/^\d{4}-\d{2}-\d{2}$/.test(first)){ date = first; day = dayFromDate(first) || first; }
+        for(var pi = 0; pi < periods.length; pi++){
+            var p = periods[pi]; if(!p) continue;
+            var sc = parseSubjectCell(cells[pi + 1] || '');
+            if(!sc.subject) continue;
+            var r = blankRow();
+            r.day = day; r.date = date; r.time = p.time; r.dur = p.dur;
+            r.subject = sc.subject; r.teacher = sc.teacher;
+            rows.push(r); added++;
+        }
+    }
+    if(added){ el('gridPasteText').value = ''; renderEditor(); renderSheet(); }
+    else alert('Nothing added — check the grid format.');
+}
+
 document.addEventListener('input', function(e){
     var card=e.target.closest && e.target.closest('#rowBody .sess-card');
     if(card){
@@ -429,7 +495,8 @@ function renderGridModeSheet(){
     var dayMap={}, days=[], cells={};
     rows.forEach(function(r){
         var day=(r.day||'').trim()||'—', g=(r.group||'').trim();
-        if(!dayMap[day]){ dayMap[day]={groups:[], gset:{}}; days.push(day); }
+        if(!dayMap[day]){ dayMap[day]={groups:[], gset:{}, date:''}; days.push(day); }
+        if(r.date && !dayMap[day].date){ dayMap[day].date=r.date; }   // date sits with its day
         if(!(g in dayMap[day].gset)){ dayMap[day].gset[g]=1; dayMap[day].groups.push(g); }
         if(r.time){ var key=day+'§'+g+'§'+periodKey(r); (cells[key]=cells[key]||[]).push(r); }
     });
@@ -446,7 +513,11 @@ function renderGridModeSheet(){
         var groups = anyGroup ? dayMap[day].groups : [''];
         groups.forEach(function(g, gi){
             body+='<tr>';
-            if(gi===0) body+='<th rowspan="'+groups.length+'" class="day-cell">'+esc(day)+'</th>';
+            if(gi===0){
+                var dlabel=esc(day);
+                if(dayMap[day].date){ dlabel+='<br><span class="c-date">'+esc(fmtDate(dayMap[day].date))+'</span>'; }
+                body+='<th rowspan="'+groups.length+'" class="day-cell">'+dlabel+'</th>';
+            }
             if(anyGroup) body+='<td class="grp-cell">'+esc(g||'—')+'</td>';
             periods.forEach(function(p){
                 var arr=cells[day+'§'+g+'§'+p.k]||[];
@@ -504,6 +575,8 @@ function onLayoutChange(){
     var blank = el('layout').value==='grid';
     el('gridEditor').style.display = blank?'block':'none';
     el('rowEditor').style.display = blank?'none':'block';
+    // grid paste only makes sense for the day×period layouts
+    el('gridPasteBox').style.display = (!blank && layout().mode==='grid') ? 'block':'none';
     if(!el('title').dataset.touched){ el('title').value=''; }
     if(!blank) renderEditor();
     renderSheet();
@@ -552,7 +625,13 @@ function downloadPDF(){
     var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
     var pdf = new JsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
     var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-    pdf.addImage(_exportCanvas.toDataURL('image/png'), 'PNG', 0, 0, pw, ph);
+    // Fill the page width and keep the natural aspect ratio (no vertical
+    // stretch); if that would overflow the page height, fit to height instead.
+    var iw = _exportCanvas.width, ih = _exportCanvas.height;
+    var imgW = pw, imgH = pw * ih / iw;
+    if(imgH > ph){ imgH = ph; imgW = ph * iw / ih; }
+    var x = (pw - imgW) / 2, y = 0;
+    pdf.addImage(_exportCanvas.toDataURL('image/png'), 'PNG', x, y, imgW, imgH);
     pdf.save(exportName() + '.pdf');
 }
 // click outside the box closes the preview
