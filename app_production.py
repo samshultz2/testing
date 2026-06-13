@@ -30,10 +30,80 @@ import time
 # (gives correct HTTPS detection for secure cookies). Set before importing app.
 os.environ.setdefault('TRUST_PROXY', '1')
 
-from app import app  # noqa: E402  — the configured application instance
-
 HOST = '127.0.0.1'
 PORT = int(os.environ.get('PORT', '5000'))
+
+
+def _tcp_open(host, port, timeout=1):
+    with socket.socket() as s:
+        s.settimeout(timeout)
+        return s.connect_ex((host, port)) == 0
+
+
+def _local_pg_target(uri):
+    """(host, port) when the configured DB is a PostgreSQL on this machine,
+    else None. A SQLite file or a remote/managed Postgres is left alone — we
+    only ever try to start a database we're hosting locally."""
+    if not uri.startswith('postgresql'):
+        return None
+    from urllib.parse import urlparse
+    p = urlparse(uri)
+    host = p.hostname or '127.0.0.1'
+    if host not in ('127.0.0.1', 'localhost', '::1'):
+        return None
+    return host, (p.port or 5432)
+
+
+def _start_postgres():
+    """Best-effort start of a local PostgreSQL (Debian/Ubuntu layouts)."""
+    import glob
+    cmds = [['service', 'postgresql', 'start']]
+    for d in sorted(glob.glob('/etc/postgresql/*/main')):
+        # /etc/postgresql/<version>/main -> pg_ctlcluster <version> main start
+        cmds.append(['pg_ctlcluster', d.split('/')[3], 'main', 'start'])
+    for cmd in cmds:
+        if not shutil.which(cmd[0]):
+            continue
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        except Exception:
+            continue
+
+
+def _ensure_database():
+    """Make sure the configured database is reachable before the app connects.
+
+    For a locally-hosted PostgreSQL that isn't up yet, try to start it and wait
+    until it accepts connections — so `python app_production.py` is genuinely a
+    one-command launch. No-op for SQLite or a remote database.
+    """
+    from config import Config            # loads .env + resolves DATABASE_URL
+    target = _local_pg_target(Config.SQLALCHEMY_DATABASE_URI)
+    if not target:
+        return
+    host, port = target
+    if _tcp_open(host, port):
+        return                           # already running
+    print(f'PostgreSQL not reachable on {host}:{port} — starting it...')
+    _start_postgres()
+    for _ in range(60):                  # wait up to ~30s for it to accept conns
+        if _tcp_open(host, port):
+            print('PostgreSQL is up.')
+            return
+        time.sleep(0.5)
+    sys.exit(
+        f'ERROR: PostgreSQL did not come up on {host}:{port}.\n'
+        f'Start it manually and retry:\n'
+        f'  service postgresql start      (or: pg_ctlcluster <version> main start)\n'
+        f'  pg_isready -h {host} -p {port}\n'
+        f'If it refuses to start, check the cluster log under '
+        f'/var/log/postgresql/.')
+
+
+# Bring the database up first, then import the app (which connects on import).
+_ensure_database()
+
+from app import app  # noqa: E402  — the configured application instance
 
 
 def _serve_app():
