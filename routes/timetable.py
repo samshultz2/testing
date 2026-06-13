@@ -308,31 +308,107 @@ def copy_timetable():
 @timetable_bp.route('/print/<int:assignment_id>')
 @login_required
 def print_timetable(assignment_id):
-    """Print-friendly timetable view"""
+    """Generate the per-class timetable as a horizontal PDF (days as rows, time
+    periods as columns) with ReportLab. Teacher names are excluded by default;
+    pass ?teachers=1 to include them."""
+    from io import BytesIO
+    from flask import send_file
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from models import SchoolSettings
+
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    
+    include_teachers = request.args.get('teachers') == '1'
+
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
-    
     entries = ClassTimetable.query.filter_by(
-        class_arm_assignment_id=assignment_id,
-        is_active=True
-    ).all()
-    
-    # Build grid
-    timetable_grid = {}
+        class_arm_assignment_id=assignment_id, is_active=True).all()
+    # grid[(day, slot_id)] = entry
+    grid = {(e.day_of_week, e.slot_id): e for e in entries}
+
+    def hhmm(t):
+        return t.strftime('%-H:%M') if t else ''
+
+    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=8,
+                          alignment=TA_CENTER, leading=9)
+    cell_b = ParagraphStyle('cellb', parent=cell, fontName='Helvetica-Bold')
+    head = ParagraphStyle('head', parent=cell_b, textColor=colors.white)
+
+    # Header row: Day + each slot (name + time range)
+    header = [Paragraph('Day', head)]
+    for s in slots:
+        label = f'{s.name}'
+        if s.start_time and s.end_time:
+            label += f'<br/>{hhmm(s.start_time)}–{hhmm(s.end_time)}'
+        header.append(Paragraph(label, head))
+
+    table_data = [header]
+    break_cols = [i + 1 for i, s in enumerate(slots) if s.is_break]
     for day_num, day_name in DAYS_OF_WEEK:
-        timetable_grid[day_num] = {}
-        for slot in slots:
-            timetable_grid[day_num][slot.id] = None
-    
-    for entry in entries:
-        if entry.day_of_week in timetable_grid:
-            timetable_grid[entry.day_of_week][entry.slot_id] = entry
-    
-    return render_template('timetable/print.html',
-        assignment=assignment, slots=slots, days=DAYS_OF_WEEK,
-        timetable_grid=timetable_grid
-    )
+        row = [Paragraph(day_name, cell_b)]
+        for s in slots:
+            if s.is_break:
+                row.append(Paragraph(s.name or 'Break', cell))
+                continue
+            e = grid.get((day_num, s.id))
+            if not e or not e.subject:
+                row.append(Paragraph('', cell))
+                continue
+            txt = e.subject.short_name or e.subject.name
+            if include_teachers and e.teacher_name:
+                txt += f'<br/><font size=7 color="#555555">{e.teacher_name}</font>'
+            row.append(Paragraph(txt, cell_b))
+        table_data.append(row)
+
+    # Column widths: day column fixed, the rest share the remaining width.
+    page_w = landscape(A4)[0] - 20 * mm
+    day_w = 22 * mm
+    other_w = (page_w - day_w) / max(len(slots), 1)
+    col_widths = [day_w] + [other_w] * len(slots)
+
+    style = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f766e')),
+        ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#e2e8f0')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('ROWBACKGROUNDS', (1, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+    ]
+    for c in break_cols:
+        style.append(('BACKGROUND', (c, 1), (c, -1), colors.HexColor('#fff7ed')))
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=10 * mm, rightMargin=10 * mm,
+                            topMargin=12 * mm, bottomMargin=10 * mm)
+    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=15,
+                                 alignment=TA_CENTER, leading=18)
+    sub_style = ParagraphStyle('sub', fontName='Helvetica', fontSize=10,
+                               alignment=TA_CENTER, textColor=colors.HexColor('#475569'))
+    school = SchoolSettings.get('school_name', '') or ''
+    term = assignment.term.full_name if assignment.term else ''
+    elems = []
+    if school:
+        elems.append(Paragraph(school, title_style))
+    elems.append(Paragraph(f'{assignment.display_name} — Class Timetable', sub_style))
+    if term:
+        elems.append(Paragraph(term, sub_style))
+    elems.append(Spacer(1, 6))
+    t = Table(table_data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle(style))
+    elems.append(t)
+    doc.build(elems)
+    buf.seek(0)
+
+    suffix = 'with-teachers' if include_teachers else 'no-teachers'
+    fname = f'timetable_{assignment.display_name.replace(" ", "_")}_{suffix}.pdf'
+    return send_file(buf, mimetype='application/pdf', as_attachment=False,
+                     download_name=fname)
 
 
 # ============================================================================

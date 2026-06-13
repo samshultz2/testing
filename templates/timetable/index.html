@@ -41,7 +41,8 @@
         <h3>{{ selected_assignment.display_name }}</h3>
         <div class="page-header-actions">
             <a href="{{ url_for('timetable.edit_timetable', assignment_id=selected_assignment.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-edit"></i> Edit</a>
-            <a href="{{ url_for('timetable.print_timetable', assignment_id=selected_assignment.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-print"></i> Print</a>
+            <a href="{{ url_for('timetable.print_timetable', assignment_id=selected_assignment.id) }}" class="btn btn-secondary btn-sm" target="_blank"><i class="fas fa-file-pdf"></i> PDF</a>
+            <a href="{{ url_for('timetable.print_timetable', assignment_id=selected_assignment.id, teachers=1) }}" class="btn btn-secondary btn-sm" target="_blank"><i class="fas fa-file-pdf"></i> PDF + teachers</a>
         </div>
     </div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
