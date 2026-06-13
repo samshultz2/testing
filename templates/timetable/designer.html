@@ -21,6 +21,11 @@
 .sess-grid input{width:100%;padding:.7rem .75rem;font-size:1rem;border:1px solid var(--gray-300,#cbd5e1);border-radius:9px;background:#fff}
 .sess-grid input:focus{outline:none;border-color:var(--primary,#2563eb);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
 .sess-hint{font-size:.82rem;color:var(--text-muted);margin:.25rem 0 .6rem}
+.sess-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.sess-dup{background:#fff;border:1px solid var(--gray-200);color:var(--text-secondary);border-radius:8px;padding:.4rem .7rem;cursor:pointer;font-size:.85rem}
+.bulk-box{border:1px dashed var(--gray-300,#cbd5e1);border-radius:10px;padding:.75rem 1rem;margin-bottom:.85rem;background:#fff}
+.bulk-box summary{cursor:pointer;font-weight:600;color:var(--primary,#2563eb)}
+.bulk-box textarea{width:100%;margin:.5rem 0;padding:.7rem;font-size:.95rem;border:1px solid var(--gray-300,#cbd5e1);border-radius:9px;font-family:inherit}
 
 /* ---- the printable sheet ---- */
 .tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1100px;margin:0 auto;overflow-x:auto}
@@ -111,9 +116,13 @@
 .tt-sheet[data-theme="mono"] th{background:#000;color:#fff;border:1px solid #000;font-size:.8rem}
 .tt-sheet[data-theme="mono"] td{border:1px solid #000}
 
+/* keep the themed header/row colours when printing (browsers drop backgrounds
+   by default, which is why the print used to look plain) */
+.tt-sheet, .tt-sheet *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+
 @media print{
     body *{visibility:hidden}
-    #sheet, #sheet *{visibility:visible}
+    #sheet, #sheet *{visibility:visible;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
     #sheet{position:absolute;left:0;top:0;width:100%;border:none;border-radius:0;padding:0;overflow:visible}
     .no-print{display:none !important}
     @page{margin:12mm;size:landscape}
@@ -176,8 +185,19 @@
         <div id="rowEditor">
             <label class="form-label">Sessions</label>
             <p class="sess-hint" id="sessHint"></p>
+
+            <details class="bulk-box">
+                <summary><i class="fas fa-bolt"></i> Quick add many at once (type or paste from a spreadsheet)</summary>
+                <p class="sess-hint" id="bulkHint" style="margin-top:.5rem"></p>
+                <textarea id="bulkText" rows="6" placeholder=""></textarea>
+                <button class="btn btn-primary btn-sm" onclick="bulkAdd()"><i class="fas fa-plus"></i> Add these</button>
+            </details>
+
             <div id="rowBody"></div>
-            <button class="btn btn-secondary" onclick="addRow()"><i class="fas fa-plus"></i> Add session</button>
+            <div class="sess-actions">
+                <button class="btn btn-secondary" onclick="addRow()"><i class="fas fa-plus"></i> Add session</button>
+                <button class="btn btn-light btn-sm" type="button" onclick="clearRows()"><i class="fas fa-eraser"></i> Clear all</button>
+            </div>
         </div>
 
         <!-- Blank grid editor -->
@@ -286,15 +306,63 @@ function sessCard(r,i){
     }).join('');
     return '<div class="sess-card" data-i="'+i+'">'
          + '<div class="sess-top"><strong>Session '+(i+1)+'</strong>'
-         + '<button type="button" class="sess-del" onclick="delRow('+i+')"><i class="fas fa-trash"></i> Remove</button></div>'
+         + '<span class="sess-actions">'
+         + '<button type="button" class="sess-dup" onclick="dupRow('+i+')"><i class="fas fa-copy"></i> Duplicate</button>'
+         + '<button type="button" class="sess-del" onclick="delRow('+i+')"><i class="fas fa-trash"></i> Remove</button>'
+         + '</span></div>'
          + '<div class="sess-grid">'+inner+'</div></div>';
+}
+var BULK_SHORT={date:'Date',day:'Day',group:'Class/Stream',time:'Start',dur:'Minutes',subject:'Subject',teacher:'Teacher',venue:'Venue'};
+function blankRow(){ return {date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}; }
+function normTime(t){
+    t=(t||'').trim(); if(!t) return '';
+    var m=t.match(/^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i); if(!m) return t;
+    var h=+m[1], mi=m[2]?+m[2]:0;
+    if(m[3]){ var pm=/pm/i.test(m[3]); if(h===12) h=pm?12:0; else if(pm) h+=12; }
+    return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2);
 }
 function renderEditor(){
     el('sessHint').textContent = layout().hint || '';
+    el('bulkHint').textContent = 'One session per line, in this order: ' +
+        layout().fields.map(function(f){ return BULK_SHORT[f]; }).join(', ') +
+        '. Separate with a comma, a | or a tab (paste straight from Excel/Sheets). Trailing fields can be left out.';
     el('rowBody').innerHTML = rows.map(sessCard).join('');
 }
-function addRow(){ rows.push({date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}); renderEditor(); renderSheet(); }
+function focusCard(i){
+    var card=document.querySelector('#rowBody .sess-card[data-i="'+i+'"]'); if(!card) return;
+    var s=card.querySelector('[data-f="subject"]')||card.querySelector('input'); if(s) s.focus();
+}
+// New session inherits the previous one's day/stream/duration/venue and auto-
+// advances the start time by the duration, so building a day's periods is just
+// "type subject, Add, type subject, Add…".
+function addRow(){
+    var last=rows[rows.length-1], r=blankRow();
+    if(last){
+        r.date=last.date; r.day=last.day; r.group=last.group; r.dur=last.dur; r.venue=last.venue;
+        r.time=(last.time && last.dur)?addMinutes(last.time,last.dur):last.time;
+    }
+    rows.push(r); renderEditor(); renderSheet(); focusCard(rows.length-1);
+}
+function dupRow(i){ rows.splice(i+1,0,Object.assign({},rows[i])); renderEditor(); renderSheet(); focusCard(i+1); }
 function delRow(i){ rows.splice(i,1); renderEditor(); renderSheet(); }
+function clearRows(){ if(rows.length && !confirm('Clear all sessions?')) return; rows=[]; addRow(); }
+function bulkAdd(){
+    var lines=(el('bulkText').value||'').split('\n'), fields=layout().fields, added=0;
+    lines.forEach(function(line){
+        if(!line.trim()) return;
+        var parts = line.indexOf('\t')>=0 ? line.split('\t') : line.split(/\s*[|,]\s*/);
+        var r=blankRow();
+        fields.forEach(function(f,idx){
+            if(idx<parts.length){
+                var val=(parts[idx]||'').trim();
+                r[f] = (f==='time') ? normTime(val) : val;
+            }
+        });
+        if(r.date && !r.day){ var a=dayFromDate(r.date); if(a) r.day=a; }
+        rows.push(r); added++;
+    });
+    if(added){ el('bulkText').value=''; renderEditor(); renderSheet(); }
+}
 
 document.addEventListener('input', function(e){
     var card=e.target.closest && e.target.closest('#rowBody .sess-card');
