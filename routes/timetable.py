@@ -333,14 +333,35 @@ def print_timetable(assignment_id):
     def hhmm(t):
         return t.strftime('%-H:%M') if t else ''
 
-    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=8,
-                          alignment=TA_CENTER, leading=9)
+    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=12,
+                          alignment=TA_CENTER, leading=13)
     cell_b = ParagraphStyle('cellb', parent=cell, fontName='Helvetica-Bold')
-    head = ParagraphStyle('head', parent=cell_b, textColor=colors.white)
+    head = ParagraphStyle('head', parent=cell_b, fontSize=11, leading=12,
+                          textColor=colors.white)
+    # One huge bold capital letter per cell, used to spell BREAK down a column.
+    brk = ParagraphStyle('brk', fontName='Helvetica-Bold', fontSize=42,
+                         leading=44, alignment=TA_CENTER,
+                         textColor=colors.HexColor('#9a3412'))
 
-    # Header row: Day + each slot (name + time range)
+    days = list(DAYS_OF_WEEK)
+    n_days = len(days)
+    BREAK_WORD = 'BREAK'
+
+    def break_letter(row_idx):
+        """Letter of BREAK for body row ``row_idx`` (spread top→bottom)."""
+        if n_days == len(BREAK_WORD):
+            return BREAK_WORD[row_idx]
+        # distribute as evenly as possible if there aren't exactly 5 day rows
+        pos = int(round(row_idx * (len(BREAK_WORD) - 1) / max(n_days - 1, 1)))
+        return BREAK_WORD[pos] if 0 <= row_idx < n_days else ''
+
+    # Header row: Day + each slot. Break columns get a blank header (the column
+    # itself spells BREAK), teaching columns show name + time range.
     header = [Paragraph('Day', head)]
     for s in slots:
+        if s.is_break:
+            header.append(Paragraph('', head))
+            continue
         label = f'{s.name}'
         if s.start_time and s.end_time:
             label += f'<br/>{hhmm(s.start_time)}–{hhmm(s.end_time)}'
@@ -348,11 +369,11 @@ def print_timetable(assignment_id):
 
     table_data = [header]
     break_cols = [i + 1 for i, s in enumerate(slots) if s.is_break]
-    for day_num, day_name in DAYS_OF_WEEK:
+    for r, (day_num, day_name) in enumerate(days):
         row = [Paragraph(day_name, cell_b)]
         for s in slots:
             if s.is_break:
-                row.append(Paragraph(s.name or 'Break', cell))
+                row.append(Paragraph(break_letter(r), brk))
                 continue
             e = grid.get((day_num, s.id))
             if not e or not e.subject:
@@ -360,46 +381,62 @@ def print_timetable(assignment_id):
                 continue
             txt = e.subject.short_name or e.subject.name
             if include_teachers and e.teacher_name:
-                txt += f'<br/><font size=7 color="#555555">{e.teacher_name}</font>'
+                txt += f'<br/><font size=9 color="#555555">{e.teacher_name}</font>'
             row.append(Paragraph(txt, cell_b))
         table_data.append(row)
 
-    # Column widths: day column fixed, the rest share the remaining width.
-    page_w = landscape(A4)[0] - 20 * mm
-    day_w = 22 * mm
-    other_w = (page_w - day_w) / max(len(slots), 1)
-    col_widths = [day_w] + [other_w] * len(slots)
+    # ---- size everything to fill the A4 page with tiny margins ----
+    page_w, page_h = landscape(A4)
+    m_side, m_top, m_bottom = 6 * mm, 7 * mm, 6 * mm
+    content_w = page_w - 2 * m_side
+    content_h = page_h - m_top - m_bottom
+
+    n_break = len(break_cols)
+    n_teach = len(slots) - n_break
+    day_w = 28 * mm
+    break_w = 13 * mm
+    teach_w = (content_w - day_w - n_break * break_w) / max(n_teach, 1)
+    col_widths = [day_w] + [(break_w if s.is_break else teach_w) for s in slots]
+
+    header_reserve = 56            # space for school/class/term block
+    header_row_h = 26
+    body_row_h = (content_h - header_reserve - header_row_h) / max(n_days, 1)
+    row_heights = [header_row_h] + [body_row_h] * n_days
 
     style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f766e')),
         ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#e2e8f0')),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
+        ('GRID', (0, 0), (-1, -1), 0.75, colors.HexColor('#475569')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('ROWBACKGROUNDS', (1, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]
     for c in break_cols:
-        style.append(('BACKGROUND', (c, 1), (c, -1), colors.HexColor('#fff7ed')))
+        style.append(('BACKGROUND', (c, 0), (c, -1), colors.HexColor('#ffedd5')))
 
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                            leftMargin=10 * mm, rightMargin=10 * mm,
-                            topMargin=12 * mm, bottomMargin=10 * mm)
-    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=15,
-                                 alignment=TA_CENTER, leading=18)
-    sub_style = ParagraphStyle('sub', fontName='Helvetica', fontSize=10,
-                               alignment=TA_CENTER, textColor=colors.HexColor('#475569'))
+                            leftMargin=m_side, rightMargin=m_side,
+                            topMargin=m_top, bottomMargin=m_bottom)
+    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=14,
+                                 alignment=TA_CENTER, leading=16)
+    sub_style = ParagraphStyle('sub', fontName='Helvetica', fontSize=9,
+                               alignment=TA_CENTER, leading=11,
+                               textColor=colors.HexColor('#475569'))
     school = SchoolSettings.get('school_name', '') or ''
     term = assignment.term.full_name if assignment.term else ''
     elems = []
     if school:
         elems.append(Paragraph(school, title_style))
-    elems.append(Paragraph(f'{assignment.display_name} — Class Timetable', sub_style))
+    sub = f'{assignment.display_name} — Class Timetable'
     if term:
-        elems.append(Paragraph(term, sub_style))
-    elems.append(Spacer(1, 6))
-    t = Table(table_data, colWidths=col_widths, repeatRows=1)
+        sub += f' &nbsp;•&nbsp; {term}'
+    elems.append(Paragraph(sub, sub_style))
+    elems.append(Spacer(1, 4))
+    t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
     t.setStyle(TableStyle(style))
     elems.append(t)
     doc.build(elems)
