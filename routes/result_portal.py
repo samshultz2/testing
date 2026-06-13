@@ -31,10 +31,11 @@ def index():
     cards = q.order_by(ScratchCard.created_at.desc(), ScratchCard.id.desc()).all()
     batches = [b[0] for b in db.session.query(ScratchCard.batch_label)
                .distinct().all() if b[0]]
+    from sqlalchemy import func
     stats = {
         'total': ScratchCard.query.count(),
         'active': ScratchCard.query.filter_by(is_active=True).count(),
-        'used': sum(c.used_count or 0 for c in ScratchCard.query.all()),
+        'used': db.session.query(func.coalesce(func.sum(ScratchCard.used_count), 0)).scalar() or 0,
     }
     return render_template('scratchcards/index.html', cards=cards, batches=batches,
                            batch=batch, stats=stats,

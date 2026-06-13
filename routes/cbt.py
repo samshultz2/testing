@@ -487,7 +487,7 @@ def monitor(exam_id):
 
 
 @cbt_bp.route('/attempts/<int:attempt_id>/force-submit', methods=['POST'])
-@login_required
+@admin_required
 def force_submit(attempt_id):
     """Invigilator action: end an in-progress attempt and grade it from the
     answers already saved on the server. The recovery tool for a student whose

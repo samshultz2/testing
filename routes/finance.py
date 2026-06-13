@@ -549,6 +549,8 @@ def search_students():
 @login_required
 def receipt(payment_id):
     payment = db.get_or_404(FeePayment, payment_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(payment.branch_id)
     bill = student_bill(payment.student_id, payment.term_id)
     from models import SchoolSettings
     school = {

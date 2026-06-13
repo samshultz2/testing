@@ -4,33 +4,30 @@ Supports both legacy password login and user-based login
 """
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from datetime import datetime, timedelta
-from collections import defaultdict
 from config import Config
 from models import db, User
+from utils.security import login_limiter
 
 auth_bp = Blueprint('auth', __name__)
 
-# Simple in-memory login throttling (per client address).
-_login_failures = defaultdict(list)
-
-
+# Login throttling via the shared DB-backed limiter, so the lockout holds across
+# all gunicorn workers (an in-memory counter is bypassable by spreading attempts
+# across processes).
 def _client_key():
-    return request.remote_addr or 'unknown'
+    return 'staff_login:' + (request.remote_addr or 'unknown')
 
 
 def _login_locked():
-    cutoff = datetime.now() - timedelta(minutes=Config.LOGIN_LOCKOUT_MINUTES)
-    recent = [t for t in _login_failures[_client_key()] if t > cutoff]
-    _login_failures[_client_key()] = recent
-    return len(recent) >= Config.LOGIN_MAX_ATTEMPTS
+    return login_limiter.is_rate_limited(_client_key(), Config.LOGIN_MAX_ATTEMPTS,
+                                         Config.LOGIN_LOCKOUT_MINUTES)
 
 
 def _record_login_failure():
-    _login_failures[_client_key()].append(datetime.now())
+    login_limiter.record_attempt(_client_key())
 
 
 def _clear_login_failures():
-    _login_failures.pop(_client_key(), None)
+    login_limiter.clear_attempts(_client_key())
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
