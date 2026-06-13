@@ -23,6 +23,7 @@
 .tt-sheet table{width:100%;border-collapse:collapse;margin-top:10px}
 .tt-sheet th,.tt-sheet td{padding:10px 12px;text-align:left;vertical-align:top}
 .tt-sheet td.empty{height:34px}
+.tt-sheet .sig-col{min-width:160px}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
@@ -235,7 +236,11 @@ function renderRowsSheet(){
     var labels={date:'Date', day:'Day', time:'Time', dur:'', subject:'Subject',
                 teacher:(l==='exam'?'Invigilator':'Teacher'), venue:'Venue'};
     var printCols = cols.filter(function(c){ return c!=='dur'; });   // time column already shows the range
-    var thead='<tr>'+printCols.map(function(c){ return '<th>'+labels[c]+'</th>'; }).join('')+'</tr>';
+    // Per-layout extra columns rendered as blank cells to fill in on paper.
+    var extras = l==='exam' ? ["Invigilator's Signature"]
+               : (l==='saturday' || l==='holiday') ? ['Remarks'] : [];
+    var thead='<tr>'+printCols.map(function(c){ return '<th>'+labels[c]+'</th>'; }).join('')
+            + extras.map(function(x){ return '<th class="sig-col">'+x+'</th>'; }).join('')+'</tr>';
     // sort by date then time for a tidy sheet
     var sorted=rows.slice().sort(function(a,b){
         return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'');
@@ -244,9 +249,10 @@ function renderRowsSheet(){
         return '<tr>'+printCols.map(function(c){
             var v = c==='time' ? timeRange(r) : (r[c]||'');
             return '<td>'+esc(v)+'</td>';
-        }).join('')+'</tr>';
+        }).join('') + extras.map(function(){ return '<td class="empty sig-col"></td>'; }).join('')+'</tr>';
     }).join('');
-    if(!body) body='<tr><td colspan="'+printCols.length+'" style="text-align:center;color:#888">Add rows above to build the timetable.</td></tr>';
+    var span = printCols.length + extras.length;
+    if(!body) body='<tr><td colspan="'+span+'" style="text-align:center;color:#888">Add rows above to build the timetable.</td></tr>';
     el('pBody').innerHTML='<table><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 function renderGridSheet(){

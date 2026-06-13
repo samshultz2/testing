@@ -165,11 +165,16 @@
                     {% if can_access_module('timetable') %}
                     <li class="nav-section">Timetable</li>
                     <li class="nav-item">
-                        <a href="{{ url_for('timetable.index') }}" class="nav-link">
+                        <a href="{{ url_for('timetable.index') }}" class="nav-link {% if request.endpoint == 'timetable.index' %}active{% endif %}">
                             <i class="fas fa-calendar-alt"></i><span>View/Edit</span>
                         </a>
                     </li>
-                    
+                    <li class="nav-item">
+                        <a href="{{ url_for('timetable.designer') }}" class="nav-link {% if request.endpoint == 'timetable.designer' %}active{% endif %}">
+                            <i class="fas fa-drafting-compass"></i><span>Designer</span>
+                        </a>
+                    </li>
+
                     {% endif %}
                     {% if can_access_module('promotion') %}
                     <li class="nav-section">Promotion</li>
