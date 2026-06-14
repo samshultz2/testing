@@ -4,6 +4,7 @@ Subjects and Score Management routes
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from utils.helpers import get_active_term
 from utils.web_exports import xlsx_response
+from utils.db_tx import safe_transaction
 from models import (
     db, Subject, ClassSubject, AssessmentType, SubjectAssessmentOverride,
     StudentScore, StudentEnrollment, ClassArmAssignment, Term, SchoolClass,
@@ -90,7 +91,7 @@ def edit_subject(subject_id):
     subject = db.get_or_404(Subject, subject_id)
     
     if request.method == 'POST':
-        try:
+        with safe_transaction('Subject updated!', 'Error: {error}') as tx:
             subject.name = request.form.get('name', '').strip()
             subject.short_name = request.form.get('short_name', '').strip().upper()
             subject.category = request.form.get('category', '').strip()
@@ -98,13 +99,9 @@ def edit_subject(subject_id):
 
             from utils.assessments import apply_practical
             apply_practical(db, subject)
-            db.session.commit()
-            flash('Subject updated!', 'success')
+        if tx.ok:
             return redirect(url_for('subjects.subjects_list'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
+
     categories = ['Science', 'Arts', 'Commercial', 'General', 'Languages', 'Vocational']
     return render_template('subjects/edit.html', subject=subject, categories=categories)
 
@@ -114,15 +111,10 @@ def edit_subject(subject_id):
 def delete_subject(subject_id):
     """Delete (deactivate) a subject"""
     subject = db.get_or_404(Subject, subject_id)
-    
-    try:
+
+    with safe_transaction('Subject deleted!', 'Error: {error}'):
         subject.is_active = False
-        db.session.commit()
-        flash('Subject deleted!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
+
     return redirect(url_for('subjects.subjects_list'))
 
 

@@ -9,6 +9,7 @@ from utils.access_control import (MODULES, manage_users_required, can_manage,
                                   current_manage_scope, current_rank, get_current_user,
                                   restrict_grant_perms, CAPABILITY_SUBSECTIONS)
 from utils.audit import log_action
+from utils.db_tx import safe_transaction
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
@@ -329,15 +330,10 @@ def delete_user(user_id):
         flash('Only super admins can delete other super admins.', 'error')
         return redirect(url_for('users.index'))
     
-    try:
-        username = user.username
+    with safe_transaction(f'User "{user.username}" deleted successfully!',
+                          'Error deleting user: {error}'):
         db.session.delete(user)
-        db.session.commit()
-        flash(f'User "{username}" deleted successfully!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting user: {str(e)}', 'error')
-    
+
     return redirect(url_for('users.index'))
 
 
