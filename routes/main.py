@@ -4,6 +4,7 @@ Main routes for dashboard and general pages
 import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from utils.helpers import get_active_term, get_active_session
+from utils.web_exports import xlsx_response
 from datetime import date, timedelta
 from models import (
     db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, Attendance, 
@@ -1712,15 +1713,7 @@ def export_students_excel(student_data, fields):
     ws.cell(row=footer_row, column=1, value=f'Total: {len(student_data)} students')
     ws.cell(row=footer_row, column=1).font = Font(bold=True, size=10)
     
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=students_export.xlsx'}
-    )
+    return xlsx_response(wb, 'students_export.xlsx')
 
 
 def export_students_word(student_data, fields):

@@ -10,6 +10,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response)
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
+from utils.web_exports import xlsx_response
 
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
@@ -1055,10 +1056,5 @@ def export_report():
                 ws3.append([e.student.full_name, e.student.student_id,
                             asg.display_name if asg else '', payable, paid, payable - paid])
 
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
     fname = f"finance_report_{(term.full_name if term else 'all').replace(' ', '_').replace('/', '-')}.xlsx"
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={fname}'})
+    return xlsx_response(wb, fname)
