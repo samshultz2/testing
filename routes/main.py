@@ -874,69 +874,15 @@ def _page_class_map(items):
 @main_bp.route('/students')
 @login_required
 def students_list():
-    """List all students with filtering and pagination"""
-    page = request.args.get('page', 1, type=int)
-    per_page = 20
-    is_ajax = request.args.get('ajax') == '1'
-
-    search = request.args.get('search', '')
-    gender = request.args.get('gender', '')
-    religion = request.args.get('religion', '')
-    stream = request.args.get('stream', '')
-    subject = request.args.get('subject', '')
-    class_id = request.args.get('class_id', '', type=int) or None
-    arm_id = request.args.get('arm_id', '', type=int) or None
-    sort_by = request.args.get('sort', 'surname')
-    order = request.args.get('order', 'asc')
-
-    students = _students_query().paginate(page=page, per_page=per_page, error_out=False)
-
-    # Add current class info to each student (single query for the whole page)
-    class_map = _page_class_map(students.items)
-    for student in students.items:
-        student.current_class = class_map.get(student.id)
-
-    # Get filter options
-    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
-
-    # If AJAX request, return only the content partial
-    if is_ajax:
-        return render_template('students/_list_content.html',
-            students=students,
-            search=search,
-            gender=gender,
-            religion=religion,
-            stream=stream,
-            subject=subject,
-            class_id=class_id,
-            arm_id=arm_id
-        )
-
-    return render_template('students/list.html',
-        students=students,
-        search=search,
-        gender=gender,
-        religion=religion,
-        stream=stream,
-        subject=subject,
-        class_id=class_id,
-        arm_id=arm_id,
-        sort_by=sort_by,
-        order=order,
-        religions=RELIGIONS,
-        classes=classes,
-        arms=arms,
-        streams=STREAMS,
-        subject_options=WAEC_SUBJECTS
-    )
+    """Students list — React app, hydrated inline with the first (scoped,
+    filtered) page so it renders instantly and works offline; subsequent
+    filter/page changes call /api/students."""
+    return render_template('students/list.html', students_json=_students_payload())
 
 
-@main_bp.route('/api/students')
-@login_required
-def api_students():
-    """Students list as JSON for the React list — same scope/filters/sort as
-    the page (via _students_query), paginated, plus the filter option lists."""
+def _students_payload():
+    """The students list as a JSON-serialisable dict — shared by the page
+    (embedded for instant render) and /api/students (filter/page changes)."""
     page = request.args.get('page', 1, type=int)
     per_page = min(request.args.get('per_page', 20, type=int) or 20, 100)
     pg = _students_query().paginate(page=page, per_page=per_page, error_out=False)
@@ -962,10 +908,18 @@ def api_students():
     } for s in pg.items]
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
-    return jsonify({
+    return {
         'students': students,
         'page': pg.page, 'pages': pg.pages or 1, 'total': pg.total,
         'per_page': per_page, 'has_next': pg.has_next, 'has_prev': pg.has_prev,
+        'applied': {
+            'search': request.args.get('search', ''), 'gender': request.args.get('gender', ''),
+            'religion': request.args.get('religion', ''), 'stream': request.args.get('stream', ''),
+            'subject': request.args.get('subject', ''),
+            'class_id': request.args.get('class_id', '', type=int) or None,
+            'arm_id': request.args.get('arm_id', '', type=int) or None,
+            'sort': request.args.get('sort', 'surname'), 'order': request.args.get('order', 'asc'),
+        },
         'filters': {
             'classes': [{'id': c.id, 'name': c.name} for c in classes],
             'arms': [{'id': a.id, 'name': a.name} for a in arms],
@@ -977,7 +931,20 @@ def api_students():
         'can_add': can_manage,
         'add_url': url_for('main.add_student'),
         'export_url': url_for('main.export_students_data'),
-    })
+        'trash_url': url_for('main.students_trash'),
+        'waec_by_stream_url': url_for('main.apply_stream_waec'),
+        'bulk_delete_url': url_for('main.bulk_delete_students'),
+        'bulk_stream_url': url_for('main.bulk_set_stream'),
+        'bulk_subject_url': url_for('main.bulk_add_subject'),
+    }
+
+
+@main_bp.route('/api/students')
+@login_required
+def api_students():
+    """Students list as JSON for the React list — same scope/filters/sort as
+    the page (via _students_query), paginated, plus the filter option lists."""
+    return jsonify(_students_payload())
 
 
 @main_bp.route('/students/add', methods=['GET', 'POST'])
