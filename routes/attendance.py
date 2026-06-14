@@ -842,6 +842,105 @@ def api_school_days(week_id):
 
 
 # ============================================================================
+# JSON API for the React offline pilot (roster read + idempotent mark write)
+# ============================================================================
+
+def _week_for_date(term_id, target_date):
+    """The Week (within term_id) that contains target_date, or None."""
+    return Week.query.filter(
+        Week.term_id == term_id,
+        Week.start_date <= target_date,
+        Week.end_date >= target_date,
+    ).first()
+
+
+@attendance_bp.route('/api/roster')
+@login_required
+def api_roster():
+    """Roster + existing marks for a class arm on a date (JSON).
+
+    Branch-scoped and permission-checked; the React pilot caches this in
+    IndexedDB so the register opens offline.
+    """
+    assignment_id = request.args.get('assignment_id', type=int)
+    if not assignment_id:
+        return jsonify({'error': 'assignment_id required'}), 400
+    caa = db.get_or_404(ClassArmAssignment, assignment_id)
+    require_branch_access(caa.branch_id)
+    if not (can_mark_attendance(assignment_id) and can_access_class(assignment_id)):
+        return jsonify({'error': 'forbidden'}), 403
+
+    ds = request.args.get('date')
+    try:
+        target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else date.today()
+    except Exception:
+        target = date.today()
+
+    holidays = Holiday.query.filter_by(term_id=caa.term_id).all()
+    week = _week_for_date(caa.term_id, target)
+    enrollments = (StudentEnrollment.query
+                   .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                   .join(Student).order_by(Student.surname, Student.first_name).all())
+    existing = {a.enrollment_id: a for a in Attendance.query.filter(
+        Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
+        Attendance.date == target).all()}
+    students = [{
+        'enrollment_id': e.id,
+        'student_id': e.student.student_id,
+        'name': e.student.full_name,
+        'morning_present': existing[e.id].morning_present if e.id in existing else True,
+        'afternoon_present': existing[e.id].afternoon_present if e.id in existing else True,
+    } for e in enrollments]
+    return jsonify({
+        'assignment_id': assignment_id,
+        'class_name': caa.display_name,
+        'date': target.isoformat(),
+        'week_id': week.id if week else None,
+        'school_day': is_school_day(target, holidays),
+        'students': students,
+    })
+
+
+@attendance_bp.route('/api/mark', methods=['POST'])
+@login_required
+def api_mark():
+    """Record attendance from JSON — the React pilot's offline outbox flushes
+    here. Idempotent upsert (mark_attendance_bulk), branch-scoped + CSRF."""
+    from utils.calculations import mark_attendance_bulk
+    data = request.get_json(silent=True) or {}
+    assignment_id = data.get('assignment_id')
+    caa = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+    if not caa:
+        return jsonify({'error': 'invalid assignment'}), 400
+    require_branch_access(caa.branch_id)
+    if not can_mark_attendance(assignment_id):
+        return jsonify({'error': 'forbidden'}), 403
+    try:
+        target = datetime.strptime(data['date'], '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({'error': 'bad date'}), 400
+    week = _week_for_date(caa.term_id, target)
+    if not week:
+        return jsonify({'error': 'no school week for that date'}), 400
+
+    session_type = 'afternoon' if data.get('session_type') == 'afternoon' else 'morning'
+    auto_copy = bool(data.get('auto_copy', session_type == 'morning'))
+    enroll_ids = [e.id for e in StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=assignment_id, is_active=True).all()]
+    valid = set(enroll_ids)
+    present = [int(x) for x in data.get('present', []) if int(x) in valid]
+    try:
+        count = mark_attendance_bulk(
+            enroll_ids, target, week.id, session_type, present, marked_by='React',
+            auto_copy_to_afternoon=auto_copy if session_type == 'morning' else False)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'ok': True, 'count': count, 'date': target.isoformat(),
+                    'session_type': session_type})
+
+
+# ============================================================================
 # ATTENDANCE ALERTS
 # ============================================================================
 
