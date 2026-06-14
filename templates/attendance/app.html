@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Attendance - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Attendance</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ---- attendance SPA (scoped .att-*) ---- */
+#attendance-spa { font-size: 15px; }
+.att-spinner { width: 18px; height: 18px; border: 3px solid var(--gray-200, #e5e7eb);
+  border-top-color: var(--primary, #2563eb); border-radius: 50%; animation: att-spin .7s linear infinite; }
+@keyframes att-spin { to { transform: rotate(360deg); } }
+.att-x { background: none; border: none; font-size: 18px; line-height: 1; cursor: pointer; color: inherit; opacity: .6; }
+.att-x:hover { opacity: 1; }
+
+.att-tabs { display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
+  border-bottom: 1px solid var(--gray-200, #e5e7eb); padding-bottom: 0; }
+.att-tab { display: inline-flex; align-items: center; gap: 6px; padding: .55rem .9rem;
+  text-decoration: none; color: var(--text-secondary, #475569); border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0; font-weight: 600; font-size: 14px; }
+.att-tab:hover { background: var(--gray-50, #f8fafc); }
+.att-tab.is-active { color: var(--primary, #2563eb); border-bottom-color: var(--primary, #2563eb); }
+.att-tabs-status { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+.att-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; overflow: hidden; }
+.att-list li + li { border-top: 1px solid var(--gray-100, #f1f5f9); }
+.att-list label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; margin: 0; }
+.att-list li.is-present label { background: rgba(22,163,74,.06); }
+.att-list input[type=checkbox] { width: 18px; height: 18px; flex: none; }
+.att-name { flex: 1; }
+.att-flag { font-size: 12px; font-weight: 600; }
+.att-list li.is-present .att-flag { color: #16a34a; }
+.att-list li.is-absent .att-flag { color: #dc2626; }
+
+.att-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
+.att-grid-wrap { overflow-x: auto; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; }
+.att-grid { border-collapse: collapse; width: 100%; font-size: 14px; }
+.att-grid th, .att-grid td { border: 1px solid var(--gray-100, #f1f5f9); padding: 6px 8px; text-align: center; }
+.att-grid thead th { background: var(--gray-50, #f8fafc); position: sticky; top: 0; white-space: nowrap; }
+.att-grid .att-grid-name { text-align: left; white-space: nowrap; position: sticky; left: 0;
+  background: var(--card-bg, #fff); z-index: 1; font-weight: 600; }
+.att-grid input[type=checkbox] { width: 18px; height: 18px; }
+.att-ampm { display: inline-flex; gap: 8px; }
+.att-ampm label { display: inline-flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--text-muted, #6b7280); gap: 2px; cursor: pointer; }
+
+@media (max-width: 560px) {
+  .att-tab span { display: none; }            /* icons-only tabs on phones */
+  .att-tab { padding: .55rem .7rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-clipboard-user"></i> Attendance</h1>
+        <p class="text-muted text-sm">Mark and review attendance — works offline; marks sync when you reconnect.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('attendance.mark_attendance_page') }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-table-list"></i> Classic view
+        </a>
+    </div>
+</div>
+
+<div class="card"><div class="card-body">
+    <div id="attendance-spa"><div class="att-spinner" aria-label="Loading"></div></div>
+</div></div>
+
+<script src="{{ url_for('static', filename='js/react/attendance-app.js') }}" defer></script>
+{% endblock %}
