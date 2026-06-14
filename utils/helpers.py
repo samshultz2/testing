@@ -369,12 +369,32 @@ RELIGIONS = [
 
 def get_active_term():
     """The currently active Term (or None). Single source of truth for the
-    common active-term lookup."""
+    common active-term lookup.
+
+    Memoised for the lifetime of a request (the context processor and templates
+    call this repeatedly per render): within one request the active term is
+    constant. Outside a request context (scripts/tests) it always re-queries.
+    """
+    from flask import g, has_request_context
+    if has_request_context():
+        if '_active_term' in g.__dict__:
+            return g._active_term
     from models import Term
-    return Term.query.filter_by(is_active=True).first()
+    val = Term.query.filter_by(is_active=True).first()
+    if has_request_context():
+        g._active_term = val
+    return val
 
 
 def get_active_session():
-    """The currently active AcademicSession (or None)."""
+    """The currently active AcademicSession (or None). Request-memoised; see
+    :func:`get_active_term`."""
+    from flask import g, has_request_context
+    if has_request_context():
+        if '_active_session' in g.__dict__:
+            return g._active_session
     from models import AcademicSession
-    return AcademicSession.query.filter_by(is_active=True).first()
+    val = AcademicSession.query.filter_by(is_active=True).first()
+    if has_request_context():
+        g._active_session = val
+    return val

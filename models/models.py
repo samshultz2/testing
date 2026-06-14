@@ -1432,6 +1432,13 @@ _INDEXES = [
     ('ix_enrollment_active', 'student_enrollments', 'is_active'),
     ('ix_caa_term', 'class_arm_assignments', 'term_id'),
     ('ix_caa_branch', 'class_arm_assignments', 'branch_id'),
+    # Per-class timetable lookups (view/print/apply all filter by class arm, and
+    # the grid is keyed by day) and score lookups for result compilation.
+    ('ix_classtt_caa', 'class_timetables', 'class_arm_assignment_id'),
+    ('ix_classtt_caa_day', 'class_timetables', 'class_arm_assignment_id, day_of_week'),
+    ('ix_ttbackup_term', 'timetable_backups', 'term_id'),
+    ('ix_score_student', 'student_scores', 'student_id'),
+    ('ix_score_classsubject', 'student_scores', 'class_subject_id'),
     ('ix_student_branch', 'students', 'branch_id'),
     ('ix_student_active', 'students', 'is_active'),
     ('ix_feepayment_term', 'fee_payments', 'term_id'),
