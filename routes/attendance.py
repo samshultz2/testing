@@ -876,11 +876,10 @@ def _week_for_date(term_id, target_date):
 
 
 @attendance_bp.route('/app')
-@attendance_bp.route('/react')   # keep the earlier pilot URL working
 @login_required
 def attendance_app():
-    """The attendance mini-SPA (React). Self-loads its data from /api/context;
-    the classic server-rendered pages remain available as a fallback.
+    """The attendance mini-SPA. Self-loads its data from /api/context; the
+    classic server-rendered pages remain available as a fallback.
 
     Anyone with attendance-module access may open it (read-only reports);
     the marking screens are additionally gated by can_mark_attendance, both in
@@ -889,6 +888,13 @@ def attendance_app():
         flash('You do not have access to attendance.', 'error')
         return redirect(url_for('main.dashboard'))
     return render_template('attendance/app.html')
+
+
+@attendance_bp.route('/react')
+@login_required
+def attendance_react_redirect():
+    """Legacy pilot URL — kept working; canonical path is /attendance/app."""
+    return redirect(url_for('attendance.attendance_app', **request.args.to_dict()))
 
 
 @attendance_bp.route('/api/roster')
