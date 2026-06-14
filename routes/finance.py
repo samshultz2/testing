@@ -11,6 +11,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from utils.web_exports import xlsx_response
+from utils.branch_scope import require_branch_access
 
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
@@ -478,6 +479,8 @@ def record_payment():
         )
         # Inherit the paying student's branch.
         stu = db.session.get(Student, student_id)
+        if stu:
+            require_branch_access(stu.branch_id)    # no recording fees across branches
         payment.branch_id = stu.branch_id if stu else None
         db.session.add(payment)
         db.session.commit()
@@ -638,6 +641,7 @@ def delete_payment(payment_id):
 @login_required
 def statement(student_id):
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)        # block cross-branch IDOR
     term_id = request.args.get('term_id', type=int) or _active_term_id()
     terms = Term.query.order_by(Term.id.desc()).all()
     bill = student_bill(student_id, term_id) if term_id else None

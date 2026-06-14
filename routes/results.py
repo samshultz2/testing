@@ -9,6 +9,7 @@ from models import (db, Student, WAECResult, JAMBResult, UniversityCutoff, Schoo
                     ClassArmAssignment, TermSummary)
 import json as _json
 from utils.access_control import login_required, admin_required
+from utils.branch_scope import require_branch_access
 from utils.audit import log_action
 from utils.helpers import (
     WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, get_sss3_students,
@@ -375,6 +376,7 @@ def scan_waec():
 def view_waec_student(student_id):
     """View comprehensive WAEC profile for a student"""
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
     risk_assessment = AcademicAnalytics.calculate_student_risk_score(student_id)
     jamb_prediction = AcademicAnalytics.predict_jamb_score(student_id)
@@ -395,6 +397,7 @@ def view_waec_student(student_id):
 def edit_waec(student_id, year):
     """Edit WAEC results for a student/year"""
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     
     if request.method == 'POST':
         try:
@@ -443,6 +446,7 @@ def edit_waec(student_id, year):
 def delete_waec(student_id, year):
     """Delete all WAEC results for a student in a given year"""
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     
     try:
         deleted = WAECResult.query.filter_by(student_id=student_id, exam_year=year).delete()
@@ -860,6 +864,7 @@ def scan_batch():
 def view_jamb_student(student_id):
     """View JAMB results for a student"""
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     jamb_summary = AcademicAnalytics.get_student_jamb_summary(student_id)
     waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
     
@@ -916,6 +921,7 @@ def student_report(student_id):
     from models.mock_jamb import MockJAMBResult, MockJAMBExam, MockJAMBAnalytics
 
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     pass_grades = set(AcademicAnalytics.PASS_GRADES)
     distinction_grades = set(AcademicAnalytics.DISTINCTION_GRADES)
 
@@ -1497,6 +1503,7 @@ def subject_enrolment_detail(exam, subject):
 def edit_jamb(student_id, year):
     """Edit JAMB results for a student/year"""
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     result = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first_or_404()
     
     if request.method == 'POST':
@@ -1538,6 +1545,7 @@ def edit_jamb(student_id, year):
 def delete_jamb(student_id, year):
     """Delete JAMB result for a student in a given year"""
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     
     try:
         result = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first()
@@ -1612,6 +1620,7 @@ def api_yoy_trends():
 @login_required
 def api_student_risk(student_id):
     """Get risk assessment for a student"""
+    require_branch_access(db.get_or_404(Student, student_id).branch_id)
     risk = AcademicAnalytics.calculate_student_risk_score(student_id)
     return jsonify(risk)
 
@@ -1620,6 +1629,7 @@ def api_student_risk(student_id):
 @login_required
 def api_predict_jamb(student_id):
     """Get JAMB prediction for a student"""
+    require_branch_access(db.get_or_404(Student, student_id).branch_id)
     prediction = AcademicAnalytics.predict_jamb_score(student_id)
     return jsonify(prediction)
 
@@ -1832,6 +1842,7 @@ def waec_student_analysis(student_id):
     from utils.exam_analytics import WAECAnalytics, WAECJAMBCorrelation
     
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     year = request.args.get('year', type=int)
     
     waec_analysis = WAECAnalytics.get_student_waec_analysis(student_id, year)
@@ -1869,6 +1880,7 @@ def student_predictions(student_id):
     from models.mock_jamb import MockJAMBResult
     
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     
     # Get mock exam history first to check data
     mock_results = MockJAMBResult.query.filter_by(student_id=student_id).all()
