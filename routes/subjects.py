@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from utils.helpers import get_active_term
 from utils.web_exports import xlsx_response
 from utils.db_tx import safe_transaction
+from utils.branch_scope import require_branch_access
 from models import (
     db, Subject, ClassSubject, AssessmentType, SubjectAssessmentOverride,
     StudentScore, StudentEnrollment, ClassArmAssignment, Term, SchoolClass,
@@ -970,6 +971,7 @@ def api_class_subjects(term_id, class_id):
 @login_required
 def api_student_scores(student_id, term_id):
     """Get all scores for a student in a term"""
+    require_branch_access(db.get_or_404(Student, student_id).branch_id)
     scores = StudentScore.query.join(ClassSubject).filter(
         StudentScore.student_id == student_id,
         ClassSubject.term_id == term_id

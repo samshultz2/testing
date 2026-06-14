@@ -13,6 +13,7 @@ from utils.access_control import (
     login_required, can_access_class, can_mark_attendance,
     filter_classes_for_user
 )
+from utils.branch_scope import require_branch_access
 from utils.helpers import is_school_day
 from utils.calculations import (
     get_daily_attendance_summary, get_weekly_attendance_summary,
@@ -789,6 +790,7 @@ def export_termly():
 @login_required
 def api_daily_summary(assignment_id, date_str):
     """API endpoint for daily attendance summary"""
+    require_branch_access(db.get_or_404(ClassArmAssignment, assignment_id).branch_id)
     try:
         target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         summary = get_daily_attendance_summary(assignment_id, target_date)

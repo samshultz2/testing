@@ -8,6 +8,7 @@ from models import (
     Term, ClassSubject
 )
 from utils.helpers import login_required
+from utils.branch_scope import require_branch_access
 
 timetable_bp = Blueprint('timetable', __name__, url_prefix='/timetable')
 
@@ -456,6 +457,7 @@ def print_timetable(assignment_id):
 @login_required
 def api_get_entries(assignment_id):
     """Get timetable entries for a class"""
+    require_branch_access(db.get_or_404(ClassArmAssignment, assignment_id).branch_id)
     entries = ClassTimetable.query.filter_by(
         class_arm_assignment_id=assignment_id,
         is_active=True

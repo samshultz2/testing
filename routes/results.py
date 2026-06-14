@@ -1943,6 +1943,7 @@ def student_predictions(student_id):
 @login_required
 def api_student_predictions(student_id):
     """API endpoint for student predictions"""
+    require_branch_access(db.get_or_404(Student, student_id).branch_id)
     from utils.exam_analytics import WAECJAMBCorrelation, MockJAMBAnalytics
     
     waec_from_mock = WAECJAMBCorrelation.predict_waec_from_mock_jamb(student_id)

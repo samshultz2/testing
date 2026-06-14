@@ -11,6 +11,7 @@ from utils.web_exports import xlsx_response
 from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass
 from models.mock_jamb import MockJAMBExam, MockJAMBResult, MockJAMBAnalytics
 from utils.helpers import login_required, WAEC_SUBJECTS, get_sss3_students, student_subject_map
+from utils.branch_scope import require_branch_access
 from utils.csrf import csrf_protect
 from utils.jamb_config import (
     convert_correct_to_100, question_count_map, COMPULSORY_SUBJECT,
@@ -686,6 +687,7 @@ def api_exam_stats(exam_id):
 @login_required
 def api_student_progress(student_id):
     """API endpoint for student progress (for charts)"""
+    require_branch_access(db.get_or_404(Student, student_id).branch_id)
     session_id = request.args.get('session_id', type=int)
     progress = MockJAMBAnalytics.get_student_progress(student_id, session_id)
     
