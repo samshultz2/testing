@@ -19,6 +19,7 @@ import secrets
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify, Response, current_app)
 from werkzeug.utils import secure_filename
+from utils.web_exports import xlsx_response
 from sqlalchemy import func
 from sqlalchemy.orm import contains_eager
 
@@ -440,12 +441,7 @@ def bank_template():
         c.font = Font(bold=True, color='FFFFFF')
     ws.append(['What is 5 + 7?', '10', '12', '13', '11', 'B', 1, 'Arithmetic', 'Easy'])
     ws.append(['Water is made of hydrogen and ___?', 'Oxygen', 'Nitrogen', 'Carbon', 'Helium', 'A', 1, 'Science', 'Easy'])
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=cbt_question_template.xlsx'})
+    return xlsx_response(wb, 'cbt_question_template.xlsx')
 
 
 @cbt_bp.route('/exams/<int:exam_id>/results')
@@ -683,13 +679,8 @@ def results_export(exam_id):
     ws = wb.active
     ws.title = _safe_sheet_title(e.subject.name if e.subject else 'Results')
     _exam_sheet(ws, e)
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
     fname = _safe_sheet_title(f'{e.subject.name if e.subject else "exam"}_{e.title}') + '.xlsx'
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={fname}'})
+    return xlsx_response(wb, fname)
 
 
 @cbt_bp.route('/results/export-all')
@@ -713,12 +704,7 @@ def results_export_all():
             title = _safe_sheet_title(f'{base} {n+1}')
         seen[base] = n + 1
         _exam_sheet(wb.create_sheet(title), e)
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=cbt_all_results.xlsx'})
+    return xlsx_response(wb, 'cbt_all_results.xlsx')
 
 
 # ============================================================================

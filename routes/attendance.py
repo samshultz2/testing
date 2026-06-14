@@ -3,6 +3,7 @@ Attendance management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from utils.helpers import get_active_term
+from utils.web_exports import xlsx_response
 from datetime import datetime, date, timedelta
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, 
@@ -562,12 +563,8 @@ def export_weekly():
     )
     
     filename = f"attendance_{assignment.display_name.replace(' ', '_')}_week{week.week_number}.xlsx"
-    
-    return Response(
-        excel_file.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
-    )
+
+    return xlsx_response(excel_file, filename)
 
 
 @attendance_bp.route('/termly')
@@ -779,17 +776,9 @@ def export_termly():
     ws.column_dimensions['H'].width = 14
     ws.column_dimensions['I'].width = 12
     
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
     filename = f"attendance_{assignment.display_name.replace(' ', '_')}_term{term.term_number}.xlsx"
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
-    )
+
+    return xlsx_response(wb, filename)
 
 
 # ============================================================================
@@ -1036,15 +1025,7 @@ def export_alerts():
             for col in range(1, 8):
                 ws.cell(row=row, column=col).fill = PatternFill(start_color='FFCDD2', fill_type='solid')
     
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename=attendance_alerts_{selected_term.name}.xlsx'}
-    )
+    return xlsx_response(wb, f'attendance_alerts_{selected_term.name}.xlsx')
 
 
 # ============================================================================
