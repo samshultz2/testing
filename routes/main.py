@@ -555,6 +555,19 @@ def _student_scope(query, tscope):
     return scope_query(query, Student)
 
 
+def _viewer_student_scope(query):
+    """Scope a Student query to what the CURRENT user may see: branch always,
+    and a form teacher additionally to their own students. Use for any
+    student list/search/export/stats so a teacher never sees other classes."""
+    from utils.branch_scope import scope_query
+    from utils.access_control import teacher_form_student_ids
+    q = scope_query(query, Student)
+    tids = teacher_form_student_ids()
+    if tids is not None:
+        q = q.filter(Student.id.in_(tids or [-1]))
+    return q
+
+
 def _dash_birthdays(tscope=None):
     """Students whose birthday is today, and within the next 6 days."""
     def sq(query):
@@ -1037,6 +1050,12 @@ def view_student(student_id):
     if not can_access_branch(student.branch_id):
         flash('That student belongs to another branch.', 'error')
         return redirect(url_for('main.students_list'))
+    # A form teacher may only open their own students.
+    from utils.access_control import teacher_form_student_ids
+    tids = teacher_form_student_ids()
+    if tids is not None and student.id not in tids:
+        flash('You can only view your own students.', 'error')
+        return redirect(url_for('main.students_list'))
 
     # Get enrollments
     enrollments = student.enrollments.join(ClassArmAssignment).order_by(
@@ -1404,7 +1423,7 @@ def global_search():
             if items:
                 groups.append({'title': title, 'icon': icon, 'rows': items})
 
-        students = (Student.query.filter_by(is_active=True)
+        students = (_viewer_student_scope(Student.query.filter_by(is_active=True))
                     .filter(db.or_(Student.first_name.ilike(like), Student.surname.ilike(like),
                                    Student.student_id.ilike(like)))
                     .order_by(Student.surname).limit(12).all())
@@ -1538,8 +1557,7 @@ def api_search_students():
     if len(query) < 2:
         return jsonify([])
 
-    students = Student.query.filter(
-        Student.is_active == True,
+    students = _viewer_student_scope(Student.query.filter(Student.is_active == True)).filter(
         db.or_(
             Student.first_name.ilike(f'%{query}%'),
             Student.surname.ilike(f'%{query}%'),
@@ -1563,10 +1581,11 @@ def api_dashboard_stats():
 
     active_term = get_active_term()
 
+    base = _viewer_student_scope(Student.query.filter_by(is_active=True))
     stats = {
-        'total_students': Student.query.filter_by(is_active=True).count(),
-        'male_students': Student.query.filter_by(is_active=True, gender='Male').count(),
-        'female_students': Student.query.filter_by(is_active=True, gender='Female').count(),
+        'total_students': base.count(),
+        'male_students': base.filter(Student.gender == 'Male').count(),
+        'female_students': base.filter(Student.gender == 'Female').count(),
     }
 
     if active_term:
@@ -1603,11 +1622,11 @@ def export_students_data():
     
     # Build query
     if student_ids:
-        # Export selected students
-        query = Student.query.filter(Student.id.in_(student_ids))
+        # Export selected students (scoped: a teacher can't export other classes)
+        query = _viewer_student_scope(Student.query.filter(Student.id.in_(student_ids)))
     else:
         # Export all students matching current filters
-        query = Student.query.filter_by(is_active=True)
+        query = _viewer_student_scope(Student.query.filter_by(is_active=True))
         
         # Apply filters
         search = request.args.get('search', '')

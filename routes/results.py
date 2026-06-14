@@ -2,7 +2,7 @@
 Results management routes - WAEC, JAMB, and Analytics Dashboard
 Comprehensive academic performance tracking and analysis
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
 from utils.helpers import get_active_term, get_active_session
 from collections import defaultdict
 from models import (db, Student, WAECResult, JAMBResult, UniversityCutoff, SchoolSettings, StudentEnrollment,
@@ -922,6 +922,10 @@ def student_report(student_id):
 
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
+    from utils.access_control import teacher_form_student_ids
+    tids = teacher_form_student_ids()
+    if tids is not None and student.id not in tids:
+        abort(403)
     pass_grades = set(AcademicAnalytics.PASS_GRADES)
     distinction_grades = set(AcademicAnalytics.DISTINCTION_GRADES)
 
@@ -1648,9 +1652,14 @@ def api_top_performers(year):
     """Get top performing students"""
     waec_stats = AcademicAnalytics.get_waec_school_statistics(year)
     
-    jamb_results = JAMBResult.query.filter_by(exam_year=year).options(
-        joinedload(JAMBResult.student)
-    ).order_by(JAMBResult.total_score.desc()).limit(10).all()
+    from utils.branch_scope import scope_by_student
+    from utils.access_control import teacher_form_student_ids
+    _jq = scope_by_student(JAMBResult.query.filter_by(exam_year=year).options(
+        joinedload(JAMBResult.student)), JAMBResult)
+    _tids = teacher_form_student_ids()
+    if _tids is not None:
+        _jq = _jq.filter(JAMBResult.student_id.in_(_tids or [-1]))
+    jamb_results = _jq.order_by(JAMBResult.total_score.desc()).limit(10).all()
     
     jamb_top = [{
         'student_id': r.student_id,
