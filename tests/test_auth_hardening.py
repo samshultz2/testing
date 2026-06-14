@@ -36,8 +36,8 @@ def test_force_password_change_redirects(app):
     assert r.status_code in (302, 303) and '/change-password' in r.headers['Location']
     # after changing, access is restored
     c.post('/change-password', data={'current_password': 'secret123',
-                                     'new_password': 'newpass123',
-                                     'confirm_password': 'newpass123',
+                                     'new_password': 'Newpass123',
+                                     'confirm_password': 'Newpass123',
                                      '_csrf_token': _pt(c)}, follow_redirects=True)
     # dashboard is reachable now (no more forced bounce to change-password)
     assert c.get('/', follow_redirects=False).status_code == 200

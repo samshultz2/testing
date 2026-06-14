@@ -7,7 +7,7 @@ import hmac
 from datetime import datetime, timedelta
 from config import Config
 from models import db, User
-from utils.security import login_limiter
+from utils.security import login_limiter, is_password_strong
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -166,8 +166,9 @@ def change_password():
             flash('New passwords do not match.', 'error')
             return redirect(url_for('auth.change_password'))
         
-        if len(new_password) < 6:
-            flash('Password must be at least 6 characters.', 'error')
+        ok, msg = is_password_strong(new_password)
+        if not ok:
+            flash(msg, 'error')
             return redirect(url_for('auth.change_password'))
         
         user.set_password(new_password)

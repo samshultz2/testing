@@ -72,8 +72,8 @@ def test_create_branch_scoped_user(app):
     with app.app_context():
         bid = Branch.get_default().id
     client.post('/users/add',
-                data={'username': 'branchuser', 'password': 'secret123',
-                      'confirm_password': 'secret123', 'role': 'staff',
+                data={'username': 'branchuser', 'password': 'Secret123',
+                      'confirm_password': 'Secret123', 'role': 'staff',
                       'scope': 'branch', 'branch_id': bid, 'modules': 'students',
                       '_csrf_token': token},
                 follow_redirects=True)

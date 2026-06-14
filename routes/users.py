@@ -10,6 +10,7 @@ from utils.access_control import (MODULES, manage_users_required, can_manage,
                                   restrict_grant_perms, CAPABILITY_SUBSECTIONS)
 from utils.audit import log_action
 from utils.db_tx import safe_transaction
+from utils.security import is_password_strong
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
@@ -137,8 +138,9 @@ def add_user():
             flash('Passwords do not match.', 'error')
             return redirect(url_for('users.add_user'))
         
-        if len(password) < 6:
-            flash('Password must be at least 6 characters.', 'error')
+        ok, msg = is_password_strong(password)
+        if not ok:
+            flash(msg, 'error')
             return redirect(url_for('users.add_user'))
         
         # Check if username exists
@@ -258,8 +260,9 @@ def edit_user(user_id):
         # Update password if provided
         new_password = request.form.get('new_password', '')
         if new_password:
-            if len(new_password) < 6:
-                flash('Password must be at least 6 characters.', 'error')
+            ok, msg = is_password_strong(new_password)
+            if not ok:
+                flash(msg, 'error')
                 return redirect(url_for('users.edit_user', user_id=user_id))
             user.set_password(new_password)
         
