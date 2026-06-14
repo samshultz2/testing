@@ -13,6 +13,18 @@ import Alerts from './screens/Alerts';
 const Ctx = createContext(null);
 export const useCtx = () => useContext(Ctx);
 
+// Deep-link params (e.g. from the dashboard): /attendance/app?tab=mark&
+// assignment_id=12&term_id=4&date=2026-06-10 — read once at load.
+const INIT = (() => {
+  const p = new URLSearchParams(location.search);
+  return {
+    termId: p.get('term_id') ? Number(p.get('term_id')) : null,
+    assignmentId: p.get('assignment_id') || '',
+    date: p.get('date') || '',
+    tab: p.get('tab') || '',
+  };
+})();
+
 const TABS = [
   { path: 'mark', label: 'Mark daily', icon: 'fa-user-check', el: MarkDaily, mark: true },
   { path: 'week', label: 'Weekly grid', icon: 'fa-table-cells-large', el: WeekGrid, mark: true },
@@ -23,7 +35,7 @@ const TABS = [
 ];
 
 function useHashRoute() {
-  const get = () => location.hash.replace(/^#\/?/, '') || 'mark';
+  const get = () => location.hash.replace(/^#\/?/, '') || INIT.tab || 'mark';
   const [route, setRoute] = useState(get);
   useEffect(() => {
     const f = () => setRoute(get());
@@ -39,7 +51,7 @@ export default function App() {
   const online = useOnline();
   const sync = useSync();
   const route = useHashRoute();
-  const [termId, setTermId] = useState(null);          // null = active term
+  const [termId, setTermId] = useState(INIT.termId);   // null = active term
   const [ctx, setCtx] = useState({ loading: true });
   const [failed, setFailed] = useState([]);
 
@@ -76,7 +88,7 @@ export default function App() {
   const selectedTerm = termId != null ? String(termId) : (data.term ? String(data.term.id) : '');
 
   return (
-    <Ctx.Provider value={{ ...data, online, sync }}>
+    <Ctx.Provider value={{ ...data, online, sync, initial: { assignmentId: INIT.assignmentId, date: INIT.date } }}>
       <nav className="att-tabs" role="tablist" aria-label="Attendance sections">
         {tabs.map((t) => (
           <a key={t.path} href={'#/' + t.path} role="tab" aria-selected={t.path === active.path}

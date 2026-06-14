@@ -107,8 +107,8 @@
                 <div class="data-card-header"><div class="data-card-title">{{ c.name }}</div>
                     <span class="badge badge-info">{{ c.count }} student{{ '' if c.count == 1 else 's' }}</span></div>
                 <div class="data-card-actions" style="display:flex;gap:.4rem;flex-wrap:wrap;">
-                    <a href="{{ url_for('attendance.mark_attendance_page', term_id=active_term.id, assignment_id=c.id) }}" class="btn btn-primary btn-sm" style="flex:1;"><i class="fas fa-clipboard-check"></i> Attendance</a>
-                    <a href="{{ url_for('attendance.week_grid', term_id=active_term.id, assignment_id=c.id) }}" class="btn btn-secondary btn-sm" style="flex:1;"><i class="fas fa-calendar-week"></i> Week</a>
+                    <a href="{{ url_for('attendance.attendance_app', term_id=active_term.id, assignment_id=c.id, tab='mark') }}" class="btn btn-primary btn-sm" style="flex:1;"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                    <a href="{{ url_for('attendance.attendance_app', term_id=active_term.id, assignment_id=c.id, tab='week') }}" class="btn btn-secondary btn-sm" style="flex:1;"><i class="fas fa-calendar-week"></i> Week</a>
                     {% if can_access_module('results') %}<a href="{{ url_for('subjects.bulk_entry') }}" class="btn btn-secondary btn-sm" style="flex:1;"><i class="fas fa-pen"></i> Scores</a>{% endif %}
                 </div>
             </div>
@@ -282,7 +282,7 @@
     <div class="wb">
         <div class="quick-actions">
             <a href="{{ url_for('main.add_student') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Student</a>
-            <a href="{{ url_for('attendance.mark_attendance_page') }}" class="btn btn-success"><i class="fas fa-clipboard-check"></i> Mark Attendance</a>
+            <a href="{{ url_for('attendance.attendance_app', tab='mark') }}" class="btn btn-success"><i class="fas fa-clipboard-check"></i> Mark Attendance</a>
             <a href="{{ url_for('subjects.scores_entry') }}" class="btn btn-info"><i class="fas fa-edit"></i> Enter Scores</a>
             <a href="{{ url_for('results.scan_waec') }}" class="btn btn-secondary"><i class="fas fa-camera"></i> Scan Result</a>
             <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-outline"><i class="fas fa-chart-pie"></i> Analytics</a>

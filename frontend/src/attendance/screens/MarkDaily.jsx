@@ -7,9 +7,11 @@ import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner
 const key = (aid, date) => `roster|${aid}|${date}`;
 
 export default function MarkDaily() {
-  const { classes = [], today, online, sync } = useCtx();
-  const [assignmentId, setAssignmentId] = useState('');
-  const [date, setDate] = useState(today || '');
+  const { classes = [], today, online, sync, initial } = useCtx();
+  // Seed from a deep link only when that class belongs to the loaded term.
+  const seeded = initial && classes.some((c) => String(c.id) === String(initial.assignmentId));
+  const [assignmentId, setAssignmentId] = useState(seeded ? String(initial.assignmentId) : '');
+  const [date, setDate] = useState((seeded && initial.date) || today || '');
   const [session, setSession] = useState('morning');    // morning | afternoon
   const [autoCopyPm, setAutoCopyPm] = useState(true);   // morning also seeds afternoon
   const [state, setState] = useState({ idle: true });   // idle | loading | data | error
