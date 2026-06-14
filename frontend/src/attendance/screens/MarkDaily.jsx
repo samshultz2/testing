@@ -11,6 +11,7 @@ export default function MarkDaily() {
   const [assignmentId, setAssignmentId] = useState('');
   const [date, setDate] = useState(today || '');
   const [session, setSession] = useState('morning');    // morning | afternoon
+  const [autoCopyPm, setAutoCopyPm] = useState(true);   // morning also seeds afternoon
   const [state, setState] = useState({ idle: true });   // idle | loading | data | error
   const [present, setPresent] = useState({});
   const [msg, setMsg] = useState(null);
@@ -51,15 +52,16 @@ export default function MarkDaily() {
   const save = async () => {
     const d = state.data;
     const presentIds = d.students.filter((s) => present[s.enrollment_id]).map((s) => s.enrollment_id);
-    // Marking the morning also seeds the afternoon (auto_copy); the afternoon
-    // session updates the afternoon only.
-    const autoCopy = session === 'morning';
+    // Marking the morning can also seed the afternoon (opt-out via the
+    // checkbox); the afternoon session updates the afternoon only.
+    const autoCopy = session === 'morning' && autoCopyPm;
     const payload = { assignment_id: Number(assignmentId), date, session_type: session, present: presentIds, auto_copy: autoCopy };
     // optimistic cache so reopening (even offline) reflects it
     const updated = { ...d, students: d.students.map((s) => {
       const val = !!present[s.enrollment_id];
       if (session === 'afternoon') return { ...s, afternoon_present: val };
-      return { ...s, morning_present: val, afternoon_present: val };  // morning seeds afternoon
+      if (autoCopy) return { ...s, morning_present: val, afternoon_present: val };  // morning seeds afternoon
+      return { ...s, morning_present: val };
     }) };
     await cachePut(key(assignmentId, date), updated);
     setBusy(true);
@@ -85,6 +87,13 @@ export default function MarkDaily() {
 
   const d = state.data;
   const presentCount = d ? d.students.filter((s) => present[s.enrollment_id]).length : 0;
+  // A holiday/weekend is not a school day: the server rejects marks, so the
+  // register is read-only here (parity with the classic page's block).
+  const notSchoolDay = d && d.school_day === false;
+  const notSchoolReason = d && (d.holiday
+    ? `${d.date} was marked as ${d.holiday.type ? d.holiday.type.toLowerCase() : 'a holiday'}: ${d.holiday.reason}.`
+    : d.weekend ? `${d.date} is a weekend.` : `${d.date} is not a school day.`);
+  const canSave = d && d.week_id && d.students.length && !notSchoolDay && !busy;
 
   return (
     <div>
@@ -120,28 +129,38 @@ export default function MarkDaily() {
 
           {!d.week_id && <Banner tone="warn">This date isn’t in a school week — you can review, but saving is disabled.</Banner>}
 
-          {d.students.length === 0 ? (
+          {notSchoolDay ? (
+            <EmptyState icon="fa-calendar-xmark" title="Not a school day" hint={notSchoolReason} />
+          ) : d.students.length === 0 ? (
             <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
           ) : (
-            <ul className="att-list" aria-label={'Register for ' + d.class_name}>
-              {d.students.map((s) => (
-                <li key={s.enrollment_id} className={present[s.enrollment_id] ? 'is-present' : 'is-absent'}>
-                  <label>
-                    <input type="checkbox" checked={!!present[s.enrollment_id]} onChange={() => toggle(s.enrollment_id)} />
-                    <span className="att-name">{s.name}</span>
-                    <span className="att-flag">{present[s.enrollment_id] ? 'Present' : 'Absent'}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
+            <>
+              {session === 'morning' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', fontSize: 14, fontWeight: 500 }}>
+                  <input type="checkbox" checked={autoCopyPm} onChange={(e) => setAutoCopyPm(e.target.checked)} />
+                  <span><i className="fas fa-copy" aria-hidden="true" /> Also mark afternoon (same as morning)</span>
+                </label>
+              )}
+              <ul className="att-list" aria-label={'Register for ' + d.class_name}>
+                {d.students.map((s) => (
+                  <li key={s.enrollment_id} className={present[s.enrollment_id] ? 'is-present' : 'is-absent'}>
+                    <label>
+                      <input type="checkbox" checked={!!present[s.enrollment_id]} onChange={() => toggle(s.enrollment_id)} />
+                      <span className="att-name">{s.name}<span className="att-sub"> {s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
+                      <span className="att-flag">{present[s.enrollment_id] ? 'Present' : 'Absent'}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
 
           <div className="att-actions">
-            <Button variant="secondary" size="sm" onClick={() => setAll(true)} disabled={!d.students.length}>Mark all present</Button>
-            <Button variant="light" size="sm" onClick={() => setAll(false)} disabled={!d.students.length}>Mark all absent</Button>
-            <Button onClick={save} disabled={!d.week_id || !d.students.length || busy}>Save register</Button>
+            <Button variant="secondary" size="sm" onClick={() => setAll(true)} disabled={!d.students.length || notSchoolDay}>Mark all present</Button>
+            <Button variant="light" size="sm" onClick={() => setAll(false)} disabled={!d.students.length || notSchoolDay}>Mark all absent</Button>
+            <Button onClick={save} disabled={!canSave}>Save register</Button>
             <Button variant="light" size="sm" onClick={copyPrevious}
-                    disabled={!online || !d.week_id || busy}
+                    disabled={!online || !d.week_id || notSchoolDay || busy}
                     title={online ? 'Copy the previous school day’s marks' : 'Copy previous needs an internet connection'}>
               Copy previous day
             </Button>

@@ -890,6 +890,7 @@ def api_roster():
 
     holidays = Holiday.query.filter_by(term_id=caa.term_id).all()
     week = _week_for_date(caa.term_id, target)
+    hol = next((h for h in holidays if h.date == target), None)
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
                    .join(Student).order_by(Student.surname, Student.first_name).all())
@@ -900,6 +901,7 @@ def api_roster():
         'enrollment_id': e.id,
         'student_id': e.student.student_id,
         'name': e.student.full_name,
+        'gender': e.student.gender,
         'morning_present': existing[e.id].morning_present if e.id in existing else True,
         'afternoon_present': existing[e.id].afternoon_present if e.id in existing else True,
     } for e in enrollments]
@@ -909,6 +911,8 @@ def api_roster():
         'date': target.isoformat(),
         'week_id': week.id if week else None,
         'school_day': is_school_day(target, holidays),
+        'weekend': target.weekday() >= 5,
+        'holiday': {'reason': hol.reason, 'type': hol.holiday_type} if hol else None,
         'students': students,
     })
 
@@ -934,6 +938,13 @@ def api_mark():
     week = _week_for_date(caa.term_id, target)
     if not week:
         return jsonify({'error': 'no school week for that date'}), 400
+    # Holidays/weekends are not school days — reject so the daily register
+    # matches the week grid (which already excludes them).
+    holidays = Holiday.query.filter_by(term_id=caa.term_id).all()
+    if not is_school_day(target, holidays):
+        hol = next((h for h in holidays if h.date == target), None)
+        reason = hol.reason if hol else 'weekend'
+        return jsonify({'error': f'not a school day ({reason})'}), 400
 
     session_type = 'afternoon' if data.get('session_type') == 'afternoon' else 'morning'
     auto_copy = bool(data.get('auto_copy', session_type == 'morning'))
@@ -1159,8 +1170,16 @@ def api_report_daily():
         target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else date.today()
     except Exception:
         return jsonify({'error': 'bad date'}), 400
+    holidays = Holiday.query.filter_by(term_id=caa.term_id).all()
+    hol = next((h for h in holidays if h.date == target), None)
     summary = get_daily_attendance_summary(caa.id, target)
-    return jsonify({'class_name': caa.display_name, **_jsonable(summary)})
+    return jsonify({
+        'class_name': caa.display_name,
+        'school_day': is_school_day(target, holidays),
+        'weekend': target.weekday() >= 5,
+        'holiday': {'reason': hol.reason, 'type': hol.holiday_type} if hol else None,
+        **_jsonable(summary),
+    })
 
 
 @attendance_bp.route('/api/report/weekly')

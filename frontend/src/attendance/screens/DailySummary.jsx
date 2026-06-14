@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { apiGet } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards } from '../../components/ui';
+import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner } from '../../components/ui';
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
@@ -45,6 +45,14 @@ export default function DailySummary() {
               <strong>{d.class_name}</strong>
               <span style={{ color: '#6b7280' }}>{new Date(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
+
+            {d.school_day === false && (
+              <Banner tone="warn">
+                {d.holiday ? `Holiday — ${d.holiday.reason}${d.holiday.type ? ' (' + d.holiday.type + ')' : ''}.`
+                  : d.weekend ? 'This date is a weekend.' : 'This date is not a school day.'}
+                {' '}Marks aren’t expected on this day.
+              </Banner>
+            )}
 
             <StatCards items={[
               { value: d.total_students, label: 'Total students' },

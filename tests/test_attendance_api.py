@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 from config import Config
 from models import (db, Branch, User, Student, ClassArmAssignment, SchoolClass,
-                    ClassArm, Term, AcademicSession, StudentEnrollment, Week, Attendance)
+                    ClassArm, Term, AcademicSession, StudentEnrollment, Week, Attendance, Holiday)
 from tests.conftest import login_token
 
 
@@ -24,6 +24,11 @@ def _setup(app):
             wk = Week(term_id=term.id, week_number=99,
                       start_date=monday, end_date=monday + timedelta(days=6))
             db.session.add(wk); db.session.flush()
+        # A guaranteed school day (weekday, no holidays in this fixture) within
+        # the week — marking endpoints now reject weekends/holidays.
+        school_date = wk.start_date
+        while school_date.weekday() >= 5 and school_date < wk.end_date:
+            school_date += timedelta(days=1)
         sc = SchoolClass.query.first(); arm = ClassArm.query.first()
         bid = Branch.get_default().id
         caa = ClassArmAssignment.query.filter_by(
@@ -48,7 +53,7 @@ def _setup(app):
                 db.session.add(en); db.session.flush()
             eids.append(en.id)
         db.session.commit()
-        return dict(caa=caa.id, eids=eids, date=today.isoformat(), bid=bid, week=wk.id)
+        return dict(caa=caa.id, eids=eids, date=school_date.isoformat(), bid=bid, week=wk.id)
 
 
 def _admin(app):
@@ -79,8 +84,9 @@ def test_mark_is_idempotent_upsert(app):
         m = c.post('/attendance/api/mark', json=body, headers={'X-CSRFToken': tok})
         assert m.status_code == 200 and m.get_json()['ok'] is True
     with app.app_context():
-        present = Attendance.query.filter_by(enrollment_id=ids['eids'][0], date=date.today()).first()
-        absent = Attendance.query.filter_by(enrollment_id=ids['eids'][1], date=date.today()).first()
+        d = date.fromisoformat(ids['date'])
+        present = Attendance.query.filter_by(enrollment_id=ids['eids'][0], date=d).first()
+        absent = Attendance.query.filter_by(enrollment_id=ids['eids'][1], date=d).first()
         assert present.morning_present is True
         assert absent.morning_present is False
 
@@ -93,6 +99,30 @@ def test_mark_rejects_date_with_no_week(app):
                json={'assignment_id': ids['caa'], 'date': far, 'present': []},
                headers={'X-CSRFToken': tok})
     assert m.status_code == 400
+
+
+def test_mark_rejects_holiday(app):
+    ids = _setup(app)
+    with app.app_context():
+        caa = ClassArmAssignment.query.get(ids['caa'])
+        d = date.fromisoformat(ids['date'])
+        if not Holiday.query.filter_by(term_id=caa.term_id, date=d).first():
+            db.session.add(Holiday(term_id=caa.term_id, date=d, reason='AA-Test Holiday',
+                                   holiday_type='Public Holiday'))
+            db.session.commit()
+    c, tok = _admin(app)
+    # roster flags it as a non-school day with the reason
+    j = c.get(f'/attendance/api/roster?assignment_id={ids["caa"]}&date={ids["date"]}').get_json()
+    assert j['school_day'] is False and j['holiday']['reason'] == 'AA-Test Holiday'
+    # and saving is rejected
+    m = c.post('/attendance/api/mark', headers={'X-CSRFToken': tok},
+               json={'assignment_id': ids['caa'], 'date': ids['date'], 'present': []})
+    assert m.status_code == 400
+    # clean up so the shared session DB stays a normal school day for later tests
+    with app.app_context():
+        caa = ClassArmAssignment.query.get(ids['caa'])
+        Holiday.query.filter_by(term_id=caa.term_id, date=date.fromisoformat(ids['date'])).delete()
+        db.session.commit()
 
 
 def test_context_lists_term_classes_weeks(app):

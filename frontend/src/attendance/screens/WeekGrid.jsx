@@ -50,6 +50,24 @@ export default function WeekGrid() {
     d.students.forEach((s) => { next[s.enrollment_id] = {}; d.days.forEach((day) => { next[s.enrollment_id][day.date] = { am: val, pm: val }; }); });
     setMarks(next);
   };
+  // Tap a day heading to toggle that whole column; tap a name to toggle that
+  // student's whole week (parity with the classic week grid).
+  const toggleColumn = (date) => {
+    const d = state.data;
+    const anyOn = d.students.some((s) => { const c = cell(s.enrollment_id, date); return c.am || c.pm; });
+    const v = !anyOn;
+    setMarks((m) => {
+      const next = { ...m };
+      d.students.forEach((s) => { next[s.enrollment_id] = { ...next[s.enrollment_id], [date]: { am: v, pm: v } }; });
+      return next;
+    });
+  };
+  const toggleRow = (eid) => {
+    const d = state.data;
+    const anyOn = d.days.some((day) => { const c = cell(eid, day.date); return c.am || c.pm; });
+    const v = !anyOn;
+    setMarks((m) => ({ ...m, [eid]: Object.fromEntries(d.days.map((day) => [day.date, { am: v, pm: v }])) }));
+  };
 
   const save = async () => {
     const d = state.data;
@@ -117,13 +135,21 @@ export default function WeekGrid() {
                 <thead>
                   <tr>
                     <th scope="col" className="att-grid-name">Student</th>
-                    {d.days.map((day) => <th key={day.date} scope="col">{day.label}</th>)}
+                    {d.days.map((day) => (
+                      <th key={day.date} scope="col">
+                        <button type="button" className="att-linkbtn" onClick={() => toggleColumn(day.date)}
+                                title="Toggle this whole day">{day.label}</button>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {d.students.map((s) => (
                     <tr key={s.enrollment_id}>
-                      <th scope="row" className="att-grid-name">{s.name}</th>
+                      <th scope="row" className="att-grid-name">
+                        <button type="button" className="att-linkbtn" onClick={() => toggleRow(s.enrollment_id)}
+                                title="Toggle this student's week">{s.name}</button>
+                      </th>
                       {d.days.map((day) => {
                         const c = cell(s.enrollment_id, day.date);
                         return (
@@ -158,6 +184,9 @@ export default function WeekGrid() {
             <Button variant="light" size="sm" onClick={() => setAll(false)} disabled={!d.students.length}>Mark all absent</Button>
             <Button onClick={save} disabled={!d.students.length || !d.days.length || busy}>Save week</Button>
           </div>
+          {!!d.days.length && d.students.length > 0 && (
+            <p className="att-legend">Tip: tap a day heading to toggle that whole day, or a name to toggle that student’s week.</p>
+          )}
         </>
       )}
     </div>
