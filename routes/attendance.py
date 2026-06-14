@@ -959,7 +959,8 @@ def api_context():
     weeks, holidays) — cacheable so the picker works offline."""
     if not can_mark_attendance():
         return jsonify({'error': 'forbidden'}), 403
-    term = get_active_term()
+    req_term = request.args.get('term_id', type=int)
+    term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
     terms = [{'id': t.id, 'name': t.full_name, 'active': bool(t.is_active)}
              for t in Term.query.join(AcademicSession)
              .order_by(AcademicSession.name.desc(), Term.term_number).all()]
@@ -1111,6 +1112,154 @@ def api_copy_previous():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
     return jsonify({'ok': True, 'copied': copied, 'from': prev.isoformat()})
+
+
+# ============================================================================
+# JSON API: read-only attendance reports for the React SPA (installment 2)
+# ----------------------------------------------------------------------------
+# All endpoints are branch-scoped and permission-checked, mirroring the
+# server-rendered report pages. They require the network (no offline write).
+# ============================================================================
+
+def _jsonable(value):
+    """Recursively convert date/datetime values to ISO strings so a summary
+    dict (which mixes in date objects) can be returned by jsonify untouched."""
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    return value
+
+
+def _scoped_caa(assignment_id):
+    """Resolve an assignment the current user may view, or return a JSON error
+    tuple. Branch-scoped + permission-checked like the marking endpoints."""
+    if not assignment_id:
+        return None, (jsonify({'error': 'assignment_id required'}), 400)
+    caa = db.session.get(ClassArmAssignment, assignment_id)
+    if not caa:
+        return None, (jsonify({'error': 'invalid assignment'}), 400)
+    require_branch_access(caa.branch_id)
+    if not (can_mark_attendance(caa.id) and can_access_class(caa.id)):
+        return None, (jsonify({'error': 'forbidden'}), 403)
+    return caa, None
+
+
+@attendance_bp.route('/api/daily-summary')
+@login_required
+def api_report_daily():
+    """Daily attendance summary for one class arm on a date (JSON, read-only)."""
+    caa, err = _scoped_caa(request.args.get('assignment_id', type=int))
+    if err:
+        return err
+    ds = request.args.get('date')
+    try:
+        target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else date.today()
+    except Exception:
+        return jsonify({'error': 'bad date'}), 400
+    summary = get_daily_attendance_summary(caa.id, target)
+    return jsonify({'class_name': caa.display_name, **_jsonable(summary)})
+
+
+@attendance_bp.route('/api/report/weekly')
+@login_required
+def api_report_weekly():
+    """Weekly attendance report (students × school-days + class totals)."""
+    caa, err = _scoped_caa(request.args.get('assignment_id', type=int))
+    if err:
+        return err
+    week = db.session.get(Week, request.args.get('week_id', type=int) or 0)
+    if not week or week.term_id != caa.term_id:
+        return jsonify({'error': 'week_id required'}), 400
+    summary = get_weekly_attendance_summary(caa.id, week.id)
+    if summary is None:
+        return jsonify({'error': 'no data for week'}), 404
+    return jsonify({'class_name': caa.display_name, **_jsonable(summary)})
+
+
+@attendance_bp.route('/api/report/termly')
+@login_required
+def api_report_termly():
+    """Termly attendance report (per-student weekly breakdown + class totals)."""
+    caa, err = _scoped_caa(request.args.get('assignment_id', type=int))
+    if err:
+        return err
+    summary = get_termly_attendance_summary(caa.id, caa.term_id)
+    if summary is None:
+        return jsonify({'error': 'no weeks defined for this term'}), 404
+    # The summary embeds Week model objects under 'weeks'; replace with a
+    # JSON-friendly shape before serialising.
+    summary['weeks'] = [{'id': w.id, 'number': w.week_number} for w in summary['weeks']]
+    return jsonify({'class_name': caa.display_name, **_jsonable(summary)})
+
+
+@attendance_bp.route('/api/report/alerts')
+@login_required
+def api_report_alerts():
+    """Students below an attendance threshold for a term, scoped to the classes
+    the current user may access (JSON, read-only)."""
+    if not can_mark_attendance():
+        return jsonify({'error': 'forbidden'}), 403
+    req_term = request.args.get('term_id', type=int)
+    term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
+    if not term:
+        return jsonify({'error': 'no term'}), 400
+    threshold = request.args.get('threshold', type=float)
+    if threshold is None:
+        threshold = 75.0
+
+    # Only classes this user may see, within the term.
+    classes = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
+    class_by_id = {c.id: c for c in classes}
+
+    weeks = Week.query.filter_by(term_id=term.id).all()
+    week_ids = [w.id for w in weeks]
+    holiday_dates = {h.date for h in Holiday.query.filter_by(term_id=term.id).all()}
+    total_school_days = 0
+    for week in weeks:
+        current = week.start_date
+        while current <= week.end_date:
+            if current.weekday() < 5 and current not in holiday_dates:
+                total_school_days += 1
+            current += timedelta(days=1)
+    total_times_opened = total_school_days * 2
+
+    alerts = []
+    if week_ids and total_times_opened > 0 and class_by_id:
+        enrollments = (StudentEnrollment.query
+                       .filter(StudentEnrollment.class_arm_assignment_id.in_(list(class_by_id)),
+                               StudentEnrollment.is_active == True)  # noqa: E712
+                       .all())
+        present_by_enrollment = {}
+        for a in Attendance.query.filter(
+                Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
+                Attendance.week_id.in_(week_ids)).all():
+            present_by_enrollment[a.enrollment_id] = present_by_enrollment.get(a.enrollment_id, 0) \
+                + (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
+        for e in enrollments:
+            present = present_by_enrollment.get(e.id, 0)
+            pct = round((present / total_times_opened) * 100, 2)
+            if pct < threshold:
+                alerts.append({
+                    'student_id': e.student.student_id,
+                    'student_name': e.student.full_name,
+                    'class_name': class_by_id[e.class_arm_assignment_id].display_name,
+                    'present': present,
+                    'total': total_times_opened,
+                    'percentage': pct,
+                    'status': 'critical' if pct < 50 else 'warning',
+                })
+        alerts.sort(key=lambda x: x['percentage'])
+
+    return jsonify({
+        'term': {'id': term.id, 'name': term.full_name},
+        'threshold': threshold,
+        'total_times_opened': total_times_opened,
+        'alerts': alerts,
+    })
 
 
 # ============================================================================

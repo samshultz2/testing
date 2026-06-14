@@ -140,3 +140,65 @@ def test_cross_branch_is_forbidden(app):
                json={'assignment_id': ids['caa'], 'date': ids['date'], 'present': []},
                headers={'X-CSRFToken': tok})
     assert m.status_code == 403
+
+
+def test_daily_summary_report(app):
+    ids = _setup(app)
+    c, _ = _admin(app)
+    r = c.get(f'/attendance/api/daily-summary?assignment_id={ids["caa"]}&date={ids["date"]}')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['date'] == ids['date'] and 'class_name' in j
+    assert len(j['students']) >= 2
+
+
+def test_weekly_report(app):
+    ids = _setup(app)
+    c, _ = _admin(app)
+    r = c.get(f'/attendance/api/report/weekly?assignment_id={ids["caa"]}&week_id={ids["week"]}')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['week_info']['week_id'] == ids['week']
+    assert isinstance(j['school_days'], list) and 'class_totals' in j
+
+
+def test_termly_report_serialises_weeks(app):
+    ids = _setup(app)
+    c, _ = _admin(app)
+    r = c.get(f'/attendance/api/report/termly?assignment_id={ids["caa"]}')
+    assert r.status_code == 200
+    j = r.get_json()
+    # weeks must be JSON-friendly dicts, not Week objects
+    assert all(set(w) == {'id', 'number'} for w in j['weeks'])
+    assert 'termly_percentage' in j['class_totals']
+
+
+def test_alerts_report_scoped(app):
+    ids = _setup(app)
+    c, _ = _admin(app)
+    r = c.get('/attendance/api/report/alerts?threshold=100')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['threshold'] == 100.0 and isinstance(j['alerts'], list)
+    # with a 100% threshold and no marks, both setup students should be flagged
+    assert any(a['student_name'] in ('Ann Ann', 'Bob Bob') for a in j['alerts'])
+
+
+def test_report_cross_branch_is_forbidden(app):
+    ids = _setup(app)
+    with app.app_context():
+        other = Branch.query.filter_by(code='AAO').first()
+        if not other:
+            other = Branch(name='AA-Other', code='AAO', is_active=True)
+            db.session.add(other); db.session.flush()
+        u = User.query.filter_by(username='aa_reportadmin').first()
+        if not u:
+            u = User(username='aa_reportadmin', role='admin', scope='branch', branch_id=other.id)
+            u.set_password('Secret123'); u.set_modules(['attendance'])
+            db.session.add(u); db.session.commit()
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'username': 'aa_reportadmin', 'password': 'Secret123', '_csrf_token': tok})
+    assert c.get(f'/attendance/api/daily-summary?assignment_id={ids["caa"]}&date={ids["date"]}').status_code == 403
+    assert c.get(f'/attendance/api/report/weekly?assignment_id={ids["caa"]}&week_id={ids["week"]}').status_code == 403
+    assert c.get(f'/attendance/api/report/termly?assignment_id={ids["caa"]}').status_code == 403
