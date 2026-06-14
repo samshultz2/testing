@@ -489,7 +489,7 @@ def download_backup_file(name):
 
 
 @settings_bp.route('/backup/download')
-@login_required
+@central_admin_required
 def download_backup():
     """Download database backup"""
     try:
@@ -515,7 +515,7 @@ def download_backup():
 
 
 @settings_bp.route('/backup/export-json')
-@login_required
+@central_admin_required
 def export_json():
     """Export all data to JSON"""
     try:
@@ -569,7 +569,7 @@ def export_json():
 
 
 @settings_bp.route('/backup/restore', methods=['POST'])
-@login_required
+@central_admin_required
 def restore_backup():
     """Restore database from an uploaded backup (SQLite .db or Postgres .sql)."""
     import tempfile
@@ -595,6 +595,21 @@ def restore_backup():
     os.close(fd)
     try:
         file.save(tmp_path)
+        # Defence-in-depth: validate the content, not just the extension, before
+        # handing it to psql / overwriting the SQLite file.
+        with open(tmp_path, 'rb') as fh:
+            head = fh.read(512)
+        if suffix == '.db' and not head.startswith(b'SQLite format 3\x00'):
+            flash('That .db file is not a valid SQLite database.', 'error')
+            return redirect(url_for('settings.backup_page'))
+        if suffix == '.sql':
+            try:
+                text_head = head.decode('utf-8', 'ignore')
+            except Exception:
+                text_head = ''
+            if not any(m in text_head for m in ('--', 'SET ', 'CREATE', 'INSERT', 'COPY', 'PGDMP')):
+                flash('That .sql file does not look like a PostgreSQL dump.', 'error')
+                return redirect(url_for('settings.backup_page'))
         ok, message = restore_database(current_app, tmp_path, file.filename)
         flash(message, 'success' if ok else 'error')
     except Exception as e:
