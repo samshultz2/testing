@@ -233,6 +233,13 @@ def _teacher_today(active_term, tscope):
     return rows
 
 
+@main_bp.route('/react-spike')
+@login_required
+def react_spike():
+    """Throwaway page that mounts one React widget (integration spike)."""
+    return render_template('spike.html')
+
+
 @main_bp.route('/dashboard/customize', methods=['GET', 'POST'])
 @login_required
 def dashboard_customize():
