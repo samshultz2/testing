@@ -324,4 +324,12 @@
     {% endif %}
 })();
 </script>
+
+<!-- React island (preview): same widget as /react-spike, mounted on the real
+     dashboard to prove islands coexist with the server-rendered page. -->
+<div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-vial"></i> React island <span class="text-muted" style="font-weight:400">(preview)</span></h3></div>
+    <div class="card-body"><div id="react-spike" style="min-height:60px">Loading React…</div></div>
+</div>
+<script src="{{ url_for('static', filename='js/react/spike.js') }}" defer></script>
 {% endblock %}
