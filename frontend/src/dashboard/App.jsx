@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Chart, { chartTheme } from './charts';
 import { Kpi, Widget, Empty, ChartBox, naira, nairaShort } from './components';
+import Customize from './Customize';
 
 const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboard-list' };
 
@@ -10,6 +11,7 @@ export default function App({ data }) {
   const has = (k) => enabled.includes(k);
   const urls = d.urls || {};
   const t = chartTheme();
+  const [customizing, setCustomizing] = useState(false);
 
   const doughnut = (extra) => ({
     responsive: true, maintainAspectRatio: false,
@@ -36,9 +38,11 @@ export default function App({ data }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
           {d.active_term && <div className="term-chip"><i className="fas fa-calendar-day" /> {d.active_term.name}</div>}
-          <a href={urls.customize} className="btn btn-secondary btn-sm" title="Choose widgets"><i className="fas fa-sliders" /> Customize</a>
+          <button type="button" onClick={() => setCustomizing(true)} className="btn btn-secondary btn-sm" title="Choose widgets"><i className="fas fa-sliders" /> Customize</button>
         </div>
       </div>
+
+      {customizing && <Customize catalog={d.widget_catalog} onClose={() => setCustomizing(false)} />}
 
       {/* Teacher: My Classes */}
       {tc !== null && tc !== undefined && (

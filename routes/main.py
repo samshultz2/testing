@@ -179,6 +179,28 @@ def api_dashboard_data():
     return jsonify(dashboard_payload())
 
 
+@main_bp.route('/api/dashboard/widgets', methods=['POST'])
+@login_required
+def api_dashboard_widgets():
+    """Save the user's dashboard widget choices (the in-SPA Customize panel).
+    Stores choices in registry order; what's actually shown is still gated by
+    module permission via enabled_widgets()."""
+    from utils.access_control import get_current_user
+    data = request.get_json(silent=True) or {}
+    sent = data.get('widgets')
+    if not isinstance(sent, list):
+        return jsonify({'error': 'widgets must be a list'}), 400
+    sent = set(sent)
+    chosen = [k for k, _, _, _ in DASHBOARD_WIDGETS if k in sent]   # registry order
+    user = get_current_user()
+    if user:
+        user.set_dashboard_widgets(chosen)
+        db.session.commit()
+    else:
+        session['dashboard_prefs'] = chosen
+    return jsonify({'ok': True, 'enabled': sorted(enabled_widgets())})
+
+
 def _ser_student_brief(s):
     return {'id': s.id, 'student_id': s.student_id, 'full_name': s.full_name,
             'gender': s.gender, 'url': url_for('main.view_student', student_id=s.id)}
@@ -220,7 +242,9 @@ def dashboard_payload():
     from utils.branch_scope import scope_query
     active_session = get_active_session()
     active_term = get_active_term()
-    enabled = sorted(enabled_widgets())
+    enabled_set = enabled_widgets()
+    permitted_set = permitted_widgets()
+    enabled = sorted(enabled_set)
     tscope = _teacher_scope()   # teacher: limit student stats to their classes
 
     active_enrollments, total_classes, class_stats = _dash_class_stats(active_term, tscope)
@@ -249,7 +273,10 @@ def dashboard_payload():
         active_session={'id': active_session.id, 'name': active_session.name} if active_session else None,
         active_term={'id': active_term.id, 'name': active_term.name} if active_term else None,
         enabled=enabled,
-        permitted=sorted(permitted_widgets()),
+        permitted=sorted(permitted_set),
+        widget_catalog=[{'key': k, 'label': label, 'group': cat,
+                         'permitted': k in permitted_set, 'enabled': k in enabled_set}
+                        for k, label, cat, _ in DASHBOARD_WIDGETS],
         announcements=[{'title': a.title, 'body': a.body, 'category': a.category,
                         'is_pinned': bool(a.is_pinned)} for a in announcements],
         recent_students=[_ser_student_brief(s) for s in recent_students],
