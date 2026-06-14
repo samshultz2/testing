@@ -2,16 +2,21 @@ import React, { useState } from 'react';
 import Chart, { chartTheme } from './charts';
 import { Kpi, Widget, Empty, ChartBox, naira, nairaShort } from './components';
 import Customize from './Customize';
+import { apiGet } from '../lib/api';
 
 const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboard-list' };
 
-export default function App({ data }) {
+export default function App({ data: initialData }) {
+  const [data, setData] = useState(initialData);
   const d = data || {};
   const enabled = d.enabled || [];
   const has = (k) => enabled.includes(k);
   const urls = d.urls || {};
   const t = chartTheme();
   const [customizing, setCustomizing] = useState(false);
+
+  // Re-fetch widget data in place after customising — no full page reload.
+  const refresh = async () => { try { setData(await apiGet('/api/dashboard/data')); } catch (e) { /* keep current */ } };
 
   const doughnut = (extra) => ({
     responsive: true, maintainAspectRatio: false,
@@ -42,7 +47,7 @@ export default function App({ data }) {
         </div>
       </div>
 
-      {customizing && <Customize catalog={d.widget_catalog} onClose={() => setCustomizing(false)} />}
+      {customizing && <Customize catalog={d.widget_catalog} onSaved={refresh} onClose={() => setCustomizing(false)} />}
 
       {/* Teacher: My Classes */}
       {tc !== null && tc !== undefined && (

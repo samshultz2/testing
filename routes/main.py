@@ -239,7 +239,6 @@ def dashboard_payload():
     Cross-module widgets are computed only when enabled (preference ∩ module
     permission), so a user never receives data for a module they can't access.
     Student/attendance helpers are branch- or teacher-scoped internally."""
-    from utils.branch_scope import scope_query
     active_session = get_active_session()
     active_term = get_active_term()
     enabled_set = enabled_widgets()
@@ -248,9 +247,9 @@ def dashboard_payload():
     tscope = _teacher_scope()   # teacher: limit student stats to their classes
 
     active_enrollments, total_classes, class_stats = _dash_class_stats(active_term, tscope)
-    birthdays_today, birthdays_week = _dash_birthdays()
-    recent_students = scope_query(
-        Student.query.filter_by(is_active=True), Student).order_by(
+    birthdays_today, birthdays_week = _dash_birthdays(tscope)
+    recent_students = _student_scope(
+        Student.query.filter_by(is_active=True), tscope).order_by(
         Student.created_at.desc()).limit(5).all()
     recent_activity = _dash_recent_activity()
     announcements = _dash_announcements()
@@ -287,15 +286,15 @@ def dashboard_payload():
         birthdays_today=[{'full_name': s.full_name, 'age': s.age} for s in birthdays_today],
         birthdays_week=[{'full_name': s.full_name,
                          'date_label': s.date_of_birth.strftime('%d %b')} for s in birthdays_week],
-        age_distribution=_dash_age_distribution(),
-        religion_stats=_dash_religion_stats(),
+        age_distribution=_dash_age_distribution(tscope),
+        religion_stats=_dash_religion_stats(tscope),
         total_subjects=Subject.query.filter_by(is_active=True).count(),
         total_school_classes=SchoolClass.query.filter_by(is_active=True).count(),
-        stream_dist=_dash_stream_distribution(),
-        jamb_snapshot=_dash_jamb_snapshot() if 'exams' in enabled else None,
-        waec_snapshot=_dash_waec_snapshot() if 'exams' in enabled else None,
-        mock_snapshot=_dash_mock_snapshot() if 'exams' in enabled else None,
-        attendance_trend=_dash_attendance_trend(active_term) if 'attendance_trend' in enabled else [],
+        stream_dist=_dash_stream_distribution(tscope),
+        jamb_snapshot=_dash_jamb_snapshot(tscope) if 'exams' in enabled else None,
+        waec_snapshot=_dash_waec_snapshot(tscope) if 'exams' in enabled else None,
+        mock_snapshot=_dash_mock_snapshot(tscope) if 'exams' in enabled else None,
+        attendance_trend=_dash_attendance_trend(active_term, tscope) if 'attendance_trend' in enabled else [],
         recent_activity=[{'action': a.action, 'detail': a.detail, 'user': a.user,
                           'created_at': a.created_at.strftime('%d %b %H:%M') if a.created_at else ''}
                          for a in recent_activity],
@@ -546,11 +545,20 @@ def _dash_attendance_stats(active_term, tscope=None):
     return stats
 
 
-def _dash_birthdays():
-    """Students whose birthday is today, and within the next 6 days."""
+def _student_scope(query, tscope):
+    """Restrict a Student-based query to the teacher's own students; otherwise
+    apply the normal branch scope. Used by every student-centric dashboard
+    widget so a form teacher only sees their classes' students."""
     from utils.branch_scope import scope_query
+    if tscope is not None:
+        return query.filter(Student.id.in_(tscope[1] or [-1]))
+    return scope_query(query, Student)
+
+
+def _dash_birthdays(tscope=None):
+    """Students whose birthday is today, and within the next 6 days."""
     def sq(query):
-        return scope_query(query, Student)
+        return _student_scope(query, tscope)
     today = date.today()
     birthdays_today = sq(Student.query.filter(
         Student.is_active == True,
@@ -571,12 +579,11 @@ def _dash_birthdays():
     return birthdays_today, birthdays_week
 
 
-def _dash_age_distribution():
+def _dash_age_distribution(tscope=None):
     """Active students bucketed by age band."""
-    from utils.branch_scope import scope_query
     dist = {'0-10': 0, '11-13': 0, '14-16': 0, '17-19': 0, '20+': 0}
-    students = scope_query(Student.query.filter(
-        Student.is_active == True, Student.date_of_birth != None), Student).all()
+    students = _student_scope(Student.query.filter(
+        Student.is_active == True, Student.date_of_birth != None), tscope).all()
     for student in students:
         age = student.age
         if age <= 10:
@@ -592,35 +599,36 @@ def _dash_age_distribution():
     return dist
 
 
-def _dash_religion_stats():
+def _dash_religion_stats(tscope=None):
     """Active-student counts grouped by religion."""
-    from utils.branch_scope import scope_query
-    rows = scope_query(db.session.query(
+    rows = _student_scope(db.session.query(
         Student.religion, func.count(Student.id)).filter(
         Student.is_active == True, Student.religion != None),
-        Student).group_by(Student.religion).all()
+        tscope).group_by(Student.religion).all()
     return {r[0]: r[1] for r in rows if r[0]}
 
 
-def _dash_stream_distribution():
+def _dash_stream_distribution(tscope=None):
     """Active-student counts grouped by stream (None -> 'Unset')."""
-    from utils.branch_scope import scope_query
-    rows = scope_query(db.session.query(
+    rows = _student_scope(db.session.query(
         Student.stream, func.count(Student.id)).filter(
-        Student.is_active == True), Student).group_by(Student.stream).all()
+        Student.is_active == True), tscope).group_by(Student.stream).all()
     return {(s or 'Unset'): c for s, c in rows}
 
 
-def _dash_jamb_snapshot():
-    """Latest-year JAMB summary (branch-scoped), or None."""
+def _dash_jamb_snapshot(tscope=None):
+    """Latest-year JAMB summary (branch- or teacher-scoped), or None."""
     from utils.branch_scope import scope_by_student
     from models import JAMBResult
     jy = db.session.query(JAMBResult.exam_year).order_by(JAMBResult.exam_year.desc()).first()
     if not jy:
         return None
-    rows = scope_by_student(
-        JAMBResult.query.filter_by(exam_year=jy[0]).options(joinedload(JAMBResult.student)),
-        JAMBResult).order_by(JAMBResult.total_score.desc()).all()
+    q = JAMBResult.query.filter_by(exam_year=jy[0]).options(joinedload(JAMBResult.student))
+    if tscope is not None:
+        q = q.filter(JAMBResult.student_id.in_(tscope[1] or [-1]))
+    else:
+        q = scope_by_student(q, JAMBResult)
+    rows = q.order_by(JAMBResult.total_score.desc()).all()
     scores = [r.total_score for r in rows]
     if not scores:
         return None
@@ -642,14 +650,19 @@ def _dash_jamb_snapshot():
     }
 
 
-def _dash_waec_snapshot():
-    """Latest-year WAEC summary (branch-scoped), or None."""
+def _dash_waec_snapshot(tscope=None):
+    """Latest-year WAEC summary (branch- or teacher-scoped), or None."""
     from utils.branch_scope import scope_by_student
     from models import WAECResult
     wy = db.session.query(WAECResult.exam_year).order_by(WAECResult.exam_year.desc()).first()
     if not wy:
         return None
-    rows = scope_by_student(WAECResult.query.filter_by(exam_year=wy[0]), WAECResult).all()
+    q = WAECResult.query.filter_by(exam_year=wy[0])
+    if tscope is not None:
+        q = q.filter(WAECResult.student_id.in_(tscope[1] or [-1]))
+    else:
+        q = scope_by_student(q, WAECResult)
+    rows = q.all()
     if not rows:
         return None
     credit = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
@@ -661,18 +674,21 @@ def _dash_waec_snapshot():
     }
 
 
-def _dash_mock_snapshot():
-    """Latest Mock JAMB exam average, scoped to the viewing branch, or None."""
+def _dash_mock_snapshot(tscope=None):
+    """Latest Mock JAMB exam average (branch- or teacher-scoped), or None."""
     from utils.branch_scope import viewing_branch_id
     from models.mock_jamb import MockJAMBExam, MockJAMBResult
     last_mock = MockJAMBExam.query.order_by(MockJAMBExam.exam_date.desc()).first()
     if not last_mock:
         return None
     res_q = last_mock.results
-    bid = viewing_branch_id()
-    if bid is not None:
-        res_q = res_q.join(Student, MockJAMBResult.student_id == Student.id) \
-                     .filter(Student.branch_id == bid)
+    if tscope is not None:
+        res_q = res_q.filter(MockJAMBResult.student_id.in_(tscope[1] or [-1]))
+    else:
+        bid = viewing_branch_id()
+        if bid is not None:
+            res_q = res_q.join(Student, MockJAMBResult.student_id == Student.id) \
+                         .filter(Student.branch_id == bid)
     ms = [r.total_score for r in res_q.all()]
     if not ms:
         return None
@@ -680,18 +696,23 @@ def _dash_mock_snapshot():
             'mean': round(sum(ms) / len(ms), 1), 'max': max(ms)}
 
 
-def _dash_attendance_trend(active_term):
-    """Average attendance % for the last 8 weeks of the active term (branch-scoped)."""
+def _dash_attendance_trend(active_term, tscope=None):
+    """Average attendance % for the last 8 weeks of the active term — branch-
+    scoped, or restricted to the teacher's own class assignments."""
     from utils.branch_scope import viewing_branch_id
     if not active_term:
         return []
-    bid = viewing_branch_id()
     branch_enr = None
-    if bid is not None:
+    if tscope is not None:
         branch_enr = (db.session.query(StudentEnrollment.id)
-                      .join(ClassArmAssignment,
-                            StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                      .filter(ClassArmAssignment.branch_id == bid))
+                      .filter(StudentEnrollment.class_arm_assignment_id.in_(tscope[0] or [-1])))
+    else:
+        bid = viewing_branch_id()
+        if bid is not None:
+            branch_enr = (db.session.query(StudentEnrollment.id)
+                          .join(ClassArmAssignment,
+                                StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                          .filter(ClassArmAssignment.branch_id == bid))
     weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.start_date).all()[-8:]
     trend = []
     for w in weeks:

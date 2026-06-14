@@ -4,7 +4,7 @@ import { apiPost } from '../lib/api';
 // In-SPA dashboard customisation: toggle which widgets show. Widgets the user
 // has no module access to are listed but disabled (parity with the classic
 // page, minus the dead toggles). Saving reloads so the page re-hydrates.
-export default function Customize({ catalog, onClose }) {
+export default function Customize({ catalog, onSaved, onClose }) {
   const initial = {};
   (catalog || []).forEach((w) => { initial[w.key] = !!w.enabled; });
   const [checked, setChecked] = useState(initial);
@@ -26,7 +26,8 @@ export default function Customize({ catalog, onClose }) {
     const widgets = (catalog || []).filter((w) => w.permitted && checked[w.key]).map((w) => w.key);
     try {
       await apiPost('/api/dashboard/widgets', { widgets });
-      window.location.reload();
+      if (onSaved) await onSaved();   // refresh data in place — no full reload
+      onClose();
     } catch (e) {
       setErr(e.message || 'Could not save'); setBusy(false);
     }

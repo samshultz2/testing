@@ -32,6 +32,67 @@ def test_widget_gated_by_permission(app):
         assert 'finance' not in enabled_widgets()
 
 
+def test_teacher_widgets_scoped_to_own_students(app):
+    """Birthdays/age/religion/stream/recent-students on a teacher's dashboard
+    cover only their own students — not the whole branch (e.g. an SSS2 form
+    teacher must not see SSS3 students' birthdays)."""
+    from datetime import date
+    with app.app_context():
+        bid = Branch.get_default().id
+        sess = AcademicSession(name='TWS-Session'); db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name='TWS-Term', is_active=True)
+        db.session.add(term); db.session.flush()
+        classes = SchoolClass.query.order_by(SchoolClass.level).all()
+        arm = ClassArm.query.first()
+        mine = ClassArmAssignment(class_id=classes[0].id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+        other = ClassArmAssignment(class_id=classes[1].id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+        db.session.add_all([mine, other]); db.session.flush()
+        today = date.today()
+        s_mine = Student(student_id='TWS_M', first_name='Mine', surname='Kid', gender='Male',
+                         is_active=True, branch_id=bid, religion='Christianity', stream='Science',
+                         date_of_birth=date(2008, today.month, today.day))
+        s_other = Student(student_id='TWS_O', first_name='Other', surname='Kid', gender='Female',
+                          is_active=True, branch_id=bid, religion='Islam', stream='Arts',
+                          date_of_birth=date(2007, today.month, today.day))
+        db.session.add_all([s_mine, s_other]); db.session.flush()
+        db.session.add_all([
+            StudentEnrollment(student_id=s_mine.id, class_arm_assignment_id=mine.id, is_active=True),
+            StudentEnrollment(student_id=s_other.id, class_arm_assignment_id=other.id, is_active=True),
+        ])
+        u = User(username='tws_teacher', role='teacher', scope='branch', branch_id=bid)
+        u.set_password('secret123'); db.session.add(u); db.session.flush()
+        t = Teacher(user_id=u.id, employee_id='TWS001', branch_id=bid)
+        db.session.add(t); db.session.flush()
+        db.session.add(TeacherClassAssignment(teacher_id=t.id,
+                       class_arm_assignment_id=mine.id, is_form_teacher=True))
+        db.session.commit()
+        uid = u.id
+    try:
+        from routes.main import dashboard_payload
+        from utils.branch_scope import set_session_scope
+        from utils.org_scope import set_session_org
+        with app.test_request_context('/'):
+            u = db.session.get(User, uid)
+            session['logged_in'] = True
+            session['user_id'] = uid
+            session['role'] = 'teacher'
+            set_session_scope(u)
+            set_session_org(u)
+            p = dashboard_payload()
+            assert p['total_students'] == 1
+            assert p['religion_stats'] == {'Christianity': 1}      # not Islam (other class)
+            assert p['stream_dist'].get('Science') == 1 and 'Arts' not in p['stream_dist']
+            bday_names = {b['full_name'] for b in p['birthdays_today']}
+            assert bday_names == {'Kid Mine'}                       # only their student, not the other class
+            assert all('Other' not in s['full_name'] for s in p['recent_students'])
+    finally:
+        with app.app_context():
+            t = Term.query.filter_by(name='TWS-Term').first()
+            if t:
+                t.is_active = False
+                db.session.commit()
+
+
 def test_teacher_counts_only_own_class(app):
     """A teacher's total_students counts only students in their classes."""
     with app.app_context():
