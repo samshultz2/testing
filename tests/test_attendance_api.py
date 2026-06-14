@@ -249,3 +249,20 @@ def test_report_cross_branch_is_forbidden(app):
     assert c.get(f'/attendance/api/daily-summary?assignment_id={ids["caa"]}&date={ids["date"]}').status_code == 403
     assert c.get(f'/attendance/api/report/weekly?assignment_id={ids["caa"]}&week_id={ids["week"]}').status_code == 403
     assert c.get(f'/attendance/api/report/termly?assignment_id={ids["caa"]}').status_code == 403
+    # the Excel export links the React reports point at are guarded the same way
+    assert c.get(f'/attendance/weekly/export?assignment_id={ids["caa"]}&week_id={ids["week"]}').status_code == 403
+    with app.app_context():
+        term_id = ClassArmAssignment.query.get(ids['caa']).term_id
+    assert c.get(f'/attendance/termly/export?assignment_id={ids["caa"]}&term_id={term_id}').status_code == 403
+
+
+def test_weekly_termly_export_download(app):
+    ids = _setup(app)
+    c, _ = _admin(app)
+    with app.app_context():
+        term_id = ClassArmAssignment.query.get(ids['caa']).term_id
+    xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    w = c.get(f'/attendance/weekly/export?assignment_id={ids["caa"]}&week_id={ids["week"]}')
+    assert w.status_code == 200 and xlsx in w.content_type
+    t = c.get(f'/attendance/termly/export?assignment_id={ids["caa"]}&term_id={term_id}')
+    assert t.status_code == 200 and xlsx in t.content_type

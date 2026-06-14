@@ -63,7 +63,15 @@ export default function TermlyReport() {
         : state.error ? <ErrorState detail={state.error.message} />
         : d && (
           <>
-            <div style={{ marginBottom: 4 }}><strong>{d.class_name}</strong></div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
+              <strong>{d.class_name}</strong>
+              {term && (
+                <a className="btn btn-success btn-sm" style={{ marginLeft: 'auto' }}
+                   href={`/attendance/termly/export?assignment_id=${assignmentId}&term_id=${term.id}`}>
+                  <i className="fas fa-download" aria-hidden="true" /> Export to Excel
+                </a>
+              )}
+            </div>
 
             <StatCards items={[
               { value: ct.termly_percentage + '%', label: 'Attendance rate', primary: true },

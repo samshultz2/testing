@@ -50,6 +50,10 @@ export default function WeeklyReport() {
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
               <strong>{d.class_name}</strong>
               <span style={{ color: '#6b7280' }}>Week {d.week_info.week_number} · {d.week_info.start_date} → {d.week_info.end_date}</span>
+              <a className="btn btn-success btn-sm" style={{ marginLeft: 'auto' }}
+                 href={`/attendance/weekly/export?assignment_id=${assignmentId}&week_id=${weekId}`}>
+                <i className="fas fa-download" aria-hidden="true" /> Export to Excel
+              </a>
             </div>
 
             <StatCards items={[

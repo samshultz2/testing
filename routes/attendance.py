@@ -1,7 +1,7 @@
 """
 Attendance management routes
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
 from utils.helpers import get_active_term
 from utils.web_exports import xlsx_response
 from datetime import datetime, date, timedelta
@@ -547,10 +547,13 @@ def export_weekly():
     if not assignment_id or not week_id:
         flash('Please select a class and week.', 'error')
         return redirect(url_for('attendance.weekly_summary'))
-    
+
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
+    require_branch_access(assignment.branch_id)
+    if not can_access_class(assignment_id):
+        abort(403)
     week = db.get_or_404(Week, week_id)
-    
+
     summary = get_weekly_attendance_summary(assignment_id, week_id)
     
     excel_file = export_attendance_to_excel(
@@ -624,10 +627,13 @@ def export_termly():
     if not assignment_id or not term_id:
         flash('Please select a class and term.', 'error')
         return redirect(url_for('attendance.termly_summary'))
-    
+
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
+    require_branch_access(assignment.branch_id)
+    if not can_access_class(assignment_id):
+        abort(403)
     term = db.get_or_404(Term, term_id)
-    
+
     summary = get_termly_attendance_summary(assignment_id, term_id)
     
     if not summary:
