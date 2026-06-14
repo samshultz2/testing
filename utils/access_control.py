@@ -187,7 +187,21 @@ def effective_perms():
 
     Admins => 'edit' on everything (view-only admins => 'view'); else the user's
     stored map; else the role default.
+
+    Memoised per request: the nav and template gates call this dozens of times
+    per render and the current user's permissions are constant within a request.
+    Callers only read the result. Outside a request it always recomputes.
     """
+    from flask import g, has_request_context
+    if has_request_context() and '_effective_perms' in g.__dict__:
+        return g._effective_perms
+    result = _effective_perms_uncached()
+    if has_request_context():
+        g._effective_perms = result
+    return result
+
+
+def _effective_perms_uncached():
     if is_admin():
         lvl = 'view' if is_read_only() else 'edit'
         return {k: lvl for k in MODULES}

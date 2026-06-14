@@ -5,6 +5,7 @@ Includes predictive analytics for Mock JAMB -> Real JAMB/WAEC correlation
 """
 from collections import defaultdict
 import math
+from sqlalchemy.orm import joinedload
 from models import db, Student, WAECResult, JAMBResult
 from models.mock_jamb import MockJAMBResult, MockJAMBExam
 
@@ -77,8 +78,9 @@ class JAMBAnalytics(ExamAnalytics):
     @staticmethod
     def get_year_statistics(year):
         """Get comprehensive statistics for a JAMB year"""
-        results = JAMBResult.query.filter_by(exam_year=year).all()
-        
+        results = JAMBResult.query.filter_by(exam_year=year).options(
+            joinedload(JAMBResult.student)).all()
+
         if not results:
             return None
         

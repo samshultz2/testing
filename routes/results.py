@@ -16,6 +16,7 @@ from utils.helpers import (
 )
 from datetime import date as _date
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from utils.analytics_service import AcademicAnalytics
 
 results_bp = Blueprint('results', __name__, url_prefix='/results')
@@ -555,7 +556,8 @@ def jamb_list():
         else:
             subject_performance.sort(key=lambda x: x['avg_score'], reverse=True)
         
-        query = JAMBResult.query.filter_by(exam_year=exam_year).join(Student)
+        query = (JAMBResult.query.filter_by(exam_year=exam_year)
+                 .options(joinedload(JAMBResult.student)).join(Student))
 
         if search:
             term = f"%{search}%"
@@ -1647,9 +1649,9 @@ def api_top_performers(year):
     """Get top performing students"""
     waec_stats = AcademicAnalytics.get_waec_school_statistics(year)
     
-    jamb_results = JAMBResult.query.filter_by(exam_year=year).order_by(
-        JAMBResult.total_score.desc()
-    ).limit(10).all()
+    jamb_results = JAMBResult.query.filter_by(exam_year=year).options(
+        joinedload(JAMBResult.student)
+    ).order_by(JAMBResult.total_score.desc()).limit(10).all()
     
     jamb_top = [{
         'student_id': r.student_id,
@@ -1765,10 +1767,10 @@ def export_jamb():
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.jamb_list'))
     
-    results = JAMBResult.query.filter_by(exam_year=year).join(Student).order_by(
-        JAMBResult.total_score.desc()
-    ).all()
-    
+    results = (JAMBResult.query.filter_by(exam_year=year)
+               .options(joinedload(JAMBResult.student)).join(Student)
+               .order_by(JAMBResult.total_score.desc()).all())
+
     wb = Workbook()
     ws = wb.active
     ws.title = f"JAMB {year}"
