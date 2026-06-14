@@ -164,31 +164,102 @@ def enabled_widgets():
 @main_bp.route('/')
 @login_required
 def dashboard():
-    """Main dashboard page: assembles enabled widget data from focused helpers."""
+    """Main dashboard. The React app (dashboard-app.js) renders the widgets;
+    the data is hydrated inline (no extra round-trip) and also available at
+    /api/dashboard/data for refresh."""
+    payload = dashboard_payload()
+    return render_template('dashboard.html', dash_json=payload, **payload)
+
+
+@main_bp.route('/api/dashboard/data')
+@login_required
+def api_dashboard_data():
+    """Dashboard widget data as JSON — permission/branch/teacher scoped exactly
+    like the page (only enabled+permitted widgets are computed and returned)."""
+    return jsonify(dashboard_payload())
+
+
+def _ser_student_brief(s):
+    return {'id': s.id, 'student_id': s.student_id, 'full_name': s.full_name,
+            'gender': s.gender, 'url': url_for('main.view_student', student_id=s.id)}
+
+
+def _dashboard_urls():
+    """Server-resolved link targets so the React dashboard never hardcodes paths."""
+    return {
+        'customize': url_for('main.dashboard_customize'),
+        'week_grid': url_for('attendance.week_grid'),
+        'bulk_entry': url_for('subjects.bulk_entry'),
+        'students_list': url_for('main.students_list'),
+        'audit_log': url_for('main.audit_log'),
+        'add_student': url_for('main.add_student'),
+        'scores_entry': url_for('subjects.scores_entry'),
+        'scan_waec': url_for('results.scan_waec'),
+        'analytics_hub': url_for('results.analytics_hub'),
+        'readiness': url_for('results.readiness'),
+        'jamb_list': url_for('results.jamb_list'),
+        'waec_list': url_for('results.waec_list'),
+        'mock_index': url_for('mock_jamb.index'),
+        'classes_list': url_for('academics.classes_list'),
+        'weekly_summary': url_for('attendance.weekly_summary'),
+        'mark_attendance': url_for('attendance.attendance_app', tab='mark'),
+    }
+
+
+def _floats(d):
+    """Coerce a dict of numeric values to JSON-safe floats (e.g. Decimals)."""
+    return None if d is None else {k: float(v) for k, v in d.items()}
+
+
+def dashboard_payload():
+    """Assemble all dashboard widget data as a JSON-serialisable dict.
+
+    Cross-module widgets are computed only when enabled (preference ∩ module
+    permission), so a user never receives data for a module they can't access.
+    Student/attendance helpers are branch- or teacher-scoped internally."""
     from utils.branch_scope import scope_query
     active_session = get_active_session()
     active_term = get_active_term()
-    enabled = enabled_widgets()
+    enabled = sorted(enabled_widgets())
     tscope = _teacher_scope()   # teacher: limit student stats to their classes
 
     active_enrollments, total_classes, class_stats = _dash_class_stats(active_term, tscope)
     birthdays_today, birthdays_week = _dash_birthdays()
-    teacher_classes = _teacher_today(active_term, tscope)
+    recent_students = scope_query(
+        Student.query.filter_by(is_active=True), Student).order_by(
+        Student.created_at.desc()).limit(5).all()
+    recent_activity = _dash_recent_activity()
+    announcements = _dash_announcements()
+    sales = _dash_sales(active_term) if 'sales' in enabled else None
 
-    ctx = dict(
-        announcements=_dash_announcements(),
-        active_session=active_session,
-        active_term=active_term,
+    from utils.access_control import can_access_module
+    tcs = _teacher_today(active_term, tscope)
+    teacher_classes = None if tcs is None else [
+        {**c,
+         'mark_url': url_for('attendance.attendance_app', term_id=active_term.id,
+                             assignment_id=c['id'], tab='mark'),
+         'week_url': url_for('attendance.attendance_app', term_id=active_term.id,
+                             assignment_id=c['id'], tab='week')}
+        for c in tcs]
+
+    user = session.get('user')
+    return dict(
+        today=date.today().isoformat(),
+        user_name=(user.split()[0] if user else ''),
+        active_session={'id': active_session.id, 'name': active_session.name} if active_session else None,
+        active_term={'id': active_term.id, 'name': active_term.name} if active_term else None,
         enabled=enabled,
-        recent_students=scope_query(
-            Student.query.filter_by(is_active=True), Student).order_by(
-            Student.created_at.desc()).limit(5).all(),
+        permitted=sorted(permitted_widgets()),
+        announcements=[{'title': a.title, 'body': a.body, 'category': a.category,
+                        'is_pinned': bool(a.is_pinned)} for a in announcements],
+        recent_students=[_ser_student_brief(s) for s in recent_students],
         active_enrollments=active_enrollments,
         total_classes=total_classes,
         class_stats=class_stats,
         attendance_stats=_dash_attendance_stats(active_term, tscope),
-        birthdays_today=birthdays_today,
-        birthdays_week=birthdays_week,
+        birthdays_today=[{'full_name': s.full_name, 'age': s.age} for s in birthdays_today],
+        birthdays_week=[{'full_name': s.full_name,
+                         'date_label': s.date_of_birth.strftime('%d %b')} for s in birthdays_week],
         age_distribution=_dash_age_distribution(),
         religion_stats=_dash_religion_stats(),
         total_subjects=Subject.query.filter_by(is_active=True).count(),
@@ -197,18 +268,21 @@ def dashboard():
         jamb_snapshot=_dash_jamb_snapshot() if 'exams' in enabled else None,
         waec_snapshot=_dash_waec_snapshot() if 'exams' in enabled else None,
         mock_snapshot=_dash_mock_snapshot() if 'exams' in enabled else None,
-        attendance_trend=_dash_attendance_trend(active_term),
-        recent_activity=_dash_recent_activity(),
+        attendance_trend=_dash_attendance_trend(active_term) if 'attendance_trend' in enabled else [],
+        recent_activity=[{'action': a.action, 'detail': a.detail, 'user': a.user,
+                          'created_at': a.created_at.strftime('%d %b %H:%M') if a.created_at else ''}
+                         for a in recent_activity],
         # Cross-module widgets (computed only when enabled).
-        finance_stat=_dash_finance(active_term) if 'finance' in enabled else None,
-        sales_stat=_dash_sales(active_term) if 'sales' in enabled else None,
+        finance_stat=_floats(_dash_finance(active_term)) if 'finance' in enabled else None,
+        sales_stat=({**sales, 'today': float(sales['today'])} if sales else None),
         hr_stat=_dash_hr() if 'hr' in enabled else None,
         cbt_stat=_dash_cbt() if 'cbt' in enabled else None,
         library_stat=_dash_library() if 'library' in enabled else None,
         teacher_classes=teacher_classes,
+        can_results=can_access_module('results'),
+        urls=_dashboard_urls(),
         **_dash_student_counts(tscope)
     )
-    return render_template('dashboard.html', **ctx)
 
 
 def _teacher_today(active_term, tscope):
