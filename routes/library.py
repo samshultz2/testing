@@ -5,6 +5,7 @@ and a dashboard.
 from datetime import datetime, date, timedelta
 import csv
 import io
+from utils.helpers import safe_redirect
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response)
@@ -179,7 +180,7 @@ def return_loan(loan_id):
     loan = db.get_or_404(BookLoan, loan_id)
     if loan.status == 'Returned':
         flash('Already returned.', 'info')
-        return redirect(request.referrer or url_for('library.loans'))
+        return safe_redirect(url_for('library.loans'))
     s = _settings()
     loan.returned_date = date.today()
     loan.status = 'Returned'
@@ -192,7 +193,7 @@ def return_loan(loan_id):
     if loan.fine:
         msg += f' Overdue fine: ₦{loan.fine:,.2f}.'
     flash(msg, 'success')
-    return redirect(request.referrer or url_for('library.loans'))
+    return safe_redirect(url_for('library.loans'))
 
 
 @library_bp.route('/loans')

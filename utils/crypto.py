@@ -43,12 +43,35 @@ def is_enabled():
     return _key() is not None
 
 
+def _strict():
+    """Opt-in: refuse to store a 'would-be-encrypted' field in plaintext.
+
+    Off by default so deployments that don't use field encryption keep working;
+    set REQUIRE_FIELD_ENCRYPTION=1 (or Config.REQUIRE_FIELD_ENCRYPTION) to fail
+    closed when the key is missing.
+    """
+    try:
+        from config import Config
+        if getattr(Config, 'REQUIRE_FIELD_ENCRYPTION', False):
+            return True
+    except Exception:
+        pass
+    return os.environ.get('REQUIRE_FIELD_ENCRYPTION') in ('1', 'true', 'True')
+
+
 def encrypt(plaintext):
     """Encrypt a string. Returns the token, or the input unchanged if disabled."""
     if plaintext is None:
         return None
     key = _key()
     if key is None:
+        # The value would be stored in PLAINTEXT. Make that visible (it was
+        # silent before); fail closed when strict mode is enabled.
+        if _strict():
+            raise RuntimeError('FIELD_ENCRYPTION_KEY is required '
+                               '(REQUIRE_FIELD_ENCRYPTION) but is not configured.')
+        _log().warning('Encrypting a field but FIELD_ENCRYPTION_KEY is not set — '
+                       'value stored in PLAINTEXT.')
         return plaintext
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     nonce = os.urandom(12)

@@ -398,3 +398,17 @@ def get_active_session():
     if has_request_context():
         g._active_session = val
     return val
+
+
+def safe_redirect(fallback):
+    """Redirect to the page the user came from, but only if it is same-origin.
+
+    ``redirect(request.referrer or fallback)`` is an open-redirect surface — the
+    Referer is attacker-influenceable. This restricts it to our own host and
+    falls back otherwise. Behaviour is unchanged for normal same-site use.
+    """
+    from flask import request, redirect
+    ref = request.referrer
+    if ref and ref.startswith(request.host_url):
+        return redirect(ref)
+    return redirect(fallback)

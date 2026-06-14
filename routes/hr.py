@@ -3,7 +3,7 @@ Staff / HR routes — personnel directory, departments, leave management and
 monthly payroll (with optional posting of the salary run to Finance expenses).
 """
 from datetime import datetime, date
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, safe_redirect
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, Response)
@@ -300,7 +300,7 @@ def add_leave():
         reason=(request.form.get('reason') or '').strip() or None))
     db.session.commit()
     flash('Leave request recorded.', 'success')
-    return redirect(request.referrer or url_for('hr.leave_list'))
+    return safe_redirect(url_for('hr.leave_list'))
 
 
 @hr_bp.route('/leave/<int:leave_id>/status', methods=['POST'])
@@ -315,7 +315,7 @@ def leave_status(leave_id):
             lv.staff.status = 'On Leave'
         db.session.commit()
         flash(f'Leave {new_status.lower()}.', 'success')
-    return redirect(request.referrer or url_for('hr.leave_list'))
+    return safe_redirect(url_for('hr.leave_list'))
 
 
 @hr_bp.route('/leave/<int:leave_id>/delete', methods=['POST'])
@@ -325,7 +325,7 @@ def delete_leave(leave_id):
     db.session.delete(lv)
     db.session.commit()
     flash('Leave record removed.', 'success')
-    return redirect(request.referrer or url_for('hr.leave_list'))
+    return safe_redirect(url_for('hr.leave_list'))
 
 
 # ============================================================================

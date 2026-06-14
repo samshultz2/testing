@@ -9,7 +9,7 @@ Two surfaces:
     exam is gated by its own access password; answers are auto-graded.
 """
 from datetime import datetime, timedelta
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, safe_redirect
 from functools import wraps
 import io
 import os
@@ -399,7 +399,7 @@ def bank_delete(bank_id):
     bq.is_active = False
     db.session.commit()
     flash('Question removed from the bank.', 'success')
-    return redirect(request.referrer or url_for('cbt.bank'))
+    return safe_redirect(url_for('cbt.bank'))
 
 
 @cbt_bp.route('/bank/import', methods=['GET', 'POST'])

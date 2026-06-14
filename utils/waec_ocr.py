@@ -11,6 +11,11 @@ import difflib
 
 from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES
 
+# Resource limits for OCR on untrusted uploads (DoS hardening).
+_MAX_IMAGE_PIXELS = 50_000_000       # ~50 MP — reject decompression bombs
+_OCR_TIMEOUT_SECONDS = 25            # per Tesseract pass
+_MAX_PDF_OCR_PAGES = 25              # cap pages rendered+OCR'd from a scanned PDF
+
 # Valid WAEC grade tokens.
 _GRADE_SET = set(WAEC_GRADES)
 # A clean, unambiguous grade (used first so correct text never gets mangled).
@@ -94,7 +99,12 @@ def extract_text(image_bytes):
     import pytesseract
     from PIL import Image, ImageOps
 
+    # Decompression-bomb / resource-exhaustion guard: cap how big an image we
+    # will decode and OCR (a small file can expand to billions of pixels).
+    Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
     img = Image.open(io.BytesIO(image_bytes))
+    if img.width * img.height > _MAX_IMAGE_PIXELS:
+        raise ValueError('Image is too large to process.')
     # Preprocess: orient via EXIF + OSD, grayscale, autocontrast and upscale a
     # little — this noticeably improves OCR on photographed slips.
     img = ImageOps.exif_transpose(img)
@@ -104,7 +114,8 @@ def extract_text(image_bytes):
     if max(img.size) < 1600:
         scale = 1600 / max(img.size)
         img = img.resize((int(img.width * scale), int(img.height * scale)))
-    return pytesseract.image_to_string(img)
+    # Bound a single OCR pass so a crafted image can't hang a worker.
+    return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS)
 
 
 def pdf_available():
@@ -132,8 +143,10 @@ def extract_text_from_pdf(pdf_bytes):
         # Sparse/empty text layer -> the PDF is almost certainly scanned images.
         if len(combined) < 40 and tesseract_available():
             ocr_parts = []
-            for page in doc:
-                pix = page.get_pixmap(dpi=200)
+            # Cap the number of rendered+OCR'd pages so a huge PDF can't pin a
+            # worker for minutes.
+            for i in range(min(doc.page_count, _MAX_PDF_OCR_PAGES)):
+                pix = doc[i].get_pixmap(dpi=200)
                 ocr_parts.append(extract_text(pix.tobytes('png')))
             combined = '\n'.join(ocr_parts).strip()
         return combined

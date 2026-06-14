@@ -8,7 +8,7 @@ from models import (
     Term, AcademicSession, SchoolClass, StudentScore, ClassSubject, Subject,
     SchoolSettings
 )
-from utils.helpers import login_required, get_sss3_enrolled_students
+from utils.helpers import login_required, get_sss3_enrolled_students, safe_redirect
 from utils.access_control import admin_required
 from utils.db_tx import safe_transaction
 from utils.audit import log_action
@@ -60,7 +60,7 @@ def mark_graduate(student_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
-    return redirect(request.referrer or url_for('main.view_student', student_id=student.id))
+    return safe_redirect(url_for('main.view_student', student_id=student.id))
 
 
 @promotion_bp.route('/ungraduate/<int:student_id>', methods=['POST'])
@@ -78,7 +78,7 @@ def unmark_graduate(student_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
-    return redirect(request.referrer or url_for('main.view_student', student_id=student.id))
+    return safe_redirect(url_for('main.view_student', student_id=student.id))
 
 
 @promotion_bp.route('/graduate-sss3/preview')

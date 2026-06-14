@@ -3,7 +3,7 @@ Main routes for dashboard and general pages
 """
 import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
-from utils.helpers import get_active_term, get_active_session
+from utils.helpers import get_active_term, get_active_session, safe_redirect
 from utils.web_exports import xlsx_response, pdf_response
 from datetime import date, timedelta
 from models import (
@@ -46,7 +46,7 @@ def set_view_branch():
                 session[VIEW_KEY] = int(raw)
             except (TypeError, ValueError):
                 session.pop(VIEW_KEY, None)
-    return redirect(request.referrer or url_for('main.dashboard'))
+    return safe_redirect(url_for('main.dashboard'))
 
 
 @main_bp.route('/branch-overview')
@@ -1120,7 +1120,7 @@ def apply_stream_waec():
             updated += 1
     db.session.commit()
     flash(f'WAEC subjects filled from stream for {updated} student(s).', 'success')
-    return redirect(request.referrer or url_for('main.students_list'))
+    return safe_redirect(url_for('main.students_list'))
 
 
 def _int_ids(raw_ids):

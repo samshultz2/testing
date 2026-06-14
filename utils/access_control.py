@@ -385,7 +385,8 @@ def enforce_read_only():
     if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
         abort(403)
     flash('Your account is view-only — you cannot make changes.', 'error')
-    return redirect(request.referrer or url_for('main.dashboard'))
+    from utils.helpers import safe_redirect
+    return safe_redirect(url_for('main.dashboard'))
 
 
 def _deny_access(view_only=False):
@@ -396,7 +397,8 @@ def _deny_access(view_only=False):
         flash('You have view-only access to that section.', 'error')
     else:
         flash('You do not have access to that section.', 'error')
-    return redirect(request.referrer or url_for('main.dashboard'))
+    from utils.helpers import safe_redirect
+    return safe_redirect(url_for('main.dashboard'))
 
 
 def enforce_write_level():
