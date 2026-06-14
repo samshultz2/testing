@@ -3,6 +3,7 @@ Enhanced Authentication routes for PosyHub
 Supports both legacy password login and user-based login
 """
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+import hmac
 from datetime import datetime, timedelta
 from config import Config
 from models import db, User
@@ -77,11 +78,13 @@ def login():
             
             elif user:
                 _record_login_failure()
-                flash('Invalid password.', 'error')
+                # Generic message — don't reveal that the username exists.
+                flash('Invalid credentials. Please try again.', 'error')
                 return redirect(url_for('auth.login'))
 
         # Legacy admin password login (only when explicitly enabled)
-        if Config.ENABLE_LEGACY_LOGIN and password and password == Config.ADMIN_PASSWORD:
+        if (Config.ENABLE_LEGACY_LOGIN and password
+                and hmac.compare_digest(password, Config.ADMIN_PASSWORD)):
             _clear_login_failures()
             session['logged_in'] = True
             session['user'] = 'Admin'
