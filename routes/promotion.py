@@ -10,6 +10,7 @@ from models import (
 )
 from utils.helpers import login_required, get_sss3_enrolled_students
 from utils.access_control import admin_required
+from utils.db_tx import safe_transaction
 from utils.audit import log_action
 from datetime import date
 import json
@@ -244,15 +245,10 @@ def add_rule():
 def delete_rule(rule_id):
     """Delete promotion rule"""
     rule = db.get_or_404(PromotionRule, rule_id)
-    
-    try:
+
+    with safe_transaction('Rule deleted!', 'Error: {error}'):
         rule.is_active = False
-        db.session.commit()
-        flash('Rule deleted!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
+
     return redirect(url_for('promotion.rules_list'))
 
 
