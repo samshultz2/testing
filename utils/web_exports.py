@@ -23,12 +23,19 @@ def _disposition(filename, inline):
     return {'Content-Disposition': f'{kind}; filename={filename}'}
 
 
-def xlsx_response(workbook, filename, inline=False):
-    """Serialise an openpyxl ``Workbook`` to an ``.xlsx`` download response."""
-    buf = BytesIO()
-    workbook.save(buf)
-    buf.seek(0)
-    return Response(buf.getvalue(), mimetype=XLSX_MIME,
+def xlsx_response(data, filename, inline=False):
+    """Build an ``.xlsx`` download response.
+
+    ``data`` may be an openpyxl ``Workbook`` (it is saved), a ``BytesIO`` (read
+    via ``getvalue``), or raw ``bytes`` — covering every existing call shape.
+    """
+    if hasattr(data, 'save'):          # openpyxl Workbook
+        buf = BytesIO()
+        data.save(buf)
+        data = buf
+    if hasattr(data, 'getvalue'):      # BytesIO / similar buffer
+        data = data.getvalue()
+    return Response(data, mimetype=XLSX_MIME,
                     headers=_disposition(filename, inline))
 
 

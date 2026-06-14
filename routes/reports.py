@@ -9,6 +9,7 @@ from utils.excel_utils import (
     export_students_to_excel, create_student_import_template,
     import_students_from_excel
 )
+from utils.web_exports import xlsx_response
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -31,12 +32,8 @@ def export_students():
     students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
     
     excel_file = export_students_to_excel(students)
-    
-    return Response(
-        excel_file.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=students_export.xlsx'}
-    )
+
+    return xlsx_response(excel_file, 'students_export.xlsx')
 
 
 @reports_bp.route('/export/class-students')
@@ -125,17 +122,9 @@ def export_class_students():
                 pass
         ws.column_dimensions[column].width = min(max_length + 2, 30)
     
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
     filename = f"students_{assignment.school_class.name}_{assignment.arm.name}.xlsx"
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
-    )
+
+    return xlsx_response(wb, filename)
 
 
 @reports_bp.route('/export/template')
@@ -143,12 +132,8 @@ def export_class_students():
 def export_template():
     """Download student import template"""
     template = create_student_import_template()
-    
-    return Response(
-        template.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=student_import_template.xlsx'}
-    )
+
+    return xlsx_response(template, 'student_import_template.xlsx')
 
 
 # ============================================================================
