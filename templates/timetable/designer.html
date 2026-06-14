@@ -603,10 +603,20 @@ function renderGridModeSheet(){
     el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 
-function groupTint(g){ var h=0; for(var i=0;i<g.length;i++){ h=(h*31+g.charCodeAt(i))%360; } return 'hsl('+h+',70%,90%)'; }
+// A small, harmonious palette assigned consistently per group (first-seen
+// order), so a few Class/Stream groups get calm, muted tints — not a clashing
+// colour per group.
+var GROUP_PALETTE = ['#eef2ff','#ecfdf5','#fff7ed','#fdf2f8','#f0f9ff','#f5f3ff'];
+var _groupColors = {};
+function buildGroupColors(){
+    _groupColors = {}; var i=0;
+    rows.forEach(function(r){ var g=(r.group||'').trim();
+        if(g && !isAll(r.group) && !(g in _groupColors)){ _groupColors[g]=GROUP_PALETTE[i % GROUP_PALETTE.length]; i++; } });
+}
 function groupBlock(r){
     var g=(r.group||'').trim();
-    return '<div class="g-block"'+(g?(' style="background:'+groupTint(g)+'"'):'')+'>'
+    var bg=_groupColors[g]||'';
+    return '<div class="g-block"'+(bg?(' style="background:'+bg+'"'):'')+'>'
         + (g?'<span class="g-tag">'+esc(g)+'</span>':'')
         + (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
         + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'')
@@ -615,6 +625,7 @@ function groupBlock(r){
 // Days as COLUMNS (time down the left). Multiple groups in a (period, day) cell
 // sit side by side; an "All" group at a period makes a full-width band (BREAK).
 function renderGridColumnsSheet(){
+    buildGroupColors();
     var pmap={}, periods=[];
     rows.forEach(function(r){ if(!r.time) return; var k=periodKey(r);
         if(!pmap[k]){ pmap[k]={k:k,label:periodLabel(r),start:r.time,allText:''}; periods.push(pmap[k]); }
