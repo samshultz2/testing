@@ -12,6 +12,7 @@ from utils.helpers import login_required
 from utils.access_control import timetable_generate_required
 from io import BytesIO
 from datetime import datetime
+from utils.web_exports import xlsx_response
 import uuid
 
 generator_bp = Blueprint('generator', __name__, url_prefix='/generator')
@@ -2358,14 +2359,7 @@ def export_results(batch_id):
             else:
                 ws.column_dimensions[get_column_letter(col)].width = period_col_width
     
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename=timetables_{batch_id}.xlsx'}
-    )
+    return xlsx_response(wb, f'timetables_{batch_id}.xlsx')
 
 
 @generator_bp.route('/results/<batch_id>/delete', methods=['POST'])
@@ -3012,14 +3006,7 @@ def export_results_by_day(batch_id):
             else:
                 ws.column_dimensions[get_column_letter(col)].width = col_width
     
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename=timetables_by_day_{batch_id}.xlsx'}
-    )
+    return xlsx_response(wb, f'timetables_by_day_{batch_id}.xlsx')
 
 
 @generator_bp.route('/results/<batch_id>/export_by_day_pdf')
