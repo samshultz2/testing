@@ -14,8 +14,8 @@ const Ctx = createContext(null);
 export const useCtx = () => useContext(Ctx);
 
 const TABS = [
-  { path: 'mark', label: 'Mark daily', icon: 'fa-user-check', el: MarkDaily },
-  { path: 'week', label: 'Weekly grid', icon: 'fa-table-cells-large', el: WeekGrid },
+  { path: 'mark', label: 'Mark daily', icon: 'fa-user-check', el: MarkDaily, mark: true },
+  { path: 'week', label: 'Weekly grid', icon: 'fa-table-cells-large', el: WeekGrid, mark: true },
   { path: 'daily', label: 'Daily summary', icon: 'fa-list-check', el: DailySummary },
   { path: 'weekly', label: 'Weekly report', icon: 'fa-calendar-week', el: WeeklyReport },
   { path: 'termly', label: 'Termly report', icon: 'fa-calendar-days', el: TermlyReport },
@@ -67,15 +67,18 @@ export default function App() {
     return () => { alive = false; };
   }, [termId]);
 
-  const active = TABS.find((t) => t.path === route) || TABS[0];
-  const Screen = active.el;
   const data = ctx.data || {};
+  // View-only users (no marking permission) don't see the marking tabs.
+  const canMark = data.can_mark !== false;
+  const tabs = TABS.filter((t) => !t.mark || canMark);
+  const active = tabs.find((t) => t.path === route) || tabs[0];
+  const Screen = active.el;
   const selectedTerm = termId != null ? String(termId) : (data.term ? String(data.term.id) : '');
 
   return (
     <Ctx.Provider value={{ ...data, online, sync }}>
       <nav className="att-tabs" role="tablist" aria-label="Attendance sections">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <a key={t.path} href={'#/' + t.path} role="tab" aria-selected={t.path === active.path}
              className={'att-tab' + (t.path === active.path ? ' is-active' : '')}>
             <i className={'fas ' + t.icon} aria-hidden="true" /> <span>{t.label}</span>

@@ -63,6 +63,24 @@ def _admin(app):
     return c, tok
 
 
+def _other_branch_admin(app):
+    """A branch-scoped admin in a DIFFERENT branch from the fixture's classes."""
+    with app.app_context():
+        other = Branch.query.filter_by(code='AAO').first()
+        if not other:
+            other = Branch(name='AA-Other', code='AAO', is_active=True)
+            db.session.add(other); db.session.flush()
+        u = User.query.filter_by(username='aa_reportadmin').first()
+        if not u:
+            u = User(username='aa_reportadmin', role='admin', scope='branch', branch_id=other.id)
+            u.set_password('Secret123'); u.set_modules(['attendance'])
+            db.session.add(u); db.session.commit()
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'username': 'aa_reportadmin', 'password': 'Secret123', '_csrf_token': tok})
+    return c, tok
+
+
 def test_roster_returns_students_and_week(app):
     ids = _setup(app)
     c, _ = _admin(app)
@@ -254,6 +272,49 @@ def test_report_cross_branch_is_forbidden(app):
     with app.app_context():
         term_id = ClassArmAssignment.query.get(ids['caa']).term_id
     assert c.get(f'/attendance/termly/export?assignment_id={ids["caa"]}&term_id={term_id}').status_code == 403
+
+
+def test_legacy_endpoints_enforce_permissions(app):
+    ids = _setup(app)
+    # an authorized central admin can reach all of them
+    a, _ = _admin(app)
+    assert a.get(f'/attendance/api/summary/{ids["caa"]}/{ids["date"]}').status_code == 200
+    assert a.get(f'/attendance/api/check-attendance?assignment_id={ids["caa"]}&date={ids["date"]}').status_code == 200
+    assert a.get(f'/attendance/daily?assignment_id={ids["caa"]}&date={ids["date"]}').status_code == 200
+
+    # a different-branch admin is denied (403 for APIs, redirect for pages)
+    c, _ = _other_branch_admin(app)
+    assert c.get(f'/attendance/api/summary/{ids["caa"]}/{ids["date"]}').status_code == 403
+    assert c.get(f'/attendance/api/check-attendance?assignment_id={ids["caa"]}&date={ids["date"]}').status_code == 403
+    assert c.get(f'/attendance/daily?assignment_id={ids["caa"]}&date={ids["date"]}').status_code in (302, 303)
+    assert c.get(f'/attendance/print-register?assignment_id={ids["caa"]}&week_id={ids["week"]}').status_code in (302, 303)
+
+
+def test_view_only_user_reports_yes_marking_no(app):
+    ids = _setup(app)
+    with app.app_context():
+        bid = ids['bid']
+        u = User.query.filter_by(username='aa_viewer').first()
+        if not u:
+            # non-admin staff in the SAME branch: attendance view, no marking
+            u = User(username='aa_viewer', role='staff', scope='branch', branch_id=bid)
+            u.set_password('Secret123')
+            u.set_permissions({'attendance': 'view'})
+            db.session.add(u); db.session.commit()
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'username': 'aa_viewer', 'password': 'Secret123', '_csrf_token': tok})
+    # SPA shell + context open for a viewer; context advertises no marking
+    assert c.get('/attendance/app').status_code == 200
+    ctx = c.get('/attendance/api/context').get_json()
+    assert ctx.get('can_mark') is False
+    # read-only reports work
+    assert c.get(f'/attendance/api/report/weekly?assignment_id={ids["caa"]}&week_id={ids["week"]}').status_code == 200
+    assert c.get(f'/attendance/api/report/termly?assignment_id={ids["caa"]}').status_code == 200
+    # but writing is rejected
+    m = c.post('/attendance/api/mark', headers={'X-CSRFToken': tok},
+               json={'assignment_id': ids['caa'], 'date': ids['date'], 'present': []})
+    assert m.status_code == 403
 
 
 def test_weekly_termly_export_download(app):

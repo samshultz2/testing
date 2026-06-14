@@ -38,7 +38,15 @@ export default function Alerts() {
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
               <strong>{d.term.name}</strong>
               <span style={{ color: '#6b7280' }}>Students below {d.threshold}% attendance</span>
-              <span style={{ marginLeft: 'auto' }}><Pill tone={d.alerts.length ? 'amber' : 'green'}>{d.alerts.length} flagged</Pill></span>
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Pill tone={d.alerts.length ? 'amber' : 'green'}>{d.alerts.length} flagged</Pill>
+                {term && d.alerts.length > 0 && (
+                  <a className="btn btn-success btn-sm"
+                     href={`/attendance/alerts/export?term_id=${term.id}&threshold=${threshold}`}>
+                    <i className="fas fa-download" aria-hidden="true" /> Export
+                  </a>
+                )}
+              </span>
             </div>
 
             {d.alerts.length === 0 ? (

@@ -11,7 +11,7 @@ from models import (
 )
 from utils.access_control import (
     login_required, can_access_class, can_mark_attendance,
-    filter_classes_for_user
+    filter_classes_for_user, can_access_module
 )
 from utils.branch_scope import require_branch_access
 from utils.helpers import is_school_day
@@ -342,7 +342,11 @@ def mark_all_present_route():
         target_date = request.form.get('date')
         session_type = request.form.get('session_type')
         week_id = request.form.get('week_id', type=int)
-        
+
+        if not assignment_id or not can_mark_attendance(assignment_id):
+            flash('You do not have permission to mark attendance for this class.', 'error')
+            return redirect(url_for('attendance.mark_attendance_page'))
+
         target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
         
         enrollments = StudentEnrollment.query.filter_by(
@@ -389,11 +393,14 @@ def daily_summary():
 
     summary = None
     selected_assignment = None
-    
+
     if assignment_id:
+        if not can_access_class(assignment_id):
+            flash('You do not have access to this class.', 'error')
+            return redirect(url_for('attendance.daily_summary'))
         selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
         summary = get_daily_attendance_summary(assignment_id, target_date)
-    
+
     return render_template('attendance/daily.html',
         assignments=assignments,
         selected_assignment=selected_assignment,
@@ -410,7 +417,11 @@ def copy_previous_attendance():
         assignment_id = request.form.get('assignment_id', type=int)
         target_date_str = request.form.get('date')
         term_id = request.form.get('term_id', type=int)
-        
+
+        if not assignment_id or not can_mark_attendance(assignment_id):
+            flash('You do not have permission to mark attendance for this class.', 'error')
+            return redirect(url_for('attendance.mark_attendance_page'))
+
         target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
         
         # Find previous school day
@@ -797,6 +808,8 @@ def export_termly():
 def api_daily_summary(assignment_id, date_str):
     """API endpoint for daily attendance summary"""
     require_branch_access(db.get_or_404(ClassArmAssignment, assignment_id).branch_id)
+    if not can_access_class(assignment_id):
+        return jsonify({'error': 'forbidden'}), 403
     try:
         target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         summary = get_daily_attendance_summary(assignment_id, target_date)
@@ -814,7 +827,9 @@ def api_check_attendance():
     
     if not assignment_id or not target_date:
         return jsonify({'exists': False})
-    
+    if not can_access_class(assignment_id):
+        return jsonify({'error': 'forbidden'}), 403
+
     target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
     
     # Check if any attendance records exist
@@ -865,9 +880,13 @@ def _week_for_date(term_id, target_date):
 @login_required
 def attendance_app():
     """The attendance mini-SPA (React). Self-loads its data from /api/context;
-    the classic server-rendered pages remain available as a fallback."""
-    if not can_mark_attendance():
-        flash('You do not have permission to mark attendance.', 'error')
+    the classic server-rendered pages remain available as a fallback.
+
+    Anyone with attendance-module access may open it (read-only reports);
+    the marking screens are additionally gated by can_mark_attendance, both in
+    the UI (tabs hidden) and on every write endpoint."""
+    if not can_access_module('attendance'):
+        flash('You do not have access to attendance.', 'error')
         return redirect(url_for('main.dashboard'))
     return render_template('attendance/app.html')
 
@@ -972,9 +991,10 @@ def api_mark():
 @attendance_bp.route('/api/context')
 @login_required
 def api_context():
-    """Selector data for the attendance SPA (term, terms, markable classes,
-    weeks, holidays) — cacheable so the picker works offline."""
-    if not can_mark_attendance():
+    """Selector data for the attendance SPA (term, terms, accessible classes,
+    weeks, holidays) — cacheable so the picker works offline. View access is
+    enough to open it; `can_mark` tells the SPA whether to show marking tabs."""
+    if not can_access_module('attendance'):
         return jsonify({'error': 'forbidden'}), 403
     req_term = request.args.get('term_id', type=int)
     term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
@@ -993,6 +1013,7 @@ def api_context():
         'term': {'id': term.id, 'name': term.full_name} if term else None,
         'terms': terms, 'classes': classes, 'weeks': weeks, 'holidays': holidays,
         'today': date.today().isoformat(),
+        'can_mark': can_mark_attendance(),   # gates the marking tabs in the SPA
     })
 
 
@@ -1151,15 +1172,16 @@ def _jsonable(value):
 
 
 def _scoped_caa(assignment_id):
-    """Resolve an assignment the current user may view, or return a JSON error
-    tuple. Branch-scoped + permission-checked like the marking endpoints."""
+    """Resolve an assignment the current user may VIEW, or return a JSON error
+    tuple. Reports are read-only, so view access (branch + class) is required —
+    marking permission is not (that gates the write endpoints only)."""
     if not assignment_id:
         return None, (jsonify({'error': 'assignment_id required'}), 400)
     caa = db.session.get(ClassArmAssignment, assignment_id)
     if not caa:
         return None, (jsonify({'error': 'invalid assignment'}), 400)
     require_branch_access(caa.branch_id)
-    if not (can_mark_attendance(caa.id) and can_access_class(caa.id)):
+    if not can_access_class(caa.id):
         return None, (jsonify({'error': 'forbidden'}), 403)
     return caa, None
 
@@ -1225,7 +1247,7 @@ def api_report_termly():
 def api_report_alerts():
     """Students below an attendance threshold for a term, scoped to the classes
     the current user may access (JSON, read-only)."""
-    if not can_mark_attendance():
+    if not can_access_module('attendance'):
         return jsonify({'error': 'forbidden'}), 403
     req_term = request.args.get('term_id', type=int)
     term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
@@ -1316,11 +1338,14 @@ def attendance_alerts():
     alerts = []
     
     if selected_term:
-        # Get all enrollments for this term
-        enrollments = StudentEnrollment.query.join(ClassArmAssignment).filter(
-            ClassArmAssignment.term_id == term_id,
+        # Only enrolments in classes this user may access (branch + role scoped).
+        accessible = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term_id).all(), form_only=True)
+        class_ids = [c.id for c in accessible]
+        enrollments = StudentEnrollment.query.filter(
+            StudentEnrollment.class_arm_assignment_id.in_(class_ids or [-1]),
             StudentEnrollment.is_active == True
-        ).all()
+        ).all() if class_ids else []
         
         # Get weeks for this term
         weeks = Week.query.filter_by(term_id=term_id).all()
@@ -1392,12 +1417,15 @@ def export_alerts():
         return redirect(url_for('attendance.attendance_alerts'))
     
     selected_term = db.session.get(Term, term_id)
-    
-    # Get alerts (same logic as above)
-    enrollments = StudentEnrollment.query.join(ClassArmAssignment).filter(
-        ClassArmAssignment.term_id == term_id,
+
+    # Get alerts (same logic as the page) — scoped to the user's accessible classes
+    accessible = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all(), form_only=True)
+    class_ids = [c.id for c in accessible]
+    enrollments = StudentEnrollment.query.filter(
+        StudentEnrollment.class_arm_assignment_id.in_(class_ids or [-1]),
         StudentEnrollment.is_active == True
-    ).all()
+    ).all() if class_ids else []
     
     weeks = Week.query.filter_by(term_id=term_id).all()
     week_ids = [w.id for w in weeks]
@@ -1500,11 +1528,15 @@ def print_register():
     
     selected_term = db.session.get(Term, term_id) if term_id else None
     
-    # Get assignments for term
+    # Get assignments for term (only those this user may access)
     assignments = []
     if term_id:
-        assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-    
+        assignments = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term_id).all(), form_only=True)
+
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('attendance.print_register'))
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     # Get weeks for term

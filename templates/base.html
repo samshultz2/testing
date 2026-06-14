@@ -131,28 +131,8 @@
                     {% if can_access_module('attendance') %}
                     <li class="nav-section">Attendance</li>
                     <li class="nav-item">
-                        <a href="{{ url_for('attendance.mark_attendance_page') }}" class="nav-link">
-                            <i class="fas fa-clipboard-check"></i><span>Mark</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ url_for('attendance.daily_summary') }}" class="nav-link">
-                            <i class="fas fa-calendar-day"></i><span>Daily</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ url_for('attendance.weekly_summary') }}" class="nav-link">
-                            <i class="fas fa-calendar-week"></i><span>Weekly</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ url_for('attendance.termly_summary') }}" class="nav-link">
-                            <i class="fas fa-chart-bar"></i><span>Termly</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ url_for('attendance.attendance_alerts') }}" class="nav-link">
-                            <i class="fas fa-exclamation-triangle"></i><span>Alerts</span>
+                        <a href="{{ url_for('attendance.attendance_app') }}" class="nav-link">
+                            <i class="fas fa-clipboard-user"></i><span>Attendance</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -160,7 +140,7 @@
                             <i class="fas fa-print"></i><span>Print Register</span>
                         </a>
                     </li>
-                    
+
                     {% endif %}
                     {% if can_access_module('timetable') %}
                     <li class="nav-section">Timetable</li>
