@@ -12,7 +12,7 @@ from utils.helpers import login_required
 from utils.access_control import timetable_generate_required
 from io import BytesIO
 from datetime import datetime
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, pdf_response
 import uuid
 
 generator_bp = Blueprint('generator', __name__, url_prefix='/generator')
@@ -3268,12 +3268,7 @@ def export_results_by_day_pdf(batch_id):
             elements.append(PageBreak())
     
     doc.build(elements)
-    output.seek(0)
-    
-    return Response(output.getvalue(),
-        mimetype='application/pdf',
-        headers={'Content-Disposition': f'attachment; filename=timetables_by_day_{batch_id}.pdf'}
-    )
+    return pdf_response(output, f'timetables_by_day_{batch_id}.pdf', inline=False)
 
 
 # ============================================================================

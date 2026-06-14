@@ -19,7 +19,7 @@ import secrets
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify, Response, current_app)
 from werkzeug.utils import secure_filename
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, pdf_response
 from sqlalchemy import func
 from sqlalchemy.orm import contains_eager
 
@@ -877,9 +877,7 @@ def _passwords_pdf(school, label, rows, safe):
     ]))
     elems.append(t)
     doc.build(elems)
-    out.seek(0)
-    return Response(out.getvalue(), mimetype='application/pdf',
-        headers={'Content-Disposition': f'attachment; filename=passwords_{safe}.pdf'})
+    return pdf_response(out, f'passwords_{safe}.pdf', inline=False)
 
 
 # ============================================================================

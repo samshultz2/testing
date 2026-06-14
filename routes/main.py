@@ -4,7 +4,7 @@ Main routes for dashboard and general pages
 import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from utils.helpers import get_active_term, get_active_session
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, pdf_response
 from datetime import date, timedelta
 from models import (
     db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, Attendance, 
@@ -1991,13 +1991,7 @@ def export_students_pdf(student_data, fields):
     elements.append(Paragraph(f'Total: {len(student_data)} students', footer_style))
     
     doc.build(elements)
-    output.seek(0)
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/pdf',
-        headers={'Content-Disposition': 'attachment; filename=students_export.pdf'}
-    )
+    return pdf_response(output, 'students_export.pdf', inline=False)
 
 
 def export_students_image(student_data, fields):
