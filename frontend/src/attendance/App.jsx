@@ -89,7 +89,7 @@ export default function App() {
 
       {(data.terms && data.terms.length > 0) && (
         <div style={{ margin: '12px 0', maxWidth: 320 }}>
-          <Field label="Term / session" htmlFor="att-term">
+          <Field label="Academic term" htmlFor="att-term">
             <Select id="att-term" value={selectedTerm} onChange={(v) => setTermId(Number(v))}
                     options={data.terms.map((t) => ({ value: String(t.id), label: t.name + (t.active ? ' (active)' : '') }))} />
           </Field>

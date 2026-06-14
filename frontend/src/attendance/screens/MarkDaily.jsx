@@ -10,6 +10,7 @@ export default function MarkDaily() {
   const { classes = [], today, online, sync } = useCtx();
   const [assignmentId, setAssignmentId] = useState('');
   const [date, setDate] = useState(today || '');
+  const [session, setSession] = useState('morning');    // morning | afternoon
   const [state, setState] = useState({ idle: true });   // idle | loading | data | error
   const [present, setPresent] = useState({});
   const [msg, setMsg] = useState(null);
@@ -35,10 +36,11 @@ export default function MarkDaily() {
   useEffect(() => {
     const d = state.data;
     if (!d) return;
+    const field = session === 'afternoon' ? 'afternoon_present' : 'morning_present';
     const init = {};
-    d.students.forEach((s) => { init[s.enrollment_id] = !!s.morning_present; });
+    d.students.forEach((s) => { init[s.enrollment_id] = !!s[field]; });
     setPresent(init);
-  }, [state.data]);
+  }, [state.data, session]);
 
   const toggle = (id) => setPresent((p) => ({ ...p, [id]: !p[id] }));
   const setAll = (val) => {
@@ -49,9 +51,16 @@ export default function MarkDaily() {
   const save = async () => {
     const d = state.data;
     const presentIds = d.students.filter((s) => present[s.enrollment_id]).map((s) => s.enrollment_id);
-    const payload = { assignment_id: Number(assignmentId), date, session_type: 'morning', present: presentIds, auto_copy: true };
+    // Marking the morning also seeds the afternoon (auto_copy); the afternoon
+    // session updates the afternoon only.
+    const autoCopy = session === 'morning';
+    const payload = { assignment_id: Number(assignmentId), date, session_type: session, present: presentIds, auto_copy: autoCopy };
     // optimistic cache so reopening (even offline) reflects it
-    const updated = { ...d, students: d.students.map((s) => ({ ...s, morning_present: !!present[s.enrollment_id], afternoon_present: !!present[s.enrollment_id] })) };
+    const updated = { ...d, students: d.students.map((s) => {
+      const val = !!present[s.enrollment_id];
+      if (session === 'afternoon') return { ...s, afternoon_present: val };
+      return { ...s, morning_present: val, afternoon_present: val };  // morning seeds afternoon
+    }) };
     await cachePut(key(assignmentId, date), updated);
     setBusy(true);
     try {
@@ -87,6 +96,10 @@ export default function MarkDaily() {
         </Field>
         <Field label="Date" htmlFor="md-date">
           <input id="md-date" type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field label="Session" htmlFor="md-session">
+          <Select id="md-session" value={session} onChange={setSession}
+                  options={[{ value: 'morning', label: 'Morning' }, { value: 'afternoon', label: 'Afternoon' }]} />
         </Field>
       </Toolbar>
 

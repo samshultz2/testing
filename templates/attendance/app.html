@@ -44,8 +44,9 @@
 .att-ampm label { display: inline-flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--text-muted, #6b7280); gap: 2px; cursor: pointer; }
 
 @media (max-width: 560px) {
-  .att-tab span { display: none; }            /* icons-only tabs on phones */
-  .att-tab { padding: .55rem .7rem; }
+  /* Keep the label beside every icon (icons alone are ambiguous); just tighten
+     spacing and let the tabs wrap onto multiple rows on small screens. */
+  .att-tab { padding: .5rem .6rem; font-size: 13px; gap: 5px; }
 }
 </style>
 {% endblock %}
