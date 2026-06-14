@@ -4,6 +4,7 @@ Uses openpyxl for Excel file operations
 """
 import io
 from datetime import datetime
+from utils.web_exports import formula_guard as _fg
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
@@ -90,16 +91,16 @@ def export_students_to_excel(students):
     for row, student in enumerate(students, 2):
         primary_contact = student.parent_contacts.filter_by(is_primary=True).first()
         
-        ws.cell(row=row, column=1, value=student.student_id)
-        ws.cell(row=row, column=2, value=student.surname)
-        ws.cell(row=row, column=3, value=student.first_name)
-        ws.cell(row=row, column=4, value=student.middle_name or '')
-        ws.cell(row=row, column=5, value=student.gender)
+        ws.cell(row=row, column=1, value=_fg(student.student_id))
+        ws.cell(row=row, column=2, value=_fg(student.surname))
+        ws.cell(row=row, column=3, value=_fg(student.first_name))
+        ws.cell(row=row, column=4, value=_fg(student.middle_name or ''))
+        ws.cell(row=row, column=5, value=_fg(student.gender))
         ws.cell(row=row, column=6, value=student.date_of_birth.strftime('%Y-%m-%d') if student.date_of_birth else '')
-        ws.cell(row=row, column=7, value=student.religion or '')
-        ws.cell(row=row, column=8, value=student.home_address or '')
-        ws.cell(row=row, column=9, value=student.hobbies or '')
-        ws.cell(row=row, column=10, value=primary_contact.phone_number if primary_contact else '')
+        ws.cell(row=row, column=7, value=_fg(student.religion or ''))
+        ws.cell(row=row, column=8, value=_fg(student.home_address or ''))
+        ws.cell(row=row, column=9, value=_fg(student.hobbies or ''))
+        ws.cell(row=row, column=10, value=_fg(primary_contact.phone_number if primary_contact else ''))
         ws.cell(row=row, column=11, value=student.created_at.strftime('%Y-%m-%d'))
         
         # Apply border to data cells

@@ -96,12 +96,13 @@ def collections_export():
     w = csv.writer(out)
     w.writerow(['Date', 'Receipt', 'Student', 'Student ID', 'Term', 'Method',
                 'Reference', 'Received By', 'Amount'])
+    from utils.web_exports import formula_guard as _fg
     for p in _collections_query(from_date, to_date, term_id).all():
-        w.writerow([p.payment_date.strftime('%Y-%m-%d'), p.receipt_no,
-                    p.student.full_name if p.student else '',
-                    p.student.student_id if p.student else '',
-                    p.term.full_name if p.term else '', p.method, p.reference or '',
-                    p.received_by or '', p.amount])
+        w.writerow([p.payment_date.strftime('%Y-%m-%d'), _fg(p.receipt_no),
+                    _fg(p.student.full_name if p.student else ''),
+                    _fg(p.student.student_id if p.student else ''),
+                    _fg(p.term.full_name if p.term else ''), _fg(p.method),
+                    _fg(p.reference or ''), _fg(p.received_by or ''), p.amount])
     fname = f'collections_{from_date}_{to_date}.csv'
     return Response(out.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': f'attachment; filename={fname}'})

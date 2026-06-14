@@ -17,6 +17,19 @@ from flask import Response
 XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 PDF_MIME = 'application/pdf'
 
+# Characters that make Excel/Sheets treat a cell as a formula.
+_FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+
+def formula_guard(value):
+    """Neutralise CSV/Excel formula injection: a string that starts with a
+    formula trigger (e.g. a student named ``=cmd|...``) is prefixed with a
+    single quote so spreadsheets render it as text instead of executing it.
+    Non-strings (numbers, dates) pass through unchanged."""
+    if isinstance(value, str) and value[:1] in _FORMULA_PREFIXES:
+        return "'" + value
+    return value
+
 
 def _disposition(filename, inline):
     kind = 'inline' if inline else 'attachment'
