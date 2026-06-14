@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from utils.helpers import get_active_term, get_active_session
 from datetime import datetime
 from io import BytesIO
+from utils.web_exports import xlsx_response
 
 from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass
 from models.mock_jamb import MockJAMBExam, MockJAMBResult, MockJAMBAnalytics
@@ -654,18 +655,9 @@ def export_results(exam_id):
     ws.column_dimensions['L'].width = 12
     ws.column_dimensions['M'].width = 15
     
-    # Save to bytes
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
     filename = f"mock_jamb_{exam.exam_number}_{exam.session.name.replace('/', '_')}.xlsx"
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
-    )
+
+    return xlsx_response(wb, filename)
 
 
 # =============================================================================

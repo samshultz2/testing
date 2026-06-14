@@ -3,6 +3,7 @@ Subjects and Score Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from utils.helpers import get_active_term
+from utils.web_exports import xlsx_response
 from models import (
     db, Subject, ClassSubject, AssessmentType, SubjectAssessmentOverride,
     StudentScore, StudentEnrollment, ClassArmAssignment, Term, SchoolClass,
@@ -1126,17 +1127,9 @@ def export_broadsheet():
                 pass
         ws.column_dimensions[column].width = min(max_length + 2, 30)
     
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
     filename = f"broadsheet_{selected_assignment.school_class.name}_{selected_assignment.arm.name}_{selected_term.name}.xlsx"
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
-    )
+
+    return xlsx_response(wb, filename)
 
 
 # ============================================================================
@@ -1295,15 +1288,7 @@ def score_import_template():
         ws.cell(row=row_num, column=1, value=enrollment.student.student_id)
         ws.cell(row=row_num, column=2, value=enrollment.student.full_name)
     
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=score_import_template.xlsx'}
-    )
+    return xlsx_response(wb, 'score_import_template.xlsx')
 
 
 # ============================================================================
