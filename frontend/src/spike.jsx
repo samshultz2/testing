@@ -5,14 +5,15 @@
  *   3. Auth     : fetch() uses the session cookie + the <meta name="csrf-token"> header
  *   4. Offline  : the bundle is precached by the service worker (see static/js/sw.js)
  *
- * It renders one read-only widget from the existing charts API. No new backend.
+ * It renders one read-only widget from /api/dashboard/stats (main blueprint,
+ * "students" module — the same module that gates this page, so any user who can
+ * open /react-spike can read it). No new backend.
  */
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-// CSRF token from the meta tag — same mechanism the rest of the app uses
-// (utils/csrf.py accepts it as the X-CSRFToken header). A no-op on GET, but it
-// proves the wiring for future POST/PUT/DELETE from React.
+// CSRF token from the meta tag — utils/csrf.py accepts it as the X-CSRFToken
+// header (a no-op on GET, but proves the wiring for future POST/PUT/DELETE).
 function csrfToken() {
   const m = document.querySelector('meta[name="csrf-token"]');
   return m ? m.getAttribute('content') : '';
@@ -21,9 +22,16 @@ function csrfToken() {
 async function apiGet(url) {
   const res = await fetch(url, {
     credentials: 'same-origin',
-    headers: { 'X-CSRFToken': csrfToken() },
+    headers: {
+      'X-CSRFToken': csrfToken(),
+      // Tells the access gate this is an API call, so a denied request returns
+      // a JSON 403 instead of an HTML redirect (which fetch would choke on).
+      'X-Requested-With': 'fetch',
+    },
   });
   if (!res.ok) throw new Error('HTTP ' + res.status);
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) throw new Error('expected JSON, got ' + ct);
   return res.json();
 }
 
@@ -40,10 +48,10 @@ function Bar({ label, value, max, color }) {
   );
 }
 
-function GenderWidget() {
+function StatsWidget() {
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
-    apiGet('/reports/api/charts/gender-distribution')
+    apiGet('/api/dashboard/stats')
       .then((d) => setState({ loading: false, data: d }))
       .catch((e) => setState({ loading: false, error: String(e) }));
   }, []);
@@ -52,19 +60,23 @@ function GenderWidget() {
   if (state.error)
     return <p style={{ color: '#dc2626' }}>Couldn’t load: {state.error}</p>;
 
-  const { labels = [], data = [], backgroundColor = [] } = state.data || {};
-  const max = Math.max(1, ...data);
+  const s = state.data || {};
+  const male = s.male_students || 0;
+  const female = s.female_students || 0;
+  const max = Math.max(1, male, female);
   return (
     <div>
-      {labels.map((label, i) => (
-        <Bar key={label} label={label} value={data[i]} max={max} color={backgroundColor[i]} />
-      ))}
-      <p style={{ marginTop: 10, fontSize: 12, color: '#16a34a' }}>
-        ✓ Rendered by React from <code>/reports/api/charts/gender-distribution</code> — session cookie + CSRF header, cached for offline.
+      <Bar label="Male" value={male} max={max} color="#4CAF50" />
+      <Bar label="Female" value={female} max={max} color="#E91E63" />
+      <p style={{ marginTop: 8, fontSize: 13 }}>
+        Total active students: <b>{s.total_students ?? male + female}</b>
+      </p>
+      <p style={{ marginTop: 6, fontSize: 12, color: '#16a34a' }}>
+        ✓ Rendered by React from <code>/api/dashboard/stats</code> — session cookie + CSRF header, cached for offline.
       </p>
     </div>
   );
 }
 
 const mount = document.getElementById('react-spike');
-if (mount) createRoot(mount).render(<GenderWidget />);
+if (mount) createRoot(mount).render(<StatsWidget />);
