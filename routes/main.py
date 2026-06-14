@@ -768,15 +768,13 @@ def _dash_announcements():
 # STUDENT ROUTES
 # ============================================================================
 
-@main_bp.route('/students')
-@login_required
-def students_list():
-    """List all students with filtering and pagination"""
-    page = request.args.get('page', 1, type=int)
-    per_page = 20
-    is_ajax = request.args.get('ajax') == '1'
-
-    # Get filter parameters
+def _students_query():
+    """Active-student query with branch/section/teacher scope plus the standard
+    list filters (search/gender/religion/stream/subject/class/arm) and sort —
+    all read from request.args. Shared by the list page and the JSON API so
+    scoping and filtering can never drift between them."""
+    from utils.branch_scope import scope_query
+    from utils.org_scope import scope_students
     search = request.args.get('search', '')
     gender = request.args.get('gender', '')
     religion = request.args.get('religion', '')
@@ -787,21 +785,18 @@ def students_list():
     sort_by = request.args.get('sort', 'surname')
     order = request.args.get('order', 'asc')
 
-    # Build query (branch + section/stream scoped)
-    from utils.branch_scope import scope_query
-    from utils.org_scope import scope_students
+    # Branch + section/stream scope first.
     query = scope_query(Student.query.filter_by(is_active=True), Student)
     query = scope_students(query)
 
-    # Teachers are further limited to their assigned classes. Other non-admin
-    # roles (principal, HOD, bursar…) rely on branch/section/stream scoping above.
+    # Teachers are further limited to their assigned classes; other non-admin
+    # roles rely on the branch/section/stream scope above.
     active_term = get_active_term()
     if is_teacher() and active_term:
         accessible_class_ids = get_accessible_class_ids()
         if accessible_class_ids:
             query = query.join(
-                StudentEnrollment,
-                Student.id == StudentEnrollment.student_id
+                StudentEnrollment, Student.id == StudentEnrollment.student_id
             ).join(
                 ClassArmAssignment,
                 StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id
@@ -810,35 +805,21 @@ def students_list():
                 ClassArmAssignment.id.in_(accessible_class_ids)
             )
         else:
-            # No accessible classes, return empty
-            query = query.filter(Student.id == -1)
+            query = query.filter(Student.id == -1)   # no accessible classes
 
-    # Apply search filter
     if search:
         search_term = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                Student.first_name.ilike(search_term),
-                Student.surname.ilike(search_term),
-                Student.middle_name.ilike(search_term),
-                Student.student_id.ilike(search_term)
-            )
-        )
-
-    # Apply gender filter
+        query = query.filter(db.or_(
+            Student.first_name.ilike(search_term), Student.surname.ilike(search_term),
+            Student.middle_name.ilike(search_term), Student.student_id.ilike(search_term)))
     if gender:
         query = query.filter(Student.gender == gender)
-
-    # Apply religion filter
     if religion:
         query = query.filter(Student.religion == religion)
-
-    # Apply stream filter
     if stream:
         query = query.filter(Student.stream == stream)
 
-    # Apply WAEC-subject filter (SSS3 students only). Uses a subquery so it
-    # doesn't interfere with the class/arm/teacher joins above.
+    # WAEC-subject filter (SSS3 only), via a subquery so it composes with the joins.
     if subject:
         sss3_q = (db.session.query(StudentEnrollment.student_id)
                   .join(ClassArmAssignment,
@@ -847,7 +828,6 @@ def students_list():
                   .filter(StudentEnrollment.is_active == True, SchoolClass.name == 'SSS3'))
         if active_term:
             sss3_q = sss3_q.filter(ClassArmAssignment.term_id == active_term.id)
-        # Token-bounded match within the comma-joined waec_subjects string.
         query = query.filter(
             Student.id.in_(sss3_q),
             db.or_(Student.waec_subjects == subject,
@@ -855,9 +835,7 @@ def students_list():
                    Student.waec_subjects.ilike(f'%, {subject}, %'),
                    Student.waec_subjects.ilike(f'%, {subject}')))
 
-    # Apply class/arm filter for ANY user (not just admins). A subquery keeps it
-    # independent of the teacher-scoping / subject joins above, so it composes
-    # cleanly and also narrows a teacher's list within their own classes.
+    # Class/arm filter (any user), via a subquery so it composes cleanly.
     if class_id or arm_id:
         enr_q = (db.session.query(StudentEnrollment.student_id)
                  .join(ClassArmAssignment,
@@ -871,20 +849,15 @@ def students_list():
             enr_q = enr_q.filter(ClassArmAssignment.arm_id == arm_id)
         query = query.filter(Student.id.in_(enr_q))
 
-    # Apply sorting
     sort_column = getattr(Student, sort_by, Student.surname)
-    if order == 'desc':
-        query = query.order_by(sort_column.desc())
-    else:
-        query = query.order_by(sort_column.asc())
+    return query.order_by(sort_column.desc() if order == 'desc' else sort_column.asc())
 
-    # Paginate
-    students = query.paginate(page=page, per_page=per_page, error_out=False)
-    
-    # Add current class info to each student (single query for the whole page)
+
+def _page_class_map(items):
+    """{student_id: current class display name} for one page of students."""
     active_term = get_active_term()
     class_map = {}
-    page_ids = [s.id for s in students.items]
+    page_ids = [s.id for s in items]
     if active_term and page_ids:
         enrollments = (StudentEnrollment.query.join(ClassArmAssignment).filter(
             StudentEnrollment.student_id.in_(page_ids),
@@ -893,8 +866,33 @@ def students_list():
             joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.school_class),
             joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.arm),
         ).all())
-        for enrollment in enrollments:
-            class_map.setdefault(enrollment.student_id, enrollment.class_arm_assignment.display_name)
+        for e in enrollments:
+            class_map.setdefault(e.student_id, e.class_arm_assignment.display_name)
+    return class_map
+
+
+@main_bp.route('/students')
+@login_required
+def students_list():
+    """List all students with filtering and pagination"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    is_ajax = request.args.get('ajax') == '1'
+
+    search = request.args.get('search', '')
+    gender = request.args.get('gender', '')
+    religion = request.args.get('religion', '')
+    stream = request.args.get('stream', '')
+    subject = request.args.get('subject', '')
+    class_id = request.args.get('class_id', '', type=int) or None
+    arm_id = request.args.get('arm_id', '', type=int) or None
+    sort_by = request.args.get('sort', 'surname')
+    order = request.args.get('order', 'asc')
+
+    students = _students_query().paginate(page=page, per_page=per_page, error_out=False)
+
+    # Add current class info to each student (single query for the whole page)
+    class_map = _page_class_map(students.items)
     for student in students.items:
         student.current_class = class_map.get(student.id)
 
@@ -932,6 +930,54 @@ def students_list():
         streams=STREAMS,
         subject_options=WAEC_SUBJECTS
     )
+
+
+@main_bp.route('/api/students')
+@login_required
+def api_students():
+    """Students list as JSON for the React list — same scope/filters/sort as
+    the page (via _students_query), paginated, plus the filter option lists."""
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int) or 20, 100)
+    pg = _students_query().paginate(page=page, per_page=per_page, error_out=False)
+    class_map = _page_class_map(pg.items)
+    can_manage = not is_teacher()   # teachers get a read-only list
+    students = [{
+        'id': s.id,
+        'student_id': s.student_id,
+        'name': s.full_name,
+        'first_name': s.first_name,
+        'surname': s.surname,
+        'gender': s.gender,
+        'religion': s.religion,
+        'stream': s.stream,
+        'age': s.age,
+        'is_graduated': bool(s.is_graduated),
+        'current_class': class_map.get(s.id),
+        'url': url_for('main.view_student', student_id=s.id),
+        'edit_url': url_for('main.edit_student', student_id=s.id),
+        'delete_url': url_for('main.delete_student', student_id=s.id),
+        'graduate_url': url_for('promotion.unmark_graduate', student_id=s.id) if s.is_graduated
+                        else url_for('promotion.mark_graduate', student_id=s.id),
+    } for s in pg.items]
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    return jsonify({
+        'students': students,
+        'page': pg.page, 'pages': pg.pages or 1, 'total': pg.total,
+        'per_page': per_page, 'has_next': pg.has_next, 'has_prev': pg.has_prev,
+        'filters': {
+            'classes': [{'id': c.id, 'name': c.name} for c in classes],
+            'arms': [{'id': a.id, 'name': a.name} for a in arms],
+            'religions': list(RELIGIONS),
+            'streams': list(STREAMS),
+            'subjects': list(WAEC_SUBJECTS),
+        },
+        'can_manage': can_manage,
+        'can_add': can_manage,
+        'add_url': url_for('main.add_student'),
+        'export_url': url_for('main.export_students_data'),
+    })
 
 
 @main_bp.route('/students/add', methods=['GET', 'POST'])

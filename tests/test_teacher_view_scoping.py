@@ -92,6 +92,32 @@ def test_teacher_stats_scoped(app):
         _deactivate(app)
 
 
+def test_teacher_students_api_scoped(app):
+    ids = _seed_teacher_and_students(app)
+    c = _login_teacher(app)
+    try:
+        j = c.get('/api/students?per_page=50').get_json()
+        sids = {s['student_id'] for s in j['students']}
+        assert 'TVS_MINE' in sids and 'TVS_OTHER' not in sids
+        assert 'classes' in j['filters'] and j['can_add'] is False   # teachers don't add
+    finally:
+        _deactivate(app)
+
+
+def test_students_api_shape_and_pagination(app):
+    from config import Config
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    j = c.get('/api/students?per_page=5&page=1').get_json()
+    assert j['per_page'] == 5 and 'page' in j and 'pages' in j and 'total' in j
+    assert isinstance(j['students'], list)
+    assert set(j['filters']) == {'classes', 'arms', 'religions', 'streams', 'subjects'}
+    if j['students']:
+        s = j['students'][0]
+        assert {'id', 'student_id', 'name', 'gender', 'url'} <= set(s)
+
+
 def _deactivate(app):
     with app.app_context():
         t = Term.query.filter_by(name='TVS-Term').first()
