@@ -854,6 +854,25 @@ def _week_for_date(term_id, target_date):
     ).first()
 
 
+@attendance_bp.route('/react')
+@login_required
+def attendance_react():
+    """React offline pilot — isolated; the existing /mark page is untouched."""
+    if not can_mark_attendance():
+        flash('You do not have permission to mark attendance.', 'error')
+        return redirect(url_for('main.dashboard'))
+    term = get_active_term()
+    assignments = []
+    if term:
+        assignments = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
+    assignment_id = request.args.get('assignment_id', type=int)
+    ds = request.args.get('date') or date.today().isoformat()
+    selected = next((a for a in assignments if a.id == assignment_id), None)
+    return render_template('attendance/react.html',
+                           assignments=assignments, selected=selected, date=ds)
+
+
 @attendance_bp.route('/api/roster')
 @login_required
 def api_roster():

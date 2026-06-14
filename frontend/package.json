@@ -4,10 +4,11 @@
   "version": "0.0.1",
   "description": "React build (esbuild). Bundles src/*.jsx into ../static/js/react/. Run: npm install && npm run build. The built bundle is committed so the phone only needs to git pull (no build at deploy time).",
   "scripts": {
-    "build": "esbuild src/spike.jsx --bundle --minify --format=iife --target=es2018 --outfile=../static/js/react/spike.js",
-    "watch": "esbuild src/spike.jsx --bundle --format=iife --target=es2018 --outfile=../static/js/react/spike.js --watch"
+    "build": "esbuild src/spike.jsx src/attendance.jsx --bundle --minify --format=iife --target=es2018 --outdir=../static/js/react",
+    "watch": "esbuild src/spike.jsx src/attendance.jsx --bundle --format=iife --target=es2018 --outdir=../static/js/react --watch"
   },
   "devDependencies": {
+    "dexie": "^4.0.8",
     "esbuild": "^0.24.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
