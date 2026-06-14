@@ -1,29 +1,29 @@
 /*
- * Attendance offline pilot (React + Dexie).
+ * Attendance offline pilot (React + Dexie) — hardened.
  *
- * Proves the hard part of "offline status": read + write while disconnected.
- *   - Read  : the roster is cached in IndexedDB, so the register opens offline.
- *   - Write : marks made offline go into an outbox queue and the UI updates
- *             optimistically.
- *   - Sync  : the outbox flushes to POST /attendance/api/mark when back online.
+ *   Read  : roster cached in IndexedDB -> register opens offline.
+ *   Write : offline marks go to an outbox; UI updates optimistically.
+ *   Sync  : outbox flushes to POST /attendance/api/mark on reconnect, on load,
+ *           and on a 30s timer. Failures are split into:
+ *             - transient (offline / 5xx)  -> kept, retried later
+ *             - permanent (4xx, e.g. no school week / forbidden) -> quarantined
+ *               to a "failed" list so one bad entry can't block the queue.
+ *   Durable: requests persistent storage so the outbox isn't evicted.
  *
- * Isolated page (/attendance-react). The existing Jinja attendance flow is
- * untouched. Class + date are chosen by the server-rendered form; this component
- * takes over the roster + marking for the selected class.
+ * Isolated page (/attendance/react); the existing Jinja flow is untouched.
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import Dexie from 'dexie';
 
-// ---- IndexedDB (Dexie) ----
 const db = new Dexie('edusyncra_attendance');
-db.version(1).stores({
-  rosters: 'key',          // key = `${assignmentId}|${date}` ; value = roster json
-  outbox: '++id',          // queued marks waiting to sync
+db.version(2).stores({
+  rosters: 'key',     // `${assignmentId}|${date}` -> roster json
+  outbox: '++id',     // queued marks pending sync
+  failed: '++id',     // quarantined marks that returned a permanent error
 });
 const rosterKey = (a, d) => `${a}|${d}`;
 
-// ---- API helpers (cookie + CSRF, JSON-typed) ----
 function csrfToken() {
   const m = document.querySelector('meta[name="csrf-token"]');
   return m ? m.getAttribute('content') : '';
@@ -33,21 +33,17 @@ async function apiGet(url) {
     credentials: 'same-origin',
     headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'fetch' },
   });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  if (!res.ok) { const e = new Error('HTTP ' + res.status); e.status = res.status; throw e; }
   return res.json();
 }
 async function apiPost(url, body) {
   const res = await fetch(url, {
     method: 'POST',
     credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': csrfToken(),
-      'X-Requested-With': 'fetch',
-    },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'fetch' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  if (!res.ok) { const e = new Error('HTTP ' + res.status); e.status = res.status; throw e; }
   return res.json();
 }
 
@@ -62,35 +58,55 @@ function StatusPill({ online, pending }) {
 }
 
 function App({ assignmentId, date, className }) {
-  const [roster, setRoster] = useState(null);     // { students:[{enrollment_id, name, morning_present}], week_id, ... }
-  const [present, setPresent] = useState({});     // enrollment_id -> bool
+  const [roster, setRoster] = useState(null);
+  const [present, setPresent] = useState({});
   const [online, setOnline] = useState(navigator.onLine);
   const [pending, setPending] = useState(0);
+  const [failed, setFailed] = useState([]);
   const [msg, setMsg] = useState('');
-  const [source, setSource] = useState('');       // 'network' | 'cache'
+  const [source, setSource] = useState('');
+  const flushing = useRef(false);
 
-  const refreshPending = useCallback(async () => {
+  const refresh = useCallback(async () => {
     setPending(await db.outbox.count());
+    setFailed(await db.failed.toArray());
   }, []);
 
-  // Flush the outbox: POST each queued mark; drop it on success.
+  // Flush oldest-first. Transient errors stop the run (retry later); permanent
+  // (4xx) errors quarantine the entry so it can't block everything behind it.
   const flush = useCallback(async () => {
-    const items = await db.outbox.toArray();
-    let synced = 0;
-    for (const it of items) {
-      try {
-        await apiPost('/attendance/api/mark', it.payload);
-        await db.outbox.delete(it.id);
-        synced++;
-      } catch (e) {
-        break; // stop on first failure (likely offline again); retry later
+    if (flushing.current) return;
+    flushing.current = true;
+    try {
+      const items = await db.outbox.orderBy('id').toArray();
+      let synced = 0;
+      for (const it of items) {
+        try {
+          await apiPost('/attendance/api/mark', it.payload);
+          await db.outbox.delete(it.id);
+          synced++;
+        } catch (e) {
+          if (e.status && e.status >= 400 && e.status < 500) {
+            await db.failed.add({ payload: it.payload, reason: 'HTTP ' + e.status, ts: Date.now() });
+            await db.outbox.delete(it.id);
+            continue;                      // skip the poison entry, keep going
+          }
+          break;                           // transient — leave queued, retry later
+        }
       }
+      await refresh();
+      if (synced) setMsg(`Synced ${synced} saved mark(s).`);
+    } finally {
+      flushing.current = false;
     }
-    await refreshPending();
-    if (synced) setMsg(`Synced ${synced} saved mark(s).`);
-  }, [refreshPending]);
+  }, [refresh]);
 
-  // Load roster: network first (cache it), else fall back to the cached copy.
+  // Ask the browser to keep our storage (so the outbox can't be evicted).
+  useEffect(() => {
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+  }, []);
+
+  // Load roster: network first (cache it), else the cached copy.
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -98,8 +114,7 @@ function App({ assignmentId, date, className }) {
       try {
         const data = await apiGet(`/attendance/api/roster?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`);
         await db.rosters.put({ key, value: data });
-        if (!alive) return;
-        setRoster(data); setSource('network');
+        if (alive) { setRoster(data); setSource('network'); }
       } catch (e) {
         const cached = await db.rosters.get(key);
         if (!alive) return;
@@ -110,7 +125,6 @@ function App({ assignmentId, date, className }) {
     return () => { alive = false; };
   }, [assignmentId, date]);
 
-  // Seed the checkbox state from the roster.
   useEffect(() => {
     if (!roster) return;
     const init = {};
@@ -118,16 +132,21 @@ function App({ assignmentId, date, className }) {
     setPresent(init);
   }, [roster]);
 
-  // Online/offline events + initial flush.
+  // online/offline + initial flush + 30s retry timer.
   useEffect(() => {
-    refreshPending();
+    refresh();
     const up = () => { setOnline(true); flush(); };
     const down = () => setOnline(false);
     window.addEventListener('online', up);
     window.addEventListener('offline', down);
     if (navigator.onLine) flush();
-    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
-  }, [flush, refreshPending]);
+    const timer = setInterval(() => { if (navigator.onLine) flush(); }, 30000);
+    return () => {
+      window.removeEventListener('online', up);
+      window.removeEventListener('offline', down);
+      clearInterval(timer);
+    };
+  }, [flush, refresh]);
 
   const toggle = (id) => setPresent((p) => ({ ...p, [id]: !p[id] }));
   const allPresent = () => {
@@ -140,7 +159,7 @@ function App({ assignmentId, date, className }) {
     const presentIds = roster.students.filter((s) => present[s.enrollment_id]).map((s) => s.enrollment_id);
     const payload = { assignment_id: assignmentId, date, session_type: 'morning', present: presentIds, auto_copy: true };
 
-    // Optimistically update the cached roster so reopening reflects the marks.
+    // optimistic cache update so reopening reflects the marks
     const key = rosterKey(assignmentId, date);
     const updated = { ...roster, students: roster.students.map((s) => ({ ...s, morning_present: !!present[s.enrollment_id], afternoon_present: !!present[s.enrollment_id] })) };
     await db.rosters.put({ key, value: updated });
@@ -149,11 +168,23 @@ function App({ assignmentId, date, className }) {
       const r = await apiPost('/attendance/api/mark', payload);
       setMsg(`Saved ${r.count} student(s) — online.`);
     } catch (e) {
+      if (e.status && e.status >= 400 && e.status < 500) {
+        setMsg(`Couldn’t save (HTTP ${e.status}) — check the date/permission; not queued.`);
+        return;
+      }
       await db.outbox.add({ payload, ts: Date.now() });
-      await refreshPending();
+      await refresh();
       setMsg('No network — saved to the queue, will sync when you’re back online.');
     }
   };
+
+  const retryFailed = async (f) => {
+    await db.outbox.add({ payload: f.payload, ts: Date.now() });
+    await db.failed.delete(f.id);
+    await refresh();
+    if (navigator.onLine) flush();
+  };
+  const discardFailed = async (f) => { await db.failed.delete(f.id); await refresh(); };
 
   if (!roster) return <p style={{ color: '#888' }}>{msg || 'Loading register…'}</p>;
   const presentCount = roster.students.filter((s) => present[s.enrollment_id]).length;
@@ -190,15 +221,30 @@ function App({ assignmentId, date, className }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <button className="btn btn-secondary btn-sm" type="button" onClick={allPresent}>Mark all present</button>
         <button className="btn btn-primary" type="button" onClick={save} disabled={!roster.week_id}>Save register</button>
         {pending > 0 && <button className="btn btn-light btn-sm" type="button" onClick={flush}>Sync now ({pending})</button>}
         {msg && <span style={{ fontSize: 13, color: '#374151' }}>{msg}</span>}
       </div>
 
+      {failed.length > 0 && (
+        <div className="alert alert-danger" style={{ marginTop: 12 }}>
+          <b>{failed.length} mark(s) couldn’t sync</b> (a server rejected them):
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            {failed.map((f) => (
+              <li key={f.id} style={{ fontSize: 13, margin: '4px 0' }}>
+                {f.payload.date} — {f.reason}
+                <button className="btn btn-light btn-sm" style={{ marginLeft: 8 }} type="button" onClick={() => retryFailed(f)}>Retry</button>
+                <button className="btn btn-light btn-sm" style={{ marginLeft: 4 }} type="button" onClick={() => discardFailed(f)}>Discard</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <p style={{ marginTop: 10, fontSize: 12, color: '#16a34a' }}>
-        ✓ React + IndexedDB (Dexie). Load once online, then it works offline — marks queue and sync on reconnect.
+        ✓ React + IndexedDB (Dexie), persistent storage. Marks queue offline and sync on reconnect; permanent errors are quarantined, not retried forever.
       </p>
     </div>
   );
