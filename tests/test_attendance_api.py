@@ -21,8 +21,9 @@ def _setup(app):
         wk = Week.query.filter(Week.term_id == term.id,
                                Week.start_date <= today, Week.end_date >= today).first()
         if not wk:
-            db.session.add(Week(term_id=term.id, week_number=99,
-                                start_date=monday, end_date=monday + timedelta(days=6)))
+            wk = Week(term_id=term.id, week_number=99,
+                      start_date=monday, end_date=monday + timedelta(days=6))
+            db.session.add(wk); db.session.flush()
         sc = SchoolClass.query.first(); arm = ClassArm.query.first()
         bid = Branch.get_default().id
         caa = ClassArmAssignment.query.filter_by(
@@ -47,7 +48,7 @@ def _setup(app):
                 db.session.add(en); db.session.flush()
             eids.append(en.id)
         db.session.commit()
-        return dict(caa=caa.id, eids=eids, date=today.isoformat(), bid=bid)
+        return dict(caa=caa.id, eids=eids, date=today.isoformat(), bid=bid, week=wk.id)
 
 
 def _admin(app):
@@ -92,6 +93,34 @@ def test_mark_rejects_date_with_no_week(app):
                json={'assignment_id': ids['caa'], 'date': far, 'present': []},
                headers={'X-CSRFToken': tok})
     assert m.status_code == 400
+
+
+def test_context_lists_term_classes_weeks(app):
+    _setup(app)
+    c, _ = _admin(app)
+    j = c.get('/attendance/api/context').get_json()
+    assert j['term'] is not None
+    assert any(k in j for k in ('classes', 'weeks', 'terms'))
+    assert isinstance(j['weeks'], list) and isinstance(j['classes'], list)
+
+
+def test_week_grid_roundtrip(app):
+    ids = _setup(app)
+    c, tok = _admin(app)
+    g = c.get(f'/attendance/api/week?assignment_id={ids["caa"]}&week_id={ids["week"]}')
+    assert g.status_code == 200
+    gj = g.get_json()
+    assert gj['week_id'] == ids['week'] and gj['days'] and gj['students']
+    day = gj['days'][0]['date']
+    # mark Ann absent (am/pm false) on the first school day
+    m = c.post('/attendance/api/week/mark', headers={'X-CSRFToken': tok}, json={
+        'assignment_id': ids['caa'], 'week_id': ids['week'],
+        'marks': [{'enrollment_id': ids['eids'][0], 'date': day, 'am': False, 'pm': False}],
+    })
+    assert m.status_code == 200 and m.get_json()['ok'] is True
+    g2 = c.get(f'/attendance/api/week?assignment_id={ids["caa"]}&week_id={ids["week"]}').get_json()
+    ann = next(s for s in g2['students'] if s['enrollment_id'] == ids['eids'][0])
+    assert ann['days'][day] == {'am': False, 'pm': False}
 
 
 def test_cross_branch_is_forbidden(app):

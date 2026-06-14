@@ -959,6 +959,167 @@ def api_mark():
                     'session_type': session_type})
 
 
+@attendance_bp.route('/api/context')
+@login_required
+def api_context():
+    """Selector data for the attendance SPA (term, terms, markable classes,
+    weeks, holidays) — cacheable so the picker works offline."""
+    if not can_mark_attendance():
+        return jsonify({'error': 'forbidden'}), 403
+    term = get_active_term()
+    terms = [{'id': t.id, 'name': t.full_name, 'active': bool(t.is_active)}
+             for t in Term.query.join(AcademicSession)
+             .order_by(AcademicSession.name.desc(), Term.term_number).all()]
+    classes, weeks, holidays = [], [], []
+    if term:
+        classes = [{'id': a.id, 'name': a.display_name} for a in filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)]
+        weeks = [{'id': w.id, 'number': w.week_number,
+                  'start': w.start_date.isoformat(), 'end': w.end_date.isoformat()}
+                 for w in Week.query.filter_by(term_id=term.id).order_by(Week.week_number).all()]
+        holidays = [h.date.isoformat() for h in Holiday.query.filter_by(term_id=term.id).all()]
+    return jsonify({
+        'term': {'id': term.id, 'name': term.full_name} if term else None,
+        'terms': terms, 'classes': classes, 'weeks': weeks, 'holidays': holidays,
+        'today': date.today().isoformat(),
+    })
+
+
+@attendance_bp.route('/api/week')
+@login_required
+def api_week():
+    """Weekly grid (students × school-days) with existing AM/PM marks."""
+    assignment_id = request.args.get('assignment_id', type=int)
+    week_id = request.args.get('week_id', type=int)
+    if not assignment_id:
+        return jsonify({'error': 'assignment_id required'}), 400
+    caa = db.get_or_404(ClassArmAssignment, assignment_id)
+    require_branch_access(caa.branch_id)
+    if not (can_mark_attendance(assignment_id) and can_access_class(assignment_id)):
+        return jsonify({'error': 'forbidden'}), 403
+    week = db.session.get(Week, week_id) if week_id else None
+    if not week:
+        return jsonify({'error': 'week_id required'}), 400
+    holidays = Holiday.query.filter_by(term_id=week.term_id).all()
+    days = _week_school_days(week, holidays)
+    enrollments = (StudentEnrollment.query
+                   .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                   .join(Student).order_by(Student.surname, Student.first_name).all())
+    recs = {}
+    for r in Attendance.query.filter(
+            Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
+            Attendance.date.in_(days)).all():
+        recs.setdefault(r.enrollment_id, {})[r.date.isoformat()] = {
+            'am': bool(r.morning_present), 'pm': bool(r.afternoon_present)}
+    students = [{
+        'enrollment_id': e.id, 'student_id': e.student.student_id, 'name': e.student.full_name,
+        'days': {d.isoformat(): recs.get(e.id, {}).get(d.isoformat(), {'am': True, 'pm': True})
+                 for d in days},
+    } for e in enrollments]
+    return jsonify({
+        'assignment_id': assignment_id, 'class_name': caa.display_name,
+        'week_id': week.id, 'week_number': week.week_number,
+        'days': [{'date': d.isoformat(), 'label': d.strftime('%a %d/%m')} for d in days],
+        'students': students,
+    })
+
+
+@attendance_bp.route('/api/week/mark', methods=['POST'])
+@login_required
+def api_week_mark():
+    """Idempotent bulk upsert for the weekly grid. Body: {assignment_id, week_id,
+    marks:[{enrollment_id, date, am, pm}]}. The offline outbox flushes here."""
+    data = request.get_json(silent=True) or {}
+    caa = db.session.get(ClassArmAssignment, data.get('assignment_id'))
+    week = db.session.get(Week, data.get('week_id'))
+    if not caa or not week:
+        return jsonify({'error': 'invalid assignment/week'}), 400
+    require_branch_access(caa.branch_id)
+    if not can_mark_attendance(caa.id):
+        return jsonify({'error': 'forbidden'}), 403
+    holidays = Holiday.query.filter_by(term_id=week.term_id).all()
+    valid_days = {d.isoformat() for d in _week_school_days(week, holidays)}
+    enroll_ids = {e.id for e in StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=caa.id, is_active=True).all()}
+    existing = {(r.enrollment_id, r.date.isoformat()): r for r in Attendance.query.filter(
+        Attendance.enrollment_id.in_(list(enroll_ids) or [-1]),
+        Attendance.week_id == week.id).all()}
+    saved = 0
+    try:
+        for m in data.get('marks', []):
+            eid, iso = m.get('enrollment_id'), m.get('date')
+            if eid not in enroll_ids or iso not in valid_days:
+                continue
+            rec = existing.get((eid, iso))
+            if rec is None:
+                rec = Attendance(enrollment_id=eid, week_id=week.id,
+                                 date=datetime.strptime(iso, '%Y-%m-%d').date())
+                db.session.add(rec)
+                existing[(eid, iso)] = rec
+            rec.week_id = week.id
+            rec.morning_present = bool(m.get('am'))
+            rec.afternoon_present = bool(m.get('pm'))
+            rec.marked_by = 'React'
+            saved += 1
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'ok': True, 'saved': saved})
+
+
+@attendance_bp.route('/api/copy-previous', methods=['POST'])
+@login_required
+def api_copy_previous():
+    """Copy the previous school day's marks into `date`. Body: {assignment_id, date}."""
+    data = request.get_json(silent=True) or {}
+    caa = db.session.get(ClassArmAssignment, data.get('assignment_id'))
+    if not caa:
+        return jsonify({'error': 'invalid assignment'}), 400
+    require_branch_access(caa.branch_id)
+    if not can_mark_attendance(caa.id):
+        return jsonify({'error': 'forbidden'}), 403
+    try:
+        target = datetime.strptime(data['date'], '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({'error': 'bad date'}), 400
+    week = _week_for_date(caa.term_id, target)
+    if not week:
+        return jsonify({'error': 'date not in any school week'}), 400
+    holiday_dates = {h.date for h in Holiday.query.filter_by(term_id=caa.term_id).all()}
+    prev, n = target - timedelta(days=1), 0
+    while n < 10 and (prev.weekday() >= 5 or prev in holiday_dates):
+        prev -= timedelta(days=1); n += 1
+    enrollments = StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=caa.id, is_active=True).all()
+    prevmap = {a.enrollment_id: a for a in Attendance.query.filter(
+        Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
+        Attendance.date == prev).all()}
+    if not prevmap:
+        return jsonify({'ok': True, 'copied': 0, 'from': prev.isoformat(),
+                        'note': 'No attendance on the previous school day.'})
+    copied = 0
+    try:
+        for e in enrollments:
+            p = prevmap.get(e.id)
+            if not p:
+                continue
+            rec = Attendance.query.filter_by(enrollment_id=e.id, date=target).first()
+            if rec:
+                rec.morning_present, rec.afternoon_present = p.morning_present, p.afternoon_present
+            else:
+                db.session.add(Attendance(
+                    enrollment_id=e.id, week_id=week.id, date=target,
+                    morning_present=p.morning_present, afternoon_present=p.afternoon_present,
+                    marked_by='React'))
+            copied += 1
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'ok': True, 'copied': copied, 'from': prev.isoformat()})
+
+
 # ============================================================================
 # ATTENDANCE ALERTS
 # ============================================================================
