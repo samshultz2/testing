@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { apiGet } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill } from '../../components/ui';
+import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards } from '../../components/ui';
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
@@ -41,16 +41,18 @@ export default function DailySummary() {
         : state.error ? <ErrorState detail={state.error.message} />
         : d && (
           <>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
               <strong>{d.class_name}</strong>
-              <span style={{ color: '#6b7280' }}>{d.date}</span>
-              <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Pill tone="green">AM present {d.morning_present}</Pill>
-                <Pill tone="red">AM absent {d.morning_absent}</Pill>
-                <Pill tone="green">PM present {d.afternoon_present}</Pill>
-                <Pill tone="red">PM absent {d.afternoon_absent}</Pill>
-              </span>
+              <span style={{ color: '#6b7280' }}>{new Date(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
+
+            <StatCards items={[
+              { value: d.total_students, label: 'Total students' },
+              { value: d.morning_present, label: 'AM present' },
+              { value: d.morning_absent, label: 'AM absent' },
+              { value: d.afternoon_present, label: 'PM present' },
+              { value: d.afternoon_absent, label: 'PM absent' },
+            ]} />
 
             {d.students.length === 0 ? (
               <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
@@ -60,6 +62,7 @@ export default function DailySummary() {
                   <thead>
                     <tr>
                       <th scope="col" className="att-grid-name">Student</th>
+                      <th scope="col">Gender</th>
                       <th scope="col">Morning</th>
                       <th scope="col">Afternoon</th>
                     </tr>
@@ -68,6 +71,7 @@ export default function DailySummary() {
                     {d.students.map((s) => (
                       <tr key={s.student_id}>
                         <td className="att-grid-name">{s.student_name}</td>
+                        <td>{s.gender}</td>
                         <td>{flag(s.morning_present)}</td>
                         <td>{flag(s.afternoon_present)}</td>
                       </tr>

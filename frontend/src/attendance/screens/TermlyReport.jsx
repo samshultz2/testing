@@ -2,9 +2,14 @@ import React, { useState } from 'react';
 import { apiGet } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill } from '../../components/ui';
+import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired,
+         StatCards, SectionTitle, PerfBands } from '../../components/ui';
 
-// Read-only termly attendance report (per-student weekly totals + percentage).
+const round1 = (n) => Math.round(n * 10) / 10;
+
+// Read-only termly attendance report — full parity with the Jinja termly page:
+// attendance rate, counts, gender table, session (AM/PM) table, term info,
+// performance bands and the per-student weekly breakdown with totals.
 export default function TermlyReport() {
   const { classes = [], term, online } = useCtx();
   const [assignmentId, setAssignmentId] = useState('');
@@ -18,6 +23,29 @@ export default function TermlyReport() {
   );
 
   const d = state.data;
+  const ct = d && d.class_totals;
+  const ti = d && d.term_info;
+  const maxSess = d ? ti.total_school_days * d.total_students : 0;
+
+  // Performance bands, mirroring the Jinja thresholds (share of roll calls).
+  let perf = null;
+  if (d) {
+    const times = ti.total_times_opened;
+    const excT = Math.floor(times * 0.9), goodT = Math.floor(times * 0.75), fairT = Math.floor(times * 0.5);
+    let exc = 0, gd = 0, fr = 0, pr = 0;
+    d.students.forEach((s) => {
+      if (s.termly_total >= excT) exc++;
+      else if (s.termly_total >= goodT) gd++;
+      else if (s.termly_total >= fairT) fr++;
+      else pr++;
+    });
+    perf = [
+      { tone: 'excellent', title: 'Excellent', count: exc, range: `≥90% (${excT}+)` },
+      { tone: 'good', title: 'Good', count: gd, range: '75–89%' },
+      { tone: 'fair', title: 'Fair', count: fr, range: '50–74%' },
+      { tone: 'poor', title: 'Poor', count: pr, range: '<50%' },
+    ];
+  }
 
   return (
     <div>
@@ -35,14 +63,77 @@ export default function TermlyReport() {
         : state.error ? <ErrorState detail={state.error.message} />
         : d && (
           <>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
-              <strong>{d.class_name}</strong>
-              <span style={{ color: '#6b7280' }}>{d.term_info.total_weeks} week(s) · {d.term_info.total_school_days} school day(s)</span>
-              <span style={{ marginLeft: 'auto' }}>
-                <Pill tone="green">{d.class_totals.termly_percentage}% attendance</Pill>
-              </span>
+            <div style={{ marginBottom: 4 }}><strong>{d.class_name}</strong></div>
+
+            <StatCards items={[
+              { value: ct.termly_percentage + '%', label: 'Attendance rate', primary: true },
+              { value: d.total_students, label: 'Students' },
+              { value: ti.total_times_opened, label: 'Times opened' },
+              { value: ti.total_school_days, label: 'School days' },
+            ]} />
+
+            <SectionTitle icon="fa-venus-mars">Gender</SectionTitle>
+            <div className="att-grid-wrap">
+              <table className="att-grid" aria-label="Attendance by gender">
+                <thead>
+                  <tr><th scope="col" className="att-grid-name">Gender</th><th scope="col">Count</th><th scope="col">Attendance</th><th scope="col">Avg</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="att-grid-name">Male</td>
+                    <td>{d.total_male_students}</td>
+                    <td>{ct.male_attendance}</td>
+                    <td>{d.total_male_students > 0 ? round1(ct.male_attendance / d.total_male_students) : 0}</td>
+                  </tr>
+                  <tr>
+                    <td className="att-grid-name">Female</td>
+                    <td>{d.total_female_students}</td>
+                    <td>{ct.female_attendance}</td>
+                    <td>{d.total_female_students > 0 ? round1(ct.female_attendance / d.total_female_students) : 0}</td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr><td className="att-grid-name">Total</td><td>{d.total_students}</td><td>{ct.total_attendance}</td><td>{ct.termly_average}</td></tr>
+                </tfoot>
+              </table>
             </div>
 
+            <SectionTitle icon="fa-clock">Session</SectionTitle>
+            <div className="att-grid-wrap">
+              <table className="att-grid" aria-label="Attendance by session">
+                <thead>
+                  <tr><th scope="col" className="att-grid-name">Session</th><th scope="col">Total</th><th scope="col">Max</th><th scope="col">%</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="att-grid-name">AM (morning)</td>
+                    <td>{ct.total_morning}</td><td>{maxSess}</td>
+                    <td>{maxSess > 0 ? round1((ct.total_morning / maxSess) * 100) : 0}%</td>
+                  </tr>
+                  <tr>
+                    <td className="att-grid-name">PM (afternoon)</td>
+                    <td>{ct.total_afternoon}</td><td>{maxSess}</td>
+                    <td>{maxSess > 0 ? round1((ct.total_afternoon / maxSess) * 100) : 0}%</td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr><td className="att-grid-name">Both</td><td>{ct.total_attendance}</td><td>{maxSess * 2}</td><td>{ct.termly_percentage}%</td></tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <SectionTitle icon="fa-info-circle">Term info</SectionTitle>
+            <StatCards items={[
+              { value: ti.total_weeks, label: 'Weeks' },
+              { value: ti.total_school_days, label: 'Days' },
+              { value: ti.total_times_opened, label: 'Roll calls' },
+              { value: ct.termly_average, label: 'Daily average' },
+            ]} />
+
+            <SectionTitle icon="fa-medal">Performance</SectionTitle>
+            <PerfBands bands={perf} />
+
+            <SectionTitle icon="fa-users">Students</SectionTitle>
             {d.students.length === 0 ? (
               <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
             ) : (
@@ -52,6 +143,8 @@ export default function TermlyReport() {
                     <tr>
                       <th scope="col" className="att-grid-name">Student</th>
                       {d.weeks.map((w) => <th scope="col" key={w.id}>W{w.number}</th>)}
+                      <th scope="col">AM</th>
+                      <th scope="col">PM</th>
                       <th scope="col">Total</th>
                       <th scope="col">%</th>
                     </tr>
@@ -59,19 +152,23 @@ export default function TermlyReport() {
                   <tbody>
                     {d.students.map((s) => (
                       <tr key={s.student_id}>
-                        <td className="att-grid-name">{s.student_name}</td>
+                        <td className="att-grid-name">{s.student_name}<div className="att-sub">{s.gender}</div></td>
                         {s.weekly.map((w) => <td key={w.week_id}>{w.total}</td>)}
+                        <td>{s.termly_morning}</td>
+                        <td>{s.termly_afternoon}</td>
                         <td><b>{s.termly_total}</b></td>
-                        <td>{s.percentage}%</td>
+                        <td>{s.termly_percentage}%</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td className="att-grid-name"><b>Class total</b></td>
-                      {d.weekly_totals.map((t, i) => <td key={i}><b>{t}</b></td>)}
-                      <td><b>{d.class_totals.total_attendance}</b></td>
-                      <td><b>{d.class_totals.termly_percentage}%</b></td>
+                      <td className="att-grid-name">Total</td>
+                      {d.weekly_totals.map((t, i) => <td key={i}>{t}</td>)}
+                      <td>{ct.total_morning}</td>
+                      <td>{ct.total_afternoon}</td>
+                      <td>{ct.total_attendance}</td>
+                      <td>{ct.termly_percentage}%</td>
                     </tr>
                   </tfoot>
                 </table>

@@ -100,6 +100,72 @@ export function Button({ variant = 'primary', size, children, ...rest }) {
   return <button type="button" className={cls} {...rest}>{children}</button>;
 }
 
+// Headline stat cards (e.g. attendance rate / students / school days).
+export function StatCards({ items }) {
+  return (
+    <div className="att-stats">
+      {items.map((it, i) => (
+        <div key={i} className={'att-stat' + (it.primary ? ' is-primary' : '')}>
+          <div className="att-stat-value">{it.value}</div>
+          <div className="att-stat-label">{it.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Compact label/value grid for secondary totals.
+export function InfoGrid({ items }) {
+  return (
+    <div className="att-info">
+      {items.map((it, i) => (
+        <div key={i} className="att-info-item">
+          <span className="k">{it.label}</span>
+          <span className="v" style={it.tone === 'primary' ? { color: 'var(--primary, #2563eb)' } : undefined}>{it.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SectionTitle({ icon, children }) {
+  return <h3 className="att-section-title">{icon && <i className={'fas ' + icon} aria-hidden="true" />}{children}</h3>;
+}
+
+// Performance bands (Excellent / Good / Fair / Poor).
+export function PerfBands({ bands }) {
+  const tones = {
+    excellent: ['rgba(76,175,80,.1)', '#4caf50'],
+    good: ['rgba(33,150,243,.1)', '#2196f3'],
+    fair: ['rgba(255,193,7,.1)', '#ffc107'],
+    poor: ['rgba(244,67,54,.1)', '#f44336'],
+  };
+  return (
+    <div className="att-perf">
+      {bands.map((b) => {
+        const [bg, bd] = tones[b.tone] || tones.good;
+        return (
+          <div key={b.tone} className="att-perf-card" style={{ background: bg, borderLeftColor: bd }}>
+            <div className="t">{b.title}</div>
+            <div className="c">{b.count}</div>
+            <div className="r">{b.range}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// AM/PM tick marks for a single day (✓ present / ✗ absent).
+export function AmPm({ am, pm }) {
+  return (
+    <span className="att-mark" aria-label={`AM ${am ? 'present' : 'absent'}, PM ${pm ? 'present' : 'absent'}`}>
+      <span className={am ? 'ok' : 'no'}>{am ? '✓' : '✗'}</span>
+      <span className={pm ? 'ok' : 'no'}>{pm ? '✓' : '✗'}</span>
+    </span>
+  );
+}
+
 // Global panel for marks that were permanently rejected by the server.
 export function FailedMarks({ items, onRetry, onDiscard }) {
   if (!items || !items.length) return null;

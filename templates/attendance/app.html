@@ -43,6 +43,37 @@
 .att-ampm { display: inline-flex; gap: 8px; }
 .att-ampm label { display: inline-flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--text-muted, #6b7280); gap: 2px; cursor: pointer; }
 
+/* ---- report stat cards / info grids / performance bands ---- */
+.att-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0; }
+@media (min-width: 768px) { .att-stats { grid-template-columns: repeat(4, 1fr); } }
+.att-stat { background: var(--card-bg, #fff); border: 1px solid var(--gray-200, #e5e7eb); border-radius: 10px; padding: 14px; text-align: center; }
+.att-stat.is-primary { background: var(--primary, #2563eb); color: #fff; border: none; }
+.att-stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.att-stat-label { font-size: 12px; opacity: .85; margin-top: 4px; }
+
+.att-info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 576px) { .att-info { grid-template-columns: repeat(3, 1fr); } }
+.att-info-item { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--gray-50, #f8fafc); border-radius: 6px; }
+.att-info-item .k { color: var(--text-muted, #6b7280); font-size: 13px; }
+.att-info-item .v { font-weight: 600; }
+
+.att-section-title { font-weight: 700; font-size: 15px; margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; color: var(--text-primary, #111827); }
+
+.att-perf { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 576px) { .att-perf { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 992px) { .att-perf { grid-template-columns: repeat(4, 1fr); } }
+.att-perf-card { padding: 12px; border-radius: 8px; border-left: 4px solid; }
+.att-perf-card .t { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.att-perf-card .c { font-size: 1.5rem; font-weight: 700; }
+.att-perf-card .r { font-size: 12px; color: var(--text-muted, #6b7280); }
+
+.att-mark { display: inline-flex; gap: 3px; font-size: 13px; }
+.att-mark .ok { color: #16a34a; }
+.att-mark .no { color: #dc2626; }
+.att-grid tfoot td { font-weight: 700; background: var(--gray-50, #f8fafc); }
+.att-sub { color: var(--text-muted, #6b7280); font-size: 11px; font-weight: 400; }
+.att-legend { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 10px; }
+
 @media (max-width: 560px) {
   /* Keep the label beside every icon (icons alone are ambiguous); just tighten
      spacing and let the tabs wrap onto multiple rows on small screens. */

@@ -159,7 +159,15 @@ def test_weekly_report(app):
     assert r.status_code == 200
     j = r.get_json()
     assert j['week_info']['week_id'] == ids['week']
-    assert isinstance(j['school_days'], list) and 'class_totals' in j
+    assert isinstance(j['school_days'], list)
+    # headline + totals the React screen renders must all be present
+    for k in ('total_students', 'school_days_count', 'times_opened'):
+        assert k in j
+    for k in ('total_morning', 'total_afternoon', 'total_attendance',
+              'male_attendance', 'female_attendance', 'weekly_percentage'):
+        assert k in j['class_totals']
+    for k in ('weekly_morning', 'weekly_afternoon', 'weekly_total', 'gender', 'daily'):
+        assert k in j['students'][0]
 
 
 def test_termly_report_serialises_weeks(app):
@@ -170,7 +178,16 @@ def test_termly_report_serialises_weeks(app):
     j = r.get_json()
     # weeks must be JSON-friendly dicts, not Week objects
     assert all(set(w) == {'id', 'number'} for w in j['weeks'])
-    assert 'termly_percentage' in j['class_totals']
+    # every stat/total the React termly screen renders must be present
+    for k in ('total_students', 'total_male_students', 'total_female_students', 'weekly_totals'):
+        assert k in j
+    for k in ('total_weeks', 'total_school_days', 'total_times_opened'):
+        assert k in j['term_info']
+    for k in ('total_morning', 'total_afternoon', 'total_attendance', 'male_attendance',
+              'female_attendance', 'termly_average', 'termly_percentage'):
+        assert k in j['class_totals']
+    for k in ('gender', 'termly_morning', 'termly_afternoon', 'termly_total', 'termly_percentage', 'weekly'):
+        assert k in j['students'][0]
 
 
 def test_alerts_report_scoped(app):
