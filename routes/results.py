@@ -17,6 +17,7 @@ from utils.helpers import (
 from datetime import date as _date
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
+from utils.web_exports import xlsx_response
 from utils.analytics_service import AcademicAnalytics
 
 results_bp = Blueprint('results', __name__, url_prefix='/results')
@@ -991,12 +992,7 @@ def import_template(exam):
         ws.append(['STU00001', 2025, 'Mathematics', 'B2'])
         ws.append(['STU00001', 2025, 'English Language', 'C4'])
         fn = 'waec_import_template.xlsx'
-    out = BytesIO()
-    wb.save(out)
-    out.seek(0)
-    return Response(out.getvalue(),
-                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    headers={'Content-Disposition': f'attachment; filename={fn}'})
+    return xlsx_response(wb, fn)
 
 
 @results_bp.route('/import/<exam>', methods=['POST'])
@@ -1385,14 +1381,7 @@ def analytics_export():
             ws.append([s['subject'], s['total_entries'], s['a1_rate'], s['pass_rate'], s['fail_rate']])
         ws.column_dimensions['A'].width = 24
 
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename=exam_analytics_{year}.xlsx'}
-    )
+    return xlsx_response(wb, f'exam_analytics_{year}.xlsx')
 
 
 @results_bp.route('/cutoffs')
@@ -1743,15 +1732,7 @@ def export_waec():
     ws.column_dimensions['B'].width = 12
     ws.column_dimensions['C'].width = 25
     
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename=waec_results_{year}.xlsx'}
-    )
+    return xlsx_response(wb, f'waec_results_{year}.xlsx')
 
 
 @results_bp.route('/jamb/export')
@@ -1808,15 +1789,7 @@ def export_jamb():
         ws.cell(row=row, column=11, value=r.subject4 or '-').border = border
         ws.cell(row=row, column=12, value=r.subject4_score or '-').border = border
     
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return Response(
-        output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename=jamb_results_{year}.xlsx'}
-    )
+    return xlsx_response(wb, f'jamb_results_{year}.xlsx')
 
 
 # ============================================================================
