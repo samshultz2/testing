@@ -1,24 +1,9 @@
 import React, { useState } from 'react';
-import { postForm } from '../lib/forms';
+import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
-import { Banner } from '../components/ui';
+import { Banner, PageHeader, Empty } from '../components/ui';
 
-function PageHeader({ icon, title, actions }) {
-  return (
-    <div className="page-header">
-      <h1><i className={'fas ' + icon} /> {title}</h1>
-      {actions && <div className="page-header-actions">{actions}</div>}
-    </div>
-  );
-}
-
-function EmptyState({ icon, title, children }) {
-  return (
-    <div className="empty-state">
-      <i className={'fas ' + icon} /><h3>{title}</h3>{children && <p>{children}</p>}
-    </div>
-  );
-}
+const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
 
 // ---- Dashboard -------------------------------------------------------------
 function Dashboard({ d }) {
@@ -97,21 +82,19 @@ function Products({ d, notify }) {
     e.preventDefault();
     if (!form.name.trim()) { notify('error', 'Product name is required.'); return; }
     setBusy(true);
-    const res = await postForm(d.add_url, form);
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(d.add_url, form);
     setBusy(false);
-    if (res.ok && body.ok) window.location.reload();
-    else notify('error', body.error || 'Could not add product.');
+    if (r.ok) window.location.reload();
+    else notify('error', r.error || 'Could not add product.');
   };
 
   const restock = async (p, qty) => {
     if (!qty) return;
     setBusy(true);
-    const res = await postForm(p.restock_url, { qty });
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(p.restock_url, { qty });
     setBusy(false);
-    if (res.ok && body.ok) window.location.reload();
-    else notify('error', body.error || 'Could not restock.');
+    if (r.ok) window.location.reload();
+    else notify('error', r.error || 'Could not restock.');
   };
 
   // Client-side search over the loaded products (parity: classic reloaded on change).
@@ -194,11 +177,10 @@ function NewSale({ d, notify }) {
     d.products.forEach((p) => { const n = Number(qty[p.id]) || 0; if (n > 0) { ids.push(p.id); qs.push(n); } });
     if (!ids.length) { notify('error', 'Add at least one item with a quantity.'); return; }
     setBusy(true);
-    const res = await postForm(d.submit_url, { product_id: ids, quantity: qs, ...pay });
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(d.submit_url, { product_id: ids, quantity: qs, ...pay });
     setBusy(false);
-    if (res.ok && body.ok) window.location = body.redirect;
-    else notify('error', body.error || 'Could not record the sale.');
+    if (r.ok) window.location = r.redirect;
+    else notify('error', r.error || 'Could not record the sale.');
   };
 
   return (

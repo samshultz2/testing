@@ -7,11 +7,6 @@
 {% endblock %}
 {% block extra_css %}
 <style>
-.fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
-.fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
-.fin-tab i{font-size:.85rem;opacity:.8}
-.fin-tab:hover{color:var(--primary);background:var(--gray-50)}
-.fin-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
 .kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
 @media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
 .kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
@@ -28,11 +23,6 @@
 .widget .wh h3 i{color:var(--primary)}
 .widget .wb{padding:1rem}
 .chart-box{position:relative;height:230px}
-.ac-wrap{position:relative}
-.ac-list{position:absolute;z-index:30;left:0;right:0;top:100%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);box-shadow:var(--shadow-md);max-height:240px;overflow:auto}
-.ac-list div{padding:.55rem .8rem;cursor:pointer;font-size:.9rem;border-bottom:1px solid var(--border-light)}
-.ac-list div:hover{background:var(--gray-50)}
-.picked{font-weight:600;color:var(--primary)}
 </style>
 {% endblock %}
 {% block content %}

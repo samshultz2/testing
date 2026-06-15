@@ -1,7 +1,74 @@
 /* Reusable, accessible UI primitives for the attendance SPA.
    Styling leans on the app's existing .btn/.form-control classes plus a few
    scoped .att-* classes defined in the host template, so it matches the theme. */
-import React from 'react';
+import React, { useState, useRef } from 'react';
+
+// Standard page header (title + optional icon + right-aligned actions). Mirrors
+// the classic .page-header markup so React pages match the Jinja ones.
+export function PageHeader({ title, icon, actions }) {
+  return (
+    <div className="page-header">
+      <h1>{icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}</h1>
+      {actions && <div className="page-header-actions">{actions}</div>}
+    </div>
+  );
+}
+
+// Classic .empty-state block (icon + heading + optional body), shared by every
+// converted list/section page.
+export function Empty({ icon = 'fa-inbox', title, children, style }) {
+  return (
+    <div className="empty-state" style={style}>
+      <i className={'fas ' + icon} aria-hidden="true" /><h3>{title}</h3>{children}
+    </div>
+  );
+}
+
+// Section sub-navigation (the .fin-tabs row). `tabs` = [[key, icon, label], …];
+// `urls` maps key->href; `active` is the current key (a page may map to a tab).
+export function SectionTabs({ tabs, urls, active }) {
+  return (
+    <div className="fin-tabs">
+      {tabs.map(([key, icon, label]) => (
+        <a key={key} href={urls[key]} className={'fin-tab' + (active === key ? ' active' : '')}>
+          <i className={'fas ' + icon} aria-hidden="true" /> {label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+// Type-ahead picker backed by a JSON search endpoint that returns
+// [{id, label}, …]. Calls onPick(id) ('' when cleared). Reused by issue forms,
+// student/parent pickers, etc.
+export function Autocomplete({ label, required, url, initialText, onPick, placeholder, minChars = 2 }) {
+  const [text, setText] = useState(initialText || '');
+  const [picked, setPicked] = useState(!!initialText);
+  const [list, setList] = useState([]);
+  const [open, setOpen] = useState(false);
+  const tRef = useRef();
+  const onInput = (v) => {
+    setText(v); setPicked(false); onPick('');
+    clearTimeout(tRef.current);
+    if (v.trim().length < minChars) { setList([]); setOpen(false); return; }
+    tRef.current = setTimeout(async () => {
+      try {
+        const r = await fetch(url + '?q=' + encodeURIComponent(v.trim()), { credentials: 'same-origin' });
+        const rows = await r.json();
+        setList(rows); setOpen(rows.length > 0);
+      } catch (_) { /* ignore */ }
+    }, 220);
+  };
+  const pick = (o) => { setText(o.label); setPicked(true); onPick(o.id); setOpen(false); };
+  return (
+    <div className="form-group ac-wrap">
+      <label className="form-label">{label}{required && <span className="required"> *</span>}</label>
+      <input type="text" className={'form-control' + (picked ? ' picked' : '')} value={text} placeholder={placeholder}
+             autoComplete="off" onChange={(e) => onInput(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {open && <div className="ac-list">{list.map((o) => <div key={o.id} onMouseDown={() => pick(o)}>{o.label}</div>)}</div>}
+    </div>
+  );
+}
 
 export function Spinner({ label = 'Loading…' }) {
   return (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { postForm } from '../lib/forms';
+import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
-import { Banner } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionTabs, Autocomplete } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'],
@@ -11,27 +11,7 @@ const TABS = [
   ['settings', 'fa-gear', 'Settings'],
 ];
 const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', settings: 'settings' };
-
-function Tabs({ urls, page }) {
-  const active = ACTIVE[page];
-  return (
-    <div className="fin-tabs">
-      {TABS.map(([key, icon, label]) => (
-        <a key={key} href={urls[key]} className={'fin-tab' + (active === key ? ' active' : '')}>
-          <i className={'fas ' + icon} /> {label}
-        </a>
-      ))}
-    </div>
-  );
-}
-
-function PageHeader({ title, actions }) {
-  return <div className="page-header"><h1>{title}</h1>{actions && <div className="page-header-actions">{actions}</div>}</div>;
-}
-
-function Empty({ icon, title, children }) {
-  return <div className="empty-state"><i className={'fas ' + icon} /><h3>{title}</h3>{children}</div>;
-}
+const Tabs = ({ urls, page }) => <SectionTabs tabs={TABS} urls={urls} active={ACTIVE[page]} />;
 
 function statusBadge(l) {
   const cls = l.status === 'Returned' ? 'badge-success' : (l.is_overdue ? 'badge-danger' : 'badge-warning');
@@ -108,11 +88,10 @@ function Books({ d, notify }) {
   const del = async (b) => {
     if (!window.confirm(`Remove ${b.title}?`)) return;
     setBusy(true);
-    const res = await postForm(b.delete_url, {});
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(b.delete_url, {});
     setBusy(false);
-    if (res.ok && body.ok) window.location.reload();
-    else notify('error', body.error || 'Could not remove the book.');
+    if (r.ok) window.location.reload();
+    else notify('error', r.error || 'Could not remove the book.');
   };
 
   const shown = d.books.filter((b) =>
@@ -183,11 +162,10 @@ function BookForm({ d, notify }) {
     e.preventDefault();
     if (!f.title.trim()) { notify('error', 'Title is required.'); return; }
     setBusy(true);
-    const res = await postForm(d.submit_url, f);
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(d.submit_url, f);
     setBusy(false);
-    if (res.ok && body.ok) window.location = body.redirect;
-    else notify('error', body.error || 'Could not save the book.');
+    if (r.ok) window.location = r.redirect;
+    else notify('error', r.error || 'Could not save the book.');
   };
 
   return (
@@ -228,33 +206,6 @@ function BookForm({ d, notify }) {
   );
 }
 
-// ---- Autocomplete ----------------------------------------------------------
-function Autocomplete({ label, url, initialText, onPick, placeholder }) {
-  const [text, setText] = useState(initialText || '');
-  const [picked, setPicked] = useState(!!initialText);
-  const [list, setList] = useState([]);
-  const [open, setOpen] = useState(false);
-  const tRef = useRef();
-  const onInput = (v) => {
-    setText(v); setPicked(false); onPick('');
-    clearTimeout(tRef.current);
-    if (v.trim().length < 2) { setList([]); setOpen(false); return; }
-    tRef.current = setTimeout(async () => {
-      try { const r = await fetch(url + '?q=' + encodeURIComponent(v.trim())); const rows = await r.json();
-        setList(rows); setOpen(rows.length > 0); } catch (_) { /* ignore */ }
-    }, 220);
-  };
-  const pick = (o) => { setText(o.label); setPicked(true); onPick(o.id); setOpen(false); };
-  return (
-    <div className="form-group ac-wrap">
-      <label className="form-label">{label} <span className="required">*</span></label>
-      <input type="text" className={'form-control' + (picked ? ' picked' : '')} value={text} placeholder={placeholder}
-             autoComplete="off" onChange={(e) => onInput(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
-      {open && <div className="ac-list">{list.map((o) => <div key={o.id} onMouseDown={() => pick(o)}>{o.label}</div>)}</div>}
-    </div>
-  );
-}
-
 // ---- Issue -----------------------------------------------------------------
 function Issue({ d, notify }) {
   const [bookId, setBookId] = useState(d.preset ? String(d.preset.id) : '');
@@ -266,11 +217,10 @@ function Issue({ d, notify }) {
     e.preventDefault();
     if (!bookId || !studentId) { notify('error', 'Select a book and a student.'); return; }
     setBusy(true);
-    const res = await postForm(d.submit_url, { book_id: bookId, student_id: studentId, due_date: due });
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(d.submit_url, { book_id: bookId, student_id: studentId, due_date: due });
     setBusy(false);
-    if (res.ok && body.ok) window.location = body.redirect;
-    else notify('error', body.error || 'Could not issue the book.');
+    if (r.ok) window.location = r.redirect;
+    else notify('error', r.error || 'Could not issue the book.');
   };
 
   return (
@@ -279,9 +229,9 @@ function Issue({ d, notify }) {
       <Tabs urls={d.urls} page="issue" />
       <div className="card" style={{ maxWidth: 640 }}><div className="card-body">
         <form onSubmit={submit}>
-          <Autocomplete label="Book" url={d.urls.book_search} placeholder="Search title / author / ISBN…"
+          <Autocomplete label="Book" required url={d.urls.book_search} placeholder="Search title / author / ISBN…"
                         initialText={d.preset ? d.preset.title : ''} onPick={setBookId} />
-          <Autocomplete label="Student" url={d.urls.student_search} placeholder="Search name / student ID…" onPick={setStudentId} />
+          <Autocomplete label="Student" required url={d.urls.student_search} placeholder="Search name / student ID…" onPick={setStudentId} />
           <div className="form-group"><label className="form-label">Due date</label>
             <input type="date" className="form-control" value={due} onChange={(e) => setDue(e.target.value)} />
             <span className="form-hint d-block">Default loan period is {d.settings.loan_days} days{d.settings.fine_per_day ? ` · ₦${d.settings.fine_per_day}/day overdue fine` : ''}.</span></div>
@@ -298,11 +248,10 @@ function Loans({ d, notify }) {
   const ret = async (l) => {
     if (!window.confirm(`Mark '${l.book}' as returned?`)) return;
     setBusy(true);
-    const res = await postForm(l.return_url, {});
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(l.return_url, {});
     setBusy(false);
-    if (res.ok && body.ok) window.location.reload();
-    else notify('error', body.error || 'Could not return the book.');
+    if (r.ok) window.location.reload();
+    else notify('error', r.error || 'Could not return the book.');
   };
   const onStatus = (v) => { window.location = d.urls.loans + '?status=' + v; };
 
@@ -351,11 +300,10 @@ function Settings({ d, notify }) {
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    const res = await postForm(d.submit_url, { loan_days: loanDays, fine_per_day: fine });
-    const body = await res.json().catch(() => ({}));
+    const r = await submitJson(d.submit_url, { loan_days: loanDays, fine_per_day: fine });
     setBusy(false);
-    if (res.ok && body.ok) notify('success', body.message || 'Saved.');
-    else notify('error', body.error || 'Could not save.');
+    if (r.ok) notify('success', r.message || 'Saved.');
+    else notify('error', r.error || 'Could not save.');
   };
   return (
     <>
