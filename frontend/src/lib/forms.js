@@ -29,3 +29,21 @@ export async function submitJson(url, fields) {
   try { body = await res.json(); } catch (_) { /* redirect/html response */ }
   return { status: res.status, ...body, ok: !!(res.ok && body.ok === true) };
 }
+
+// Multipart upload (a single file + optional extra fields), JSON response.
+export async function postFile(url, file, extra = {}) {
+  const fd = new FormData();
+  fd.append('file', file);
+  Object.entries(extra).forEach(([k, v]) => fd.append(k, v));
+  let res, body = {};
+  try {
+    res = await fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'fetch' }, body: fd,
+    });
+  } catch (e) {
+    return { ok: false, status: 0, error: e.message || 'Upload failed.' };
+  }
+  try { body = await res.json(); } catch (_) { /* ignore */ }
+  return { status: res.status, ...body, ok: !!(res.ok && body.ok === true) };
+}
