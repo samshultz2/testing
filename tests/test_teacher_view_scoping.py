@@ -131,6 +131,29 @@ def test_teacher_cannot_view_other_student_api(app):
         _deactivate(app)
 
 
+def test_students_api_sort_by_age(app):
+    """Sorting by age must not 500 (age is a property, mapped to DOB) and must
+    put the oldest student first when order=desc."""
+    ids = _seed_teacher_and_students(app)
+    with app.app_context():
+        older = db.session.get(Student, ids['mine_id'])
+        younger = db.session.get(Student, ids['other_id'])
+        older.date_of_birth = date(2005, 1, 1)
+        younger.date_of_birth = date(2012, 1, 1)
+        db.session.commit()
+    from config import Config
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    try:
+        r = c.get('/api/students?sort=age&order=desc')
+        assert r.status_code == 200
+        order = [s['id'] for s in r.get_json()['students']]
+        assert order.index(ids['mine_id']) < order.index(ids['other_id'])
+    finally:
+        _deactivate(app)
+
+
 def test_students_api_shape_and_pagination(app):
     from config import Config
     c = app.test_client()

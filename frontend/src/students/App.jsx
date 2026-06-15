@@ -6,7 +6,8 @@ import ExportModal from './ExportModal';
 const SORTS = [
   ['surname|asc', 'Name A–Z'], ['surname|desc', 'Name Z–A'],
   ['first_name|asc', 'First name'], ['student_id|asc', 'Student ID'],
-  ['created_at|desc', 'Newest'], ['age|desc', 'Oldest'],
+  ['created_at|desc', 'Recently added'],
+  ['age|desc', 'Oldest (by age)'], ['age|asc', 'Youngest (by age)'],
 ];
 
 // Reusable labelled filter field (label above the control).

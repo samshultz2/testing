@@ -16,7 +16,7 @@ from utils.access_control import (
 )
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, nullslast
 from sqlalchemy.orm import joinedload
 from urllib.parse import urlparse
 
@@ -849,7 +849,19 @@ def _students_query():
             enr_q = enr_q.filter(ClassArmAssignment.arm_id == arm_id)
         query = query.filter(Student.id.in_(enr_q))
 
-    sort_column = getattr(Student, sort_by, Student.surname)
+    # Whitelisted sort columns. `age` isn't a DB column (it's a derived
+    # property), so map it onto date_of_birth with the direction inverted:
+    # oldest student == earliest birth date.
+    sort_map = {
+        'surname': Student.surname, 'first_name': Student.first_name,
+        'student_id': Student.student_id, 'created_at': Student.created_at,
+    }
+    if sort_by == 'age':
+        col = Student.date_of_birth
+        # 'desc' means oldest-first -> earliest DOB first -> ascending DOB.
+        ordering = col.asc() if order == 'desc' else col.desc()
+        return query.order_by(nullslast(ordering), Student.surname.asc())
+    sort_column = sort_map.get(sort_by, Student.surname)
     return query.order_by(sort_column.desc() if order == 'desc' else sort_column.asc())
 
 
