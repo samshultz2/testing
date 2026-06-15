@@ -22,12 +22,14 @@ STATUS_BADGE = {
 }
 
 
-def pipeline_stats(session_id=None):
-    q = Applicant.query
+def pipeline_stats(session_id=None, branch_id=None):
+    filters = []
     if session_id:
-        q = q.filter_by(session_id=session_id)
+        filters.append(Applicant.session_id == session_id)
+    if branch_id is not None:
+        filters.append(Applicant.branch_id == branch_id)
     by_status = dict(db.session.query(Applicant.status, func.count(Applicant.id))
-                     .filter(*( [Applicant.session_id == session_id] if session_id else []))
+                     .filter(*filters)
                      .group_by(Applicant.status).all())
     total = sum(by_status.values())
     admitted = by_status.get('Admitted', 0)

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% set _t = {'dashboard':'Admissions','applicants':'Applicants','applicant_form':'Application','applicant_detail':'Application'} %}
+{% block title %}{{ _t.get(adm_json.page,'Admissions') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if adm_json.page == 'dashboard' %}<span>Admissions</span>
+{% else %}<a href="{{ url_for('admissions.dashboard') }}">Admissions</a> / <span>{{ _t.get(adm_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
+.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
+.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
+.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
+.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
+.kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
+.kpi .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.funnel{display:flex;flex-direction:column;gap:.5rem}
+.funnel-row{display:flex;align-items:center;gap:.6rem}
+.funnel-row .lab{width:90px;font-size:.82rem;font-weight:600;flex-shrink:0}
+.funnel-row .track{flex:1;height:24px;background:var(--gray-100);border-radius:var(--radius-sm);overflow:hidden}
+.funnel-row .fill{height:100%;background:linear-gradient(90deg,var(--primary),#38ef7d);display:flex;align-items:center;justify-content:flex-end;padding-right:.4rem;color:#fff;font-size:.75rem;font-weight:700;min-width:1.5rem}
+.adm-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:992px){.adm-grid.split{grid-template-columns:1.3fr 1fr}.adm-2col{grid-template-columns:1fr 1fr !important}}
+.widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
+.widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;gap:.45rem;align-items:center}
+.widget .wh h3 i{color:var(--primary)}
+.widget .wb{padding:1rem}
+.chart-box{position:relative;height:230px}
+.avatar{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#11998e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;flex-shrink:0}
+.pipe{display:flex;flex-wrap:wrap;gap:.35rem}
+.info-row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}
+.info-row .k{color:var(--text-muted);font-size:.85rem}.info-row .v{font-weight:600;text-align:right}
+.info-grid{display:grid;grid-template-columns:1fr}@media(min-width:640px){.info-grid{grid-template-columns:1fr 1fr}}
+.adm-2col{display:grid;grid-template-columns:1fr;gap:1rem}
+</style>
+{% endblock %}
+{% block content %}
+<div id="adm-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="adm-data">{{ adm_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/react/admissions-app.js') }}" defer></script>
+{% endblock %}
