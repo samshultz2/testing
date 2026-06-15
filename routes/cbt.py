@@ -624,6 +624,7 @@ def _review_rows(exam, attempt):
 @login_required
 def attempt_review(attempt_id):
     attempt = db.get_or_404(CBTAttempt, attempt_id)
+    require_branch_access(attempt.exam.branch_id)   # no cross-branch attempt data
     rows = _review_rows(attempt.exam, attempt)
     violations = attempt.violation_log.order_by(CBTViolation.created_at).all()
     total_away = sum(v.away_seconds or 0 for v in violations)

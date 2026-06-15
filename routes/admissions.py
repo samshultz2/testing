@@ -130,7 +130,9 @@ def add_applicant():
 @adm_bp.route('/applicants/<int:applicant_id>')
 @login_required
 def applicant_detail(applicant_id):
+    from utils.branch_scope import require_branch_access
     a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)   # no cross-branch applicant PII
     # class arms for the intended class (for enrolment on conversion)
     assignments = []
     if a.intended_class_id:
@@ -149,7 +151,9 @@ def applicant_detail(applicant_id):
 @adm_bp.route('/applicants/<int:applicant_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_applicant(applicant_id):
+    from utils.branch_scope import require_branch_access
     a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)
     if request.method == 'POST':
         _read_form(a)
         db.session.commit()
@@ -165,7 +169,9 @@ def edit_applicant(applicant_id):
 @adm_bp.route('/applicants/<int:applicant_id>/status', methods=['POST'])
 @login_required
 def set_status(applicant_id):
+    from utils.branch_scope import require_branch_access
     a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)
     new_status = request.form.get('status')
     if new_status in admissions.ALL_STATUSES:
         a.status = new_status
@@ -182,7 +188,9 @@ def set_status(applicant_id):
 @adm_bp.route('/applicants/<int:applicant_id>/convert', methods=['POST'])
 @admin_required
 def convert(applicant_id):
+    from utils.branch_scope import require_branch_access
     a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)
     assignment_id = request.form.get('assignment_id', type=int)
     if assignment_id and not db.session.get(ClassArmAssignment, assignment_id):
         flash('Selected class arm no longer exists — admitting without enrolment.', 'warning')

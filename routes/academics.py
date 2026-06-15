@@ -719,7 +719,9 @@ def add_assignment():
 @login_required
 def view_assignment(assignment_id):
     """View class arm assignment and enrolled students"""
+    from utils.branch_scope import require_branch_access
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
+    require_branch_access(assignment.branch_id)   # no cross-branch roster
     enrollments = assignment.enrollments.filter_by(is_active=True).all()
 
     # Available = active students NOT already actively enrolled in ANY class
@@ -752,8 +754,10 @@ def view_assignment(assignment_id):
 @login_required
 def enroll_student(assignment_id):
     """Enroll a student in a class arm"""
+    from utils.branch_scope import require_branch_access
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
-    
+    require_branch_access(assignment.branch_id)   # no cross-branch enrolment
+
     try:
         # Accept both "student_ids[]" and "student_ids" field names.
         student_ids = (request.form.getlist('student_ids[]')
@@ -802,9 +806,11 @@ def enroll_student(assignment_id):
 @login_required
 def remove_enrollment(enrollment_id):
     """Remove a student from a class arm"""
+    from utils.branch_scope import require_branch_access
     enrollment = db.get_or_404(StudentEnrollment, enrollment_id)
+    require_branch_access(enrollment.class_arm_assignment.branch_id)   # no cross-branch unenrol
     assignment_id = enrollment.class_arm_assignment_id
-    
+
     try:
         enrollment.is_active = False
         db.session.commit()

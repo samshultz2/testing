@@ -172,9 +172,10 @@ def index():
 def edit_timetable(assignment_id):
     """Edit timetable for a class"""
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    
+    require_branch_access(assignment.branch_id)   # no cross-branch timetables
+
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
-    
+
     # Get subjects for this class
     subjects = ClassSubject.query.filter_by(
         term_id=assignment.term_id,
@@ -204,7 +205,8 @@ def edit_timetable(assignment_id):
 def save_timetable(assignment_id):
     """Save timetable entries"""
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    
+    require_branch_access(assignment.branch_id)   # no cross-branch writes
+
     try:
         slots = TimetableSlot.query.filter_by(is_active=True).all()
         
@@ -271,7 +273,9 @@ def copy_timetable():
         if not from_assignment or not to_assignment:
             flash('Invalid class selection.', 'error')
             return redirect(url_for('timetable.index'))
-        
+        require_branch_access(from_assignment.branch_id)   # no cross-branch copy
+        require_branch_access(to_assignment.branch_id)
+
         # Get source entries
         source_entries = ClassTimetable.query.filter_by(
             class_arm_assignment_id=from_assignment_id,
@@ -323,6 +327,7 @@ def print_timetable(assignment_id):
     from models import SchoolSettings
 
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
+    require_branch_access(assignment.branch_id)   # no cross-branch timetable PDF
     include_teachers = request.args.get('teachers') == '1'
 
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
