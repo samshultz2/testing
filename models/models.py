@@ -1376,6 +1376,17 @@ def _ensure_student_exam_columns():
                 statements.append(f'ALTER TABLE {tbl} ADD COLUMN branch_id INTEGER')
         except Exception:
             pass
+    # mock_jamb_exams.branch_id (per-branch mock exams). Backfill existing rows
+    # to a branch so they aren't left unbranched — can_access_branch(None) is
+    # permissive, which would leave old exams readable across branches.
+    try:
+        mj_cols = {c['name'] for c in inspect(db.engine).get_columns('mock_jamb_exams')}
+        if 'branch_id' not in mj_cols:
+            statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN branch_id INTEGER')
+            statements.append('UPDATE mock_jamb_exams SET branch_id = '
+                              '(SELECT MIN(id) FROM branches) WHERE branch_id IS NULL')
+    except Exception:
+        pass
     try:
         u_cols = {c['name'] for c in inspect(db.engine).get_columns('users')}
         if 'scope' not in u_cols:
