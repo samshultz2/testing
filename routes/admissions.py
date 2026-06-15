@@ -56,7 +56,8 @@ def _render(payload):
         'dashboard': url_for('admissions.dashboard'), 'applicants': url_for('admissions.applicants'),
         'add': url_for('admissions.add_applicant'), 'export': url_for('admissions.export'),
     }, **payload.get('urls', {})}
-    return render_template('admissions/app.html', adm_json=payload)
+    from utils.spa import render_or_json
+    return render_or_json('admissions/app.html', 'adm_json', payload)
 
 
 def _sessions_json():

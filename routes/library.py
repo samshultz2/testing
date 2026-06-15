@@ -61,7 +61,8 @@ def _urls():
 def _render(payload):
     payload['urls'] = {**_urls(), **payload.get('urls', {})}
     payload['is_admin'] = is_admin()
-    return render_template('library/app.html', library_json=payload)
+    from utils.spa import render_or_json
+    return render_or_json('library/app.html', 'library_json', payload)
 
 
 # ============================================================================

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { submitJson, postFile } from '../lib/forms';
+import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, PageHeader, Empty } from '../components/ui';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -46,14 +47,15 @@ function Calendar({ d }) {
 
 // ---- Agenda ----------------------------------------------------------------
 function Agenda({ d, notify }) {
+  const nav = useNav();
   const [busy, setBusy] = useState(false);
-  const go = (params) => { window.location = d.urls.self + '?' + new URLSearchParams(params).toString(); };
+  const go = (params) => { nav.go(d.urls.self + '?' + new URLSearchParams(params).toString()); };
   const del = async (e) => {
     if (!window.confirm(`Delete ${e.title}?`)) return;
     setBusy(true);
     const r = await submitJson(e.delete_url, {});
     setBusy(false);
-    if (r.ok) window.location.reload(); else notify('error', r.error || 'Could not delete.');
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
   };
   return (
     <>
@@ -99,6 +101,7 @@ function Agenda({ d, notify }) {
 
 // ---- Event form ------------------------------------------------------------
 function EventForm({ d, notify }) {
+  const nav = useNav();
   const ev = d.event || {};
   const editing = !!d.event;
   const [f, setF] = useState({
@@ -117,12 +120,12 @@ function EventForm({ d, notify }) {
     setBusy(true);
     const r = await submitJson(d.submit_url, { ...f, all_day: f.all_day ? 'on' : '' });
     setBusy(false);
-    if (r.ok) window.location = r.redirect; else notify('error', r.error || 'Could not save the event.');
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save the event.');
   };
   const del = async () => {
     if (!window.confirm('Delete this event?')) return;
     const r = await submitJson(d.delete_url, {});
-    if (r.ok) window.location = r.redirect; else notify('error', r.error || 'Could not delete.');
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
   };
 
   return (
@@ -212,6 +215,7 @@ function Import({ d, notify }) {
 }
 
 function ImportReview({ review, setReview, d, notify }) {
+  const nav = useNav();
   const [busy, setBusy] = useState(false);
   const [termId, setTermId] = useState('');
   const rows = review.rows;
@@ -228,7 +232,7 @@ function ImportReview({ review, setReview, d, notify }) {
     });
     const res = await submitJson(review.save_url, fields);
     setBusy(false);
-    if (res.ok) window.location = res.redirect; else notify('error', res.error || 'Could not import.');
+    if (res.ok) nav.go(res.redirect); else notify('error', res.error || 'Could not import.');
   };
 
   return (
@@ -273,13 +277,14 @@ function ImportReview({ review, setReview, d, notify }) {
 const SCREENS = { calendar: Calendar, agenda: Agenda, event_form: EventForm, import: Import };
 
 export default function EventsApp({ data }) {
+  const { data: d, go, refresh } = useSection(data);
   const [msg, setMsg] = useState(null);
   const notify = (tone, text) => setMsg({ tone, text });
-  const Screen = SCREENS[data.page] || Calendar;
+  const Screen = SCREENS[d.page] || Calendar;
   return (
-    <div>
+    <NavCtx.Provider value={{ go, refresh }}>
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={data} notify={notify} />
-    </div>
+      <Screen d={d} notify={notify} />
+    </NavCtx.Provider>
   );
 }

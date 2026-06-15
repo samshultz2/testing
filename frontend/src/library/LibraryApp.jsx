@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
+import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, PageHeader, Empty, SectionTabs, Autocomplete } from '../components/ui';
 
 const TABS = [
@@ -11,7 +12,7 @@ const TABS = [
   ['settings', 'fa-gear', 'Settings'],
 ];
 const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', settings: 'settings' };
-const Tabs = ({ urls, page }) => <SectionTabs tabs={TABS} urls={urls} active={ACTIVE[page]} />;
+const Tabs = ({ urls, page }) => { const { go } = useNav(); return <SectionTabs tabs={TABS} urls={urls} active={ACTIVE[page]} go={go} />; };
 
 function statusBadge(l) {
   const cls = l.status === 'Returned' ? 'badge-success' : (l.is_overdue ? 'badge-danger' : 'badge-warning');
@@ -80,6 +81,7 @@ function Dashboard({ d }) {
 
 // ---- Catalogue -------------------------------------------------------------
 function Books({ d, notify }) {
+  const nav = useNav();
   const [q, setQ] = useState(d.q || '');
   const [category, setCategory] = useState(d.category || '');
   const [availOnly, setAvailOnly] = useState(d.avail === '1');
@@ -90,7 +92,7 @@ function Books({ d, notify }) {
     setBusy(true);
     const r = await submitJson(b.delete_url, {});
     setBusy(false);
-    if (r.ok) window.location.reload();
+    if (r.ok) nav.refresh();
     else notify('error', r.error || 'Could not remove the book.');
   };
 
@@ -149,6 +151,7 @@ function Books({ d, notify }) {
 
 // ---- Book form -------------------------------------------------------------
 function BookForm({ d, notify }) {
+  const nav = useNav();
   const b = d.book || {};
   const editing = !!d.book;
   const [f, setF] = useState({
@@ -164,7 +167,7 @@ function BookForm({ d, notify }) {
     setBusy(true);
     const r = await submitJson(d.submit_url, f);
     setBusy(false);
-    if (r.ok) window.location = r.redirect;
+    if (r.ok) nav.go(r.redirect);
     else notify('error', r.error || 'Could not save the book.');
   };
 
@@ -208,6 +211,7 @@ function BookForm({ d, notify }) {
 
 // ---- Issue -----------------------------------------------------------------
 function Issue({ d, notify }) {
+  const nav = useNav();
   const [bookId, setBookId] = useState(d.preset ? String(d.preset.id) : '');
   const [studentId, setStudentId] = useState('');
   const [due, setDue] = useState(d.default_due);
@@ -219,7 +223,7 @@ function Issue({ d, notify }) {
     setBusy(true);
     const r = await submitJson(d.submit_url, { book_id: bookId, student_id: studentId, due_date: due });
     setBusy(false);
-    if (r.ok) window.location = r.redirect;
+    if (r.ok) nav.go(r.redirect);
     else notify('error', r.error || 'Could not issue the book.');
   };
 
@@ -244,16 +248,17 @@ function Issue({ d, notify }) {
 
 // ---- Loans -----------------------------------------------------------------
 function Loans({ d, notify }) {
+  const nav = useNav();
   const [busy, setBusy] = useState(false);
   const ret = async (l) => {
     if (!window.confirm(`Mark '${l.book}' as returned?`)) return;
     setBusy(true);
     const r = await submitJson(l.return_url, {});
     setBusy(false);
-    if (r.ok) window.location.reload();
+    if (r.ok) nav.refresh();
     else notify('error', r.error || 'Could not return the book.');
   };
-  const onStatus = (v) => { window.location = d.urls.loans + '?status=' + v; };
+  const onStatus = (v) => { nav.go(d.urls.loans + '?status=' + v); };
 
   return (
     <>
@@ -331,13 +336,14 @@ function Settings({ d, notify }) {
 const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue: Issue, loans: Loans, settings: Settings };
 
 export default function LibraryApp({ data }) {
+  const { data: d, go, refresh } = useSection(data);
   const [msg, setMsg] = useState(null);
   const notify = (tone, text) => setMsg({ tone, text });
-  const Screen = SCREENS[data.page] || Dashboard;
+  const Screen = SCREENS[d.page] || Dashboard;
   return (
-    <div>
+    <NavCtx.Provider value={{ go, refresh }}>
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={data} notify={notify} />
-    </div>
+      <Screen d={d} notify={notify} />
+    </NavCtx.Provider>
   );
 }

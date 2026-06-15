@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { postFile } from '../lib/forms';
+import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, PageHeader, Empty } from '../components/ui';
 
 // ---- Index hub -------------------------------------------------------------
@@ -82,13 +83,14 @@ function Summary({ d }) {
 
 // ---- Export class students -------------------------------------------------
 function ExportClass({ d }) {
+  const nav = useNav();
   return (
     <>
       <PageHeader title="Export Class Students" />
       <div className="card"><div className="card-header"><h3>Select Class to Export</h3></div>
         <div className="card-body">
           <div className="filter-form"><div className="form-group"><label className="form-label">Term</label>
-            <select className="form-control" value={d.term_id} onChange={(e) => { window.location = d.urls.self + '?term_id=' + e.target.value; }}>
+            <select className="form-control" value={d.term_id} onChange={(e) => { nav.go(d.urls.self + '?term_id=' + e.target.value); }}>
               <option value="">Select Term</option>{d.terms.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></div></div>
 
           {d.assignments.length ? (<>
@@ -167,13 +169,14 @@ function Import({ d, notify }) {
 const SCREENS = { index: Index, summary: Summary, export_class: ExportClass, import: Import };
 
 export default function ReportsApp({ data }) {
+  const { data: d, go, refresh } = useSection(data);
   const [msg, setMsg] = useState(null);
   const notify = (tone, text) => setMsg({ tone, text });
-  const Screen = SCREENS[data.page] || Index;
+  const Screen = SCREENS[d.page] || Index;
   return (
-    <div>
+    <NavCtx.Provider value={{ go, refresh }}>
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={data} notify={notify} />
-    </div>
+      <Screen d={d} notify={notify} />
+    </NavCtx.Provider>
   );
 }

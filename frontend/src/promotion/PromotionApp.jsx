@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
+import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { Banner, PageHeader, Empty } from '../components/ui';
 
-const go = (url, params) => { window.location = url + '?' + new URLSearchParams(params).toString(); };
 
 // ---- Index -----------------------------------------------------------------
 function Index({ d }) {
@@ -49,13 +49,14 @@ function Index({ d }) {
 
 // ---- Rules -----------------------------------------------------------------
 function Rules({ d, notify }) {
+  const nav = useNav();
   const [busy, setBusy] = useState(false);
   const del = async (r) => {
     if (!window.confirm('Delete this rule?')) return;
     setBusy(true);
     const res = await submitJson(r.delete_url, {});
     setBusy(false);
-    if (res.ok) window.location.reload(); else notify('error', res.error || 'Could not delete.');
+    if (res.ok) nav.refresh(); else notify('error', res.error || 'Could not delete.');
   };
   return (
     <>
@@ -91,6 +92,7 @@ function Rules({ d, notify }) {
 
 // ---- Add rule --------------------------------------------------------------
 function AddRule({ d, notify }) {
+  const nav = useNav();
   const [f, setF] = useState({ from_class_id: '', to_class_id: '', stream_name: '', min_average: '50', priority: '0' });
   const [subjects, setSubjects] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -101,7 +103,7 @@ function AddRule({ d, notify }) {
     setBusy(true);
     const r = await submitJson(d.submit_url, { ...f, 'required_subjects[]': subjects });
     setBusy(false);
-    if (r.ok) window.location = r.redirect; else notify('error', r.error || 'Could not save.');
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
   const toggleSubj = (e) => setSubjects(Array.from(e.target.selectedOptions).map((o) => o.value));
   return (
@@ -141,6 +143,7 @@ function AddRule({ d, notify }) {
 
 // ---- Process ---------------------------------------------------------------
 function Process({ d, notify }) {
+  const nav = useNav();
   const [rows, setRows] = useState(() => d.students.map((s) => ({
     id: s.id, action: s.recommendation.status === 'graduated' ? 'graduated'
       : (s.recommendation.status === 'promote' ? 'promoted' : (s.recommendation.status === 'repeat' ? 'repeated' : 'skip')),
@@ -158,7 +161,7 @@ function Process({ d, notify }) {
       'stream[]': rows.map((r) => r.stream) };
     const res = await submitJson(d.execute_url, fields);
     setBusy(false);
-    if (res.ok) window.location = res.redirect; else notify('error', res.error || 'Could not save promotions.');
+    if (res.ok) nav.go(res.redirect); else notify('error', res.error || 'Could not save promotions.');
   };
 
   return (
@@ -166,13 +169,13 @@ function Process({ d, notify }) {
       <PageHeader title="Process Promotions" />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">From Session</label>
-          <select className="form-control" value={d.from_session_id} onChange={(e) => go(d.urls.self, { from_session_id: e.target.value, to_session_id: d.to_session_id, class_id: d.class_id })}>
+          <select className="form-control" value={d.from_session_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: e.target.value, to_session_id: d.to_session_id, class_id: d.class_id })}>
             <option value="">Select Session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div className="form-group"><label className="form-label">To Session</label>
-          <select className="form-control" value={d.to_session_id} onChange={(e) => go(d.urls.self, { from_session_id: d.from_session_id, to_session_id: e.target.value, class_id: d.class_id })}>
+          <select className="form-control" value={d.to_session_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: e.target.value, class_id: d.class_id })}>
             <option value="">Select Session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div className="form-group"><label className="form-label">Class</label>
-          <select className="form-control" value={d.class_id} onChange={(e) => go(d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id, class_id: e.target.value })}>
+          <select className="form-control" value={d.class_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id, class_id: e.target.value })}>
             <option value="">Select Class</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
       </div></div></div>
 
@@ -217,6 +220,7 @@ function Process({ d, notify }) {
 
 // ---- Graduates -------------------------------------------------------------
 function Graduates({ d }) {
+  const nav = useNav();
   const males = d.graduates.filter((g) => g.gender === 'Male').length;
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
   return (
@@ -224,7 +228,7 @@ function Graduates({ d }) {
       <PageHeader title="Graduates" actions={<a href={d.preview_url} className="btn btn-success"><i className="fas fa-user-graduate" /> Graduate current SSS3</a>} />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">Graduation Session</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => go(window.location.pathname, { session_id: e.target.value })}>
+          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value })}>
             <option value="">All Sessions</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
       </div></div></div>
       {d.graduates.length ? (<>
@@ -256,13 +260,14 @@ function Graduates({ d }) {
 
 // ---- Graduate preview ------------------------------------------------------
 function GraduatePreview({ d, notify }) {
+  const nav = useNav();
   const [busy, setBusy] = useState(false);
   const confirm = async () => {
     if (!window.confirm(`Mark these ${d.students.length} SSS3 student(s) as graduates?`)) return;
     setBusy(true);
     const r = await submitJson(d.confirm_url, {});
     setBusy(false);
-    if (r.ok) window.location = r.redirect; else notify('error', r.error || 'Could not graduate students.');
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not graduate students.');
   };
   return (
     <>
@@ -343,13 +348,14 @@ function GraduateProfile({ d }) {
 
 // ---- History ---------------------------------------------------------------
 function History({ d }) {
+  const nav = useNav();
   const count = (st) => d.records.filter((r) => r.status === st).length;
   return (
     <>
       <PageHeader title="Promotion History" />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">Session</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => go(window.location.pathname, { session_id: e.target.value })}>
+          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value })}>
             <option value="">Select Session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
       </div></div></div>
       {d.records.length ? (<>
@@ -382,13 +388,14 @@ const SCREENS = { index: Index, rules: Rules, add_rule: AddRule, process: Proces
   graduates: Graduates, graduate_preview: GraduatePreview, graduate_profile: GraduateProfile, history: History };
 
 export default function PromotionApp({ data }) {
+  const { data: d, go, refresh } = useSection(data);
   const [msg, setMsg] = useState(null);
   const notify = (tone, text) => setMsg({ tone, text });
-  const Screen = SCREENS[data.page] || Index;
+  const Screen = SCREENS[d.page] || Index;
   return (
-    <div>
+    <NavCtx.Provider value={{ go, refresh }}>
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={data} notify={notify} />
-    </div>
+      <Screen d={d} notify={notify} />
+    </NavCtx.Provider>
   );
 }

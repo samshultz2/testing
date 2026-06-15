@@ -46,7 +46,8 @@ def _err(message, redirect_url=None, tone='error'):
 
 
 def _render(payload):
-    return render_template('events/app.html', events_json=payload)
+    from utils.spa import render_or_json
+    return render_or_json('events/app.html', 'events_json', payload)
 
 
 def _event_json(e):

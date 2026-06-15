@@ -2,6 +2,29 @@
    Styling leans on the app's existing .btn/.form-control classes plus a few
    scoped .att-* classes defined in the host template, so it matches the theme. */
 import React, { useState, useRef } from 'react';
+import { useNav } from '../lib/section';
+
+// Context-aware in-section link (no reload) — pulls `go` from NavCtx so callers
+// don't thread it. Use for links that target another React page in the same
+// section; keep a plain <a> for downloads / cross-section / external links.
+export function L(props) {
+  const { go } = useNav();
+  return <Nav go={go} {...props} />;
+}
+
+// In-section link that navigates with no reload (via useSection's `go`), while
+// still being a real <a href> (middle-click / ctrl-click open a new tab).
+export function Nav({ go, href, className, children, title, style }) {
+  return (
+    <a href={href} className={className} title={title} style={style}
+       onClick={(e) => {
+         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+         e.preventDefault(); go(href);
+       }}>
+      {children}
+    </a>
+  );
+}
 
 // Standard page header (title + optional icon + right-aligned actions). Mirrors
 // the classic .page-header markup so React pages match the Jinja ones.
@@ -26,14 +49,16 @@ export function Empty({ icon = 'fa-inbox', title, children, style }) {
 
 // Section sub-navigation (the .fin-tabs row). `tabs` = [[key, icon, label], …];
 // `urls` maps key->href; `active` is the current key (a page may map to a tab).
-export function SectionTabs({ tabs, urls, active }) {
+export function SectionTabs({ tabs, urls, active, go }) {
   return (
     <div className="fin-tabs">
-      {tabs.map(([key, icon, label]) => (
-        <a key={key} href={urls[key]} className={'fin-tab' + (active === key ? ' active' : '')}>
-          <i className={'fas ' + icon} aria-hidden="true" /> {label}
-        </a>
-      ))}
+      {tabs.map(([key, icon, label]) => {
+        const cls = 'fin-tab' + (active === key ? ' active' : '');
+        const inner = <><i className={'fas ' + icon} aria-hidden="true" /> {label}</>;
+        return go
+          ? <Nav key={key} go={go} href={urls[key]} className={cls}>{inner}</Nav>
+          : <a key={key} href={urls[key]} className={cls}>{inner}</a>;
+      })}
     </div>
   );
 }

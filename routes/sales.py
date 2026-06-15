@@ -39,7 +39,8 @@ def _err(message, redirect_url=None):
 
 def _render(payload):
     """Render the shared sales React shell with an embedded payload."""
-    return render_template('sales/app.html', sales_json=payload)
+    from utils.spa import render_or_json
+    return render_or_json('sales/app.html', 'sales_json', payload)
 
 
 # ---------------------------------------------------------------------------

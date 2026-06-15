@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
+import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { Banner, PageHeader, Empty, SectionTabs } from '../components/ui';
 
-const Tabs = ({ d }) => <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} />;
-const go = (url, params) => { window.location = url + '?' + new URLSearchParams(params).toString(); };
+const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
 
 // ---- Dashboard -------------------------------------------------------------
 function Dashboard({ d }) {
+  const nav = useNav();
   const ref = useRef();
   useEffect(() => {
     if (!ref.current || !window.Chart || !d.class_chart.length) return;
@@ -29,7 +30,7 @@ function Dashboard({ d }) {
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Session</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => go(d.urls.dashboard, { session_id: e.target.value })}>
+          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, d.urls.dashboard, { session_id: e.target.value })}>
             <option value="">All sessions</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div></div>
       </div></div>
 
@@ -78,6 +79,7 @@ function Dashboard({ d }) {
 
 // ---- Applicants list -------------------------------------------------------
 function Applicants({ d }) {
+  const nav = useNav();
   const [q, setQ] = useState(d.q || '');
   const params = (over) => ({ status: d.status, session_id: d.session_id, class_id: d.class_id, q, ...over });
   return (
@@ -90,15 +92,15 @@ function Applicants({ d }) {
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form">
           <div className="form-group"><label className="form-label">Status</label>
-            <select className="form-control" value={d.status} onChange={(e) => go(d.urls.applicants, params({ status: e.target.value }))}>
+            <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.urls.applicants, params({ status: e.target.value }))}>
               <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Session</label>
-            <select className="form-control" value={d.session_id} onChange={(e) => go(d.urls.applicants, params({ session_id: e.target.value }))}>
+            <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, d.urls.applicants, params({ session_id: e.target.value }))}>
               <option value="">All</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Intended class</label>
-            <select className="form-control" value={d.class_id} onChange={(e) => go(d.urls.applicants, params({ class_id: e.target.value }))}>
+            <select className="form-control" value={d.class_id} onChange={(e) => navParams(nav.go, d.urls.applicants, params({ class_id: e.target.value }))}>
               <option value="">All</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <form className="form-group" onSubmit={(e) => { e.preventDefault(); go(d.urls.applicants, params({})); }}>
+          <form className="form-group" onSubmit={(e) => { e.preventDefault(); navParams(nav.go, d.urls.applicants, params({})); }}>
             <label className="form-label">Search</label>
             <input type="text" className="form-control" value={q} placeholder="Name, app no, phone" onChange={(e) => setQ(e.target.value)} /></form>
         </div>
@@ -129,6 +131,7 @@ function Applicants({ d }) {
 
 // ---- Applicant form --------------------------------------------------------
 function ApplicantForm({ d, notify }) {
+  const nav = useNav();
   const a = d.applicant || {};
   const editing = !!d.applicant;
   const [f, setF] = useState({
@@ -148,7 +151,7 @@ function ApplicantForm({ d, notify }) {
     setBusy(true);
     const r = await submitJson(d.submit_url, f);
     setBusy(false);
-    if (r.ok) window.location = r.redirect; else notify('error', r.error || 'Could not save.');
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
   const F = ({ label, k, type = 'text', req, ...rest }) => (
     <div className="form-group"><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
@@ -202,6 +205,7 @@ function ApplicantForm({ d, notify }) {
 
 // ---- Applicant detail ------------------------------------------------------
 function ApplicantDetail({ d, notify }) {
+  const nav = useNav();
   const a = d.applicant;
   const [busy, setBusy] = useState(false);
   const [assignment, setAssignment] = useState('');
@@ -210,7 +214,7 @@ function ApplicantDetail({ d, notify }) {
     setBusy(true);
     const r = await submitJson(url, fields);
     setBusy(false);
-    if (r.ok) window.location = r.redirect || window.location.href.split('?')[0];
+    if (r.ok) nav.go(r.redirect || window.location.pathname);
     else notify('error', r.error || 'Action failed.');
   };
   const setStatus = (st) => act(d.urls.status, { status: st });
@@ -284,13 +288,14 @@ function ApplicantDetail({ d, notify }) {
 const SCREENS = { dashboard: Dashboard, applicants: Applicants, applicant_form: ApplicantForm, applicant_detail: ApplicantDetail };
 
 export default function AdmissionsApp({ data }) {
+  const { data: d, go, refresh } = useSection(data);
   const [msg, setMsg] = useState(null);
   const notify = (tone, text) => setMsg({ tone, text });
-  const Screen = SCREENS[data.page] || Dashboard;
+  const Screen = SCREENS[d.page] || Dashboard;
   return (
-    <div>
+    <NavCtx.Provider value={{ go, refresh }}>
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={data} notify={notify} />
-    </div>
+      <Screen d={d} notify={notify} />
+    </NavCtx.Provider>
   );
 }

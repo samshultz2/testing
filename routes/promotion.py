@@ -41,7 +41,8 @@ def _err(message, redirect_url=None):
 
 
 def _render(payload):
-    return render_template('promotion/app.html', promo_json=payload)
+    from utils.spa import render_or_json
+    return render_or_json('promotion/app.html', 'promo_json', payload)
 
 
 def _sessions_json():

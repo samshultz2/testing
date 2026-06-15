@@ -20,7 +20,8 @@ def _wants_json():
 
 
 def _render(payload):
-    return render_template('reports/app.html', reports_json=payload)
+    from utils.spa import render_or_json
+    return render_or_json('reports/app.html', 'reports_json', payload)
 
 
 @reports_bp.route('/')

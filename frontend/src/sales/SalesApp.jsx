@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
+import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, PageHeader, Empty } from '../components/ui';
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
@@ -73,6 +74,7 @@ function SalesTable({ rows, withItems }) {
 
 // ---- Products --------------------------------------------------------------
 function Products({ d, notify }) {
+  const nav = useNav();
   const [q, setQ] = useState(d.q || '');
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ name: '', category: (d.categories[0] || 'Other'), unit_price: '0', stock_qty: '0', reorder_level: '0' });
@@ -84,7 +86,7 @@ function Products({ d, notify }) {
     setBusy(true);
     const r = await submitJson(d.add_url, form);
     setBusy(false);
-    if (r.ok) window.location.reload();
+    if (r.ok) nav.refresh();
     else notify('error', r.error || 'Could not add product.');
   };
 
@@ -93,7 +95,7 @@ function Products({ d, notify }) {
     setBusy(true);
     const r = await submitJson(p.restock_url, { qty });
     setBusy(false);
-    if (r.ok) window.location.reload();
+    if (r.ok) nav.refresh();
     else notify('error', r.error || 'Could not restock.');
   };
 
@@ -165,6 +167,7 @@ function ProductRow({ p, onRestock, busy }) {
 
 // ---- New sale --------------------------------------------------------------
 function NewSale({ d, notify }) {
+  const nav = useNav();
   const [qty, setQty] = useState({});       // product_id -> qty
   const [pay, setPay] = useState({ student_id: '', customer_name: '', payment_method: d.methods[0] || 'Cash', amount_paid: '' });
   const [busy, setBusy] = useState(false);
@@ -179,7 +182,7 @@ function NewSale({ d, notify }) {
     setBusy(true);
     const r = await submitJson(d.submit_url, { product_id: ids, quantity: qs, ...pay });
     setBusy(false);
-    if (r.ok) window.location = r.redirect;
+    if (r.ok) nav.go(r.redirect);
     else notify('error', r.error || 'Could not record the sale.');
   };
 
@@ -254,13 +257,14 @@ function History({ d }) {
 const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History };
 
 export default function SalesApp({ data }) {
+  const { data: d, go, refresh } = useSection(data);
   const [msg, setMsg] = useState(null);
   const notify = (tone, text) => setMsg({ tone, text });
-  const Screen = SCREENS[data.page] || Dashboard;
+  const Screen = SCREENS[d.page] || Dashboard;
   return (
-    <div>
+    <NavCtx.Provider value={{ go, refresh }}>
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={data} notify={notify} />
-    </div>
+      <Screen d={d} notify={notify} />
+    </NavCtx.Provider>
   );
 }
