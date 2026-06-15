@@ -18,17 +18,21 @@ class MockJAMBExam(db.Model):
     exam_number = db.Column(db.Integer, nullable=False)
     session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'), nullable=False)
     exam_date = db.Column(db.Date, nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))   # owning branch (for scoping)
     is_active = db.Column(db.Boolean, default=True)
     is_completed = db.Column(db.Boolean, default=False)
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
-    
+
     session = db.relationship('AcademicSession', backref=db.backref('mock_jamb_exams', lazy='dynamic'))
+    branch = db.relationship('Branch')
     results = db.relationship('MockJAMBResult', backref='exam', lazy='dynamic', cascade='all, delete-orphan')
     
     __table_args__ = (
-        db.UniqueConstraint('session_id', 'exam_number', name='unique_mock_exam_per_session'),
+        # Exam numbers are unique per session *within a branch*, so each branch
+        # can run its own First/Second/... mock for the same session.
+        db.UniqueConstraint('session_id', 'exam_number', 'branch_id', name='unique_mock_exam_per_session'),
     )
     
     @property

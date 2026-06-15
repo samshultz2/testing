@@ -11,7 +11,7 @@ from utils.web_exports import xlsx_response
 from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass
 from models.mock_jamb import MockJAMBExam, MockJAMBResult, MockJAMBAnalytics
 from utils.helpers import login_required, WAEC_SUBJECTS, get_sss3_students, student_subject_map
-from utils.branch_scope import require_branch_access
+from utils.branch_scope import require_branch_access, branch_for_new, scope_query
 from utils.csrf import csrf_protect
 from utils.jamb_config import (
     convert_correct_to_100, question_count_map, COMPULSORY_SUBJECT,
@@ -69,7 +69,8 @@ def index():
     comparison_data = None
     
     if session_id:
-        exams = MockJAMBExam.query.filter_by(session_id=session_id).order_by(MockJAMBExam.exam_number).all()
+        exams = scope_query(MockJAMBExam.query.filter_by(session_id=session_id),
+                            MockJAMBExam).order_by(MockJAMBExam.exam_number).all()
         comparison_data = MockJAMBAnalytics.compare_mock_exams(session_id)
     
     return render_template('mock_jamb/index.html',
@@ -106,8 +107,11 @@ def create_exam():
                 flash('Please fill all required fields.', 'error')
                 return redirect(url_for('mock_jamb.create_exam'))
             
-            # Check if exam number already exists for this session
-            existing = MockJAMBExam.query.filter_by(session_id=session_id, exam_number=exam_number).first()
+            # The new exam belongs to the creator's branch; uniqueness of the
+            # exam number is per (session, branch).
+            new_branch_id = branch_for_new(request.form.get('branch_id', type=int))
+            existing = MockJAMBExam.query.filter_by(
+                session_id=session_id, exam_number=exam_number, branch_id=new_branch_id).first()
             if existing:
                 flash(f'Mock exam #{exam_number} already exists for this session.', 'error')
                 return redirect(url_for('mock_jamb.create_exam'))
@@ -130,7 +134,8 @@ def create_exam():
                 exam_number=exam_number,
                 session_id=session_id,
                 exam_date=exam_date,
-                description=description
+                description=description,
+                branch_id=new_branch_id
             )
             
             db.session.add(exam)
@@ -159,6 +164,7 @@ def create_exam():
 def view_exam(exam_id):
     """View a specific mock exam with detailed statistics"""
     exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)   # no cross-branch exam data
     statistics = MockJAMBAnalytics.get_exam_statistics(exam_id)
     
     # Get sort and filter parameters
@@ -230,7 +236,8 @@ def view_exam(exam_id):
 def edit_exam(exam_id):
     """Edit mock exam details"""
     exam = db.get_or_404(MockJAMBExam, exam_id)
-    
+    require_branch_access(exam.branch_id)
+
     if request.method == 'POST':
         try:
             exam.name = request.form.get('name', '').strip()
@@ -259,6 +266,7 @@ def edit_exam(exam_id):
 def delete_exam(exam_id):
     """Delete a mock exam and all its results"""
     exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
     session_id = exam.session_id
     exam_name = exam.display_name
     
@@ -283,6 +291,7 @@ def delete_exam(exam_id):
 def add_result(exam_id):
     """Add results for a student"""
     exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
     
     # SSS3 students who don't already have a result for this exam.
     existing_student_ids = {r.student_id for r in exam.results}
@@ -356,6 +365,7 @@ def add_result(exam_id):
 def bulk_entry(exam_id):
     """Bulk entry of results for multiple students"""
     exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
     
     # Get active term to find enrolled students
     active_term = get_active_term()
@@ -570,7 +580,8 @@ def analytics():
     
     if session_id:
         comparison = MockJAMBAnalytics.compare_mock_exams(session_id)
-        exams = MockJAMBExam.query.filter_by(session_id=session_id).order_by(MockJAMBExam.exam_number).all()
+        exams = scope_query(MockJAMBExam.query.filter_by(session_id=session_id),
+                            MockJAMBExam).order_by(MockJAMBExam.exam_number).all()
         for exam in exams:
             stats = MockJAMBAnalytics.get_exam_statistics(exam.id)
             if stats:
@@ -594,8 +605,9 @@ def export_results(exam_id):
     """Export exam results to Excel"""
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
-    
+
     exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
     results = MockJAMBResult.query.filter_by(mock_exam_id=exam_id).join(Student).order_by(
         MockJAMBResult.total_score.desc()
     ).all()
