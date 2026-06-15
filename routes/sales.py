@@ -5,7 +5,7 @@ branch-scoped via utils.branch_scope.
 """
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, session)
+                   flash, session, jsonify)
 from sqlalchemy import func
 
 from models import db, Product, Sale, SaleItem, Student
@@ -17,9 +17,45 @@ from utils import timeutil
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
 
 
+def _wants_json():
+    """The React UI posts via fetch with this header; reply JSON to it while
+    keeping the classic flash+redirect for any plain form submit."""
+    return request.headers.get('X-Requested-With') == 'fetch' or request.is_json
+
+
+def _ok(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('sales.dashboard'))
+
+
+def _err(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), 400
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('sales.dashboard'))
+
+
+def _render(payload):
+    """Render the shared sales React shell with an embedded payload."""
+    return render_template('sales/app.html', sales_json=payload)
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
+
+def _sale_row(s, with_when_year=False):
+    fmt = '%d %b %Y %H:%M' if with_when_year else '%d %b %H:%M'
+    return {
+        'id': s.id, 'receipt_no': s.receipt_no, 'buyer': s.buyer,
+        'payment_method': s.payment_method, 'total': s.total or 0,
+        'item_count': s.items.count(),
+        'when': s.created_at.strftime(fmt) if s.created_at else '',
+        'receipt_url': url_for('sales.receipt', sale_id=s.id),
+    }
+
 
 @sales_bp.route('/')
 @login_required
@@ -32,9 +68,16 @@ def dashboard():
     low_stock = [p for p in products if p.low_stock]
     recent = (scope_query(Sale.query, Sale)
               .order_by(Sale.created_at.desc()).limit(8).all())
-    return render_template('sales/dashboard.html',
-        today_total=today_total, today_count=len(todays),
-        product_count=len(products), low_stock=low_stock, recent=recent)
+    return _render({
+        'page': 'dashboard',
+        'today_total': today_total, 'today_count': len(todays),
+        'product_count': len(products),
+        'low_stock': [{'name': p.name, 'category': p.category,
+                       'stock_qty': p.stock_qty, 'reorder_level': p.reorder_level} for p in low_stock],
+        'recent': [_sale_row(s) for s in recent],
+        'urls': {'new_sale': url_for('sales.new_sale'), 'products': url_for('sales.products'),
+                 'history': url_for('sales.history')},
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -49,8 +92,15 @@ def products():
     if q:
         query = query.filter(Product.name.ilike(f'%{q}%'))
     rows = query.order_by(Product.category, Product.name).all()
-    return render_template('sales/products.html', products=rows, q=q,
-                           categories=PRODUCT_CATEGORIES)
+    return _render({
+        'page': 'products', 'q': q, 'categories': PRODUCT_CATEGORIES,
+        'products': [{'id': p.id, 'name': p.name, 'sku': p.sku, 'category': p.category,
+                      'unit_price': p.unit_price or 0, 'stock_qty': p.stock_qty,
+                      'low_stock': bool(p.low_stock),
+                      'restock_url': url_for('sales.restock', product_id=p.id)} for p in rows],
+        'add_url': url_for('sales.add_product'),
+        'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard')},
+    })
 
 
 @sales_bp.route('/products/add', methods=['POST'])
@@ -58,8 +108,7 @@ def products():
 def add_product():
     name = (request.form.get('name') or '').strip()
     if not name:
-        flash('Product name is required.', 'error')
-        return redirect(url_for('sales.products'))
+        return _err('Product name is required.', url_for('sales.products'))
     db.session.add(Product(
         branch_id=branch_for_new(),
         name=name,
@@ -70,8 +119,7 @@ def add_product():
         stock_qty=request.form.get('stock_qty', type=int) or 0,
         reorder_level=request.form.get('reorder_level', type=int) or 0))
     db.session.commit()
-    flash(f'Added "{name}".', 'success')
-    return redirect(url_for('sales.products'))
+    return _ok(f'Added "{name}".', url_for('sales.products'))
 
 
 @sales_bp.route('/products/<int:product_id>/edit', methods=['POST'])
@@ -79,8 +127,7 @@ def add_product():
 def edit_product(product_id):
     p = db.get_or_404(Product, product_id)
     if not can_access_branch(p.branch_id):
-        flash('That product belongs to another branch.', 'error')
-        return redirect(url_for('sales.products'))
+        return _err('That product belongs to another branch.', url_for('sales.products'))
     p.name = (request.form.get('name') or p.name).strip()
     p.category = request.form.get('category') or p.category
     p.sku = (request.form.get('sku') or '').strip() or None
@@ -89,8 +136,7 @@ def edit_product(product_id):
     p.reorder_level = request.form.get('reorder_level', type=int) or 0
     p.is_active = request.form.get('is_active') == 'on'
     db.session.commit()
-    flash('Product updated.', 'success')
-    return redirect(url_for('sales.products'))
+    return _ok('Product updated.', url_for('sales.products'))
 
 
 @sales_bp.route('/products/<int:product_id>/restock', methods=['POST'])
@@ -98,13 +144,11 @@ def edit_product(product_id):
 def restock(product_id):
     p = db.get_or_404(Product, product_id)
     if not can_access_branch(p.branch_id):
-        flash('That product belongs to another branch.', 'error')
-        return redirect(url_for('sales.products'))
+        return _err('That product belongs to another branch.', url_for('sales.products'))
     qty = request.form.get('qty', type=int) or 0
     p.stock_qty = (p.stock_qty or 0) + qty
     db.session.commit()
-    flash(f'Added {qty} to {p.name} (now {p.stock_qty}).', 'success')
-    return redirect(url_for('sales.products'))
+    return _ok(f'Added {qty} to {p.name} (now {p.stock_qty}).', url_for('sales.products'))
 
 
 # ---------------------------------------------------------------------------
@@ -126,14 +170,12 @@ def new_sale():
             if not p or not can_access_branch(p.branch_id):
                 continue
             if qty > (p.stock_qty or 0):
-                flash(f'Only {p.stock_qty} of "{p.name}" in stock.', 'error')
-                return redirect(url_for('sales.new_sale'))
+                return _err(f'Only {p.stock_qty} of "{p.name}" in stock.', url_for('sales.new_sale'))
             line_total = round((p.unit_price or 0) * qty, 2)
             total += line_total
             lines.append((p, qty, line_total))
         if not lines:
-            flash('Add at least one item with a quantity.', 'error')
-            return redirect(url_for('sales.new_sale'))
+            return _err('Add at least one item with a quantity.', url_for('sales.new_sale'))
 
         sale = Sale(
             branch_id=branch_for_new(),
@@ -156,16 +198,22 @@ def new_sale():
         from utils.audit import log_action
         log_action('sales.sale', detail=f'{sale.total:g} ({len(lines)} item(s))',
                    target=sale)
-        flash(f'Sale recorded — receipt {sale.receipt_no}.', 'success')
-        return redirect(url_for('sales.receipt', sale_id=sale.id))
+        return _ok(f'Sale recorded — receipt {sale.receipt_no}.',
+                   url_for('sales.receipt', sale_id=sale.id))
 
     products = scope_query(
         Product.query.filter_by(is_active=True), Product
     ).filter(Product.stock_qty > 0).order_by(Product.category, Product.name).all()
     students = scope_query(Student.query.filter_by(is_active=True), Student) \
         .order_by(Student.surname, Student.first_name).all()
-    return render_template('sales/new_sale.html', products=products,
-                           students=students, methods=SALE_METHODS)
+    return _render({
+        'page': 'new_sale', 'methods': SALE_METHODS,
+        'submit_url': url_for('sales.new_sale'),
+        'products': [{'id': p.id, 'name': p.name, 'category': p.category,
+                      'unit_price': p.unit_price or 0, 'stock_qty': p.stock_qty} for p in products],
+        'students': [{'id': s.id, 'label': f'{s.full_name} ({s.student_id})'} for s in students],
+        'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
+    })
 
 
 @sales_bp.route('/history')
@@ -174,7 +222,11 @@ def history():
     rows = (scope_query(Sale.query, Sale)
             .order_by(Sale.created_at.desc()).limit(300).all())
     total = sum(s.total or 0 for s in rows)
-    return render_template('sales/history.html', sales=rows, total=total)
+    return _render({
+        'page': 'history', 'total': total,
+        'sales': [_sale_row(s, with_when_year=True) for s in rows],
+        'urls': {'dashboard': url_for('sales.dashboard')},
+    })
 
 
 @sales_bp.route('/receipt/<int:sale_id>')

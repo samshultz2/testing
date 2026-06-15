@@ -25,6 +25,26 @@ def test_sales_pages_load(app):
         assert client.get(url).status_code == 200
 
 
+def test_sales_pages_are_react_shells(app):
+    client = _admin(app)
+    pages = {'/sales/': 'dashboard', '/sales/products': 'products',
+             '/sales/new': 'new_sale', '/sales/history': 'history'}
+    for url, page in pages.items():
+        html = client.get(url).get_data(as_text=True)
+        assert 'sales-app' in html and 'sales-data' in html
+        assert f'"page": "{page}"' in html
+
+
+def test_add_product_json(app):
+    client = _admin(app)
+    r = client.post('/sales/products/add', headers={'X-Requested-With': 'fetch'},
+                    data={'name': 'JSONPen', 'unit_price': '50', 'stock_qty': '4',
+                          '_csrf_token': _ptoken(client)})
+    assert r.status_code == 200 and r.get_json()['ok']
+    with app.app_context():
+        assert Product.query.filter_by(name='JSONPen').first() is not None
+
+
 def test_add_product_and_sell_decrements_stock(app):
     client = _admin(app)
     tok = _ptoken(client)
