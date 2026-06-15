@@ -7,15 +7,18 @@ import { Toolbar, Field, Spinner, EmptyState, ErrorState, OfflineRequired, Pill 
 // Read-only attendance alerts: students below a threshold, scoped to the
 // classes this user may access. Server-computed → needs the network.
 export default function Alerts() {
-  const { term, online } = useCtx();
+  const { term, online, sync = {} } = useCtx();
   const [threshold, setThreshold] = useState(75);
 
+  // Wait for queued offline marks to flush so alerts reflect the latest marks.
+  const pending = sync.pending || 0;
+  const syncing = online && pending > 0;
   const termParam = term ? `&term_id=${term.id}` : '';
   const [state] = useAsync(
-    () => (online
+    () => (online && !syncing
       ? apiGet(`/attendance/api/report/alerts?threshold=${threshold}${termParam}`)
       : Promise.resolve(null)),
-    [threshold, term && term.id, online]
+    [threshold, term && term.id, online, syncing]
   );
 
   const d = state.data;
@@ -31,6 +34,7 @@ export default function Alerts() {
       </Toolbar>
 
       {!online ? <OfflineRequired what="Attendance alerts" />
+        : syncing ? <Spinner label={`Syncing your saved marks… (${pending} left) — alerts will update once they reach the server.`} />
         : state.loading ? <Spinner label="Loading alerts…" />
         : state.error ? <ErrorState detail={state.error.message} />
         : d && (

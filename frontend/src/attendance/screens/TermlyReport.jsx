@@ -11,15 +11,18 @@ const round1 = (n) => Math.round(n * 10) / 10;
 // attendance rate, counts, gender table, session (AM/PM) table, term info,
 // performance bands and the per-student weekly breakdown with totals.
 export default function TermlyReport() {
-  const { classes = [], term, online } = useCtx();
+  const { classes = [], term, online, sync = {} } = useCtx();
   const [assignmentId, setAssignmentId] = useState('');
 
-  const ready = online && assignmentId;
+  // Wait for queued offline marks to flush before computing the report.
+  const pending = sync.pending || 0;
+  const syncing = online && pending > 0;
+  const ready = online && !syncing && assignmentId;
   const [state] = useAsync(
     () => (ready
       ? apiGet(`/attendance/api/report/termly?assignment_id=${assignmentId}`)
       : Promise.resolve(null)),
-    [assignmentId, online]
+    [assignmentId, online, syncing]
   );
 
   const d = state.data;
@@ -58,6 +61,7 @@ export default function TermlyReport() {
       </Toolbar>
 
       {!online ? <OfflineRequired what="The termly report" />
+        : syncing ? <Spinner label={`Syncing your saved marks… (${pending} left) — the report will update once they reach the server.`} />
         : !assignmentId ? <EmptyState icon="fa-hand-pointer" title="Pick a class" hint={`Choose a class to see its termly attendance${term ? ' for ' + term.name : ''}.`} />
         : state.loading ? <Spinner label="Loading termly report…" />
         : state.error ? <ErrorState detail={state.error.message} />

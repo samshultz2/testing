@@ -6,16 +6,19 @@ import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequire
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
-  const { classes = [], today, online } = useCtx();
+  const { classes = [], today, online, sync = {} } = useCtx();
   const [assignmentId, setAssignmentId] = useState('');
   const [date, setDate] = useState(today || '');
 
-  const ready = online && assignmentId && date;
+  // Wait for queued offline marks to flush before computing the summary.
+  const pending = sync.pending || 0;
+  const syncing = online && pending > 0;
+  const ready = online && !syncing && assignmentId && date;
   const [state] = useAsync(
     () => (ready
       ? apiGet(`/attendance/api/daily-summary?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`)
       : Promise.resolve(null)),
-    [assignmentId, date, online]
+    [assignmentId, date, online, syncing]
   );
 
   const d = state.data;
@@ -36,6 +39,7 @@ export default function DailySummary() {
       </Toolbar>
 
       {!online ? <OfflineRequired what="The daily summary" />
+        : syncing ? <Spinner label={`Syncing your saved marks… (${pending} left) — the summary will update once they reach the server.`} />
         : !assignmentId ? <EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class and date to see who was present." />
         : state.loading ? <Spinner label="Loading summary…" />
         : state.error ? <ErrorState detail={state.error.message} />

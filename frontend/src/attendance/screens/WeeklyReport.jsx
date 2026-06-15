@@ -9,16 +9,20 @@ import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequire
 // attendance rate, student/school-day/roll-call counts, week totals (AM/PM/
 // combined, male/female, max possible) and a per-student daily breakdown.
 export default function WeeklyReport() {
-  const { classes = [], weeks = [], online } = useCtx();
+  const { classes = [], weeks = [], online, sync = {} } = useCtx();
   const [assignmentId, setAssignmentId] = useState('');
   const [weekId, setWeekId] = useState(weeks.length ? String(weeks[0].id) : '');
 
-  const ready = online && assignmentId && weekId;
+  // Don't compute the report until any marks queued offline have been flushed,
+  // otherwise a reconnect could show server stats that omit this week's marks.
+  const pending = sync.pending || 0;
+  const syncing = online && pending > 0;
+  const ready = online && !syncing && assignmentId && weekId;
   const [state] = useAsync(
     () => (ready
       ? apiGet(`/attendance/api/report/weekly?assignment_id=${assignmentId}&week_id=${weekId}`)
       : Promise.resolve(null)),
-    [assignmentId, weekId, online]
+    [assignmentId, weekId, online, syncing]
   );
 
   const d = state.data;
@@ -41,6 +45,7 @@ export default function WeeklyReport() {
       </Toolbar>
 
       {!online ? <OfflineRequired what="The weekly report" />
+        : syncing ? <Spinner label={`Syncing your saved marks… (${pending} left) — the report will update once they reach the server.`} />
         : !assignmentId ? <EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class and week to see the attendance breakdown." />
         : !weekId ? <EmptyState icon="fa-calendar-week" title="No weeks defined" hint="This term has no weeks set up yet." />
         : state.loading ? <Spinner label="Loading weekly report…" />
