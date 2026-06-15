@@ -171,6 +171,8 @@ def edit_staff(staff_id):
 def adjust_salary(staff_id):
     """Record a salary increment / adjustment and update the current salary."""
     s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)   # no cross-branch salary changes
     new_salary = request.form.get('new_salary', type=float)
     if new_salary is None or new_salary < 0:
         flash('Enter a valid new salary.', 'error')
@@ -192,6 +194,8 @@ def adjust_salary(staff_id):
 @admin_required
 def delete_staff(staff_id):
     s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)   # no cross-branch staff deletion
     s.is_active = False
     db.session.commit()
     from utils.audit import log_action
@@ -307,6 +311,8 @@ def add_leave():
 @login_required
 def leave_status(leave_id):
     lv = db.get_or_404(LeaveRecord, leave_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(lv.staff.branch_id)   # scope by the leave's staff
     new_status = request.form.get('status')
     if new_status in ('Approved', 'Rejected', 'Pending'):
         lv.status = new_status
@@ -322,6 +328,8 @@ def leave_status(leave_id):
 @login_required
 def delete_leave(leave_id):
     lv = db.get_or_404(LeaveRecord, leave_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(lv.staff.branch_id)   # scope by the leave's staff
     db.session.delete(lv)
     db.session.commit()
     flash('Leave record removed.', 'success')

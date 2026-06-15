@@ -624,6 +624,7 @@ def edit_payment(payment_id):
 @admin_required
 def delete_payment(payment_id):
     payment = db.get_or_404(FeePayment, payment_id)
+    require_branch_access(payment.branch_id)   # no cross-branch payment deletion
     term_id = payment.term_id
     from utils.audit import log_action
     log_action('finance.payment_delete', detail=f'{payment.amount:g}',
@@ -663,6 +664,7 @@ def payment_link(student_id):
     """Staff: generate a Paystack link to send to a parent (recorded via webhook)."""
     from utils import payments as pay_gw
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)   # no cross-branch payment links
     term_id = request.form.get('term_id', type=int) or _active_term_id()
     if not pay_gw.is_configured():
         flash('Online payment is not configured (set Paystack keys).', 'error')
@@ -883,6 +885,7 @@ def edit_expense(expense_id):
 @admin_required
 def delete_expense(expense_id):
     e = db.get_or_404(Expense, expense_id)
+    require_branch_access(e.branch_id)   # no cross-branch expense deletion
     term_id = e.term_id
     from utils.audit import log_action
     log_action('finance.expense_delete', detail=f'{e.amount:g} — {e.description}',
