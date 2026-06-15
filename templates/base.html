@@ -182,11 +182,13 @@
                             <i class="fas fa-laptop-code"></i><span>Online Tests</span>
                         </a>
                     </li>
+                    {% if branch_ctx.is_central or is_admin %}
                     <li class="nav-item">
                         <a href="{{ url_for('cbt.passwords') }}" class="nav-link {% if request.endpoint == 'cbt.passwords' %}active{% endif %}">
                             <i class="fas fa-key"></i><span>Student Passwords</span>
                         </a>
                     </li>
+                    {% endif %}
 
                     {% endif %}
                     {% if can_access_module('results') %}

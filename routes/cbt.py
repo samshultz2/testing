@@ -17,7 +17,7 @@ import random
 import secrets
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, session, jsonify, Response, current_app)
+                   flash, session, jsonify, Response, current_app, abort)
 from werkzeug.utils import secure_filename
 from utils.web_exports import xlsx_response, pdf_response
 from utils.branch_scope import require_branch_access
@@ -727,6 +727,12 @@ def results_export_all():
 @cbt_bp.route('/passwords', methods=['GET', 'POST'])
 @login_required
 def passwords():
+    # Portal passwords are sensitive: only a central admin or a (branch) admin
+    # may view/manage them — not every CBT-module user.
+    from utils.access_control import is_admin
+    from utils.branch_scope import is_central
+    if not (is_central() or is_admin()):
+        abort(403)
     term = _active_term()
     class_id = request.values.get('class_id', type=int)
     arm_id = request.values.get('arm_id', type=int)
@@ -770,18 +776,19 @@ def passwords():
 
 
 def _password_roster(class_id, arm_id, term):
+    from utils.branch_scope import scope_query
     if class_id and term:
-        q = (StudentEnrollment.query
+        q = scope_query(StudentEnrollment.query
              .join(ClassArmAssignment,
                    StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
              .filter(StudentEnrollment.is_active == True,
                      ClassArmAssignment.term_id == term.id,
-                     ClassArmAssignment.class_id == class_id))
+                     ClassArmAssignment.class_id == class_id), ClassArmAssignment)
         if arm_id:
             q = q.filter(ClassArmAssignment.arm_id == arm_id)
         ids = [e.student_id for e in q.all()]
-        return Student.query.filter(Student.id.in_(ids or [-1])).order_by(Student.surname, Student.first_name).all()
-    return Student.query.filter_by(is_active=True).order_by(Student.surname).limit(300).all()
+        return scope_query(Student.query.filter(Student.id.in_(ids or [-1])), Student).order_by(Student.surname, Student.first_name).all()
+    return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).limit(300).all()
 
 
 def _roster_label(class_id, arm_id, classes, arms):
@@ -794,6 +801,10 @@ def _roster_label(class_id, arm_id, classes, arms):
 @login_required
 def passwords_export():
     """Export portal passwords for a class arm as Excel / Word / PDF."""
+    from utils.access_control import is_admin
+    from utils.branch_scope import is_central
+    if not (is_central() or is_admin()):
+        abort(403)
     term = _active_term()
     class_id = request.args.get('class_id', type=int)
     arm_id = request.args.get('arm_id', type=int)
