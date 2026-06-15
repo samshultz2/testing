@@ -929,6 +929,7 @@ def _students_payload():
         },
         'can_manage': can_manage,
         'can_add': can_manage,
+        'can_admin': is_admin(),   # admin-only bulk tools (set stream / add subject / delete)
         'add_url': url_for('main.add_student'),
         'export_url': url_for('main.export_students_data'),
         'trash_url': url_for('main.students_trash'),

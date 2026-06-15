@@ -24,6 +24,16 @@ const SORTS = [
   ['created_at|desc', 'Newest'], ['age|desc', 'Oldest'],
 ];
 
+// Reusable labelled filter field (label above the control).
+function Field({ label, full, children }) {
+  return (
+    <label className={'stu-field-wrap' + (full ? ' full' : '')}>
+      <span className="stu-field-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export default function App({ initial }) {
   const [data, setData] = useState(initial || {});
   const a = (initial && initial.applied) || {};
@@ -66,8 +76,16 @@ export default function App({ initial }) {
   const students = d.students || [];
   const filters = d.filters || {};
   const canManage = !!d.can_manage;
+  const canAdmin = !!d.can_admin;   // admin-only bulk tools
   const setFilter = (k, v) => setQuery((q) => ({ ...q, [k]: v, page: 1 }));
   const goPage = (p) => setQuery((q) => ({ ...q, page: p }));
+  const hasFilters = !!(search || query.gender || query.religion || query.stream
+    || query.subject || query.class_id || query.arm_id);
+  const resetFilters = () => {
+    setSearch('');
+    setQuery({ gender: '', religion: '', stream: '', subject: '', class_id: '', arm_id: '',
+               sort: 'surname', order: 'asc', search: '', page: 1 });
+  };
 
   const allOnPage = students.length && students.every((s) => selected.has(s.id));
   const toggleSel = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -101,8 +119,9 @@ export default function App({ initial }) {
         <div><h1><i className="fas fa-user-graduate" /> Students</h1></div>
         <div className="page-header-actions stu-toolbar">
           {d.can_add && <a href={d.add_url} className="btn btn-primary"><i className="fas fa-plus" /> Add Student</a>}
-          {canManage && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
-                                onClick={() => runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.')}><i className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
+          {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
+                               onClick={() => window.confirm("Fill WAEC subjects from stream for students who don't have them set?")
+                                 && runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.')}><i className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
           {canManage && <a href={d.trash_url} className="btn btn-secondary btn-sm" title="Deleted students"><i className="fas fa-trash" /></a>}
         </div>
       </div>
@@ -117,36 +136,59 @@ export default function App({ initial }) {
 
       <div className="card"><div className="card-body">
         <div className="stu-filters">
-          <input className="form-control full" type="text" placeholder="Search name or Student ID…"
-                 value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search students" />
-          <select className="form-control" value={query.class_id} onChange={(e) => setFilter('class_id', e.target.value)} aria-label="Class">
-            <option value="">All classes</option>
-            {(filters.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select className="form-control" value={query.arm_id} onChange={(e) => setFilter('arm_id', e.target.value)} aria-label="Arm">
-            <option value="">All arms</option>
-            {(filters.arms || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select className="form-control" value={query.gender} onChange={(e) => setFilter('gender', e.target.value)} aria-label="Gender">
-            <option value="">Any gender</option><option>Male</option><option>Female</option>
-          </select>
-          <select className="form-control" value={query.religion} onChange={(e) => setFilter('religion', e.target.value)} aria-label="Religion">
-            <option value="">Any religion</option>
-            {(filters.religions || []).map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select className="form-control" value={query.stream} onChange={(e) => setFilter('stream', e.target.value)} aria-label="Stream">
-            <option value="">Any stream</option>
-            {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select className="form-control" value={query.subject} onChange={(e) => setFilter('subject', e.target.value)} aria-label="WAEC subject (SSS3)">
-            <option value="">Any WAEC subject</option>
-            {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select className="form-control" value={query.sort + '|' + query.order}
-                  onChange={(e) => { const [s, o] = e.target.value.split('|'); setQuery((q) => ({ ...q, sort: s, order: o, page: 1 })); }} aria-label="Sort">
-            {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-          </select>
+          <Field label="Search" full>
+            <input className="form-control" type="text" placeholder="Name or Student ID…"
+                   value={search} onChange={(e) => setSearch(e.target.value)} />
+          </Field>
+          <Field label="Class">
+            <select className="form-control" value={query.class_id} onChange={(e) => setFilter('class_id', e.target.value)}>
+              <option value="">All classes</option>
+              {(filters.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Arm">
+            <select className="form-control" value={query.arm_id} onChange={(e) => setFilter('arm_id', e.target.value)}>
+              <option value="">All arms</option>
+              {(filters.arms || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Gender">
+            <select className="form-control" value={query.gender} onChange={(e) => setFilter('gender', e.target.value)}>
+              <option value="">All</option><option>Male</option><option>Female</option>
+            </select>
+          </Field>
+          <Field label="Religion">
+            <select className="form-control" value={query.religion} onChange={(e) => setFilter('religion', e.target.value)}>
+              <option value="">All</option>
+              {(filters.religions || []).map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="Stream">
+            <select className="form-control" value={query.stream} onChange={(e) => setFilter('stream', e.target.value)}>
+              <option value="">All</option>
+              {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="WAEC subject (SSS3)">
+            <select className="form-control" value={query.subject} onChange={(e) => setFilter('subject', e.target.value)}>
+              <option value="">All</option>
+              {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="Sort by">
+            <select className="form-control" value={query.sort + '|' + query.order}
+                    onChange={(e) => { const [s, o] = e.target.value.split('|'); setQuery((q) => ({ ...q, sort: s, order: o, page: 1 })); }}>
+              {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+          </Field>
         </div>
+        {hasFilters && (
+          <div style={{ marginTop: '.5rem' }}>
+            <button type="button" className="btn btn-light btn-sm" onClick={resetFilters}>
+              <i className="fas fa-xmark" /> Clear filters
+            </button>
+          </div>
+        )}
       </div></div>
 
       <div className="stu-bulkbar">
@@ -156,7 +198,7 @@ export default function App({ initial }) {
         <span className="stu-count">{selectedIds.length ? `${selectedIds.length} selected · ` : ''}{d.total || 0} student(s){loading ? ' · loading…' : ''}</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(true)}><i className="fas fa-download" /> Export</button>
-          {canManage && <>
+          {canAdmin && <>
             <select className="form-control" style={{ width: 'auto' }} value={bulkStream} onChange={(e) => setBulkStream(e.target.value)} aria-label="Bulk stream">
               <option value="">Set stream…</option>
               {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}

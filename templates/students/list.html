@@ -13,6 +13,9 @@
 .stu-filters { display:grid; grid-template-columns:repeat(2,1fr); gap:.5rem; margin:.75rem 0; }
 @media(min-width:768px){ .stu-filters{ grid-template-columns:repeat(4,1fr); } }
 .stu-filters .full { grid-column:1/-1; }
+.stu-field-wrap { display:flex; flex-direction:column; gap:4px; margin:0; }
+.stu-field-wrap.full { grid-column:1/-1; }
+.stu-field-label { font-size:12px; font-weight:600; color:var(--text-secondary,#475569); }
 .stu-count { color:var(--text-muted); font-size:.85rem; }
 .stu-bulkbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.5rem .7rem;
   background:var(--gray-50,#f8fafc); border:1px solid var(--border-color); border-radius:8px; margin-bottom:.75rem; }
