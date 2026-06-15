@@ -54,6 +54,30 @@ def _read_subject_scores(form, suffix=''):
 # DASHBOARD & OVERVIEW
 # =============================================================================
 
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _ok(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('mock_jamb.index'))
+
+
+def _err(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), 400
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('mock_jamb.index'))
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('mock_jamb/app.html', 'mj_json', payload)
+
+
 @mock_jamb_bp.route('/')
 @login_required
 def index():
@@ -73,14 +97,32 @@ def index():
                             MockJAMBExam).order_by(MockJAMBExam.exam_number).all()
         comparison_data = MockJAMBAnalytics.compare_mock_exams(session_id)
     
-    return render_template('mock_jamb/index.html',
-        sessions=sessions,
-        selected_session_id=session_id,
-        active_session=active_session,
-        exams=exams,
-        comparison_data=comparison_data,
-        max_mock_exams=4
-    )
+    def exam_row(e):
+        above_200 = sum(1 for r in e.results if r.total_score and r.total_score >= 200)
+        return {
+            'id': e.id, 'display_name': e.display_name, 'is_completed': bool(e.is_completed),
+            'exam_date': e.exam_date.strftime('%d %B %Y') if e.exam_date else '',
+            'student_count': e.student_count,
+            'average_score': round(e.average_score, 1) if e.student_count > 0 else None,
+            'above_200': above_200,
+            'view_url': url_for('mock_jamb.view_exam', exam_id=e.id),
+            'add_url': url_for('mock_jamb.add_result', exam_id=e.id),
+            'bulk_url': url_for('mock_jamb.bulk_entry', exam_id=e.id),
+        }
+    avg_scores = [e.average_score for e in exams if e.student_count > 0]
+    return _render({
+        'page': 'index', 'selected_session_id': session_id or '',
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'exams': [exam_row(e) for e in exams],
+        'stats': {'count': len(exams), 'total_results': sum(e.student_count for e in exams),
+                  'avg_score': round(sum(avg_scores) / len(avg_scores), 1) if avg_scores else None,
+                  'remaining': 4 - len(exams)},
+        'comparison': [{'label': c['exam'].display_name, 'average': round(c['average'], 1),
+                        'above_250': round((c.get('above_250_pct') or 0) * c['student_count'] / 100)}
+                       for c in (comparison_data or [])],
+        'urls': {'create': url_for('mock_jamb.create_exam'), 'analytics': url_for('mock_jamb.analytics'),
+                 'predictions': url_for('results.predictions_dashboard'), 'self': url_for('mock_jamb.index')},
+    })
 
 
 # =============================================================================
@@ -104,24 +146,21 @@ def create_exam():
             
             # Validate
             if not session_id or not exam_number or not exam_date:
-                flash('Please fill all required fields.', 'error')
-                return redirect(url_for('mock_jamb.create_exam'))
-            
+                return _err('Please fill all required fields.', url_for('mock_jamb.create_exam'))
+
             # The new exam belongs to the creator's branch; uniqueness of the
             # exam number is per (session, branch).
             new_branch_id = branch_for_new(request.form.get('branch_id', type=int))
             existing = MockJAMBExam.query.filter_by(
                 session_id=session_id, exam_number=exam_number, branch_id=new_branch_id).first()
             if existing:
-                flash(f'Mock exam #{exam_number} already exists for this session.', 'error')
-                return redirect(url_for('mock_jamb.create_exam'))
-            
+                return _err(f'Mock exam #{exam_number} already exists for this session.', url_for('mock_jamb.create_exam'))
+
             # Parse date
             try:
                 exam_date = datetime.strptime(exam_date, '%Y-%m-%d').date()
             except ValueError:
-                flash('Invalid date format.', 'error')
-                return redirect(url_for('mock_jamb.create_exam'))
+                return _err('Invalid date format.', url_for('mock_jamb.create_exam'))
             
             # Create exam
             session_obj = db.session.get(AcademicSession, session_id)
@@ -140,23 +179,24 @@ def create_exam():
             
             db.session.add(exam)
             db.session.commit()
-            
-            flash(f'{exam.display_name} created successfully!', 'success')
-            return redirect(url_for('mock_jamb.index', session_id=session_id))
-            
+            return _ok(f'{exam.display_name} created successfully!',
+                       url_for('mock_jamb.index', session_id=session_id))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error creating exam: {str(e)}', 'error')
-    
+            return _err(f'Error creating exam: {str(e)}', url_for('mock_jamb.create_exam'))
+
     # Get existing exam numbers for each session
     existing_exams = {}
     for sess in sessions:
-        existing_exams[sess.id] = [e.exam_number for e in MockJAMBExam.query.filter_by(session_id=sess.id).all()]
-    
-    return render_template('mock_jamb/create_exam.html',
-        sessions=sessions,
-        existing_exams=existing_exams
-    )
+        existing_exams[str(sess.id)] = [e.exam_number for e in MockJAMBExam.query.filter_by(session_id=sess.id).all()]
+
+    return _render({
+        'page': 'create_exam', 'existing_exams': existing_exams,
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'submit_url': url_for('mock_jamb.create_exam'),
+        'urls': {'index': url_for('mock_jamb.index')},
+    })
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>')
@@ -248,16 +288,24 @@ def edit_exam(exam_id):
                 exam.exam_date = datetime.strptime(exam_date, '%Y-%m-%d').date()
             
             exam.is_completed = request.form.get('is_completed') == 'on'
-            
+
             db.session.commit()
-            flash('Exam updated successfully!', 'success')
-            return redirect(url_for('mock_jamb.view_exam', exam_id=exam_id))
-            
+            return _ok('Exam updated successfully!', url_for('mock_jamb.view_exam', exam_id=exam_id))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating exam: {str(e)}', 'error')
-    
-    return render_template('mock_jamb/edit_exam.html', exam=exam)
+            return _err(f'Error updating exam: {str(e)}', url_for('mock_jamb.edit_exam', exam_id=exam_id))
+
+    return _render({
+        'page': 'edit_exam',
+        'exam': {'id': exam.id, 'name': exam.name or '', 'description': exam.description or '',
+                 'exam_date': exam.exam_date.strftime('%Y-%m-%d') if exam.exam_date else '',
+                 'is_completed': bool(exam.is_completed), 'display_name': exam.display_name,
+                 'session_name': exam.session.name if exam.session else ''},
+        'submit_url': url_for('mock_jamb.edit_exam', exam_id=exam.id),
+        'delete_url': url_for('mock_jamb.delete_exam', exam_id=exam.id),
+        'view_url': url_for('mock_jamb.view_exam', exam_id=exam.id),
+    })
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/delete', methods=['POST'])
@@ -273,12 +321,11 @@ def delete_exam(exam_id):
     try:
         db.session.delete(exam)
         db.session.commit()
-        flash(f'{exam_name} and all its results have been deleted.', 'success')
+        return _ok(f'{exam_name} and all its results have been deleted.',
+                   url_for('mock_jamb.index', session_id=session_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error deleting exam: {str(e)}', 'error')
-    
-    return redirect(url_for('mock_jamb.index', session_id=session_id))
+        return _err(f'Error deleting exam: {str(e)}', url_for('mock_jamb.index', session_id=session_id))
 
 
 # =============================================================================
@@ -476,8 +523,8 @@ def edit_result(result_id):
             total_score = request.form.get('total_score', type=int)
             
             if total_score is None or total_score < 0 or total_score > 400:
-                flash('Invalid total score. Must be between 0 and 400.', 'error')
-                return redirect(url_for('mock_jamb.edit_result', result_id=result_id))
+                return _err('Invalid total score. Must be between 0 and 400.',
+                            url_for('mock_jamb.edit_result', result_id=result_id))
             
             def safe_int(val):
                 try:
@@ -496,17 +543,27 @@ def edit_result(result_id):
             result.subject4_score = safe_int(request.form.get('subject4_score'))
             
             db.session.commit()
-            flash('Result updated successfully!', 'success')
-            return redirect(url_for('mock_jamb.view_exam', exam_id=result.mock_exam_id))
-            
+            return _ok('Result updated successfully!', url_for('mock_jamb.view_exam', exam_id=result.mock_exam_id))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating result: {str(e)}', 'error')
-    
-    return render_template('mock_jamb/edit_result.html',
-        result=result,
-        subjects=WAEC_SUBJECTS
-    )
+            return _err(f'Error updating result: {str(e)}', url_for('mock_jamb.edit_result', result_id=result_id))
+
+    r = result
+    return _render({
+        'page': 'edit_result',
+        'result': {'id': r.id, 'student_name': r.student.full_name, 'student_id': r.student.student_id,
+                   'subject1': r.subject1 or '', 'subject1_score': r.subject1_score if r.subject1_score is not None else '',
+                   'subject2': r.subject2 or '', 'subject2_score': r.subject2_score if r.subject2_score is not None else '',
+                   'subject3': r.subject3 or '', 'subject3_score': r.subject3_score if r.subject3_score is not None else '',
+                   'subject4': r.subject4 or '', 'subject4_score': r.subject4_score if r.subject4_score is not None else '',
+                   'total_score': r.total_score, 'exam_name': r.exam.display_name,
+                   'exam_id': r.mock_exam_id},
+        'subjects': list(WAEC_SUBJECTS),
+        'submit_url': url_for('mock_jamb.edit_result', result_id=r.id),
+        'delete_url': url_for('mock_jamb.delete_result', result_id=r.id),
+        'view_url': url_for('mock_jamb.view_exam', exam_id=r.mock_exam_id),
+    })
 
 
 @mock_jamb_bp.route('/result/<int:result_id>/delete', methods=['POST'])
@@ -523,12 +580,10 @@ def delete_result(result_id):
     try:
         db.session.delete(result)
         db.session.commit()
-        flash(f'Result for {student_name} deleted.', 'success')
+        return _ok(f'Result for {student_name} deleted.', url_for('mock_jamb.view_exam', exam_id=exam_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error deleting result: {str(e)}', 'error')
-    
-    return redirect(url_for('mock_jamb.view_exam', exam_id=exam_id))
+        return _err(f'Error deleting result: {str(e)}', url_for('mock_jamb.view_exam', exam_id=exam_id))
 
 
 # =============================================================================

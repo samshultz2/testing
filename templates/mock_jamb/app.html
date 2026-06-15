@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% set _t = {'index':'Mock JAMB','create_exam':'Create Mock Exam','edit_exam':'Edit Mock Exam','edit_result':'Edit Result'} %}
+{% block title %}{{ _t.get(mj_json.page,'Mock JAMB') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if mj_json.page == 'index' %}<span>Mock JAMB Examinations</span>
+{% else %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <span>{{ _t.get(mj_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block content %}
+<div id="mj-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="mj-data">{{ mj_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/react/mock-jamb-app.js') }}" defer></script>
+{% endblock %}
