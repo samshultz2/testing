@@ -457,8 +457,10 @@ def bulk_entry(exam_id):
 @csrf_protect
 def edit_result(result_id):
     """Edit a specific result"""
+    from utils.branch_scope import require_branch_access
     result = db.get_or_404(MockJAMBResult, result_id)
-    
+    require_branch_access(result.student.branch_id)   # scope by the result's student
+
     if request.method == 'POST':
         try:
             total_score = request.form.get('total_score', type=int)
@@ -502,7 +504,9 @@ def edit_result(result_id):
 @csrf_protect
 def delete_result(result_id):
     """Delete a result"""
+    from utils.branch_scope import require_branch_access
     result = db.get_or_404(MockJAMBResult, result_id)
+    require_branch_access(result.student.branch_id)   # scope by the result's student
     exam_id = result.mock_exam_id
     student_name = result.student.full_name
     
