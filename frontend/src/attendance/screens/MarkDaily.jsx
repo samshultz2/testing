@@ -6,6 +6,24 @@ import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner
 
 const key = (aid, date) => `roster|${aid}|${date}`;
 
+// Local YYYY-MM-DD (no UTC shift) for a Date.
+const ymd = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+
+// Mon–Fri of the week containing `iso` — the days worth caching for offline
+// marking (the server flags weekends/holidays as non-school days anyway).
+function weekdays(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return [];
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return Array.from({ length: 5 }, (_, i) => {
+    const x = new Date(monday); x.setDate(monday.getDate() + i); return ymd(x);
+  });
+}
+
+// Up to two initials from a name, for the row avatar.
+const initialsOf = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
 export default function MarkDaily() {
   const { classes = [], today, online, sync, initial } = useCtx();
   // Seed from a deep link only when that class belongs to the loaded term.
@@ -18,21 +36,40 @@ export default function MarkDaily() {
   const [present, setPresent] = useState({});
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [weekCached, setWeekCached] = useState(false);
+
+  // After an online load, quietly cache every weekday of that week so the
+  // teacher can mark the whole week offline — not just dates they opened first.
+  const prefetchWeek = useCallback(async (aid, baseDate) => {
+    if (!navigator.onLine) return;
+    let any = false;
+    for (const dt of weekdays(baseDate)) {
+      if (dt === baseDate) { any = true; continue; }
+      try {
+        const data = await apiGet(`/attendance/api/roster?assignment_id=${aid}&date=${encodeURIComponent(dt)}`);
+        await cachePut(key(aid, dt), data);
+        any = true;
+      } catch (_) { /* best effort — skip days that fail */ }
+    }
+    setWeekCached(any);
+  }, []);
 
   const load = useCallback(async () => {
     if (!assignmentId || !date) { setState({ idle: true }); return; }
     setState({ loading: true });
+    setWeekCached(false);
     const k = key(assignmentId, date);
     try {
       const data = await apiGet(`/attendance/api/roster?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`);
       await cachePut(k, data);
       setState({ data, source: 'network' });
+      prefetchWeek(assignmentId, date);   // fire-and-forget
     } catch (e) {
       const cached = await cacheGet(k);
       if (cached) setState({ data: cached, source: 'cache' });
       else setState({ error: e });
     }
-  }, [assignmentId, date]);
+  }, [assignmentId, date, prefetchWeek]);
 
   useEffect(() => { setMsg(null); load(); }, [load]);
 
@@ -126,6 +163,7 @@ export default function MarkDaily() {
             <strong>{d.class_name}</strong>
             <span style={{ color: '#6b7280' }}>{d.date}</span>
             {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
+            {weekCached && online && <Pill tone="green"><i className="fas fa-download" aria-hidden="true" /> week saved offline</Pill>}
             <span style={{ marginLeft: 'auto', fontSize: 13 }}>Present: <b>{presentCount}</b>/{d.students.length}</span>
           </div>
 
@@ -144,15 +182,21 @@ export default function MarkDaily() {
                 </label>
               )}
               <ul className="att-list" aria-label={'Register for ' + d.class_name}>
-                {d.students.map((s) => (
-                  <li key={s.enrollment_id} className={present[s.enrollment_id] ? 'is-present' : 'is-absent'}>
-                    <label>
-                      <input type="checkbox" checked={!!present[s.enrollment_id]} onChange={() => toggle(s.enrollment_id)} />
-                      <span className="att-name">{s.name}<span className="att-sub"> {s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
-                      <span className="att-flag">{present[s.enrollment_id] ? 'Present' : 'Absent'}</span>
-                    </label>
-                  </li>
-                ))}
+                {d.students.map((s) => {
+                  const on = !!present[s.enrollment_id];
+                  return (
+                    <li key={s.enrollment_id} className={on ? 'is-present' : 'is-absent'}>
+                      <label>
+                        <input type="checkbox" checked={on} onChange={() => toggle(s.enrollment_id)} />
+                        <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
+                        <span className="att-name">{s.name}<span className="att-sub">{s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
+                        <span className="att-flag">
+                          <i className={'fas ' + (on ? 'fa-check' : 'fa-xmark')} aria-hidden="true" /> {on ? 'Present' : 'Absent'}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}
