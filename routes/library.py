@@ -33,6 +33,37 @@ def _d(value, default=None):
         return default
 
 
+def _wants_json():
+    return request.headers.get('X-Requested-With') == 'fetch' or request.is_json
+
+
+def _ok(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('library.dashboard'))
+
+
+def _err(message, redirect_url=None, info=False):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), 400
+    flash(message, 'info' if info else 'error')
+    return redirect(redirect_url or url_for('library.dashboard'))
+
+
+def _urls():
+    return {k: url_for('library.' + v) for k, v in {
+        'dashboard': 'dashboard', 'books': 'books', 'issue': 'issue', 'loans': 'loans',
+        'settings': 'settings', 'add_book': 'add_book', 'export': 'export',
+        'book_search': 'book_search', 'student_search': 'student_search'}.items()}
+
+
+def _render(payload):
+    payload['urls'] = {**_urls(), **payload.get('urls', {})}
+    payload['is_admin'] = is_admin()
+    return render_template('library/app.html', library_json=payload)
+
+
 # ============================================================================
 # DASHBOARD
 # ============================================================================
@@ -50,9 +81,25 @@ def dashboard():
                 .filter(Book.is_active == True), Book).group_by(Book.category).all())
     cat_chart = [{'name': c or 'Uncategorised', 'count': n} for c, n in cat_rows]
     recent = (scope_by_student(BookLoan.query, BookLoan).order_by(BookLoan.created_at.desc()).limit(8).all())
-    return render_template('library/dashboard.html', titles=titles, copies=copies,
-        available=available, on_loan=on_loan, overdue=overdue,
-        cat_chart=cat_chart, recent=recent)
+    return _render({
+        'page': 'dashboard', 'titles': titles, 'copies': copies, 'available': available,
+        'on_loan': on_loan, 'overdue': overdue, 'cat_chart': cat_chart,
+        'recent': [_loan_row(l, short=True) for l in recent],
+    })
+
+
+def _loan_row(l, short=False):
+    bfmt = '%d %b' if short else '%d %b %Y'
+    return {
+        'id': l.id, 'book': l.book.title if l.book else '—',
+        'student': l.student.full_name if l.student else '—',
+        'borrowed': l.borrowed_date.strftime(bfmt) if l.borrowed_date else '',
+        'due': l.due_date.strftime(bfmt) if l.due_date else '',
+        'is_overdue': bool(l.is_overdue), 'days_overdue': l.days_overdue,
+        'status': l.status, 'fine': l.fine or 0,
+        'returned': l.returned_date.strftime('%d %b %Y') if l.returned_date else '',
+        'return_url': url_for('library.return_loan', loan_id=l.id),
+    }
 
 
 # ============================================================================
@@ -75,11 +122,30 @@ def books():
         query = query.filter_by(category=category)
     if avail == '1':
         query = query.filter(Book.copies_available > 0)
-    books = query.order_by(Book.title).all()
+    rows = query.order_by(Book.title).all()
     categories = [c[0] for c in db.session.query(Book.category).filter(
         Book.category != None, Book.category != '').distinct().all()]
-    return render_template('library/books.html', books=books, q=q,
-        category=category, avail=avail, categories=categories)
+    return _render({
+        'page': 'books', 'q': q, 'category': category or '', 'avail': avail or '',
+        'categories': categories,
+        'books': [{'id': b.id, 'title': b.title, 'isbn': b.isbn, 'author': b.author,
+                   'category': b.category, 'shelf': b.shelf,
+                   'copies_available': b.copies_available, 'copies_total': b.copies_total,
+                   'edit_url': url_for('library.edit_book', book_id=b.id),
+                   'issue_url': url_for('library.issue') + f'?book_id={b.id}',
+                   'delete_url': url_for('library.delete_book', book_id=b.id)} for b in rows],
+    })
+
+
+def _book_payload(b):
+    return {
+        'page': 'book_form',
+        'book': ({'id': b.id, 'title': b.title, 'author': b.author or '', 'isbn': b.isbn or '',
+                  'category': b.category or '', 'publisher': b.publisher or '', 'shelf': b.shelf or '',
+                  'copies_total': b.copies_total, 'copies_available': b.copies_available,
+                  'on_loan': b.on_loan, 'notes': b.notes or ''} if b else None),
+        'submit_url': url_for('library.edit_book', book_id=b.id) if b else url_for('library.add_book'),
+    }
 
 
 def _read_book(b):
@@ -97,8 +163,7 @@ def _read_book(b):
 def add_book():
     if request.method == 'POST':
         if not request.form.get('title'):
-            flash('Title is required.', 'error')
-            return redirect(url_for('library.add_book'))
+            return _err('Title is required.', url_for('library.add_book'))
         total = request.form.get('copies_total', type=int) or 1
         b = Book(copies_total=total, copies_available=total)
         _read_book(b)
@@ -106,15 +171,15 @@ def add_book():
         b.branch_id = branch_for_new()
         db.session.add(b)
         db.session.commit()
-        flash(f'Added "{b.title}".', 'success')
-        return redirect(url_for('library.books'))
-    return render_template('library/book_form.html', book=None)
+        return _ok(f'Added "{b.title}".', url_for('library.books'))
+    return _render(_book_payload(None))
 
 
 @library_bp.route('/books/<int:book_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_book(book_id):
     b = db.get_or_404(Book, book_id)
+    require_branch_access(b.branch_id)
     if request.method == 'POST':
         new_total = request.form.get('copies_total', type=int)
         _read_book(b)
@@ -126,22 +191,20 @@ def edit_book(book_id):
             if b.copies_available > b.copies_total:
                 b.copies_available = b.copies_total
         db.session.commit()
-        flash('Book updated.', 'success')
-        return redirect(url_for('library.books'))
-    return render_template('library/book_form.html', book=b)
+        return _ok('Book updated.', url_for('library.books'))
+    return _render(_book_payload(b))
 
 
 @library_bp.route('/books/<int:book_id>/delete', methods=['POST'])
 @admin_required
 def delete_book(book_id):
     b = db.get_or_404(Book, book_id)
+    require_branch_access(b.branch_id)
     if b.loans.filter_by(status='Borrowed').count():
-        flash('Cannot delete: copies are still on loan.', 'error')
-        return redirect(url_for('library.books'))
+        return _err('Cannot delete: copies are still on loan.', url_for('library.books'))
     b.is_active = False
     db.session.commit()
-    flash('Book removed.', 'success')
-    return redirect(url_for('library.books'))
+    return _ok('Book removed.', url_for('library.books'))
 
 
 # ============================================================================
@@ -158,25 +221,26 @@ def issue():
         book = db.session.get(Book, book_id) if book_id else None
         student = db.session.get(Student, student_id) if student_id else None
         if not (book and student):
-            flash('Select a book and a student.', 'error')
-            return redirect(url_for('library.issue'))
+            return _err('Select a book and a student.', url_for('library.issue'))
         if not can_access_branch(book.branch_id) or not can_access_branch(student.branch_id):
-            flash('That book or student belongs to another branch.', 'error')
-            return redirect(url_for('library.issue'))
+            return _err('That book or student belongs to another branch.', url_for('library.issue'))
         if (book.copies_available or 0) <= 0:
-            flash('No copies available for that title.', 'error')
-            return redirect(url_for('library.issue'))
+            return _err('No copies available for that title.', url_for('library.issue'))
         due = _d(request.form.get('due_date')) or (date.today() + timedelta(days=s['loan_days']))
         loan = BookLoan(book_id=book.id, student_id=student.id,
                         borrowed_date=date.today(), due_date=due, status='Borrowed')
         book.copies_available = (book.copies_available or 0) - 1
         db.session.add(loan)
         db.session.commit()
-        flash(f'Issued "{book.title}" to {student.full_name} (due {due.strftime("%d %b %Y")}).', 'success')
-        return redirect(url_for('library.loans'))
+        return _ok(f'Issued "{book.title}" to {student.full_name} (due {due.strftime("%d %b %Y")}).',
+                   url_for('library.loans'))
     preset = db.session.get(Book, request.args.get('book_id', type=int)) if request.args.get('book_id') else None
-    return render_template('library/issue.html', settings=s, preset=preset,
-        default_due=(date.today() + timedelta(days=s['loan_days'])))
+    return _render({
+        'page': 'issue', 'settings': s,
+        'default_due': (date.today() + timedelta(days=s['loan_days'])).isoformat(),
+        'preset': ({'id': preset.id, 'title': preset.title} if preset else None),
+        'submit_url': url_for('library.issue'),
+    })
 
 
 @library_bp.route('/loans/<int:loan_id>/return', methods=['POST'])
@@ -185,8 +249,7 @@ def return_loan(loan_id):
     loan = db.get_or_404(BookLoan, loan_id)
     require_branch_access(loan.book.branch_id if loan.book else None)
     if loan.status == 'Returned':
-        flash('Already returned.', 'info')
-        return safe_redirect(url_for('library.loans'))
+        return _err('Already returned.', url_for('library.loans'), info=True)
     s = _settings()
     loan.returned_date = date.today()
     loan.status = 'Returned'
@@ -198,8 +261,7 @@ def return_loan(loan_id):
     msg = f'Returned "{loan.book.title if loan.book else "book"}".'
     if loan.fine:
         msg += f' Overdue fine: ₦{loan.fine:,.2f}.'
-    flash(msg, 'success')
-    return safe_redirect(url_for('library.loans'))
+    return _ok(msg, url_for('library.loans'))
 
 
 @library_bp.route('/loans')
@@ -211,9 +273,11 @@ def loans():
         q = q.filter(BookLoan.status == 'Borrowed', BookLoan.due_date < date.today())
     elif status in ('Borrowed', 'Returned'):
         q = q.filter_by(status=status)
-    loans = q.order_by(BookLoan.borrowed_date.desc(), BookLoan.id.desc()).all()
-    return render_template('library/loans.html', loans=loans, status=status,
-                           today=date.today())
+    rows = q.order_by(BookLoan.borrowed_date.desc(), BookLoan.id.desc()).all()
+    return _render({
+        'page': 'loans', 'status': status,
+        'loans': [_loan_row(l) for l in rows],
+    })
 
 
 @library_bp.route('/book-search')
@@ -268,12 +332,11 @@ def export():
 def settings():
     if request.method == 'POST':
         if not is_admin():
-            flash('Admins only.', 'error')
-            return redirect(url_for('library.settings'))
+            return _err('Admins only.', url_for('library.settings'))
         SchoolSettings.set('library_loan_days', request.form.get('loan_days') or '14',
                            'int', 'Library loan period (days)')
         SchoolSettings.set('library_fine_per_day', request.form.get('fine_per_day') or '0',
                            'string', 'Library overdue fine per day')
-        flash('Library settings saved.', 'success')
-        return redirect(url_for('library.settings'))
-    return render_template('library/settings.html', settings=_settings())
+        return _ok('Library settings saved.', url_for('library.settings'))
+    return _render({'page': 'settings', 'settings': _settings(),
+                    'submit_url': url_for('library.settings')})
