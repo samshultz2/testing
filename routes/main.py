@@ -1473,17 +1473,40 @@ def bulk_delete_students():
 @admin_required
 def students_trash():
     """List soft-deleted students with restore / permanent-delete options."""
-    students = Student.query.filter_by(is_active=False).order_by(Student.surname, Student.first_name).all()
-    return render_template('students/trash.html', students=students)
+    return render_template('students/trash.html', trash_json=_trash_payload())
+
+
+def _trash_payload():
+    """Soft-deleted students the current admin may act on (branch-scoped)."""
+    from utils.branch_scope import scope_query
+    q = scope_query(Student.query.filter_by(is_active=False), Student)
+    students = q.order_by(Student.surname, Student.first_name).all()
+    return {
+        'students': [{
+            'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
+            'gender': s.gender, 'stream': s.stream,
+            'restore_url': url_for('main.restore_student', student_id=s.id),
+            'purge_url': url_for('main.purge_student', student_id=s.id),
+        } for s in students],
+        'urls': {
+            'list': url_for('main.students_list'),
+            'bulk_restore': url_for('main.bulk_restore_students'),
+            'bulk_purge': url_for('main.bulk_purge_students'),
+        },
+    }
 
 
 @main_bp.route('/students/<int:student_id>/restore', methods=['POST'])
 @admin_required
 def restore_student(student_id):
     student = db.get_or_404(Student, student_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(student.branch_id)   # don't touch another branch's records
     student.is_active = True
     db.session.commit()
     log_action('restore_student', f'{student.full_name} ({student.student_id})')
+    if _wants_json():
+        return jsonify({'ok': True})
     flash(f'{student.full_name} restored.', 'success')
     return redirect(url_for('main.students_trash'))
 
@@ -1493,7 +1516,11 @@ def restore_student(student_id):
 def purge_student(student_id):
     """Permanently delete a soft-deleted student and their related records."""
     student = db.get_or_404(Student, student_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(student.branch_id)
     if student.is_active:
+        if _wants_json():
+            return jsonify({'ok': False, 'error': 'Only deleted students can be permanently removed.'}), 400
         flash('Only deleted students can be permanently removed.', 'error')
         return redirect(url_for('main.students_trash'))
     name = student.full_name
@@ -1502,26 +1529,39 @@ def purge_student(student_id):
         db.session.delete(student)
         db.session.commit()
         log_action('purge_student', f'{name} ({sid})')
+        if _wants_json():
+            return jsonify({'ok': True})
         flash(f'{name} permanently deleted.', 'success')
     except Exception as e:
         db.session.rollback()
+        if _wants_json():
+            return jsonify({'ok': False, 'error': str(e)}), 400
         flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('main.students_trash'))
+
+
+def _bulk_no_selection():
+    if _wants_json():
+        return jsonify({'ok': False, 'error': 'No students selected.'}), 400
+    flash('No students selected.', 'error')
     return redirect(url_for('main.students_trash'))
 
 
 @main_bp.route('/students/bulk-restore', methods=['POST'])
 @admin_required
 def bulk_restore_students():
-    """Restore several soft-deleted students at once."""
+    """Restore several soft-deleted students at once (branch-scoped)."""
+    from utils.branch_scope import scope_query
     ids = _int_ids(request.form.getlist('student_ids'))
     if not ids:
-        flash('No students selected.', 'error')
-        return redirect(url_for('main.students_trash'))
-    restored = Student.query.filter(
-        Student.id.in_(ids), Student.is_active == False
+        return _bulk_no_selection()
+    restored = scope_query(
+        Student.query.filter(Student.id.in_(ids), Student.is_active == False), Student
     ).update({Student.is_active: True}, synchronize_session=False)
     db.session.commit()
     log_action('bulk_restore_students', f'{restored} students restored')
+    if _wants_json():
+        return jsonify({'ok': True, 'restored': restored})
     flash(f'{restored} student(s) restored.', 'success')
     return redirect(url_for('main.students_trash'))
 
@@ -1529,13 +1569,13 @@ def bulk_restore_students():
 @main_bp.route('/students/bulk-purge', methods=['POST'])
 @admin_required
 def bulk_purge_students():
-    """Permanently delete several soft-deleted students at once."""
+    """Permanently delete several soft-deleted students at once (branch-scoped)."""
+    from utils.branch_scope import scope_query
     ids = _int_ids(request.form.getlist('student_ids'))
     if not ids:
-        flash('No students selected.', 'error')
-        return redirect(url_for('main.students_trash'))
-    students = Student.query.filter(
-        Student.id.in_(ids), Student.is_active == False
+        return _bulk_no_selection()
+    students = scope_query(
+        Student.query.filter(Student.id.in_(ids), Student.is_active == False), Student
     ).all()
     purged = 0
     try:
@@ -1544,9 +1584,13 @@ def bulk_purge_students():
             purged += 1
         db.session.commit()
         log_action('bulk_purge_students', f'{purged} students permanently deleted')
+        if _wants_json():
+            return jsonify({'ok': True, 'purged': purged})
         flash(f'{purged} student(s) permanently deleted.', 'success')
     except Exception as e:
         db.session.rollback()
+        if _wants_json():
+            return jsonify({'ok': False, 'error': str(e)}), 400
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('main.students_trash'))
 
