@@ -64,6 +64,7 @@ class Message(db.Model):
     audience = db.Column(db.String(40))              # all / class / students / defaulters
     audience_label = db.Column(db.String(120))       # human description, e.g. "JSS1 Rose"
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))   # owning branch (scoping)
     created_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=local_now)
     recipient_count = db.Column(db.Integer, default=0)

@@ -18,6 +18,7 @@ from models import (
     Message, MessageRecipient, Announcement,
 )
 from utils.access_control import login_required, admin_required
+from utils.branch_scope import scope_query, require_branch_access
 from utils import comms
 
 comms_bp = Blueprint('comms', __name__, url_prefix='/communication')
@@ -52,13 +53,13 @@ def _dt(value):
 @login_required
 def dashboard():
     cov = comms.coverage_stats()
-    total_campaigns = Message.query.count()
-    total_recipients = db.session.query(func.coalesce(func.sum(Message.recipient_count), 0)).scalar() or 0
-    total_sent = db.session.query(func.coalesce(func.sum(Message.sent_count), 0)).scalar() or 0
-    channel_rows = (db.session.query(Message.channel, func.count(Message.id))
+    total_campaigns = scope_query(Message.query, Message).count()
+    total_recipients = scope_query(db.session.query(func.coalesce(func.sum(Message.recipient_count), 0)), Message).scalar() or 0
+    total_sent = scope_query(db.session.query(func.coalesce(func.sum(Message.sent_count), 0)), Message).scalar() or 0
+    channel_rows = (scope_query(db.session.query(Message.channel, func.count(Message.id)), Message)
                     .group_by(Message.channel).all())
     channel_chart = [{'channel': ch or 'Other', 'count': n} for ch, n in channel_rows]
-    recent = Message.query.order_by(Message.created_at.desc()).limit(8).all()
+    recent = scope_query(Message.query, Message).order_by(Message.created_at.desc()).limit(8).all()
     template_count = MessageTemplate.query.filter_by(is_active=True).count()
     return render_template('communication/dashboard.html',
         cov=cov, total_campaigns=total_campaigns, total_recipients=total_recipients,
@@ -272,9 +273,10 @@ def compose():
                 status = 'Scheduled'
 
         label = _audience_label(audience, classes, arms, class_id, arm_id, len(reachable))
+        from utils.branch_scope import branch_for_new
         msg = Message(title=title or label, body=body, channel=channel,
                       audience=audience, audience_label=label,
-                      term_id=term.id if term else None,
+                      term_id=term.id if term else None, branch_id=branch_for_new(),
                       created_by=_current_user(), recipient_count=len(reachable),
                       status=status, scheduled_at=scheduled_at)
         db.session.add(msg)
@@ -390,6 +392,7 @@ def students_search():
 @login_required
 def cancel_schedule(message_id):
     msg = db.get_or_404(Message, message_id)
+    require_branch_access(msg.branch_id)
     msg.status = 'Draft'
     msg.scheduled_at = None
     db.session.commit()
@@ -413,7 +416,7 @@ def process_scheduled():
 @comms_bp.route('/messages')
 @login_required
 def messages_list():
-    msgs = Message.query.order_by(Message.created_at.desc()).all()
+    msgs = scope_query(Message.query, Message).order_by(Message.created_at.desc()).all()
     return render_template('communication/messages.html', messages=msgs)
 
 
@@ -421,6 +424,7 @@ def messages_list():
 @login_required
 def message_detail(message_id):
     msg = db.get_or_404(Message, message_id)
+    require_branch_access(msg.branch_id)
     recips = msg.recipients.order_by(MessageRecipient.parent_name).all()
     rows = []
     for r in recips:
@@ -441,6 +445,7 @@ def mark_sent(message_id, rid):
     r = db.get_or_404(MessageRecipient, rid)
     if r.message_id != message_id:
         return ('', 404)
+    require_branch_access(r.message.branch_id)
     if r.status != 'Sent':
         r.status = 'Sent'
         r.sent_at = datetime.now()
@@ -455,6 +460,7 @@ def mark_sent(message_id, rid):
 @login_required
 def mark_all_sent(message_id):
     msg = db.get_or_404(Message, message_id)
+    require_branch_access(msg.branch_id)
     n = 0
     for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
         r.status = 'Sent'
@@ -470,6 +476,7 @@ def mark_all_sent(message_id):
 @login_required
 def export_recipients(message_id):
     msg = db.get_or_404(Message, message_id)
+    require_branch_access(msg.branch_id)
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['Parent', 'Phone', 'Phone (intl)', 'Student', 'Message', 'Status'])
@@ -485,6 +492,7 @@ def export_recipients(message_id):
 @admin_required
 def delete_message(message_id):
     msg = db.get_or_404(Message, message_id)
+    require_branch_access(msg.branch_id)
     from utils.audit import log_action
     log_action('communication.message_delete',
                target_type='message', target_id=msg.id, target_label=getattr(msg, 'title', None))
@@ -500,6 +508,7 @@ def send_gateway(message_id):
     """Dispatch all pending recipients through the configured SMS gateway."""
     from utils import sms_gateway
     msg = db.get_or_404(Message, message_id)
+    require_branch_access(msg.branch_id)
     cfg = sms_gateway.get_config()
     if not sms_gateway.is_configured(cfg):
         flash('No SMS gateway is configured. Add your provider key in Settings.', 'error')

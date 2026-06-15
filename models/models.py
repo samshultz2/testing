@@ -1387,6 +1387,15 @@ def _ensure_student_exam_columns():
                               '(SELECT MIN(id) FROM branches) WHERE branch_id IS NULL')
     except Exception:
         pass
+    # messages.branch_id (per-branch SMS/WhatsApp campaigns) + backfill.
+    try:
+        msg_cols = {c['name'] for c in inspect(db.engine).get_columns('messages')}
+        if 'branch_id' not in msg_cols:
+            statements.append('ALTER TABLE messages ADD COLUMN branch_id INTEGER')
+            statements.append('UPDATE messages SET branch_id = '
+                              '(SELECT MIN(id) FROM branches) WHERE branch_id IS NULL')
+    except Exception:
+        pass
     try:
         u_cols = {c['name'] for c in inspect(db.engine).get_columns('users')}
         if 'scope' not in u_cols:
