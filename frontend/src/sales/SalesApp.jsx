@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, PageHeader, Empty } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
 
@@ -263,8 +263,10 @@ export default function SalesApp({ data }) {
   const Screen = SCREENS[d.page] || Dashboard;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
-      {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={d} notify={notify} />
+      <SectionShell go={go}>
+        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+        <Screen d={d} notify={notify} />
+      </SectionShell>
     </NavCtx.Provider>
   );
 }

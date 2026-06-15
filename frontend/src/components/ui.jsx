@@ -1,8 +1,32 @@
 /* Reusable, accessible UI primitives for the attendance SPA.
    Styling leans on the app's existing .btn/.form-control classes plus a few
    scoped .att-* classes defined in the host template, so it matches the theme. */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNav } from '../lib/section';
+
+// Wrap a section's content: intercepts clicks on internal <a href="/…"> links and
+// navigates with no reload (go() falls back to a real navigation for downloads /
+// cross-section / non-JSON targets). External, target=_blank, download and
+// data-native links are left alone, as are links that already handled the click.
+export function SectionShell({ go, children }) {
+  const ref = useRef();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onClick = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+      const a = e.target.closest('a');
+      if (!a || a.target === '_blank' || a.hasAttribute('download') || a.dataset.native) return;
+      const href = a.getAttribute('href');
+      if (!href || !href.startsWith('/')) return;   // external / tel: / mailto: / #
+      e.preventDefault();
+      go(href);
+    };
+    el.addEventListener('click', onClick);
+    return () => el.removeEventListener('click', onClick);
+  }, [go]);
+  return <div ref={ref}>{children}</div>;
+}
 
 // Context-aware in-section link (no reload) — pulls `go` from NavCtx so callers
 // don't thread it. Use for links that target another React page in the same

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { postFile } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, PageHeader, Empty } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 
 // ---- Index hub -------------------------------------------------------------
 function Index({ d }) {
@@ -16,7 +16,7 @@ function Index({ d }) {
       <PageHeader title="Reports" />
       <div className="stats-grid">
         {cards.map(([key, tone, icon, title, sub]) => (
-          <a key={key} href={d.urls[key]} className="stat-card" style={{ textDecoration: 'none' }}>
+          <a key={key} href={d.urls[key]} data-native={['export_students', 'export_template'].includes(key) || undefined} className="stat-card" style={{ textDecoration: 'none' }}>
             <div className={'stat-icon ' + tone}><i className={'fas ' + icon} /></div>
             <div className="stat-content"><h3>{title}</h3><p>{sub}</p></div>
           </a>
@@ -99,7 +99,7 @@ function ExportClass({ d }) {
               <div className="data-card" key={a.id}>
                 <div className="data-card-header"><div className="data-card-title">{a.display_name}</div></div>
                 <div className="data-card-row"><span className="data-card-label">Students</span><span>{a.student_count}</span></div>
-                <div className="data-card-actions"><a href={a.export_url} className="btn btn-success btn-sm w-100"><i className="fas fa-download" /> Export</a></div>
+                <div className="data-card-actions"><a href={a.export_url} data-native className="btn btn-success btn-sm w-100"><i className="fas fa-download" /> Export</a></div>
               </div>
             ))}</div>
           </>) : d.term_id ? <Empty icon="fa-school" title="No Classes" style={{ marginTop: '1rem' }}><p>No class assignments for this term</p></Empty>
@@ -143,7 +143,7 @@ function Import({ d, notify }) {
       )}
       <div className="card"><div className="card-body">
         <p className="mb-3">Upload an Excel (<code>.xlsx</code>) or CSV (<code>.csv</code>) file to import students.{' '}
-          <a href={d.template_url}>Download the template</a> for the column layout. Only <strong>Surname</strong> and <strong>First Name</strong> are required.</p>
+          <a href={d.template_url} data-native>Download the template</a> for the column layout. Only <strong>Surname</strong> and <strong>First Name</strong> are required.</p>
         <form onSubmit={submit}>
           <div className="form-row" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <div className="form-group" style={{ flex: 1, minWidth: 180 }}>
@@ -175,8 +175,10 @@ export default function ReportsApp({ data }) {
   const Screen = SCREENS[d.page] || Index;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
-      {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={d} notify={notify} />
+      <SectionShell go={go}>
+        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+        <Screen d={d} notify={notify} />
+      </SectionShell>
     </NavCtx.Provider>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionTabs, Autocomplete } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'],
@@ -104,7 +104,7 @@ function Books({ d, notify }) {
   return (
     <>
       <PageHeader title="Catalogue" actions={<>
-        <a href={d.urls.export} className="btn btn-secondary"><i className="fas fa-file-csv" /> Export</a>
+        <a href={d.urls.export} data-native className="btn btn-secondary"><i className="fas fa-file-csv" /> Export</a>
         <a href={d.urls.add_book} className="btn btn-primary"><i className="fas fa-plus" /> Add Book</a>
       </>} />
       <Tabs urls={d.urls} page="books" />
@@ -342,8 +342,10 @@ export default function LibraryApp({ data }) {
   const Screen = SCREENS[d.page] || Dashboard;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
-      {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={d} notify={notify} />
+      <SectionShell go={go}>
+        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+        <Screen d={d} notify={notify} />
+      </SectionShell>
     </NavCtx.Provider>
   );
 }

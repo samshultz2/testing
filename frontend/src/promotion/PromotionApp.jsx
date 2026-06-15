@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, PageHeader, Empty } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 
 
 // ---- Index -----------------------------------------------------------------
@@ -394,8 +394,10 @@ export default function PromotionApp({ data }) {
   const Screen = SCREENS[d.page] || Index;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
-      {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={d} notify={notify} />
+      <SectionShell go={go}>
+        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+        <Screen d={d} notify={notify} />
+      </SectionShell>
     </NavCtx.Provider>
   );
 }

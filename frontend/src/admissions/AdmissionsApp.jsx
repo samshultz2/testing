@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionTabs } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionTabs, SectionShell } from '../components/ui';
 
 const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
 
@@ -85,7 +85,7 @@ function Applicants({ d }) {
   return (
     <>
       <PageHeader title="Applicants" actions={<>
-        <a href={d.urls.export} className="btn btn-secondary"><i className="fas fa-file-csv" /> Export</a>
+        <a href={d.urls.export} data-native className="btn btn-secondary"><i className="fas fa-file-csv" /> Export</a>
         <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-user-plus" /> New Application</a>
       </>} />
       <Tabs d={d} />
@@ -294,8 +294,10 @@ export default function AdmissionsApp({ data }) {
   const Screen = SCREENS[d.page] || Dashboard;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
-      {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={d} notify={notify} />
+      <SectionShell go={go}>
+        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+        <Screen d={d} notify={notify} />
+      </SectionShell>
     </NavCtx.Provider>
   );
 }

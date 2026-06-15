@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, PageHeader, Empty } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -283,8 +283,10 @@ export default function EventsApp({ data }) {
   const Screen = SCREENS[d.page] || Calendar;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
-      {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-      <Screen d={d} notify={notify} />
+      <SectionShell go={go}>
+        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+        <Screen d={d} notify={notify} />
+      </SectionShell>
     </NavCtx.Provider>
   );
 }
