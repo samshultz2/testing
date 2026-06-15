@@ -47,7 +47,9 @@ def graduates_list():
 @admin_required
 def mark_graduate(student_id):
     """Mark a single (SSS3) student as graduated."""
+    from utils.branch_scope import require_branch_access
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)   # don't graduate another branch's student
     active_session = get_active_session()
     try:
         student.is_graduated = True
@@ -67,7 +69,9 @@ def mark_graduate(student_id):
 @admin_required
 def unmark_graduate(student_id):
     """Reverse a graduation (in case it was marked by mistake)."""
+    from utils.branch_scope import require_branch_access
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)   # don't alter another branch's student
     try:
         student.is_graduated = False
         student.graduation_date = None
@@ -124,9 +128,11 @@ def graduate_sss3():
 def graduate_profile(student_id):
     """View graduate profile with all external results"""
     from models import WAECResult, JAMBResult
-    
+    from utils.access_control import assert_student_access
+
     student = db.get_or_404(Student, student_id)
-    
+    assert_student_access(student)   # branch + form-teacher scope
+
     # Get WAEC results
     waec_results = WAECResult.query.filter_by(student_id=student_id).order_by(
         WAECResult.exam_year.desc()

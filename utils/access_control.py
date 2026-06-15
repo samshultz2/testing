@@ -626,6 +626,18 @@ def teacher_form_student_ids():
     return {e.student_id for e in rows}
 
 
+def assert_student_access(student):
+    """Abort 403 unless the current user may access THIS specific student:
+    branch-scoped, and a form teacher is limited to their own students. Use on
+    any route that loads a student by a URL id and returns/exports their data,
+    so a guessable id can't reveal another branch's (or class's) student."""
+    from utils.branch_scope import require_branch_access
+    require_branch_access(student.branch_id)
+    tids = teacher_form_student_ids()
+    if tids is not None and student.id not in tids:
+        abort(403)
+
+
 def can_view_student_details():
     """Check if current user can view student details"""
     if is_admin():

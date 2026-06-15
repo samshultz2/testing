@@ -896,8 +896,10 @@ def comments():
 def student_report_card(student_id):
     """View student report card"""
     student = db.get_or_404(Student, student_id)
+    from utils.access_control import assert_student_access
+    assert_student_access(student)   # branch + form-teacher scope
     term_id = request.args.get('term_id', type=int)
-    
+
     terms = Term.query.order_by(Term.id.desc()).all()
     
     if not term_id:
@@ -930,7 +932,9 @@ def report_card_pdf(student_id):
     from flask import send_file
     from utils.report_card import build_report_card, active_traits, RATING_LABELS
     from utils.report_pdf import report_card_pdf as build_pdf
+    from utils.access_control import assert_student_access
     student = db.get_or_404(Student, student_id)
+    assert_student_access(student)   # branch + form-teacher scope
     term_id = request.args.get('term_id', type=int) or (
         get_active_term().id if get_active_term() else None)
     _, report_data = build_report_card(student_id, term_id) if term_id else (None, None)

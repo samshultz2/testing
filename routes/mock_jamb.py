@@ -526,7 +526,9 @@ def delete_result(result_id):
 def student_progress(student_id):
     """View a student's progress across all mock exams"""
     student = db.get_or_404(Student, student_id)
-    
+    from utils.access_control import assert_student_access
+    assert_student_access(student)   # branch + form-teacher scope
+
     session_id = request.args.get('session_id', type=int)
     active_session = get_active_session()
     if not session_id and active_session:
