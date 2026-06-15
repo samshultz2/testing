@@ -13,6 +13,8 @@ from sqlalchemy import func
 
 from models import db, Book, BookLoan, Student, SchoolSettings
 from utils.access_control import login_required, admin_required, is_admin
+from utils.branch_scope import (scope_query, scope_by_student, require_branch_access,
+                                can_access_branch)
 
 library_bp = Blueprint('library', __name__, url_prefix='/library')
 
@@ -38,16 +40,16 @@ def _d(value, default=None):
 @library_bp.route('/')
 @login_required
 def dashboard():
-    titles = Book.query.filter_by(is_active=True).count()
-    copies = db.session.query(func.coalesce(func.sum(Book.copies_total), 0)).scalar() or 0
-    available = db.session.query(func.coalesce(func.sum(Book.copies_available), 0)).scalar() or 0
+    titles = scope_query(Book.query.filter_by(is_active=True), Book).count()
+    copies = scope_query(db.session.query(func.coalesce(func.sum(Book.copies_total), 0)), Book).scalar() or 0
+    available = scope_query(db.session.query(func.coalesce(func.sum(Book.copies_available), 0)), Book).scalar() or 0
     on_loan = (copies or 0) - (available or 0)
-    overdue = BookLoan.query.filter(BookLoan.status == 'Borrowed',
-                                    BookLoan.due_date < date.today()).count()
-    cat_rows = (db.session.query(Book.category, func.count(Book.id))
-                .filter(Book.is_active == True).group_by(Book.category).all())
+    overdue = scope_by_student(BookLoan.query.filter(BookLoan.status == 'Borrowed',
+                                    BookLoan.due_date < date.today()), BookLoan).count()
+    cat_rows = (scope_query(db.session.query(Book.category, func.count(Book.id))
+                .filter(Book.is_active == True), Book).group_by(Book.category).all())
     cat_chart = [{'name': c or 'Uncategorised', 'count': n} for c, n in cat_rows]
-    recent = (BookLoan.query.order_by(BookLoan.created_at.desc()).limit(8).all())
+    recent = (scope_by_student(BookLoan.query, BookLoan).order_by(BookLoan.created_at.desc()).limit(8).all())
     return render_template('library/dashboard.html', titles=titles, copies=copies,
         available=available, on_loan=on_loan, overdue=overdue,
         cat_chart=cat_chart, recent=recent)
@@ -158,6 +160,9 @@ def issue():
         if not (book and student):
             flash('Select a book and a student.', 'error')
             return redirect(url_for('library.issue'))
+        if not can_access_branch(book.branch_id) or not can_access_branch(student.branch_id):
+            flash('That book or student belongs to another branch.', 'error')
+            return redirect(url_for('library.issue'))
         if (book.copies_available or 0) <= 0:
             flash('No copies available for that title.', 'error')
             return redirect(url_for('library.issue'))
@@ -178,6 +183,7 @@ def issue():
 @login_required
 def return_loan(loan_id):
     loan = db.get_or_404(BookLoan, loan_id)
+    require_branch_access(loan.book.branch_id if loan.book else None)
     if loan.status == 'Returned':
         flash('Already returned.', 'info')
         return safe_redirect(url_for('library.loans'))
@@ -200,7 +206,7 @@ def return_loan(loan_id):
 @login_required
 def loans():
     status = request.args.get('status', 'Borrowed')
-    q = BookLoan.query
+    q = scope_by_student(BookLoan.query, BookLoan)
     if status == 'Overdue':
         q = q.filter(BookLoan.status == 'Borrowed', BookLoan.due_date < date.today())
     elif status in ('Borrowed', 'Returned'):
@@ -217,7 +223,7 @@ def book_search():
     if len(q) < 2:
         return jsonify([])
     like = f'%{q}%'
-    rows = (Book.query.filter(Book.is_active == True, Book.copies_available > 0)
+    rows = (scope_query(Book.query.filter(Book.is_active == True, Book.copies_available > 0), Book)
             .filter(db.or_(Book.title.ilike(like), Book.author.ilike(like),
                            Book.isbn.ilike(like)))
             .order_by(Book.title).limit(15).all())
@@ -233,7 +239,7 @@ def student_search():
     if len(q) < 2:
         return jsonify([])
     like = f'%{q}%'
-    rows = (Student.query.filter_by(is_active=True)
+    rows = (scope_query(Student.query.filter_by(is_active=True), Student)
             .filter(db.or_(Student.surname.ilike(like), Student.first_name.ilike(like),
                            Student.student_id.ilike(like)))
             .order_by(Student.surname).limit(15).all())
@@ -246,7 +252,7 @@ def export():
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['Title', 'Author', 'ISBN', 'Category', 'Total', 'Available', 'Shelf'])
-    for b in Book.query.filter_by(is_active=True).order_by(Book.title).all():
+    for b in scope_query(Book.query.filter_by(is_active=True), Book).order_by(Book.title).all():
         w.writerow([b.title, b.author or '', b.isbn or '', b.category or '',
                     b.copies_total, b.copies_available, b.shelf or ''])
     return Response(out.getvalue(), mimetype='text/csv',

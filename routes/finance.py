@@ -11,7 +11,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from utils.web_exports import xlsx_response
-from utils.branch_scope import require_branch_access
+from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
@@ -207,7 +207,7 @@ def _term_fee_summary(term_id):
 
     # Count students with an outstanding balance.
     disc_by_student = {}
-    for d in FeeDiscount.query.filter_by(term_id=term_id).all():
+    for d in scope_by_student(FeeDiscount.query.filter_by(term_id=term_id), FeeDiscount).all():
         disc_by_student[d.student_id] = disc_by_student.get(d.student_id, 0.0) + d.amount
     defaulters = 0
     for sid, (cid, aid, _cn) in placement.items():
@@ -757,11 +757,11 @@ def defaulters():
         enrollments = enr_q.all()
 
         # Pre-aggregate payments + discounts for the term.
-        paid_map = dict(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
-                        .filter(FeePayment.term_id == term_id)
+        paid_map = dict(scope_query(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
+                        .filter(FeePayment.term_id == term_id), FeePayment)
                         .group_by(FeePayment.student_id).all())
-        disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
-                        .filter(FeeDiscount.term_id == term_id)
+        disc_map = dict(scope_by_student(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
+                        .filter(FeeDiscount.term_id == term_id), FeeDiscount)
                         .group_by(FeeDiscount.student_id).all())
         total_cache = {}
         for e in enrollments:
@@ -936,11 +936,15 @@ def reports():
     expected = collected = discounts = expenses = 0.0
     by_class = {}
     if term_id:
-        enrollments = (StudentEnrollment.query
-                       .join(ClassArmAssignment,
-                             StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                       .filter(StudentEnrollment.is_active == True,
-                               ClassArmAssignment.term_id == term_id).all())
+        _bid = viewing_branch_id()
+        _enq = (StudentEnrollment.query
+                .join(ClassArmAssignment,
+                      StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                .filter(StudentEnrollment.is_active == True,
+                        ClassArmAssignment.term_id == term_id))
+        if _bid is not None:
+            _enq = _enq.filter(ClassArmAssignment.branch_id == _bid)
+        enrollments = _enq.all()
         placement = {}
         total_cache = {}
         for e in enrollments:
@@ -954,7 +958,7 @@ def reports():
             slot['expected'] += total_cache[key]
             slot['students'] += 1
             expected += total_cache[key]
-        for p in FeePayment.query.filter_by(term_id=term_id).all():
+        for p in scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment).all():
             collected += p.amount
             # Payments from withdrawn students (not in the active placement) go to
             # an "Unassigned" bucket so the class table reconciles to the total.
@@ -963,14 +967,14 @@ def reports():
                                      'discount': 0.0, 'students': 0})['collected'] += p.amount
         # Per-class discounts (mapped via the student's placement) so each row's
         # outstanding matches the headline payable figure.
-        for d in FeeDiscount.query.filter_by(term_id=term_id).all():
+        for d in scope_by_student(FeeDiscount.query.filter_by(term_id=term_id), FeeDiscount).all():
             discounts += d.amount
             cn = placement.get(d.student_id)
             if cn and cn in by_class:
                 by_class[cn].setdefault('discount', 0.0)
                 by_class[cn]['discount'] += d.amount
-        expenses = (db.session.query(func.coalesce(func.sum(Expense.amount), 0.0))
-                    .filter(Expense.term_id == term_id).scalar()) or 0.0
+        expenses = (scope_query(db.session.query(func.coalesce(func.sum(Expense.amount), 0.0))
+                    .filter(Expense.term_id == term_id), Expense).scalar()) or 0.0
 
     payable = max(expected - discounts, 0)
     class_rows = []
@@ -984,9 +988,9 @@ def reports():
     item_breakdown = fee_item_breakdown(term_id) if term_id else []
     method_rows = []
     if term_id:
-        method_rows = (db.session.query(FeePayment.method, func.sum(FeePayment.amount),
+        method_rows = (scope_query(db.session.query(FeePayment.method, func.sum(FeePayment.amount),
                                         func.count(FeePayment.id))
-                       .filter(FeePayment.term_id == term_id)
+                       .filter(FeePayment.term_id == term_id), FeePayment)
                        .group_by(FeePayment.method).all())
 
     return render_template('finance/reports.html',
