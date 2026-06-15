@@ -204,9 +204,15 @@ def check():
             flash('No result found for that student in the selected term.', 'error')
             return render_template('scratchcards/check.html', **ctx)
 
-        # Consume a use only on a successful lookup.
+        # Consume a use only on a successful lookup, and bind the card to this
+        # student on first use. After binding, the check at the top rejects any
+        # other Student ID, so a valid PIN can no longer be used to walk the
+        # (sequential, guessable) Student-ID range and read other students'
+        # results. We deliberately do NOT clear the throttle on success, so
+        # PIN/ID guessing stays rate-limited.
         card.used_count = (card.used_count or 0) + 1
-        login_limiter.clear_attempts(rkey)
+        if card.student_id is None:
+            card.student_id = student.id
         _log_check(card, student, term, True, f'viewed; {card.uses_left} left')
 
         return render_template('scratchcards/result.html', student=student,
