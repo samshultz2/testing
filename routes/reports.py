@@ -15,11 +15,24 @@ from utils.branch_scope import scope_query, scope_by_student, viewing_branch_id
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
 
+def _wants_json():
+    return request.headers.get('X-Requested-With') == 'fetch' or request.is_json
+
+
+def _render(payload):
+    return render_template('reports/app.html', reports_json=payload)
+
+
 @reports_bp.route('/')
 @login_required
 def index():
     """Reports main page"""
-    return render_template('reports/index.html')
+    return _render({'page': 'index', 'urls': {
+        'summary': url_for('reports.summary_report'),
+        'import': url_for('reports.import_students'),
+        'export_students': url_for('reports.export_students'),
+        'export_template': url_for('reports.export_template'),
+    }})
 
 
 # ============================================================================
@@ -60,10 +73,18 @@ def export_class_students():
         
         assignments = []
         if term_id:
-            assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-        
-        return render_template('reports/export_class_students.html',
-            terms=terms, term_id=term_id, assignments=assignments)
+            assignments = scope_query(
+                ClassArmAssignment.query.filter_by(term_id=term_id), ClassArmAssignment).all()
+
+        return _render({
+            'page': 'export_class', 'term_id': term_id or '',
+            'terms': [{'id': t.id, 'label': t.full_name} for t in terms],
+            'assignments': [{'id': a.id, 'display_name': a.display_name,
+                             'student_count': sum(1 for e in a.enrollments if e.is_active),
+                             'export_url': url_for('reports.export_class_students', assignment_id=a.id)}
+                            for a in assignments],
+            'urls': {'self': url_for('reports.export_class_students')},
+        })
     
     # Export the class
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
@@ -146,20 +167,19 @@ def export_template():
 def import_students():
     """Import students from Excel or CSV, optionally enrolling into a class arm."""
     from models import ClassArmAssignment, SchoolClass, ClassArm
+
+    def _fail(msg):
+        if _wants_json():
+            return jsonify({'ok': False, 'error': msg}), 400
+        flash(msg, 'error')
+        return redirect(url_for('reports.import_students'))
+
     if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('No file selected.', 'error')
-            return redirect(url_for('reports.import_students'))
-        
-        file = request.files['file']
-        
-        if file.filename == '':
-            flash('No file selected.', 'error')
-            return redirect(url_for('reports.import_students'))
-        
+        file = request.files.get('file')
+        if not file or file.filename == '':
+            return _fail('No file selected.')
         if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
-            flash('Please upload a .xlsx or .csv file.', 'error')
-            return redirect(url_for('reports.import_students'))
+            return _fail('Please upload a .xlsx or .csv file.')
 
         try:
             from utils.branch_scope import branch_for_new
@@ -195,24 +215,33 @@ def import_students():
                 branch_id=branch_for_new(),
                 class_arm_assignment_id=assignment_id,
             )
-            
+
+            if _wants_json():
+                msg = f'Successfully imported {success_count} student(s).' if success_count else 'No students imported.'
+                return jsonify({'ok': True, 'message': msg, 'imported': success_count,
+                                'warnings': errors[:8], 'more': max(0, len(errors) - 8)})
             if success_count > 0:
                 flash(f'Successfully imported {success_count} students!', 'success')
-            
             if errors:
                 for error in errors[:5]:  # Show first 5 errors
                     flash(error, 'warning')
                 if len(errors) > 5:
                     flash(f'... and {len(errors) - 5} more errors', 'warning')
-            
+
         except Exception as e:
-            flash(f'Error importing file: {str(e)}', 'error')
-        
+            return _fail(f'Error importing file: {str(e)}')
+
         return redirect(url_for('reports.import_students'))
 
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
-    return render_template('reports/import_students.html', classes=classes, arms=arms)
+    return _render({
+        'page': 'import',
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'arms': [{'id': a.id, 'name': a.name} for a in arms],
+        'upload_url': url_for('reports.import_students'),
+        'template_url': url_for('reports.export_template'),
+    })
 
 
 # ============================================================================
@@ -454,13 +483,15 @@ def summary_report():
     students_with_waec = scope_by_student(db.session.query(WAECResult.student_id), WAECResult).distinct().count()
     students_with_jamb = scope_by_student(db.session.query(JAMBResult.student_id), JAMBResult).distinct().count()
     
-    return render_template('reports/summary.html',
-        active_session=active_session,
-        active_term=active_term,
-        total_students=total_students,
-        male_students=male_students,
-        female_students=female_students,
-        active_enrollments=active_enrollments,
-        students_with_waec=students_with_waec,
-        students_with_jamb=students_with_jamb
-    )
+    return _render({
+        'page': 'summary',
+        'kpis': {'total': total_students, 'male': male_students, 'female': female_students,
+                 'enrolled': active_enrollments},
+        'quick_info': {
+            'session': active_session.name if active_session else 'Not Set',
+            'term': active_term.name if active_term else 'Not Set',
+            'with_waec': students_with_waec, 'with_jamb': students_with_jamb,
+        },
+        'chart_urls': {'gender': url_for('reports.api_gender_distribution'),
+                       'attendance': url_for('reports.api_attendance_trend')},
+    })

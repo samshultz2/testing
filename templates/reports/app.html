@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% set _t = {'index':'Reports','summary':'Summary','export_class':'Export Class','import':'Import Students'} %}
+{% block title %}{{ _t.get(reports_json.page,'Reports') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if reports_json.page == 'index' %}<span>Reports</span>
+{% else %}<a href="{{ url_for('reports.index') }}">Reports</a> / <span>{{ _t.get(reports_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}<style>.chart-container{position:relative;height:280px}</style>{% endblock %}
+{% block content %}
+<div id="reports-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="reports-data">{{ reports_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/react/reports-app.js') }}" defer></script>
+{% endblock %}
