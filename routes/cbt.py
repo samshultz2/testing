@@ -20,7 +20,6 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify, Response, current_app, abort)
 from werkzeug.utils import secure_filename
 from utils.web_exports import xlsx_response, pdf_response
-from utils.branch_scope import require_branch_access
 from sqlalchemy import func
 from sqlalchemy.orm import contains_eager
 
@@ -101,9 +100,10 @@ def dashboard():
         term_id = None
     else:
         term_id = request.args.get('term_id', type=int) or (active.id if active else None)
+    # Online tests are a shared catalogue: every CBT-permissioned user sees the
+    # same exams across all branches (access to manage them is gated by the CBT
+    # module permission, not by branch).
     q = CBTExam.query
-    from utils.branch_scope import scope_query
-    q = scope_query(q, CBTExam)
     if term_id:
         q = q.filter(CBTExam.term_id == term_id)
     exams = q.order_by(CBTExam.exam_date.desc(), CBTExam.id.desc()).all()
@@ -195,7 +195,6 @@ def add_exam():
 @login_required
 def exam_detail(exam_id):
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     questions = e.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     return render_template('cbt/exam_detail.html', e=e, questions=questions)
 
@@ -204,7 +203,6 @@ def exam_detail(exam_id):
 @login_required
 def edit_exam(exam_id):
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     if request.method == 'POST':
         _read_exam(e)
         db.session.commit()
@@ -217,7 +215,6 @@ def edit_exam(exam_id):
 @login_required
 def toggle_publish(exam_id):
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     if not e.is_published and e.question_count == 0:
         flash('Add at least one question before publishing.', 'error')
         return redirect(url_for('cbt.exam_detail', exam_id=e.id))
@@ -233,7 +230,6 @@ def toggle_publish(exam_id):
 @admin_required
 def delete_exam(exam_id):
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     db.session.delete(e)
     db.session.commit()
     flash('Exam deleted.', 'success')
@@ -244,7 +240,6 @@ def delete_exam(exam_id):
 @login_required
 def add_question(exam_id):
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     text = (request.form.get('question_text') or '').strip()
     correct = (request.form.get('correct_option') or '').strip().upper()
     if not text or correct not in ('A', 'B', 'C', 'D'):
@@ -272,7 +267,6 @@ def import_questions_file(exam_id):
     """Bulk-add questions to an exam from an uploaded Excel/CSV file."""
     from utils import cbt_import
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     f = request.files.get('file')
     if not f or not f.filename:
         flash('Choose an Excel or CSV file.', 'error')
@@ -301,7 +295,6 @@ def import_questions_file(exam_id):
 def import_from_bank(exam_id):
     """Pick questions from the bank to copy into an exam."""
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     if request.method == 'POST':
         ids = request.form.getlist('bank_id', type=int)
         nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
@@ -456,7 +449,6 @@ def bank_template():
 @login_required
 def results(exam_id):
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     attempts = (e.attempts.join(Student).order_by(Student.surname, Student.first_name).all())
     submitted = [a for a in attempts if a.status == 'Submitted']
     avg = round(sum(a.score for a in submitted) / len(submitted), 1) if submitted else 0
@@ -482,7 +474,6 @@ def results(exam_id):
 @login_required
 def monitor(exam_id):
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     # Central users get a branch filter (CBT is school-wide); branch users are
     # already scoped to their own branch.
     from utils.branch_scope import is_central
@@ -520,7 +511,6 @@ def monitor_data(exam_id):
     Branch users are always restricted to their own branch.
     """
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     now = timeutil.now()
     qcount = e.question_count
     # Resolve the branch filter: branch users -> their branch; a central user may
@@ -624,7 +614,6 @@ def _review_rows(exam, attempt):
 @login_required
 def attempt_review(attempt_id):
     attempt = db.get_or_404(CBTAttempt, attempt_id)
-    require_branch_access(attempt.exam.branch_id)   # no cross-branch attempt data
     rows = _review_rows(attempt.exam, attempt)
     violations = attempt.violation_log.order_by(CBTViolation.created_at).all()
     total_away = sum(v.away_seconds or 0 for v in violations)
@@ -687,7 +676,6 @@ def _safe_sheet_title(text):
 def results_export(exam_id):
     from openpyxl import Workbook
     e = db.get_or_404(CBTExam, exam_id)
-    require_branch_access(e.branch_id)
     wb = Workbook()
     ws = wb.active
     ws.title = _safe_sheet_title(e.subject.name if e.subject else 'Results')
@@ -1028,9 +1016,8 @@ def home():
                                  CBTExam.exam_date == timeutil.today(),
                                  CBTExam.class_id == class_id)
         q = q.filter((CBTExam.arm_id == None) | (CBTExam.arm_id == arm_id))
-        # Only this student's branch (a shared class name must not leak across branches).
-        if student.branch_id:
-            q = q.filter((CBTExam.branch_id == student.branch_id) | (CBTExam.branch_id == None))
+        # Online tests are shared across branches: a student sees every published
+        # exam for their class/arm today, regardless of which branch created it.
         exams = q.order_by(CBTExam.start_time, CBTExam.title).all()
     # attach this student's attempt status + availability window
     rows = []

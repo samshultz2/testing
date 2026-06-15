@@ -105,8 +105,9 @@ def test_new_student_stamped_with_branch_users_branch(app):
         assert s.branch_id == b_id
 
 
-def test_cbt_exams_branch_scoped(app):
-    """A branch user's CBT dashboard shows only their branch's exams."""
+def test_cbt_exams_shared_across_branches(app):
+    """Online tests are a shared catalogue: a CBT-permissioned user sees every
+    branch's exams (management is gated by the CBT module permission, not branch)."""
     from models import CBTExam
     a_id, b_id, s_a, s_b = _setup(app)
     with app.app_context():
@@ -120,8 +121,7 @@ def test_cbt_exams_branch_scoped(app):
         db.session.commit()
     client = _login(app, 'branchscope')
     html = client.get('/cbt/?term_id=all').get_data(as_text=True)
-    assert 'ExamB' in html
-    assert 'ExamA' not in html
+    assert 'ExamA' in html and 'ExamB' in html
 
 
 def test_filter_classes_for_user_branch_scoped(app):
