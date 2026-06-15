@@ -2,7 +2,7 @@
 Main routes for dashboard and general pages
 """
 import re
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, abort
 from utils.helpers import get_active_term, get_active_session, safe_redirect
 from utils.web_exports import xlsx_response, pdf_response
 from datetime import date, timedelta
@@ -960,6 +960,49 @@ def api_students():
     return jsonify(_students_payload())
 
 
+def _wants_json():
+    """The React forms POST via fetch with this header; reply JSON to them and
+    keep the classic flash+redirect behaviour for plain form submits."""
+    return request.headers.get('X-Requested-With') == 'fetch' or request.is_json
+
+
+RELATIONSHIPS = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other']
+
+
+def _student_form_options(with_enrolment=False):
+    """Shared option lists for the add/edit forms; the enrolment block (add
+    only) is class-scoped to the current user with their form class default."""
+    opts = {
+        'religions': RELIGIONS, 'streams': STREAMS, 'waec_subjects': WAEC_SUBJECTS,
+        'stream_waec': STREAM_WAEC_SUBJECTS, 'relationships': RELATIONSHIPS,
+        'genders': ['Male', 'Female'],
+    }
+    if with_enrolment:
+        from utils.access_control import get_teacher_profile, filter_classes_for_user
+        active_term = get_active_term()
+        enrol = None
+        if active_term:
+            caas = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
+            class_options = filter_classes_for_user(caas)
+            default_id = None
+            teacher = get_teacher_profile()
+            if teacher and not is_admin():
+                form_ids = teacher.form_class_ids or set()
+                default_id = next((c.id for c in class_options if c.id in form_ids), None)
+            enrol = {
+                'term_label': active_term.full_name,
+                'has_classes': bool(class_options),
+                'default_id': default_id,
+                'classes': [{'id': c.id, 'label': c.display_name} for c in class_options],
+            }
+        opts['enrolment'] = enrol
+    return opts
+
+
+def _blank_contact():
+    return {'name': '', 'phone_number': '', 'relationship': 'Father'}
+
+
 @main_bp.route('/students/add', methods=['GET', 'POST'])
 @login_required
 def add_student():
@@ -1036,35 +1079,30 @@ def add_student():
 
             db.session.commit()
             log_action('student.create', target=student)
+            view_url = url_for('main.view_student', student_id=student.id)
             if enrolled_label:
                 flash(f'{FlashMessages.STUDENT_CREATED} Enrolled in {enrolled_label}.', 'success')
             else:
                 flash(FlashMessages.STUDENT_CREATED, 'success')
-            return redirect(url_for('main.view_student', student_id=student.id))
+            if _wants_json():
+                return jsonify({'ok': True, 'redirect': view_url})
+            return redirect(view_url)
 
         except Exception as e:
             db.session.rollback()
+            if _wants_json():
+                return jsonify({'ok': False, 'error': f'Error creating student: {e}'}), 400
             flash(f'Error creating student: {str(e)}', 'error')
 
-    # Class-enrolment options for the active term, scoped to what this user may
-    # access; a form teacher's own class is pre-selected.
-    from utils.access_control import get_teacher_profile, filter_classes_for_user
-    active_term = get_active_term()
-    class_options, default_caa_id = [], None
-    if active_term:
-        caas = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
-        class_options = filter_classes_for_user(caas)
-        teacher = get_teacher_profile()
-        if teacher and not is_admin():
-            form_ids = teacher.form_class_ids or set()
-            for c in class_options:
-                if c.id in form_ids:
-                    default_caa_id = c.id
-                    break
-    return render_template('students/add.html', religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS,
-                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS,
-                           class_options=class_options, default_caa_id=default_caa_id,
-                           active_term=active_term)
+    payload = {
+        'mode': 'add',
+        'student': {'gender': '', 'waec_subjects': [], 'jamb_subjects': []},
+        'contacts': [_blank_contact()],
+        'options': _student_form_options(with_enrolment=True),
+        'urls': {'submit': url_for('main.add_student'),
+                 'cancel': url_for('main.students_list')},
+    }
+    return render_template('students/add.html', form_json=payload)
 
 
 def _student_or_redirect(student_id):
@@ -1172,9 +1210,16 @@ def api_student_view(student_id):
 @login_required
 def edit_student(student_id):
     """Edit student details"""
-    student = db.get_or_404(Student, student_id)
-    from utils.branch_scope import require_branch_access
-    require_branch_access(student.branch_id)
+    # Same scope as viewing: branch-scoped and a form teacher is limited to
+    # their own students (a teacher can't edit another class's student by URL).
+    student, err = _student_or_redirect(student_id)
+    if err:
+        if _wants_json():
+            return jsonify({'ok': False, 'error': err[1]}), 403
+        if err[0] == 'branch':
+            abort(403)   # cross-branch edit is an IDOR attempt, not a redirect
+        flash(err[1], 'error')
+        return redirect(url_for('main.students_list'))
 
     if request.method == 'POST':
         try:
@@ -1217,8 +1262,11 @@ def edit_student(student_id):
             if not (complete or 'phone_number[]' in form):
                 db.session.commit()
                 flash(FlashMessages.STUDENT_UPDATED, 'success')
-                return redirect(_safe_next(form.get('return_to'),
-                                           url_for('main.view_student', student_id=student.id)))
+                dest = _safe_next(form.get('return_to'),
+                                  url_for('main.view_student', student_id=student.id))
+                if _wants_json():
+                    return jsonify({'ok': True, 'redirect': dest})
+                return redirect(dest)
 
             ParentContact.query.filter_by(student_id=student.id).delete()
 
@@ -1240,20 +1288,47 @@ def edit_student(student_id):
             db.session.commit()
             log_action('student.update', target=student)
             flash(FlashMessages.STUDENT_UPDATED, 'success')
-            return redirect(_safe_next(
-                request.form.get('return_to'),
-                url_for('main.view_student', student_id=student.id)
-            ))
+            dest = _safe_next(request.form.get('return_to'),
+                              url_for('main.view_student', student_id=student.id))
+            if _wants_json():
+                return jsonify({'ok': True, 'redirect': dest})
+            return redirect(dest)
 
         except Exception as e:
             db.session.rollback()
+            if _wants_json():
+                return jsonify({'ok': False, 'error': f'Error updating student: {e}'}), 400
             flash(f'Error updating student: {str(e)}', 'error')
 
     # Remember where the user came from so we can return there after saving.
     return_to = _safe_next(
         request.form.get('return_to') or request.args.get('return_to') or request.referrer, '')
-    return render_template('students/edit.html', student=student, religions=RELIGIONS, waec_subjects=WAEC_SUBJECTS,
-                           streams=STREAMS, stream_waec=STREAM_WAEC_SUBJECTS, return_to=return_to)
+    view_url = url_for('main.view_student', student_id=student.id)
+    contacts = [{'name': c.name or '', 'phone_number': c.phone_number or '',
+                 'relationship': c.relationship or 'Father'}
+                for c in student.parent_contacts.all()]
+    payload = {
+        'mode': 'edit',
+        'student': {
+            'id': student.id, 'student_id': student.student_id, 'full_name': student.full_name,
+            'surname': student.surname or '', 'first_name': student.first_name or '',
+            'middle_name': student.middle_name or '', 'gender': student.gender or '',
+            'date_of_birth': student.date_of_birth.strftime('%Y-%m-%d') if student.date_of_birth else '',
+            'religion': student.religion or '', 'stream': student.stream or '',
+            'jamb_target': student.jamb_target if student.jamb_target is not None else '',
+            'home_address': student.home_address or '', 'hobbies': student.hobbies or '',
+            'waec_subjects': student.waec_subject_list or [],
+            'jamb_subjects': student.jamb_subject_list or [],
+        },
+        'contacts': contacts or [_blank_contact()],
+        'options': _student_form_options(),
+        'return_to': return_to,
+        'urls': {'submit': url_for('main.edit_student', student_id=student.id),
+                 'cancel': return_to or view_url, 'back': view_url,
+                 'list': url_for('main.students_list')},
+    }
+    return render_template('students/edit.html', form_json=payload,
+                           student_name=student.full_name, student_sid=student.student_id)
 
 
 @main_bp.route('/students/<int:student_id>/delete', methods=['POST'])

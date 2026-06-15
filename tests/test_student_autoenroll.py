@@ -72,8 +72,8 @@ def test_teacher_add_student_enrols_into_form_class(app):
     page = client.get('/students/add').get_data(as_text=True)
     m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', page)
     token = m.group(1) if m else None
-    # The form should offer the teacher's form class, pre-selected.
-    assert '(your class)' in page
+    # The React form payload should pre-select the teacher's form class.
+    assert f'"default_id": {ids["caa"]}' in page
 
     with app.app_context():
         before = StudentEnrollment.query.filter_by(

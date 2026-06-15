@@ -5,7 +5,7 @@ from flask import session
 from models import (db, Branch, User, Teacher, Student, SchoolClass, ClassArm,
                     ClassArmAssignment, StudentEnrollment, TeacherClassAssignment,
                     AcademicSession, Term)
-from tests.conftest import login_token
+from tests.conftest import login_token, page_token
 
 
 def _get_or_create(model, defaults=None, **kw):
@@ -127,6 +127,56 @@ def test_teacher_cannot_view_other_student_api(app):
     try:
         assert c.get(f'/api/students/{ids["mine_id"]}').status_code == 200
         assert c.get(f'/api/students/{ids["other_id"]}').status_code == 403
+    finally:
+        _deactivate(app)
+
+
+def test_add_student_form_payload(auth_client):
+    html = auth_client.get('/students/add').get_data(as_text=True)
+    assert 'student-form-app' in html and 'student-form-data' in html
+    assert '"mode": "add"' in html
+
+
+def test_add_student_json_create(auth_client, app):
+    tok = page_token(auth_client)
+    r = auth_client.post('/students/add', headers={'X-Requested-With': 'fetch'}, data={
+        'surname': 'QAForm', 'first_name': 'Kid', 'gender': 'Male',
+        'contact_name[]': 'Mr QA', 'phone_number[]': '08011112222', 'relationship[]': 'Father',
+        'waec_subjects[]': 'Mathematics', '_csrf_token': tok})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['ok'] and '/students/' in body['redirect']
+    with app.app_context():
+        s = Student.query.filter_by(surname='QAForm', first_name='Kid').first()
+        assert s is not None and s.parent_contacts.count() == 1
+        assert s.waec_subject_list == ['Mathematics']
+        s.parent_contacts.delete()
+        db.session.delete(s)
+        db.session.commit()
+
+
+def test_edit_student_json_update(auth_client, app):
+    ids = _seed_teacher_and_students(app)
+    tok = page_token(auth_client)
+    r = auth_client.post(f'/students/{ids["mine_id"]}/edit', headers={'X-Requested-With': 'fetch'},
+                         data={'form_complete': '1', 'surname': 'Mine', 'first_name': 'Zara',
+                               'gender': 'Female', 'hobbies': 'Chess, Coding', '_csrf_token': tok})
+    assert r.status_code == 200 and r.get_json()['ok']
+    with app.app_context():
+        assert db.session.get(Student, ids['mine_id']).hobbies == 'Chess, Coding'
+    _deactivate(app)
+
+
+def test_teacher_cannot_edit_other_student(app):
+    ids = _seed_teacher_and_students(app)
+    c = _login_teacher(app)
+    try:
+        assert c.get(f'/students/{ids["other_id"]}/edit').status_code in (302, 303)
+        tok = page_token(c)
+        r = c.post(f'/students/{ids["other_id"]}/edit', headers={'X-Requested-With': 'fetch'},
+                   data={'form_complete': '1', 'surname': 'X', 'first_name': 'Y',
+                         'gender': 'Male', '_csrf_token': tok})
+        assert r.status_code == 403
     finally:
         _deactivate(app)
 

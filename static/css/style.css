@@ -2260,6 +2260,15 @@ input:focus, select:focus, textarea:focus {
 .subject-check input { width:16px; height:16px; flex-shrink:0; accent-color:var(--primary); }
 .subject-check input:checked + span { font-weight:600; color:var(--primary); }
 
+/* Student add/edit form (React) — responsive rows + contact lines */
+.sf-row { display:grid; grid-template-columns:1fr; gap:0 1rem; }
+@media (min-width:560px){ .sf-row{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.sf-contact { display:grid; grid-template-columns:1fr; gap:0 .75rem; align-items:start;
+    padding:.6rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); margin-bottom:.6rem; }
+@media (min-width:640px){ .sf-contact{ grid-template-columns:1.2fr 1fr 1fr auto; } }
+.sf-contact .sf-remove { align-self:start; margin-top:1.7rem; }
+@media (max-width:639px){ .sf-contact .sf-remove { margin-top:0; } }
+
 /* ============================================
    MOBILE-FIRST TABLES + DARK-MODE READABILITY
    ============================================ */
