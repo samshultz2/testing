@@ -10,6 +10,7 @@ from models import (
 )
 from utils.helpers import login_required, get_sss3_enrolled_students, safe_redirect
 from utils.access_control import admin_required
+from utils.branch_scope import scope_query, scope_by_student
 from utils.db_tx import safe_transaction
 from utils.audit import log_action
 from datetime import date
@@ -179,8 +180,8 @@ def index():
     # Get promotion rules count
     rules_count = PromotionRule.query.filter_by(is_active=True).count()
     
-    # Get recent promotions
-    recent_promotions = PromotionRecord.query.order_by(
+    # Get recent promotions (branch-scoped)
+    recent_promotions = scope_by_student(PromotionRecord.query, PromotionRecord).order_by(
         PromotionRecord.created_at.desc()
     ).limit(10).all()
     
@@ -291,11 +292,11 @@ def process_promotion():
         ).first()
         
         if third_term:
-            # Get all class arm assignments for this class in the term
-            assignments = ClassArmAssignment.query.filter_by(
+            # Get all class arm assignments for this class in the term (scoped)
+            assignments = scope_query(ClassArmAssignment.query.filter_by(
                 term_id=third_term.id,
                 class_id=class_id
-            ).all()
+            ), ClassArmAssignment).all()
             
             for assignment in assignments:
                 # Get enrolled students
@@ -471,8 +472,8 @@ def enroll_promoted():
             flash('First term not found for new session. Please create terms first.', 'error')
             return redirect(url_for('promotion.index'))
         
-        # Get promoted students
-        promotions = PromotionRecord.query.filter_by(
+        # Get promoted students (branch-scoped)
+        promotions = scope_by_student(PromotionRecord.query, PromotionRecord).filter_by(
             from_session_id=from_session_id,
             to_session_id=to_session_id,
             status='promoted'
@@ -537,9 +538,9 @@ def promotion_history():
     
     records = []
     if session_id:
-        records = PromotionRecord.query.filter_by(
+        records = scope_by_student(PromotionRecord.query.filter_by(
             from_session_id=session_id
-        ).join(Student).order_by(Student.surname).all()
+        ), PromotionRecord).join(Student).order_by(Student.surname).all()
     
     return render_template('promotion/history.html',
         sessions=sessions, session_id=session_id, records=records

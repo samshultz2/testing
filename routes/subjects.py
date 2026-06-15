@@ -1014,7 +1014,10 @@ def export_broadsheet():
     if not selected_term or not selected_assignment:
         flash('Invalid selection.', 'error')
         return redirect(url_for('subjects.broadsheet'))
-    
+    if not can_access_class(assignment_id):
+        flash('You do not have access to that class.', 'error')
+        return redirect(url_for('subjects.broadsheet'))
+
     # Get data (same as broadsheet view)
     class_subjects = ClassSubject.query.filter_by(
         term_id=term_id,
@@ -1556,11 +1559,17 @@ def print_all_report_cards():
             term_id = active_term.id
     
     selected_term = db.session.get(Term, term_id) if term_id else None
-    
+
+    # A user may only print report cards for classes they can access.
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to that class.', 'error')
+        return redirect(url_for('subjects.print_all_report_cards', term_id=term_id))
+
     assignments = []
     if term_id:
-        assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-    
+        assignments = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term_id).all())
+
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     all_reports = []

@@ -119,12 +119,16 @@ def index():
     
     selected_term = Term.query.get(term_id) if term_id else None
     
-    # Get class assignments for selected term
+    # Get class assignments for selected term (branch-scoped picker)
+    from utils.branch_scope import scope_query, can_access_branch
     assignments = []
     if term_id:
-        assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-    
+        assignments = scope_query(
+            ClassArmAssignment.query.filter_by(term_id=term_id), ClassArmAssignment).all()
+
     selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    if selected_assignment and not can_access_branch(selected_assignment.branch_id):
+        selected_assignment = None   # no peeking at another branch's timetable by id
     
     # Get timetable slots
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()

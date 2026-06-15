@@ -10,6 +10,7 @@ from utils.excel_utils import (
     import_students_from_excel
 )
 from utils.web_exports import xlsx_response
+from utils.branch_scope import scope_query, scope_by_student, viewing_branch_id
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -29,7 +30,7 @@ def index():
 @login_required
 def export_students():
     """Export all students to Excel"""
-    students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+    students = scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
     
     excel_file = export_students_to_excel(students)
 
@@ -222,8 +223,8 @@ def import_students():
 @login_required
 def api_gender_distribution():
     """Get gender distribution data for charts"""
-    male_count = Student.query.filter_by(is_active=True, gender='Male').count()
-    female_count = Student.query.filter_by(is_active=True, gender='Female').count()
+    male_count = scope_query(Student.query.filter_by(is_active=True, gender='Male'), Student).count()
+    female_count = scope_query(Student.query.filter_by(is_active=True, gender='Female'), Student).count()
     
     return jsonify({
         'labels': ['Male', 'Female'],
@@ -238,13 +239,17 @@ def api_religion_distribution():
     """Get religion distribution data for charts"""
     from sqlalchemy import func
     
-    distribution = db.session.query(
+    _rq = db.session.query(
         Student.religion,
         func.count(Student.id)
     ).filter(
         Student.is_active == True,
         Student.religion != None
-    ).group_by(Student.religion).all()
+    )
+    _bid = viewing_branch_id()
+    if _bid is not None:
+        _rq = _rq.filter(Student.branch_id == _bid)
+    distribution = _rq.group_by(Student.religion).all()
     
     labels = [d[0] or 'Not Specified' for d in distribution]
     data = [d[1] for d in distribution]
@@ -272,7 +277,7 @@ def api_enrollment_by_class():
     # Get enrollment counts by class
     from sqlalchemy import func
     
-    enrollments = db.session.query(
+    _enq = db.session.query(
         SchoolClass.name,
         func.count(StudentEnrollment.id)
     ).join(
@@ -284,7 +289,11 @@ def api_enrollment_by_class():
     ).filter(
         ClassArmAssignment.term_id == active_term.id,
         StudentEnrollment.is_active == True
-    ).group_by(SchoolClass.name).order_by(SchoolClass.level).all()
+    )
+    _bid = viewing_branch_id()
+    if _bid is not None:
+        _enq = _enq.filter(ClassArmAssignment.branch_id == _bid)
+    enrollments = _enq.group_by(SchoolClass.name).order_by(SchoolClass.level).all()
     
     return jsonify({
         'labels': [e[0] for e in enrollments],
@@ -345,14 +354,14 @@ def api_waec_grade_distribution():
     
     year = request.args.get('year', type=int)
     
-    query = db.session.query(
+    query = scope_by_student(db.session.query(
         WAECResult.grade,
         func.count(WAECResult.id)
-    )
-    
+    ), WAECResult)
+
     if year:
         query = query.filter(WAECResult.exam_year == year)
-    
+
     distribution = query.group_by(WAECResult.grade).all()
     
     grade_counts = {g: 0 for g in WAEC_GRADES}
@@ -381,7 +390,7 @@ def api_jamb_score_distribution():
     
     year = request.args.get('year', type=int)
     
-    query = JAMBResult.query
+    query = scope_by_student(JAMBResult.query, JAMBResult)
     if year:
         query = query.filter_by(exam_year=year)
     
@@ -425,22 +434,25 @@ def summary_report():
     active_session = get_active_session()
     active_term = get_active_term()
     
-    # Student statistics
-    total_students = Student.query.filter_by(is_active=True).count()
-    male_students = Student.query.filter_by(is_active=True, gender='Male').count()
-    female_students = Student.query.filter_by(is_active=True, gender='Female').count()
-    
+    # Student statistics (branch-scoped)
+    _bid = viewing_branch_id()
+    total_students = scope_query(Student.query.filter_by(is_active=True), Student).count()
+    male_students = scope_query(Student.query.filter_by(is_active=True, gender='Male'), Student).count()
+    female_students = scope_query(Student.query.filter_by(is_active=True, gender='Female'), Student).count()
+
     # Enrollment statistics
     active_enrollments = 0
     if active_term:
-        active_enrollments = StudentEnrollment.query.join(ClassArmAssignment).filter(
+        _eq = StudentEnrollment.query.join(ClassArmAssignment).filter(
             ClassArmAssignment.term_id == active_term.id,
-            StudentEnrollment.is_active == True
-        ).count()
-    
+            StudentEnrollment.is_active == True)
+        if _bid is not None:
+            _eq = _eq.filter(ClassArmAssignment.branch_id == _bid)
+        active_enrollments = _eq.count()
+
     # Results statistics
-    students_with_waec = db.session.query(WAECResult.student_id).distinct().count()
-    students_with_jamb = db.session.query(JAMBResult.student_id).distinct().count()
+    students_with_waec = scope_by_student(db.session.query(WAECResult.student_id), WAECResult).distinct().count()
+    students_with_jamb = scope_by_student(db.session.query(JAMBResult.student_id), JAMBResult).distinct().count()
     
     return render_template('reports/summary.html',
         active_session=active_session,
