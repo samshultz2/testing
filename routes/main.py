@@ -1055,39 +1055,105 @@ def add_student():
                            active_term=active_term)
 
 
+def _student_or_redirect(student_id):
+    """Load a student the current user may view, or return (None, response).
+    Branch-scoped + a form teacher is limited to their own students."""
+    student = db.get_or_404(Student, student_id)
+    from utils.branch_scope import can_access_branch
+    from utils.access_control import teacher_form_student_ids
+    if not can_access_branch(student.branch_id):
+        return None, ('branch', 'That student belongs to another branch.')
+    tids = teacher_form_student_ids()
+    if tids is not None and student.id not in tids:
+        return None, ('teacher', 'You can only view your own students.')
+    return student, None
+
+
+def _fmt_date(d):
+    return d.strftime('%d %b %Y') if d else None
+
+
+def _student_view_payload(student):
+    """Everything the student detail page shows, JSON-serialisable."""
+    enrollments = student.enrollments.join(ClassArmAssignment).order_by(
+        ClassArmAssignment.term_id.desc()).all()
+    waec_results = student.waec_results.all()
+    jamb_results = student.jamb_results.order_by(None).all() if hasattr(student.jamb_results, 'order_by') else student.jamb_results.all()
+    latest_jamb = student.jamb_results.first()
+    contacts = student.parent_contacts.all()
+    discipline = sorted(student.discipline_records.all(), key=lambda r: (r.date or date.min), reverse=True)
+    clinic = sorted(student.clinic_visits.all(), key=lambda v: (v.date or date.min), reverse=True)
+    can_manage = not is_teacher()
+    sid = student.id
+    return {
+        'student': {
+            'id': sid, 'student_id': student.student_id, 'full_name': student.full_name,
+            'first_name': student.first_name, 'gender': student.gender,
+            'date_of_birth': _fmt_date(student.date_of_birth), 'age': student.age,
+            'religion': student.religion, 'home_address': student.home_address,
+            'hobbies': student.hobbies, 'stream': student.stream,
+            'waec_subjects': student.waec_subject_list or [],
+            'jamb_subjects': student.jamb_subject_list or [],
+            'is_graduated': bool(student.is_graduated),
+        },
+        'contacts': [{'name': c.name, 'is_primary': bool(c.is_primary),
+                      'phone_number': c.phone_number, 'relationship': c.relationship} for c in contacts],
+        'enrollments': [{'term': e.class_arm_assignment.term.name,
+                         'class': e.class_arm_assignment.school_class.name,
+                         'arm': e.class_arm_assignment.arm.name} for e in enrollments],
+        'waec': {'count': len(waec_results),
+                 'add_url': url_for('results.add_waec') + f'?student_id={sid}',
+                 'view_url': url_for('results.view_waec_student', student_id=sid)},
+        'jamb': {'latest': ({'year': latest_jamb.exam_year, 'score': latest_jamb.total_score}
+                            if latest_jamb else None),
+                 'add_url': url_for('results.add_jamb') + f'?student_id={sid}'},
+        'discipline': [{'id': r.id, 'date': _fmt_date(r.date), 'category': r.category,
+                        'severity': r.severity, 'description': r.description,
+                        'action_taken': r.action_taken, 'reported_by': r.reported_by,
+                        'delete_url': url_for('welfare.delete_discipline', record_id=r.id)} for r in discipline],
+        'clinic': [{'id': v.id, 'date': _fmt_date(v.date), 'complaint': v.complaint,
+                    'treatment': v.treatment, 'parent_notified': bool(v.parent_notified),
+                    'attended_by': v.attended_by,
+                    'delete_url': url_for('welfare.delete_clinic', visit_id=v.id)} for v in clinic],
+        'today': date.today().isoformat(),
+        'can_manage': can_manage,
+        'urls': {
+            'list': url_for('main.students_list'),
+            'edit': url_for('main.edit_student', student_id=sid),
+            'graduate': url_for('promotion.unmark_graduate', student_id=sid) if student.is_graduated
+                        else url_for('promotion.mark_graduate', student_id=sid),
+            'exam_report': url_for('results.student_report', student_id=sid),
+            'predictions': url_for('results.student_predictions', student_id=sid),
+            'report_card': url_for('subjects.student_report_card', student_id=sid),
+            'discipline_add': url_for('welfare.add_discipline', student_id=sid),
+            'clinic_add': url_for('welfare.add_clinic', student_id=sid),
+        },
+        'discipline_categories': ['Lateness', 'Truancy', 'Uniform', 'Fighting', 'Rudeness',
+                                  'Bullying', 'Property damage', 'Exam misconduct', 'Other'],
+    }
+
+
 @main_bp.route('/students/<int:student_id>')
 @login_required
 def view_student(student_id):
-    """View student details"""
-    student = db.get_or_404(Student, student_id)
-    from utils.branch_scope import can_access_branch
-    if not can_access_branch(student.branch_id):
-        flash('That student belongs to another branch.', 'error')
+    """Student detail — React app, hydrated inline with the full record."""
+    student, err = _student_or_redirect(student_id)
+    if err:
+        flash(err[1], 'error')
         return redirect(url_for('main.students_list'))
-    # A form teacher may only open their own students.
-    from utils.access_control import teacher_form_student_ids
-    tids = teacher_form_student_ids()
-    if tids is not None and student.id not in tids:
-        flash('You can only view your own students.', 'error')
-        return redirect(url_for('main.students_list'))
+    return render_template('students/view.html', student_json=_student_view_payload(student),
+                           student_name=student.full_name)
 
-    # Get enrollments
-    enrollments = student.enrollments.join(ClassArmAssignment).order_by(
-        ClassArmAssignment.term_id.desc()
-    ).all()
 
-    # Get WAEC results
-    waec_results = student.waec_results.all()
-
-    # Get JAMB results
-    jamb_results = student.jamb_results.all()
-
-    return render_template('students/view.html',
-        student=student,
-        enrollments=enrollments,
-        waec_results=waec_results,
-        jamb_results=jamb_results
-    )
+@main_bp.route('/api/students/<int:student_id>')
+@login_required
+def api_student_view(student_id):
+    """Student detail as JSON (scoped like the page) — used to refresh the view
+    after adding/removing a welfare record without a full reload."""
+    student, err = _student_or_redirect(student_id)
+    if err:
+        return jsonify({'error': err[1]}), 403
+    return jsonify(_student_view_payload(student))
 
 
 @main_bp.route('/students/<int:student_id>/edit', methods=['GET', 'POST'])

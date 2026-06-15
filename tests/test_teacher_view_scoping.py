@@ -104,6 +104,33 @@ def test_teacher_students_api_scoped(app):
         _deactivate(app)
 
 
+def test_student_view_page_and_api(app):
+    ids = _seed_teacher_and_students(app)
+    from config import Config
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    try:
+        html = c.get(f'/students/{ids["mine_id"]}').get_data(as_text=True)
+        assert 'student-view-app' in html and 'student-data' in html
+        j = c.get(f'/api/students/{ids["mine_id"]}').get_json()
+        assert j['student']['id'] == ids['mine_id']
+        for k in ('contacts', 'enrollments', 'waec', 'jamb', 'discipline', 'clinic', 'urls', 'can_manage'):
+            assert k in j
+    finally:
+        _deactivate(app)
+
+
+def test_teacher_cannot_view_other_student_api(app):
+    ids = _seed_teacher_and_students(app)
+    c = _login_teacher(app)
+    try:
+        assert c.get(f'/api/students/{ids["mine_id"]}').status_code == 200
+        assert c.get(f'/api/students/{ids["other_id"]}').status_code == 403
+    finally:
+        _deactivate(app)
+
+
 def test_students_api_shape_and_pagination(app):
     from config import Config
     c = app.test_client()

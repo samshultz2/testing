@@ -1,22 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { apiGet, csrfToken } from '../lib/api';
+import { apiGet } from '../lib/api';
+import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
-
-// Form-encoded POST to the existing student endpoints (delete/graduate/bulk),
-// carrying CSRF. Returns the response so callers can read JSON where provided.
-async function postForm(url, fields) {
-  const body = new URLSearchParams();
-  Object.entries(fields).forEach(([k, v]) => {
-    if (Array.isArray(v)) v.forEach((x) => body.append(k, x));
-    else if (v !== undefined && v !== null) body.append(k, v);
-  });
-  return fetch(url, {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'fetch',
-               'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-}
 
 const SORTS = [
   ['surname|asc', 'Name A–Z'], ['surname|desc', 'Name Z–A'],
