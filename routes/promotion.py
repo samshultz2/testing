@@ -1,7 +1,7 @@
 """
 Student Promotion Management routes
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from utils.helpers import get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, PromotionRule, PromotionRecord,
@@ -17,6 +17,36 @@ from datetime import date
 import json
 
 promotion_bp = Blueprint('promotion', __name__, url_prefix='/promotion')
+
+_STATUS_BADGE = {'promoted': 'badge-success', 'graduated': 'badge-primary',
+                 'repeated': 'badge-warning'}
+
+
+def _wants_json():
+    return request.headers.get('X-Requested-With') == 'fetch' or request.is_json
+
+
+def _ok(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('promotion.index'))
+
+
+def _err(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), 400
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('promotion.index'))
+
+
+def _render(payload):
+    return render_template('promotion/app.html', promo_json=payload)
+
+
+def _sessions_json():
+    return [{'id': s.id, 'name': s.name} for s in
+            AcademicSession.query.order_by(AcademicSession.id.desc()).all()]
 
 
 # ============================================================================
@@ -38,10 +68,18 @@ def graduates_list():
         query = query.filter_by(graduation_session_id=session_id)
     
     graduates = query.order_by(Student.surname, Student.first_name).all()
-    
-    return render_template('promotion/graduates.html',
-        sessions=sessions, session_id=session_id, graduates=graduates
-    )
+
+    return _render({
+        'page': 'graduates', 'session_id': session_id or '', 'sessions': _sessions_json(),
+        'preview_url': url_for('promotion.graduate_sss3_preview'),
+        'graduates': [{
+            'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id, 'gender': s.gender,
+            'graduation_date': s.graduation_date.strftime('%d %b %Y') if s.graduation_date else None,
+            'graduation_session': s.graduation_session.name if s.graduation_session else None,
+            'has_waec': s.waec_results.count() > 0, 'has_jamb': s.jamb_results.count() > 0,
+            'profile_url': url_for('promotion.graduate_profile', student_id=s.id),
+        } for s in graduates],
+    })
 
 
 @promotion_bp.route('/graduate/<int:student_id>', methods=['POST'])
@@ -93,8 +131,13 @@ def graduate_sss3_preview():
     enrolled = get_sss3_enrolled_students()
     students = [s for s in enrolled if not s.is_graduated]
     already = [s for s in enrolled if s.is_graduated]
-    return render_template('promotion/graduate_preview.html',
-                           students=students, already=already)
+    return _render({
+        'page': 'graduate_preview', 'already_count': len(already),
+        'confirm_url': url_for('promotion.graduate_sss3'),
+        'urls': {'graduates': url_for('promotion.graduates_list')},
+        'students': [{'student_id': s.student_id, 'full_name': s.full_name, 'gender': s.gender}
+                     for s in students],
+    })
 
 
 @promotion_bp.route('/graduate-sss3', methods=['POST'])
@@ -114,14 +157,12 @@ def graduate_sss3():
                 graduated += 1
         db.session.commit()
         log_action('graduate_sss3', f'{graduated} students')
-        if graduated:
-            flash(f'{graduated} SSS3 student(s) marked as graduates.', 'success')
-        else:
-            flash('No new SSS3 students to graduate.', 'info')
+        msg = (f'{graduated} SSS3 student(s) marked as graduates.' if graduated
+               else 'No new SSS3 students to graduate.')
+        return _ok(msg, url_for('promotion.graduates_list'))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('promotion.graduates_list'))
+        return _err(f'Error: {str(e)}', url_for('promotion.graduates_list'))
 
 
 @promotion_bp.route('/graduates/<int:student_id>')
@@ -161,12 +202,28 @@ def graduate_profile(student_id):
     if student.graduation_session_id:
         graduation_session = db.session.get(AcademicSession, student.graduation_session_id)
     
-    return render_template('promotion/graduate_profile.html',
-        student=student,
-        waec_by_year=waec_by_year,
-        jamb_results=jamb_results,
-        graduation_session=graduation_session
-    )
+    return _render({
+        'page': 'graduate_profile',
+        'student': {'id': student.id, 'full_name': student.full_name,
+                    'student_id': student.student_id, 'gender': student.gender},
+        'graduation_session': graduation_session.name if graduation_session else None,
+        'graduation_date': student.graduation_date.strftime('%d %B %Y') if student.graduation_date else None,
+        'waec_by_year': [{'exam_year': v['exam_year'], 'exam_number': v['exam_number'],
+                          'subjects': [{'subject': r.subject, 'grade': r.grade} for r in v['subjects']]}
+                         for v in waec_by_year.values()],
+        'jamb_results': [{'exam_year': j.exam_year, 'total_score': j.total_score,
+                          'registration_number': j.registration_number,
+                          'subjects': [{'name': j.subject1, 'score': j.subject1_score},
+                                       {'name': j.subject2, 'score': j.subject2_score},
+                                       {'name': j.subject3, 'score': j.subject3_score},
+                                       {'name': j.subject4, 'score': j.subject4_score}]} for j in jamb_results],
+        'contacts': [{'name': c.contact_name or c.relationship, 'relationship': c.relationship,
+                      'phone': c.phone_number} for c in student.parent_contacts],
+        'urls': {'graduates': url_for('promotion.graduates_list'),
+                 'full_profile': url_for('main.view_student', student_id=student.id),
+                 'add_waec': url_for('results.add_waec') + f'?student_id={student.id}',
+                 'add_jamb': url_for('results.add_jamb') + f'?student_id={student.id}'},
+    })
 
 
 @promotion_bp.route('/')
@@ -185,10 +242,17 @@ def index():
         PromotionRecord.created_at.desc()
     ).limit(10).all()
     
-    return render_template('promotion/index.html',
-        sessions=sessions, active_session=active_session,
-        rules_count=rules_count, recent_promotions=recent_promotions
-    )
+    return _render({
+        'page': 'index', 'rules_count': rules_count,
+        'active_session': active_session.name if active_session else None,
+        'recent': [{'name': p.student.full_name, 'status': p.status,
+                    'status_badge': _STATUS_BADGE.get(p.status, 'badge-secondary'),
+                    'from_class': p.from_class.name if p.from_class else '-',
+                    'to_class': p.to_class.name if p.to_class else '-', 'stream': p.stream}
+                   for p in recent_promotions],
+        'urls': {'rules': url_for('promotion.rules_list'), 'process': url_for('promotion.process_promotion'),
+                 'graduates': url_for('promotion.graduates_list'), 'history': url_for('promotion.promotion_history')},
+    })
 
 
 # ============================================================================
@@ -203,12 +267,13 @@ def rules_list():
         PromotionRule.from_class_id, PromotionRule.priority.desc()
     ).all()
     
-    classes = SchoolClass.query.order_by(SchoolClass.level).all()
-    subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
-    
-    return render_template('promotion/rules.html',
-        rules=rules, classes=classes, subjects=subjects
-    )
+    return _render({
+        'page': 'rules', 'add_url': url_for('promotion.add_rule'),
+        'rules': [{'id': r.id, 'from_class': r.from_class.name, 'to_class': r.to_class.name,
+                   'stream_name': r.stream_name, 'min_average': r.min_average, 'priority': r.priority,
+                   'required_count': len(r.get_required_subjects()) if r.required_subjects else 0,
+                   'delete_url': url_for('promotion.delete_rule', rule_id=r.id)} for r in rules],
+    })
 
 
 @promotion_bp.route('/rules/add', methods=['GET', 'POST'])
@@ -234,17 +299,19 @@ def add_rule():
             )
             db.session.add(rule)
             db.session.commit()
-            
-            flash('Promotion rule added!', 'success')
-            return redirect(url_for('promotion.rules_list'))
+            return _ok('Promotion rule added!', url_for('promotion.rules_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
+            return _err(f'Error: {str(e)}', url_for('promotion.add_rule'))
+
     classes = SchoolClass.query.order_by(SchoolClass.level).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
-    
-    return render_template('promotion/add_rule.html', classes=classes, subjects=subjects)
+    return _render({
+        'page': 'add_rule', 'submit_url': url_for('promotion.add_rule'),
+        'urls': {'rules': url_for('promotion.rules_list')},
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'subjects': [{'id': s.id, 'name': s.name} for s in subjects],
+    })
 
 
 @promotion_bp.route('/rules/<int:rule_id>/delete', methods=['POST'])
@@ -252,11 +319,9 @@ def add_rule():
 def delete_rule(rule_id):
     """Delete promotion rule"""
     rule = db.get_or_404(PromotionRule, rule_id)
-
-    with safe_transaction('Rule deleted!', 'Error: {error}'):
-        rule.is_active = False
-
-    return redirect(url_for('promotion.rules_list'))
+    rule.is_active = False
+    db.session.commit()
+    return _ok('Rule deleted!', url_for('promotion.rules_list'))
 
 
 # ============================================================================
@@ -334,13 +399,25 @@ def process_promotion():
             # Sort by average descending
             students_data.sort(key=lambda x: x['average'] or 0, reverse=True)
     
-    return render_template('promotion/process.html',
-        sessions=sessions, classes=classes,
-        from_session_id=from_session_id, to_session_id=to_session_id,
-        class_id=class_id, from_session=from_session, to_session=to_session,
-        selected_class=selected_class, students_data=students_data,
-        promotion_threshold=promotion_threshold
-    )
+    classes_json = [{'id': c.id, 'name': c.name} for c in classes]
+    return _render({
+        'page': 'process', 'sessions': _sessions_json(), 'classes': classes_json,
+        'from_session_id': from_session_id or '', 'to_session_id': to_session_id or '',
+        'class_id': class_id or '', 'threshold': promotion_threshold,
+        'selected_class_name': selected_class.name if selected_class else '',
+        'execute_url': url_for('promotion.execute_promotion'),
+        'urls': {'self': url_for('promotion.process_promotion')},
+        'students': [{
+            'id': it['student'].id, 'name': it['student'].full_name,
+            'assignment': it['assignment'].display_name, 'average': it['average'],
+            'over_threshold': bool(it['average'] and it['average'] >= promotion_threshold),
+            'recommendation': {'message': it['recommendation'].get('message', ''),
+                               'status': it['recommendation'].get('status'),
+                               'to_class': it['recommendation'].get('to_class'),
+                               'stream': it['recommendation'].get('stream')},
+            'existing_status': it['existing_promotion'].status if it['existing_promotion'] else None,
+        } for it in students_data],
+    })
 
 
 @promotion_bp.route('/execute', methods=['POST'])
@@ -439,13 +516,13 @@ def execute_promotion():
         if graduated:
             msg_parts.append(f'{graduated} graduated')
         
-        flash(f'Processed: {", ".join(msg_parts)}', 'success')
+        dest = url_for('promotion.process_promotion',
+                       from_session_id=from_session_id, to_session_id=to_session_id)
+        return _ok(f'Processed: {", ".join(msg_parts)}', dest)
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('promotion.process_promotion',
-        from_session_id=from_session_id, to_session_id=to_session_id))
+        return _err(f'Error: {str(e)}', url_for('promotion.process_promotion',
+                    from_session_id=from_session_id, to_session_id=to_session_id))
 
 
 @promotion_bp.route('/enroll-promoted', methods=['POST'])
@@ -542,9 +619,14 @@ def promotion_history():
             from_session_id=session_id
         ), PromotionRecord).join(Student).order_by(Student.surname).all()
     
-    return render_template('promotion/history.html',
-        sessions=sessions, session_id=session_id, records=records
-    )
+    return _render({
+        'page': 'history', 'session_id': session_id or '', 'sessions': _sessions_json(),
+        'records': [{'name': r.student.full_name, 'status': r.status,
+                     'status_badge': _STATUS_BADGE.get(r.status, 'badge-secondary'),
+                     'from_class': r.from_class.name if r.from_class else '-',
+                     'to_class': r.to_class.name if r.to_class else '-', 'stream': r.stream,
+                     'average': r.average_score, 'is_manual': bool(r.is_manual)} for r in records],
+    })
 
 
 # ============================================================================

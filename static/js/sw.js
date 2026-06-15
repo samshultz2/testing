@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
 // pick them up promptly. Static assets also use stale-while-revalidate below,
 // so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v39';
+const CACHE_VERSION = 'v40';
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
@@ -46,6 +46,7 @@ const ASSETS = [
   '/static/js/react/events-app.js',
   '/static/js/react/admissions-app.js',
   '/static/js/react/reports-app.js',
+  '/static/js/react/promotion-app.js',
   '/static/manifest.webmanifest',
   OFFLINE_URL
 ];

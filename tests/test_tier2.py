@@ -38,8 +38,9 @@ def test_graduate_preview_lists_then_commits(app):
 
     c = _admin(app)
     body = c.get('/promotion/graduate-sss3/preview').get_data(as_text=True)
-    assert 'GRADT2' in body and 'Will be graduated' in body
-    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', body).group(1)
+    # React shell: the student is in the embedded payload + the page marker is present.
+    assert 'GRADT2' in body and '"page": "graduate_preview"' in body
+    tok = re.search(r'name="csrf-token" content="([0-9a-f]+)"', body).group(1)
     c.post('/promotion/graduate-sss3', data={'_csrf_token': tok})
     with app.app_context():
         assert db.session.get(Student, sid).is_graduated is True
