@@ -8,6 +8,9 @@ import math
 from sqlalchemy.orm import joinedload
 from models import db, Student, WAECResult, JAMBResult
 from models.mock_jamb import MockJAMBResult, MockJAMBExam
+# Analytics run inside request handlers, so these scope to the branch in view
+# (a no-op for central users seeing all branches).
+from utils.branch_scope import scope_by_student
 
 
 class ExamAnalytics:
@@ -78,7 +81,7 @@ class JAMBAnalytics(ExamAnalytics):
     @staticmethod
     def get_year_statistics(year):
         """Get comprehensive statistics for a JAMB year"""
-        results = JAMBResult.query.filter_by(exam_year=year).options(
+        results = scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).options(
             joinedload(JAMBResult.student)).all()
 
         if not results:
@@ -549,7 +552,7 @@ class WAECAnalytics(ExamAnalytics):
     @staticmethod
     def get_year_statistics(year):
         """Get comprehensive statistics for a WAEC year"""
-        results = WAECResult.query.filter_by(exam_year=year).all()
+        results = scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all()
         
         if not results:
             return None
@@ -991,7 +994,8 @@ class WAECJAMBCorrelation(ExamAnalytics):
         mock_students = db.session.query(MockJAMBResult.student_id).distinct().all()
         mock_student_ids = [s[0] for s in mock_students]
         
-        waec_query = WAECResult.query.filter(WAECResult.student_id.in_(mock_student_ids))
+        waec_query = scope_by_student(
+            WAECResult.query.filter(WAECResult.student_id.in_(mock_student_ids)), WAECResult)
         if year:
             waec_query = waec_query.filter_by(exam_year=year)
         

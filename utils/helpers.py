@@ -292,9 +292,9 @@ def _sss3_enrolled_map():
 
     students = {}
     if sss3 and active_term:
-        assignments = ClassArmAssignment.query.filter_by(
-            class_id=sss3.id, term_id=active_term.id
-        ).all()
+        from utils.branch_scope import scope_query
+        assignments = scope_query(ClassArmAssignment.query.filter_by(
+            class_id=sss3.id, term_id=active_term.id), ClassArmAssignment).all()
         for assignment in assignments:
             enrollments = StudentEnrollment.query.filter_by(
                 class_arm_assignment_id=assignment.id,
@@ -323,16 +323,16 @@ def get_sss3_students():
     becomes impossible.
     """
     from models import Student
+    from utils.branch_scope import scope_query
 
     students = _sss3_enrolled_map()
 
     # Include this session's graduates (former SSS3) so results can still be added.
     active_session = get_active_session()
     if active_session:
-        graduates = Student.query.filter_by(
+        graduates = scope_query(Student.query.filter_by(
             is_active=True, is_graduated=True,
-            graduation_session_id=active_session.id
-        ).all()
+            graduation_session_id=active_session.id), Student).all()
         for g in graduates:
             students.setdefault(g.id, g)
 
@@ -340,7 +340,7 @@ def get_sss3_students():
         return sorted(students.values(), key=lambda s: (s.surname or '', s.first_name or ''))
 
     # Fallback: SSS3/active term not configured yet.
-    return Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+    return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
 
 
 def student_subject_map(students):

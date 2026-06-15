@@ -9,7 +9,7 @@ from models import (db, Student, WAECResult, JAMBResult, UniversityCutoff, Schoo
                     ClassArmAssignment, TermSummary)
 import json as _json
 from utils.access_control import login_required, admin_required
-from utils.branch_scope import require_branch_access
+from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 from utils.audit import log_action
 from utils.helpers import (
     WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, get_sss3_students,
@@ -519,7 +519,7 @@ def jamb_list():
         correlation = AcademicAnalytics.calculate_waec_jamb_correlation(exam_year, _bid)
         
         # Get all results for subject analysis
-        all_results = JAMBResult.query.filter_by(exam_year=exam_year).all()
+        all_results = scope_by_student(JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult).all()
         
         # Build subject performance data
         subject_scores = defaultdict(list)
@@ -883,7 +883,7 @@ def subject_enrolment():
     if only_sss3:
         students = get_sss3_students()
     else:
-        students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+        students = scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
 
     waec_counts = {}
     jamb_counts = {}
@@ -1140,9 +1140,12 @@ def analytics_hub():
 
     # Gender breakdowns for the selected year.
     def gender_split(model):
-        rows = db.session.query(Student.gender, func.count(func.distinct(Student.id))).join(
+        q = db.session.query(Student.gender, func.count(func.distinct(Student.id))).join(
             model, Student.id == model.student_id
-        ).filter(model.exam_year == year).group_by(Student.gender).all()
+        ).filter(model.exam_year == year)
+        if bid is not None:
+            q = q.filter(Student.branch_id == bid)
+        rows = q.group_by(Student.gender).all()
         return {g or 'Unknown': c for g, c in rows}
 
     waec_gender = gender_split(WAECResult) if (year and waec_stats) else {}
@@ -1152,9 +1155,12 @@ def analytics_hub():
     # / >=200 rate (JAMB) split by gender for the selected year.
     waec_gender_stats = []
     if year and waec_stats:
-        rows = db.session.query(Student.gender, WAECResult.grade).join(
+        _q = db.session.query(Student.gender, WAECResult.grade).join(
             WAECResult, Student.id == WAECResult.student_id
-        ).filter(WAECResult.exam_year == year).all()
+        ).filter(WAECResult.exam_year == year)
+        if bid is not None:
+            _q = _q.filter(Student.branch_id == bid)
+        rows = _q.all()
         by_gender = defaultdict(list)
         for g, grade in rows:
             by_gender[g or 'Unknown'].append(grade)
@@ -1174,9 +1180,12 @@ def analytics_hub():
 
     jamb_gender_stats = []
     if year and jamb_stats:
-        rows = db.session.query(Student.gender, JAMBResult.total_score).join(
+        _q = db.session.query(Student.gender, JAMBResult.total_score).join(
             JAMBResult, Student.id == JAMBResult.student_id
-        ).filter(JAMBResult.exam_year == year).all()
+        ).filter(JAMBResult.exam_year == year)
+        if bid is not None:
+            _q = _q.filter(Student.branch_id == bid)
+        rows = _q.all()
         by_gender = defaultdict(list)
         for g, score in rows:
             by_gender[g or 'Unknown'].append(score)
@@ -1196,7 +1205,7 @@ def analytics_hub():
     projection = None
     jamb_means = []
     for jy in sorted(set(jamb_years)):
-        rs = JAMBResult.query.filter_by(exam_year=jy).all()
+        rs = scope_by_student(JAMBResult.query.filter_by(exam_year=jy), JAMBResult).all()
         if rs:
             jamb_means.append({'year': jy, 'mean_score': round(sum(r.total_score for r in rs) / len(rs), 1)})
     if len(jamb_means) >= 2:
@@ -1246,12 +1255,12 @@ def analytics_hub():
                 arm_map.setdefault(e.student_id, e.class_arm_assignment.display_name)
 
         jamb_by_arm = defaultdict(list)
-        for r in JAMBResult.query.filter_by(exam_year=year).all():
+        for r in scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).all():
             arm = arm_map.get(r.student_id)
             if arm:
                 jamb_by_arm[arm].append(r.total_score)
         waec_by_arm = defaultdict(lambda: {'pass': 0, 'total': 0})
-        for r in WAECResult.query.filter_by(exam_year=year).all():
+        for r in scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all():
             arm = arm_map.get(r.student_id)
             if arm:
                 waec_by_arm[arm]['total'] += 1
@@ -1269,7 +1278,7 @@ def analytics_hub():
             })
 
         pairs = []
-        for r in JAMBResult.query.filter_by(exam_year=year).all():
+        for r in scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).all():
             ts = TermSummary.query.filter_by(student_id=r.student_id).order_by(
                 TermSummary.term_id.desc()).first()
             if ts and ts.average_score is not None:
@@ -1315,9 +1324,10 @@ def analytics_export():
         flash('Select a year to export.', 'error')
         return redirect(url_for('results.analytics_hub'))
 
-    waec_stats = AcademicAnalytics.get_waec_school_statistics(year)
-    jamb_stats = AcademicAnalytics.get_jamb_school_statistics(year)
-    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year)
+    bid = viewing_branch_id()
+    waec_stats = AcademicAnalytics.get_waec_school_statistics(year, bid)
+    jamb_stats = AcademicAnalytics.get_jamb_school_statistics(year, bid)
+    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year, bid)
 
     wb = Workbook()
     head_font = Font(bold=True, color='FFFFFF')
@@ -1484,7 +1494,7 @@ def subject_enrolment_detail(exam, subject):
     if only_sss3:
         students = get_sss3_students()
     else:
-        students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+        students = scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
 
     matched = []
     for s in students:
@@ -1577,7 +1587,7 @@ def delete_jamb(student_id, year):
 @login_required
 def api_waec_grade_distribution(year):
     """Get WAEC grade distribution for charts"""
-    results = WAECResult.query.filter_by(exam_year=year).all()
+    results = scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all()
     distribution = {g: sum(1 for r in results if r.grade == g) for g in WAEC_GRADES}
     return jsonify(distribution)
 
@@ -1596,7 +1606,7 @@ def api_waec_subject_stats(year):
 @login_required
 def api_jamb_score_distribution(year):
     """Get JAMB score distribution for charts"""
-    results = JAMBResult.query.filter_by(exam_year=year).all()
+    results = scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).all()
     scores = [r.total_score for r in results]
     
     distribution = {
@@ -1616,7 +1626,7 @@ def api_jamb_score_distribution(year):
 @login_required
 def api_yoy_trends():
     """Get year-over-year performance trends"""
-    data = AcademicAnalytics.get_year_over_year_comparison()
+    data = AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
     return jsonify(data)
 
 
@@ -1642,7 +1652,7 @@ def api_predict_jamb(student_id):
 @login_required
 def api_waec_jamb_correlation(year):
     """Get WAEC-JAMB correlation data"""
-    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year)
+    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year, viewing_branch_id())
     return jsonify(correlation)
 
 
@@ -1650,7 +1660,7 @@ def api_waec_jamb_correlation(year):
 @login_required
 def api_top_performers(year):
     """Get top performing students"""
-    waec_stats = AcademicAnalytics.get_waec_school_statistics(year)
+    waec_stats = AcademicAnalytics.get_waec_school_statistics(year, viewing_branch_id())
     
     from utils.branch_scope import scope_by_student
     from utils.access_control import teacher_form_student_ids
@@ -1767,7 +1777,7 @@ def export_jamb():
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.jamb_list'))
     
-    results = (JAMBResult.query.filter_by(exam_year=year)
+    results = (scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
                .options(joinedload(JAMBResult.student)).join(Student)
                .order_by(JAMBResult.total_score.desc()).all())
 
