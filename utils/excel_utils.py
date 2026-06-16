@@ -216,6 +216,14 @@ def _cell_str(value):
     return s or None
 
 
+def _cap(value, max_len):
+    """Truncate a string to a column's length so a length-enforcing database
+    (PostgreSQL) never rejects an over-long value and rolls back the whole row."""
+    if value is None:
+        return None
+    return value[:max_len]
+
+
 def _parse_dob(value, errors, row_num):
     """Parse a date-of-birth cell that may be a real date or a string."""
     from datetime import date as _date
@@ -510,16 +518,20 @@ def import_student_rows(rows, db, Student, ParentContact,
             # Per-row savepoint: a bad row rolls back only itself, never the
             # rows already imported in this batch.
             with db.session.begin_nested():
+                # Cap each value to its column length. Length-enforcing
+                # databases (PostgreSQL) reject an over-long value and would
+                # otherwise roll back the whole row — e.g. a mis-shifted column
+                # that drops a long address into the 30-char religion field.
                 student = Student(
                     student_id=Student.generate_student_id(),
-                    surname=surname,
-                    first_name=first_name,
-                    middle_name=_cell_str(get(row, 'middle_name')),
-                    gender=gender,
+                    surname=_cap(surname, 50),
+                    first_name=_cap(first_name, 50),
+                    middle_name=_cap(_cell_str(get(row, 'middle_name')), 50),
+                    gender=_cap(gender, 10),
                     date_of_birth=dob,
-                    religion=_cell_str(get(row, 'religion')),
-                    home_address=_cell_str(get(row, 'address')),
-                    hobbies=_cell_str(get(row, 'hobbies')),
+                    religion=_cap(_cell_str(get(row, 'religion')), 30),
+                    home_address=_cell_str(get(row, 'address')),   # TEXT — unbounded
+                    hobbies=_cell_str(get(row, 'hobbies')),         # TEXT — unbounded
                     branch_id=branch_id,
                     is_active=True,
                 )
@@ -529,13 +541,13 @@ def import_student_rows(rows, db, Student, ParentContact,
                 # A cell may carry several phone numbers — create one contact
                 # each (first is primary), all sharing the parent name/relation.
                 # A name on its own (no phone) is dropped, as phone is required.
-                parent_name = _cell_str(get(row, 'parent_name'))
-                parent_rel = _cell_str(get(row, 'parent_rel')) or 'Guardian'
+                parent_name = _cap(_cell_str(get(row, 'parent_name')), 100)
+                parent_rel = _cap(_cell_str(get(row, 'parent_rel')) or 'Guardian', 20)
                 for i, phone in enumerate(_split_phones(get(row, 'parent_phone'))):
                     db.session.add(ParentContact(
                         student_id=student.id,
                         name=parent_name,
-                        phone_number=phone,
+                        phone_number=_cap(phone, 15),
                         relationship=parent_rel,
                         is_primary=(i == 0),
                     ))

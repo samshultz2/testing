@@ -141,6 +141,20 @@ def test_quoted_addresses_multi_phone_and_surname_only(app):
         assert ab is not None and ab.first_name == ''
 
 
+def test_overlong_values_are_capped_not_dropped(app):
+    """An over-long value (e.g. a mis-shifted column dropping a long address
+    into the 30-char religion field) must be truncated so the row still imports
+    — on a length-enforcing DB (Postgres) it would otherwise roll back."""
+    client = _admin(app)
+    long_religion = 'A Very Long Religion Value That Exceeds Thirty Characters Easily'
+    text = f'Surname, First Name, Religion\nCapped, Student, {long_religion}'
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 1
+    with app.app_context():
+        s = Student.query.filter_by(surname='Capped', first_name='Student').first()
+        assert s is not None and len(s.religion) == 30
+
+
 def test_requires_a_name_column(app):
     client = _admin(app)
     r = _post(client, text='Phone, Religion\n08012345678, Islam')
