@@ -55,9 +55,10 @@ def _capture(app, term_id):
     finally:
         template_rendered.disconnect(record, app)
     for name, ctx in recorded:
-        if name == 'finance/dashboard.html':
-            return ctx
-    raise AssertionError('finance/dashboard.html not rendered')
+        # The dashboard is now a React shell hydrated with the payload dict.
+        if name == 'finance/app.html':
+            return ctx['fin_json']
+    raise AssertionError('finance/app.html not rendered')
 
 
 def test_finance_dashboard_context(app):
@@ -76,5 +77,5 @@ def test_finance_dashboard_context(app):
     methods = {m['method']: m['amount'] for m in ctx['method_chart']}
     assert methods.get('Cash') == 5000.0
     for key in ('terms', 'selected_term', 'class_chart', 'recent', 'item_chart',
-                'trend_chart', 'expense_chart', 'recent_expenses', 'has_structure'):
+                'trend_chart', 'expense_chart', 'has_structure'):
         assert key in ctx

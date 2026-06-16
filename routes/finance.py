@@ -43,6 +43,54 @@ def _parse_date(value, default=None):
         return default or date.today()
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('finance/app.html', 'fin_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('finance.dashboard'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('finance.dashboard'))
+
+
+def _is_admin():
+    from utils.access_control import is_admin
+    return is_admin()
+
+
+def _bill_json(bill):
+    if not bill:
+        return None
+    return {'lines': [{'name': it.name, 'amount': amt} for it, amt in bill['lines']],
+            'billed': bill['billed'], 'discount': bill['discount'], 'paid': bill['paid'],
+            'payable': bill['payable'], 'balance': bill['balance'],
+            'class_id': bill['class_id'], 'arm_id': bill['arm_id']}
+
+
+def _nav_urls():
+    return {'dashboard': url_for('finance.dashboard'), 'record_payment': url_for('finance.record_payment'),
+            'payments': url_for('finance.payments_list'), 'structure': url_for('finance.structure'),
+            'items': url_for('finance.items_list'), 'expenses': url_for('finance.expenses_list'),
+            'defaulters': url_for('finance.defaulters'), 'collections': url_for('finance.collections'),
+            'reports': url_for('finance.reports')}
+
+
 def _collections_query(from_date, to_date, term_id=None):
     from utils.branch_scope import scope_query
     q = scope_query(
@@ -78,10 +126,23 @@ def collections():
     method_rows = sorted(by_method.items(), key=lambda x: x[1], reverse=True)
     day_chart = [{'label': d, 'amount': round(v, 2)} for d, v in sorted(by_day.items())]
 
-    return render_template('finance/collections.html',
-        from_date=from_date, to_date=to_date, payments=payments, total=total,
-        method_rows=method_rows, day_chart=day_chart, count=len(payments),
-        terms=Term.query.order_by(Term.id.desc()).all(), term_id=term_id)
+    return _render({
+        'page': 'collections', 'nav': _nav_urls(),
+        'from_date': from_date.isoformat(), 'to_date': to_date.isoformat(),
+        'from_label': from_date.strftime('%d %b %Y'), 'to_label': to_date.strftime('%d %b %Y'),
+        'term_id': term_id or '', 'total': total, 'count': len(payments),
+        'method_rows': [{'method': m, 'amount': round(v, 2)} for m, v in method_rows],
+        'day_chart': day_chart,
+        'payments': [{'id': p.id, 'date': p.payment_date.strftime('%d %b %Y'),
+                      'receipt_no': p.receipt_no, 'student': p.student.full_name if p.student else '—',
+                      'method': p.method, 'amount': p.amount,
+                      'receipt_url': url_for('finance.receipt', payment_id=p.id)} for p in payments],
+        'terms': [{'id': t.id, 'full_name': t.full_name or t.name} for t in
+                  Term.query.order_by(Term.id.desc()).all()],
+        'self_url': url_for('finance.collections'),
+        'export_url': url_for('finance.collections_export', **{'from': from_date.isoformat(),
+                              'to': to_date.isoformat(), 'term_id': term_id or ''}),
+    })
 
 
 @finance_bp.route('/collections/export')
@@ -137,16 +198,28 @@ def dashboard():
     expense_chart = [{'name': k, 'amount': round(v, 2)} for k, v in
                      sorted(exp['expense_breakdown'].items(), key=lambda x: x[1], reverse=True)]
 
-    return render_template('finance/dashboard.html',
-        terms=terms, term_id=term_id, selected_term=selected_term,
-        expected=fees['expected'], collected=fees['collected'], discounts=fees['discounts'],
-        payable_total=payable_total, outstanding=outstanding, rate=rate,
-        expenses=exp['expenses'], net=net,
-        enrolled=fees['enrolled'], defaulter_count=fees['defaulter_count'],
-        class_chart=class_chart, method_chart=method_chart, recent=fees['recent'],
-        item_chart=item_chart, trend_chart=trend_chart, expense_chart=expense_chart,
-        recent_expenses=exp['recent_expenses'], has_structure=(fees['expected'] > 0),
-    )
+    return _render({
+        'page': 'dashboard', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'selected_term': selected_term.full_name if selected_term else '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'expected': fees['expected'], 'collected': fees['collected'], 'discounts': fees['discounts'],
+        'payable_total': payable_total, 'outstanding': outstanding, 'rate': rate,
+        'expenses': exp['expenses'], 'net': net,
+        'enrolled': fees['enrolled'], 'defaulter_count': fees['defaulter_count'],
+        'class_chart': class_chart, 'method_chart': method_chart,
+        'item_chart': item_chart, 'trend_chart': trend_chart, 'expense_chart': expense_chart,
+        'has_structure': fees['expected'] > 0,
+        'recent': [{'id': p.id, 'date': p.payment_date.strftime('%d %b'),
+                    'student': p.student.full_name if p.student else '—', 'receipt_no': p.receipt_no,
+                    'method': p.method, 'amount': p.amount,
+                    'receipt_url': url_for('finance.receipt', payment_id=p.id)} for p in fees['recent']],
+        'urls': {'record_payment': url_for('finance.record_payment', term_id=term_id or ''),
+                 'defaulters': url_for('finance.defaulters', term_id=term_id or ''),
+                 'items': url_for('finance.items_list'),
+                 'structure': url_for('finance.structure', term_id=term_id or ''),
+                 'payments': url_for('finance.payments_list', term_id=term_id or '')},
+        'self_url': url_for('finance.dashboard'),
+    })
 
 
 def _term_fee_summary(term_id):
@@ -246,7 +319,15 @@ def _term_expense_summary(term_id):
 @login_required
 def items_list():
     items = FeeItem.query.order_by(FeeItem.is_active.desc(), FeeItem.name).all()
-    return render_template('finance/items.html', items=items)
+    return _render({
+        'page': 'items', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'items': [{'id': i.id, 'name': i.name, 'description': i.description or '',
+                   'is_active': bool(i.is_active),
+                   'edit_url': url_for('finance.edit_item', item_id=i.id),
+                   'delete_url': url_for('finance.delete_item', item_id=i.id)} for i in items],
+        'add_url': url_for('finance.add_item'),
+        'structure_url': url_for('finance.structure'),
+    })
 
 
 @finance_bp.route('/items/add', methods=['POST'])
@@ -254,15 +335,12 @@ def items_list():
 def add_item():
     name = (request.form.get('name') or '').strip()
     if not name:
-        flash('Fee item name is required.', 'error')
-        return redirect(url_for('finance.items_list'))
+        return _err('Fee item name is required.', url_for('finance.items_list'))
     if FeeItem.query.filter(func.lower(FeeItem.name) == name.lower()).first():
-        flash(f'"{name}" already exists.', 'warning')
-        return redirect(url_for('finance.items_list'))
+        return _err(f'"{name}" already exists.', url_for('finance.items_list'))
     db.session.add(FeeItem(name=name, description=(request.form.get('description') or '').strip()))
     db.session.commit()
-    flash(f'Added fee item "{name}".', 'success')
-    return redirect(url_for('finance.items_list'))
+    return _ok(f'Added fee item "{name}".', url_for('finance.items_list'))
 
 
 @finance_bp.route('/items/<int:item_id>/edit', methods=['POST'])
@@ -275,8 +353,7 @@ def edit_item(item_id):
     item.description = (request.form.get('description') or '').strip()
     item.is_active = bool(request.form.get('is_active'))
     db.session.commit()
-    flash('Fee item updated.', 'success')
-    return redirect(url_for('finance.items_list'))
+    return _ok('Fee item updated.', url_for('finance.items_list'))
 
 
 @finance_bp.route('/items/<int:item_id>/delete', methods=['POST'])
@@ -286,12 +363,12 @@ def delete_item(item_id):
     used = FeeStructure.query.filter_by(fee_item_id=item_id).count()
     if used:
         item.is_active = False
-        flash(f'"{item.name}" is used in {used} fee structure row(s); deactivated instead of deleted.', 'info')
-    else:
-        db.session.delete(item)
-        flash('Fee item deleted.', 'success')
+        db.session.commit()
+        return _ok(f'"{item.name}" is used in {used} fee structure row(s); deactivated instead of deleted.',
+                   url_for('finance.items_list'))
+    db.session.delete(item)
     db.session.commit()
-    return redirect(url_for('finance.items_list'))
+    return _ok('Fee item deleted.', url_for('finance.items_list'))
 
 
 # ============================================================================
@@ -319,10 +396,19 @@ def structure():
             current[r.fee_item_id] = r.amount
         total = sum(current.values())
 
-    return render_template('finance/structure.html',
-        terms=terms, classes=classes, arms=arms, items=items,
-        term_id=term_id, class_id=class_id, arm_id=arm_id,
-        current=current, total=total)
+    return _render({
+        'page': 'structure', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'term_id': term_id or '', 'class_id': class_id or '', 'arm_id': arm_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'arms': [{'id': a.id, 'name': a.name} for a in arms],
+        'items': [{'id': i.id, 'name': i.name, 'description': i.description or '',
+                   'amount': current.get(i.id, '')} for i in items],
+        'has_current': bool(current), 'total': total,
+        'self_url': url_for('finance.structure'), 'items_url': url_for('finance.items_list'),
+        'urls': {'save': url_for('finance.save_structure'), 'copy': url_for('finance.copy_structure'),
+                 'clear': url_for('finance.clear_structure')},
+    })
 
 
 @finance_bp.route('/structure/save', methods=['POST'])
@@ -332,8 +418,7 @@ def save_structure():
     class_id = request.form.get('class_id', type=int)
     arm_id = request.form.get('arm_id', type=int)  # None -> all arms
     if not (term_id and class_id):
-        flash('Select a term and class first.', 'error')
-        return redirect(url_for('finance.structure'))
+        return _err('Select a term and class first.', url_for('finance.structure'))
 
     items = FeeItem.query.filter_by(is_active=True).all()
     changed = 0
@@ -365,8 +450,8 @@ def save_structure():
             changed += 1
 
     db.session.commit()
-    flash(f'Fee structure saved ({changed} change(s)).', 'success')
-    return redirect(url_for('finance.structure', term_id=term_id, class_id=class_id, arm_id=arm_id or ''))
+    return _ok(f'Fee structure saved ({changed} change(s)).',
+               url_for('finance.structure', term_id=term_id, class_id=class_id, arm_id=arm_id or ''))
 
 
 @finance_bp.route('/structure/copy', methods=['POST'])
@@ -376,8 +461,7 @@ def copy_structure():
     from_term_id = request.form.get('from_term_id', type=int)
     to_term_id = request.form.get('to_term_id', type=int)
     if not (from_term_id and to_term_id) or from_term_id == to_term_id:
-        flash('Choose two different terms.', 'error')
-        return redirect(url_for('finance.structure', term_id=to_term_id))
+        return _err('Choose two different terms.', url_for('finance.structure', term_id=to_term_id or ''))
     src = FeeStructure.query.filter_by(term_id=from_term_id, is_active=True).all()
     copied = skipped = 0
     for r in src:
@@ -392,8 +476,8 @@ def copy_structure():
             fee_item_id=r.fee_item_id, amount=r.amount))
         copied += 1
     db.session.commit()
-    flash(f'Copied {copied} fee row(s); skipped {skipped} already set.', 'success')
-    return redirect(url_for('finance.structure', term_id=to_term_id))
+    return _ok(f'Copied {copied} fee row(s); skipped {skipped} already set.',
+               url_for('finance.structure', term_id=to_term_id))
 
 
 @finance_bp.route('/structure/clear', methods=['POST'])
@@ -404,13 +488,12 @@ def clear_structure():
     class_id = request.form.get('class_id', type=int)
     arm_id = request.form.get('arm_id', type=int)
     if not (term_id and class_id):
-        flash('Select a term and class first.', 'error')
-        return redirect(url_for('finance.structure'))
+        return _err('Select a term and class first.', url_for('finance.structure'))
     deleted = FeeStructure.query.filter_by(
         term_id=term_id, class_id=class_id, arm_id=arm_id).delete()
     db.session.commit()
-    flash(f'Cleared {deleted} fee row(s) for this class.', 'success')
-    return redirect(url_for('finance.structure', term_id=term_id, class_id=class_id, arm_id=arm_id or ''))
+    return _ok(f'Cleared {deleted} fee row(s) for this class.',
+               url_for('finance.structure', term_id=term_id, class_id=class_id, arm_id=arm_id or ''))
 
 
 # ============================================================================
@@ -449,9 +532,23 @@ def payments_list():
     payments = query.order_by(FeePayment.payment_date.desc(), FeePayment.id.desc()).all()
     total = sum(p.amount for p in payments)
 
-    return render_template('finance/payments.html',
-        terms=terms, classes=classes, term_id=term_id, class_id=class_id, q=q,
-        payments=payments, total=total)
+    return _render({
+        'page': 'payments', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'term_id': term_id or '', 'class_id': class_id or '', 'q': q, 'total': total,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'payments': [{'id': p.id, 'date': p.payment_date.strftime('%d %b %Y'), 'receipt_no': p.receipt_no,
+                      'student': p.student.full_name if p.student else '—',
+                      'student_id': p.student.student_id if p.student else '',
+                      'method': p.method, 'received_by': p.received_by or '—', 'amount': p.amount,
+                      'receipt_url': url_for('finance.receipt', payment_id=p.id),
+                      'edit_url': url_for('finance.edit_payment', payment_id=p.id),
+                      'delete_url': url_for('finance.delete_payment', payment_id=p.id),
+                      'statement_url': url_for('finance.statement', student_id=p.student_id, term_id=p.term_id)}
+                     for p in payments],
+        'self_url': url_for('finance.payments_list'),
+        'record_url': url_for('finance.record_payment', term_id=term_id or ''),
+    })
 
 
 @finance_bp.route('/payments/record', methods=['GET', 'POST'])
@@ -465,8 +562,8 @@ def record_payment():
         term_id = request.form.get('term_id', type=int)
         amount = request.form.get('amount', type=float)
         if not (student_id and term_id and amount and amount > 0):
-            flash('Select a student, term and a positive amount.', 'error')
-            return redirect(url_for('finance.record_payment', term_id=term_id, student_id=student_id))
+            return _err('Select a student, term and a positive amount.',
+                        url_for('finance.record_payment', term_id=term_id, student_id=student_id))
         payment = FeePayment(
             student_id=student_id,
             term_id=term_id,
@@ -489,8 +586,8 @@ def record_payment():
         log_action('finance.payment',
                    detail=f'{payment.amount:g} from {stu.full_name if stu else "—"}',
                    target=payment)
-        flash(f'Payment recorded — receipt {payment.receipt_no}.', 'success')
-        return redirect(url_for('finance.receipt', payment_id=payment.id))
+        return _ok(f'Payment recorded — receipt {payment.receipt_no}.',
+                   url_for('finance.receipt', payment_id=payment.id))
 
     terms = Term.query.order_by(Term.id.desc()).all()
     student = db.session.get(Student, student_id) if student_id else None
@@ -514,10 +611,26 @@ def record_payment():
             roster.append({'student': e.student, 'balance': b['balance'],
                            'paid': b['paid'], 'billed': b['payable']})
 
-    return render_template('finance/record_payment.html',
-        terms=terms, term_id=term_id, student=student, bill=bill,
-        assignments=assignments, assignment_id=assignment_id, roster=roster,
-        methods=PAYMENT_METHODS, today=date.today())
+    return _render({
+        'page': 'record_payment', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'methods': PAYMENT_METHODS, 'today': date.today().isoformat(),
+        'student': ({'id': student.id, 'full_name': student.full_name,
+                     'student_id': student.student_id} if student else None),
+        'bill': _bill_json(bill),
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'roster': [{'id': r['student'].id, 'full_name': r['student'].full_name,
+                    'student_id': r['student'].student_id, 'balance': r['balance'],
+                    'pick_url': url_for('finance.record_payment', student_id=r['student'].id, term_id=term_id)}
+                   for r in roster],
+        'self_url': url_for('finance.record_payment'),
+        'submit_url': url_for('finance.record_payment'),
+        'search_url': url_for('finance.search_students'),
+        'urls': {'statement': (url_for('finance.statement', student_id=student.id, term_id=term_id) if student else ''),
+                 'structure': (url_for('finance.structure', term_id=term_id, class_id=bill['class_id']) if bill else ''),
+                 'change_student': url_for('finance.record_payment', term_id=term_id or '', assignment_id=assignment_id or '')},
+    })
 
 
 @finance_bp.route('/payments/search')
@@ -600,8 +713,7 @@ def edit_payment(payment_id):
     if request.method == 'POST':
         amount = request.form.get('amount', type=float)
         if not amount or amount <= 0:
-            flash('Enter a positive amount.', 'error')
-            return redirect(url_for('finance.edit_payment', payment_id=payment_id))
+            return _err('Enter a positive amount.', url_for('finance.edit_payment', payment_id=payment_id))
         payment.amount = amount
         payment.payment_date = _parse_date(request.form.get('payment_date'), payment.payment_date)
         payment.method = request.form.get('method') or payment.method
@@ -611,13 +723,25 @@ def edit_payment(payment_id):
         db.session.commit()
         from utils.audit import log_action
         log_action('finance.payment_edit', detail=f'{payment.amount:g}', target=payment)
-        flash(f'Payment {payment.receipt_no} updated.', 'success')
-        return redirect(url_for('finance.receipt', payment_id=payment.id))
+        return _ok(f'Payment {payment.receipt_no} updated.',
+                   url_for('finance.receipt', payment_id=payment.id))
 
-    terms = Term.query.order_by(Term.id.desc()).all()
     bill = student_bill(payment.student_id, payment.term_id)
-    return render_template('finance/edit_payment.html',
-        payment=payment, bill=bill, terms=terms, methods=PAYMENT_METHODS)
+    return _render({
+        'page': 'edit_payment', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'methods': PAYMENT_METHODS, 'bill': _bill_json(bill),
+        'payment': {'id': payment.id, 'amount': payment.amount, 'method': payment.method,
+                    'payment_date': payment.payment_date.isoformat() if payment.payment_date else '',
+                    'reference': payment.reference or '', 'received_by': payment.received_by or '',
+                    'notes': payment.notes or '', 'receipt_no': payment.receipt_no,
+                    'term_id': payment.term_id, 'term': payment.term.full_name if payment.term else '',
+                    'student': payment.student.full_name if payment.student else '—',
+                    'student_id_label': payment.student.student_id if payment.student else ''},
+        'submit_url': url_for('finance.edit_payment', payment_id=payment.id),
+        'receipt_url': url_for('finance.receipt', payment_id=payment.id),
+        'delete_url': url_for('finance.delete_payment', payment_id=payment.id),
+        'payments_url': url_for('finance.payments_list', term_id=payment.term_id),
+    })
 
 
 @finance_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
@@ -631,8 +755,7 @@ def delete_payment(payment_id):
                target_type='feepayment', target_id=payment.id, target_label=payment.receipt_no)
     db.session.delete(payment)
     db.session.commit()
-    flash('Payment deleted.', 'success')
-    return redirect(url_for('finance.payments_list', term_id=term_id))
+    return _ok('Payment deleted.', url_for('finance.payments_list', term_id=term_id))
 
 
 # ============================================================================
@@ -652,10 +775,27 @@ def statement(student_id):
     discounts = (FeeDiscount.query.filter_by(student_id=student_id, term_id=term_id)
                  .order_by(FeeDiscount.created_at).all()) if term_id else []
     from utils import payments as pay_gw
-    return render_template('finance/statement.html',
-        student=student, terms=terms, term_id=term_id, bill=bill,
-        payments=payments, discounts=discounts,
-        pay_enabled=pay_gw.is_configured(), paylink=request.args.get('paylink'))
+    return _render({
+        'page': 'statement', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'term_id': term_id or '', 'paylink': request.args.get('paylink') or '',
+        'pay_enabled': pay_gw.is_configured(),
+        'student': {'id': student.id, 'full_name': student.full_name,
+                    'student_id': student.student_id, 'gender': student.gender or ''},
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'bill': _bill_json(bill),
+        'payments': [{'id': p.id, 'date': p.payment_date.strftime('%d %b %Y'), 'receipt_no': p.receipt_no,
+                      'method': p.method, 'amount': p.amount,
+                      'receipt_url': url_for('finance.receipt', payment_id=p.id),
+                      'edit_url': url_for('finance.edit_payment', payment_id=p.id)} for p in payments],
+        'discounts': [{'id': d.id, 'reason': d.reason or '', 'amount': d.amount,
+                       'edit_url': url_for('finance.edit_discount', discount_id=d.id),
+                       'delete_url': url_for('finance.delete_discount', discount_id=d.id)} for d in discounts],
+        'self_url': url_for('finance.statement', student_id=student.id),
+        'urls': {'record_payment': url_for('finance.record_payment', student_id=student.id, term_id=term_id or ''),
+                 'payment_link': url_for('finance.payment_link', student_id=student.id),
+                 'add_discount': url_for('finance.add_discount')},
+        'student_id': student.id,
+    })
 
 
 @finance_bp.route('/students/<int:student_id>/payment-link', methods=['POST'])
@@ -667,23 +807,23 @@ def payment_link(student_id):
     require_branch_access(student.branch_id)   # no cross-branch payment links
     term_id = request.form.get('term_id', type=int) or _active_term_id()
     if not pay_gw.is_configured():
-        flash('Online payment is not configured (set Paystack keys).', 'error')
-        return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+        return _err('Online payment is not configured (set Paystack keys).',
+                    url_for('finance.statement', student_id=student_id, term_id=term_id))
     bill = student_bill(student_id, term_id) if term_id else None
     amount = request.form.get('amount', type=float) or (bill['balance'] if bill else 0)
     if not term_id or amount <= 0:
-        flash('No outstanding balance to collect.', 'info')
-        return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+        return _err('No outstanding balance to collect.',
+                    url_for('finance.statement', student_id=student_id, term_id=term_id))
     res = pay_gw.initialize(
         email=request.form.get('email') or '', amount_naira=amount,
         reference=pay_gw.new_reference('STF'),
         callback_url=url_for('parent.pay_callback', _external=True),
         metadata={'student_id': student_id, 'term_id': term_id})
     if res.get('ok'):
-        return redirect(url_for('finance.statement', student_id=student_id,
-                                term_id=term_id, paylink=res['authorization_url']))
-    flash(res.get('error', 'Could not create payment link.'), 'error')
-    return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+        return _ok('Payment link created.', url_for('finance.statement', student_id=student_id,
+                   term_id=term_id, paylink=res['authorization_url']))
+    return _err(res.get('error', 'Could not create payment link.'),
+                url_for('finance.statement', student_id=student_id, term_id=term_id))
 
 
 @finance_bp.route('/discounts/add', methods=['POST'])
@@ -693,14 +833,14 @@ def add_discount():
     term_id = request.form.get('term_id', type=int)
     amount = request.form.get('amount', type=float)
     if not (student_id and term_id and amount and amount > 0):
-        flash('A student, term and positive amount are required.', 'error')
-        return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+        return _err('A student, term and positive amount are required.',
+                    url_for('finance.statement', student_id=student_id, term_id=term_id))
     db.session.add(FeeDiscount(
         student_id=student_id, term_id=term_id, amount=amount,
         reason=(request.form.get('reason') or '').strip() or None))
     db.session.commit()
-    flash('Discount / waiver applied.', 'success')
-    return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+    return _ok('Discount / waiver applied.',
+               url_for('finance.statement', student_id=student_id, term_id=term_id))
 
 
 @finance_bp.route('/discounts/<int:discount_id>/edit', methods=['POST'])
@@ -709,13 +849,12 @@ def edit_discount(discount_id):
     d = db.get_or_404(FeeDiscount, discount_id)
     amount = request.form.get('amount', type=float)
     if not amount or amount <= 0:
-        flash('Enter a positive amount.', 'error')
-    else:
-        d.amount = amount
-        d.reason = (request.form.get('reason') or '').strip() or None
-        db.session.commit()
-        flash('Discount updated.', 'success')
-    return redirect(url_for('finance.statement', student_id=d.student_id, term_id=d.term_id))
+        return _err('Enter a positive amount.',
+                    url_for('finance.statement', student_id=d.student_id, term_id=d.term_id))
+    d.amount = amount
+    d.reason = (request.form.get('reason') or '').strip() or None
+    db.session.commit()
+    return _ok('Discount updated.', url_for('finance.statement', student_id=d.student_id, term_id=d.term_id))
 
 
 @finance_bp.route('/discounts/<int:discount_id>/delete', methods=['POST'])
@@ -725,8 +864,7 @@ def delete_discount(discount_id):
     student_id, term_id = d.student_id, d.term_id
     db.session.delete(d)
     db.session.commit()
-    flash('Discount removed.', 'success')
-    return redirect(url_for('finance.statement', student_id=student_id, term_id=term_id))
+    return _ok('Discount removed.', url_for('finance.statement', student_id=student_id, term_id=term_id))
 
 
 # ============================================================================
@@ -785,9 +923,20 @@ def defaulters():
                 totals['balance'] += balance
         rows.sort(key=lambda r: r['balance'], reverse=True)
 
-    return render_template('finance/defaulters.html',
-        terms=terms, classes=classes, term_id=term_id, class_id=class_id,
-        rows=rows, totals=totals)
+    return _render({
+        'page': 'defaulters', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'class_id': class_id or '', 'totals': totals,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'rows': [{'student': r['student'].full_name, 'student_id': r['student'].student_id,
+                  'class_name': r['class_name'], 'arm_name': r['arm_name'],
+                  'billed': r['billed'], 'paid': r['paid'], 'balance': r['balance'],
+                  'statement_url': url_for('finance.statement', student_id=r['student'].id, term_id=term_id),
+                  'record_url': url_for('finance.record_payment', student_id=r['student'].id, term_id=term_id)}
+                 for r in rows],
+        'self_url': url_for('finance.defaulters'),
+        'message_url': url_for('comms.compose', audience='defaulters', class_id=class_id or '', term_id=term_id or ''),
+    })
 
 
 # ============================================================================
@@ -818,10 +967,24 @@ def expenses_list():
         by_cat[cat] = by_cat.get(cat, 0.0) + e.amount
     cat_summary = sorted(by_cat.items(), key=lambda x: x[1], reverse=True)
 
-    return render_template('finance/expenses.html',
-        terms=terms, categories=categories, term_id=term_id, category_id=category_id,
-        expenses=expenses, total=total, cat_summary=cat_summary,
-        methods=PAYMENT_METHODS, today=date.today())
+    return _render({
+        'page': 'expenses', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'term_id': term_id or '', 'category_id': category_id or '', 'total': total,
+        'today': date.today().isoformat(), 'methods': PAYMENT_METHODS,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'categories': [{'id': c.id, 'name': c.name,
+                        'delete_url': url_for('finance.delete_expense_category', category_id=c.id)}
+                       for c in categories],
+        'cat_summary': [{'name': n, 'amount': v} for n, v in cat_summary],
+        'expenses': [{'id': e.id, 'date': e.expense_date.strftime('%d %b %Y'),
+                      'expense_date': e.expense_date.isoformat() if e.expense_date else '',
+                      'category': e.category.name if e.category else '', 'category_id': e.category_id or '',
+                      'description': e.description, 'payee': e.payee or '', 'method': e.method, 'amount': e.amount,
+                      'edit_url': url_for('finance.edit_expense', expense_id=e.id),
+                      'delete_url': url_for('finance.delete_expense', expense_id=e.id)} for e in expenses],
+        'self_url': url_for('finance.expenses_list'), 'reports_url': url_for('finance.reports', term_id=term_id or ''),
+        'urls': {'add': url_for('finance.add_expense'), 'add_category': url_for('finance.add_expense_category')},
+    })
 
 
 @finance_bp.route('/expenses/add', methods=['POST'])
@@ -831,8 +994,8 @@ def add_expense():
     description = (request.form.get('description') or '').strip()
     amount = request.form.get('amount', type=float)
     if not (description and amount and amount > 0):
-        flash('A description and positive amount are required.', 'error')
-        return redirect(url_for('finance.expenses_list', term_id=term_id))
+        return _err('A description and positive amount are required.',
+                    url_for('finance.expenses_list', term_id=term_id or ''))
     from utils.branch_scope import branch_for_new
     db.session.add(Expense(
         term_id=term_id or None,
@@ -850,8 +1013,7 @@ def add_expense():
     from utils.audit import log_action
     log_action('finance.expense', detail=f'{amount:g} — {description}',
                target_type='expense', target_label=description)
-    flash('Expense recorded.', 'success')
-    return redirect(url_for('finance.expenses_list', term_id=term_id))
+    return _ok('Expense recorded.', url_for('finance.expenses_list', term_id=term_id or ''))
 
 
 @finance_bp.route('/expenses/<int:expense_id>/edit', methods=['POST'])
@@ -863,8 +1025,8 @@ def edit_expense(expense_id):
     amount = request.form.get('amount', type=float)
     description = (request.form.get('description') or '').strip()
     if not (description and amount and amount > 0):
-        flash('A description and positive amount are required.', 'error')
-        return redirect(url_for('finance.expenses_list', term_id=e.term_id))
+        return _err('A description and positive amount are required.',
+                    url_for('finance.expenses_list', term_id=e.term_id or ''))
     e.description = description
     e.amount = amount
     e.category_id = request.form.get('category_id', type=int) or None
@@ -877,8 +1039,7 @@ def edit_expense(expense_id):
     from utils.audit import log_action
     log_action('finance.expense_edit', detail=f'{amount:g} — {description}',
                target_type='expense', target_id=e.id, target_label=description)
-    flash('Expense updated.', 'success')
-    return redirect(url_for('finance.expenses_list', term_id=e.term_id))
+    return _ok('Expense updated.', url_for('finance.expenses_list', term_id=e.term_id or ''))
 
 
 @finance_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
@@ -892,19 +1053,20 @@ def delete_expense(expense_id):
                target_type='expense', target_id=e.id, target_label=e.description)
     db.session.delete(e)
     db.session.commit()
-    flash('Expense deleted.', 'success')
-    return redirect(url_for('finance.expenses_list', term_id=term_id))
+    return _ok('Expense deleted.', url_for('finance.expenses_list', term_id=term_id or ''))
 
 
 @finance_bp.route('/expense-categories/add', methods=['POST'])
 @admin_required
 def add_expense_category():
     name = (request.form.get('name') or '').strip()
-    if name and not ExpenseCategory.query.filter(func.lower(ExpenseCategory.name) == name.lower()).first():
-        db.session.add(ExpenseCategory(name=name))
-        db.session.commit()
-        flash(f'Added category "{name}".', 'success')
-    return redirect(url_for('finance.expenses_list'))
+    if not name:
+        return _err('Enter a category name.', url_for('finance.expenses_list'))
+    if ExpenseCategory.query.filter(func.lower(ExpenseCategory.name) == name.lower()).first():
+        return _err(f'Category "{name}" already exists.', url_for('finance.expenses_list'))
+    db.session.add(ExpenseCategory(name=name))
+    db.session.commit()
+    return _ok(f'Added category "{name}".', url_for('finance.expenses_list'))
 
 
 @finance_bp.route('/expense-categories/<int:category_id>/delete', methods=['POST'])
@@ -913,12 +1075,11 @@ def delete_expense_category(category_id):
     cat = db.get_or_404(ExpenseCategory, category_id)
     if Expense.query.filter_by(category_id=category_id).count():
         cat.is_active = False
-        flash('Category is in use; deactivated instead of deleted.', 'info')
-    else:
-        db.session.delete(cat)
-        flash('Category deleted.', 'success')
+        db.session.commit()
+        return _ok('Category is in use; deactivated instead of deleted.', url_for('finance.expenses_list'))
+    db.session.delete(cat)
     db.session.commit()
-    return redirect(url_for('finance.expenses_list'))
+    return _ok('Category deleted.', url_for('finance.expenses_list'))
 
 
 # ============================================================================
@@ -993,12 +1154,18 @@ def reports():
                        .filter(FeePayment.term_id == term_id), FeePayment)
                        .group_by(FeePayment.method).all())
 
-    return render_template('finance/reports.html',
-        terms=terms, term_id=term_id, selected_term=selected_term,
-        expected=expected, payable=payable, collected=collected, discounts=discounts,
-        outstanding=payable - collected, expenses=expenses, net=collected - expenses,
-        rate=round(collected / payable * 100, 1) if payable > 0 else 0.0,
-        class_rows=class_rows, item_breakdown=item_breakdown, method_rows=method_rows)
+    return _render({
+        'page': 'reports', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'selected_term': selected_term.full_name if selected_term else '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'expected': expected, 'payable': payable, 'collected': collected, 'discounts': discounts,
+        'outstanding': payable - collected, 'expenses': expenses, 'net': collected - expenses,
+        'rate': round(collected / payable * 100, 1) if payable > 0 else 0.0,
+        'class_rows': class_rows, 'item_breakdown': item_breakdown,
+        'method_rows': [{'method': m, 'amount': amt, 'count': cnt} for m, amt, cnt in method_rows],
+        'self_url': url_for('finance.reports'),
+        'export_url': url_for('finance.export_report', term_id=term_id) if term_id else '',
+    })
 
 
 @finance_bp.route('/reports/export')

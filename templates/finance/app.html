@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% set _t = {'dashboard':'Finance & Fees','collections':'Collections','items':'Fee Items','structure':'Fee Structure','payments':'Payments','record_payment':'Record Payment','statement':'Fee Statement','defaulters':'Outstanding Fees','expenses':'Expenses','reports':'Finance Reports','edit_payment':'Edit Payment'} %}
+{% block title %}{{ _t.get(fin_json.page,'Finance') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if fin_json.page == 'dashboard' %}<span>Finance</span>
+{% else %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>{{ _t.get(fin_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
+.fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.fin-tab i{font-size:.85rem;opacity:.8}
+.fin-tab:hover{color:var(--primary);background:var(--gray-50)}
+.fin-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+/* dashboard */
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}.kpi-row.kpi-6{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1100px){.kpi-row.kpi-6{grid-template-columns:repeat(6,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
+.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
+.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
+.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
+.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
+.kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
+.kpi .ic.teal{background:linear-gradient(135deg,#11998e,#0b6b63)}
+.kpi .ic.orange{background:linear-gradient(135deg,#fd7e14,#c75e00)}
+.kpi .v{font-size:1.35rem;font-weight:700;line-height:1.1;font-family:var(--font-display)}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.fin-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:992px){.fin-grid.split{grid-template-columns:1.4fr 1fr}.fin-grid.c2{grid-template-columns:1fr 1fr}.fin-grid.c3{grid-template-columns:repeat(3,1fr)}}
+.widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
+.widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.45rem}
+.widget .wh h3 i{color:var(--primary)}
+.widget .wb{padding:1rem}
+.chart-box{position:relative;height:240px}
+.progress-wrap{height:10px;background:var(--gray-100);border-radius:var(--radius-full);overflow:hidden;margin-top:.5rem}
+.progress-wrap .bar{height:100%;background:linear-gradient(90deg,var(--primary),#38ef7d);border-radius:var(--radius-full)}
+.fin-steps .card-header{display:flex;justify-content:space-between;align-items:center}
+.fin-steps .card-header .fa-chevron-down{transition:transform .2s;color:var(--text-muted)}
+.fin-steps.is-collapsed .fin-steps-body{display:none}
+.fin-steps.is-collapsed .card-header .fa-chevron-down{transform:rotate(-90deg)}
+.steps-row{display:flex;align-items:stretch;gap:.5rem;flex-wrap:wrap}
+.step{flex:1;min-width:200px;display:flex;gap:.7rem;align-items:flex-start;padding:.8rem;border:1px solid var(--border-color);border-radius:var(--radius-md);text-decoration:none;color:inherit;transition:box-shadow var(--transition),transform var(--transition)}
+.step:hover{box-shadow:var(--shadow-sm);transform:translateY(-2px);border-color:var(--primary)}
+.step-n{width:28px;height:28px;flex-shrink:0;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
+.step-t{display:flex;flex-direction:column;gap:.15rem}
+.step-arrow{align-self:center;color:var(--text-muted)}
+@media(max-width:700px){.step-arrow{display:none}}
+/* structure */
+.fee-rows{display:flex;flex-direction:column}
+.fee-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.7rem .25rem;border-bottom:1px solid var(--border-light);flex-wrap:wrap}
+.fee-row:last-child{border-bottom:none}
+.fee-name{flex:1;min-width:160px;margin:0}
+.fee-amt{display:flex;align-items:center;gap:.4rem}
+.fee-cur{color:var(--text-muted);font-weight:600}
+.fee-amt .form-control{width:150px;text-align:right;font-variant-numeric:tabular-nums}
+@media(max-width:420px){.fee-amt{width:100%}.fee-amt .form-control{width:100%}}
+/* record payment */
+.ac-wrap{position:relative}
+.ac-list{position:absolute;z-index:30;left:0;right:0;top:100%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);box-shadow:var(--shadow-md);max-height:260px;overflow:auto}
+.ac-list div{padding:.6rem .8rem;cursor:pointer;font-size:.9rem;border-bottom:1px solid var(--border-light)}
+.ac-list div:last-child{border-bottom:none}
+.ac-list div:hover,.ac-list div.sel{background:var(--gray-50)}
+.ac-list .sid{color:var(--text-muted);font-size:.78rem}
+.roster{display:flex;flex-direction:column;gap:.5rem}
+.roster-item{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.7rem .85rem;border:1px solid var(--border-color);border-radius:var(--radius-md);text-decoration:none;color:inherit}
+.roster-item .who{flex:1;min-width:140px}
+.roster-item .who .nm{font-weight:600}
+.roster-item .who .sid{font-size:.78rem;color:var(--text-muted)}
+.roster-item .bal{font-weight:700;white-space:nowrap}
+.pay-grid{display:grid;grid-template-columns:1fr;gap:1rem;align-items:start}
+@media(min-width:860px){.pay-grid{grid-template-columns:340px 1fr}}
+.bill-line{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px solid var(--border-light)}
+.bill-line span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
+.bill-line.total{font-weight:700;border-top:2px solid var(--border-color);border-bottom:none;margin-top:.3rem;padding-top:.6rem}
+.pay-fields{display:grid;grid-template-columns:1fr;gap:.85rem}
+@media(min-width:520px){.pay-fields.two{grid-template-columns:1fr 1fr}}
+.seg{display:inline-flex;border:1px solid var(--border-color);border-radius:var(--radius-full);overflow:hidden;margin-bottom:1rem}
+.seg button{border:none;background:transparent;padding:.5rem 1rem;font-size:.85rem;font-weight:600;color:var(--text-secondary);cursor:pointer}
+.seg button.active{background:var(--primary);color:#fff}
+/* collections */
+.sum-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1rem}
+@media(min-width:768px){.sum-cards{grid-template-columns:repeat(3,1fr)}}
+.sum-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem}
+.sum-card .v{font-size:1.4rem;font-weight:700;font-family:var(--font-display)}
+.sum-card .l{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em}
+/* expenses */
+.chip-row{display:flex;flex-wrap:wrap;gap:.5rem}
+.chip{background:var(--gray-100);border-radius:var(--radius-full);padding:.35rem .75rem;font-size:.8rem;font-weight:600}
+.chip span{color:var(--text-muted);font-weight:500}
+.exp-fields{display:grid;grid-template-columns:1fr;gap:.75rem}
+@media(min-width:640px){.exp-fields{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:992px){.exp-fields{grid-template-columns:repeat(3,1fr)}}
+/* reports */
+.pl{max-width:520px}
+.pl-row{display:flex;justify-content:space-between;gap:1rem;padding:.55rem 0;border-bottom:1px solid var(--border-light)}
+.pl-row span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pl-row.total{font-weight:700;border-top:2px solid var(--border-color);border-bottom:none;margin-top:.3rem;padding-top:.6rem;font-size:1.05rem}
+.pl-row .pos{color:var(--success)} .pl-row .neg{color:var(--danger)}
+.two-col{display:grid;grid-template-columns:1fr;gap:1rem;align-items:start}
+@media(min-width:900px){.two-col{grid-template-columns:1fr 1fr}}
+</style>
+{% endblock %}
+{% block content %}
+<div id="fin-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="fin-data">{{ fin_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/react/finance-app.js') }}" defer></script>
+{% endblock %}
