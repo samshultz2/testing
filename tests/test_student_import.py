@@ -61,6 +61,23 @@ def test_only_surname_and_first_name(app):
         assert s is not None and s.gender == 'Unknown'   # no gender column -> defaulted
 
 
+def test_same_name_no_dob_different_address_both_import(app):
+    """Two genuinely different students sharing a name but with no DOB must NOT
+    be merged by the duplicate guard — the home address disambiguates them.
+    A true re-import (same name + same address) is still skipped."""
+    client = _admin(app)
+    text = ('Surname, First Name, Address\n'
+            'Bello, Musa, "12 Allen Avenue"\n'
+            'Bello, Musa, "7 Lekki Phase 1"')
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 2   # both kept, not collapsed
+    with app.app_context():
+        assert Student.query.filter_by(surname='Bello', first_name='Musa').count() == 2
+    # Re-importing the exact same list creates nobody new.
+    res2 = _post(client, text=text, commit='1').get_json()
+    assert res2['ok'] and res2['created'] == 0
+
+
 def test_tab_separated_with_phone_creates_contact(app):
     client = _admin(app)
     text = 'Surname\tFirst Name\tParent Phone\nJohnson\tMary\t8099887766'

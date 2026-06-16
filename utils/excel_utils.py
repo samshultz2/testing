@@ -262,11 +262,19 @@ def _normalise_gender(value):
     return None
 
 
-def _dup_key(surname, first_name, dob):
-    """Identity key for duplicate detection: name (case-insensitive) + DOB."""
+def _dup_key(surname, first_name, dob, extra=''):
+    """Identity key for duplicate detection.
+
+    Name + date of birth is the primary key. When the sheet has **no date of
+    birth** (common for hand-typed registers), the name alone is not a reliable
+    identity — two different students often share a name — so we add the home
+    address as a discriminator. That way distinct same-name students still
+    import, while a true re-import (same name + same address) is still skipped.
+    """
     return ((surname or '').strip().lower(),
             (first_name or '').strip().lower(),
-            dob)
+            dob,
+            extra if dob is None else '')
 
 
 def _rows_from_xlsx(file_stream):
@@ -453,9 +461,10 @@ def import_student_rows(rows, db, Student, ParentContact,
         q = Student.query
         if branch_id is not None:
             q = q.filter(Student.branch_id == branch_id)
-        for sn, fn, d in q.with_entities(
-                Student.surname, Student.first_name, Student.date_of_birth):
-            seen_keys.add(_dup_key(sn, fn, d))
+        for sn, fn, d, addr in q.with_entities(
+                Student.surname, Student.first_name, Student.date_of_birth,
+                Student.home_address):
+            seen_keys.add(_dup_key(sn, fn, d, (addr or '').strip().lower()))
 
     gender_defaulted = 0
     duplicates_skipped = 0
@@ -478,9 +487,10 @@ def import_student_rows(rows, db, Student, ParentContact,
             first_name = first_name or ''
 
         dob = _parse_dob(get(row, 'dob'), errors, row_num)
+        address = _cell_str(get(row, 'address'))
 
         if skip_duplicates:
-            key = _dup_key(surname, first_name, dob)
+            key = _dup_key(surname, first_name, dob, (address or '').strip().lower())
             if key in seen_keys:
                 duplicates_skipped += 1
                 errors.append(
