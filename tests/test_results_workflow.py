@@ -84,8 +84,10 @@ def test_workflow_page(app):
     ids = _setup(app)
     c = _admin(app)
     html = c.get(f'/subjects/workflow?term_id={ids["term"]}&assignment_id={ids["asg"]}').get_data(as_text=True)
-    assert 'Results Workflow' in html
-    assert 'Scores entered' in html and 'Comments entered' in html and 'Behaviour rated' in html
+    # Workflow is now a React shell hydrated with the step checklist payload.
+    assert 'subj-app' in html and '"page": "workflow"' in html
+    for key in ('scores_entered', 'scores_expected', 'comments', 'behaviour', 'positions'):
+        assert f'"{key}"' in html
 
 
 def test_bulk_entry_rejects_above_max(app):

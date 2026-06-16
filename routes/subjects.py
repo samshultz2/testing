@@ -503,13 +503,27 @@ def scores_entry():
         if override:
             max_score = override.max_score
     
-    return render_template('subjects/scores.html',
-        terms=terms, term_id=term_id, selected_term=selected_term,
-        assignments=assignments, assignment_id=assignment_id, selected_assignment=selected_assignment,
-        class_subjects=class_subjects, class_subject_id=class_subject_id, selected_class_subject=selected_class_subject,
-        assessment_types=assessment_types, assessment_type_id=assessment_type_id, selected_assessment=selected_assessment,
-        students_data=students_data, max_score=max_score
-    )
+    return _render({
+        'page': 'scores', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'class_subject_id': class_subject_id or '', 'assessment_type_id': assessment_type_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'class_subjects': [{'id': cs.id, 'subject_name': cs.subject.name} for cs in class_subjects],
+        'assessment_types': [{'id': at.id, 'name': at.name, 'max_score': at.max_score} for at in assessment_types],
+        'selected_subject': selected_class_subject.subject.name if selected_class_subject else '',
+        'selected_assessment': selected_assessment.name if selected_assessment else '',
+        'max_score': max_score,
+        'has_selection': bool(selected_assignment and selected_class_subject and selected_assessment),
+        'students_data': [{'id': it['student'].id, 'full_name': it['student'].full_name,
+                           'gender': it['student'].gender or '',
+                           'score': it['score'] if it['score'] is not None else ''}
+                          for it in students_data],
+        'self_url': url_for('subjects.scores_entry'),
+        'save_url': url_for('subjects.save_scores'),
+        'urls': {'scan': url_for('subjects.scoresheet_scan', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
+                 'import': url_for('subjects.import_scores', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or '')},
+    })
 
 
 @subjects_bp.route('/scores/save', methods=['POST'])
@@ -576,15 +590,14 @@ def save_scores():
         msg = f'{saved} scores saved!'
         if rejected:
             msg += f' {rejected} skipped (above the {max_score:g} maximum).'
-        flash(msg, 'success' if not rejected else 'warning')
+        return _ok(msg, url_for('subjects.scores_entry',
+            term_id=term_id, assignment_id=assignment_id,
+            class_subject_id=class_subject_id, assessment_type_id=assessment_type_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('subjects.scores_entry',
-        term_id=term_id, assignment_id=assignment_id,
-        class_subject_id=class_subject_id, assessment_type_id=assessment_type_id
-    ))
+        return _err(f'Error: {str(e)}', url_for('subjects.scores_entry',
+            term_id=term_id, assignment_id=assignment_id,
+            class_subject_id=class_subject_id, assessment_type_id=assessment_type_id))
 
 
 # ============================================================================
@@ -635,9 +648,25 @@ def workflow():
             'behaviour': sum(1 for t in ts_rows if t.affective),
         }
     selected_term = db.session.get(Term, term_id) if term_id else None
-    return render_template('subjects/workflow.html', terms=terms, term_id=term_id,
-        assignments=assignments, assignment_id=assignment_id, selected=selected,
-        steps=steps, published=bool(selected_term and selected_term.results_published))
+    return _render({
+        'page': 'workflow', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'steps': steps, 'published': bool(selected_term and selected_term.results_published),
+        'self_url': url_for('subjects.workflow'),
+        'urls': {
+            'class_subjects': url_for('subjects.class_subjects_list'),
+            'enrol': url_for('academics.assignments_list'),
+            'bulk_entry': url_for('subjects.bulk_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
+            'broadsheet': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
+            'comments': url_for('subjects.comments', term_id=term_id or '', assignment_id=assignment_id or ''),
+            'affective': url_for('subjects.affective', term_id=term_id or '', assignment_id=assignment_id or ''),
+            'compute': url_for('subjects.compute_summaries'),
+            'print_all': url_for('subjects.print_all_report_cards', term_id=term_id or '', assignment_id=assignment_id or ''),
+            'publish': url_for('scratchcards.publish', term_id=term_id) if term_id else '',
+        },
+    })
 
 
 @subjects_bp.route('/bulk-entry', methods=['GET', 'POST'])
@@ -705,8 +734,7 @@ def bulk_entry():
         msg = f'Saved — {changed} change(s).'
         if rejected:
             msg += f' {rejected} skipped (above the subject maximum).'
-        flash(msg, 'success' if not rejected else 'warning')
-        return redirect(url_for('subjects.bulk_entry', term_id=term_id, assignment_id=assignment_id))
+        return _ok(msg, url_for('subjects.bulk_entry', term_id=term_id, assignment_id=assignment_id))
 
     scores = {}
     if selected and class_subjects and enrollments:
@@ -716,10 +744,21 @@ def bulk_entry():
                                            StudentScore.class_subject_id.in_(cs_ids)).all():
             scores[(s.student_id, s.class_subject_id, s.assessment_type_id)] = s.score
 
-    return render_template('subjects/bulk_entry.html', terms=terms, term_id=term_id,
-        assignments=assignments, assignment_id=assignment_id, selected=selected,
-        class_subjects=class_subjects, assessment_types=assessment_types,
-        enrollments=[e.student for e in enrollments], scores=scores)
+    students = [e.student for e in enrollments]
+    return _render({
+        'page': 'bulk_entry', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'has_grid': bool(selected and class_subjects and enrollments),
+        'class_subjects': [{'id': cs.id, 'subject_name': cs.subject.name} for cs in class_subjects],
+        'assessment_types': [{'id': at.id, 'name': at.name, 'short_name': at.short_name or at.name,
+                              'max_score': at.max_score} for at in assessment_types],
+        'students': [{'id': s.id, 'full_name': s.full_name} for s in students],
+        'scores': {f'{sid}_{csid}_{atid}': v for (sid, csid, atid), v in scores.items()},
+        'self_url': url_for('subjects.bulk_entry'), 'submit_url': url_for('subjects.bulk_entry'),
+        'broadsheet_url': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
+    })
 
 
 @subjects_bp.route('/broadsheet')
@@ -825,12 +864,30 @@ def broadsheet():
         for i, row in enumerate(broadsheet_data):
             row['position'] = i + 1
     
-    return render_template('subjects/broadsheet.html',
-        terms=terms, term_id=term_id, selected_term=selected_term,
-        assignments=assignments, assignment_id=assignment_id, selected_assignment=selected_assignment,
-        class_subjects=class_subjects, assessment_types=assessment_types,
-        broadsheet_data=broadsheet_data
-    )
+    return _render({
+        'page': 'broadsheet', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'selected_assignment': selected_assignment.display_name if selected_assignment else '',
+        'has_selection': bool(selected_assignment),
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'class_subjects': [{'id': cs.id, 'short': cs.subject.short_name or cs.subject.name[:3],
+                            'name': cs.subject.name} for cs in class_subjects],
+        'rows': [{'position': r['position'], 'student': r['student'].full_name,
+                  'subjects': {str(cs.id): (round(r['subjects'].get(cs.id, {}).get('total', 0), 1)
+                                            if r['subjects'].get(cs.id, {}).get('total') else None)
+                               for cs in class_subjects},
+                  'total': round(r['total'], 1), 'average': r['average'],
+                  'passed': r['subjects_passed'], 'failed': r['subjects_failed']}
+                 for r in broadsheet_data],
+        'self_url': url_for('subjects.broadsheet'),
+        'urls': {'compute': url_for('subjects.compute_summaries'),
+                 'bulk_entry': url_for('subjects.bulk_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'affective': url_for('subjects.affective', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'comments': url_for('subjects.comments', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'export': url_for('subjects.export_broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or '')},
+    })
 
 
 @subjects_bp.route('/broadsheet/compute', methods=['POST'])
@@ -841,15 +898,14 @@ def compute_summaries():
     assignment_id = request.form.get('assignment_id', type=int)
     asg = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     if not (term_id and asg):
-        flash('Select a term and class first.', 'error')
-        return redirect(url_for('subjects.broadsheet'))
+        return _err('Select a term and class first.', url_for('subjects.broadsheet'))
     from utils.report_card import compute_term_summaries
     from utils.audit import log_action
     count = compute_term_summaries(term_id, asg.class_id)
     log_action('results.compute_summaries',
                detail=f'term {term_id}, class {asg.class_id}: {count} student(s)')
-    flash(f'Computed results and positions for {count} student(s).', 'success')
-    return redirect(url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))
+    return _ok(f'Computed results and positions for {count} student(s).',
+               url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])
@@ -887,8 +943,8 @@ def affective():
         from utils.audit import log_action
         log_action('results.affective',
                    detail=f'term {term_id}, {selected_assignment.display_name}')
-        flash('Behavioural ratings saved.', 'success')
-        return redirect(url_for('subjects.affective', term_id=term_id, assignment_id=assignment_id))
+        return _ok('Behavioural ratings saved.',
+                   url_for('subjects.affective', term_id=term_id, assignment_id=assignment_id))
 
     students = []
     if selected_assignment:
@@ -900,9 +956,19 @@ def affective():
         for e in enrollments:
             students.append({'student': e.student, 'ratings': ratings.get(e.student_id, {})})
 
-    return render_template('subjects/affective.html', terms=terms, term_id=term_id,
-        assignments=assignments, assignment_id=assignment_id,
-        selected_assignment=selected_assignment, students=students, traits=AFFECTIVE_TRAITS)
+    return _render({
+        'page': 'affective', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'has_students': bool(selected_assignment and students),
+        'selected': bool(selected_assignment),
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'traits': [{'key': k, 'label': lbl} for k, lbl in AFFECTIVE_TRAITS],
+        'students': [{'id': r['student'].id, 'full_name': r['student'].full_name,
+                      'ratings': r['ratings']} for r in students],
+        'self_url': url_for('subjects.affective'), 'submit_url': url_for('subjects.affective'),
+        'broadsheet_url': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
+    })
 
 
 @subjects_bp.route('/comments', methods=['GET', 'POST'])
@@ -935,8 +1001,8 @@ def comments():
         db.session.commit()
         from utils.audit import log_action
         log_action('results.comments', detail=f'term {term_id}, {selected_assignment.display_name}')
-        flash('Comments saved.', 'success')
-        return redirect(url_for('subjects.comments', term_id=term_id, assignment_id=assignment_id))
+        return _ok('Comments saved.',
+                   url_for('subjects.comments', term_id=term_id, assignment_id=assignment_id))
 
     students = []
     if selected_assignment:
@@ -950,9 +1016,19 @@ def comments():
                              'teacher_comment': ts.teacher_comment if ts else '',
                              'principal_comment': ts.principal_comment if ts else ''})
 
-    return render_template('subjects/comments.html', terms=terms, term_id=term_id,
-        assignments=assignments, assignment_id=assignment_id,
-        selected_assignment=selected_assignment, students=students)
+    return _render({
+        'page': 'comments', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'has_students': bool(selected_assignment and students),
+        'selected': bool(selected_assignment),
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'students': [{'id': r['student'].id, 'full_name': r['student'].full_name,
+                      'teacher_comment': r['teacher_comment'] or '',
+                      'principal_comment': r['principal_comment'] or ''} for r in students],
+        'self_url': url_for('subjects.comments'), 'submit_url': url_for('subjects.comments'),
+        'broadsheet_url': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
+    })
 
 
 # ============================================================================

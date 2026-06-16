@@ -27,6 +27,12 @@ def test_subject_shells_render(app):
         '/subjects/bulk-add': 'bulk_add',
         '/subjects/class-subjects': 'class_subjects',
         '/subjects/class-subjects/assign': 'assign',
+        '/subjects/scores': 'scores',
+        '/subjects/workflow': 'workflow',
+        '/subjects/bulk-entry': 'bulk_entry',
+        '/subjects/broadsheet': 'broadsheet',
+        '/subjects/affective': 'affective',
+        '/subjects/comments': 'comments',
     }.items():
         html = client.get(url).get_data(as_text=True)
         assert 'subj-app' in html and 'subj-data' in html, url
