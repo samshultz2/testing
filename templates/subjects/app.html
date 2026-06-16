@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% set _t = {'list':'Subjects','add':'Add Subject','edit':'Edit Subject','bulk_add':'Bulk Add','class_subjects':'Class Subjects','assign':'Assign Subjects','edit_class_subject':'Edit Class Subject'} %}
+{% block title %}{{ _t.get(subj_json.page,'Subjects') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if subj_json.page in ['list','add','edit','bulk_add'] %}<span>{{ _t.get(subj_json.page,'Subjects') }}</span>
+{% else %}<a href="{{ url_for('subjects.class_subjects_list') }}">Class Subjects</a> / <span>{{ _t.get(subj_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block content %}
+<div id="subj-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="subj-data">{{ subj_json|tojson }}</script>
+<script src="{{ url_for('static', filename='js/react/subjects-app.js') }}" defer></script>
+{% endblock %}

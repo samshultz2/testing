@@ -18,6 +18,39 @@ from utils.access_control import (
 
 subjects_bp = Blueprint('subjects', __name__, url_prefix='/subjects')
 
+SUBJECT_CATEGORIES = ['Science', 'Arts', 'Commercial', 'General', 'Languages', 'Vocational']
+
+
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('subjects/app.html', 'subj_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('subjects.subjects_list'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('subjects.subjects_list'))
+
+
+def _nav_urls():
+    return {'subjects': url_for('subjects.subjects_list'),
+            'class_subjects': url_for('subjects.class_subjects_list')}
+
 
 # ============================================================================
 # SUBJECTS CRUD
@@ -36,11 +69,18 @@ def subjects_list():
     categories = {}
     for subject in subjects:
         cat = subject.category or 'General'
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(subject)
-    
-    return render_template('subjects/list.html', subjects=subjects, categories=categories)
+        categories.setdefault(cat, []).append({
+            'id': subject.id, 'name': subject.name, 'short_name': subject.short_name or '',
+            'edit_url': url_for('subjects.edit_subject', subject_id=subject.id),
+            'delete_url': url_for('subjects.delete_subject', subject_id=subject.id),
+        })
+
+    return _render({
+        'page': 'list', 'nav': _nav_urls(),
+        'categories': [{'name': k, 'subjects': v} for k, v in categories.items()],
+        'urls': {'add': url_for('subjects.add_subject'),
+                 'bulk_add': url_for('subjects.bulk_add_subjects')},
+    })
 
 
 @subjects_bp.route('/add', methods=['GET', 'POST'])
@@ -52,17 +92,12 @@ def add_subject():
             name = request.form.get('name', '').strip()
             short_name = request.form.get('short_name', '').strip().upper()
             category = request.form.get('category', '').strip()
-            
+
             if not name:
-                flash('Subject name is required.', 'error')
-                return redirect(url_for('subjects.add_subject'))
-            
-            # Check for duplicate
-            existing = Subject.query.filter_by(name=name).first()
-            if existing:
-                flash('Subject already exists.', 'error')
-                return redirect(url_for('subjects.add_subject'))
-            
+                return _err('Subject name is required.', url_for('subjects.add_subject'))
+            if Subject.query.filter_by(name=name).first():
+                return _err('Subject already exists.', url_for('subjects.add_subject'))
+
             subject = Subject(
                 name=name,
                 short_name=short_name or name[:3].upper(),
@@ -74,15 +109,15 @@ def add_subject():
             from utils.assessments import apply_practical
             apply_practical(db, subject)
             db.session.commit()
-
-            flash(f'Subject "{name}" added!', 'success')
-            return redirect(url_for('subjects.subjects_list'))
+            return _ok(f'Subject "{name}" added!', url_for('subjects.subjects_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    categories = ['Science', 'Arts', 'Commercial', 'General', 'Languages', 'Vocational']
-    return render_template('subjects/add.html', categories=categories)
+            return _err(f'Error: {str(e)}', url_for('subjects.add_subject'))
+
+    return _render({
+        'page': 'add', 'nav': _nav_urls(), 'categories': SUBJECT_CATEGORIES,
+        'submit_url': url_for('subjects.add_subject'), 'cancel_url': url_for('subjects.subjects_list'),
+    })
 
 
 @subjects_bp.route('/<int:subject_id>/edit', methods=['GET', 'POST'])
@@ -90,21 +125,28 @@ def add_subject():
 def edit_subject(subject_id):
     """Edit a subject"""
     subject = db.get_or_404(Subject, subject_id)
-    
+
     if request.method == 'POST':
-        with safe_transaction('Subject updated!', 'Error: {error}') as tx:
+        try:
             subject.name = request.form.get('name', '').strip()
             subject.short_name = request.form.get('short_name', '').strip().upper()
             subject.category = request.form.get('category', '').strip()
             subject.has_practical = bool(request.form.get('has_practical'))
-
             from utils.assessments import apply_practical
             apply_practical(db, subject)
-        if tx.ok:
-            return redirect(url_for('subjects.subjects_list'))
+            db.session.commit()
+            return _ok('Subject updated!', url_for('subjects.subjects_list'))
+        except Exception as e:
+            db.session.rollback()
+            return _err(f'Error: {str(e)}', url_for('subjects.edit_subject', subject_id=subject_id))
 
-    categories = ['Science', 'Arts', 'Commercial', 'General', 'Languages', 'Vocational']
-    return render_template('subjects/edit.html', subject=subject, categories=categories)
+    return _render({
+        'page': 'edit', 'nav': _nav_urls(), 'categories': SUBJECT_CATEGORIES,
+        'subject': {'id': subject.id, 'name': subject.name, 'short_name': subject.short_name or '',
+                    'category': subject.category or 'General', 'has_practical': bool(subject.has_practical)},
+        'submit_url': url_for('subjects.edit_subject', subject_id=subject.id),
+        'cancel_url': url_for('subjects.subjects_list'),
+    })
 
 
 @subjects_bp.route('/<int:subject_id>/delete', methods=['POST'])
@@ -112,11 +154,13 @@ def edit_subject(subject_id):
 def delete_subject(subject_id):
     """Delete (deactivate) a subject"""
     subject = db.get_or_404(Subject, subject_id)
-
-    with safe_transaction('Subject deleted!', 'Error: {error}'):
+    try:
         subject.is_active = False
-
-    return redirect(url_for('subjects.subjects_list'))
+        db.session.commit()
+        return _ok('Subject deleted!', url_for('subjects.subjects_list'))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('subjects.subjects_list'))
 
 
 @subjects_bp.route('/bulk-add', methods=['GET', 'POST'])
@@ -127,30 +171,32 @@ def bulk_add_subjects():
         try:
             subjects_text = request.form.get('subjects', '')
             category = request.form.get('category', 'General')
-            
+
             lines = [line.strip() for line in subjects_text.split('\n') if line.strip()]
             added = 0
-            
             for line in lines:
-                # Check if already exists
                 if not Subject.query.filter_by(name=line).first():
-                    subject = Subject(
-                        name=line,
-                        short_name=line[:3].upper(),
-                        category=category
-                    )
-                    db.session.add(subject)
+                    db.session.add(Subject(name=line, short_name=line[:3].upper(), category=category))
                     added += 1
-            
+
             db.session.commit()
-            flash(f'{added} subjects added!', 'success')
-            return redirect(url_for('subjects.subjects_list'))
+            return _ok(f'{added} subjects added!', url_for('subjects.subjects_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    categories = ['Science', 'Arts', 'Commercial', 'General', 'Languages', 'Vocational']
-    return render_template('subjects/bulk_add.html', categories=categories)
+            return _err(f'Error: {str(e)}', url_for('subjects.bulk_add_subjects'))
+
+    default_subjects = '\n'.join([
+        'Mathematics', 'English Language', 'Civic Education', 'Physics', 'Chemistry', 'Biology',
+        'Further Mathematics', 'Agricultural Science', 'Economics', 'Geography', 'Government',
+        'Literature in English', 'Commerce', 'Accounting', 'Computer Studies',
+        'Christian Religious Studies', 'Islamic Religious Studies', 'French', 'Yoruba', 'Igbo',
+        'Hausa', 'Technical Drawing', 'Food and Nutrition', 'Home Economics', 'Physical Education',
+        'History', 'Music', 'Visual Arts'])
+    return _render({
+        'page': 'bulk_add', 'nav': _nav_urls(), 'categories': SUBJECT_CATEGORIES,
+        'default_subjects': default_subjects,
+        'submit_url': url_for('subjects.bulk_add_subjects'), 'cancel_url': url_for('subjects.subjects_list'),
+    })
 
 
 # ============================================================================
@@ -186,12 +232,23 @@ def class_subjects_list():
             query = query.filter_by(class_id=class_id)
         
         class_subjects = query.join(Subject).order_by(Subject.name).all()
-    
-    return render_template('subjects/class_subjects.html',
-        terms=terms, classes=classes,
-        selected_term=selected_term, selected_class=selected_class,
-        class_subjects=class_subjects, term_id=term_id, class_id=class_id
-    )
+
+    return _render({
+        'page': 'class_subjects', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'class_id': class_id or '',
+        'selected_term': selected_term.full_name if selected_term else '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'class_subjects': [{'id': cs.id, 'subject': cs.subject.name,
+                            'class_name': cs.school_class.name if cs.school_class else '',
+                            'arm': cs.arm.name if cs.arm else '', 'teacher_name': cs.teacher_name or '',
+                            'edit_url': url_for('subjects.edit_class_subject', cs_id=cs.id),
+                            'delete_url': url_for('subjects.delete_class_subject', cs_id=cs.id)}
+                           for cs in class_subjects],
+        'self_url': url_for('subjects.class_subjects_list'),
+        'urls': {'assign': url_for('subjects.assign_class_subjects'),
+                 'copy': url_for('subjects.copy_class_subjects')},
+    })
 
 
 @subjects_bp.route('/class-subjects/copy', methods=['POST'])
@@ -203,8 +260,8 @@ def copy_class_subjects():
     class_id = request.form.get('class_id', type=int)
 
     if not from_term_id or not to_term_id or from_term_id == to_term_id:
-        flash('Choose two different terms to copy between.', 'error')
-        return redirect(url_for('subjects.class_subjects_list', term_id=to_term_id, class_id=class_id))
+        return _err('Choose two different terms to copy between.',
+                    url_for('subjects.class_subjects_list', term_id=to_term_id or '', class_id=class_id or ''))
 
     source = ClassSubject.query.filter_by(term_id=from_term_id, is_active=True)
     if class_id:
@@ -225,8 +282,8 @@ def copy_class_subjects():
             term_id=to_term_id, teacher_name=cs.teacher_name, is_active=True))
         copied += 1
     db.session.commit()
-    flash(f'Copied {copied} subject assignment(s){" (" + str(skipped) + " already existed)" if skipped else ""}.', 'success')
-    return redirect(url_for('subjects.class_subjects_list', term_id=to_term_id, class_id=class_id))
+    return _ok(f'Copied {copied} subject assignment(s){" (" + str(skipped) + " already existed)" if skipped else ""}.',
+               url_for('subjects.class_subjects_list', term_id=to_term_id, class_id=class_id or ''))
 
 
 @subjects_bp.route('/class-subjects/assign', methods=['GET', 'POST'])
@@ -242,9 +299,8 @@ def assign_class_subjects():
             teacher_names = request.form.getlist('teacher_names[]')
             
             if not term_id or not class_id:
-                flash('Term and class are required.', 'error')
-                return redirect(url_for('subjects.assign_class_subjects'))
-            
+                return _err('Term and class are required.', url_for('subjects.assign_class_subjects'))
+
             added = 0
             for i, subject_id in enumerate(subject_ids):
                 if subject_id:
@@ -272,20 +328,26 @@ def assign_class_subjects():
                         added += 1
             
             db.session.commit()
-            flash(f'{added} subjects assigned!', 'success')
-            return redirect(url_for('subjects.class_subjects_list', term_id=term_id, class_id=class_id))
+            return _ok(f'{added} subjects assigned!',
+                       url_for('subjects.class_subjects_list', term_id=term_id, class_id=class_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
+            return _err(f'Error: {str(e)}', url_for('subjects.assign_class_subjects'))
+
     terms = Term.query.order_by(Term.id.desc()).all()
     classes = SchoolClass.query.order_by(SchoolClass.level).all()
     arms = ClassArm.query.order_by(ClassArm.name).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
-    
-    return render_template('subjects/assign.html',
-        terms=terms, classes=classes, arms=arms, subjects=subjects
-    )
+
+    return _render({
+        'page': 'assign', 'nav': _nav_urls(),
+        'terms': [{'id': t.id, 'full_name': t.full_name, 'is_active': bool(t.is_active)} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'arms': [{'id': a.id, 'name': a.name} for a in arms],
+        'subjects': [{'id': s.id, 'name': s.name, 'category': s.category or ''} for s in subjects],
+        'submit_url': url_for('subjects.assign_class_subjects'),
+        'cancel_url': url_for('subjects.class_subjects_list'),
+    })
 
 
 @subjects_bp.route('/class-subjects/<int:cs_id>/edit', methods=['GET', 'POST'])
@@ -298,13 +360,20 @@ def edit_class_subject(cs_id):
         try:
             cs.teacher_name = request.form.get('teacher_name', '').strip() or None
             db.session.commit()
-            flash('Updated!', 'success')
-            return redirect(url_for('subjects.class_subjects_list', term_id=cs.term_id, class_id=cs.class_id))
+            return _ok('Updated!', url_for('subjects.class_subjects_list', term_id=cs.term_id, class_id=cs.class_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    return render_template('subjects/edit_class_subject.html', cs=cs)
+            return _err(f'Error: {str(e)}', url_for('subjects.edit_class_subject', cs_id=cs.id))
+
+    return _render({
+        'page': 'edit_class_subject', 'nav': _nav_urls(),
+        'cs': {'id': cs.id, 'subject': cs.subject.name,
+               'class_name': cs.school_class.name if cs.school_class else '',
+               'arm': cs.arm.name if cs.arm else 'All Arms',
+               'term': cs.term.full_name if cs.term else '', 'teacher_name': cs.teacher_name or ''},
+        'submit_url': url_for('subjects.edit_class_subject', cs_id=cs.id),
+        'cancel_url': url_for('subjects.class_subjects_list', term_id=cs.term_id, class_id=cs.class_id),
+    })
 
 
 @subjects_bp.route('/class-subjects/<int:cs_id>/delete', methods=['POST'])
@@ -318,12 +387,12 @@ def delete_class_subject(cs_id):
     try:
         cs.is_active = False
         db.session.commit()
-        flash('Subject removed from class!', 'success')
+        return _ok('Subject removed from class!',
+                   url_for('subjects.class_subjects_list', term_id=term_id, class_id=class_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('subjects.class_subjects_list', term_id=term_id, class_id=class_id))
+        return _err(f'Error: {str(e)}',
+                    url_for('subjects.class_subjects_list', term_id=term_id, class_id=class_id))
 
 
 # ============================================================================
