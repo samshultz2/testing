@@ -281,6 +281,75 @@ def _rows_from_csv(file_stream):
     return [tuple(r) for r in csv.reader(io.StringIO(data))]
 
 
+def rows_from_pasted_text(text):
+    """Parse copy-pasted tabular text into row tuples (header row first).
+
+    The delimiter is auto-detected from the heading line: tab if it looks
+    tab-separated (a spreadsheet paste), otherwise comma. Quoted values are
+    handled by the csv module. Blank lines are dropped. This feeds the same
+    header-matching importer as the .xlsx/.csv paths, so a plain paste of just
+    'Surname, First Name' works like a full sheet.
+    """
+    import csv
+    lines = [ln for ln in (text or '').splitlines() if ln.strip()]
+    if not lines:
+        return []
+    head = lines[0]
+    delim = '\t' if (head.count('\t') and head.count('\t') >= head.count(',')) else ','
+    return [tuple(r) for r in csv.reader(io.StringIO('\n'.join(lines)), delimiter=delim)]
+
+
+def preview_student_rows(rows):
+    """Dry-run a parsed sheet: which columns were recognised, which ignored,
+    and a per-row breakdown — without touching the database.
+
+    Returns a dict mirroring what ``import_student_rows`` would do for the
+    name/skip checks, so the UI can show a faithful preview before committing.
+    """
+    if not rows:
+        return {'recognised': [], 'ignored': [], 'total': 0, 'valid': 0,
+                'invalid': 0, 'rows': []}
+    header = rows[0]
+    colmap, ignored = {}, []
+    for cell in header:
+        field = _HEADER_ALIASES.get(_norm_header(cell))
+        if field and field not in colmap:
+            colmap[field] = True
+        elif cell not in (None, ''):
+            ignored.append(str(cell).strip())
+
+    def col(row, field):
+        # Recompute the index the same way import_student_rows does.
+        for idx, cell in enumerate(header):
+            if _HEADER_ALIASES.get(_norm_header(cell)) == field:
+                return _cell_str(row[idx]) if idx < len(row) else None
+        return None
+
+    out, valid = [], 0
+    for row_num, row in enumerate(rows[1:], start=2):
+        surname = col(row, 'surname')
+        first_name = col(row, 'first_name')
+        if not surname and not first_name:
+            continue   # blank line — not shown, not counted
+        if surname and surname.lower() in _SKIP_FIRST_CELL:
+            continue   # leftover template/instruction row
+        if not surname or not first_name:
+            out.append({'row': row_num, 'error': 'Missing surname or first name',
+                        'data': {}})
+            continue
+        valid += 1
+        out.append({'row': row_num, 'error': None,
+                    'name': ' '.join(p for p in [surname, first_name] if p),
+                    'details': {'gender': _normalise_gender(col(row, 'gender')) or 'Unknown',
+                                'religion': col(row, 'religion'),
+                                'date_of_birth': col(row, 'dob'),
+                                'phone_number': _normalise_phone(col(row, 'parent_phone')),
+                                'address': col(row, 'address')}})
+    return {'recognised': sorted(colmap.keys()), 'ignored': ignored,
+            'total': len(out), 'valid': valid, 'invalid': len(out) - valid,
+            'rows': out}
+
+
 def import_students_from_excel(file_stream, db, Student, ParentContact,
                                branch_id=None, skip_duplicates=True,
                                class_arm_assignment_id=None):

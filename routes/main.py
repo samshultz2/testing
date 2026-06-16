@@ -943,6 +943,8 @@ def _students_payload():
         'can_add': can_manage,
         'can_admin': is_admin(),   # admin-only bulk tools (set stream / add subject / delete)
         'add_url': url_for('main.add_student'),
+        'import_url': url_for('main.import_students'),
+        'enrolment': _student_form_options(with_enrolment=True)['enrolment'] if can_manage else None,
         'export_url': url_for('main.export_students_data'),
         'trash_url': url_for('main.students_trash'),
         'waec_by_stream_url': url_for('main.apply_stream_waec'),
@@ -1103,6 +1105,68 @@ def add_student():
                  'cancel': url_for('main.students_list')},
     }
     return render_template('students/add.html', form_json=payload)
+
+
+# =============================================================================
+# PASTE IMPORT  —  create many students from copy-pasted text
+# =============================================================================
+
+@main_bp.route('/students/import', methods=['POST'])
+@login_required
+def import_students():
+    """Create many students from pasted text (reuses the shared row importer).
+
+    Same endpoint, two modes: without a truthy ``commit`` flag it returns a
+    dry-run *preview*; with it, the rows are actually saved. Only some headings
+    need be present (at least Surname + First Name); unknown columns are ignored
+    and missing ones left blank. Teachers (read-only list) may not import.
+    """
+    from utils.excel_utils import (rows_from_pasted_text, preview_student_rows,
+                                   import_student_rows)
+    if is_teacher():
+        return jsonify({'ok': False, 'error': 'You do not have permission to import students.'}), 403
+
+    text = (request.json or {}).get('text', '') if request.is_json else request.form.get('text', '')
+    rows = rows_from_pasted_text(text)
+    if not rows or len(rows) < 2:
+        return jsonify({'ok': False, 'error': 'Paste a heading row and at least one student.'}), 400
+
+    prev = preview_student_rows(rows)
+    if 'surname' not in prev['recognised'] or 'first_name' not in prev['recognised']:
+        return jsonify({'ok': False, 'error': 'Could not find the name columns. '
+                        'Include at least "Surname" and "First Name" headings.'}), 400
+
+    commit = request.form.get('commit') in ('1', 'true', 'on', 'yes')
+    if not commit:
+        return jsonify({
+            'ok': True, 'preview': True,
+            'recognised': prev['recognised'], 'ignored': prev['ignored'],
+            'total': prev['total'], 'valid': prev['valid'], 'invalid': prev['invalid'],
+            # Cap the echoed rows so a huge paste doesn't bloat the response.
+            'rows': prev['rows'][:200], 'truncated': len(prev['rows']) > 200,
+        })
+
+    # ---- commit ----------------------------------------------------------
+    from utils.branch_scope import branch_for_new
+    from utils.access_control import can_access_class
+    new_branch_id = branch_for_new(request.form.get('branch_id', type=int))
+
+    caa = None
+    caa_id = request.form.get('class_arm_assignment_id', type=int)
+    if caa_id:
+        caa = db.session.get(ClassArmAssignment, caa_id)
+        if not caa or not can_access_class(caa.id):
+            caa = None
+
+    created, messages = import_student_rows(
+        rows, db, Student, ParentContact, branch_id=new_branch_id,
+        class_arm_assignment_id=caa.id if caa else None)
+    if created:
+        log_action('student.import', detail=f'Imported {created} students')
+        flash(f'Imported {created} student(s).'
+              + (f' Enrolled in {caa.display_name}.' if caa else ''), 'success')
+    return jsonify({'ok': True, 'created': created, 'messages': messages,
+                    'redirect': url_for('main.students_list')})
 
 
 def _student_or_redirect(student_id):

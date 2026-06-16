@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
+import ImportModal from './ImportModal';
 
 const SORTS = [
   ['surname|asc', 'Name A–Z'], ['surname|desc', 'Name Z–A'],
@@ -34,6 +35,7 @@ export default function App({ initial }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
   const [showExport, setShowExport] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [bulkStream, setBulkStream] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
   const skip = useRef(true);
@@ -105,6 +107,7 @@ export default function App({ initial }) {
         <div><h1><i className="fas fa-user-graduate" /> Students</h1></div>
         <div className="page-header-actions stu-toolbar">
           {d.can_add && <a href={d.add_url} className="btn btn-primary"><i className="fas fa-plus" /> Add Student</a>}
+          {d.can_add && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i className="fas fa-paste" /> Import (paste)</button>}
           {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
                                onClick={() => window.confirm("Fill WAEC subjects from stream for students who don't have them set?")
                                  && runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.')}><i className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
@@ -251,6 +254,12 @@ export default function App({ initial }) {
       {showExport && (
         <ExportModal total={d.total || 0} selectedIds={selectedIds} exportUrl={d.export_url}
                      applied={{ ...query, page: undefined }} onClose={() => setShowExport(false)} />
+      )}
+
+      {showImport && (
+        <ImportModal importUrl={d.import_url} enrolment={d.enrolment}
+                     onClose={() => setShowImport(false)}
+                     onDone={(text) => { setShowImport(false); setMsg({ tone: 'success', text }); refresh(); }} />
       )}
     </div>
   );

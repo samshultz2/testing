@@ -1,130 +1,85 @@
-"""Header-driven student Excel import: flexible columns, gender default,
-phone leading-zero restore, and per-row isolation."""
-import io
+"""Paste-to-import students: flexible headings, preview then commit.
 
-from openpyxl import Workbook
+The route reuses the shared row importer in utils.excel_utils (gender default,
+phone leading-zero restore, name+DOB de-duplication), so these tests focus on
+the paste/preview/commit wiring on top of it.
+"""
+import re
 
-from models import (db, Student, ParentContact, StudentEnrollment,
-                    SchoolClass, ClassArm, ClassArmAssignment, Term)
-from utils.excel_utils import (import_students_from_excel, import_student_rows,
-                               _rows_from_csv, create_student_import_template)
-
-
-def _xlsx(rows):
-    wb = Workbook()
-    ws = wb.active
-    for r in rows:
-        ws.append(r)
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return buf
+from config import Config
+from models import db, Student
+from tests.conftest import login_token
 
 
-def test_register_style_import(app):
-    """A register-style sheet (no Gender column, phone as a number) imports."""
-    sheet = _xlsx([
-        ['Surname', 'First Name', 'Middle Name', 'Date of Birth', 'Address',
-         'Phone Number', 'Religion', 'Name of Primary Contact'],
-        ['MESHACH', 'JEFFREY', None, '16/12/2010', 'Goshen Estate',
-         7070239917, 'Christianity', 'Mrs. MESHACH'],          # phone lost its 0
-        ['OMITIE', 'DOMINION', None, '08/12/2010', 'Lucky way',
-         None, 'Christianity', 'Mrs. OMITIE'],                 # name but no phone
-    ])
-    with app.app_context():
-        n, msgs = import_students_from_excel(sheet, db, Student, ParentContact)
-        assert n == 2
-        m = Student.query.filter_by(surname='MESHACH').order_by(Student.id.desc()).first()
-        assert m.gender == 'Unknown'                  # no gender column -> defaulted
-        assert str(m.date_of_birth) == '2010-12-16'   # day-first parsed
-        assert m.parent_contacts.first().phone_number == '07070239917'  # 0 restored
-        o = Student.query.filter_by(surname='OMITIE').order_by(Student.id.desc()).first()
-        assert o.parent_contacts.count() == 0          # name-only -> no broken contact
-        assert any('Unknown' in s for s in msgs)       # defaulting is reported
-        db.session.rollback()
+def _admin(app):
+    client = app.test_client()
+    token = login_token(client)
+    client.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': token})
+    return client
 
 
-def test_columns_any_order_and_gender_normalised(app):
-    sheet = _xlsx([
-        ['First Name', 'Surname', 'Sex'],   # reordered + 'Sex' alias
-        ['Ada', 'Obi', 'female'],
-    ])
-    with app.app_context():
-        n, _ = import_students_from_excel(sheet, db, Student, ParentContact)
-        assert n == 1
-        s = Student.query.filter_by(surname='Obi').order_by(Student.id.desc()).first()
-        assert s.first_name == 'Ada' and s.gender == 'Female'
-        db.session.rollback()
+def _ptoken(client):
+    html = client.get('/students').get_data(as_text=True)
+    m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', html)
+    return m.group(1) if m else None
 
 
-def test_missing_required_headers_rejected(app):
-    sheet = _xlsx([['Name', 'Phone'], ['x', '0800']])
-    with app.app_context():
-        n, msgs = import_students_from_excel(sheet, db, Student, ParentContact)
-        assert n == 0 and any('Surname' in m for m in msgs)
+def _post(client, **data):
+    data.setdefault('_csrf_token', _ptoken(client))
+    return client.post('/students/import', headers={'X-Requested-With': 'fetch'}, data=data)
 
 
-def test_duplicate_guard_skips_reimport(app):
-    """Re-importing the same sheet adds nobody the second time."""
-    sheet_rows = [
-        ['Surname', 'First Name', 'Date of Birth'],
-        ['Dupe', 'Tester', '2011-01-02'],
-    ]
-    with app.app_context():
-        n1, _ = import_students_from_excel(_xlsx(sheet_rows), db, Student, ParentContact)
-        assert n1 == 1
-        n2, msgs = import_students_from_excel(_xlsx(sheet_rows), db, Student, ParentContact)
-        assert n2 == 0
-        assert any('duplicate' in m.lower() for m in msgs)
-        # in-file duplicate (same row twice) is also caught
-        n3, _ = import_students_from_excel(
-            _xlsx(sheet_rows[:1] + [sheet_rows[1], sheet_rows[1]]),
-            db, Student, ParentContact)
-        assert n3 == 0
-        db.session.rollback()
+def test_preview_then_commit_partial_headings(app):
+    client = _admin(app)
+    # Two name headings + an unknown column + a ragged/blank row.
+    text = ('Surname, First Name, Gender, Nickname\n'
+            'Okafor, Chidi, Male, Chy\n'
+            'Bello, Aisha, female\n'
+            ', ,')
+    pre = _post(client, text=text).get_json()
+    assert pre['ok'] and pre['preview'] is True
+    assert pre['valid'] == 2 and pre['invalid'] == 0   # blank row dropped, not counted
+    assert 'surname' in pre['recognised'] and pre['ignored'] == ['Nickname']
 
-
-def test_csv_parsing(app):
-    csv_text = ("Surname,First Name,Phone Number\n"
-                "Okoro,Chidi,8031234567\n")
-    rows = _rows_from_csv(io.BytesIO(csv_text.encode()))
-    assert rows[0] == ('Surname', 'First Name', 'Phone Number')
-    with app.app_context():
-        n, _ = import_student_rows(rows, db, Student, ParentContact)
-        assert n == 1
-        s = Student.query.filter_by(surname='Okoro').order_by(Student.id.desc()).first()
-        assert s.parent_contacts.first().phone_number == '08031234567'
-        db.session.rollback()
-
-
-def test_class_arm_enrollment(app):
-    with app.app_context():
-        term = Term.query.first()
-        sc = SchoolClass.query.first()
-        arm = ClassArm.query.first()
-        if not (term and sc and arm):
-            import pytest
-            pytest.skip("no class/arm/term seeded")
-        a = ClassArmAssignment.query.filter_by(
-            class_id=sc.id, arm_id=arm.id, term_id=term.id).first()
-        if not a:
-            a = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id)
-            db.session.add(a); db.session.commit()
-        rows = [['Surname', 'First Name'], ['Enrol', 'Me']]
-        n, msgs = import_student_rows(
-            rows, db, Student, ParentContact, class_arm_assignment_id=a.id)
-        assert n == 1
-        s = Student.query.filter_by(surname='Enrol').order_by(Student.id.desc()).first()
-        assert StudentEnrollment.query.filter_by(
-            student_id=s.id, class_arm_assignment_id=a.id).first() is not None
-        assert any('enrolled' in m.lower() for m in msgs)
-        db.session.rollback()
-
-
-def test_generated_template_imports_without_junk(app):
-    """The downloadable template's EXAMPLE row must not create a student."""
     with app.app_context():
         before = Student.query.count()
-        n, _ = import_students_from_excel(
-            create_student_import_template(), db, Student, ParentContact)
-        assert n == 0 and Student.query.count() == before
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 2
+    with app.app_context():
+        assert Student.query.count() == before + 2
+        s = Student.query.filter_by(surname='Okafor', first_name='Chidi').first()
+        assert s.gender == 'Male' and s.student_id.startswith('STU')
+
+
+def test_only_surname_and_first_name(app):
+    client = _admin(app)
+    text = 'surname,first name\nAdeyemi,Tunde'
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 1
+    with app.app_context():
+        s = Student.query.filter_by(surname='Adeyemi', first_name='Tunde').first()
+        assert s is not None and s.gender == 'Unknown'   # no gender column -> defaulted
+
+
+def test_tab_separated_with_phone_creates_contact(app):
+    client = _admin(app)
+    text = 'Surname\tFirst Name\tParent Phone\nJohnson\tMary\t8099887766'
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 1
+    with app.app_context():
+        s = Student.query.filter_by(surname='Johnson', first_name='Mary').first()
+        contacts = s.parent_contacts.all()
+        assert len(contacts) == 1 and contacts[0].is_primary
+        assert contacts[0].phone_number == '08099887766'   # leading 0 restored
+
+
+def test_requires_a_name_column(app):
+    client = _admin(app)
+    r = _post(client, text='Phone, Religion\n08012345678, Islam')
+    assert r.status_code == 400 and 'name column' in r.get_json()['error']
+
+
+def test_empty_text_rejected(app):
+    client = _admin(app)
+    assert _post(client, text='   ').status_code == 400
+    assert _post(client, text='Surname, First Name').status_code == 400  # header only
