@@ -280,7 +280,87 @@ function BulkEntry({ d, notify }) {
   );
 }
 
-const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult, bulk_entry: BulkEntry };
+// ---- Add result ------------------------------------------------------------
+function AddResult({ d, notify }) {
+  const nav = useNav();
+  const qFor = (subj) => d.question_counts[subj] || 40;
+  const [studentId, setStudentId] = useState('');
+  const [rows, setRows] = useState([{ subject: d.compulsory_subject, correct: '' }, { subject: '', correct: '' },
+    { subject: '', correct: '' }, { subject: '', correct: '' }]);
+  const [addAnother, setAddAnother] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const scoreOf = (r) => {
+    if (r.correct === '' || r.correct == null) return null;
+    const q = qFor(r.subject);
+    return Math.round((Math.max(0, Math.min(parseInt(r.correct, 10) || 0, q)) / q) * 100);
+  };
+  const total = rows.reduce((t, r) => t + (scoreOf(r) || 0), 0);
+  const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+
+  const onStudent = (v) => {
+    setStudentId(v);
+    const saved = (d.subject_map[v] || {}).jamb || [];
+    if (saved.length) setRows((rs) => rs.map((r, i) => ({ ...r, subject: saved[i] || r.subject })));
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!studentId) { notify('error', 'Please select a student.'); return; }
+    setBusy(true);
+    const fields = { student_id: studentId, total_score: total, add_another: addAnother ? 'on' : '' };
+    rows.forEach((r, i) => { fields['subject' + (i + 1)] = r.subject; fields['subject' + (i + 1) + '_correct'] = r.correct; });
+    const res = await submitJson(d.submit_url, fields);
+    setBusy(false);
+    if (res.ok) nav.go(res.redirect); else notify('error', res.error || 'Could not add the result.');
+  };
+
+  if (!d.students.length) {
+    return (<>
+      <PageHeader title="Add Result" />
+      <div className="card" style={{ maxWidth: 760 }}><div className="card-body"><Empty icon="fa-user-slash" title="">
+        <p>All students already have results for this exam</p>
+        <a href={d.view_url} className="btn btn-primary">View Results</a></Empty></div></div>
+    </>);
+  }
+  return (
+    <>
+      <PageHeader title="Add Result" actions={<a href={d.view_url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-left" /> Back</a>} />
+      <div className="card" style={{ maxWidth: 760 }}><div className="card-body"><form onSubmit={submit}>
+        <div className="form-group"><label className="form-label">Student <span className="text-danger">*</span></label>
+          <select className="form-control" required value={studentId} onChange={(e) => onStudent(e.target.value)}>
+            <option value="">Select Student</option>{d.students.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+        <hr className="my-4" /><h4 className="mb-2">Subject Scores</h4>
+        <div className="entry-hint"><i className="fas fa-circle-info" />
+          <span>Enter the number of <strong>correct answers</strong> for each subject. We convert it to a score over 100 automatically — English is marked over 60 questions, every other subject over 40.</span></div>
+        {rows.map((r, i) => {
+          const q = qFor(r.subject); const sc = scoreOf(r);
+          return (
+            <div className="subject-row" key={i}>
+              <div className="field"><label>Subject {i + 1}{i === 0 && <span className="text-danger"> *</span>}</label>
+                <select className="form-control" required={i === 0} value={r.subject} onChange={(e) => setRow(i, 'subject', e.target.value)}>
+                  <option value="">Select Subject</option>{d.subjects.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+              <div className="field"><label>Correct <span className="qcount">(/{q})</span></label>
+                <input type="number" className="form-control" min="0" max={q} placeholder="0" value={r.correct} onChange={(e) => setRow(i, 'correct', e.target.value)} /></div>
+              <div className="field"><label>Score /100</label>
+                <div className={'converted' + (sc == null ? ' empty' : '')}>{sc == null ? '—' : sc}</div></div>
+            </div>
+          );
+        })}
+        <div className="total-box"><div><div className="total-label">Total Score</div>
+          <div><span className="total-value">{total}</span> <span className="total-max">/ {d.max_total}</span></div></div>
+          <i className="fas fa-calculator" style={{ fontSize: '1.75rem', opacity: 0.6 }} /></div>
+        <div className="form-check mb-4"><input type="checkbox" className="form-check-input" id="aa" checked={addAnother} onChange={(e) => setAddAnother(e.target.checked)} />
+          <label htmlFor="aa" className="form-check-label"> Add another result after saving</label></div>
+        <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Result</button>
+          <a href={d.view_url} className="btn btn-secondary">Cancel</a></div>
+      </form></div></div>
+    </>
+  );
+}
+
+const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult,
+  bulk_entry: BulkEntry, add_result: AddResult };
 
 export default function MockJambApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

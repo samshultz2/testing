@@ -349,14 +349,12 @@ def add_result(exam_id):
             student_id = request.form.get('student_id', type=int)
 
             if not student_id:
-                flash('Please select a student.', 'error')
-                return redirect(url_for('mock_jamb.add_result', exam_id=exam_id))
+                return _err('Please select a student.', url_for('mock_jamb.add_result', exam_id=exam_id))
 
             # Check if result already exists
             existing = MockJAMBResult.query.filter_by(student_id=student_id, mock_exam_id=exam_id).first()
             if existing:
-                flash('Result already exists for this student. Edit instead.', 'error')
-                return redirect(url_for('mock_jamb.add_result', exam_id=exam_id))
+                return _err('Result already exists for this student. Edit instead.', url_for('mock_jamb.add_result', exam_id=exam_id))
 
             # Read each subject and convert the raw number of correct answers
             # (out of 60 for English, 40 for others) into a score over 100.
@@ -364,8 +362,7 @@ def add_result(exam_id):
             total_score = sum(s['score'] for s in subjects_payload if s['score'] is not None)
 
             if total_score < 0 or total_score > MAX_TOTAL_SCORE:
-                flash(f'Total score must be between 0 and {MAX_TOTAL_SCORE}.', 'error')
-                return redirect(url_for('mock_jamb.add_result', exam_id=exam_id))
+                return _err(f'Total score must be between 0 and {MAX_TOTAL_SCORE}.', url_for('mock_jamb.add_result', exam_id=exam_id))
 
             result = MockJAMBResult(
                 student_id=student_id,
@@ -383,27 +380,27 @@ def add_result(exam_id):
 
             db.session.add(result)
             db.session.commit()
-            
-            flash('Result added successfully!', 'success')
-            
-            # Check if more students to add
-            if request.form.get('add_another'):
-                return redirect(url_for('mock_jamb.add_result', exam_id=exam_id))
-            
-            return redirect(url_for('mock_jamb.view_exam', exam_id=exam_id))
-            
+            dest = (url_for('mock_jamb.add_result', exam_id=exam_id) if request.form.get('add_another')
+                    else url_for('mock_jamb.view_exam', exam_id=exam_id))
+            return _ok('Result added successfully!', dest)
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error adding result: {str(e)}', 'error')
-    
-    return render_template('mock_jamb/add_result.html',
-        exam=exam,
-        students=students,
-        subjects=WAEC_SUBJECTS,
-        question_counts=question_count_map(WAEC_SUBJECTS),
-        compulsory_subject=COMPULSORY_SUBJECT,
-        subject_map=student_subject_map(students)
-    )
+            return _err(f'Error adding result: {str(e)}', url_for('mock_jamb.add_result', exam_id=exam_id))
+
+    return _render({
+        'page': 'add_result',
+        'exam': {'id': exam.id, 'display_name': exam.display_name,
+                 'exam_date': exam.exam_date.strftime('%d %B %Y') if exam.exam_date else ''},
+        'students': [{'id': s.id, 'label': f'{s.full_name} ({s.student_id})'} for s in students],
+        'subjects': list(WAEC_SUBJECTS),
+        'question_counts': question_count_map(WAEC_SUBJECTS),
+        'compulsory_subject': COMPULSORY_SUBJECT,
+        'subject_map': student_subject_map(students),
+        'max_total': MAX_TOTAL_SCORE,
+        'submit_url': url_for('mock_jamb.add_result', exam_id=exam.id),
+        'view_url': url_for('mock_jamb.view_exam', exam_id=exam.id),
+    })
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/results/bulk', methods=['GET', 'POST'])

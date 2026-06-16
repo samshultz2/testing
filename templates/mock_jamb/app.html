@@ -5,6 +5,23 @@
 {% if mj_json.page == 'index' %}<span>Mock JAMB Examinations</span>
 {% else %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <span>{{ _t.get(mj_json.page,'') }}</span>{% endif %}
 {% endblock %}
+{% block extra_css %}
+<style>
+.entry-hint{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;margin-bottom:1.25rem;line-height:1.4}
+.entry-hint i{margin-top:.15rem}
+.subject-row{display:grid;grid-template-columns:1fr;gap:.6rem;padding:.85rem;border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.75rem;background:var(--gray-50);transition:border-color var(--transition)}
+.subject-row:focus-within{border-color:var(--primary)}
+@media(min-width:640px){.subject-row{grid-template-columns:1fr 130px 110px;align-items:end}}
+.subject-row .field label{display:block;font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:.3rem}
+.subject-row .field .qcount{font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)}
+.converted{display:flex;align-items:center;justify-content:center;height:42px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px dashed var(--border-color);font-weight:700;font-size:1.1rem;color:var(--primary)}
+.converted.empty{color:var(--text-muted);font-weight:500;font-size:.85rem}
+.total-box{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#11998e,#38ef7d);color:#fff;border-radius:var(--radius-md);padding:1rem 1.25rem;margin:1.25rem 0}
+.total-box .total-label{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;opacity:.9}
+.total-box .total-value{font-size:2.25rem;font-weight:700;line-height:1}
+.total-box .total-max{font-size:.9rem;opacity:.85}
+</style>
+{% endblock %}
 {% block content %}
 <div id="mj-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="mj-data">{{ mj_json|tojson }}</script>
