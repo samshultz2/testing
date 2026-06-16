@@ -78,6 +78,24 @@ def test_same_name_no_dob_different_address_both_import(app):
     assert res2['ok'] and res2['created'] == 0
 
 
+def test_reimport_after_soft_delete_recreates(app):
+    """A soft-deleted (trashed) student must not block re-importing them —
+    otherwise deleting a class to re-add it reports every row as a duplicate."""
+    client = _admin(app)
+    text = 'Surname, First Name\nDangote, Aliko'
+    assert _post(client, text=text, commit='1').get_json()['created'] == 1
+    with app.app_context():
+        s = Student.query.filter_by(surname='Dangote', first_name='Aliko').first()
+        s.is_active = False   # soft-delete (what delete / trash does)
+        db.session.commit()
+    # Re-import now recreates the student rather than skipping it as a duplicate.
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 1
+    with app.app_context():
+        assert Student.query.filter_by(surname='Dangote', first_name='Aliko',
+                                       is_active=True).count() == 1
+
+
 def test_tab_separated_with_phone_creates_contact(app):
     client = _admin(app)
     text = 'Surname\tFirst Name\tParent Phone\nJohnson\tMary\t8099887766'

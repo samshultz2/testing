@@ -454,11 +454,14 @@ def import_student_rows(rows, db, Student, ParentContact,
         return row[idx]
 
     # Preload existing students' identity keys so re-running an import doesn't
-    # create duplicates. Scoped to the target branch. Keys added during this run
-    # are tracked too, so duplicate rows within the same file are also caught.
+    # create duplicates. Only *active* students count: a student you soft-deleted
+    # (moved to trash) must not block re-importing them, otherwise deleting a
+    # class to re-add it would report every row as a duplicate. Scoped to the
+    # target branch. Keys added during this run are tracked too, so duplicate
+    # rows within the same file are also caught.
     seen_keys = set()
     if skip_duplicates:
-        q = Student.query
+        q = Student.query.filter(Student.is_active == True)
         if branch_id is not None:
             q = q.filter(Student.branch_id == branch_id)
         for sn, fn, d, addr in q.with_entities(
