@@ -3,6 +3,7 @@ Excel import/export utilities for the Student Management System
 Uses openpyxl for Excel file operations
 """
 import io
+import re
 from datetime import datetime
 from utils.web_exports import formula_guard as _fg
 from openpyxl import Workbook, load_workbook
@@ -278,7 +279,23 @@ def _rows_from_csv(file_stream):
     data = file_stream.read()
     if isinstance(data, bytes):
         data = data.decode('utf-8-sig', errors='replace')   # tolerate a BOM
-    return [tuple(r) for r in csv.reader(io.StringIO(data))]
+    # skipinitialspace so '..., "No 1, Main St", ...' (a space before the quote)
+    # is still read as one quoted field rather than splitting on the inner comma.
+    return [tuple(r) for r in csv.reader(io.StringIO(data), skipinitialspace=True)]
+
+
+def _split_phones(value):
+    """A phone cell may hold several numbers, e.g. "0803…, 0701…". Split on the
+    usual separators and normalise each, dropping blanks/dupes."""
+    s = _cell_str(value)
+    if not s:
+        return []
+    out = []
+    for part in re.split(r'[,;/\n]| and | & ', s):
+        n = _normalise_phone(part)
+        if n and any(c.isdigit() for c in n) and n not in out:
+            out.append(n)
+    return out
 
 
 def rows_from_pasted_text(text):
@@ -296,7 +313,11 @@ def rows_from_pasted_text(text):
         return []
     head = lines[0]
     delim = '\t' if (head.count('\t') and head.count('\t') >= head.count(',')) else ','
-    return [tuple(r) for r in csv.reader(io.StringIO('\n'.join(lines)), delimiter=delim)]
+    # skipinitialspace so '..., "No 1, Main St", ...' (note the space before the
+    # opening quote, common in hand-typed/pasted lists) is read as one quoted
+    # field instead of splitting on the comma inside the quotes.
+    return [tuple(r) for r in csv.reader(io.StringIO('\n'.join(lines)),
+                                         delimiter=delim, skipinitialspace=True)]
 
 
 def preview_student_rows(rows):
@@ -333,17 +354,16 @@ def preview_student_rows(rows):
             continue   # blank line — not shown, not counted
         if surname and surname.lower() in _SKIP_FIRST_CELL:
             continue   # leftover template/instruction row
-        if not surname or not first_name:
-            out.append({'row': row_num, 'error': 'Missing surname or first name',
-                        'data': {}})
-            continue
+        # At least one name present → importable (the other is left blank).
         valid += 1
-        out.append({'row': row_num, 'error': None,
+        partial = not (surname and first_name)
+        out.append({'row': row_num,
+                    'error': 'Only one name — will import, please complete it' if partial else None,
                     'name': ' '.join(p for p in [surname, first_name] if p),
                     'details': {'gender': _normalise_gender(col(row, 'gender')) or 'Unknown',
                                 'religion': col(row, 'religion'),
                                 'date_of_birth': col(row, 'dob'),
-                                'phone_number': _normalise_phone(col(row, 'parent_phone')),
+                                'phone_number': ', '.join(_split_phones(col(row, 'parent_phone'))) or None,
                                 'address': col(row, 'address')}})
     return {'recognised': sorted(colmap.keys()), 'ignored': ignored,
             'total': len(out), 'valid': valid, 'invalid': len(out) - valid,
@@ -412,10 +432,10 @@ def import_student_rows(rows, db, Student, ParentContact,
         if field and field not in colmap:
             colmap[field] = idx
 
-    if 'surname' not in colmap or 'first_name' not in colmap:
+    if 'surname' not in colmap and 'first_name' not in colmap:
         return 0, [
-            "Couldn't find the required column headers. Row 1 must include at "
-            "least 'Surname' and 'First Name' columns. Found: "
+            "Couldn't find a name column. Row 1 must include at least a "
+            "'Surname' or 'First Name' column. Found: "
             + ', '.join(str(h) for h in header if h) + '.'
         ]
 
@@ -449,9 +469,13 @@ def import_student_rows(rows, db, Student, ParentContact,
             continue
         if surname and surname.lower() in _SKIP_FIRST_CELL:
             continue
+        # A row needs at least one of the two names; the missing one is stored
+        # blank (the columns are NOT NULL) so a record with only a surname —
+        # or only a first name — still imports and can be completed later.
         if not surname or not first_name:
-            errors.append(f"Row {row_num}: missing Surname or First Name — skipped")
-            continue
+            errors.append(f"Row {row_num}: only one name given — imported, please complete it")
+            surname = surname or ''
+            first_name = first_name or ''
 
         dob = _parse_dob(get(row, 'dob'), errors, row_num)
 
@@ -489,16 +513,18 @@ def import_student_rows(rows, db, Student, ParentContact,
                 db.session.add(student)
                 db.session.flush()  # assign student.id
 
-                # phone_number is required on a contact, so only create one when
-                # a phone is present (a name on its own is dropped).
-                parent_phone = _normalise_phone(get(row, 'parent_phone'))
-                if parent_phone:
+                # A cell may carry several phone numbers — create one contact
+                # each (first is primary), all sharing the parent name/relation.
+                # A name on its own (no phone) is dropped, as phone is required.
+                parent_name = _cell_str(get(row, 'parent_name'))
+                parent_rel = _cell_str(get(row, 'parent_rel')) or 'Guardian'
+                for i, phone in enumerate(_split_phones(get(row, 'parent_phone'))):
                     db.session.add(ParentContact(
                         student_id=student.id,
-                        name=_cell_str(get(row, 'parent_name')),
-                        phone_number=parent_phone,
-                        relationship=_cell_str(get(row, 'parent_rel')) or 'Guardian',
-                        is_primary=True,
+                        name=parent_name,
+                        phone_number=phone,
+                        relationship=parent_rel,
+                        is_primary=(i == 0),
                     ))
 
                 # Optionally enrol the new student in the chosen class arm.

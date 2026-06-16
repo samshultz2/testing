@@ -73,6 +73,39 @@ def test_tab_separated_with_phone_creates_contact(app):
         assert contacts[0].phone_number == '08099887766'   # leading 0 restored
 
 
+def test_quoted_addresses_multi_phone_and_surname_only(app):
+    """The real-world register paste: spaces before quotes, addresses with
+    internal commas, two-phone cells, and a row with only a surname."""
+    client = _admin(app)
+    text = (
+        'Surname, First Name, Middle Name, Gender, Date of Birth, Religion, Address, '
+        'Hobbies, Name of Primary Contact, Phone Number, Relationship\n'
+        'Emmanuel, Eliezer, Oghenemiro, , , Christianity, "No 64, Owie street Agbo Auchi Park", '
+        ', Mrs. Emmanuel, 07038819942, Mother\n'
+        'Ehigiatoc, Praise, Oseze-le, , , Christianity, "37 Omorogbe street, for-mer Road Eyean", '
+        ', Mrs. Ehigiatoc, "08035341749, 07013850785", Mother\n'
+        'Abdulrazak, , , , , Christianity, off Cherry road, , Mrs. Abdulrazak, 07066345619, Mother'
+    )
+    pre = _post(client, text=text).get_json()
+    assert pre['ok'] and pre['valid'] == 3 and 'address' in pre['recognised']
+
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 3
+    with app.app_context():
+        # internal-comma address survived intact (not split / shifted)
+        em = Student.query.filter_by(surname='Emmanuel', first_name='Eliezer').first()
+        assert em.home_address == 'No 64, Owie street Agbo Auchi Park'
+        assert em.parent_contacts.first().relationship == 'Mother'
+        # the two-phone cell became two contacts, first primary
+        praise = Student.query.filter_by(surname='Ehigiatoc', first_name='Praise').first()
+        phones = sorted(c.phone_number for c in praise.parent_contacts.all())
+        assert phones == ['07013850785', '08035341749']
+        assert praise.parent_contacts.filter_by(is_primary=True).count() == 1
+        # surname-only row still imported (first name left blank)
+        ab = Student.query.filter_by(surname='Abdulrazak').first()
+        assert ab is not None and ab.first_name == ''
+
+
 def test_requires_a_name_column(app):
     client = _admin(app)
     r = _post(client, text='Phone, Religion\n08012345678, Islam')
