@@ -8,7 +8,7 @@ from utils.helpers import get_active_term
 import csv
 import io
 
-from flask import (Blueprint, render_template, request, redirect, url_for,
+from flask import (Blueprint, request, redirect, url_for,
                    flash, jsonify, Response)
 from sqlalchemy import func
 
@@ -24,6 +24,44 @@ from utils import comms
 comms_bp = Blueprint('comms', __name__, url_prefix='/communication')
 
 CHANNELS = ['WhatsApp', 'SMS']
+
+
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('communication/app.html', 'comm_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('comms.dashboard'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('comms.dashboard'))
+
+
+def _is_admin():
+    from utils.access_control import is_admin
+    return is_admin()
+
+
+def _nav_urls():
+    return {'dashboard': url_for('comms.dashboard'), 'compose': url_for('comms.compose'),
+            'announcements': url_for('comms.announcements'), 'messages': url_for('comms.messages_list'),
+            'templates': url_for('comms.templates_list'), 'contacts': url_for('comms.contacts'),
+            'settings': url_for('comms.settings')}
 
 
 def _active_term():
@@ -61,10 +99,18 @@ def dashboard():
     channel_chart = [{'channel': ch or 'Other', 'count': n} for ch, n in channel_rows]
     recent = scope_query(Message.query, Message).order_by(Message.created_at.desc()).limit(8).all()
     template_count = MessageTemplate.query.filter_by(is_active=True).count()
-    return render_template('communication/dashboard.html',
-        cov=cov, total_campaigns=total_campaigns, total_recipients=total_recipients,
-        total_sent=total_sent, channel_chart=channel_chart, recent=recent,
-        template_count=template_count)
+    return _render({
+        'page': 'dashboard', 'nav': _nav_urls(),
+        'cov': cov, 'total_campaigns': total_campaigns,
+        'total_recipients': int(total_recipients), 'total_sent': int(total_sent),
+        'channel_chart': channel_chart, 'template_count': template_count,
+        'recent': [{'id': m.id, 'date': m.created_at.strftime('%d %b'),
+                    'title': m.title or 'Message', 'audience_label': m.audience_label,
+                    'channel': m.channel, 'sent_count': m.sent_count or 0,
+                    'recipient_count': m.recipient_count or 0,
+                    'url': url_for('comms.message_detail', message_id=m.id)} for m in recent],
+        'urls': {'contacts_missing': url_for('comms.contacts', missing=1)},
+    })
 
 
 # ============================================================================
@@ -76,7 +122,18 @@ def dashboard():
 def announcements():
     items = Announcement.query.order_by(Announcement.is_pinned.desc(),
                                         Announcement.created_at.desc()).all()
-    return render_template('communication/announcements.html', items=items)
+    return _render({
+        'page': 'announcements', 'nav': _nav_urls(),
+        'items': [{'id': a.id, 'title': a.title, 'body': a.body or '',
+                   'category': a.category or 'Info', 'audience': a.audience or 'All',
+                   'is_pinned': bool(a.is_pinned), 'is_active': bool(a.is_active),
+                   'created_at': a.created_at.strftime('%d %b %Y') if a.created_at else '',
+                   'created_by': a.created_by or '',
+                   'starts_on': a.starts_on.strftime('%d %b') if a.starts_on else '',
+                   'ends_on': a.ends_on.strftime('%d %b') if a.ends_on else '',
+                   'delete_url': url_for('comms.delete_announcement', ann_id=a.id)} for a in items],
+        'add_url': url_for('comms.add_announcement'),
+    })
 
 
 def _read_announcement(a):
@@ -100,14 +157,12 @@ def _date(v):
 @login_required
 def add_announcement():
     if not (request.form.get('title') or '').strip():
-        flash('Title is required.', 'error')
-        return redirect(url_for('comms.announcements'))
+        return _err('Title is required.', url_for('comms.announcements'))
     a = Announcement(created_by=_current_user())
     _read_announcement(a)
     db.session.add(a)
     db.session.commit()
-    flash('Announcement posted.', 'success')
-    return redirect(url_for('comms.announcements'))
+    return _ok('Announcement posted.', url_for('comms.announcements'))
 
 
 @comms_bp.route('/announcements/<int:ann_id>/edit', methods=['POST'])
@@ -116,8 +171,7 @@ def edit_announcement(ann_id):
     a = db.get_or_404(Announcement, ann_id)
     _read_announcement(a)
     db.session.commit()
-    flash('Announcement updated.', 'success')
-    return redirect(url_for('comms.announcements'))
+    return _ok('Announcement updated.', url_for('comms.announcements'))
 
 
 @comms_bp.route('/announcements/<int:ann_id>/delete', methods=['POST'])
@@ -128,8 +182,7 @@ def delete_announcement(ann_id):
     log_action('communication.announcement_delete', target=a)
     db.session.delete(a)
     db.session.commit()
-    flash('Announcement deleted.', 'success')
-    return redirect(url_for('comms.announcements'))
+    return _ok('Announcement deleted.', url_for('comms.announcements'))
 
 
 @comms_bp.route('/contacts')
@@ -171,11 +224,22 @@ def contacts():
         contacts_list = [c for c in s.parent_contacts.all() if c.phone_number]
         if missing and contacts_list:
             continue
-        rows.append({'student': s, 'contacts': contacts_list})
+        rows.append({
+            'student': {'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
+                        'view_url': url_for('main.view_student', student_id=s.id)},
+            'contacts': [{'name': c.name or 'Parent', 'relationship': c.relationship or '',
+                          'is_primary': bool(c.is_primary), 'phone_number': c.phone_number,
+                          'wa_intl': comms.normalise_phone(c.phone_number)} for c in contacts_list],
+        })
 
-    return render_template('communication/contacts.html',
-        rows=rows, terms=terms, classes=classes, term=term,
-        class_id=class_id, q=q, missing=missing, cov=comms.coverage_stats())
+    return _render({
+        'page': 'contacts', 'nav': _nav_urls(), 'rows': rows,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'term_id': term.id if term else '', 'class_id': class_id or '',
+        'q': q, 'missing': bool(missing), 'cov': comms.coverage_stats(),
+        'self_url': url_for('comms.contacts'),
+    })
 
 
 # ============================================================================
@@ -187,8 +251,15 @@ def contacts():
 def templates_list():
     tpls = MessageTemplate.query.order_by(MessageTemplate.is_active.desc(),
                                           MessageTemplate.category, MessageTemplate.name).all()
-    return render_template('communication/templates.html',
-        templates=tpls, placeholders=comms.PLACEHOLDERS)
+    return _render({
+        'page': 'templates', 'nav': _nav_urls(), 'placeholders': comms.PLACEHOLDERS,
+        'templates': [{'id': t.id, 'name': t.name, 'body': t.body,
+                       'category': t.category or '', 'is_active': bool(t.is_active),
+                       'use_url': url_for('comms.compose', tpl=t.id),
+                       'edit_url': url_for('comms.edit_template', template_id=t.id),
+                       'delete_url': url_for('comms.delete_template', template_id=t.id)} for t in tpls],
+        'add_url': url_for('comms.add_template'),
+    })
 
 
 @comms_bp.route('/templates/add', methods=['POST'])
@@ -197,13 +268,11 @@ def add_template():
     name = (request.form.get('name') or '').strip()
     body = (request.form.get('body') or '').strip()
     if not (name and body):
-        flash('Template name and body are required.', 'error')
-        return redirect(url_for('comms.templates_list'))
+        return _err('Template name and body are required.', url_for('comms.templates_list'))
     db.session.add(MessageTemplate(name=name, body=body,
         category=(request.form.get('category') or 'General').strip()))
     db.session.commit()
-    flash(f'Template "{name}" saved.', 'success')
-    return redirect(url_for('comms.templates_list'))
+    return _ok(f'Template "{name}" saved.', url_for('comms.templates_list'))
 
 
 @comms_bp.route('/templates/<int:template_id>/edit', methods=['POST'])
@@ -215,8 +284,7 @@ def edit_template(template_id):
     t.category = (request.form.get('category') or t.category or 'General').strip()
     t.is_active = bool(request.form.get('is_active'))
     db.session.commit()
-    flash('Template updated.', 'success')
-    return redirect(url_for('comms.templates_list'))
+    return _ok('Template updated.', url_for('comms.templates_list'))
 
 
 @comms_bp.route('/templates/<int:template_id>/delete', methods=['POST'])
@@ -225,8 +293,7 @@ def delete_template(template_id):
     t = db.get_or_404(MessageTemplate, template_id)
     db.session.delete(t)
     db.session.commit()
-    flash('Template deleted.', 'success')
-    return redirect(url_for('comms.templates_list'))
+    return _ok('Template deleted.', url_for('comms.templates_list'))
 
 
 # ============================================================================
@@ -252,16 +319,15 @@ def compose():
         student_ids = request.form.getlist('student_ids', type=int)
 
         if not body:
-            flash('Message body cannot be empty.', 'error')
-            return redirect(url_for('comms.compose'))
+            return _err('Message body cannot be empty.', url_for('comms.compose'))
 
         targets = comms.resolve_audience(audience, term, class_id=class_id,
                                          arm_id=arm_id, student_ids=student_ids)
         # Only those with a phone number can actually be messaged.
         reachable = [t for t in targets if t['phone']]
         if not reachable:
-            flash('No recipients with a phone number matched that audience.', 'warning')
-            return redirect(url_for('comms.compose'))
+            return _err('No recipients with a phone number matched that audience.',
+                        url_for('comms.compose'))
 
         # Optional scheduling (auto-send via gateway at a future time).
         from utils import sms_gateway
@@ -290,11 +356,11 @@ def compose():
                 body=comms.render(body, ctx)))
         db.session.commit()
         if status == 'Scheduled':
-            flash(f'Campaign scheduled for {scheduled_at.strftime("%d %b %Y, %I:%M %p")} '
-                  f'({len(reachable)} parent(s)).', 'success')
+            note = (f'Campaign scheduled for {scheduled_at.strftime("%d %b %Y, %I:%M %p")} '
+                    f'({len(reachable)} parent(s)).')
         else:
-            flash(f'Campaign created for {len(reachable)} parent(s).', 'success')
-        return redirect(url_for('comms.message_detail', message_id=msg.id))
+            note = f'Campaign created for {len(reachable)} parent(s).'
+        return _ok(note, url_for('comms.message_detail', message_id=msg.id))
 
     # Pre-selection from query params (e.g. "Message defaulters" from Finance,
     # or "Use" from the templates page).
@@ -321,12 +387,22 @@ def compose():
 
     from utils import sms_gateway
     gw = sms_gateway.get_config()
-    return render_template('communication/compose.html',
-        term=term, terms=terms, classes=classes, arms=arms, templates=templates,
-        channels=CHANNELS, placeholders=comms.PLACEHOLDERS, cov=comms.coverage_stats(),
-        gateway_ready=sms_gateway.is_configured(gw),
-        gateway_label=sms_gateway.provider_label(gw),
-        pre_audience=pre_audience, pre_class=pre_class, pre_tpl=pre_tpl, pre_body=pre_body)
+    return _render({
+        'page': 'compose', 'nav': _nav_urls(),
+        'term_id': term.id if term else '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'arms': [{'id': a.id, 'name': a.name} for a in arms],
+        'templates': [{'id': t.id, 'name': t.name, 'category': t.category or '', 'body': t.body}
+                      for t in templates],
+        'channels': CHANNELS, 'placeholders': comms.PLACEHOLDERS, 'cov': comms.coverage_stats(),
+        'gateway_ready': sms_gateway.is_configured(gw),
+        'gateway_label': sms_gateway.provider_label(gw),
+        'pre_audience': pre_audience, 'pre_class': pre_class or '',
+        'pre_tpl': pre_tpl or '', 'pre_body': pre_body,
+        'urls': {'submit': url_for('comms.compose'), 'preview': url_for('comms.compose_preview'),
+                 'search': url_for('comms.students_search'), 'settings': url_for('comms.settings')},
+    })
 
 
 def _current_user():
@@ -385,7 +461,8 @@ def students_search():
             .filter(db.or_(Student.surname.ilike(like), Student.first_name.ilike(like),
                            Student.student_id.ilike(like)))
             .order_by(Student.surname).limit(15).all())
-    return jsonify([{'id': s.id, 'name': s.full_name, 'sid': s.student_id} for s in rows])
+    return jsonify([{'id': s.id, 'name': s.full_name, 'sid': s.student_id,
+                     'label': f'{s.full_name} ({s.student_id})'} for s in rows])
 
 
 @comms_bp.route('/messages/<int:message_id>/cancel-schedule', methods=['POST'])
@@ -396,17 +473,16 @@ def cancel_schedule(message_id):
     msg.status = 'Draft'
     msg.scheduled_at = None
     db.session.commit()
-    flash('Schedule cancelled — the campaign is now on hold.', 'success')
-    return redirect(url_for('comms.message_detail', message_id=message_id))
+    return _ok('Schedule cancelled — the campaign is now on hold.',
+               url_for('comms.message_detail', message_id=message_id))
 
 
 @comms_bp.route('/process-scheduled', methods=['POST'])
 @admin_required
 def process_scheduled():
     n = comms.dispatch_due_scheduled()
-    flash(f'Processed {n} due scheduled campaign(s).' if n else 'No campaigns were due.',
-          'success' if n else 'info')
-    return redirect(url_for('comms.messages_list'))
+    return _ok(f'Processed {n} due scheduled campaign(s).' if n else 'No campaigns were due.',
+               url_for('comms.messages_list'))
 
 
 # ============================================================================
@@ -417,7 +493,17 @@ def process_scheduled():
 @login_required
 def messages_list():
     msgs = scope_query(Message.query, Message).order_by(Message.created_at.desc()).all()
-    return render_template('communication/messages.html', messages=msgs)
+    return _render({
+        'page': 'messages', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'messages': [{'id': m.id, 'date': m.created_at.strftime('%d %b %Y') if m.created_at else '',
+                      'title': m.title or 'Message', 'status': m.status,
+                      'scheduled_at': m.scheduled_at.strftime('%d %b %H:%M') if m.scheduled_at else '',
+                      'audience_label': m.audience_label, 'channel': m.channel,
+                      'recipient_count': m.recipient_count or 0, 'sent_count': m.sent_count or 0,
+                      'url': url_for('comms.message_detail', message_id=m.id)} for m in msgs],
+        'urls': {'compose': url_for('comms.compose'),
+                 'process_scheduled': url_for('comms.process_scheduled')},
+    })
 
 
 @comms_bp.route('/messages/<int:message_id>')
@@ -428,15 +514,34 @@ def message_detail(message_id):
     recips = msg.recipients.order_by(MessageRecipient.parent_name).all()
     rows = []
     for r in recips:
-        rows.append({'r': r, 'intl': comms.normalise_phone(r.phone)})
+        rows.append({'id': r.id, 'parent_name': r.parent_name,
+                     'student_name': r.student.full_name if r.student else '—',
+                     'phone': r.phone, 'intl': comms.normalise_phone(r.phone),
+                     'status': r.status, 'error': r.error or '', 'body': r.body,
+                     'sent_url': url_for('comms.mark_sent', message_id=msg.id, rid=r.id)})
     from utils import sms_gateway
     gw = sms_gateway.get_config()
-    return render_template('communication/message_detail.html',
-        msg=msg, rows=rows, segments=comms.sms_segments(msg.body),
-        gateway_ready=sms_gateway.is_configured(gw),
-        gateway_label=sms_gateway.provider_label(gw),
-        failed_count=msg.recipients.filter(MessageRecipient.status == 'Failed').count(),
-        pending_count=msg.recipients.filter(MessageRecipient.status != 'Sent').count())
+    return _render({
+        'page': 'message_detail', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'msg': {'id': msg.id, 'title': msg.title or 'Campaign', 'channel': msg.channel,
+                'audience_label': msg.audience_label, 'status': msg.status, 'body': msg.body,
+                'scheduled_at': msg.scheduled_at.strftime('%d %b, %I:%M %p') if msg.scheduled_at else '',
+                'created_at': msg.created_at.strftime('%d %b %Y, %I:%M %p') if msg.created_at else '',
+                'created_by': msg.created_by or '', 'sent_count': msg.sent_count or 0,
+                'recipient_count': msg.recipient_count or 0},
+        'rows': rows, 'segments': comms.sms_segments(msg.body),
+        'gateway_ready': sms_gateway.is_configured(gw),
+        'gateway_label': sms_gateway.provider_label(gw),
+        'failed_count': msg.recipients.filter(MessageRecipient.status == 'Failed').count(),
+        'pending_count': msg.recipients.filter(MessageRecipient.status != 'Sent').count(),
+        'urls': {'export': url_for('comms.export_recipients', message_id=msg.id),
+                 'compose': url_for('comms.compose'),
+                 'cancel_schedule': url_for('comms.cancel_schedule', message_id=msg.id),
+                 'send_gateway': url_for('comms.send_gateway', message_id=msg.id),
+                 'mark_all_sent': url_for('comms.mark_all_sent', message_id=msg.id),
+                 'delete': url_for('comms.delete_message', message_id=msg.id),
+                 'list': url_for('comms.messages_list')},
+    })
 
 
 @comms_bp.route('/messages/<int:message_id>/recipient/<int:rid>/sent', methods=['POST'])
@@ -468,8 +573,8 @@ def mark_all_sent(message_id):
         n += 1
     msg.sent_count = msg.recipients.filter_by(status='Sent').count()
     db.session.commit()
-    flash(f'Marked {n} recipient(s) as sent.', 'success')
-    return redirect(url_for('comms.message_detail', message_id=message_id))
+    return _ok(f'Marked {n} recipient(s) as sent.',
+               url_for('comms.message_detail', message_id=message_id))
 
 
 @comms_bp.route('/messages/<int:message_id>/export')
@@ -498,8 +603,7 @@ def delete_message(message_id):
                target_type='message', target_id=msg.id, target_label=getattr(msg, 'title', None))
     db.session.delete(msg)
     db.session.commit()
-    flash('Campaign deleted.', 'success')
-    return redirect(url_for('comms.messages_list'))
+    return _ok('Campaign deleted.', url_for('comms.messages_list'))
 
 
 @comms_bp.route('/messages/<int:message_id>/send-gateway', methods=['POST'])
@@ -511,13 +615,13 @@ def send_gateway(message_id):
     require_branch_access(msg.branch_id)
     cfg = sms_gateway.get_config()
     if not sms_gateway.is_configured(cfg):
-        flash('No SMS gateway is configured. Add your provider key in Settings.', 'error')
-        return redirect(url_for('comms.message_detail', message_id=message_id))
+        return _err('No SMS gateway is configured. Add your provider key in Settings.',
+                    url_for('comms.message_detail', message_id=message_id))
 
     # Claim a scheduled campaign so this manual send can't race the worker.
     if msg.status in ('Scheduled', 'Sending') and not comms._claim_message(msg.id, msg.status):
-        flash('This campaign is already being sent.', 'warning')
-        return redirect(url_for('comms.message_detail', message_id=message_id))
+        return _err('This campaign is already being sent.',
+                    url_for('comms.message_detail', message_id=message_id))
 
     # Send in the background: each gateway call can take seconds, so sending a
     # whole batch inline would tie up this web worker for minutes.
@@ -526,9 +630,9 @@ def send_gateway(message_id):
     msg.status = 'Sending'
     db.session.commit()
     comms.dispatch_campaign_async(current_app._get_current_object(), msg.id, cfg)
-    flash(f'Sending {pending} message(s) via {sms_gateway.provider_label(cfg)} in the '
-          'background. Refresh this page to see delivery progress.', 'success')
-    return redirect(url_for('comms.message_detail', message_id=message_id))
+    return _ok(f'Sending {pending} message(s) via {sms_gateway.provider_label(cfg)} in the '
+               'background. Refresh this page to see delivery progress.',
+               url_for('comms.message_detail', message_id=message_id))
 
 
 # ============================================================================
@@ -542,11 +646,16 @@ def settings():
     cfg = sms_gateway.get_config()
     configured = sms_gateway.is_configured(cfg)
     balance_ok, balance = (sms_gateway.get_balance(cfg) if configured else (False, ''))
-    return render_template('communication/settings.html',
-        cfg=cfg, providers=sms_gateway.PROVIDERS,
-        configured=configured,
-        balance_ok=balance_ok, balance=balance,
-        provider_label=sms_gateway.provider_label(cfg))
+    return _render({
+        'page': 'settings', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'cfg': {'provider': cfg.get('provider', 'none'), 'sender': cfg.get('sender', ''),
+                'termii_key': cfg.get('termii_key', ''), 'twilio_sid': cfg.get('twilio_sid', ''),
+                'twilio_token': cfg.get('twilio_token', '')},
+        'providers': [{'key': k, 'label': v} for k, v in sms_gateway.PROVIDERS.items()],
+        'configured': configured, 'balance_ok': balance_ok, 'balance': balance,
+        'provider_label': sms_gateway.provider_label(cfg),
+        'urls': {'save': url_for('comms.save_settings'), 'test': url_for('comms.test_sms')},
+    })
 
 
 @comms_bp.route('/settings/save', methods=['POST'])
@@ -556,10 +665,9 @@ def save_settings():
     sms_gateway.save_config(request.form)
     cfg = sms_gateway.get_config()
     if cfg['provider'] != 'none' and not sms_gateway.is_configured(cfg):
-        flash('Settings saved, but some required fields for this provider are missing.', 'warning')
-    else:
-        flash('SMS gateway settings saved.', 'success')
-    return redirect(url_for('comms.settings'))
+        return _ok('Settings saved, but some required fields for this provider are missing.',
+                   url_for('comms.settings'))
+    return _ok('SMS gateway settings saved.', url_for('comms.settings'))
 
 
 @comms_bp.route('/settings/test', methods=['POST'])
@@ -568,12 +676,9 @@ def test_sms():
     from utils import sms_gateway
     phone = (request.form.get('phone') or '').strip()
     if not phone:
-        flash('Enter a phone number to send the test to.', 'error')
-        return redirect(url_for('comms.settings'))
+        return _err('Enter a phone number to send the test to.', url_for('comms.settings'))
     ok, info = sms_gateway.send_sms(phone,
         f'Test message from {comms.school_name()} via PosyHub. Your SMS gateway is working!')
     if ok:
-        flash(f'Test SMS sent successfully (ref: {info}).', 'success')
-    else:
-        flash(f'Test failed: {info}', 'error')
-    return redirect(url_for('comms.settings'))
+        return _ok(f'Test SMS sent successfully (ref: {info}).', url_for('comms.settings'))
+    return _err(f'Test failed: {info}', url_for('comms.settings'))
