@@ -34,6 +34,39 @@ from utils.useragent import parse_user_agent
 cbt_bp = Blueprint('cbt', __name__, url_prefix='/cbt')
 cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
 
+
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('cbt/app.html', 'cbt_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('cbt.dashboard'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('cbt.dashboard'))
+
+
+def _nav_urls():
+    return {'dashboard': url_for('cbt.dashboard'), 'add_exam': url_for('cbt.add_exam'),
+            'bank': url_for('cbt.bank'), 'passwords': url_for('cbt.passwords'),
+            'settings': url_for('cbt.settings'), 'lab_setup': url_for('cbt.lab_setup'),
+            'portal': url_for('cbt_portal.login')}
+
 PORTAL_KEY = 'cbt_student_id'
 MAX_VIOLATIONS = 3   # leave-page events allowed before the test auto-submits
 # After the timer expires, how long a returning student's device still gets the
@@ -113,9 +146,21 @@ def dashboard():
     exam_ids = [e.id for e in exams]
     attempts = (CBTAttempt.query.filter(CBTAttempt.status == 'Submitted',
                 CBTAttempt.exam_id.in_(exam_ids)).count() if exam_ids else 0)
-    return render_template('cbt/dashboard.html', exams=exams, total=total,
-        published=published, today_count=today_count, attempts=attempts,
-        terms=terms, term_id=term_id, show_all=(raw == 'all'))
+    return _render({
+        'page': 'dashboard', 'nav': _nav_urls(),
+        'total': total, 'published': published, 'today_count': today_count, 'attempts': attempts,
+        'term_id': term_id or '', 'show_all': (raw == 'all'),
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'exams': [{'id': e.id, 'title': e.title,
+                   'subject': e.subject.name if e.subject else '—',
+                   'class_name': (e.school_class.name if e.school_class else '—') + (f' {e.arm.name}' if e.arm else ''),
+                   'exam_date': e.exam_date.strftime('%d %b %Y') if e.exam_date else '',
+                   'question_count': e.question_count, 'is_published': bool(e.is_published),
+                   'detail_url': url_for('cbt.exam_detail', exam_id=e.id),
+                   'results_url': url_for('cbt.results', exam_id=e.id)} for e in exams],
+        'self_url': url_for('cbt.dashboard'),
+        'urls': {'add': url_for('cbt.add_exam'), 'export_all': url_for('cbt.results_export_all')},
+    })
 
 
 @cbt_bp.route('/settings', methods=['GET', 'POST'])
@@ -123,14 +168,15 @@ def dashboard():
 def settings():
     if request.method == 'POST':
         if not is_admin():
-            flash('Admins only.', 'error')
-            return redirect(url_for('cbt.settings'))
+            return _err('Admins only.', url_for('cbt.settings'), status=403)
         SchoolSettings.set('cbt_supervisor_pin', (request.form.get('supervisor_pin') or '').strip(),
                            'string', 'CBT supervisor override PIN')
-        flash('CBT settings saved.', 'success')
-        return redirect(url_for('cbt.settings'))
-    return render_template('cbt/settings.html',
-        supervisor_pin=SchoolSettings.get('cbt_supervisor_pin', ''))
+        return _ok('CBT settings saved.', url_for('cbt.settings'))
+    return _render({
+        'page': 'settings', 'nav': _nav_urls(), 'is_admin': is_admin(),
+        'supervisor_pin': SchoolSettings.get('cbt_supervisor_pin', ''),
+        'submit_url': url_for('cbt.settings'),
+    })
 
 
 @cbt_bp.route('/lab-setup')
@@ -138,7 +184,7 @@ def settings():
 def lab_setup():
     """Invigilator guide: launch lab laptops in locked kiosk mode."""
     portal_url = url_for('cbt_portal.login', _external=True)
-    return render_template('cbt/lab_setup.html', portal_url=portal_url)
+    return _render({'page': 'lab_setup', 'nav': _nav_urls(), 'portal_url': portal_url})
 
 
 def _exam_choices():
@@ -147,6 +193,31 @@ def _exam_choices():
         'classes': SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all(),
         'arms': ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all(),
         'terms': Term.query.order_by(Term.id.desc()).all(),
+    }
+
+
+def _exam_form_payload(e, submit_url, cancel_url):
+    ch = _exam_choices()
+    active = _active_term()
+    ex = None
+    if e:
+        ex = {'id': e.id, 'title': e.title or '', 'subject_id': e.subject_id or '',
+              'class_id': e.class_id or '', 'arm_id': e.arm_id or '', 'term_id': e.term_id or '',
+              'exam_date': e.exam_date.isoformat() if e.exam_date else '',
+              'start_time': e.start_time or '', 'end_time': e.end_time or '',
+              'duration_minutes': e.duration_minutes or 30,
+              'max_score': e.max_score if e.max_score else '',
+              'access_password': e.access_password or '', 'instructions': e.instructions or '',
+              'shuffle': bool(e.shuffle), 'strict_mode': bool(e.strict_mode),
+              'violation_limit': e.violation_limit if e.violation_limit is not None else 3}
+    return {
+        'page': 'exam_form', 'nav': _nav_urls(), 'mode': 'edit' if e else 'add', 'exam': ex,
+        'active_term_id': active.id if active else '',
+        'subjects': [{'id': s.id, 'name': s.name} for s in ch['subjects']],
+        'classes': [{'id': c.id, 'name': c.name} for c in ch['classes']],
+        'arms': [{'id': a.id, 'name': a.name} for a in ch['arms']],
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in ch['terms']],
+        'submit_url': submit_url, 'cancel_url': cancel_url,
     }
 
 
@@ -174,8 +245,7 @@ def _read_exam(e):
 def add_exam():
     if request.method == 'POST':
         if not (request.form.get('title') and request.form.get('access_password')):
-            flash('Title and an access password are required.', 'error')
-            return redirect(url_for('cbt.add_exam'))
+            return _err('Title and an access password are required.', url_for('cbt.add_exam'))
         from flask import session as _s
         e = CBTExam(created_by=_s.get('username') or 'Admin')
         _read_exam(e)
@@ -185,10 +255,8 @@ def add_exam():
         db.session.commit()
         from utils.audit import log_action
         log_action('cbt.exam_create', target=e)
-        flash('Exam created — now add questions.', 'success')
-        return redirect(url_for('cbt.exam_detail', exam_id=e.id))
-    active = _active_term()
-    return render_template('cbt/exam_form.html', exam=None, active_term=active, **_exam_choices())
+        return _ok('Exam created — now add questions.', url_for('cbt.exam_detail', exam_id=e.id))
+    return _render(_exam_form_payload(None, url_for('cbt.add_exam'), url_for('cbt.dashboard')))
 
 
 @cbt_bp.route('/exams/<int:exam_id>')
@@ -206,9 +274,9 @@ def edit_exam(exam_id):
     if request.method == 'POST':
         _read_exam(e)
         db.session.commit()
-        flash('Exam updated.', 'success')
-        return redirect(url_for('cbt.exam_detail', exam_id=e.id))
-    return render_template('cbt/exam_form.html', exam=e, active_term=_active_term(), **_exam_choices())
+        return _ok('Exam updated.', url_for('cbt.exam_detail', exam_id=e.id))
+    return _render(_exam_form_payload(e, url_for('cbt.edit_exam', exam_id=e.id),
+                                      url_for('cbt.exam_detail', exam_id=e.id)))
 
 
 @cbt_bp.route('/exams/<int:exam_id>/publish', methods=['POST'])
@@ -466,8 +534,22 @@ def results(exam_id):
                 CBTAnswer.is_correct == True).count()
         pct = round(correct / len(submitted) * 100, 1) if submitted else 0
         analysis.append({'q': q, 'correct': correct, 'pct': pct})
-    return render_template('cbt/results.html', e=e, attempts=attempts, avg=avg,
-                           analysis=analysis, submitted_count=len(submitted))
+    return _render({
+        'page': 'results', 'nav': _nav_urls(),
+        'exam': {'id': e.id, 'title': e.title, 'total_marks': e.total_marks,
+                 'question_count': e.question_count},
+        'avg': avg, 'submitted_count': len(submitted),
+        'attempts': [{'id': a.id, 'student': a.student.full_name if a.student else '—',
+                      'student_id': a.student.student_id if a.student else '',
+                      'raw_score': a.raw_score, 'raw_total': a.raw_total,
+                      'score': a.score, 'total': a.total, 'percentage': a.percentage,
+                      'violations': a.violations, 'status': a.status,
+                      'review_url': url_for('cbt.attempt_review', attempt_id=a.id)} for a in attempts],
+        'analysis': [{'text': it['q'].question_text, 'correct': it['correct'], 'pct': it['pct']}
+                     for it in analysis],
+        'urls': {'export': url_for('cbt.results_export', exam_id=e.id),
+                 'detail': url_for('cbt.exam_detail', exam_id=e.id)},
+    })
 
 
 @cbt_bp.route('/exams/<int:exam_id>/monitor')
