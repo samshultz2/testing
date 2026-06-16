@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set _t = {'dashboard':'Staff & HR','staff':'Staff Directory','staff_form':'Staff','staff_detail':'Staff Profile','departments':'Departments','leave':'Leave Management','payroll':'Payroll','payroll_detail':'Payroll','attendance':'Staff Attendance','settings':'HR Settings'} %}
+{% block title %}{{ _t.get(hr_json.page,'Staff / HR') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if hr_json.page == 'dashboard' %}<span>Staff / HR</span>
+{% else %}<a href="{{ url_for('hr.dashboard') }}">HR</a> / <span>{{ _t.get(hr_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
+.fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.fin-tab i{font-size:.85rem;opacity:.8}
+.fin-tab:hover{color:var(--primary);background:var(--gray-50)}
+.fin-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+/* dashboard */
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
+.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
+.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
+.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
+.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
+.kpi .ic.purple{background:linear-gradient(135deg,#7e6cf0,#5a48c9)}
+.kpi .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.hr-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:992px){.hr-grid.c2{grid-template-columns:1fr 1fr}}
+.widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
+.widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.45rem}
+.widget .wh h3 i{color:var(--primary)}
+.widget .wb{padding:1rem}
+.chart-box{position:relative;height:230px}
+/* staff detail */
+.profile-head{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#11998e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;flex-shrink:0}
+.info-grid{display:grid;grid-template-columns:1fr;gap:.1rem}
+@media(min-width:640px){.info-grid{grid-template-columns:1fr 1fr}}
+.info-row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}
+.info-row .k{color:var(--text-muted);font-size:.85rem}
+.info-row .v{font-weight:600;text-align:right}
+.hr-2col{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:992px){.hr-2col{grid-template-columns:1fr 1fr}}
+/* attendance */
+.att-status select{min-width:120px}
+.sum-chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.sum-chips .chip{background:var(--gray-100);border-radius:var(--radius-full);padding:.35rem .8rem;font-size:.82rem;font-weight:600}
+</style>
+{% endblock %}
+{% block content %}
+<div id="hr-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="hr-data">{{ hr_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/react/hr-app.js') }}" defer></script>
+{% endblock %}

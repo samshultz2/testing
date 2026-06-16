@@ -1,0 +1,755 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { submitJson } from '../lib/forms';
+import { naira } from '../lib/format';
+import { useSection, NavCtx, useNav, navParams } from '../lib/section';
+import { Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
+
+const TABS = [
+  ['dashboard', 'fa-chart-pie', 'Overview'], ['staff', 'fa-users', 'Staff'],
+  ['attendance', 'fa-user-clock', 'Attendance'], ['leave', 'fa-plane-departure', 'Leave'],
+  ['payroll', 'fa-money-check-dollar', 'Payroll'], ['departments', 'fa-sitemap', 'Departments'],
+  ['settings', 'fa-gear', 'Settings'],
+];
+const TAB_FOR = { staff_form: 'staff', staff_detail: 'staff', payroll_detail: 'payroll' };
+
+function Tabs({ d }) {
+  const nav = useNav();
+  return <SectionTabs tabs={TABS} urls={d.nav} active={TAB_FOR[d.page] || d.page} go={nav.go} />;
+}
+
+const nairaShort = (n) => {
+  n = Number(n) || 0;
+  if (n >= 1e6) return '₦' + (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '₦' + (n / 1e3).toFixed(1) + 'k';
+  return naira(n);
+};
+const statusBadge = (s) => 'badge ' + (s === 'Active' ? 'badge-success' : s === 'On Leave' ? 'badge-warning' : 'badge-danger');
+const typeBadge = (t) => 'badge ' + (t === 'Teaching' ? 'badge-info' : 'badge-secondary');
+const leaveBadge = (s) => 'badge ' + (s === 'Approved' ? 'badge-success' : s === 'Rejected' ? 'badge-danger' : 'badge-warning');
+const runBadge = (s) => 'badge ' + (s === 'Paid' ? 'badge-success' : s === 'Finalized' ? 'badge-info' : 'badge-warning');
+
+// ---- Dashboard -------------------------------------------------------------
+function Dashboard({ d }) {
+  const st = d.stats;
+  const deptRef = useRef();
+  const typeRef = useRef();
+  useEffect(() => {
+    if (!window.Chart) return;
+    const charts = [];
+    const cs = getComputedStyle(document.body);
+    window.Chart.defaults.color = cs.getPropertyValue('--text-secondary') || '#666';
+    const PALETTE = ['#4e73df', '#1cc88a', '#f6c23e', '#e74a3b', '#7e6cf0', '#11998e', '#fd7e14', '#20c997'];
+    if (deptRef.current && st.dept_chart.length) {
+      charts.push(new window.Chart(deptRef.current, {
+        type: 'bar', data: { labels: st.dept_chart.map((x) => x.name), datasets: [{ data: st.dept_chart.map((x) => x.count), backgroundColor: '#4e73df', borderRadius: 5 }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
+      }));
+    }
+    if (typeRef.current && st.total) {
+      charts.push(new window.Chart(typeRef.current, {
+        type: 'doughnut', data: { labels: st.type_chart.map((x) => x.name), datasets: [{ data: st.type_chart.map((x) => x.count), backgroundColor: PALETTE, borderWidth: 0 }] },
+        options: { maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } },
+      }));
+    }
+    return () => charts.forEach((c) => c.destroy());
+  }, [st]);
+
+  const kpis = [['blue', 'fa-users', st.total, 'Total staff'], ['green', 'fa-chalkboard-user', st.teaching, 'Teaching'],
+    ['purple', 'fa-user-gear', st.non_teaching, 'Non-teaching'], ['amber', 'fa-money-check-dollar', nairaShort(st.monthly_payroll), 'Monthly payroll', naira(st.monthly_payroll)]];
+  return (
+    <>
+      <div className="page-header"><h1>Staff &amp; HR</h1>
+        <div className="page-header-actions"><a href={d.urls.add_staff} className="btn btn-primary"><i className="fas fa-user-plus" /> Add Staff</a></div>
+      </div>
+      <Tabs d={d} />
+      <div className="kpi-row">{kpis.map(([c, ic, v, l, title]) => (
+        <div className="kpi" key={l}><div className={'ic ' + c}><i className={'fas ' + ic} /></div>
+          <div><div className="v" title={title || ''}>{v}</div><div className="l">{l}</div></div></div>))}
+      </div>
+      <div className="hr-grid c2">
+        <div className="widget"><div className="wh"><h3><i className="fas fa-sitemap" /> Staff by department</h3></div>
+          <div className="wb"><div className="chart-box">{st.dept_chart.length ? <canvas ref={deptRef} /> : <Empty icon="fa-sitemap" title=""><p>No staff yet</p></Empty>}</div></div></div>
+        <div className="widget"><div className="wh"><h3><i className="fas fa-chart-pie" /> Teaching vs non-teaching</h3></div>
+          <div className="wb"><div className="chart-box">{st.total ? <canvas ref={typeRef} /> : <Empty icon="fa-chart-pie" title=""><p>No staff yet</p></Empty>}</div></div></div>
+      </div>
+      <div className="hr-grid c2">
+        <div className="widget">
+          <div className="wh"><h3><i className="fas fa-plane-departure" /> Pending leave ({st.pending_leave})</h3><a href={d.urls.leave_pending} className="text-sm">Review</a></div>
+          <div className="wb" style={{ padding: 0 }}>
+            {d.pending_leaves.length ? (
+              <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Days</th></tr></thead>
+                <tbody>{d.pending_leaves.map((lv, i) => (
+                  <tr key={i}><td data-label="Staff">{lv.staff_name}</td><td data-label="Type">{lv.leave_type}</td><td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td></tr>))}</tbody>
+              </table></div>
+            ) : <Empty icon="fa-check" title="" style={{ padding: '1.4rem' }}><p>No pending leave requests</p></Empty>}
+          </div>
+        </div>
+        <div className="widget">
+          <div className="wh"><h3><i className="fas fa-user-clock" /> Recently added</h3><a href={d.nav.staff} className="text-sm">All staff</a></div>
+          <div className="wb" style={{ padding: 0 }}>
+            {d.recent.length ? (
+              <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Name</th><th>Designation</th><th>Dept</th></tr></thead>
+                <tbody>{d.recent.map((s) => (
+                  <tr key={s.id}><td data-label="Name"><a href={s.url}>{s.full_name}</a></td><td data-label="Designation" className="text-muted text-sm">{s.designation}</td><td data-label="Dept">{s.department}</td></tr>))}</tbody>
+              </table></div>
+            ) : <Empty icon="fa-user-plus" title="" style={{ padding: '1.4rem' }}><p>No staff yet</p><a href={d.urls.add_staff} className="btn btn-primary btn-sm mt-2">Add staff</a></Empty>}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---- Staff list ------------------------------------------------------------
+function Staff({ d }) {
+  const nav = useNav();
+  const a = d.applied;
+  const [q, setQ] = useState(a.q);
+  const go = (extra) => navParams(nav.go, d.self_url, { department_id: a.department_id, staff_type: a.staff_type, status: a.status, q, ...extra });
+  return (
+    <>
+      <div className="page-header"><h1>Staff Directory</h1>
+        <div className="page-header-actions">
+          <a href={d.urls.export} className="btn btn-secondary" data-native download><i className="fas fa-file-csv" /> Export</a>
+          <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-user-plus" /> Add Staff</a>
+        </div>
+      </div>
+      <Tabs d={d} />
+      <div className="card mb-3"><div className="card-body">
+        <form className="filter-form" onSubmit={(e) => { e.preventDefault(); go(); }}>
+          <div className="form-group"><label className="form-label">Department</label>
+            <select className="form-control" value={a.department_id} onChange={(e) => go({ department_id: e.target.value })}>
+              <option value="">All</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Type</label>
+            <select className="form-control" value={a.staff_type} onChange={(e) => go({ staff_type: e.target.value })}>
+              <option value="">All</option>{d.staff_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Status</label>
+            <select className="form-control" value={a.status} onChange={(e) => go({ status: e.target.value })}>
+              <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Search</label>
+            <input type="text" className="form-control" value={q} placeholder="Name, ID, role, phone" onChange={(e) => setQ(e.target.value)} /></div>
+        </form>
+      </div></div>
+      <div className="card"><div className="card-header"><h3>{d.staff.length} staff</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.staff.length ? (
+            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+              <thead><tr><th>Staff ID</th><th>Name</th><th>Designation</th><th>Department</th><th>Type</th><th>Status</th><th /></tr></thead>
+              <tbody>{d.staff.map((s) => (
+                <tr key={s.id}>
+                  <td data-label="Staff ID">{s.staff_id}</td>
+                  <td data-label="Name"><a href={s.url}><strong>{s.full_name}</strong></a>{s.phone && <div className="text-muted text-sm">{s.phone}</div>}</td>
+                  <td data-label="Designation">{s.designation}</td>
+                  <td data-label="Department">{s.department}</td>
+                  <td data-label="Type"><span className={typeBadge(s.staff_type)}>{s.staff_type}</span></td>
+                  <td data-label="Status"><span className={statusBadge(s.status)}>{s.status}</span></td>
+                  <td className="actions"><a href={s.url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-right" /></a></td>
+                </tr>))}</tbody>
+            </table></div>
+          ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a></Empty>}
+        </div></div>
+    </>
+  );
+}
+
+// ---- Staff form (add / edit) ----------------------------------------------
+function StaffForm({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState(d.staff);
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.first_name.trim() || !f.surname.trim()) { notify('error', 'First name and surname are required.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.submit_url, f);
+    setBusy(false);
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
+  };
+  const T = ({ k, label, type = 'text', req, ...rest }) => (
+    <div className="form-group"><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
+      <input type={type} className="form-control" required={req} value={f[k]} onChange={(e) => set(k, e.target.value)} {...rest} /></div>
+  );
+  return (
+    <>
+      <div className="page-header"><h1>{d.mode === 'edit' ? 'Edit Staff' : 'Add Staff'}</h1></div>
+      <form onSubmit={submit}>
+        <div className="card mb-3"><div className="card-header"><h3>Personal</h3></div><div className="card-body">
+          <div className="form-row"><T k="first_name" label="First name" req /><T k="surname" label="Surname" req /></div>
+          <div className="form-row"><T k="middle_name" label="Middle name" />
+            <div className="form-group"><label className="form-label">Gender</label>
+              <select className="form-control" value={f.gender} onChange={(e) => set('gender', e.target.value)}><option value="">—</option><option>Male</option><option>Female</option></select></div>
+            <T k="date_of_birth" label="Date of birth" type="date" /></div>
+          <div className="form-row"><T k="phone" label="Phone" /><T k="email" label="Email" type="email" /></div>
+          <T k="address" label="Address" />
+        </div></div>
+
+        <div className="card mb-3"><div className="card-header"><h3>Employment</h3></div><div className="card-body">
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Department</label>
+              <select className="form-control" value={f.department_id} onChange={(e) => set('department_id', e.target.value)}><option value="">—</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+            <T k="designation" label="Designation" placeholder="e.g., Mathematics Teacher" /></div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Staff type</label>
+              <select className="form-control" value={f.staff_type} onChange={(e) => set('staff_type', e.target.value)}>{d.staff_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Employment</label>
+              <select className="form-control" value={f.employment_type} onChange={(e) => set('employment_type', e.target.value)}>{d.employment_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Status</label>
+              <select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          </div>
+          <div className="form-row"><T k="date_employed" label="Date employed" type="date" /><T k="salary" label="Monthly salary (₦)" type="number" min="0" step="500" /></div>
+          <T k="qualification" label="Qualification" placeholder="e.g., B.Sc Mathematics, PGDE" />
+        </div></div>
+
+        <div className="card mb-3"><div className="card-header"><h3>Next of kin &amp; bank</h3></div><div className="card-body">
+          <div className="form-row"><T k="nok_name" label="Next of kin" /><T k="nok_phone" label="NOK phone" /><T k="nok_relationship" label="Relationship" /></div>
+          <div className="form-row"><T k="bank_name" label="Bank" /><T k="account_number" label="Account number" /><T k="account_name" label="Account name" /></div>
+          <div className="form-group"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        </div></div>
+
+        <div className="page-header-actions">
+          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> {d.mode === 'edit' ? 'Save Changes' : 'Add Staff'}</button>
+          <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
+        </div>
+      </form>
+    </>
+  );
+}
+
+// ---- Staff detail ----------------------------------------------------------
+function StaffDetail({ d, notify }) {
+  const nav = useNav();
+  const s = d.s;
+  const act = async (url, fields, confirmMsg, follow) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
+    else notify('error', r.error || 'Action failed.');
+  };
+  const Row = ({ k, v }) => <div className="info-row"><span className="k">{k}</span><span className="v">{v || '—'}</span></div>;
+  return (
+    <>
+      <div className="page-header"><h1>Staff Profile</h1>
+        <div className="page-header-actions">
+          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary"><i className="fas fa-phone" /></a>
+            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary"><i className="fab fa-whatsapp" /></a></>}
+          <a href={d.urls.edit} className="btn btn-primary"><i className="fas fa-edit" /> Edit</a>
+          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i className="fas fa-box-archive" /></button>}
+        </div>
+      </div>
+
+      <div className="card mb-3"><div className="card-body"><div className="profile-head">
+        <div className="avatar">{s.initials}</div>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <h2 style={{ margin: 0 }}>{s.full_name}</h2>
+          <div className="text-muted">{s.designation || '—'}{s.department && ` · ${s.department}`}</div>
+          <div className="mt-1">
+            <span className={typeBadge(s.staff_type)}>{s.staff_type}</span>{' '}
+            <span className="badge badge-secondary">{s.employment_type}</span>{' '}
+            <span className={statusBadge(s.status)}>{s.status}</span>{' '}
+            <span className="badge badge-primary">{s.staff_id}</span>
+          </div>
+        </div>
+      </div></div></div>
+
+      <div className="hr-2col">
+        <div className="card"><div className="card-header"><h3>Details</h3></div><div className="card-body"><div className="info-grid">
+          <Row k="Phone" v={s.phone} /><Row k="Email" v={s.email} /><Row k="Gender" v={s.gender} />
+          <Row k="Date of birth" v={s.date_of_birth} /><Row k="Date employed" v={s.date_employed} />
+          <Row k="Salary" v={s.salary ? naira(s.salary) : ''} /><Row k="Qualification" v={s.qualification} /><Row k="Address" v={s.address} />
+        </div></div></div>
+        <div className="card"><div className="card-header"><h3>Next of kin &amp; bank</h3></div><div className="card-body"><div className="info-grid">
+          <Row k="Next of kin" v={s.nok_name} /><Row k="NOK phone" v={s.nok_phone} /><Row k="Relationship" v={s.nok_relationship} />
+          <Row k="Bank" v={s.bank_name} /><Row k="Account no." v={s.account_number} /><Row k="Account name" v={s.account_name} />
+        </div>{s.notes && <p className="text-muted text-sm mt-2">{s.notes}</p>}</div></div>
+      </div>
+
+      <SalarySection d={d} act={act} />
+      <LeaveSection d={d} act={act} notify={notify} />
+      {d.payslips.length > 0 && (
+        <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-money-check-dollar" /> Payslips</h3></div>
+          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Period</th><th className="text-right">Basic</th><th className="text-right">Allow.</th><th className="text-right">Deduct.</th><th className="text-right">Net</th><th /></tr></thead>
+            <tbody>{d.payslips.map((ps, i) => (
+              <tr key={i}><td data-label="Period">{ps.period}</td><td data-label="Basic" className="text-right">{naira(ps.basic)}</td>
+                <td data-label="Allow." className="text-right">{naira(ps.allowances)}</td><td data-label="Deduct." className="text-right">{naira(ps.total_deductions)}</td>
+                <td data-label="Net" className="text-right"><strong>{naira(ps.net)}</strong></td>
+                <td className="actions"><a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i className="fas fa-print" /></a></td></tr>))}</tbody>
+          </table></div></div></div>
+      )}
+    </>
+  );
+}
+
+function SalarySection({ d, act }) {
+  const s = d.s;
+  const [f, setF] = useState({ new_salary: s.salary || '', effective_date: d.today, reason: '' });
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const submit = (e) => { e.preventDefault(); act(d.urls.adjust_salary, f, 'Update salary and record this change?'); };
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-money-bill-trend-up" /> Salary &amp; increments</h3><span className="badge badge-primary" style={{ alignSelf: 'center' }}>Current: {naira(s.salary)}</span></div>
+      <div className="card-body">
+        {d.is_admin && (
+          <form onSubmit={submit} className="d-flex gap-2 align-end flex-wrap mb-3">
+            <div className="form-group mb-0"><label className="form-label">New salary (₦)</label><input type="number" className="form-control" min="0" step="500" required value={f.new_salary} onChange={(e) => set('new_salary', e.target.value)} /></div>
+            <div className="form-group mb-0"><label className="form-label">Effective</label><input type="date" className="form-control" value={f.effective_date} onChange={(e) => set('effective_date', e.target.value)} /></div>
+            <div className="form-group mb-0" style={{ flex: 1, minWidth: 160 }}><label className="form-label">Reason</label><input type="text" className="form-control" placeholder="e.g., Annual increment, Promotion" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
+            <button className="btn btn-primary"><i className="fas fa-arrow-trend-up" /> Apply</button>
+          </form>
+        )}
+        {d.salary_history.length ? (
+          <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Effective</th><th className="text-right">Previous</th><th className="text-right">New</th><th className="text-right">Change</th><th>Reason</th></tr></thead>
+            <tbody>{d.salary_history.map((h, i) => (
+              <tr key={i}><td data-label="Effective">{h.effective}</td><td data-label="Previous" className="text-right">{naira(h.previous_salary)}</td>
+                <td data-label="New" className="text-right">{naira(h.new_salary)}</td>
+                <td data-label="Change" className="text-right"><span style={{ color: h.change >= 0 ? 'var(--success)' : 'var(--danger)' }}>{h.change >= 0 ? '+' : ''}{naira(h.change)}</span></td>
+                <td data-label="Reason" className="text-muted text-sm">{h.reason}</td></tr>))}</tbody>
+          </table></div>
+        ) : <p className="text-muted mb-0">No salary changes recorded yet.</p>}
+      </div></div>
+  );
+}
+
+function LeaveSection({ d, act }) {
+  const s = d.s;
+  const [f, setF] = useState({ leave_type: d.leave_types[0], start_date: '', end_date: '', reason: '' });
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const add = (e) => { e.preventDefault(); act(d.urls.add_leave, { ...f, staff_id: s.id }); };
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-plane-departure" /> Leave history</h3></div>
+      <div className="card-body">
+        <form onSubmit={add} className="d-flex gap-2 align-end flex-wrap mb-3">
+          <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.leave_type} onChange={(e) => set('leave_type', e.target.value)}>{d.leave_types.map((t) => <option key={t}>{t}</option>)}</select></div>
+          <div className="form-group mb-0"><label className="form-label">From</label><input type="date" className="form-control" required value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></div>
+          <div className="form-group mb-0"><label className="form-label">To</label><input type="date" className="form-control" required value={f.end_date} onChange={(e) => set('end_date', e.target.value)} /></div>
+          <div className="form-group mb-0" style={{ flex: 1, minWidth: 160 }}><label className="form-label">Reason</label><input type="text" className="form-control" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
+          <button className="btn btn-secondary"><i className="fas fa-plus" /> Add</button>
+        </form>
+        {d.leaves.length ? (
+          <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th /></tr></thead>
+            <tbody>{d.leaves.map((lv) => (
+              <tr key={lv.id}><td data-label="Type">{lv.leave_type}</td><td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td>
+                <td data-label="Status"><span className={leaveBadge(lv.status)}>{lv.status}</span></td>
+                <td className="actions"><div className="d-flex gap-1 justify-end">
+                  {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" title="Approve" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i className="fas fa-check" /></button>}
+                  {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" title="Reject" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i className="fas fa-xmark" /></button>}
+                  <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete leave record?')}><i className="fas fa-trash" /></button>
+                </div></td></tr>))}</tbody>
+          </table></div>
+        ) : <p className="text-muted mb-0">No leave records.</p>}
+      </div></div>
+  );
+}
+
+// ---- Departments -----------------------------------------------------------
+function Departments({ d, notify }) {
+  const nav = useNav();
+  const [name, setName] = useState('');
+  const [editing, setEditing] = useState(null);
+  const act = async (url, fields, confirmMsg) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
+  };
+  const add = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) { notify('error', 'Enter a department name.'); return; }
+    const r = await submitJson(d.add_url, { name });
+    if (r.ok) { setName(''); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>Departments</h1></div>
+      <Tabs d={d} />
+      {d.is_admin && (
+        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Add Department</h3></div>
+          <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
+            <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g., Sports" required value={name} onChange={(e) => setName(e.target.value)} /></div>
+            <button className="btn btn-primary"><i className="fas fa-save" /> Add</button>
+          </form></div></div>
+      )}
+      <div className="card"><div className="card-header"><h3>Departments ({d.departments.length})</h3></div>
+        <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+          <thead><tr><th>Name</th><th className="text-right">Staff</th><th>Status</th>{d.is_admin && <th />}</tr></thead>
+          <tbody>{d.departments.map((dep) => (
+            <React.Fragment key={dep.id}>
+              <tr>
+                <td data-label="Name"><strong>{dep.name}</strong></td>
+                <td data-label="Staff" className="text-right">{dep.count}</td>
+                <td data-label="Status">{dep.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-secondary">Inactive</span>}</td>
+                {d.is_admin && <td className="actions"><div className="d-flex gap-1 justify-end">
+                  <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dep.id ? null : dep.id)}><i className="fas fa-edit" /></button>
+                  <button className="btn btn-danger btn-sm" onClick={() => act(dep.delete_url, {}, `Delete ${dep.name}?`)}><i className="fas fa-trash" /></button>
+                </div></td>}
+              </tr>
+              {d.is_admin && editing === dep.id && (
+                <tr><td colSpan={4} className="stack-full" style={{ background: 'var(--gray-50)' }}>
+                  <DeptEdit dep={dep} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
+                </td></tr>)}
+            </React.Fragment>))}</tbody>
+        </table></div></div></div>
+    </>
+  );
+}
+
+function DeptEdit({ dep, notify, onDone }) {
+  const [name, setName] = useState(dep.name);
+  const [active, setActive] = useState(dep.is_active);
+  const submit = async (e) => {
+    e.preventDefault();
+    const r = await submitJson(dep.edit_url, { name, is_active: active ? 'on' : '' });
+    if (r.ok) onDone(); else notify('error', r.error || 'Could not update.');
+  };
+  return (
+    <form onSubmit={submit} className="d-flex gap-2 align-end flex-wrap">
+      <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">Name</label><input type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} /></div>
+      <label className="form-check mb-0"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active</label>
+      <button className="btn btn-primary btn-sm"><i className="fas fa-save" /> Update</button>
+    </form>
+  );
+}
+
+// ---- Leave -----------------------------------------------------------------
+function Leave({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const act = async (url, fields, confirmMsg) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
+  };
+  const add = async (e) => {
+    e.preventDefault();
+    if (!f.staff_id) { notify('error', 'Select a staff member.'); return; }
+    const r = await submitJson(d.add_url, f);
+    if (r.ok) { setF({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' }); notify('success', r.message); nav.refresh(); }
+    else notify('error', r.error || 'Could not add.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>Leave Management</h1></div>
+      <Tabs d={d} />
+      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Record Leave</h3></div>
+        <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
+          <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Staff</label>
+            <select className="form-control" required value={f.staff_id} onChange={(e) => set('staff_id', e.target.value)}><option value="">Select…</option>{d.staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>
+          <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.leave_type} onChange={(e) => set('leave_type', e.target.value)}>{d.leave_types.map((t) => <option key={t}>{t}</option>)}</select></div>
+          <div className="form-group mb-0"><label className="form-label">From</label><input type="date" className="form-control" required value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></div>
+          <div className="form-group mb-0"><label className="form-label">To</label><input type="date" className="form-control" required value={f.end_date} onChange={(e) => set('end_date', e.target.value)} /></div>
+          <button className="btn btn-primary"><i className="fas fa-save" /> Add</button>
+        </form></div></div>
+
+      <div className="card mb-3"><div className="card-body">
+        <form className="filter-form"><div className="form-group"><label className="form-label">Status</label>
+          <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.self_url, { status: e.target.value })}>
+            <option value="">All</option>{['Pending', 'Approved', 'Rejected'].map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+        </form>
+      </div></div>
+
+      <div className="card"><div className="card-header"><h3>{d.leaves.length} record(s)</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.leaves.length ? (
+            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+              <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th /></tr></thead>
+              <tbody>{d.leaves.map((lv) => (
+                <tr key={lv.id}><td data-label="Staff"><a href={lv.staff_url}>{lv.staff_name}</a></td><td data-label="Type">{lv.leave_type}</td>
+                  <td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td>
+                  <td data-label="Status"><span className={leaveBadge(lv.status)}>{lv.status}</span></td>
+                  <td className="actions"><div className="d-flex gap-1 justify-end">
+                    {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i className="fas fa-check" /></button>}
+                    {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i className="fas fa-xmark" /></button>}
+                    <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete?')}><i className="fas fa-trash" /></button>
+                  </div></td></tr>))}</tbody>
+            </table></div>
+          ) : <Empty icon="fa-plane-departure" title="No leave records"><p>Record staff leave above.</p></Empty>}
+        </div></div>
+    </>
+  );
+}
+
+// ---- Payroll list ----------------------------------------------------------
+function Payroll({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ month: d.cur_month, year: d.cur_year });
+  const create = async (e) => {
+    e.preventDefault();
+    const r = await submitJson(d.create_url, f);
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not generate.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>Payroll</h1></div>
+      <Tabs d={d} />
+      {d.is_admin && (
+        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Generate Payroll</h3></div>
+          <div className="card-body">
+            <p className="text-muted text-sm">Creates a payslip for every active staff member using their monthly salary. You can adjust allowances/deductions afterwards.</p>
+            <form onSubmit={create} className="d-flex gap-2 align-end flex-wrap">
+              <div className="form-group mb-0"><label className="form-label">Month</label><select className="form-control" value={f.month} onChange={(e) => setF((s) => ({ ...s, month: e.target.value }))}>{d.months.map((m) => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div>
+              <div className="form-group mb-0"><label className="form-label">Year</label><input type="number" className="form-control" min="2000" max="2100" style={{ width: 120 }} value={f.year} onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))} /></div>
+              <button className="btn btn-primary"><i className="fas fa-gears" /> Generate</button>
+            </form>
+          </div></div>
+      )}
+      <div className="card"><div className="card-header"><h3>Payroll Runs ({d.rows.length})</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.rows.length ? (
+            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+              <thead><tr><th>Period</th><th className="text-right">Staff</th><th className="text-right">Total</th><th>Status</th><th /></tr></thead>
+              <tbody>{d.rows.map((r) => (
+                <tr key={r.id}><td data-label="Period"><a href={r.url}><strong>{r.period_label}</strong></a></td>
+                  <td data-label="Staff" className="text-right">{r.count}</td><td data-label="Total" className="text-right">{naira(r.total)}</td>
+                  <td data-label="Status"><span className={runBadge(r.status)}>{r.status}</span></td>
+                  <td className="actions"><a href={r.url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
+            </table></div>
+          ) : <Empty icon="fa-money-check-dollar" title="No payroll yet"><p>Generate your first monthly payroll above.</p></Empty>}
+        </div></div>
+    </>
+  );
+}
+
+// ---- Payroll detail --------------------------------------------------------
+function PayrollDetail({ d, notify }) {
+  const nav = useNav();
+  const run = d.run;
+  const [editing, setEditing] = useState(null);
+  const act = async (url, fields, confirmMsg, follow) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
+    else notify('error', r.error || 'Action failed.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>Payroll · {run.period_label}</h1>
+        <div className="page-header-actions">
+          <span className={runBadge(run.status)} style={{ alignSelf: 'center' }}>{run.status}</span>
+          {d.is_admin && run.status === 'Draft' && <>
+            <button className="btn btn-secondary" onClick={() => act(d.urls.sync_deductions, {}, "Refresh every payslip's deductions from this month's attendance?")}><i className="fas fa-rotate" /> Refresh deductions from attendance</button>
+            <button className="btn btn-primary" onClick={() => act(d.urls.finalize, { post_expense: '1' }, 'Finalize this payroll? You can optionally post the total to Finance.')}><i className="fas fa-lock" /> Finalize &amp; post to Finance</button>
+          </>}
+          {d.is_admin && run.status === 'Finalized' && <button className="btn btn-success" onClick={() => act(d.urls.mark_paid, {})}><i className="fas fa-check-double" /> Mark paid</button>}
+          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this payroll run and all payslips?', true)}><i className="fas fa-trash" /></button>}
+        </div>
+      </div>
+      <Tabs d={d} />
+      <div className="card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
+        <div><div className="text-muted text-sm">Staff</div><strong style={{ fontSize: '1.2rem' }}>{d.slips.length}</strong></div>
+        <div><div className="text-muted text-sm">Total net pay</div><strong style={{ fontSize: '1.2rem' }}>{naira(d.total)}</strong></div>
+        {run.posted_expense_id && <div><div className="text-muted text-sm">Finance</div><span className="badge badge-success">Posted to expenses</span></div>}
+      </div></div>
+      <div className="card"><div className="card-header"><h3>Payslips</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.slips.length ? (
+            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+              <thead><tr><th>Staff</th><th className="text-right">Basic</th><th className="text-right">Allowances</th><th className="text-right">Manual</th><th className="text-right">Recurring</th><th className="text-right">Attendance</th><th className="text-right">Net</th><th /></tr></thead>
+              <tbody>{d.slips.map((ps) => (
+                <React.Fragment key={ps.id}>
+                  <tr>
+                    <td data-label="Staff">{ps.staff_name}</td>
+                    <td data-label="Basic" className="text-right">{naira(ps.basic)}</td>
+                    <td data-label="Allowances" className="text-right">{naira(ps.allowances)}</td>
+                    <td data-label="Manual" className="text-right">{naira(ps.deductions)}</td>
+                    <td data-label="Recurring" className="text-right">{ps.recurring_deductions ? <span style={{ color: 'var(--danger)' }} title={ps.items.map((i) => `${i.name}: ${naira(i.amount)}`).join(' · ')}>{naira(ps.recurring_deductions)}</span> : '—'}</td>
+                    <td data-label="Attendance" className="text-right">{ps.attendance_deduction ? <span style={{ color: 'var(--danger)' }}>{naira(ps.attendance_deduction)}</span> : '—'}</td>
+                    <td data-label="Net" className="text-right"><strong>{naira(ps.net)}</strong></td>
+                    <td className="actions"><div className="d-flex gap-1 justify-end">
+                      <a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i className="fas fa-print" /></a>
+                      {d.is_admin && run.status === 'Draft' && <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === ps.id ? null : ps.id)}><i className="fas fa-edit" /></button>}
+                    </div></td>
+                  </tr>
+                  {d.is_admin && run.status === 'Draft' && editing === ps.id && (
+                    <tr><td colSpan={8} className="stack-full" style={{ background: 'var(--gray-50)' }}>
+                      <PayslipEdit ps={ps} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
+                      <div className="text-muted text-sm" style={{ marginTop: '.5rem' }}>
+                        Auto: attendance {naira(ps.attendance_deduction)}{ps.items.map((i, k) => <span key={k}> · {i.name} {naira(i.amount)}</span>)} · <strong>Total deductions {naira(ps.total_deductions)}</strong>
+                      </div>
+                    </td></tr>)}
+                </React.Fragment>))}</tbody>
+            </table></div>
+          ) : <Empty icon="fa-money-check-dollar" title="No payslips" />}
+        </div></div>
+    </>
+  );
+}
+
+function PayslipEdit({ ps, notify, onDone }) {
+  const [f, setF] = useState({ basic: ps.basic, allowances: ps.allowances, deductions: ps.deductions });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    const r = await submitJson(ps.edit_url, f);
+    if (r.ok) onDone(); else notify('error', r.error || 'Could not update.');
+  };
+  return (
+    <form onSubmit={submit} className="d-flex gap-2 align-end flex-wrap">
+      <div className="form-group mb-0"><label className="form-label">Basic</label><input type="number" className="form-control" step="100" value={f.basic} onChange={(e) => set('basic', e.target.value)} /></div>
+      <div className="form-group mb-0"><label className="form-label">Allowances</label><input type="number" className="form-control" step="100" value={f.allowances} onChange={(e) => set('allowances', e.target.value)} /></div>
+      <div className="form-group mb-0"><label className="form-label">Manual deductions</label><input type="number" className="form-control" step="100" value={f.deductions} onChange={(e) => set('deductions', e.target.value)} /></div>
+      <button className="btn btn-primary btn-sm"><i className="fas fa-save" /> Update</button>
+    </form>
+  );
+}
+
+// ---- Attendance ------------------------------------------------------------
+function Attendance({ d, notify }) {
+  const nav = useNav();
+  const [rows, setRows] = useState(() => d.rows.map((r) => ({ ...r })));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setRows(d.rows.map((r) => ({ ...r }))); }, [d.rows]);
+  const setRow = (id, k, v) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [k]: v } : r)));
+  const s = d.settings;
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true);
+    const fields = { date: d.day, staff_id: rows.map((r) => r.id) };
+    rows.forEach((r) => { fields['status_' + r.id] = r.status; fields['clock_' + r.id] = r.clock_in; });
+    const r = await submitJson(d.save_url, fields);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); nav.go(r.redirect); } else notify('error', r.error || 'Could not save.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>Staff Attendance</h1></div>
+      <Tabs d={d} />
+      <div className="card mb-3"><div className="card-body">
+        <form className="filter-form">
+          <div className="form-group"><label className="form-label">Date</label><input type="date" className="form-control" value={d.day} onChange={(e) => navParams(nav.go, d.self_url, { date: e.target.value, department_id: d.dept_id })} /></div>
+          <div className="form-group"><label className="form-label">Department</label>
+            <select className="form-control" value={d.dept_id} onChange={(e) => navParams(nav.go, d.self_url, { date: d.day, department_id: e.target.value })}>
+              <option value="">All</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+        </form>
+        <div className="sum-chips mt-2">
+          <span className="chip" style={{ background: 'rgba(28,200,138,.15)' }}>Resumption {s.late_time} · ₦{s.late_rate}/min late{s.absence_deduction ? ` · ₦${Math.round(s.absence_deduction).toLocaleString()}/absence` : ''}</span>
+          <span className="chip">Present: {d.summary.present}</span>
+          <span className="chip" style={{ background: 'rgba(246,194,62,.18)' }}>Late: {d.summary.late}</span>
+          <span className="chip" style={{ background: 'rgba(231,74,59,.15)' }}>Absent: {d.summary.absent}</span>
+          <span className="chip" style={{ background: 'rgba(231,74,59,.15)' }}>Deductions: {naira(d.summary.deduction)}</span>
+        </div>
+      </div></div>
+
+      <form onSubmit={save}>
+        <div className="card"><div className="card-header"><h3>{rows.length} staff · {d.day_label}</h3>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i className="fas fa-save" /> Save</button></div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {rows.length ? (
+              <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+                <thead><tr><th>Staff</th><th>Status</th><th>Clock-in</th><th>Late</th><th className="text-right">Deduction</th></tr></thead>
+                <tbody>{rows.map((r) => (
+                  <tr key={r.id}>
+                    <td data-label="Staff">{r.full_name}</td>
+                    <td data-label="Status" className="att-status"><select className="form-control" value={r.status} onChange={(e) => setRow(r.id, 'status', e.target.value)}>{d.att_statuses.map((st) => <option key={st} value={st}>{st}</option>)}</select></td>
+                    <td data-label="Clock-in"><input type="time" className="form-control" style={{ maxWidth: 130 }} value={r.clock_in} onChange={(e) => setRow(r.id, 'clock_in', e.target.value)} /></td>
+                    <td data-label="Late">{r.minutes_late ? <span className="badge badge-warning">{r.minutes_late} min</span> : '—'}</td>
+                    <td data-label="Deduction" className="text-right">{r.deduction ? <span style={{ color: 'var(--danger)' }}>{naira(r.deduction)}</span> : '—'}</td>
+                  </tr>))}</tbody>
+              </table></div>
+            ) : <Empty icon="fa-user-clock" title="No active staff"><p>Add staff to mark attendance.</p></Empty>}
+          </div></div>
+        {rows.length > 0 && <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Attendance</button></div>}
+      </form>
+      <p className="text-muted text-sm mt-2"><i className="fas fa-circle-info" /> Lateness deductions are calculated from the clock-in time vs the resumption time set in <a href={d.settings_url}>Settings</a>, and flow into that month's payroll automatically.</p>
+    </>
+  );
+}
+
+// ---- Settings --------------------------------------------------------------
+function Settings({ d, notify }) {
+  const nav = useNav();
+  const [s, setS] = useState(d.settings);
+  const [ded, setDed] = useState({ name: '', kind: 'percent', value: '' });
+  const set = (k, v) => setS((x) => ({ ...x, [k]: v }));
+  const act = async (url, fields, confirmMsg) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
+  };
+  const saveSettings = async (e) => {
+    e.preventDefault();
+    const r = await submitJson(d.urls.save, s);
+    if (r.ok) notify('success', r.message); else notify('error', r.error || 'Could not save.');
+  };
+  const addDed = async (e) => {
+    e.preventDefault();
+    const r = await submitJson(d.urls.add_deduction, ded);
+    if (r.ok) { setDed({ name: '', kind: 'percent', value: '' }); notify('success', r.message); nav.refresh(); }
+    else notify('error', r.error || 'Could not add.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>HR Settings</h1></div>
+      <Tabs d={d} />
+      <div className="card"><div className="card-header"><h3><i className="fas fa-user-clock" /> Attendance &amp; Deductions</h3></div>
+        <div className="card-body"><form onSubmit={saveSettings}>
+          <fieldset disabled={!d.is_admin} style={{ border: 0, padding: 0, margin: 0 }}>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Resumption time</label><input type="time" className="form-control" value={s.late_time} onChange={(e) => set('late_time', e.target.value)} /><span className="form-hint d-block">Staff clocking in after this time are marked late.</span></div>
+              <div className="form-group"><label className="form-label">Lateness rate (₦ per minute)</label><input type="number" className="form-control" min="0" step="1" value={s.late_rate} onChange={(e) => set('late_rate', e.target.value)} /><span className="form-hint d-block">e.g. 10 → ₦10 for every minute after the resumption time.</span></div>
+              <div className="form-group"><label className="form-label">Absence deduction (₦ per day)</label><input type="number" className="form-control" min="0" step="100" value={s.absence_deduction} onChange={(e) => set('absence_deduction', e.target.value)} /><span className="form-hint d-block">Flat amount deducted for each day marked absent (0 to disable).</span></div>
+            </div>
+            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Settings</button>
+          </fieldset>
+        </form></div></div>
+
+      <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-money-bill-trend-up" /> Recurring Deductions</h3></div>
+        <div className="card-body">
+          <p className="text-muted text-sm" style={{ marginTop: 0 }}>Deductions applied to <strong>every</strong> staff member's payslip each month — e.g. pension (a % of basic) or welfare (a fixed amount).</p>
+          {d.is_admin && (
+            <form onSubmit={addDed} className="d-flex gap-2 align-end flex-wrap mb-3">
+              <div className="form-group mb-0" style={{ flex: 2, minWidth: 160 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g. Pension, Welfare, Union dues" required value={ded.name} onChange={(e) => setDed((x) => ({ ...x, name: e.target.value }))} /></div>
+              <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={ded.kind} onChange={(e) => setDed((x) => ({ ...x, kind: e.target.value }))}><option value="percent">% of basic</option><option value="fixed">Fixed ₦</option></select></div>
+              <div className="form-group mb-0"><label className="form-label">Value</label><input type="number" className="form-control" min="0" step="0.5" placeholder="5 or 500" required value={ded.value} onChange={(e) => setDed((x) => ({ ...x, value: e.target.value }))} /></div>
+              <button className="btn btn-primary"><i className="fas fa-plus" /> Add</button>
+            </form>
+          )}
+          {d.deductions.length ? (
+            <table className="data-table table-stack">
+              <thead><tr><th>Name</th><th>Deduction</th><th>Status</th><th /></tr></thead>
+              <tbody>{d.deductions.map((dd) => (
+                <tr key={dd.id} style={dd.is_active ? undefined : { opacity: 0.55 }}>
+                  <td data-label="Name">{dd.name}</td>
+                  <td data-label="Deduction">{dd.kind === 'percent' ? `${Math.round(dd.value * 100) / 100}% of basic` : `${naira(dd.value)} fixed`}</td>
+                  <td data-label="Status">{dd.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-warning">Inactive</span>}</td>
+                  <td className="actions"><div className="d-flex gap-1 justify-end">
+                    <button className="btn btn-secondary btn-sm" title="Toggle active" onClick={() => act(dd.toggle_url, {})}><i className="fas fa-power-off" /></button>
+                    <button className="btn btn-danger btn-sm" title="Delete" onClick={() => act(dd.delete_url, {}, 'Remove this deduction?')}><i className="fas fa-trash" /></button>
+                  </div></td>
+                </tr>))}</tbody>
+            </table>
+          ) : <p className="text-muted text-sm">No recurring deductions yet.</p>}
+        </div></div>
+
+      <div className="card mt-3"><div className="card-body">
+        <h4 style={{ marginTop: 0 }}><i className="fas fa-circle-question" /> How deductions work</h4>
+        <ul className="text-sm text-muted" style={{ margin: 0, paddingLeft: '1.1rem', lineHeight: 1.7 }}>
+          <li>Mark daily attendance under <strong>Attendance</strong>; entering a clock-in time auto-calculates minutes late and the naira deduction.</li>
+          <li>When you <strong>generate payroll</strong> for a month, each staff member's total lateness + absence deductions for that month are pre-filled into their payslip.</li>
+          <li>Already generated a run? Use <strong>“Refresh deductions from attendance”</strong> on the payroll page to pull the latest.</li>
+        </ul>
+      </div></div>
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, staff: Staff, staff_form: StaffForm, staff_detail: StaffDetail,
+  departments: Departments, leave: Leave, payroll: Payroll, payroll_detail: PayrollDetail,
+  attendance: Attendance, settings: Settings };
+
+export default function HrApp({ data }) {
+  const { data: d, go, refresh } = useSection(data);
+  const [msg, setMsg] = useState(null);
+  const notify = (tone, text) => setMsg({ tone, text });
+  const Screen = SCREENS[d.page] || Dashboard;
+  return (
+    <NavCtx.Provider value={{ go, refresh }}>
+      <SectionShell go={go}>
+        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+        <Screen d={d} notify={notify} />
+      </SectionShell>
+    </NavCtx.Provider>
+  );
+}
