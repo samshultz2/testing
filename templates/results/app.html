@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% set _t = {'index':'Results Management','readiness':'Exam Readiness','subject_enrolment':'Subject Enrolment','subject_enrolment_detail':'Subject Enrolment','cutoffs':'Admission Cut-offs'} %}
+{% block title %}{{ _t.get(res_json.page,'Results') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if res_json.page == 'index' %}<span>Results</span>
+{% elif res_json.page == 'cutoffs' %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Cut-offs</span>
+{% elif res_json.page == 'subject_enrolment_detail' %}<a href="{{ url_for('results.subject_enrolment') }}">Subject Enrolment</a> / <span>{{ res_json.subject }}</span>
+{% else %}<a href="{{ url_for('results.index') }}">Results</a> / <span>{{ _t.get(res_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+/* index */
+.results-overview{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1.5rem}
+@media(min-width:768px){.results-overview{grid-template-columns:repeat(2,1fr)}}
+.result-type-card{background:var(--bg-card);border-radius:12px;border:1px solid var(--border-color);overflow:hidden;transition:transform .2s,box-shadow .2s}
+.result-type-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.result-type-header{padding:1.5rem;color:#fff}
+.result-type-header.waec{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+.result-type-header.jamb{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)}
+.result-type-title{font-size:1.5rem;font-weight:700;margin-bottom:.25rem}
+.result-type-subtitle{opacity:.9;font-size:.9rem}
+.result-type-body{padding:1rem 1.5rem}
+.result-stat{display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--border-light)}
+.result-stat:last-child{border-bottom:none}
+.result-stat-label{color:var(--text-muted)}.result-stat-value{font-weight:600}
+.result-type-actions{padding:1rem 1.5rem;background:var(--gray-50);display:flex;gap:.5rem;flex-wrap:wrap}
+.quick-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
+@media(min-width:768px){.quick-actions{grid-template-columns:repeat(4,1fr)}}
+.quick-action-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:1rem;text-align:center;text-decoration:none;color:inherit;transition:all .2s}
+.quick-action-card:hover{border-color:#007bff;background:var(--gray-50)}
+.quick-action-icon{font-size:1.5rem;color:#007bff;margin-bottom:.5rem}
+.quick-action-label{font-size:.85rem;font-weight:500}
+/* readiness */
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-bottom:1rem}
+@media(min-width:768px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.85rem;text-align:center}
+.kpi.good{background:linear-gradient(135deg,#11998e,#38ef7d);color:#fff;border:none}
+.kpi .v{font-size:1.6rem;font-weight:700}.kpi .l{font-size:.72rem;color:var(--text-muted)}
+.kpi.good .l{color:rgba(255,255,255,.9)}
+.rgroup{margin-bottom:.75rem;border:1px solid var(--border-color);border-radius:var(--radius-md);overflow:hidden}
+.rgroup summary{cursor:pointer;padding:.75rem 1rem;background:var(--gray-50);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.rgroup summary .count{background:var(--danger);color:#fff;border-radius:var(--radius-full);padding:.05rem .55rem;font-size:.8rem}
+.rgroup.clear summary .count{background:var(--success)}
+.slist{display:grid;grid-template-columns:1fr;gap:.3rem;padding:.6rem}
+@media(min-width:768px){.slist{grid-template-columns:repeat(2,1fr)}}
+.srow{display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem;border:1px solid var(--border-light);border-radius:var(--radius-sm);font-size:.85rem}
+.srow a{font-size:.75rem}
+/* subject enrolment */
+.scope-tabs{display:flex;gap:.4rem;margin-bottom:1rem}
+.scope-tab{padding:.4rem .9rem;border:1px solid var(--border-color);border-radius:var(--radius-full);font-size:.8rem;text-decoration:none;color:var(--text-secondary);background:var(--bg-card);cursor:pointer}
+.scope-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.enrol-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:992px){.enrol-grid{grid-template-columns:1fr 1fr}}
+.enrol-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.enrol-table th,.enrol-table td{padding:.5rem .65rem;border-bottom:1px solid var(--border-light);text-align:left}
+.enrol-table th{background:var(--gray-50);font-weight:600;position:sticky;top:0}
+.enrol-table td.num,.enrol-table th.num{text-align:right;white-space:nowrap}
+.bar{position:relative;background:var(--gray-100);border-radius:var(--radius-full);height:8px;overflow:hidden;margin-top:.25rem}
+.bar > span{position:absolute;left:0;top:0;bottom:0;border-radius:var(--radius-full);background:linear-gradient(90deg,#11998e,#38ef7d)}
+.bar.jamb > span{background:linear-gradient(90deg,#667eea,#764ba2)}
+.chart-wrap{height:260px;padding:.5rem}
+/* cutoffs */
+.cut-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:992px){.cut-grid{grid-template-columns:360px 1fr}}
+.ctable{width:100%;border-collapse:collapse;font-size:.83rem}
+.ctable th,.ctable td{padding:.4rem .5rem;border-bottom:1px solid var(--border-light);text-align:left}
+.ctable th{background:var(--gray-50)}
+.subject-checks{display:grid;grid-template-columns:1fr 1fr;gap:.35rem;max-height:240px;overflow:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:.5rem}
+.subject-check{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
+.toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem}
+</style>
+{% endblock %}
+{% block content %}
+<div id="res-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="res-data">{{ res_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/react/results-app.js') }}" defer></script>
+{% endblock %}

@@ -24,6 +24,37 @@ from utils.analytics_service import AcademicAnalytics
 results_bp = Blueprint('results', __name__, url_prefix='/results')
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('results/app.html', 'res_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('results.index'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('results.index'))
+
+
+def _is_admin_results():
+    from utils.access_control import is_admin
+    return is_admin()
+
+
 @results_bp.route('/')
 @login_required
 def index():
@@ -33,13 +64,20 @@ def index():
     
     waec_years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
     jamb_years = db.session.query(JAMBResult.exam_year).distinct().order_by(JAMBResult.exam_year.desc()).all()
-    
-    return render_template('results/index.html',
-        waec_count=waec_count,
-        jamb_count=jamb_count,
-        waec_years=[y[0] for y in waec_years],
-        jamb_years=[y[0] for y in jamb_years]
-    )
+    waec_years = [y[0] for y in waec_years]
+    jamb_years = [y[0] for y in jamb_years]
+
+    return _render({
+        'page': 'index',
+        'waec_count': waec_count, 'jamb_count': jamb_count,
+        'waec_years': waec_years, 'jamb_years': jamb_years,
+        'urls': {
+            'waec_dashboard': url_for('results.waec_list'), 'add_waec': url_for('results.add_waec'),
+            'jamb_dashboard': url_for('results.jamb_list'), 'add_jamb': url_for('results.add_jamb'),
+            'export_waec': url_for('results.export_waec', year=waec_years[0]) if waec_years else '',
+            'export_jamb': url_for('results.export_jamb', year=jamb_years[0]) if jamb_years else '',
+        },
+    })
 
 
 # ============================================================================
@@ -903,15 +941,22 @@ def subject_enrolment():
 
     waec_rows = sorted(waec_counts.items(), key=lambda x: (-x[1], x[0]))
     jamb_rows = sorted(jamb_counts.items(), key=lambda x: (-x[1], x[0]))
+    scope = 'sss3' if only_sss3 else 'all'
 
-    return render_template('results/subject_enrolment.html',
-        waec_rows=waec_rows,
-        jamb_rows=jamb_rows,
-        waec_enrolled=waec_enrolled,
-        jamb_enrolled=jamb_enrolled,
-        student_count=len(students),
-        only_sss3=only_sss3
-    )
+    def _rows(rows, enrolled, exam):
+        return [{'subject': subj, 'count': cnt,
+                 'pct': round(cnt / enrolled * 100) if enrolled else 0,
+                 'url': url_for('results.subject_enrolment_detail', exam=exam, subject=subj, scope=scope)}
+                for subj, cnt in rows]
+
+    return _render({
+        'page': 'subject_enrolment', 'only_sss3': only_sss3, 'student_count': len(students),
+        'waec_enrolled': waec_enrolled, 'jamb_enrolled': jamb_enrolled,
+        'waec_rows': _rows(waec_rows, waec_enrolled, 'waec'),
+        'jamb_rows': _rows(jamb_rows, jamb_enrolled, 'jamb'),
+        'urls': {'sss3': url_for('results.subject_enrolment', scope='sss3'),
+                 'all': url_for('results.subject_enrolment', scope='all')},
+    })
 
 
 @results_bp.route('/student/<int:student_id>/report')
@@ -1116,7 +1161,21 @@ def readiness():
         {'key': 'no_waec_subjects', 'title': 'No WAEC subjects on profile', 'icon': 'fa-list-check', 'students': no_waec_subjects},
     ]
     ready = total - len({s.id for g in groups for s in g['students']})
-    return render_template('results/readiness.html', total=total, ready=ready, groups=groups)
+
+    def _action(key, sid):
+        if key in ('no_jamb', 'no_jamb_subjects'):
+            return {'label': 'JAMB', 'url': url_for('results.add_jamb')}
+        if key in ('no_waec', 'no_waec_subjects'):
+            return {'label': 'WAEC', 'url': url_for('results.add_waec')}
+        return {'label': 'Edit', 'url': url_for('main.edit_student', student_id=sid)}
+
+    return _render({
+        'page': 'readiness', 'total': total, 'ready': ready,
+        'groups': [{'key': g['key'], 'title': g['title'], 'icon': g['icon'],
+                    'students': [{'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
+                                  'action': _action(g['key'], s.id)} for s in g['students']]}
+                   for g in groups],
+    })
 
 
 @results_bp.route('/analytics')
@@ -1421,10 +1480,25 @@ def cutoffs_list():
     editing_subjects = _json.loads(editing.required_subjects or '[]') if editing else []
     reference = SchoolSettings.get('admission_reference', 'General Requirements')
 
-    return render_template('results/cutoffs.html',
-        universities=universities, selected=selected, rows=rows,
-        editing=editing, editing_subjects=editing_subjects,
-        reference=reference, subjects=WAEC_SUBJECTS)
+    return _render({
+        'page': 'cutoffs', 'is_admin': _is_admin_results(),
+        'universities': universities, 'selected': selected, 'reference': reference,
+        'subjects': list(WAEC_SUBJECTS),
+        'rows': [{'id': r.id, 'course_name': r.course_name, 'faculty': r.faculty or '',
+                  'jamb_cutoff': r.jamb_cutoff, 'min_credits': r.min_credits,
+                  'required_subjects': _json.loads(r.required_subjects or '[]'),
+                  'edit_url': url_for('results.cutoffs_list', university=selected, edit=r.id),
+                  'delete_url': url_for('results.cutoffs_delete', cid=r.id)} for r in rows],
+        'editing': ({'id': editing.id, 'university_name': editing.university_name,
+                     'course_name': editing.course_name, 'faculty': editing.faculty or '',
+                     'jamb_cutoff': editing.jamb_cutoff, 'min_credits': editing.min_credits,
+                     'exam_year': editing.exam_year, 'required_subjects': editing_subjects}
+                    if editing else None),
+        'self_url': url_for('results.cutoffs_list'),
+        'urls': {'save': url_for('results.cutoffs_save'),
+                 'reference': url_for('results.cutoffs_reference'),
+                 'analytics': url_for('results.analytics_hub')},
+    })
 
 
 @results_bp.route('/cutoffs/save', methods=['POST'])
@@ -1434,8 +1508,7 @@ def cutoffs_save():
     uni = (request.form.get('university_name') or '').strip() or 'General Requirements'
     course = (request.form.get('course_name') or '').strip()
     if not course:
-        flash('Course name is required.', 'error')
-        return redirect(url_for('results.cutoffs_list', university=uni))
+        return _err('Course name is required.', url_for('results.cutoffs_list', university=uni))
 
     year = request.form.get('exam_year', type=int) or 0
     obj = db.session.get(UniversityCutoff, cid) if cid else None
@@ -1455,11 +1528,10 @@ def cutoffs_save():
     try:
         db.session.commit()
         log_action('cutoff_save', f'{uni} / {course}')
-        flash(f'Saved cut-off for {course}.', 'success')
+        return _ok(f'Saved cut-off for {course}.', url_for('results.cutoffs_list', university=uni))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('results.cutoffs_list', university=uni))
+        return _err(f'Error: {str(e)}', url_for('results.cutoffs_list', university=uni))
 
 
 @results_bp.route('/cutoffs/<int:cid>/delete', methods=['POST'])
@@ -1470,9 +1542,8 @@ def cutoffs_delete(cid):
         uni = obj.university_name
         db.session.delete(obj)
         db.session.commit()
-        flash('Cut-off deleted.', 'success')
-        return redirect(url_for('results.cutoffs_list', university=uni))
-    return redirect(url_for('results.cutoffs_list'))
+        return _ok('Cut-off deleted.', url_for('results.cutoffs_list', university=uni))
+    return _ok('Cut-off deleted.', url_for('results.cutoffs_list'))
 
 
 @results_bp.route('/cutoffs/reference', methods=['POST'])
@@ -1481,8 +1552,8 @@ def cutoffs_reference():
     ref = (request.form.get('reference') or 'General Requirements').strip()
     SchoolSettings.set('admission_reference', ref, 'string',
                        'University reference used by the admission advisor')
-    flash(f'Admission advisor now uses "{ref}" cut-offs.', 'success')
-    return redirect(url_for('results.cutoffs_list', university=ref))
+    return _ok(f'Admission advisor now uses "{ref}" cut-offs.',
+               url_for('results.cutoffs_list', university=ref))
 
 
 @results_bp.route('/subject-enrolment/<exam>/<path:subject>')
@@ -1503,13 +1574,15 @@ def subject_enrolment_detail(exam, subject):
             matched.append(s)
     matched.sort(key=lambda s: (s.surname or '', s.first_name or ''))
 
-    return render_template('results/subject_enrolment_detail.html',
-        exam=exam,
-        exam_label='JAMB' if exam == 'jamb' else 'WAEC',
-        subject=subject,
-        students=matched,
-        only_sss3=only_sss3
-    )
+    return _render({
+        'page': 'subject_enrolment_detail', 'exam': exam,
+        'exam_label': 'JAMB' if exam == 'jamb' else 'WAEC',
+        'subject': subject, 'only_sss3': only_sss3,
+        'students': [{'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
+                      'gender': s.gender or '', 'is_graduated': bool(s.is_graduated),
+                      'view_url': url_for('main.view_student', student_id=s.id)} for s in matched],
+        'back_url': url_for('results.subject_enrolment', scope='sss3' if only_sss3 else 'all'),
+    })
 
 
 @results_bp.route('/jamb/student/<int:student_id>/edit/<int:year>', methods=['GET', 'POST'])
