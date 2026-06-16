@@ -61,13 +61,18 @@
                     <li class="nav-section">Students</li>
                     {% if can_access_module('students') %}
                     <li class="nav-item">
-                        <a href="{{ url_for('main.students_list') }}" class="nav-link {% if 'students' in request.endpoint %}active{% endif %}">
+                        <a href="{{ url_for('main.students_list') }}" class="nav-link {% if 'students' in request.endpoint and request.endpoint not in ['main.students_trash', 'main.add_student'] %}active{% endif %}">
                             <i class="fas fa-users"></i><span>All Students</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('main.add_student') }}" class="nav-link">
+                        <a href="{{ url_for('main.add_student') }}" class="nav-link {% if request.endpoint == 'main.add_student' %}active{% endif %}">
                             <i class="fas fa-user-plus"></i><span>Add Student</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.students_trash') }}" class="nav-link {% if request.endpoint == 'main.students_trash' %}active{% endif %}">
+                            <i class="fas fa-trash-can"></i><span>Deleted Students</span>
                         </a>
                     </li>
                     {% endif %}
