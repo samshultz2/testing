@@ -231,7 +231,56 @@ function EditResult({ d, notify }) {
   );
 }
 
-const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult };
+// ---- Bulk entry ------------------------------------------------------------
+function BulkEntry({ d, notify }) {
+  const nav = useNav();
+  const [scores, setScores] = useState(() => {
+    const m = {}; d.students.forEach((s) => { m[s.id] = s.total_score === '' ? '' : String(s.total_score); }); return m;
+  });
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault(); setBusy(true);
+    const fields = {};
+    d.students.forEach((s) => { if (scores[s.id] !== '') fields['score_' + s.id] = scores[s.id]; });
+    const r = await submitJson(d.submit_url, fields);
+    setBusy(false);
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save results.');
+  };
+  return (
+    <>
+      <div className="mb-4"><div className="d-flex justify-between align-center flex-wrap gap-2">
+        <div><h1>Bulk Entry</h1><p className="text-muted">{d.exam.display_name} - Enter scores for multiple students</p></div>
+        <a href={d.urls.view} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</a>
+      </div></div>
+      {d.students.length ? (
+        <form onSubmit={submit}><div className="card">
+          <div className="card-header"><h3 className="card-title">SSS3 Students ({d.students.length})</h3></div>
+          <div className="card-body"><div className="table-responsive"><table className="table data-table">
+            <thead><tr><th>Student</th><th>Arm</th><th>Total Score</th><th>Status</th></tr></thead>
+            <tbody>{d.students.map((s) => (
+              <tr key={s.id}>
+                <td><strong>{s.full_name}</strong><div className="text-xs text-muted">{s.student_id}</div></td>
+                <td>{s.arm}</td>
+                <td><input type="number" className="form-control" style={{ width: 100 }} min="0" max="400" placeholder="0-400"
+                           value={scores[s.id]} onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td>
+                <td><span className={'badge ' + (s.entered ? 'badge-success' : 'badge-secondary')}>{s.entered ? 'Entered' : 'Pending'}</span></td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+          <div className="mt-4"><button type="submit" className="btn btn-primary btn-lg" disabled={busy}><i className="fas fa-save" /> Save All Results</button></div>
+          </div></div>
+        </form>
+      ) : (
+        <div className="card"><div className="card-body"><Empty icon="fa-users" title="">
+          <p>No SSS3 students found for the current term.</p>
+          <p className="text-sm text-muted">Make sure students are enrolled in SSS3 for the active term.</p>
+          <a href={d.urls.add} className="btn btn-primary">Add Individual Result</a></Empty></div></div>
+      )}
+    </>
+  );
+}
+
+const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult, bulk_entry: BulkEntry };
 
 export default function MockJambApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

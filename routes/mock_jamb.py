@@ -422,7 +422,8 @@ def bulk_entry(exam_id):
     
     students = []
     if sss3 and active_term:
-        assignments = ClassArmAssignment.query.filter_by(class_id=sss3.id, term_id=active_term.id).all()
+        assignments = scope_query(ClassArmAssignment.query.filter_by(
+            class_id=sss3.id, term_id=active_term.id), ClassArmAssignment).all()
         for assignment in assignments:
             enrollments = StudentEnrollment.query.filter_by(
                 class_arm_assignment_id=assignment.id,
@@ -495,18 +496,24 @@ def bulk_entry(exam_id):
                     added += 1
             
             db.session.commit()
-            flash(f'Results saved! Added: {added}, Updated: {updated}', 'success')
-            return redirect(url_for('mock_jamb.view_exam', exam_id=exam_id))
-            
+            return _ok(f'Results saved! Added: {added}, Updated: {updated}',
+                       url_for('mock_jamb.view_exam', exam_id=exam_id))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error saving results: {str(e)}', 'error')
-    
-    return render_template('mock_jamb/bulk_entry.html',
-        exam=exam,
-        students=students,
-        subjects=WAEC_SUBJECTS
-    )
+            return _err(f'Error saving results: {str(e)}', url_for('mock_jamb.bulk_entry', exam_id=exam_id))
+
+    return _render({
+        'page': 'bulk_entry',
+        'exam': {'id': exam.id, 'display_name': exam.display_name},
+        'students': [{'id': it['student'].id, 'full_name': it['student'].full_name,
+                      'student_id': it['student'].student_id, 'arm': it['arm'],
+                      'total_score': it['existing_result'].total_score if it['existing_result'] else '',
+                      'entered': bool(it['existing_result'])} for it in students],
+        'submit_url': url_for('mock_jamb.bulk_entry', exam_id=exam.id),
+        'urls': {'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
+                 'add': url_for('mock_jamb.add_result', exam_id=exam.id)},
+    })
 
 
 @mock_jamb_bp.route('/result/<int:result_id>/edit', methods=['GET', 'POST'])
