@@ -563,8 +563,9 @@ def import_student_rows(rows, db, Student, ParentContact,
     if enrolled:
         errors.insert(0, f"{enrolled} student(s) enrolled in the selected class.")
     if duplicates_skipped:
-        errors.insert(0, f"{duplicates_skipped} row(s) skipped as duplicates "
-                         "(same name + date of birth already on record).")
+        errors.insert(0, f"{duplicates_skipped} row(s) skipped as duplicates — a student "
+                         "with that name is already on record (matched on name + date of "
+                         "birth, or name + address when no DOB is given).")
     if gender_defaulted:
         errors.insert(0, f"{gender_defaulted} student(s) had no Gender column/value "
                          "and were set to 'Unknown' — edit them to set Male/Female.")

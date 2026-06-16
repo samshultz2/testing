@@ -19,6 +19,7 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
   const [text, setText] = useState('');
   const [caa, setCaa] = useState((enrolment && enrolment.default_id) || '');
   const [preview, setPreview] = useState(null);
+  const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -35,11 +36,19 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
     const r = await submitJson(importUrl, { text, commit: '1', class_arm_assignment_id: caa || '' });
     setBusy(false);
     if (r.ok) {
-      // Surface the importer's notes (duplicates skipped, gender defaulted, …).
-      const notes = (r.messages || []).filter((m) => !/^\d+ student\(s\) enrolled/.test(m));
-      onDone(`Imported ${r.created} student(s).` + (notes.length ? ` ${notes[0]}` : ''));
+      const messages = (r.messages || []);
+      const attempted = (preview && preview.valid) || r.created;
+      setResult({ created: r.created, attempted, messages });
     } else setErr(r.error || 'Import failed.');
   };
+
+  // One number that explains the gap between "rows ready" and "created".
+  const skippedCount = result
+    ? (() => {
+        const m = (result.messages || []).find((x) => /skipped as duplicates/.test(x));
+        return m ? parseInt(m, 10) || 0 : Math.max(result.attempted - result.created, 0);
+      })()
+    : 0;
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true"
@@ -53,7 +62,29 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
         <div className="card-body">
           {err && <div className="alert alert-danger" role="alert">{err}</div>}
 
-          {!preview ? (
+          {result ? (
+            <>
+              <div className="d-flex gap-2 flex-wrap mb-2">
+                <span className="badge badge-success">{result.created} imported</span>
+                {skippedCount > 0 && <span className="badge badge-warning">{skippedCount} already existed (skipped)</span>}
+              </div>
+              <p className="text-sm">
+                {result.created} student(s) were added.
+                {skippedCount > 0 && ` ${skippedCount} row(s) were skipped because a student with that name is already on record (same name + date of birth, or same name + address when no DOB is given) — those students are already in your list, nothing was lost.`}
+              </p>
+              {result.messages.length > 0 && (
+                <details open style={{ marginTop: '0.5rem' }}>
+                  <summary className="text-sm text-muted" style={{ cursor: 'pointer' }}>Details ({result.messages.length})</summary>
+                  <ul className="text-xs text-muted" style={{ marginTop: '0.4rem', maxHeight: 220, overflow: 'auto', paddingLeft: '1.1rem' }}>
+                    {result.messages.map((m, i) => <li key={i}>{m}</li>)}
+                  </ul>
+                </details>
+              )}
+              <div className="d-flex gap-2 mt-3" style={{ justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-primary" onClick={() => onDone(`Imported ${result.created} student(s).`)}>Done — view students</button>
+              </div>
+            </>
+          ) : !preview ? (
             <>
               <p className="text-muted text-sm" style={{ marginTop: 0 }}>
                 Copy rows from a spreadsheet or type them in. The <strong>first line is the headings</strong> (e.g.
