@@ -346,18 +346,14 @@ def api_attendance_trend():
     
     weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.week_number).all()
     
+    from sqlalchemy import case
     weekly_data = []
     for week in weeks:
-        # Get total attendance for this week
+        # Get total attendance for this week (morning + afternoon ticks)
         attendance = db.session.query(
             func.sum(
-                func.case(
-                    (Attendance.morning_present == True, 1),
-                    else_=0
-                ) + func.case(
-                    (Attendance.afternoon_present == True, 1),
-                    else_=0
-                )
+                case((Attendance.morning_present == True, 1), else_=0)
+                + case((Attendance.afternoon_present == True, 1), else_=0)
             )
         ).filter(Attendance.week_id == week.id).scalar() or 0
         
