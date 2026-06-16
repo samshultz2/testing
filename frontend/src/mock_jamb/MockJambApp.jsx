@@ -359,8 +359,553 @@ function AddResult({ d, notify }) {
   );
 }
 
+// ---- View exam -------------------------------------------------------------
+const r1 = (n) => Math.round((n || 0) * 10) / 10;
+const scoreColor = (s) => (s >= 300 ? '#28a745' : s >= 250 ? '#17a2b8' : s >= 200 ? '#ffc107' : '#dc3545');
+const rankClass = (r) => (r === 1 ? ' gold' : r === 2 ? ' silver' : r === 3 ? ' bronze' : '');
+
+function ViewExam({ d, notify }) {
+  const nav = useNav();
+  const distRef = useRef();
+  const subjRef = useRef();
+  const st = d.statistics;
+  const [filters, setFilters] = useState(d.filters);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    if (!st || !distRef.current || !window.Chart) return;
+    const dist = st.distribution;
+    const chart = new window.Chart(distRef.current, {
+      type: 'doughnut',
+      data: { labels: ['300-400', '250-299', '200-249', '180-199', '0-179'],
+        datasets: [{ data: [dist['300-400'], dist['250-299'], dist['200-249'], dist['180-199'], dist['0-179']],
+          backgroundColor: ['#28a745', '#17a2b8', '#ffc107', '#fd7e14', '#dc3545'] }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } } },
+    });
+    return () => chart.destroy();
+  }, [st]);
+
+  useEffect(() => {
+    if (!st || !st.subject_analysis.length || !subjRef.current || !window.Chart) return;
+    const subjects = st.subject_analysis.slice(0, 8);
+    const chart = new window.Chart(subjRef.current, {
+      type: 'bar',
+      data: { labels: subjects.map((s) => s.subject.substring(0, 10)),
+        datasets: [{ label: 'Average', data: subjects.map((s) => s.average),
+          backgroundColor: subjects.map((s) => (s.average >= 70 ? '#28a745' : s.average >= 50 ? '#ffc107' : '#dc3545')) }] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, max: 100 } } },
+    });
+    return () => chart.destroy();
+  }, [st]);
+
+  const applyFilters = (e) => {
+    e.preventDefault();
+    navParams(nav.go, d.urls.self, { search: filters.search, min_score: filters.min_score, max_score: filters.max_score });
+  };
+  const clearFilters = () => nav.go(d.urls.self);
+
+  const delResult = async (url) => {
+    if (!window.confirm('Delete?')) return;
+    const r = await submitJson(url, {});
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
+  };
+  const delExam = async () => {
+    if (!window.confirm(`DELETE ${d.exam.display_name} and ALL results?`)) return;
+    const r = await submitJson(d.urls.delete_exam, {});
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
+  };
+
+  const doExport = async (opts) => {
+    setExporting(false);
+    const node = buildExportNode(d, st, opts);
+    document.body.appendChild(node);
+    try {
+      const canvas = await window.html2canvas(node.firstChild, { scale: opts.quality, backgroundColor: '#ffffff' });
+      setSaveImg(canvas.toDataURL('image/png'));
+    } catch (err) {
+      notify('error', 'Could not generate image.');
+    } finally {
+      document.body.removeChild(node);
+    }
+  };
+  const [saveImg, setSaveImg] = useState(null);
+
+  const actions = (
+    <>
+      <a href={d.urls.add} className="btn btn-primary btn-sm" title="Add"><i className="fas fa-plus" /></a>
+      <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i className="fas fa-list" /></a>
+      <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i className="fas fa-file-excel" /></a>
+      {d.results.length > 0 && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="HD Image"><i className="fas fa-image" /></button>}
+      <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i className="fas fa-edit" /></a>
+      <a href={d.urls.index} className="btn btn-secondary btn-sm" title="Back"><i className="fas fa-arrow-left" /></a>
+    </>
+  );
+
+  return (
+    <>
+      <div className="page-header">
+        <div><h1>{d.exam.display_name}</h1>
+          <p className="text-muted text-sm"><i className="fas fa-calendar" /> {d.exam.exam_date}{d.exam.session_name ? ` | ${d.exam.session_name}` : ''}</p></div>
+        <div className="page-header-actions">{actions}</div>
+      </div>
+
+      {st && (<>
+        <div className="stats-grid">
+          <div className="mj-stat-card highlight"><div className="stat-value">{r1(st.statistics.average)}</div><div className="stat-label">Average</div></div>
+          <div className="mj-stat-card"><div className="stat-value">{st.student_count}</div><div className="stat-label">Students</div></div>
+          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#28a745' }}>{st.statistics.max}</div><div className="stat-label">Highest</div></div>
+          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#dc3545' }}>{st.statistics.min}</div><div className="stat-label">Lowest</div></div>
+        </div>
+        <div className="stats-grid">
+          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#6f42c1' }}>{st.statistics.above_300}</div><div className="stat-label">Above 300</div></div>
+          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#007bff' }}>{st.statistics.above_250}</div><div className="stat-label">Above 250</div></div>
+          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#17a2b8' }}>{st.statistics.above_200}</div><div className="stat-label">Above 200</div></div>
+          <div className="mj-stat-card"><div className="stat-value">{st.statistics.median}</div><div className="stat-label">Median</div></div>
+        </div>
+        <div className="charts-row">
+          <div className="card"><div className="card-header"><h3><i className="fas fa-chart-pie" /> Distribution</h3></div><div className="chart-body"><canvas ref={distRef} /></div></div>
+          {st.subject_analysis.length > 0 && <div className="card"><div className="card-header"><h3><i className="fas fa-chart-bar" /> Subjects</h3></div><div className="chart-body"><canvas ref={subjRef} /></div></div>}
+        </div>
+        {st.subject_analysis.length > 0 && (
+          <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-book" /> Subject Analysis</h3></div>
+            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+              <table className="subject-table">
+                <thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>Count</th><th>Avg</th><th>Max</th><th>Min</th><th>≥70</th><th>≥50</th></tr></thead>
+                <tbody>{st.subject_analysis.map((s) => (
+                  <tr key={s.subject}><td>{s.subject}</td><td>{s.count}</td>
+                    <td style={{ color: s.average >= 70 ? '#28a745' : s.average >= 50 ? '#ffc107' : '#dc3545' }}><strong>{r1(s.average)}</strong></td>
+                    <td style={{ color: '#28a745' }}>{s.max}</td><td style={{ color: '#dc3545' }}>{s.min}</td><td>{s.above_70}</td><td>{s.above_50}</td></tr>))}
+                </tbody>
+              </table>
+            </div></div>
+        )}
+      </>)}
+
+      <div className="card">
+        <div className="card-header">
+          <h3><i className="fas fa-list-ol" /> Results ({d.results.length})</h3>
+          <form onSubmit={applyFilters} className="filter-form">
+            <input type="text" className="form-control" placeholder="Search name..." style={{ width: 140 }}
+                   value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
+            <input type="number" className="form-control" placeholder="Min" style={{ width: 70 }}
+                   value={filters.min_score} onChange={(e) => setFilters((f) => ({ ...f, min_score: e.target.value }))} />
+            <input type="number" className="form-control" placeholder="Max" style={{ width: 70 }}
+                   value={filters.max_score} onChange={(e) => setFilters((f) => ({ ...f, max_score: e.target.value }))} />
+            <button type="submit" className="btn btn-sm btn-primary"><i className="fas fa-search" /></button>
+            {d.has_filter && <button type="button" className="btn btn-sm btn-secondary" onClick={clearFilters}>Clear</button>}
+          </form>
+        </div>
+
+        {d.results.length ? (<>
+          <div className="students-list">
+            {d.results.map((it) => (
+              <div className="student-card" key={it.rank}>
+                <div className="student-card-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className={'student-rank' + rankClass(it.rank)}>{it.rank}</span>
+                    <div>
+                      <div className="student-name">{it.student.full_name}</div>
+                      <div className="student-id">{it.student.student_id}</div>
+                      <a href={it.student.progress_url} className="progress-link"><i className="fas fa-chart-line" /> View Progress</a>
+                    </div>
+                  </div>
+                  <span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span>
+                </div>
+                <div className="student-score" style={{ color: scoreColor(it.total_score) }}>{it.total_score}</div>
+                <div className="student-subjects">
+                  {it.subjects.filter(Boolean).map((s, i) => (
+                    <div className="student-subject" key={i}><span>{s.name.substring(0, 10)}</span><strong>{s.score}</strong></div>))}
+                </div>
+                <div className="student-actions">
+                  <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i className="fas fa-chart-line" /></a>
+                  <a href={it.edit_url} className="btn btn-warning btn-sm"><i className="fas fa-edit" /></a>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i className="fas fa-trash" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="desktop-table">
+            <table>
+              <thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>Level</th><th>Actions</th></tr></thead>
+              <tbody>{d.results.map((it) => (
+                <tr key={it.rank}>
+                  <td><span className={'student-rank' + rankClass(it.rank)} style={{ width: 24, height: 24, fontSize: '0.7rem' }}>{it.rank}</span></td>
+                  <td><strong>{it.student.full_name}</strong><br /><small style={{ color: 'var(--text-muted)' }}>{it.student.student_id}</small><br />
+                    <a href={it.student.progress_url} className="progress-link"><i className="fas fa-chart-line" /> Progress</a></td>
+                  <td><strong style={{ fontSize: '1.1rem', color: scoreColor(it.total_score) }}>{it.total_score}</strong></td>
+                  {it.subjects.map((s, i) => (
+                    <td key={i}>{s ? <><small>{s.name.substring(0, 8)}</small><br /><strong>{s.score}</strong></> : '-'}</td>))}
+                  <td><span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span></td>
+                  <td><div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i className="fas fa-chart-line" /></a>
+                    <a href={it.edit_url} className="btn btn-warning btn-sm"><i className="fas fa-edit" /></a>
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i className="fas fa-trash" /></button>
+                  </div></td>
+                </tr>))}
+              </tbody>
+            </table>
+          </div>
+        </>) : (
+          <div className="card-body"><Empty icon="fa-clipboard-list" title="No Results">
+            <p>{filters.search ? `No students found matching "${filters.search}"` : 'Add results for this exam'}</p>
+            <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-plus" /> Add</a></Empty></div>
+        )}
+      </div>
+
+      <div className="card mt-3" style={{ borderColor: 'var(--danger)' }}>
+        <div className="card-header" style={{ background: 'rgba(220,53,69,0.1)' }}><h3 className="text-danger"><i className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
+        <div className="card-body"><p className="text-muted mb-3">Delete exam and all results permanently.</p>
+          <button type="button" className="btn btn-danger" onClick={delExam}><i className="fas fa-trash" /> Delete Exam</button></div>
+      </div>
+
+      {exporting && <ExportModal d={d} st={st} onClose={() => setExporting(false)} onGenerate={doExport} />}
+      {saveImg && <SaveModal src={saveImg} onClose={() => setSaveImg(null)} />}
+    </>
+  );
+}
+
+function ExportModal({ onClose, onGenerate }) {
+  const [opts, setOpts] = useState({ rank: true, studentId: true, subjects: true, level: false,
+    summary: true, distribution: true, timestamp: true, quality: 3 });
+  const set = (k, v) => setOpts((o) => ({ ...o, [k]: v }));
+  const Check = ({ k, label }) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'var(--gray-50)', borderRadius: 6, marginBottom: '0.5rem', cursor: 'pointer' }}>
+      <input type="checkbox" checked={opts[k]} onChange={(e) => set(k, e.target.checked)} /><span style={{ fontSize: '0.9rem' }}>{label}</span></label>
+  );
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 12, maxWidth: 400, margin: '2rem auto', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '1.1rem' }}><i className="fas fa-image" /> Export HD Image</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
+        </div>
+        <div style={{ padding: '1rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Select columns:</p>
+          <div style={{ marginBottom: '1rem' }}>
+            <Check k="rank" label="Rank" /><Check k="studentId" label="Student ID" /><Check k="subjects" label="Subject Scores" /><Check k="level" label="Performance Level" /></div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Stats to include:</p>
+          <div style={{ marginBottom: '1rem' }}>
+            <Check k="summary" label="Summary Stats" /><Check k="distribution" label="Score Distribution" /><Check k="timestamp" label="Timestamp" /></div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Quality:</p>
+          <select value={opts.quality} onChange={(e) => set('quality', parseInt(e.target.value, 10))}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: '1rem' }}>
+            <option value="2">Standard (2x)</option><option value="3">HD (3x)</option><option value="4">Ultra HD (4x)</option>
+          </select>
+          <button onClick={() => onGenerate(opts)} className="btn btn-primary" style={{ width: '100%' }}><i className="fas fa-download" /> Generate Image</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SaveModal({ src, onClose }) {
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10000, padding: '1rem', overflowY: 'auto' }}>
+      <div style={{ maxWidth: '100%', margin: '1rem auto', textAlign: 'center' }}>
+        <p style={{ color: 'white', marginBottom: '1rem' }}>Long-press image to save</p>
+        <img src={src} alt="Results export" style={{ maxWidth: '100%', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }} />
+        <div><button onClick={onClose} style={{ marginTop: '1rem', padding: '0.75rem 2rem', background: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Close</button></div>
+      </div>
+    </div>
+  );
+}
+
+// Build an off-screen node for html2canvas to snapshot (ported from the Jinja version).
+function buildExportNode(d, st, o) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:absolute;left:-9999px;width:500px;';
+  const dist = (st && st.distribution) || {};
+  const stats = (st && st.statistics) || {};
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  let thead = '<tr style="background:#11998e;color:white;">';
+  if (o.rank) thead += '<th style="padding:6px;text-align:center;">#</th>';
+  thead += '<th style="padding:6px;">Name</th>';
+  if (o.studentId) thead += '<th style="padding:6px;">ID</th>';
+  thead += '<th style="padding:6px;text-align:center;">Score</th>';
+  if (o.subjects) thead += '<th style="padding:6px;text-align:center;">Subjects</th>';
+  if (o.level) thead += '<th style="padding:6px;text-align:center;">Level</th>';
+  thead += '</tr>';
+
+  let tbody = '';
+  d.results.forEach((r, i) => {
+    const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
+    const sc = scoreColor(r.total_score);
+    const subs = r.subjects.filter(Boolean);
+    tbody += `<tr style="background:${bg};">`;
+    if (o.rank) tbody += `<td style="padding:5px;text-align:center;font-weight:bold;">${r.rank}</td>`;
+    tbody += `<td style="padding:5px;font-size:10px;">${esc(r.student.full_name)}</td>`;
+    if (o.studentId) tbody += `<td style="padding:5px;font-size:9px;color:#666;">${esc(r.student.student_id)}</td>`;
+    tbody += `<td style="padding:5px;text-align:center;font-weight:bold;color:${sc};">${r.total_score}</td>`;
+    if (o.subjects) tbody += `<td style="padding:5px;font-size:9px;">${subs.map((s) => esc(s.name).substring(0, 3) + ':' + s.score).join(' ')}</td>`;
+    if (o.level) tbody += `<td style="padding:5px;font-size:9px;text-align:center;">${esc(r.performance_level)}</td>`;
+    tbody += '</tr>';
+  });
+
+  const summary = o.summary
+    ? `Students: ${st ? st.student_count : 0} | Avg: ${r1(stats.average)} | High: ${stats.max || 0} | Low: ${stats.min || 0}` : '';
+  const below = (dist['180-199'] || 0) + (dist['0-179'] || 0);
+  const distHtml = o.distribution
+    ? `<div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Distribution:</div><div style="font-size:9px;display:flex;gap:8px;flex-wrap:wrap;"><span style="color:#28a745;">300+: ${dist['300-400'] || 0}</span><span style="color:#17a2b8;">250-299: ${dist['250-299'] || 0}</span><span style="color:#ffc107;">200-249: ${dist['200-249'] || 0}</span><span style="color:#dc3545;">&lt;200: ${below}</span></div>` : '';
+  const footer = o.timestamp ? `Generated: ${new Date().toLocaleString()}` : '';
+
+  wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <h2 style="color:#11998e;text-align:center;margin:0 0 8px 0;font-size:18px;">${esc(d.exam.display_name)}</h2>
+    <p style="text-align:center;color:#666;margin:0 0 4px 0;font-size:11px;">${esc(d.exam.exam_date)}${d.exam.session_name ? ' | ' + esc(d.exam.session_name) : ''}</p>
+    <p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;">${summary}</p>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
+    ${o.distribution ? `<div style="margin-top:10px;padding:8px;background:#f8f9fa;border-radius:6px;">${distHtml}</div>` : ''}
+    <p style="text-align:center;margin:8px 0 0 0;color:#999;font-size:9px;">${footer}</p>
+  </div>`;
+  return wrap;
+}
+
+// ---- Student progress ------------------------------------------------------
+function StudentProgress({ d }) {
+  const nav = useNav();
+  const chartRef = useRef();
+  const p = d.progress;
+  const pred = d.prediction;
+  const recs = d.recommendations;
+  const s = d.student;
+
+  useEffect(() => {
+    if (!p || !p.progress.length || !chartRef.current || !window.Chart) return;
+    const scores = p.progress.map((x) => x.score);
+    const chart = new window.Chart(chartRef.current, {
+      type: 'line',
+      data: { labels: p.progress.map((x) => x.exam),
+        datasets: [{ label: 'Score', data: scores, borderColor: '#11998e', backgroundColor: 'rgba(17,153,142,0.1)',
+          borderWidth: 3, fill: true, tension: 0.3, pointRadius: 6, pointBackgroundColor: '#11998e' }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: false, min: Math.max(0, Math.min(...scores) - 50), max: Math.min(400, Math.max(...scores) + 50), grid: { color: 'rgba(0,0,0,0.05)' } },
+          x: { grid: { display: false } } } },
+    });
+    return () => chart.destroy();
+  }, [p]);
+
+  const latest = p && p.progress.length ? p.progress[p.progress.length - 1] : null;
+  const gap = s.jamb_target != null && p ? s.jamb_target - p.latest_score : null;
+
+  return (
+    <>
+      <div className="student-header">
+        <div className="student-avatar">{s.full_name[0]}</div>
+        <div className="student-info"><h1>{s.full_name}</h1><p>{s.student_id}{s.gender ? ` | ${s.gender}` : ''}</p></div>
+        <div style={{ marginLeft: 'auto' }}>
+          <select className="form-control" value={d.selected_session_id}
+                  onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
+            {d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {p ? (<>
+        <div className="stats-row">
+          <div className="stat-box highlight"><div className="value">{r1(p.average_score)}</div><div className="label">Average Score</div></div>
+          <div className="stat-box"><div className="value">{p.best_score}</div><div className="label">Best Score</div></div>
+          <div className="stat-box"><div className="value">{p.latest_score}</div><div className="label">Latest Score</div></div>
+          <div className="stat-box"><div className="value">{p.exam_count}</div><div className="label">Exams Taken</div></div>
+        </div>
+
+        {s.jamb_target != null && (
+          <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div><strong><i className="fas fa-bullseye" /> JAMB Target: {s.jamb_target}</strong>
+              <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>Latest mock: {p.latest_score}</p></div>
+            <div style={{ textAlign: 'right' }}>
+              {gap <= 0 ? <span className="badge badge-success" style={{ fontSize: '0.95rem' }}><i className="fas fa-check" /> Target met (+{-gap})</span>
+                : <span className="badge badge-warning" style={{ fontSize: '0.95rem' }}>{gap} to go</span>}
+            </div>
+          </div></div>
+        )}
+
+        {pred && (<>
+          <div className="prediction-card">
+            <h3 style={{ textAlign: 'center', margin: '0 0 0.5rem', fontSize: '1rem', opacity: 0.9 }}><i className="fas fa-crystal-ball" /> Predicted Real JAMB Score</h3>
+            <div className="prediction-score">{pred.predicted_score}</div>
+            <div className="prediction-range">Expected Range: {pred.predicted_range.low} - {pred.predicted_range.high}</div>
+            <div className="prediction-details">
+              <div className="prediction-detail"><div className="val">
+                <span className={'trend-badge ' + (pred.improvement_trend > 0 ? 'trend-improving' : pred.improvement_trend < 0 ? 'trend-declining' : 'trend-stable')}>
+                  {pred.improvement_trend > 0 ? <><i className="fas fa-arrow-up" /> +{pred.improvement_trend}</>
+                    : pred.improvement_trend < 0 ? <><i className="fas fa-arrow-down" /> {pred.improvement_trend}</>
+                    : <><i className="fas fa-minus" /> Stable</>}
+                </span></div><div className="lbl">Trend</div></div>
+              <div className="prediction-detail"><div className="val">{pred.confidence_level}%</div><div className="lbl">Confidence</div></div>
+              <div className="prediction-detail"><div className="val">{pred.mock_count}</div><div className="lbl">Based on Exams</div></div>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85rem', opacity: 0.9 }}>
+              {pred.recommendation}</div>
+          </div>
+          <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center">
+            <div><strong><i className="fas fa-file-alt" /> Want to see predicted WAEC grades?</strong>
+              <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>Based on your Mock JAMB subject scores</p></div>
+            <a href={d.urls.predictions} className="btn btn-primary"><i className="fas fa-chart-line" /> View All Predictions</a>
+          </div></div>
+        </>)}
+
+        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-chart-line" /> Score Progression</h3></div>
+          <div className="card-body"><div className="progress-chart"><canvas ref={chartRef} /></div></div></div>
+
+        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-history" /> Exam History</h3></div>
+          <div className="card-body"><div className="exam-timeline">
+            {p.progress.map((x, i) => (
+              <div className="exam-item" key={i}>
+                <div className="exam-number">{x.exam_number}</div>
+                <div className="exam-details"><div className="exam-name">{x.exam}</div><div className="exam-date">{x.exam_date}</div></div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="exam-score" style={{ color: scoreColor(x.score) }}>{x.score}</div>
+                  {x.change != null && <div className={'exam-change ' + (x.change > 0 ? 'positive' : x.change < 0 ? 'negative' : '')}>{x.change > 0 ? '+' : ''}{x.change}</div>}
+                </div>
+              </div>))}
+          </div></div></div>
+
+        {latest && latest.subjects && latest.subjects.length > 0 && (
+          <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-book" /> Latest Subject Scores</h3></div>
+            <div className="card-body"><div className="subject-breakdown">
+              {latest.subjects.map((sub, i) => (
+                <div className="subject-card" key={i}><div className="name">{sub.name}</div>
+                  <div className="score" style={{ color: sub.score >= 70 ? '#28a745' : sub.score >= 50 ? '#ffc107' : '#dc3545' }}>{sub.score}</div></div>))}
+            </div></div></div>
+        )}
+
+        {recs && recs.length > 0 && (
+          <div className="card"><div className="card-header"><h3><i className="fas fa-lightbulb" /> Improvement Recommendations</h3></div>
+            <div className="card-body"><div className="recommendation-list">
+              {recs.map((rec, i) => (
+                <div className={'rec-item ' + rec.priority} key={i}>
+                  <div style={{ flex: 1 }}><div className="rec-subject">{rec.subject} <span className="rec-score">({rec.score})</span></div>
+                    <div className="rec-text">{rec.recommendation}</div></div>
+                </div>))}
+            </div></div></div>
+        )}
+      </>) : (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-line" title="No Mock Exam Results">
+          <p>This student hasn't taken any mock exams yet</p></Empty></div></div>
+      )}
+    </>
+  );
+}
+
+// ---- Analytics -------------------------------------------------------------
+function Analytics({ d }) {
+  const nav = useNav();
+  const chartRef = useRef();
+  const comp = d.comparison;
+
+  useEffect(() => {
+    if (!comp.length || !chartRef.current || !window.Chart) return;
+    const chart = new window.Chart(chartRef.current, {
+      type: 'bar',
+      data: { labels: comp.map((c) => c.exam.display_name),
+        datasets: [
+          { label: 'Average Score', data: comp.map((c) => r1(c.average)), backgroundColor: 'rgba(17,153,142,0.8)', borderRadius: 4, order: 2 },
+          { label: 'Max Score', data: comp.map((c) => c.max), type: 'line', borderColor: '#28a745', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 4, order: 1 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+        scales: { y: { beginAtZero: false, min: 100, max: 400, grid: { color: 'rgba(0,0,0,0.05)' } } } },
+    });
+    return () => chart.destroy();
+  }, [comp]);
+
+  const latest = comp.length ? comp[comp.length - 1] : null;
+  const first = comp.length ? comp[0] : null;
+  const change = latest && first ? latest.average - first.average : 0;
+
+  return (
+    <>
+      <div className="page-header"><h1><i className="fas fa-chart-bar" /> Mock JAMB Analytics</h1></div>
+      <div className="filter-bar">
+        <div className="form-group mb-0">
+          <label className="form-label">Academic Session</label>
+          <select className="form-control" value={d.selected_session_id}
+                  onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
+            {d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {comp.length > 0 ? (<>
+        <div className="stats-row">
+          <div className="stat-box highlight"><div className="value">{comp.length}</div><div className="label">Exams Conducted</div></div>
+          <div className="stat-box"><div className="value">{latest.student_count}</div><div className="label">Latest Participants</div></div>
+          <div className="stat-box"><div className="value">{r1(latest.average)}</div><div className="label">Latest Average</div></div>
+          <div className="stat-box"><div className="value" style={{ color: change > 0 ? '#28a745' : change < 0 ? '#dc3545' : '#6c757d' }}>
+            {change > 0 ? '+' : ''}{r1(change)}</div><div className="label">Change from 1st</div></div>
+        </div>
+
+        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-chart-line" /> Exam Comparison</h3></div>
+          <div className="card-body"><div className="chart-container"><canvas ref={chartRef} /></div></div></div>
+
+        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-table" /> Exam Statistics</h3></div>
+          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="comparison-table">
+              <thead><tr><th>Exam</th><th>Students</th><th>Average</th><th>Change</th><th>Max</th><th>Min</th><th>≥200</th><th>≥250%</th></tr></thead>
+              <tbody>{comp.map((c, i) => {
+                const ch = i > 0 ? c.average - comp[i - 1].average : null;
+                return (
+                  <tr key={c.exam.id}>
+                    <td><strong>{c.exam.display_name}</strong></td>
+                    <td>{c.student_count}</td>
+                    <td><strong>{r1(c.average)}</strong></td>
+                    <td>{ch == null ? '-' : <span className={ch > 0 ? 'trend-up' : ch < 0 ? 'trend-down' : ''}>{ch > 0 ? '+' : ''}{r1(ch)}</span>}</td>
+                    <td style={{ color: '#28a745' }}>{c.max}</td>
+                    <td style={{ color: '#dc3545' }}>{c.min}</td>
+                    <td>{c.above_200}</td>
+                    <td>{c.above_250_pct}%</td>
+                  </tr>);
+              })}</tbody>
+            </table>
+          </div></div>
+
+        <h3 className="mb-3"><i className="fas fa-clipboard-list" /> Detailed Breakdown</h3>
+        {d.exams_stats.map((stats) => {
+          const total = stats.student_count;
+          const pct = (n) => (total > 0 ? (n / total) * 100 : 0);
+          const dist = stats.distribution;
+          const below = dist['180-199'] + dist['0-179'];
+          return (
+            <div className="exam-card" key={stats.exam.id}>
+              <div className="exam-card-header">
+                <div><div className="exam-card-title">{stats.exam.display_name}</div><div className="exam-card-date">{stats.exam.exam_date}</div></div>
+                <a href={stats.exam.view_url} className="btn btn-sm btn-primary">View</a>
+              </div>
+              <div className="exam-card-body">
+                <div className="mini-stats">
+                  <div className="mini-stat"><div className="val">{stats.student_count}</div><div className="lbl">Students</div></div>
+                  <div className="mini-stat"><div className="val">{r1(stats.statistics.average)}</div><div className="lbl">Average</div></div>
+                  <div className="mini-stat"><div className="val" style={{ color: '#28a745' }}>{stats.statistics.max}</div><div className="lbl">Highest</div></div>
+                  <div className="mini-stat"><div className="val" style={{ color: '#dc3545' }}>{stats.statistics.min}</div><div className="lbl">Lowest</div></div>
+                </div>
+                <div className="distribution-bars">
+                  <div className="dist-row"><span className="dist-label">300-400</span><div className="dist-bar-bg"><div className="dist-bar excellent" style={{ width: pct(dist['300-400']) + '%' }} /></div><span className="dist-count">{dist['300-400']}</span></div>
+                  <div className="dist-row"><span className="dist-label">250-299</span><div className="dist-bar-bg"><div className="dist-bar good" style={{ width: pct(dist['250-299']) + '%' }} /></div><span className="dist-count">{dist['250-299']}</span></div>
+                  <div className="dist-row"><span className="dist-label">200-249</span><div className="dist-bar-bg"><div className="dist-bar average" style={{ width: pct(dist['200-249']) + '%' }} /></div><span className="dist-count">{dist['200-249']}</span></div>
+                  <div className="dist-row"><span className="dist-label">Below 200</span><div className="dist-bar-bg"><div className="dist-bar below" style={{ width: pct(below) + '%' }} /></div><span className="dist-count">{below}</span></div>
+                </div>
+                {stats.subject_analysis.length > 0 && (
+                  <div className="improvement-section"><div className="improvement-title">Subject Performance</div>
+                    <div className="improvement-list">{stats.subject_analysis.slice(0, 6).map((su) => (
+                      <span className={'improvement-badge ' + (su.average >= 60 ? 'improving' : su.average < 45 ? 'declining' : '')} key={su.subject}>
+                        {su.subject}: {r1(su.average)}</span>))}
+                    </div></div>
+                )}
+              </div>
+            </div>);
+        })}
+      </>) : (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-bar" title="No Data Yet">
+          <p>Conduct mock exams to see analytics</p>
+          <a href={d.urls.create} className="btn btn-primary"><i className="fas fa-plus" /> Create Exam</a></Empty></div></div>
+      )}
+    </>
+  );
+}
+
 const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult,
-  bulk_entry: BulkEntry, add_result: AddResult };
+  bulk_entry: BulkEntry, add_result: AddResult, view_exam: ViewExam, student_progress: StudentProgress, analytics: Analytics };
 
 export default function MockJambApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

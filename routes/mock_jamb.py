@@ -2,7 +2,7 @@
 Mock JAMB Examination Routes
 Full management of mock JAMB exams with analytics and insights
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Blueprint, request, redirect, url_for, flash, jsonify, Response
 from utils.helpers import get_active_term, get_active_session
 from datetime import datetime
 from io import BytesIO
@@ -248,26 +248,57 @@ def view_exam(exam_id):
         query = query.order_by(MockJAMBResult.total_score.desc())
     
     results = query.all()
-    
-    # Add rank to results
-    results_with_rank = []
+
+    def subj_arr(r):
+        out = []
+        for i in (1, 2, 3, 4):
+            name = getattr(r, f'subject{i}')
+            score = getattr(r, f'subject{i}_score')
+            out.append({'name': name, 'score': score} if name else None)
+        return out
+
+    results_payload = []
     for idx, r in enumerate(results):
-        results_with_rank.append({
-            'result': r,
+        st = r.student
+        results_payload.append({
             'rank': idx + 1,
-            'student': r.student
+            'student': {'id': st.id, 'full_name': st.full_name, 'student_id': st.student_id,
+                        'progress_url': url_for('mock_jamb.student_progress', student_id=st.id)},
+            'total_score': r.total_score,
+            'performance_level': r.performance_level,
+            'perf_class': r.performance_level.lower().replace(' ', '_'),
+            'subjects': subj_arr(r),
+            'edit_url': url_for('mock_jamb.edit_result', result_id=r.id),
+            'delete_url': url_for('mock_jamb.delete_result', result_id=r.id),
         })
-    
-    return render_template('mock_jamb/view_exam.html',
-        exam=exam,
-        statistics=statistics,
-        results=results_with_rank,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        min_score=min_score,
-        max_score=max_score,
-        search=search
-    )
+
+    stats_payload = None
+    if statistics and statistics.get('statistics'):
+        stats_payload = {
+            'student_count': statistics['student_count'],
+            'statistics': statistics['statistics'],
+            'distribution': statistics['distribution'],
+            'subject_analysis': statistics['subject_analysis'],
+        }
+
+    return _render({
+        'page': 'view_exam',
+        'exam': {'id': exam.id, 'display_name': exam.display_name,
+                 'exam_date': exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '',
+                 'session_name': exam.session.name if exam.session else ''},
+        'statistics': stats_payload,
+        'results': results_payload,
+        'filters': {'search': search, 'min_score': min_score or '', 'max_score': max_score or '',
+                    'sort': sort_by, 'order': sort_order},
+        'has_filter': bool(search or min_score or max_score),
+        'urls': {'add': url_for('mock_jamb.add_result', exam_id=exam.id),
+                 'bulk': url_for('mock_jamb.bulk_entry', exam_id=exam.id),
+                 'export': url_for('mock_jamb.export_results', exam_id=exam.id),
+                 'edit': url_for('mock_jamb.edit_exam', exam_id=exam.id),
+                 'index': url_for('mock_jamb.index'),
+                 'self': url_for('mock_jamb.view_exam', exam_id=exam.id),
+                 'delete_exam': url_for('mock_jamb.delete_exam', exam_id=exam.id)},
+    })
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/edit', methods=['GET', 'POST'])
@@ -610,17 +641,36 @@ def student_progress(student_id):
     progress = MockJAMBAnalytics.get_student_progress(student_id, session_id)
     prediction = MockJAMBAnalytics.predict_real_jamb(student_id, session_id)
     recommendations = MockJAMBAnalytics.get_improvement_recommendations(student_id, session_id)
-    
+
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
-    
-    return render_template('mock_jamb/student_progress.html',
-        student=student,
-        progress=progress,
-        prediction=prediction,
-        recommendations=recommendations,
-        sessions=sessions,
-        selected_session_id=session_id
-    )
+
+    prog_payload = None
+    if progress:
+        prog_payload = {
+            'average_score': progress['average_score'],
+            'best_score': progress['best_score'],
+            'latest_score': progress['latest_score'],
+            'exam_count': progress['exam_count'],
+            'progress': [{'exam': p['exam'], 'exam_number': p['exam_number'],
+                          'exam_date': p['exam_date'].strftime('%d %b %Y') if p['exam_date'] else '',
+                          'score': p['score'], 'change': p['change'],
+                          'subjects': p['subjects']} for p in progress['progress']],
+        }
+
+    return _render({
+        'page': 'student_progress',
+        'student': {'id': student.id, 'full_name': student.full_name,
+                    'student_id': student.student_id, 'gender': student.gender or '',
+                    'jamb_target': student.jamb_target},
+        'progress': prog_payload,
+        'prediction': prediction,
+        'recommendations': recommendations,
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'selected_session_id': session_id or '',
+        'urls': {'index': url_for('mock_jamb.index'),
+                 'self': url_for('mock_jamb.student_progress', student_id=student.id),
+                 'predictions': url_for('results.student_predictions', student_id=student.id)},
+    })
 
 
 @mock_jamb_bp.route('/analytics')
@@ -641,17 +691,35 @@ def analytics():
         comparison = MockJAMBAnalytics.compare_mock_exams(session_id)
         exams = scope_query(MockJAMBExam.query.filter_by(session_id=session_id),
                             MockJAMBExam).order_by(MockJAMBExam.exam_number).all()
+        # Only the creator's branch should appear; compare_mock_exams is not
+        # branch-scoped, so intersect it with the scoped exam ids.
+        scoped_ids = {e.id for e in exams}
+        comparison = [c for c in (comparison or []) if c['exam'].id in scoped_ids]
         for exam in exams:
             stats = MockJAMBAnalytics.get_exam_statistics(exam.id)
             if stats:
                 exams_stats.append(stats)
-    
-    return render_template('mock_jamb/analytics.html',
-        sessions=sessions,
-        selected_session_id=session_id,
-        comparison=comparison,
-        exams_stats=exams_stats
-    )
+
+    comp_payload = [{'exam': {'id': c['exam'].id, 'display_name': c['exam'].display_name},
+                     'student_count': c['student_count'], 'average': c['average'],
+                     'max': c['max'], 'min': c['min'], 'above_200': c['above_200'],
+                     'above_250_pct': c['above_250_pct']} for c in comparison]
+    estats_payload = [{'exam': {'id': s['exam'].id, 'display_name': s['exam'].display_name,
+                                'view_url': url_for('mock_jamb.view_exam', exam_id=s['exam'].id),
+                                'exam_date': s['exam'].exam_date.strftime('%d %B %Y') if s['exam'].exam_date else ''},
+                       'student_count': s['student_count'], 'statistics': s['statistics'],
+                       'distribution': s['distribution'], 'subject_analysis': s['subject_analysis']}
+                      for s in exams_stats if s.get('statistics')]
+
+    return _render({
+        'page': 'analytics',
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'selected_session_id': session_id or '',
+        'comparison': comp_payload,
+        'exams_stats': estats_payload,
+        'urls': {'index': url_for('mock_jamb.index'), 'create': url_for('mock_jamb.create_exam'),
+                 'self': url_for('mock_jamb.analytics')},
+    })
 
 
 # =============================================================================
