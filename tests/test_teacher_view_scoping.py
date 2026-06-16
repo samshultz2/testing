@@ -218,6 +218,27 @@ def test_students_api_shape_and_pagination(app):
         assert {'id', 'student_id', 'name', 'gender', 'url'} <= set(s)
 
 
+def test_trash_is_teacher_scoped(app):
+    """A form teacher's trash shows only their own (form-class) deleted students,
+    not other classes' — branch + teacher scoped."""
+    ids = _seed_teacher_and_students(app)
+    with app.app_context():
+        for sid in (ids['mine_id'], ids['other_id']):
+            db.session.get(Student, sid).is_active = False
+        db.session.commit()
+    try:
+        c = _login_teacher(app)
+        html = c.get('/students/trash').get_data(as_text=True)
+        assert 'TVS_MINE' in html        # the teacher's own deleted student
+        assert 'TVS_OTHER' not in html   # another class's student is hidden
+    finally:
+        with app.app_context():
+            for sid in (ids['mine_id'], ids['other_id']):
+                db.session.get(Student, sid).is_active = True
+            db.session.commit()
+        _deactivate(app)
+
+
 def _deactivate(app):
     with app.app_context():
         t = Term.query.filter_by(name='TVS-Term').first()

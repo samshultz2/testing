@@ -8,6 +8,7 @@ export default function TrashApp({ initial }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const urls = initial.urls || {};
+  const canManage = initial.can_manage !== false;   // view-only users can't restore/purge
 
   const allSelected = students.length > 0 && selected.size === students.length;
   const toggle = (id) => setSelected((s) => {
@@ -71,41 +72,45 @@ export default function TrashApp({ initial }) {
             <EmptyState icon="fa-trash" title="No deleted students." hint="Students you delete from the list show up here and can be restored." />
           ) : (
             <>
-              <div className="selection-bar" style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap', padding: '.75rem 1rem', borderBottom: '1px solid var(--border-color,#eee)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', margin: 0 }}>
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /> Select all
-                </label>
-                <span className="text-muted text-sm">{selected.size} selected</span>
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem' }}>
-                  <button type="button" className="btn btn-success btn-sm" disabled={busy || !selected.size} onClick={bulkRestore}>
-                    <i className="fas fa-rotate-left" /> Restore selected
-                  </button>
-                  <button type="button" className="btn btn-danger btn-sm" disabled={busy || !selected.size} onClick={bulkPurge}>
-                    <i className="fas fa-trash" /> Delete forever
-                  </button>
+              {canManage && (
+                <div className="selection-bar" style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap', padding: '.75rem 1rem', borderBottom: '1px solid var(--border-color,#eee)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', margin: 0 }}>
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /> Select all
+                  </label>
+                  <span className="text-muted text-sm">{selected.size} selected</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem' }}>
+                    <button type="button" className="btn btn-success btn-sm" disabled={busy || !selected.size} onClick={bulkRestore}>
+                      <i className="fas fa-rotate-left" /> Restore selected
+                    </button>
+                    <button type="button" className="btn btn-danger btn-sm" disabled={busy || !selected.size} onClick={bulkPurge}>
+                      <i className="fas fa-trash" /> Delete forever
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="data-cards" style={{ padding: '1rem' }}>
                 {students.map((s) => (
                   <div className="data-card" key={s.id}>
                     <div className="data-card-header">
                       <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: 0 }}>
-                        <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} aria-label={`Select ${s.full_name}`} />
+                        {canManage && <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} aria-label={`Select ${s.full_name}`} />}
                         <span className="data-card-title">{s.full_name}</span>
                       </label>
                       <span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span>
                     </div>
                     <div className="data-card-row"><span className="data-card-label">ID</span><span>{s.student_id}</span></div>
                     {s.stream && <div className="data-card-row"><span className="data-card-label">Stream</span><span>{s.stream}</span></div>}
-                    <div className="data-card-actions" style={{ display: 'flex', gap: '.4rem' }}>
-                      <button type="button" className="btn btn-success btn-sm w-100" style={{ flex: 1 }} disabled={busy} onClick={() => restoreOne(s)}>
-                        <i className="fas fa-rotate-left" /> Restore
-                      </button>
-                      <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} disabled={busy} onClick={() => purgeOne(s)}>
-                        <i className="fas fa-trash" /> Delete forever
-                      </button>
-                    </div>
+                    {canManage && (
+                      <div className="data-card-actions" style={{ display: 'flex', gap: '.4rem' }}>
+                        <button type="button" className="btn btn-success btn-sm w-100" style={{ flex: 1 }} disabled={busy} onClick={() => restoreOne(s)}>
+                          <i className="fas fa-rotate-left" /> Restore
+                        </button>
+                        <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} disabled={busy} onClick={() => purgeOne(s)}>
+                          <i className="fas fa-trash" /> Delete forever
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -1534,16 +1534,21 @@ def bulk_delete_students():
 
 
 @main_bp.route('/students/trash')
-@admin_required
+@login_required
 def students_trash():
     """List soft-deleted students with restore / permanent-delete options."""
     return render_template('students/trash.html', trash_json=_trash_payload())
 
 
 def _trash_payload():
-    """Soft-deleted students the current admin may act on (branch-scoped)."""
+    """Soft-deleted students the current user may act on — branch- and
+    teacher-scoped (a form teacher only sees their own students' trash)."""
     from utils.branch_scope import scope_query
+    from utils.access_control import teacher_form_student_ids, page_can_write
     q = scope_query(Student.query.filter_by(is_active=False), Student)
+    tids = teacher_form_student_ids()
+    if tids is not None:
+        q = q.filter(Student.id.in_(tids or [-1]))
     students = q.order_by(Student.surname, Student.first_name).all()
     return {
         'students': [{
@@ -1552,6 +1557,7 @@ def _trash_payload():
             'restore_url': url_for('main.restore_student', student_id=s.id),
             'purge_url': url_for('main.purge_student', student_id=s.id),
         } for s in students],
+        'can_manage': page_can_write(),
         'urls': {
             'list': url_for('main.students_list'),
             'bulk_restore': url_for('main.bulk_restore_students'),
@@ -1561,11 +1567,11 @@ def _trash_payload():
 
 
 @main_bp.route('/students/<int:student_id>/restore', methods=['POST'])
-@admin_required
+@login_required
 def restore_student(student_id):
+    from utils.access_control import assert_student_access
     student = db.get_or_404(Student, student_id)
-    from utils.branch_scope import require_branch_access
-    require_branch_access(student.branch_id)   # don't touch another branch's records
+    assert_student_access(student)   # branch + form-teacher scope
     student.is_active = True
     db.session.commit()
     log_action('restore_student', f'{student.full_name} ({student.student_id})')
@@ -1576,12 +1582,12 @@ def restore_student(student_id):
 
 
 @main_bp.route('/students/<int:student_id>/purge', methods=['POST'])
-@admin_required
+@login_required
 def purge_student(student_id):
     """Permanently delete a soft-deleted student and their related records."""
+    from utils.access_control import assert_student_access
     student = db.get_or_404(Student, student_id)
-    from utils.branch_scope import require_branch_access
-    require_branch_access(student.branch_id)
+    assert_student_access(student)   # branch + form-teacher scope
     if student.is_active:
         if _wants_json():
             return jsonify({'ok': False, 'error': 'Only deleted students can be permanently removed.'}), 400
@@ -1611,16 +1617,27 @@ def _bulk_no_selection():
     return redirect(url_for('main.students_trash'))
 
 
-@main_bp.route('/students/bulk-restore', methods=['POST'])
-@admin_required
-def bulk_restore_students():
-    """Restore several soft-deleted students at once (branch-scoped)."""
+def _trash_scope(query):
+    """Limit a soft-deleted-student query to the user's branch + form-teacher
+    scope, so bulk restore/purge can never touch out-of-scope records."""
     from utils.branch_scope import scope_query
+    from utils.access_control import teacher_form_student_ids
+    query = scope_query(query, Student)
+    tids = teacher_form_student_ids()
+    if tids is not None:
+        query = query.filter(Student.id.in_(tids or [-1]))
+    return query
+
+
+@main_bp.route('/students/bulk-restore', methods=['POST'])
+@login_required
+def bulk_restore_students():
+    """Restore several soft-deleted students at once (branch + teacher scoped)."""
     ids = _int_ids(request.form.getlist('student_ids'))
     if not ids:
         return _bulk_no_selection()
-    restored = scope_query(
-        Student.query.filter(Student.id.in_(ids), Student.is_active == False), Student
+    restored = _trash_scope(
+        Student.query.filter(Student.id.in_(ids), Student.is_active == False)
     ).update({Student.is_active: True}, synchronize_session=False)
     db.session.commit()
     log_action('bulk_restore_students', f'{restored} students restored')
@@ -1631,15 +1648,14 @@ def bulk_restore_students():
 
 
 @main_bp.route('/students/bulk-purge', methods=['POST'])
-@admin_required
+@login_required
 def bulk_purge_students():
-    """Permanently delete several soft-deleted students at once (branch-scoped)."""
-    from utils.branch_scope import scope_query
+    """Permanently delete several soft-deleted students at once (branch + teacher scoped)."""
     ids = _int_ids(request.form.getlist('student_ids'))
     if not ids:
         return _bulk_no_selection()
-    students = scope_query(
-        Student.query.filter(Student.id.in_(ids), Student.is_active == False), Student
+    students = _trash_scope(
+        Student.query.filter(Student.id.in_(ids), Student.is_active == False)
     ).all()
     purged = 0
     try:

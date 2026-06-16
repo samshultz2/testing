@@ -111,7 +111,7 @@ export default function App({ initial }) {
           {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
                                onClick={() => window.confirm("Fill WAEC subjects from stream for students who don't have them set?")
                                  && runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.')}><i className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
-          {canManage && <a href={d.trash_url} className="btn btn-secondary btn-sm" title="Deleted students"><i className="fas fa-trash" /></a>}
+          {d.trash_url && <a href={d.trash_url} className="btn btn-secondary btn-sm" title="View deleted students (restore / delete permanently)"><i className="fas fa-trash" /> Trash</a>}
         </div>
       </div>
 
