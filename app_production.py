@@ -63,6 +63,54 @@ def _have_user(name):
         return False
 
 
+def _find_data_dirs():
+    """Every PostgreSQL data directory we can locate, most-specific first.
+
+    Mirrors the manual recovery (`find /var/lib/postgresql -name PG_VERSION`):
+    a data dir is any directory that contains a ``PG_VERSION`` file. We look at
+    ``$PGDATA``, the standard cluster paths, the ``data_directory`` declared in
+    any registered cluster's ``postgresql.conf``, and finally walk the common
+    roots so an unregistered dir at any depth is still found.
+    """
+    import glob
+    out = []
+
+    def add(path):
+        if path and path not in out:
+            out.append(path)
+
+    add(os.environ.get('PGDATA'))
+    for p in sorted(glob.glob('/var/lib/postgresql/*/main')):
+        add(p)
+    for p in sorted(glob.glob('/var/lib/postgresql/*/*')):   # non-'main' names
+        add(p)
+    # data_directory= lines from registered clusters (may point elsewhere).
+    for conf in glob.glob('/etc/postgresql/*/*/postgresql.conf'):
+        try:
+            with open(conf) as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line.startswith('data_directory'):
+                        val = line.split('=', 1)[1].strip().strip("'\"")
+                        add(val.split('#', 1)[0].strip())
+        except OSError:
+            pass
+    # Last resort: walk the common roots for any PG_VERSION (bounded depth).
+    for root in ('/var/lib/postgresql', '/var/lib/pgsql', '/data'):
+        if not os.path.isdir(root):
+            continue
+        base_depth = root.rstrip('/').count('/')
+        for dirpath, dirnames, filenames in os.walk(root):
+            if 'PG_VERSION' in filenames:
+                add(dirpath)
+                dirnames[:] = []            # don't descend into a data dir
+            elif dirpath.count('/') - base_depth >= 4:
+                dirnames[:] = []            # keep the walk shallow/fast
+
+    # Keep only real data dirs.
+    return [d for d in out if os.path.exists(os.path.join(d, 'PG_VERSION'))]
+
+
 def _start_postgres(port):
     """Best-effort start of a local PostgreSQL.
 
@@ -121,11 +169,7 @@ def _start_postgres(port):
     except Exception:
         pass
 
-    candidates = []
-    if os.environ.get('PGDATA'):
-        candidates.append(os.environ['PGDATA'])
-    candidates += sorted(glob.glob('/var/lib/postgresql/*/main'))
-    candidates += sorted(glob.glob('/var/lib/postgresql/*/*'))   # non-'main' names
+    candidates = _find_data_dirs()
 
     seen = set()
     for d in candidates:
@@ -137,7 +181,7 @@ def _start_postgres(port):
             with open(os.path.join(d, 'PG_VERSION')) as fh:
                 ver = fh.read().strip()
         except OSError:
-            ver = d.split('/')[3]
+            continue
         pg_ctl = f'/usr/lib/postgresql/{ver}/bin/pg_ctl'
         if not os.path.exists(pg_ctl):
             found = sorted(glob.glob('/usr/lib/postgresql/*/bin/pg_ctl'))
