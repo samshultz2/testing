@@ -87,6 +87,24 @@ def _start_postgres(port):
         except Exception:
             continue
 
+    # Fresh install with no cluster at all ("No PostgreSQL clusters exist"):
+    # neither /etc/postgresql nor a data dir holds one. Create + start one with
+    # pg_createcluster so a brand-new phone/proot box is genuinely one-command.
+    have_cluster = bool(glob.glob('/etc/postgresql/*/main') or [
+        d for d in glob.glob('/var/lib/postgresql/*/main')
+        if os.path.exists(os.path.join(d, 'PG_VERSION'))])
+    if (not _tcp_open('127.0.0.1', port) and not have_cluster
+            and shutil.which('pg_createcluster')):
+        versions = sorted(p.split('/')[4]
+                          for p in glob.glob('/usr/lib/postgresql/*/bin/pg_ctl'))
+        if versions:
+            print(f'No PostgreSQL cluster exists — creating one (v{versions[-1]})...')
+            try:
+                subprocess.run(['pg_createcluster', versions[-1], 'main', '--start'],
+                               capture_output=True, text=True, timeout=120)
+            except Exception:
+                pass
+
     if _tcp_open('127.0.0.1', port) or not _have_user('postgres'):
         return
 
@@ -144,6 +162,8 @@ def _ensure_database():
         f'ERROR: PostgreSQL did not come up on {host}:{port}.\n'
         f'Start it manually and retry:\n'
         f'  service postgresql start      (or: pg_ctlcluster <version> main start)\n'
+        f'  # if it says "No PostgreSQL clusters exist", create one first:\n'
+        f'  pg_createcluster $(ls /usr/lib/postgresql) main --start\n'
         f'  pg_isready -h {host} -p {port}\n'
         f'If it refuses to start, check the log: '
         f'/var/lib/postgresql/<version>/main/server.log')
