@@ -14,6 +14,46 @@ PKEY = 'parent_student_id'      # the child currently being viewed
 AUTHKEY = 'parent_auth_id'      # the child whose password was used to sign in
 
 
+def _render(payload):
+    """Parent portal shell, or JSON for in-portal (no-reload) navigation.
+
+    The parent portal is its own public mini-app (not the staff shell), so it
+    has a dedicated standalone page. Flash messages (e.g. a payment result on
+    the redirect back from Paystack) are folded into the payload on a full load
+    so the React app can surface them."""
+    from utils.spa import wants_json
+    from flask import jsonify, get_flashed_messages
+    if wants_json():
+        return jsonify(payload)
+    payload = {**payload, 'flashes': [{'category': c, 'message': m}
+               for c, m in get_flashed_messages(with_categories=True)]}
+    return render_template('parent/app.html', parent_json=payload)
+
+
+def _report_payload(report, affective_traits, rating_labels):
+    """Serialise the report-card dict for the React portal."""
+    if not report:
+        return None
+    ts = report.get('term_summary')
+    aff = getattr(ts, 'affective_map', None) or {} if ts else {}
+    return {
+        'assessment_types': [{'id': at.id, 'label': at.short_name or at.name}
+                             for at in report['assessment_types']],
+        'subjects': [{'name': row['subject'].name,
+                      'assessments': {str(at.id): row['assessments'].get(at.id)
+                                      for at in report['assessment_types']},
+                      'total': row['total'], 'grade': row['grade'], 'remark': row['remark']}
+                     for row in report['subjects']],
+        'average': report['average'], 'overall_grade': report['overall_grade'],
+        'position': (ts.position_in_class if ts else None),
+        'teacher_comment': (ts.teacher_comment if ts else None),
+        'principal_comment': (ts.principal_comment if ts else None),
+        'affective': [{'label': label, 'rating': aff.get(key),
+                       'rating_label': rating_labels.get(aff.get(key), '')}
+                      for key, label in affective_traits if aff.get(key)],
+    }
+
+
 def parent_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -135,12 +175,33 @@ def home():
 
     auth = db.session.get(Student, session.get(AUTHKEY)) or student
     siblings = _siblings(auth)
-    return render_template('parent/home.html',
-        student=student, terms=terms, term_id=term_id, bill=bill,
-        report=report if results_ready else None, results_ready=results_ready,
-        enrollment=enrollment, attendance=attendance, announcements=announcements,
-        pay_enabled=payments.is_configured(), siblings=siblings,
-        affective_traits=active_traits(), rating_labels=RATING_LABELS)
+    aff_traits = active_traits()
+    return _render({
+        'page': 'home',
+        'student': {'full_name': student.full_name, 'student_id': student.student_id,
+                    'class_name': (enrollment.class_arm_assignment.display_name
+                                   if enrollment else None)},
+        'terms': [{'id': t.id, 'name': t.name} for t in terms],
+        'term_id': term_id,
+        'bill': ({'balance': bill['balance'], 'payable': bill['payable'], 'paid': bill['paid']}
+                 if bill else None),
+        'pay_enabled': payments.is_configured(),
+        'attendance': attendance,
+        'report': _report_payload(report if results_ready else None, aff_traits, RATING_LABELS),
+        'results_ready': results_ready,
+        'announcements': [{'title': a.title, 'body': a.body, 'is_pinned': bool(a.is_pinned)}
+                          for a in announcements],
+        'siblings': [{'id': s.id, 'full_name': s.full_name,
+                      'switch_url': url_for('parent.switch_child', student_id=s.id),
+                      'is_current': s.id == student.id} for s in siblings],
+        'urls': {
+            'self': url_for('parent.home'),
+            'logout': url_for('parent.logout'),
+            'pay': url_for('parent.pay'),
+            'report_pdf': url_for('parent.report_pdf', term_id=term_id),
+            'staff_login': url_for('auth.login'),
+        },
+    })
 
 
 def _record_online_payment(student_id, term_id, amount, reference):

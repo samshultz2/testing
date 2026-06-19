@@ -37,8 +37,12 @@ def test_login_and_view(app):
     c = app.test_client()
     c.post('/parent/login', data={'student_id': sid, 'password': pw, '_csrf_token': _tok(c)})
     html = c.get('/parent/').get_data(as_text=True)
-    assert sid in html               # the child's record is shown
-    assert 'Results' in html         # the results section renders
+    assert sid in html               # the child's record is in the payload
+    assert 'parent-app' in html      # the React portal mounts
+    assert '"page": "home"' in html
+    # JSON (no-reload) navigation returns the same payload
+    j = c.get('/parent/', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert j['page'] == 'home' and j['student']['student_id'] == sid
     # logout clears access
     c.get('/parent/logout')
     assert c.get('/parent/', follow_redirects=False).status_code in (302, 303)

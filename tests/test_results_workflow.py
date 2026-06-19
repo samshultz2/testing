@@ -128,10 +128,12 @@ def test_parent_results_publish_gate(app):
     tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
                     c.get('/parent/login').get_data(as_text=True)).group(1)
     c.post('/parent/login', data={'student_id': 'WF1', 'password': 'pw12345', '_csrf_token': tok})
-    hidden = c.get(f'/parent/?term_id={ids["term"]}').get_data(as_text=True)
-    assert 'not yet available' in hidden            # unpublished -> hidden
+    hidden = c.get(f'/parent/?term_id={ids["term"]}',
+                   headers={'X-Requested-With': 'fetch'}).get_json()
+    assert hidden['report'] is None and not hidden['results_ready']   # unpublished -> hidden
     with app.app_context():
         T.query.get(ids['term']).results_published = True
         db.session.commit()
-    shown = c.get(f'/parent/?term_id={ids["term"]}').get_data(as_text=True)
-    assert 'not yet available' not in shown         # released -> visible
+    shown = c.get(f'/parent/?term_id={ids["term"]}',
+                  headers={'X-Requested-With': 'fetch'}).get_json()
+    assert shown['report'] is not None and shown['results_ready']     # released -> visible
