@@ -5,7 +5,7 @@
   Student ID + card PIN to view a published term result. No staff login.
 """
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash)
+                   flash, jsonify)
 
 from models import db, ScratchCard, ResultCheckLog, Term, Student
 from utils.access_control import login_required, result_card_required
@@ -15,6 +15,32 @@ from utils.report_card import build_report_card
 
 scratchcards_bp = Blueprint('scratchcards', __name__, url_prefix='/scratch-cards')
 result_portal_bp = Blueprint('result_portal', __name__, url_prefix='/check-result')
+
+
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('scratchcards/app.html', 'sc_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('scratchcards.index'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('scratchcards.index'))
 
 
 # ===========================================================================
@@ -37,9 +63,25 @@ def index():
         'active': ScratchCard.query.filter_by(is_active=True).count(),
         'used': db.session.query(func.coalesce(func.sum(ScratchCard.used_count), 0)).scalar() or 0,
     }
-    return render_template('scratchcards/index.html', cards=cards, batches=batches,
-                           batch=batch, stats=stats,
-                           terms=Term.query.order_by(Term.id.desc()).all())
+    terms = Term.query.order_by(Term.id.desc()).all()
+    return _render({
+        'page': 'index',
+        'stats': stats,
+        'batch': batch,
+        'batches': batches,
+        'terms': [{'id': t.id, 'name': t.full_name or t.name,
+                   'results_published': bool(t.results_published),
+                   'publish_url': url_for('scratchcards.publish', term_id=t.id)} for t in terms],
+        'cards': [{'id': c.id, 'serial': c.serial, 'pin': c.pin,
+                   'used_count': c.used_count, 'max_uses': c.max_uses, 'uses_left': c.uses_left,
+                   'term_name': c.term.name if c.term else 'Any', 'batch_label': c.batch_label or '—',
+                   'is_active': bool(c.is_active),
+                   'toggle_url': url_for('scratchcards.toggle', card_id=c.id)} for c in cards],
+        'generate_url': url_for('scratchcards.generate'),
+        'logs_url': url_for('scratchcards.logs'),
+        'self_url': url_for('scratchcards.index'),
+        'print_batch_url': url_for('scratchcards.print_cards', batch=batch) if batch else None,
+    })
 
 
 @scratchcards_bp.route('/generate', methods=['POST'])
@@ -68,9 +110,9 @@ def generate():
                f'{count} card(s), {max_uses} uses each'
                + (f', term_id={term_id}' if term_id else '')
                + (f', batch="{label}"' if label else ''))
-    flash(f'Generated {count} scratch card(s).', 'success')
     ids = ','.join(str(c.id) for c in created)
-    return redirect(url_for('scratchcards.print_cards', ids=ids))
+    return _ok(f'Generated {count} scratch card(s).',
+               url_for('scratchcards.print_cards', ids=ids))
 
 
 @scratchcards_bp.route('/print')
@@ -95,9 +137,8 @@ def toggle(card_id):
     card = db.get_or_404(ScratchCard, card_id)
     card.is_active = not card.is_active
     db.session.commit()
-    flash(f'Card {card.serial} {"activated" if card.is_active else "disabled"}.',
-          'success')
-    return redirect(url_for('scratchcards.index', batch=card.batch_label))
+    return _ok(f'Card {card.serial} {"activated" if card.is_active else "disabled"}.',
+               url_for('scratchcards.index', batch=card.batch_label))
 
 
 @scratchcards_bp.route('/publish/<int:term_id>', methods=['POST'])
@@ -109,15 +150,17 @@ def publish(term_id):
     db.session.commit()
     state = 'released' if term.results_published else 'hidden'
     log_action('results.publish', f'{term.full_name}: {state}')
-    flash(f'Results for {term.full_name} are now {state}.', 'success')
     # Optionally notify parents (uses the existing bulk-SMS compose flow).
     if term.results_published and request.form.get('notify') == 'on':
+        flash(f'Results for {term.full_name} are now {state}.', 'success')
         flash('Send this SMS to notify parents that results are released.', 'info')
         return redirect(url_for('comms.compose', audience='all', notice='results'))
     nxt = request.form.get('next')
     if nxt and nxt.startswith('/') and not nxt.startswith('//'):
+        flash(f'Results for {term.full_name} are now {state}.', 'success')
         return redirect(nxt)
-    return redirect(url_for('scratchcards.index'))
+    return _ok(f'Results for {term.full_name} are now {state}.',
+               url_for('scratchcards.index'))
 
 
 @scratchcards_bp.route('/logs')
@@ -125,7 +168,16 @@ def publish(term_id):
 def logs():
     rows = (ResultCheckLog.query.order_by(ResultCheckLog.checked_at.desc())
             .limit(500).all())
-    return render_template('scratchcards/logs.html', rows=rows)
+    return _render({
+        'page': 'logs',
+        'index_url': url_for('scratchcards.index'),
+        'rows': [{'when': r.checked_at.strftime('%d %b %Y %H:%M') if r.checked_at else '',
+                  'student': r.student.full_name if r.student else '—',
+                  'term': r.term.name if r.term else '—',
+                  'card': r.card.serial if r.card else '—',
+                  'success': bool(r.success), 'detail': r.detail,
+                  'ip': r.ip_address or ''} for r in rows],
+    })
 
 
 # ===========================================================================

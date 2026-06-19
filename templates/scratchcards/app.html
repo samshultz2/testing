@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% set _t = {'index':'Scratch Cards','logs':'Result Check Logs'} %}
+{% block title %}{{ _t.get(sc_json.page,'Scratch Cards') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('scratchcards.index') }}">Scratch Cards</a>{% if sc_json.page != 'index' %} / <span>{{ _t.get(sc_json.page,'Scratch Cards') }}</span>{% endif %}{% endblock %}
+{% block content %}
+<div id="sc-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="sc-data">{{ sc_json|tojson }}</script>
+<script src="{{ url_for('static', filename='js/react/scratchcards-app.js') }}" defer></script>
+{% endblock %}
