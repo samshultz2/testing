@@ -1,5 +1,6 @@
 """Assigning students to a class: enroll persists, remove + re-enroll works,
 and already-enrolled students drop out of the available list."""
+import json
 import re
 from config import Config
 from models import (db, Branch, AcademicSession, Term, SchoolClass, ClassArm,
@@ -39,6 +40,13 @@ def _pt(c):
                      c.get('/').get_data(as_text=True)).group(1)
 
 
+def _roster(c, caa_id):
+    """Parse the React shell's JSON payload for a class roster page."""
+    html = c.get(f'/academics/assignments/{caa_id}').get_data(as_text=True)
+    m = re.search(r'id="acad-data">(.*?)</script>', html, re.S)
+    return json.loads(m.group(1))
+
+
 def _enrolled(app, caa_id, sid, active=True):
     with app.app_context():
         e = StudentEnrollment.query.filter_by(
@@ -50,18 +58,19 @@ def test_enroll_persists_and_reactivates(app):
     caa_id, sid = _setup(app)
     c = _admin(app)
 
-    # available list shows the unassigned student
-    html = c.get(f'/academics/assignments/{caa_id}').get_data(as_text=True)
-    assert 'ENR1' in html
+    # available picker shows the unassigned student
+    roster = _roster(c, caa_id)
+    assert any(s['student_id'] == 'ENR1' for s in roster['available_students'])
 
     # enroll
     c.post(f'/academics/assignments/{caa_id}/enroll',
            data={'student_ids[]': [str(sid)], '_csrf_token': _pt(c)})
     assert _enrolled(app, caa_id, sid, active=True)
 
-    # once enrolled, the student no longer appears in the available picker
-    html = c.get(f'/academics/assignments/{caa_id}').get_data(as_text=True)
-    assert 'ENR1' not in html.split('Add Students')[-1]
+    # once enrolled, the student leaves the available picker and shows as enrolled
+    roster = _roster(c, caa_id)
+    assert not any(s['student_id'] == 'ENR1' for s in roster['available_students'])
+    assert any(e['student_id'] == 'ENR1' for e in roster['enrollments'])
 
     # remove (soft delete) then re-enroll -> must reactivate, not silently skip
     with app.app_context():

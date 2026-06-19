@@ -13,6 +13,38 @@ from utils.access_control import admin_required
 
 academics_bp = Blueprint('academics', __name__, url_prefix='/academics')
 
+FMT = '%d %b %Y'
+
+
+def _fd(d):
+    return d.strftime(FMT) if d else None
+
+
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('academics/app.html', 'acad_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('academics.sessions_list'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('academics.sessions_list'))
+
 
 # ============================================================================
 # ACADEMIC SESSIONS
@@ -23,7 +55,15 @@ academics_bp = Blueprint('academics', __name__, url_prefix='/academics')
 def sessions_list():
     """List all academic sessions"""
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
-    return render_template('academics/sessions.html', sessions=sessions)
+    return _render({
+        'page': 'sessions',
+        'sessions': [{'id': s.id, 'name': s.name, 'is_active': bool(s.is_active),
+                      'start_date': _fd(s.start_date), 'end_date': _fd(s.end_date),
+                      'terms': s.terms.count(),
+                      'edit_url': url_for('academics.edit_session', session_id=s.id),
+                      'activate_url': url_for('academics.activate_session', session_id=s.id)} for s in sessions],
+        'add_url': url_for('academics.add_session'),
+    })
 
 
 @academics_bp.route('/sessions/add', methods=['GET', 'POST'])
@@ -39,36 +79,26 @@ def add_session():
             
             # Validate
             if not name:
-                flash('Session name is required.', 'error')
-                return redirect(url_for('academics.add_session'))
-            
-            # Check for duplicate
-            existing = AcademicSession.query.filter_by(name=name).first()
-            if existing:
-                flash('A session with this name already exists.', 'error')
-                return redirect(url_for('academics.add_session'))
-            
+                return _err('Session name is required.', url_for('academics.add_session'))
+            if AcademicSession.query.filter_by(name=name).first():
+                return _err('A session with this name already exists.', url_for('academics.add_session'))
+
             # If setting as active, deactivate others
             if is_active:
                 AcademicSession.query.update({AcademicSession.is_active: False})
-            
+
             session = AcademicSession(
-                name=name,
-                start_date=start_date,
-                end_date=end_date,
-                is_active=is_active
-            )
+                name=name, start_date=start_date, end_date=end_date, is_active=is_active)
             db.session.add(session)
             db.session.commit()
-            
-            flash('Academic session created successfully!', 'success')
-            return redirect(url_for('academics.sessions_list'))
-            
+            return _ok('Academic session created successfully!', url_for('academics.sessions_list'))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error creating session: {str(e)}', 'error')
-    
-    return render_template('academics/add_session.html')
+            return _err(f'Error creating session: {str(e)}', url_for('academics.add_session'))
+
+    return _render({'page': 'add_session', 'submit_url': url_for('academics.add_session'),
+                    'cancel_url': url_for('academics.sessions_list')})
 
 
 @academics_bp.route('/sessions/<int:session_id>/activate', methods=['POST'])
@@ -83,13 +113,10 @@ def activate_session(session_id):
         session = db.get_or_404(AcademicSession, session_id)
         session.is_active = True
         db.session.commit()
-        
-        flash(f'{session.name} is now the active session.', 'success')
+        return _ok(f'{session.name} is now the active session.', url_for('academics.sessions_list'))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.sessions_list'))
+        return _err(f'Error: {str(e)}', url_for('academics.sessions_list'))
 
 
 @academics_bp.route('/sessions/<int:session_id>/edit', methods=['GET', 'POST'])
@@ -105,31 +132,29 @@ def edit_session(session_id):
             end_date = parse_date(request.form.get('end_date'))
             
             if not name:
-                flash('Session name is required.', 'error')
-                return redirect(url_for('academics.edit_session', session_id=session_id))
-            
-            # Check for duplicate name (excluding current session)
+                return _err('Session name is required.', url_for('academics.edit_session', session_id=session_id))
             existing = AcademicSession.query.filter(
-                AcademicSession.name == name,
-                AcademicSession.id != session_id
-            ).first()
+                AcademicSession.name == name, AcademicSession.id != session_id).first()
             if existing:
-                flash('A session with this name already exists.', 'error')
-                return redirect(url_for('academics.edit_session', session_id=session_id))
-            
+                return _err('A session with this name already exists.', url_for('academics.edit_session', session_id=session_id))
+
             session.name = name
             session.start_date = start_date
             session.end_date = end_date
             db.session.commit()
-            
-            flash('Session updated successfully!', 'success')
-            return redirect(url_for('academics.sessions_list'))
-            
+            return _ok('Session updated successfully!', url_for('academics.sessions_list'))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating session: {str(e)}', 'error')
-    
-    return render_template('academics/edit_session.html', academic_session=session)
+            return _err(f'Error updating session: {str(e)}', url_for('academics.edit_session', session_id=session_id))
+
+    return _render({
+        'page': 'edit_session',
+        'session': {'id': session.id, 'name': session.name,
+                    'start_date': session.start_date.isoformat() if session.start_date else '',
+                    'end_date': session.end_date.isoformat() if session.end_date else ''},
+        'submit_url': url_for('academics.edit_session', session_id=session.id),
+        'cancel_url': url_for('academics.sessions_list')})
 
 
 # ============================================================================
@@ -145,7 +170,17 @@ def terms_list():
         Term.term_number
     ).all()
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
-    return render_template('academics/terms.html', terms=terms, sessions=sessions)
+    return _render({
+        'page': 'terms',
+        'terms': [{'id': t.id, 'name': t.name, 'is_active': bool(t.is_active),
+                   'session': t.session.name if t.session else '',
+                   'start_date': _fd(t.start_date), 'end_date': _fd(t.end_date),
+                   'weeks': t.weeks.count(),
+                   'view_url': url_for('academics.view_term', term_id=t.id),
+                   'edit_url': url_for('academics.edit_term', term_id=t.id),
+                   'activate_url': url_for('academics.activate_term', term_id=t.id)} for t in terms],
+        'urls': {'setup': url_for('academics.term_setup'), 'add': url_for('academics.add_term')},
+    })
 
 
 @academics_bp.route('/terms/add', methods=['GET', 'POST'])
@@ -164,17 +199,11 @@ def add_term():
             
             # Validate
             if not session_id or not term_number:
-                flash('Session and term number are required.', 'error')
-                return redirect(url_for('academics.add_term'))
-            
-            # Check for duplicate
+                return _err('Session and term number are required.', url_for('academics.add_term'))
             existing = Term.query.filter_by(
-                session_id=session_id,
-                term_number=term_number
-            ).first()
+                session_id=session_id, term_number=term_number).first()
             if existing:
-                flash('This term already exists for this session.', 'error')
-                return redirect(url_for('academics.add_term'))
+                return _err('This term already exists for this session.', url_for('academics.add_term'))
             
             # Get term name
             term_names = {1: 'First Term', 2: 'Second Term', 3: 'Third Term'}
@@ -208,14 +237,17 @@ def add_term():
                     db.session.add(week)
             
             db.session.commit()
-            flash('Term created successfully!', 'success')
-            return redirect(url_for('academics.terms_list'))
-            
+            return _ok('Term created successfully!', url_for('academics.terms_list'))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error creating term: {str(e)}', 'error')
-    
-    return render_template('academics/add_term.html', sessions=sessions)
+            return _err(f'Error creating term: {str(e)}', url_for('academics.add_term'))
+
+    return _render({
+        'page': 'add_term',
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'submit_url': url_for('academics.add_term'),
+        'cancel_url': url_for('academics.terms_list')})
 
 
 @academics_bp.route('/terms/<int:term_id>/activate', methods=['POST'])
@@ -231,14 +263,12 @@ def activate_term(term_id):
         # Also activate the parent session
         AcademicSession.query.update({AcademicSession.is_active: False})
         term.session.is_active = True
-        
+
         db.session.commit()
-        flash(f'{term.full_name} is now the active term.', 'success')
+        return _ok(f'{term.full_name} is now the active term.', url_for('academics.terms_list'))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.terms_list'))
+        return _err(f'Error: {str(e)}', url_for('academics.terms_list'))
 
 
 @academics_bp.route('/setup')
@@ -283,8 +313,16 @@ def term_setup():
     ]
     required = [s for s in steps if not s.get('optional')]
     done = sum(1 for s in required if s['done'])
-    return render_template('academics/setup.html', steps=steps, term=term,
-                           terms=terms, done=done, required=len(required))
+    from utils.access_control import can_write_module
+    return _render({
+        'page': 'setup',
+        'steps': [{'title': s['title'], 'done': bool(s['done']), 'optional': bool(s.get('optional')),
+                   'detail': s['detail'], 'url': s['url'], 'cta': s['cta']} for s in steps],
+        'done': done, 'required': len(required),
+        'term_id': term.id if term else '', 'can_write': can_write_module('academics'),
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'self_url': url_for('academics.term_setup'),
+    })
 
 
 @academics_bp.route('/terms/<int:term_id>')
@@ -294,14 +332,25 @@ def view_term(term_id):
     term = db.get_or_404(Term, term_id)
     weeks = term.weeks.order_by(Week.week_number).all()
     holidays = term.holidays.order_by(Holiday.date).all()
-    class_assignments = term.class_arm_assignments.all()
-    
-    return render_template('academics/view_term.html',
-        term=term,
-        weeks=weeks,
-        holidays=holidays,
-        class_assignments=class_assignments
-    )
+    last_id = weeks[-1].id if weeks else None
+
+    return _render({
+        'page': 'view_term',
+        'term': {'id': term.id, 'full_name': term.full_name, 'name': term.name,
+                 'is_active': bool(term.is_active), 'has_start': term.start_date is not None,
+                 'start_date': _fd(term.start_date), 'end_date': _fd(term.end_date)},
+        'weeks': [{'id': w.id, 'week_number': w.week_number,
+                   'start_date': _fd(w.start_date), 'end_date': _fd(w.end_date),
+                   'is_last': w.id == last_id,
+                   'delete_url': url_for('academics.delete_week', week_id=w.id)} for w in weeks],
+        'holidays': [{'id': h.id, 'date': _fd(h.date), 'holiday_type': h.holiday_type or '',
+                      'reason': h.reason,
+                      'delete_url': url_for('academics.delete_holiday', holiday_id=h.id)} for h in holidays],
+        'urls': {'edit': url_for('academics.edit_term', term_id=term.id),
+                 'add_week': url_for('academics.add_next_week', term_id=term.id),
+                 'generate_weeks': url_for('academics.generate_weeks', term_id=term.id),
+                 'add_holiday': url_for('academics.add_holiday', term_id=term.id)},
+    })
 
 
 @academics_bp.route('/terms/<int:term_id>/edit', methods=['GET', 'POST'])
@@ -337,14 +386,20 @@ def edit_term(term_id):
                     db.session.add(week)
             
             db.session.commit()
-            flash('Term updated successfully!', 'success')
-            return redirect(url_for('academics.view_term', term_id=term_id))
-            
+            return _ok('Term updated successfully!', url_for('academics.view_term', term_id=term_id))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating term: {str(e)}', 'error')
-    
-    return render_template('academics/edit_term.html', term=term, sessions=sessions)
+            return _err(f'Error updating term: {str(e)}', url_for('academics.edit_term', term_id=term_id))
+
+    return _render({
+        'page': 'edit_term',
+        'term': {'id': term.id, 'full_name': term.full_name, 'name': term.name,
+                 'session': term.session.name if term.session else '',
+                 'start_date': term.start_date.isoformat() if term.start_date else '',
+                 'end_date': term.end_date.isoformat() if term.end_date else ''},
+        'submit_url': url_for('academics.edit_term', term_id=term.id),
+        'cancel_url': url_for('academics.view_term', term_id=term.id)})
 
 
 # ============================================================================
@@ -387,9 +442,9 @@ def add_next_week(term_id):
         
         # Check max weeks (15)
         if new_week_number > 15:
-            flash('Maximum of 15 weeks reached for this term.', 'warning')
-            return redirect(url_for('academics.view_term', term_id=term_id))
-        
+            return _err('Maximum of 15 weeks reached for this term.',
+                        url_for('academics.view_term', term_id=term_id))
+
         week = Week(
             term_id=term.id,
             week_number=new_week_number,
@@ -398,13 +453,11 @@ def add_next_week(term_id):
         )
         db.session.add(week)
         db.session.commit()
-        
-        flash(f'Week {new_week_number} added ({new_start_date.strftime("%d %b")} - {new_end_date.strftime("%d %b %Y")})!', 'success')
+        return _ok(f'Week {new_week_number} added ({new_start_date.strftime("%d %b")} - {new_end_date.strftime("%d %b %Y")})!',
+                   url_for('academics.view_term', term_id=term_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.view_term', term_id=term_id))
+        return _err(f'Error: {str(e)}', url_for('academics.view_term', term_id=term_id))
 
 
 @academics_bp.route('/weeks/<int:week_id>/delete', methods=['POST'])
@@ -419,22 +472,19 @@ def delete_week(week_id):
         last_week = Week.query.filter_by(term_id=term_id).order_by(Week.week_number.desc()).first()
         
         if week.id != last_week.id:
-            flash('Only the last week can be deleted.', 'error')
-            return redirect(url_for('academics.view_term', term_id=term_id))
-        
+            return _err('Only the last week can be deleted.', url_for('academics.view_term', term_id=term_id))
+
         # Delete associated attendance records first
         from models import Attendance
         Attendance.query.filter_by(week_id=week_id).delete()
-        
+
+        n = week.week_number
         db.session.delete(week)
         db.session.commit()
-        
-        flash(f'Week {week.week_number} deleted.', 'success')
+        return _ok(f'Week {n} deleted.', url_for('academics.view_term', term_id=term_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.view_term', term_id=term_id))
+        return _err(f'Error: {str(e)}', url_for('academics.view_term', term_id=term_id))
 
 
 @academics_bp.route('/terms/<int:term_id>/weeks/generate', methods=['POST'])
@@ -444,9 +494,8 @@ def generate_weeks(term_id):
     term = db.get_or_404(Term, term_id)
     
     if not term.start_date or not term.end_date:
-        flash('Please set term start and end dates first.', 'error')
-        return redirect(url_for('academics.view_term', term_id=term_id))
-    
+        return _err('Please set term start and end dates first.', url_for('academics.view_term', term_id=term_id))
+
     try:
         # Delete existing weeks
         Week.query.filter_by(term_id=term_id).delete()
@@ -463,12 +512,10 @@ def generate_weeks(term_id):
             db.session.add(week)
         
         db.session.commit()
-        flash(f'{len(weeks)} weeks generated successfully!', 'success')
+        return _ok(f'{len(weeks)} weeks generated successfully!', url_for('academics.view_term', term_id=term_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.view_term', term_id=term_id))
+        return _err(f'Error: {str(e)}', url_for('academics.view_term', term_id=term_id))
 
 
 # ============================================================================
@@ -487,13 +534,12 @@ def add_holiday(term_id):
         holiday_type = request.form.get('holiday_type', 'Public Holiday')
 
         if not start or not reason:
-            flash('Date and reason are required.', 'error')
-            return redirect(url_for('academics.view_term', term_id=term_id))
+            return _err('Date and reason are required.', url_for('academics.view_term', term_id=term_id))
         if end < start:
             start, end = end, start
         if (end - start).days > 60:
-            flash('That range is longer than 60 days — please check the dates.', 'error')
-            return redirect(url_for('academics.view_term', term_id=term_id))
+            return _err('That range is longer than 60 days — please check the dates.',
+                        url_for('academics.view_term', term_id=term_id))
 
         taken = {h.date for h in Holiday.query.filter_by(term_id=term_id).all()}
         added = skipped = 0
@@ -519,12 +565,11 @@ def add_holiday(term_id):
             msg = 'No new days to add — those dates are already holidays or weekends.'
         if skipped:
             msg += f' {skipped} already-marked day(s) skipped.'
-        flash(msg, 'success' if added else 'warning')
+        return _ok(msg, url_for('academics.view_term', term_id=term_id)) if added \
+            else _err(msg, url_for('academics.view_term', term_id=term_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-
-    return redirect(url_for('academics.view_term', term_id=term_id))
+        return _err(f'Error: {str(e)}', url_for('academics.view_term', term_id=term_id))
 
 
 @academics_bp.route('/holidays/<int:holiday_id>/delete', methods=['POST'])
@@ -533,16 +578,13 @@ def delete_holiday(holiday_id):
     """Delete a holiday"""
     holiday = db.get_or_404(Holiday, holiday_id)
     term_id = holiday.term_id
-    
     try:
         db.session.delete(holiday)
         db.session.commit()
-        flash('Holiday deleted.', 'success')
+        return _ok('Holiday deleted.', url_for('academics.view_term', term_id=term_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.view_term', term_id=term_id))
+        return _err(f'Error: {str(e)}', url_for('academics.view_term', term_id=term_id))
 
 
 # ============================================================================
@@ -554,7 +596,11 @@ def delete_holiday(holiday_id):
 def classes_list():
     """List all classes"""
     classes = SchoolClass.query.order_by(SchoolClass.level).all()
-    return render_template('academics/classes.html', classes=classes)
+    return _render({
+        'page': 'classes',
+        'classes': [{'id': c.id, 'name': c.name, 'level': c.level,
+                     'description': c.description or ''} for c in classes],
+        'add_url': url_for('academics.add_class')})
 
 
 @academics_bp.route('/classes/add', methods=['POST'])
@@ -565,30 +611,18 @@ def add_class():
         name = request.form.get('name', '').strip().upper()
         level = request.form.get('level', type=int)
         description = request.form.get('description', '').strip()
-        
+
         if not name or not level:
-            flash('Class name and level are required.', 'error')
-            return redirect(url_for('academics.classes_list'))
-        
-        existing = SchoolClass.query.filter_by(name=name).first()
-        if existing:
-            flash('A class with this name already exists.', 'error')
-            return redirect(url_for('academics.classes_list'))
-        
-        school_class = SchoolClass(
-            name=name,
-            level=level,
-            description=description
-        )
-        db.session.add(school_class)
+            return _err('Class name and level are required.', url_for('academics.classes_list'))
+        if SchoolClass.query.filter_by(name=name).first():
+            return _err('A class with this name already exists.', url_for('academics.classes_list'))
+
+        db.session.add(SchoolClass(name=name, level=level, description=description))
         db.session.commit()
-        
-        flash('Class added successfully!', 'success')
+        return _ok('Class added successfully!', url_for('academics.classes_list'))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.classes_list'))
+        return _err(f'Error: {str(e)}', url_for('academics.classes_list'))
 
 
 # ============================================================================
@@ -600,7 +634,10 @@ def add_class():
 def arms_list():
     """List all class arms"""
     arms = ClassArm.query.order_by(ClassArm.name).all()
-    return render_template('academics/arms.html', arms=arms)
+    return _render({
+        'page': 'arms',
+        'arms': [{'id': a.id, 'name': a.name, 'description': a.description or ''} for a in arms],
+        'add_url': url_for('academics.add_arm')})
 
 
 @academics_bp.route('/arms/add', methods=['POST'])
@@ -610,26 +647,18 @@ def add_arm():
     try:
         name = request.form.get('name', '').strip().title()
         description = request.form.get('description', '').strip()
-        
+
         if not name:
-            flash('Arm name is required.', 'error')
-            return redirect(url_for('academics.arms_list'))
-        
-        existing = ClassArm.query.filter_by(name=name).first()
-        if existing:
-            flash('An arm with this name already exists.', 'error')
-            return redirect(url_for('academics.arms_list'))
-        
-        arm = ClassArm(name=name, description=description)
-        db.session.add(arm)
+            return _err('Arm name is required.', url_for('academics.arms_list'))
+        if ClassArm.query.filter_by(name=name).first():
+            return _err('An arm with this name already exists.', url_for('academics.arms_list'))
+
+        db.session.add(ClassArm(name=name, description=description))
         db.session.commit()
-        
-        flash('Arm added successfully!', 'success')
+        return _ok('Arm added successfully!', url_for('academics.arms_list'))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.arms_list'))
+        return _err(f'Error: {str(e)}', url_for('academics.arms_list'))
 
 
 # ============================================================================
@@ -662,14 +691,23 @@ def assignments_list():
     
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
-    
-    return render_template('academics/assignments.html',
-        assignments=assignments,
-        terms=terms,
-        selected_term=selected_term,
-        classes=classes,
-        arms=arms
-    )
+
+    return _render({
+        'page': 'assignments',
+        'term_id': term_id or '',
+        'selected_term': ({'id': selected_term.id, 'name': selected_term.name}
+                          if selected_term else None),
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'arms': [{'id': a.id, 'name': a.name} for a in arms],
+        'assignments': [{'id': a.id,
+                         'name': f'{a.school_class.name} {a.arm.name}' if a.school_class and a.arm else a.display_name,
+                         'form_teacher': a.form_teacher_name or '',
+                         'students': a.enrollments.filter_by(is_active=True).count(),
+                         'view_url': url_for('academics.view_assignment', assignment_id=a.id)}
+                        for a in assignments],
+        'self_url': url_for('academics.assignments_list'),
+        'add_url': url_for('academics.add_assignment')})
 
 
 @academics_bp.route('/assignments/add', methods=['POST'])
@@ -684,35 +722,23 @@ def add_assignment():
         form_teacher_phone = request.form.get('form_teacher_phone', '').strip()
         
         if not all([term_id, class_id, arm_id]):
-            flash('Term, class, and arm are required.', 'error')
-            return redirect(url_for('academics.assignments_list', term_id=term_id))
-        
-        # Check for duplicate
+            return _err('Term, class, and arm are required.',
+                        url_for('academics.assignments_list', term_id=term_id or ''))
         existing = ClassArmAssignment.query.filter_by(
-            term_id=term_id,
-            class_id=class_id,
-            arm_id=arm_id
-        ).first()
+            term_id=term_id, class_id=class_id, arm_id=arm_id).first()
         if existing:
-            flash('This class-arm combination already exists for this term.', 'error')
-            return redirect(url_for('academics.assignments_list', term_id=term_id))
-        
-        assignment = ClassArmAssignment(
-            term_id=term_id,
-            class_id=class_id,
-            arm_id=arm_id,
+            return _err('This class-arm combination already exists for this term.',
+                        url_for('academics.assignments_list', term_id=term_id))
+
+        db.session.add(ClassArmAssignment(
+            term_id=term_id, class_id=class_id, arm_id=arm_id,
             form_teacher_name=form_teacher or None,
-            form_teacher_phone=form_teacher_phone or None
-        )
-        db.session.add(assignment)
+            form_teacher_phone=form_teacher_phone or None))
         db.session.commit()
-        
-        flash('Class arm assignment created!', 'success')
+        return _ok('Class arm assignment created!', url_for('academics.assignments_list', term_id=term_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.assignments_list', term_id=term_id))
+        return _err(f'Error: {str(e)}', url_for('academics.assignments_list', term_id=term_id or ''))
 
 
 @academics_bp.route('/assignments/<int:assignment_id>')
@@ -743,11 +769,19 @@ def view_assignment(assignment_id):
         q = q.filter(Student.branch_id == assignment.branch_id)
     available_students = q.order_by(Student.surname, Student.first_name).all()
 
-    return render_template('academics/view_assignment.html',
-        assignment=assignment,
-        enrollments=enrollments,
-        available_students=available_students
-    )
+    return _render({
+        'page': 'view_assignment',
+        'assignment': {'id': assignment.id, 'display_name': assignment.display_name,
+                       'term': assignment.term.full_name if assignment.term else '',
+                       'term_id': assignment.term_id},
+        'enrollments': [{'id': e.id, 'full_name': e.student.full_name,
+                         'student_id': e.student.student_id, 'gender': e.student.gender or '',
+                         'remove_url': url_for('academics.remove_enrollment', enrollment_id=e.id)}
+                        for e in enrollments],
+        'available_students': [{'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id}
+                               for s in available_students],
+        'back_url': url_for('academics.assignments_list', term_id=assignment.term_id),
+        'enroll_url': url_for('academics.enroll_student', assignment_id=assignment.id)})
 
 
 @academics_bp.route('/assignments/<int:assignment_id>/enroll', methods=['POST'])
@@ -790,16 +824,12 @@ def enroll_student(assignment_id):
 
         db.session.commit()
         total = added + reactivated
-        if total:
-            flash(f'{total} student(s) enrolled.', 'success')
-        else:
-            flash('No new students to enroll — the selected students were '
-                  'already in this class.', 'info')
+        msg = (f'{total} student(s) enrolled.' if total
+               else 'No new students to enroll — the selected students were already in this class.')
+        return _ok(msg, url_for('academics.view_assignment', assignment_id=assignment_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-
-    return redirect(url_for('academics.view_assignment', assignment_id=assignment_id))
+        return _err(f'Error: {str(e)}', url_for('academics.view_assignment', assignment_id=assignment_id))
 
 
 @academics_bp.route('/enrollments/<int:enrollment_id>/remove', methods=['POST'])
@@ -814,12 +844,10 @@ def remove_enrollment(enrollment_id):
     try:
         enrollment.is_active = False
         db.session.commit()
-        flash('Student removed from class.', 'success')
+        return _ok('Student removed from class.', url_for('academics.view_assignment', assignment_id=assignment_id))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('academics.view_assignment', assignment_id=assignment_id))
+        return _err(f'Error: {str(e)}', url_for('academics.view_assignment', assignment_id=assignment_id))
 
 
 # ============================================================================
@@ -882,12 +910,9 @@ def copy_term_setup():
             copy_enrollments = request.form.get('copy_enrollments') == 'on'
             
             if not from_term_id or not to_term_id:
-                flash('Select both source and destination terms.', 'error')
-                return redirect(url_for('academics.copy_term_setup'))
-            
+                return _err('Select both source and destination terms.', url_for('academics.copy_term_setup'))
             if from_term_id == to_term_id:
-                flash('Source and destination must be different.', 'error')
-                return redirect(url_for('academics.copy_term_setup'))
+                return _err('Source and destination must be different.', url_for('academics.copy_term_setup'))
             
             from_term = db.session.get(Term, from_term_id)
             to_term = db.session.get(Term, to_term_id)
@@ -942,18 +967,20 @@ def copy_term_setup():
                             enrollments_copied += 1
             
             db.session.commit()
-            
+
             msg = f'Copied {assignments_copied} class assignments'
             if copy_enrollments:
                 msg += f' and {enrollments_copied} student enrollments'
-            flash(msg + '!', 'success')
-            
+            return _ok(msg + '!', url_for('academics.copy_term_setup'))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-        
-        return redirect(url_for('academics.copy_term_setup'))
-    
+            return _err(f'Error: {str(e)}', url_for('academics.copy_term_setup'))
+
     # GET - show form
     terms = Term.query.order_by(Term.id.desc()).all()
-    return render_template('academics/copy_term_setup.html', terms=terms)
+    return _render({
+        'page': 'copy_term_setup',
+        'terms': [{'id': t.id, 'full_name': t.full_name, 'is_active': bool(t.is_active)} for t in terms],
+        'submit_url': url_for('academics.copy_term_setup'),
+        'cancel_url': url_for('academics.assignments_list')})
