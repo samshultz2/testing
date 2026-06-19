@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set _t = {'index':'User Management','matrix':'Permission Matrix','add':'Add User','view':'User','edit':'Edit User','assign_class':'Assign Class','assign_subject':'Assign Subject'} %}
+{% block title %}{{ _t.get(users_json.page,'Users') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('users.index') }}">Users</a>{% if users_json.page != 'index' %} / <span>{{ _t.get(users_json.page,'Users') }}</span>{% endif %}{% endblock %}
+{% block extra_css %}
+<style>
+.info-grid{display:grid;grid-template-columns:1fr;gap:.5rem}
+@media(min-width:576px){.info-grid{grid-template-columns:repeat(2,1fr)}}
+.info-item{display:flex;flex-direction:column;gap:.25rem;padding:.5rem .75rem;background:var(--gray-50);border-radius:var(--radius-sm)}
+.info-item .info-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase}
+.info-item .info-value{font-weight:600}
+.permission-list{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+.perm{padding:.5rem;background:var(--gray-50);border-radius:var(--radius-sm);font-size:.85rem;color:var(--text-muted)}
+.perm.active{background:rgba(40,167,69,.15);color:#28a745}
+.perm i{margin-right:.5rem}
+.permission-grid{display:grid;grid-template-columns:1fr;gap:.5rem}
+@media(min-width:768px){.permission-grid{grid-template-columns:repeat(2,1fr)}}
+.perm-row{justify-content:space-between;gap:.75rem}
+.perm-select{max-width:150px;padding:.3rem .4rem;height:auto}
+.perm-block{display:flex;flex-direction:column;gap:.3rem}
+.perm-subs{margin:.1rem 0 .3rem .25rem;font-size:.85rem}
+.perm-subs summary{cursor:pointer;color:var(--text-muted);font-size:.78rem}
+.perm-sub{background:transparent;padding:.25rem .5rem}
+.perm-sub span{font-size:.85rem;color:var(--text-secondary)}
+.perm-cap{background:rgba(245,158,11,.12);border-radius:var(--radius-sm)}
+.perm-cap span{color:var(--text-primary);font-weight:600}
+.permission-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--gray-50);border-radius:var(--radius-sm);cursor:pointer}
+.permission-item input{width:1.1rem;height:1.1rem}
+.form-row{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:576px){.form-row{grid-template-columns:repeat(2,1fr)}}
+.form-row .form-group{margin-bottom:0}
+.toggle-label{display:flex;align-items:center;gap:.5rem;padding:.5rem 0;cursor:pointer}
+.toggle-label input{width:1.2rem;height:1.2rem}
+.matrix-wrap{overflow-x:auto}
+table.matrix{border-collapse:collapse;width:100%;font-size:.85rem}
+table.matrix th,table.matrix td{border:1px solid var(--border-color);padding:.4rem .5rem;text-align:center;white-space:nowrap}
+table.matrix th.user,table.matrix td.user{text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:1;font-weight:600}
+table.matrix thead th{background:var(--gray-50);font-size:.72rem;text-transform:uppercase;letter-spacing:.02em}
+table.matrix thead th.rot{height:120px;vertical-align:bottom}
+table.matrix thead th.rot span{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}
+table.matrix input{width:1.1rem;height:1.1rem;cursor:pointer}
+table.matrix tr.admin-row td{color:var(--text-muted);font-style:italic}
+.matrix-note{color:var(--text-muted);font-size:.8rem;margin:.5rem 0}
+.matrix-sel{padding:.1rem .2rem;font-size:.78rem;border:1px solid var(--border-color);border-radius:4px}
+</style>
+{% endblock %}
+{% block content %}
+<div id="users-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="users-data">{{ users_json|tojson }}</script>
+<script src="{{ url_for('static', filename='js/react/users-app.js') }}" defer></script>
+{% endblock %}

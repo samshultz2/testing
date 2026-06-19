@@ -2,7 +2,8 @@
 User Management Routes
 Handles user CRUD, role management, and teacher assignments
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import (Blueprint, render_template, request, redirect, url_for, flash,
+                   session, jsonify)
 from utils.helpers import get_active_term
 from models import db, ClassArmAssignment, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
 from utils.access_control import (MODULES, manage_users_required, can_manage,
@@ -19,12 +20,131 @@ users_bp = Blueprint('users', __name__, url_prefix='/users')
 admin_required = manage_users_required
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('users/app.html', 'users_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('users.index'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('users.index'))
+
+
 def _guard(target):
-    """403/redirect if the current user may not manage ``target``."""
+    """JSON-aware: 403/redirect if the current user may not manage ``target``."""
     if not can_manage(target):
-        flash('You are not allowed to manage that account.', 'error')
-        return redirect(url_for('users.index'))
+        return _err('You are not allowed to manage that account.',
+                    url_for('users.index'), status=403)
     return None
+
+
+def _role_badge(u):
+    if u.is_super_admin:
+        return 'danger'
+    if u.is_admin:
+        return 'warning'
+    if u.is_teacher:
+        return 'info'
+    return 'secondary'
+
+
+def _form_meta():
+    """Shared metadata for the add/edit user forms (modules, presets, etc.)."""
+    from models import Branch
+    from utils.role_presets import presets_for_form
+    from utils.access_control import (MODULE_SUBSECTIONS, ROLE_DEFAULT_MODULES,
+                                      CAPABILITY_SUBSECTIONS as CAPS)
+    return {
+        'modules': [{'key': k, 'label': v} for k, v in MODULES.items()],
+        'subsections': {k: [{'sub': s, 'label': l} for s, l in subs.items()]
+                        for k, subs in MODULE_SUBSECTIONS.items()},
+        'capabilities': sorted(CAPS),
+        'cap_modules': sorted({c.split('.')[0] for c in CAPS}),
+        'role_defaults': {r: sorted(m) for r, m in ROLE_DEFAULT_MODULES.items()},
+        'branches': [{'id': b.id, 'name': b.name, 'is_default': b.is_default}
+                     for b in Branch.query.order_by(Branch.name).all()],
+        'presets': presets_for_form(),
+    }
+
+
+def _teacher_perms(t):
+    if not t:
+        return None
+    return {'can_mark_attendance': bool(t.can_mark_attendance),
+            'can_view_student_details': bool(t.can_view_student_details),
+            'can_print_reports': bool(t.can_print_reports),
+            'can_enter_results': bool(t.can_enter_results),
+            'can_edit_results': bool(t.can_edit_results)}
+
+
+def _user_core(u):
+    return {'id': u.id, 'username': u.username, 'full_name': u.full_name or '',
+            'email': u.email or '', 'phone': u.phone or '',
+            'role': u.role, 'display_role': u.get_display_role(),
+            'role_badge': _role_badge(u), 'is_active': bool(u.is_active),
+            'is_admin': bool(u.is_admin), 'is_super_admin': bool(u.is_super_admin),
+            'is_teacher': bool(u.is_teacher)}
+
+
+def _user_view(u):
+    d = _user_core(u)
+    d['last_login'] = u.last_login.strftime('%d %b %Y %H:%M') if u.last_login else 'Never'
+    d['created'] = u.created_at.strftime('%d %b %Y') if u.created_at else ''
+    t = u.teacher_profile if u.is_teacher else None
+    d['teacher'] = _teacher_perms(t)
+    granted = u.permission_map
+    d['module_access'] = (None if u.is_admin else
+                          [{'key': k, 'label': v, 'level': granted.get(k)}
+                           for k, v in MODULES.items()])
+    d['has_custom_modules'] = bool(granted)
+    if t:
+        d['class_assignments'] = [
+            {'id': a.id, 'name': a.class_arm_assignment.display_name,
+             'is_form_teacher': bool(a.is_form_teacher),
+             'remove_url': url_for('users.remove_assignment', assignment_id=a.id)}
+            for a in t.class_assignments.filter_by(is_active=True).all()]
+        d['subject_assignments'] = [
+            {'id': a.id, 'subject': a.subject.name,
+             'class': a.class_arm_assignment.display_name,
+             'remove_url': url_for('users.remove_assignment', assignment_id=a.id)}
+            for a in t.subject_assignments.filter_by(is_active=True).all()]
+        d['assign_class_url'] = url_for('users.assign_class', user_id=u.id)
+        d['assign_subject_url'] = url_for('users.assign_subject', user_id=u.id)
+    d['edit_url'] = url_for('users.edit_user', user_id=u.id)
+    d['reset_password_url'] = url_for('users.reset_password', user_id=u.id)
+    d['back_url'] = url_for('users.index')
+    return d
+
+
+def _user_edit(u):
+    d = _user_core(u)
+    d['scope'] = u.scope
+    d['branch_id'] = u.branch_id
+    d['section'] = u.section or ''
+    d['stream'] = u.stream or ''
+    d['manage_scope'] = u.manage_scope or 'none'
+    d['rank'] = u.rank or 0
+    d['view_only'] = bool(u.view_only)
+    d['permission_map'] = dict(u.permission_map)
+    d['teacher'] = _teacher_perms(u.teacher_profile if u.is_teacher else None)
+    return d
+
 
 
 def _clamp_management_fields(user, role):
@@ -78,9 +198,23 @@ def _read_perms(form, prefix='perm_'):
 @admin_required
 def index():
     """List the users the current manager may manage."""
+    me = session.get('user_id')
     users = [u for u in User.query.order_by(User.created_at.desc()).all()
              if can_manage(u)]
-    return render_template('users/index.html', users=users)
+    return _render({
+        'page': 'index',
+        'matrix_url': url_for('users.matrix'),
+        'add_url': url_for('users.add_user'),
+        'users': [{
+            'id': u.id, 'username': u.username, 'full_name': u.full_name or '',
+            'display_role': u.get_display_role(), 'role_badge': _role_badge(u),
+            'is_active': bool(u.is_active), 'is_self': u.id == me,
+            'last_login': u.last_login.strftime('%d %b %Y %H:%M') if u.last_login else 'Never',
+            'view_url': url_for('users.view_user', user_id=u.id),
+            'edit_url': url_for('users.edit_user', user_id=u.id),
+            'toggle_url': url_for('users.toggle_status', user_id=u.id),
+        } for u in users],
+    })
 
 
 @users_bp.route('/matrix', methods=['GET', 'POST'])
@@ -109,11 +243,22 @@ def matrix():
                            f'{u.username} (matrix): perms {before[0]}→{after[0]}, '
                            f'view_only {before[1]}→{after[1]}')
         db.session.commit()
-        flash(f'Updated access for {changed} user(s).', 'success')
-        return redirect(url_for('users.matrix'))
+        return _ok(f'Updated access for {changed} user(s).', url_for('users.matrix'))
 
-    return render_template('users/matrix.html', users=users, editable=editable,
-                           modules=MODULES)
+    return _render({
+        'page': 'matrix',
+        'save_url': url_for('users.matrix'),
+        'back_url': url_for('users.index'),
+        'add_url': url_for('users.add_user'),
+        'modules': [{'key': k, 'label': v} for k, v in MODULES.items()],
+        'has_editable': bool(editable),
+        'users': [{
+            'id': u.id, 'name': u.full_name or u.username,
+            'display_role': u.get_display_role(), 'is_admin': u.role == 'admin',
+            'view_only': bool(u.view_only), 'perms': dict(u.permission_map),
+            'view_url': url_for('users.view_user', user_id=u.id),
+        } for u in users],
+    })
 
 
 @users_bp.route('/add', methods=['GET', 'POST'])
@@ -131,27 +276,22 @@ def add_user():
         
         # Validation
         if not username or not password:
-            flash('Username and password are required.', 'error')
-            return redirect(url_for('users.add_user'))
-        
+            return _err('Username and password are required.', url_for('users.add_user'))
+
         if password != confirm_password:
-            flash('Passwords do not match.', 'error')
-            return redirect(url_for('users.add_user'))
-        
+            return _err('Passwords do not match.', url_for('users.add_user'))
+
         ok, msg = is_password_strong(password)
         if not ok:
-            flash(msg, 'error')
-            return redirect(url_for('users.add_user'))
-        
+            return _err(msg, url_for('users.add_user'))
+
         # Check if username exists
         if User.query.filter_by(username=username).first():
-            flash('Username already exists.', 'error')
-            return redirect(url_for('users.add_user'))
-        
+            return _err('Username already exists.', url_for('users.add_user'))
+
         # Check if email exists
         if email and User.query.filter_by(email=email).first():
-            flash('Email already exists.', 'error')
-            return redirect(url_for('users.add_user'))
+            return _err('Email already exists.', url_for('users.add_user'))
         
         try:
             # Create user
@@ -194,25 +334,18 @@ def add_user():
             log_action('user.create',
                        f'{username} (role={role}, modules={user.module_list or "role default"}, '
                        f'view_only={user.view_only})')
-            flash(f'User "{username}" created successfully!', 'success')
-            return redirect(url_for('users.index'))
-            
+            return _ok(f'User "{username}" created successfully!', url_for('users.index'))
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Error creating user: {str(e)}', 'error')
-            return redirect(url_for('users.add_user'))
-    
-    from models import Branch
-    from utils.role_presets import presets_for_form
-    from utils.access_control import (MODULE_SUBSECTIONS, ROLE_DEFAULT_MODULES,
-                                      CAPABILITY_SUBSECTIONS)
-    return render_template('users/add.html', modules=MODULES,
-                           subsections=MODULE_SUBSECTIONS,
-                           role_defaults={r: sorted(m) for r, m in ROLE_DEFAULT_MODULES.items()},
-                           capabilities=sorted(CAPABILITY_SUBSECTIONS),
-                           cap_modules=sorted({c.split('.')[0] for c in CAPABILITY_SUBSECTIONS}),
-                           branches=Branch.query.order_by(Branch.name).all(),
-                           presets=presets_for_form())
+            return _err(f'Error creating user: {str(e)}', url_for('users.add_user'))
+
+    return _render({
+        'page': 'add',
+        'submit_url': url_for('users.add_user'),
+        'back_url': url_for('users.index'),
+        **_form_meta(),
+    })
 
 
 @users_bp.route('/<int:user_id>')
@@ -223,7 +356,7 @@ def view_user(user_id):
     blocked = _guard(user)
     if blocked:
         return blocked
-    return render_template('users/view.html', user=user, modules=MODULES)
+    return _render({'page': 'view', 'user': _user_view(user)})
 
 
 @users_bp.route('/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -262,8 +395,7 @@ def edit_user(user_id):
         if new_password:
             ok, msg = is_password_strong(new_password)
             if not ok:
-                flash(msg, 'error')
-                return redirect(url_for('users.edit_user', user_id=user_id))
+                return _err(msg, url_for('users.edit_user', user_id=user_id))
             user.set_password(new_password)
         
         # Update teacher permissions if teacher
@@ -294,23 +426,21 @@ def edit_user(user_id):
                            f'perms {before[1]}→{after[1]}, '
                            f'view_only {before[2]}→{after[2]}, '
                            f'scope {before[3]}→{after[3]}, branch {before[4]}→{after[4]}')
-            flash('User updated successfully!', 'success')
-            return redirect(url_for('users.view_user', user_id=user_id))
+            return _ok('User updated successfully!',
+                       url_for('users.view_user', user_id=user_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating user: {str(e)}', 'error')
-    
-    from models import Branch
-    from utils.role_presets import presets_for_form
-    from utils.access_control import (MODULE_SUBSECTIONS, ROLE_DEFAULT_MODULES,
-                                      CAPABILITY_SUBSECTIONS)
-    return render_template('users/edit.html', user=user, modules=MODULES,
-                           subsections=MODULE_SUBSECTIONS,
-                           role_defaults={r: sorted(m) for r, m in ROLE_DEFAULT_MODULES.items()},
-                           capabilities=sorted(CAPABILITY_SUBSECTIONS),
-                           cap_modules=sorted({c.split('.')[0] for c in CAPABILITY_SUBSECTIONS}),
-                           branches=Branch.query.order_by(Branch.name).all(),
-                           presets=presets_for_form())
+            return _err(f'Error updating user: {str(e)}',
+                        url_for('users.edit_user', user_id=user_id))
+
+    return _render({
+        'page': 'edit',
+        'user': _user_edit(user),
+        'submit_url': url_for('users.edit_user', user_id=user.id),
+        'view_url': url_for('users.view_user', user_id=user.id),
+        'back_url': url_for('users.index'),
+        **_form_meta(),
+    })
 
 
 @users_bp.route('/<int:user_id>/delete', methods=['POST'])
@@ -324,20 +454,21 @@ def delete_user(user_id):
 
     # Prevent deleting self
     if user.id == session.get('user_id'):
-        flash('You cannot delete your own account.', 'error')
-        return redirect(url_for('users.index'))
-    
+        return _err('You cannot delete your own account.', url_for('users.index'))
+
     # Prevent deleting super_admin if not super_admin
     current_user = db.session.get(User, session.get('user_id'))
     if user.is_super_admin and not current_user.is_super_admin:
-        flash('Only super admins can delete other super admins.', 'error')
-        return redirect(url_for('users.index'))
-    
-    with safe_transaction(f'User "{user.username}" deleted successfully!',
-                          'Error deleting user: {error}'):
-        db.session.delete(user)
+        return _err('Only super admins can delete other super admins.', url_for('users.index'))
 
-    return redirect(url_for('users.index'))
+    username = user.username
+    try:
+        db.session.delete(user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error deleting user: {str(e)}', url_for('users.index'))
+    return _ok(f'User "{username}" deleted successfully!', url_for('users.index'))
 
 
 @users_bp.route('/<int:user_id>/assign-class', methods=['GET', 'POST'])
@@ -350,26 +481,25 @@ def assign_class(user_id):
         return blocked
 
     if not user.is_teacher or not user.teacher_profile:
-        flash('User must be a teacher to assign classes.', 'error')
-        return redirect(url_for('users.view_user', user_id=user_id))
-    
+        return _err('User must be a teacher to assign classes.',
+                    url_for('users.view_user', user_id=user_id))
+
     teacher = user.teacher_profile
     active_term = get_active_term()
-    
+
     if request.method == 'POST':
         assignment_id = request.form.get('assignment_id', type=int)
         is_form_teacher = request.form.get('is_form_teacher') == 'on'
-        
+
         if not assignment_id:
-            flash('Please select a class.', 'error')
-            return redirect(url_for('users.assign_class', user_id=user_id))
-        
+            return _err('Please select a class.', url_for('users.assign_class', user_id=user_id))
+
         # Check if already assigned
         existing = TeacherClassAssignment.query.filter_by(
             teacher_id=teacher.id,
             class_arm_assignment_id=assignment_id
         ).first()
-        
+
         if existing:
             existing.is_form_teacher = is_form_teacher
             existing.is_active = True
@@ -380,24 +510,26 @@ def assign_class(user_id):
                 is_form_teacher=is_form_teacher
             )
             db.session.add(assignment)
-        
+
         try:
             db.session.commit()
-            flash('Class assigned successfully!', 'success')
-            return redirect(url_for('users.view_user', user_id=user_id))
+            return _ok('Class assigned successfully!', url_for('users.view_user', user_id=user_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
+            return _err(f'Error: {str(e)}', url_for('users.assign_class', user_id=user_id))
+
     assignments = []
     if active_term:
         assignments = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
-    
-    return render_template('users/assign_class.html', 
-                         user=user, 
-                         teacher=teacher, 
-                         assignments=assignments,
-                         active_term=active_term)
+
+    return _render({
+        'page': 'assign_class',
+        'user': {'id': user.id, 'name': user.full_name or user.username},
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'has_term': active_term is not None,
+        'submit_url': url_for('users.assign_class', user_id=user.id),
+        'back_url': url_for('users.view_user', user_id=user.id),
+    })
 
 
 @users_bp.route('/<int:user_id>/assign-subject', methods=['GET', 'POST'])
@@ -410,27 +542,27 @@ def assign_subject(user_id):
         return blocked
 
     if not user.is_teacher or not user.teacher_profile:
-        flash('User must be a teacher to assign subjects.', 'error')
-        return redirect(url_for('users.view_user', user_id=user_id))
-    
+        return _err('User must be a teacher to assign subjects.',
+                    url_for('users.view_user', user_id=user_id))
+
     teacher = user.teacher_profile
     active_term = get_active_term()
-    
+
     if request.method == 'POST':
         assignment_id = request.form.get('assignment_id', type=int)
         subject_id = request.form.get('subject_id', type=int)
-        
+
         if not assignment_id or not subject_id:
-            flash('Please select both class and subject.', 'error')
-            return redirect(url_for('users.assign_subject', user_id=user_id))
-        
+            return _err('Please select both class and subject.',
+                        url_for('users.assign_subject', user_id=user_id))
+
         # Check if already assigned
         existing = TeacherSubjectAssignment.query.filter_by(
             teacher_id=teacher.id,
             class_arm_assignment_id=assignment_id,
             subject_id=subject_id
         ).first()
-        
+
         if existing:
             existing.is_active = True
         else:
@@ -440,27 +572,29 @@ def assign_subject(user_id):
                 subject_id=subject_id
             )
             db.session.add(assignment)
-        
+
         try:
             db.session.commit()
-            flash('Subject assigned successfully!', 'success')
-            return redirect(url_for('users.view_user', user_id=user_id))
+            return _ok('Subject assigned successfully!', url_for('users.view_user', user_id=user_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
+            return _err(f'Error: {str(e)}', url_for('users.assign_subject', user_id=user_id))
+
     assignments = []
     if active_term:
         assignments = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
-    
+
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
-    
-    return render_template('users/assign_subject.html',
-                         user=user,
-                         teacher=teacher,
-                         assignments=assignments,
-                         subjects=subjects,
-                         active_term=active_term)
+
+    return _render({
+        'page': 'assign_subject',
+        'user': {'id': user.id, 'name': user.full_name or user.username},
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'subjects': [{'id': s.id, 'name': s.name} for s in subjects],
+        'has_term': active_term is not None,
+        'submit_url': url_for('users.assign_subject', user_id=user.id),
+        'back_url': url_for('users.view_user', user_id=user.id),
+    })
 
 
 @users_bp.route('/assignment/<int:assignment_id>/remove', methods=['POST'])
@@ -478,12 +612,10 @@ def remove_assignment(assignment_id):
     try:
         db.session.delete(assignment)
         db.session.commit()
-        flash('Assignment removed successfully!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('users.view_user', user_id=user_id))
+        return _err(f'Error: {str(e)}', url_for('users.view_user', user_id=user_id))
+    return _ok('Assignment removed successfully!', url_for('users.view_user', user_id=user_id))
 
 
 @users_bp.route('/<int:user_id>/reset-password', methods=['POST'])
@@ -500,9 +632,9 @@ def reset_password(user_id):
     user.must_change_password = True
     db.session.commit()
     log_action('user.password_reset', target=user)
-    flash(f'Temporary password for {user.username}: {temp} — '
-          f'they will be required to change it at next login.', 'success')
-    return redirect(url_for('users.view_user', user_id=user.id))
+    return _ok(f'Temporary password for {user.username}: {temp} — '
+               f'they will be required to change it at next login.',
+               url_for('users.view_user', user_id=user.id))
 
 
 @users_bp.route('/<int:user_id>/toggle-status', methods=['POST'])
@@ -515,17 +647,14 @@ def toggle_status(user_id):
         return blocked
 
     if user.id == session.get('user_id'):
-        flash('You cannot deactivate your own account.', 'error')
-        return redirect(url_for('users.index'))
-    
+        return _err('You cannot deactivate your own account.', url_for('users.index'))
+
     user.is_active = not user.is_active
-    
+
     try:
         db.session.commit()
-        status = 'activated' if user.is_active else 'deactivated'
-        flash(f'User {status} successfully!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('users.index'))
+        return _err(f'Error: {str(e)}', url_for('users.index'))
+    status = 'activated' if user.is_active else 'deactivated'
+    return _ok(f'User {status} successfully!', url_for('users.index'))
