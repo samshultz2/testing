@@ -37,6 +37,7 @@ export default function App({ initial }) {
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [bulkStream, setBulkStream] = useState('');
+  const [bulkGender, setBulkGender] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
   const skip = useRef(true);
 
@@ -92,7 +93,7 @@ export default function App({ initial }) {
       if ((res.headers.get('content-type') || '').includes('application/json')) {
         const j = await res.json();
         if (j.error) { setMsg({ tone: 'error', text: j.error }); return; }
-        if (j.updated !== undefined) text = `Updated ${j.updated}${j.skipped ? `, skipped ${j.skipped}` : ''}.`;
+        if (j.updated !== undefined) text = `Updated ${j.updated}${j.skipped ? `, skipped ${j.skipped}` : ''}${j.waec_filled ? ` · WAEC subjects filled for ${j.waec_filled}` : ''}.`;
       } else if (!res.ok) { setMsg({ tone: 'error', text: 'Action failed.' }); return; }
       setMsg({ tone: 'success', text });
       await refresh();
@@ -188,11 +189,18 @@ export default function App({ initial }) {
         <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(true)}><i className="fas fa-download" /> Export</button>
           {canAdmin && <>
+            <select className="form-control" style={{ width: 'auto' }} value={bulkGender} onChange={(e) => setBulkGender(e.target.value)} aria-label="Bulk gender">
+              <option value="">Set gender…</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkGender}
+                    onClick={() => needSel() && runAction(d.bulk_gender_url, { gender: bulkGender, student_ids: selectedIds }, 'Gender updated.')}>Apply</button>
             <select className="form-control" style={{ width: 'auto' }} value={bulkStream} onChange={(e) => setBulkStream(e.target.value)} aria-label="Bulk stream">
               <option value="">Set stream…</option>
               {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
-            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStream}
+            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStream} title="Also fills WAEC subjects from the stream where not already set"
                     onClick={() => needSel() && runAction(d.bulk_stream_url, { stream: bulkStream, student_ids: selectedIds }, 'Stream updated.')}>Apply</button>
             <select className="form-control" style={{ width: 'auto' }} value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} aria-label="Bulk WAEC subject">
               <option value="">Add WAEC subject…</option>

@@ -950,6 +950,7 @@ def _students_payload():
         'waec_by_stream_url': url_for('main.apply_stream_waec'),
         'bulk_delete_url': url_for('main.bulk_delete_students'),
         'bulk_stream_url': url_for('main.bulk_set_stream'),
+        'bulk_gender_url': url_for('main.bulk_set_gender'),
         'bulk_subject_url': url_for('main.bulk_add_subject'),
     }
 
@@ -1433,12 +1434,53 @@ def bulk_set_stream():
     updated = Student.query.filter(Student.id.in_(ids)).update(
         {Student.stream: stream}, synchronize_session=False
     )
+
+    # Assigning a stream should also give those students that stream's WAEC
+    # subjects. Fill where the student has none yet (don't clobber a custom
+    # list). Clearing the stream (stream=None) leaves WAEC subjects untouched.
+    waec_filled = 0
+    defaults = STREAM_WAEC_SUBJECTS.get(stream) if stream else None
+    if defaults:
+        joined = ', '.join(defaults)
+        for student in Student.query.filter(Student.id.in_(ids)).all():
+            if not student.waec_subject_list:
+                student.waec_subjects = joined
+                waec_filled += 1
     db.session.commit()
 
     label = stream if stream else 'cleared'
-    log_action('bulk_set_stream', f'{updated} students -> {label}')
-    flash(f'Stream set to {label} for {updated} student(s).', 'success')
-    return jsonify({'updated': updated, 'stream': stream})
+    log_action('bulk_set_stream', f'{updated} students -> {label}'
+               + (f', WAEC filled {waec_filled}' if waec_filled else ''))
+    msg = f'Stream set to {label} for {updated} student(s).'
+    if waec_filled:
+        msg += f' WAEC subjects filled from stream for {waec_filled}.'
+    flash(msg, 'success')
+    return jsonify({'updated': updated, 'stream': stream, 'waec_filled': waec_filled})
+
+
+@main_bp.route('/students/bulk-gender', methods=['POST'])
+@admin_required
+def bulk_set_gender():
+    """Set the gender for several students at once."""
+    gender = request.form.get('gender') or None
+    student_ids = request.form.getlist('student_ids')
+
+    if gender not in ('Male', 'Female'):
+        return jsonify({'error': 'Invalid gender'}), 400
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+
+    updated = Student.query.filter(Student.id.in_(ids)).update(
+        {Student.gender: gender}, synchronize_session=False
+    )
+    db.session.commit()
+    log_action('bulk_set_gender', f'{updated} students -> {gender}')
+    flash(f'Gender set to {gender} for {updated} student(s).', 'success')
+    return jsonify({'updated': updated, 'gender': gender})
 
 
 @main_bp.route('/students/bulk-add-subject', methods=['POST'])
