@@ -108,33 +108,80 @@ def _start_postgres(port):
     if _tcp_open('127.0.0.1', port) or not _have_user('postgres'):
         return
 
-    # Fallback: an unregistered data dir at the standard path. Ensure the
-    # runtime socket dir exists (it lives on tmpfs and vanishes on restart).
+    # Fallback: an unregistered data dir (common on phone/proot installs where
+    # /etc/postgresql has no cluster, but the data — and your tables — live under
+    # /var/lib/postgresql/<ver>/main). Start it directly as the postgres user,
+    # FORCING a TCP listener on the expected port: a stock config often ships
+    # with listen_addresses='' (socket only), so the server would come up yet
+    # never open 127.0.0.1:5432 and we'd wrongly report failure. On failure we
+    # print the server's own log so the real cause is visible.
     try:
         os.makedirs('/var/run/postgresql', exist_ok=True)
         shutil.chown('/var/run/postgresql', 'postgres', 'postgres')
     except Exception:
         pass
-    for d in sorted(glob.glob('/var/lib/postgresql/*/main')):
-        if not os.path.exists(os.path.join(d, 'PG_VERSION')):
+
+    candidates = []
+    if os.environ.get('PGDATA'):
+        candidates.append(os.environ['PGDATA'])
+    candidates += sorted(glob.glob('/var/lib/postgresql/*/main'))
+    candidates += sorted(glob.glob('/var/lib/postgresql/*/*'))   # non-'main' names
+
+    seen = set()
+    for d in candidates:
+        if d in seen or not os.path.exists(os.path.join(d, 'PG_VERSION')):
             continue
-        pg_ctl = f"/usr/lib/postgresql/{d.split('/')[3]}/bin/pg_ctl"
+        seen.add(d)
+        # Match the binaries to the data dir's own catalog version.
+        try:
+            with open(os.path.join(d, 'PG_VERSION')) as fh:
+                ver = fh.read().strip()
+        except OSError:
+            ver = d.split('/')[3]
+        pg_ctl = f'/usr/lib/postgresql/{ver}/bin/pg_ctl'
         if not os.path.exists(pg_ctl):
-            continue
+            found = sorted(glob.glob('/usr/lib/postgresql/*/bin/pg_ctl'))
+            if not found:
+                continue
+            pg_ctl = found[-1]
+        # The data dir must be owned by postgres, and a stale lock must go.
+        try:
+            subprocess.run(['chown', '-R', 'postgres:postgres', d],
+                           capture_output=True, text=True, timeout=120)
+        except Exception:
+            pass
         try:
             os.remove(os.path.join(d, 'postmaster.pid'))  # stale lock
         except OSError:
             pass
-        print(f'Starting unregistered PostgreSQL data dir {d} as postgres...')
+        log = os.path.join(d, 'server.log')
+        opts = (f'-p {port} -c listen_addresses=127.0.0.1 '
+                f'-c unix_socket_directories=/var/run/postgresql')
+        inner = f"{pg_ctl} -D '{d}' -l '{log}' -o \"{opts}\" -w -t 30 start"
+        print(f'Starting unregistered PostgreSQL data dir {d} (v{ver}) as postgres...')
         try:
-            subprocess.run(
-                ['su', '-s', '/bin/sh', 'postgres', '-c',
-                 f'{pg_ctl} -D {d} -l {d}/server.log start'],
-                capture_output=True, text=True, timeout=30)
-        except Exception:
+            r = subprocess.run(['su', '-s', '/bin/sh', 'postgres', '-c', inner],
+                               capture_output=True, text=True, timeout=60)
+            out = ((r.stdout or '') + (r.stderr or '')).strip()
+            if r.returncode != 0 and out:
+                print(out)
+        except Exception as e:
+            print(f'  pg_ctl failed: {e}')
+        for _ in range(10):
+            if _tcp_open('127.0.0.1', port):
+                return
+            time.sleep(0.5)
+        # Still not listening — show what the server itself logged.
+        try:
+            with open(log) as fh:
+                tail = fh.read().splitlines()[-15:]
+            if tail:
+                print(f'--- {log} (last lines) ---')
+                for line in tail:
+                    print('  ' + line)
+                print('---')
+        except OSError:
             pass
-        if _tcp_open('127.0.0.1', port):
-            return
 
 
 def _ensure_database():
@@ -160,13 +207,19 @@ def _ensure_database():
         time.sleep(0.5)
     sys.exit(
         f'ERROR: PostgreSQL did not come up on {host}:{port}.\n'
-        f'Start it manually and retry:\n'
-        f'  service postgresql start      (or: pg_ctlcluster <version> main start)\n'
-        f'  # if it says "No PostgreSQL clusters exist", create one first:\n'
-        f'  pg_createcluster $(ls /usr/lib/postgresql) main --start\n'
-        f'  pg_isready -h {host} -p {port}\n'
-        f'If it refuses to start, check the log: '
-        f'/var/lib/postgresql/<version>/main/server.log')
+        f'See the server log printed above for the real cause.\n'
+        f'\n'
+        f'If your tables already live in a data dir (you have data), start it\n'
+        f'directly — do NOT run pg_createcluster, that is only for a brand-new,\n'
+        f'empty install:\n'
+        f"  DATADIR=$(dirname \"$(find /var/lib/postgresql -name PG_VERSION 2>/dev/null | head -1)\")\n"
+        f'  PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)\n'
+        f'  mkdir -p /var/run/postgresql && chown postgres:postgres /var/run/postgresql\n'
+        f'  chown -R postgres:postgres "$DATADIR"\n'
+        f"  su -s /bin/sh postgres -c \"$PGBIN/pg_ctl -D '$DATADIR' -l '$DATADIR/server.log' "
+        f"-o '-p {port} -c listen_addresses=127.0.0.1' -w start\"\n"
+        f'  tail -n 30 "$DATADIR/server.log"\n'
+        f'  pg_isready -h {host} -p {port}')
 
 
 # Bring the database up first, then import the app (which connects on import).
