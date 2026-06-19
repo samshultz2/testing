@@ -27,6 +27,56 @@ def contributions_access_required(f):
     return decorated_function
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    payload.setdefault('urls', _urls())
+    return render_or_json('contributions/app.html', 'contrib_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('contributions.dashboard'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('contributions.dashboard'))
+
+
+def _urls():
+    """Section-wide links used across the React shell."""
+    return {
+        'dashboard': url_for('contributions.dashboard'),
+        'quick_entry': url_for('contributions.quick_entry'),
+        'add_payment': url_for('contributions.add_payment'),
+        'payments': url_for('contributions.payments_list'),
+        'expenses': url_for('contributions.expenses_list'),
+        'add_expense': url_for('contributions.add_expense'),
+        'report': url_for('contributions.report'),
+        'defaulters': url_for('contributions.defaulters'),
+        'daily_summary': url_for('contributions.daily_summary'),
+        'history': url_for('contributions.session_history'),
+        'settings': url_for('contributions.settings'),
+        'import': url_for('contributions.import_excel'),
+        'export': url_for('contributions.export_excel'),
+        'export_defaulters': url_for('contributions.export_defaulters'),
+        'clear_all': url_for('contributions.clear_all_data'),
+        'logout': url_for('contributions.logout_contributions'),
+    }
+
+
+
 @contributions_bp.route('/access', methods=['GET', 'POST'])
 def access_page():
     if request.method == 'POST':
@@ -149,17 +199,39 @@ def dashboard():
     
     # Top contributors
     top_contributors = sorted(students_data, key=lambda x: x['total_paid'], reverse=True)[:10]
-    
-    return render_template('contributions/dashboard.html',
-        students=students_data, total_expected=total_expected, total_received=total_received,
-        total_expenses=total_expenses, net_balance=total_received - total_expenses,
-        fully_paid_count=fully_paid_count, total_students=len(students_data),
-        max_due=max_due, recent_payments=recent_payments, active_term=active_term,
-        total_outstanding=total_outstanding, avg_paid=avg_paid, total_payments=total_payments,
-        today_collections=today_collections, week_collections=week_collections,
-        collection_rate=collection_rate, expense_count=expense_count,
-        arms_summary=arms_summary, top_contributors=top_contributors
-    )
+
+    def _student_url(sid):
+        return url_for('contributions.student_detail', student_id=sid)
+
+    for s in students_data:
+        s['detail_url'] = _student_url(s['id'])
+        s['add_payment_url'] = url_for('contributions.add_payment', student_id=s['id'])
+
+    arms_list = [{'name': name, 'paid': v['paid'], 'total': v['total'],
+                  'collected': v['collected'], 'percentage': v['percentage']}
+                 for name, v in sorted(arms_summary.items())]
+
+    return _render({
+        'page': 'dashboard',
+        'stats': {
+            'total_students': len(students_data), 'total_expected': total_expected,
+            'total_received': total_received, 'total_expenses': total_expenses,
+            'net_balance': total_received - total_expenses, 'fully_paid_count': fully_paid_count,
+            'total_outstanding': total_outstanding, 'avg_paid': avg_paid,
+            'total_payments': total_payments, 'today_collections': today_collections,
+            'week_collections': week_collections, 'collection_rate': collection_rate,
+            'expense_count': expense_count, 'max_due': max_due,
+        },
+        'students': students_data,
+        'arms_summary': arms_list,
+        'recent_payments': [{'student_name': p.student.full_name, 'amount': p.amount,
+                             'date_short': p.payment_date.strftime('%d %b'),
+                             'detail_url': _student_url(p.student_id)}
+                            for p in recent_payments[:7]],
+        'top_contributors': [{'name': s['name'], 'total_paid': s['total_paid'],
+                              'detail_url': _student_url(s['id'])}
+                             for s in top_contributors[:7]],
+    })
 
 
 @contributions_bp.route('/quick-entry', methods=['GET', 'POST'])
@@ -193,8 +265,7 @@ def quick_entry():
             payment_date_str = request.form.get('payment_date')
             received_by = request.form.get('received_by', '').strip()
             if not payment_date_str:
-                flash('Payment date is required', 'error')
-                return redirect(url_for('contributions.quick_entry'))
+                return _err('Payment date is required', url_for('contributions.quick_entry'))
             payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
             count = 0
             total_amount = 0
@@ -209,15 +280,20 @@ def quick_entry():
                         total_amount += amount
             if count > 0:
                 db.session.commit()
-                flash(f'Added {count} payment(s) totaling ₦{total_amount:,.0f}', 'success')
-            else:
-                flash('No payments entered', 'warning')
-            return redirect(url_for('contributions.quick_entry'))
+                return _ok(f'Added {count} payment(s) totaling ₦{total_amount:,.0f}',
+                           url_for('contributions.quick_entry'))
+            return _err('No payments entered', url_for('contributions.quick_entry'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    return render_template('contributions/quick_entry.html', students=students_list, today=date.today().strftime('%Y-%m-%d'), max_due=max_due)
+            return _err(f'Error: {str(e)}', url_for('contributions.quick_entry'))
+
+    return _render({
+        'page': 'quick_entry',
+        'students': students_list,
+        'today': date.today().strftime('%Y-%m-%d'),
+        'max_due': max_due,
+        'submit_url': url_for('contributions.quick_entry'),
+    })
 
 
 @contributions_bp.route('/add-payment', methods=['GET', 'POST'])
@@ -247,13 +323,20 @@ def add_payment():
             db.session.add(payment)
             db.session.commit()
             student = db.session.get(Student, student_id)
-            flash(f'Payment of ₦{amount:,.0f} added for {student.full_name}', 'success')
-            return redirect(url_for('contributions.dashboard'))
+            return _ok(f'Payment of ₦{amount:,.0f} added for {student.full_name}',
+                       url_for('contributions.dashboard'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    return render_template('contributions/add_payment.html', students=students_list, today=date.today().strftime('%Y-%m-%d'))
+            return _err(f'Error: {str(e)}', url_for('contributions.add_payment'))
+
+    return _render({
+        'page': 'add_payment',
+        'students': students_list,
+        'today': date.today().strftime('%Y-%m-%d'),
+        'preselect': request.args.get('student_id', type=int),
+        'submit_url': url_for('contributions.add_payment'),
+        'info_url_base': url_for('contributions.api_student_info', student_id=0),
+    })
 
 
 @contributions_bp.route('/payments')
@@ -270,7 +353,18 @@ def payments_list():
             pass
     payments = query.order_by(ContributionPayment.payment_date.desc(), ContributionPayment.created_at.desc()).all()
     unique_dates = db.session.query(ContributionPayment.payment_date).distinct().order_by(ContributionPayment.payment_date.desc()).all()
-    return render_template('contributions/payments_list.html', payments=payments, unique_dates=[d[0] for d in unique_dates], filter_date=filter_date, filter_student=None)
+    return _render({
+        'page': 'payments',
+        'filter_date': filter_date,
+        'unique_dates': [{'value': d[0].strftime('%Y-%m-%d'),
+                          'label': d[0].strftime('%a, %d %b %Y')} for d in unique_dates if d[0]],
+        'payments': [{'id': p.id, 'date': p.payment_date.strftime('%a, %d %b %Y'),
+                      'student_name': p.student.full_name, 'amount': p.amount,
+                      'received_by': p.received_by or '-', 'notes': p.notes or '-',
+                      'detail_url': url_for('contributions.student_detail', student_id=p.student_id),
+                      'delete_url': url_for('contributions.delete_payment', payment_id=p.id)}
+                     for p in payments],
+    })
 
 
 @contributions_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
@@ -281,8 +375,8 @@ def delete_payment(payment_id):
     amount = payment.amount
     db.session.delete(payment)
     db.session.commit()
-    flash(f'Deleted payment of ₦{amount:,.0f} from {student_name}', 'success')
-    return redirect(url_for('contributions.payments_list'))
+    return _ok(f'Deleted payment of ₦{amount:,.0f} from {student_name}',
+               url_for('contributions.payments_list'))
 
 
 @contributions_bp.route('/student/<int:student_id>')
@@ -306,8 +400,18 @@ def student_detail(student_id):
         week_payments = [p for p in payments if week_start <= p.payment_date <= week_end]
         week_total = sum(p.amount for p in week_payments)
         if week_total > 0 or week_start <= date.today():
-            weekly_data.append({'week': week_num, 'start': week_start, 'end': week_end, 'amount': week_total})
-    return render_template('contributions/student_detail.html', student=student, payments=payments, total_paid=total_paid, remaining=remaining, max_due=max_due, status='Paid' if remaining <= 0 else 'Ongoing', weekly_data=weekly_data)
+            weekly_data.append({'week': week_num,
+                                'period': f"{week_start.strftime('%d %b')} - {week_end.strftime('%d %b')}",
+                                'amount': week_total})
+    return _render({
+        'page': 'student_detail',
+        'student': {'id': student.id, 'name': student.full_name},
+        'total_paid': total_paid, 'remaining': remaining, 'max_due': max_due,
+        'status': 'Paid' if remaining <= 0 else 'Ongoing',
+        'payments': [{'date': p.payment_date.strftime('%d %b %Y'), 'amount': p.amount,
+                      'received_by': p.received_by or '-'} for p in payments],
+        'weekly_data': weekly_data,
+    })
 
 
 @contributions_bp.route('/expenses')
@@ -336,15 +440,18 @@ def expenses_list():
         category_summary[category] = category_summary.get(category, 0) + expense.amount
     
     category_summary = dict(sorted(category_summary.items(), key=lambda x: x[1], reverse=True))
-    
-    return render_template('contributions/expenses_list.html',
-        expenses=expenses,
-        total_expenses=total_expenses,
-        total_collected=total_collected,
-        available_balance=available_balance,
-        expense_rate=expense_rate,
-        category_summary=category_summary if len(category_summary) > 1 else {}
-    )
+
+    return _render({
+        'page': 'expenses',
+        'total_expenses': total_expenses, 'total_collected': total_collected,
+        'available_balance': available_balance, 'expense_rate': expense_rate,
+        'category_summary': ([{'name': k, 'amount': v} for k, v in category_summary.items()]
+                             if len(category_summary) > 1 else []),
+        'expenses': [{'id': e.id, 'date': e.expense_date.strftime('%a, %d %b %Y'),
+                      'description': e.description, 'amount': e.amount, 'notes': e.notes or '-',
+                      'delete_url': url_for('contributions.delete_expense', expense_id=e.id)}
+                     for e in expenses],
+    })
 
 
 
@@ -361,12 +468,16 @@ def add_expense():
             expense = ContributionExpense(session_id=active_session.id if active_session else None, expense_date=expense_date, description=description, amount=amount, notes=notes)
             db.session.add(expense)
             db.session.commit()
-            flash(f'Expense of ₦{amount:,.0f} added', 'success')
-            return redirect(url_for('contributions.expenses_list'))
+            return _ok(f'Expense of ₦{amount:,.0f} added', url_for('contributions.expenses_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    return render_template('contributions/add_expense.html', today=date.today().strftime('%Y-%m-%d'))
+            return _err(f'Error: {str(e)}', url_for('contributions.add_expense'))
+    return _render({
+        'page': 'add_expense',
+        'today': date.today().strftime('%Y-%m-%d'),
+        'submit_url': url_for('contributions.add_expense'),
+        'back_url': url_for('contributions.expenses_list'),
+    })
 
 
 @contributions_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
@@ -375,8 +486,7 @@ def delete_expense(expense_id):
     expense = db.get_or_404(ContributionExpense, expense_id)
     db.session.delete(expense)
     db.session.commit()
-    flash('Expense deleted', 'success')
-    return redirect(url_for('contributions.expenses_list'))
+    return _ok('Expense deleted', url_for('contributions.expenses_list'))
 
 
 @contributions_bp.route('/settings', methods=['GET', 'POST'])
@@ -388,13 +498,16 @@ def settings():
             start_date = request.form.get('start_date', '2025-01-06')
             ContributionSettings.set('max_due', max_due)
             ContributionSettings.set('start_date', start_date)
-            flash('Settings updated', 'success')
         except Exception as e:
-            flash(f'Error: {str(e)}', 'error')
-        return redirect(url_for('contributions.settings'))
+            return _err(f'Error: {str(e)}', url_for('contributions.settings'))
+        return _ok('Settings updated', url_for('contributions.settings'))
     max_due = ContributionSettings.get('max_due', '20000')
     start_date = ContributionSettings.get('start_date', '2025-01-06')
-    return render_template('contributions/settings.html', max_due=max_due, start_date=start_date)
+    return _render({
+        'page': 'settings', 'max_due': max_due, 'start_date': start_date,
+        'submit_url': url_for('contributions.settings'),
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/report')
@@ -428,7 +541,11 @@ def report():
             arm_students.append({'name': student.full_name, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
         arm_students.sort(key=lambda x: x['name'])
         arms_data[arm_name] = {'students': arm_students, 'total_students': len(arm_students), 'total_expected': len(arm_students) * max_due, 'total_paid': arm_total_paid, 'fully_paid': arm_fully_paid}
-    return render_template('contributions/report.html', arms_data=arms_data, max_due=max_due)
+    return _render({
+        'page': 'report', 'max_due': max_due,
+        'arms': [{'name': name, **data} for name, data in sorted(arms_data.items())],
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/export')
@@ -696,7 +813,12 @@ def import_excel():
             flash(f'Import error: {str(e)}', 'error')
             return redirect(url_for('contributions.import_excel'))
     
-    return render_template('contributions/import_excel.html')
+    return _render({
+        'page': 'import',
+        'submit_url': url_for('contributions.import_excel'),
+        'clear_url': url_for('contributions.clear_all_data'),
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/clear-all', methods=['POST'])
@@ -707,11 +829,10 @@ def clear_all_data():
         ContributionPayment.query.delete()
         ContributionExpense.query.delete()
         db.session.commit()
-        flash('All contribution data cleared', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('contributions.import_excel'))
+        return _err(f'Error: {str(e)}', url_for('contributions.import_excel'))
+    return _ok('All contribution data cleared', url_for('contributions.import_excel'))
 
 
 @contributions_bp.route('/defaulters')
@@ -767,13 +888,21 @@ def defaulters():
     
     defaulters_list.sort(key=lambda x: x['remaining'], reverse=True)
     avg_outstanding = total_outstanding / len(defaulters_list) if defaulters_list else 0
-    
-    return render_template('contributions/defaulters.html',
-        defaulters=defaulters_list,
-        total_outstanding=total_outstanding,
-        avg_outstanding=avg_outstanding,
-        max_due=max_due
-    )
+
+    for s in defaulters_list:
+        s['last_payment'] = s['last_payment'].strftime('%d %b %Y') if s['last_payment'] else 'Never'
+        s['detail_url'] = url_for('contributions.student_detail', student_id=s['id'])
+        s['add_payment_url'] = url_for('contributions.add_payment', student_id=s['id'])
+
+    return _render({
+        'page': 'defaulters',
+        'defaulters': defaulters_list,
+        'total_outstanding': total_outstanding,
+        'avg_outstanding': avg_outstanding,
+        'max_due': max_due,
+        'export_url': url_for('contributions.export_defaulters'),
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/daily-summary')
@@ -808,17 +937,26 @@ def daily_summary():
         }
         result.append(day_data)
         total_amount += day_data['amount']
-        
+
         if not best_day or day_data['amount'] > best_day['amount']:
             best_day = day_data
-    
+
     avg_daily = total_amount / len(result) if result else 0
-    
-    return render_template('contributions/daily_summary.html',
-        daily_data=result,
-        avg_daily=avg_daily,
-        best_day=best_day
-    )
+
+    return _render({
+        'page': 'daily_summary',
+        'avg_daily': avg_daily,
+        'days_count': len(result),
+        'best_day': ({'amount': best_day['amount'], 'date_short': best_day['date'].strftime('%d %b')}
+                     if best_day else None),
+        'daily_data': [{'date': d['date'].strftime('%d %b %Y'),
+                        'day': d['date'].strftime('%A'),
+                        'count': d['count'], 'amount': d['amount'],
+                        'collectors': ', '.join(d['collectors']) if d['collectors'] else '-',
+                        'view_url': url_for('contributions.payments_list', date=d['date'].strftime('%Y-%m-%d'))}
+                       for d in result],
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/export-defaulters')
@@ -926,7 +1064,10 @@ def session_history():
                 'net_balance': (total_collected or 0) - expenses
             })
     
-    return render_template('contributions/session_history.html', sessions=session_data)
+    for s in session_data:
+        s['view_url'] = url_for('contributions.view_session', session_id=s['id'])
+    return _render({'page': 'history', 'sessions': session_data,
+                    'back_url': url_for('contributions.dashboard')})
 
 
 @contributions_bp.route('/session/<int:session_id>')
@@ -962,13 +1103,18 @@ def view_session(session_id):
     
     total_collected = sum(p.amount for p in payments)
     total_expenses = sum(e.amount for e in expenses)
-    
-    return render_template('contributions/view_session.html',
-        contrib_session=session,
-        payments=payments,
-        expenses=expenses,
-        student_totals=sorted(student_totals.values(), key=lambda x: x['total'], reverse=True),
-        total_collected=total_collected,
-        total_expenses=total_expenses,
-        net_balance=total_collected - total_expenses
-    )
+    ordered = sorted(student_totals.values(), key=lambda x: x['total'], reverse=True)
+
+    return _render({
+        'page': 'view_session',
+        'session': {'name': session.name, 'is_active': session.is_active},
+        'payments_count': len(payments),
+        'total_collected': total_collected, 'total_expenses': total_expenses,
+        'net_balance': total_collected - total_expenses,
+        'student_totals': [{'name': it['student'].full_name, 'payment_count': it['payment_count'],
+                            'total': it['total']} for it in ordered],
+        'expenses': [{'description': e.description,
+                      'date': e.expense_date.strftime('%d %b %Y'), 'amount': e.amount}
+                     for e in expenses],
+        'back_url': url_for('contributions.session_history'),
+    })
