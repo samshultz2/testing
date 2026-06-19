@@ -1,7 +1,8 @@
 """
 Settings, Backup, and Configuration routes
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, send_file, session
+from flask import (Blueprint, render_template, request, redirect, url_for, flash,
+                   Response, send_file, session, jsonify)
 from datetime import datetime
 import os
 import shutil
@@ -32,6 +33,36 @@ def _settings_admin_only():
     return None
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('settings/app.html', 'settings_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('settings.index'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('settings.index'))
+
+
+def _settings_dict():
+    return {s.key: s.value for s in SchoolSettings.query.all()}
+
+
 # ============================================================================
 # SCHOOL SETTINGS
 # ============================================================================
@@ -40,10 +71,22 @@ def _settings_admin_only():
 @login_required
 def index():
     """Settings main page"""
-    settings = SchoolSettings.query.all()
-    settings_dict = {s.key: s.value for s in settings}
-
-    return render_template('settings/index.html', settings=settings_dict)
+    from utils.branch_scope import is_central
+    return _render({
+        'page': 'index',
+        'is_central': is_central(),
+        'urls': {
+            'school': url_for('settings.school_settings'),
+            'academic': url_for('settings.academic_settings'),
+            'grades': url_for('settings.grades_list'),
+            'traits': url_for('settings.traits_list'),
+            'assessments': url_for('settings.assessments_list'),
+            'timetable_slots': url_for('settings.timetable_slots'),
+            'users': url_for('settings.users_list'),
+            'branches': url_for('settings.branches'),
+            'backup': url_for('settings.backup_page'),
+        },
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +98,16 @@ def index():
 def branches():
     from models import Branch
     rows = Branch.query.order_by(Branch.is_default.desc(), Branch.name).all()
-    return render_template('settings/branches.html', branches=rows)
+    return _render({
+        'page': 'branches',
+        'add_url': url_for('settings.add_branch'),
+        'back_url': url_for('settings.index'),
+        'branches': [{
+            'id': b.id, 'name': b.name, 'code': b.code, 'phone': b.phone,
+            'address': b.address, 'is_active': b.is_active, 'is_default': b.is_default,
+            'edit_url': url_for('settings.edit_branch', branch_id=b.id),
+        } for b in rows],
+    })
 
 
 @settings_bp.route('/branches/add', methods=['POST'])
@@ -64,11 +116,9 @@ def add_branch():
     from models import db, Branch
     name = (request.form.get('name') or '').strip()
     if not name:
-        flash('Branch name is required.', 'error')
-        return redirect(url_for('settings.branches'))
+        return _err('Branch name is required.', url_for('settings.branches'))
     if Branch.query.filter_by(name=name).first():
-        flash('A branch with that name already exists.', 'error')
-        return redirect(url_for('settings.branches'))
+        return _err('A branch with that name already exists.', url_for('settings.branches'))
     first = Branch.query.count() == 0
     db.session.add(Branch(
         name=name,
@@ -79,8 +129,7 @@ def add_branch():
     db.session.commit()
     from utils.audit import log_action
     log_action('branch.create', target_type='branch', target_label=name)
-    flash(f'Branch "{name}" added.', 'success')
-    return redirect(url_for('settings.branches'))
+    return _ok(f'Branch "{name}" added.', url_for('settings.branches'))
 
 
 @settings_bp.route('/branches/<int:branch_id>/edit', methods=['POST'])
@@ -100,8 +149,7 @@ def edit_branch(branch_id):
     db.session.commit()
     from utils.audit import log_action
     log_action('branch.update', target=b)
-    flash('Branch updated.', 'success')
-    return redirect(url_for('settings.branches'))
+    return _ok('Branch updated.', url_for('settings.branches'))
 
 
 @settings_bp.route('/school', methods=['GET', 'POST'])
@@ -123,17 +171,19 @@ def school_settings():
                 SchoolSettings.set('timezone', tz, 'string', 'Site-wide timezone')
                 from utils.timeutil import clear_cache
                 clear_cache()
-
-            flash('School settings updated!', 'success')
         except Exception as e:
-            flash(f'Error: {str(e)}', 'error')
-        
-        return redirect(url_for('settings.school_settings'))
-    
-    settings = {s.key: s.value for s in SchoolSettings.query.all()}
+            return _err(f'Error: {str(e)}', url_for('settings.school_settings'))
+        return _ok('School settings updated!', url_for('settings.school_settings'))
+
     from utils.timeutil import all_timezones, get_timezone
-    return render_template('settings/school.html', settings=settings,
-        timezones=all_timezones(), current_tz=get_timezone())
+    return _render({
+        'page': 'school',
+        'settings': _settings_dict(),
+        'timezones': all_timezones(),
+        'current_tz': get_timezone(),
+        'submit_url': url_for('settings.school_settings'),
+        'back_url': url_for('settings.index'),
+    })
 
 
 @settings_bp.route('/academic', methods=['GET', 'POST'])
@@ -149,15 +199,16 @@ def academic_settings():
             SchoolSettings.set('periods_per_day', request.form.get('periods_per_day', '8'), 'int')
             SchoolSettings.set('promotion_threshold', request.form.get('promotion_threshold', '50'), 'float')
             SchoolSettings.set('pass_mark', request.form.get('pass_mark', '50'), 'int')
-            
-            flash('Academic settings updated!', 'success')
         except Exception as e:
-            flash(f'Error: {str(e)}', 'error')
-        
-        return redirect(url_for('settings.academic_settings'))
-    
-    settings = {s.key: s.value for s in SchoolSettings.query.all()}
-    return render_template('settings/academic.html', settings=settings)
+            return _err(f'Error: {str(e)}', url_for('settings.academic_settings'))
+        return _ok('Academic settings updated!', url_for('settings.academic_settings'))
+
+    return _render({
+        'page': 'academic',
+        'settings': _settings_dict(),
+        'submit_url': url_for('settings.academic_settings'),
+        'back_url': url_for('settings.index'),
+    })
 
 
 # ============================================================================
@@ -169,7 +220,13 @@ def academic_settings():
 def grades_list():
     """List grade scale"""
     grades = GradeScale.query.order_by(GradeScale.order).all()
-    return render_template('settings/grades.html', grades=grades)
+    return _render({
+        'page': 'grades',
+        'save_url': url_for('settings.save_grades'),
+        'back_url': url_for('settings.index'),
+        'grades': [{'grade': g.grade, 'min_score': g.min_score,
+                    'max_score': g.max_score, 'remark': g.remark} for g in grades],
+    })
 
 
 @settings_bp.route('/grades/save', methods=['POST'])
@@ -182,10 +239,10 @@ def save_grades():
         min_scores = request.form.getlist('min_score[]')
         max_scores = request.form.getlist('max_score[]')
         remarks = request.form.getlist('remark[]')
-        
+
         # Delete existing grades
         GradeScale.query.delete()
-        
+
         # Add new grades
         for i, grade in enumerate(grades):
             if grade.strip():
@@ -196,14 +253,12 @@ def save_grades():
                     remark=remarks[i].strip() if i < len(remarks) else '',
                     order=i + 1
                 ))
-        
+
         db.session.commit()
-        flash('Grade scale saved!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('settings.grades_list'))
+        return _err(f'Error: {str(e)}', url_for('settings.grades_list'))
+    return _ok('Grade scale saved!', url_for('settings.grades_list'))
 
 
 # ============================================================================
@@ -221,7 +276,12 @@ def _slugify(text):
 def traits_list():
     from models import BehaviouralTrait
     traits = BehaviouralTrait.query.order_by(BehaviouralTrait.order, BehaviouralTrait.id).all()
-    return render_template('settings/traits.html', traits=traits)
+    return _render({
+        'page': 'traits',
+        'save_url': url_for('settings.save_traits'),
+        'back_url': url_for('settings.index'),
+        'traits': [{'key': t.key, 'label': t.label, 'is_active': t.is_active} for t in traits],
+    })
 
 
 @settings_bp.route('/traits/save', methods=['POST'])
@@ -254,11 +314,10 @@ def save_traits():
             if t.key not in seen:
                 t.is_active = False
         db.session.commit()
-        flash('Behavioural traits saved!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('settings.traits_list'))
+        return _err(f'Error: {str(e)}', url_for('settings.traits_list'))
+    return _ok('Behavioural traits saved!', url_for('settings.traits_list'))
 
 
 # ============================================================================
@@ -271,7 +330,14 @@ def assessments_list():
     """List assessment types"""
     assessments = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
     total_max = sum(a.max_score for a in assessments)
-    return render_template('settings/assessments.html', assessments=assessments, total_max=total_max)
+    return _render({
+        'page': 'assessments',
+        'total_max': total_max,
+        'save_url': url_for('settings.save_assessments'),
+        'back_url': url_for('settings.index'),
+        'assessments': [{'name': a.name, 'short_name': a.short_name,
+                         'max_score': a.max_score} for a in assessments],
+    })
 
 
 @settings_bp.route('/assessments/save', methods=['POST'])
@@ -282,10 +348,10 @@ def save_assessments():
         names = request.form.getlist('name[]')
         short_names = request.form.getlist('short_name[]')
         max_scores = request.form.getlist('max_score[]')
-        
+
         # Deactivate all existing
         AssessmentType.query.update({AssessmentType.is_active: False})
-        
+
         # Add/update assessment types
         for i, name in enumerate(names):
             if name.strip():
@@ -304,14 +370,12 @@ def save_assessments():
                         order=i + 1,
                         is_active=True
                     ))
-        
+
         db.session.commit()
-        flash('Assessment types saved!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('settings.assessments_list'))
+        return _err(f'Error: {str(e)}', url_for('settings.assessments_list'))
+    return _ok('Assessment types saved!', url_for('settings.assessments_list'))
 
 
 # ============================================================================
@@ -323,8 +387,17 @@ def save_assessments():
 def timetable_slots():
     """Manage timetable slots/periods"""
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
-    settings = {s.key: s.value for s in SchoolSettings.query.all()}
-    return render_template('settings/timetable_slots.html', slots=slots, settings=settings)
+    return _render({
+        'page': 'timetable_slots',
+        'settings': _settings_dict(),
+        'save_url': url_for('settings.save_timetable_slots'),
+        'generate_url': url_for('settings.generate_timetable_slots'),
+        'back_url': url_for('settings.index'),
+        'slots': [{'id': s.id, 'name': s.name,
+                   'start_time': s.start_time.strftime('%H:%M') if s.start_time else '',
+                   'end_time': s.end_time.strftime('%H:%M') if s.end_time else '',
+                   'is_break': s.is_break} for s in slots],
+    })
 
 
 @settings_bp.route('/timetable-slots/generate', methods=['POST'])
@@ -333,23 +406,23 @@ def generate_timetable_slots():
     """Auto-generate timetable slots based on settings"""
     try:
         from datetime import timedelta, datetime as dt
-        
+
         # Get settings
         start_time_str = SchoolSettings.get('school_day_start', '08:20')
         period_duration = SchoolSettings.get('period_duration', 40)
         break_duration = SchoolSettings.get('break_duration', 30)
         periods_per_day = SchoolSettings.get('periods_per_day', 8)
-        
+
         # Parse start time
         start_hour, start_min = map(int, start_time_str.split(':'))
         current_time = dt(2000, 1, 1, start_hour, start_min)
-        
+
         # Delete existing slots
         TimetableSlot.query.delete()
-        
+
         slot_number = 1
         order = 1
-        
+
         for i in range(periods_per_day):
             # Add period
             end_time = current_time + timedelta(minutes=period_duration)
@@ -365,7 +438,7 @@ def generate_timetable_slots():
             current_time = end_time
             slot_number += 1
             order += 1
-            
+
             # Add break after period 4 and period 6 (configurable)
             if i == 3 or i == 5:  # After 4th and 6th periods
                 break_end = current_time + timedelta(minutes=break_duration)
@@ -381,14 +454,12 @@ def generate_timetable_slots():
                 ))
                 current_time = break_end
                 order += 1
-        
+
         db.session.commit()
-        flash(f'{periods_per_day} periods and 2 breaks generated!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('settings.timetable_slots'))
+        return _err(f'Error: {str(e)}', url_for('settings.timetable_slots'))
+    return _ok(f'{periods_per_day} periods and 2 breaks generated!', url_for('settings.timetable_slots'))
 
 
 @settings_bp.route('/timetable-slots/save', methods=['POST'])
@@ -397,37 +468,35 @@ def save_timetable_slots():
     """Save timetable slots"""
     try:
         from datetime import time
-        
+
         slot_ids = request.form.getlist('slot_id[]')
         names = request.form.getlist('name[]')
         start_times = request.form.getlist('start_time[]')
         end_times = request.form.getlist('end_time[]')
         is_breaks = request.form.getlist('is_break[]')
-        
+
         for i, slot_id in enumerate(slot_ids):
             if slot_id:
                 slot = db.session.get(TimetableSlot, int(slot_id))
                 if slot:
                     slot.name = names[i] if i < len(names) else slot.name
-                    
+
                     if i < len(start_times) and start_times[i]:
                         h, m = map(int, start_times[i].split(':'))
                         slot.start_time = time(h, m)
-                    
+
                     if i < len(end_times) and end_times[i]:
                         h, m = map(int, end_times[i].split(':'))
                         slot.end_time = time(h, m)
-                    
+
                     slot.is_break = str(i) in is_breaks
                     slot.order = i + 1
-        
+
         db.session.commit()
-        flash('Timetable slots updated!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('settings.timetable_slots'))
+        return _err(f'Error: {str(e)}', url_for('settings.timetable_slots'))
+    return _ok('Timetable slots updated!', url_for('settings.timetable_slots'))
 
 
 # ============================================================================
@@ -443,7 +512,7 @@ def backup_page():
     db_size = 0
     if os.path.exists(db_path):
         db_size = os.path.getsize(db_path)
-    
+
     # Get record counts
     counts = {
         'students': Student.query.count(),
@@ -451,11 +520,26 @@ def backup_page():
         'terms': Term.query.count(),
         'users': User.query.count()
     }
-    
+
     from flask import current_app
     from utils.backup import list_backups
-    return render_template('settings/backup.html', db_size=db_size, counts=counts,
-                           backups=list_backups(current_app))
+    backups = list_backups(current_app)
+    return _render({
+        'page': 'backup',
+        'db_size': db_size,
+        'counts': counts,
+        'download_url': url_for('settings.download_backup'),
+        'export_json_url': url_for('settings.export_json'),
+        'create_url': url_for('settings.create_backup'),
+        'restore_url': url_for('settings.restore_backup'),
+        'back_url': url_for('settings.index'),
+        'backups': [{
+            'name': b['name'],
+            'modified': b['modified'].strftime('%d %b %Y %H:%M') if b.get('modified') else '',
+            'size': b['size'],
+            'download_url': url_for('settings.download_backup_file', name=b['name']),
+        } for b in backups],
+    })
 
 
 @settings_bp.route('/backup/create', methods=['POST'])
@@ -465,10 +549,8 @@ def create_backup():
     from utils.backup import make_backup
     path = make_backup(current_app)
     if path:
-        flash('Backup created.', 'success')
-    else:
-        flash('Could not create backup.', 'error')
-    return redirect(url_for('settings.backup_page'))
+        return _ok('Backup created.', url_for('settings.backup_page'))
+    return _err('Could not create backup.', url_for('settings.backup_page'))
 
 
 @settings_bp.route('/backup/file/<path:name>')
@@ -494,15 +576,15 @@ def download_backup():
     """Download database backup"""
     try:
         db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'school.db')
-        
+
         if not os.path.exists(db_path):
             flash('Database file not found!', 'error')
             return redirect(url_for('settings.backup_page'))
-        
+
         # Create backup filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_filename = f'school_backup_{timestamp}.db'
-        
+
         return send_file(
             db_path,
             as_attachment=True,
@@ -522,7 +604,7 @@ def export_json():
         from models import (
             Student, ParentContact, AcademicSession, SchoolSettings, GradeScale, AssessmentType
         )
-        
+
         data = {
             'export_date': datetime.now().isoformat(),
             'school_settings': [{
@@ -553,11 +635,11 @@ def export_json():
                 'is_active': s.is_active
             } for s in AcademicSession.query.all()],
         }
-        
+
         # Create JSON response
         json_str = json.dumps(data, indent=2)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
+
         return Response(
             json_str,
             mimetype='application/json',
@@ -628,12 +710,25 @@ def restore_backup():
 # USER MANAGEMENT
 # ============================================================================
 
+def _user_dict(u):
+    return {'id': u.id, 'username': u.username, 'full_name': u.full_name,
+            'email': u.email, 'role': u.role, 'is_active': u.is_active}
+
+
 @settings_bp.route('/users')
 @central_admin_required
 def users_list():
     """List all users"""
     users = User.query.order_by(User.role, User.username).all()
-    return render_template('settings/users.html', users=users)
+    return _render({
+        'page': 'users',
+        'add_url': url_for('settings.add_user'),
+        'back_url': url_for('settings.index'),
+        'users': [{**_user_dict(u),
+                   'edit_url': url_for('settings.edit_user', user_id=u.id),
+                   'delete_url': url_for('settings.delete_user', user_id=u.id)}
+                  for u in users],
+    })
 
 
 @settings_bp.route('/users/add', methods=['GET', 'POST'])
@@ -647,16 +742,14 @@ def add_user():
             full_name = request.form.get('full_name', '').strip()
             password = request.form.get('password', '')
             role = request.form.get('role', 'teacher')
-            
+
             if not username or not password:
-                flash('Username and password are required.', 'error')
-                return redirect(url_for('settings.add_user'))
-            
+                return _err('Username and password are required.', url_for('settings.add_user'))
+
             # Check for duplicates
             if User.query.filter_by(username=username).first():
-                flash('Username already exists.', 'error')
-                return redirect(url_for('settings.add_user'))
-            
+                return _err('Username already exists.', url_for('settings.add_user'))
+
             user = User(
                 username=username,
                 email=email or None,
@@ -664,17 +757,20 @@ def add_user():
                 role=role
             )
             user.set_password(password)
-            
+
             db.session.add(user)
             db.session.commit()
-            
-            flash(f'User {username} created!', 'success')
-            return redirect(url_for('settings.users_list'))
+
+            return _ok(f'User {username} created!', url_for('settings.users_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    return render_template('settings/add_user.html')
+            return _err(f'Error: {str(e)}', url_for('settings.add_user'))
+
+    return _render({
+        'page': 'add_user',
+        'submit_url': url_for('settings.add_user'),
+        'back_url': url_for('settings.users_list'),
+    })
 
 
 @settings_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -682,27 +778,31 @@ def add_user():
 def edit_user(user_id):
     """Edit user"""
     user = db.get_or_404(User, user_id)
-    
+
     if request.method == 'POST':
         try:
             user.email = request.form.get('email', '').strip().lower() or None
             user.full_name = request.form.get('full_name', '').strip() or None
             user.role = request.form.get('role', 'teacher')
             user.is_active = request.form.get('is_active') == 'on'
-            
+
             # Update password if provided
             new_password = request.form.get('password', '').strip()
             if new_password:
                 user.set_password(new_password)
-            
+
             db.session.commit()
-            flash('User updated!', 'success')
-            return redirect(url_for('settings.users_list'))
+            return _ok('User updated!', url_for('settings.users_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    return render_template('settings/edit_user.html', user=user)
+            return _err(f'Error: {str(e)}', url_for('settings.edit_user', user_id=user_id))
+
+    return _render({
+        'page': 'edit_user',
+        'user': _user_dict(user),
+        'submit_url': url_for('settings.edit_user', user_id=user.id),
+        'back_url': url_for('settings.users_list'),
+    })
 
 
 @settings_bp.route('/users/<int:user_id>/delete', methods=['POST'])
@@ -710,20 +810,17 @@ def edit_user(user_id):
 def delete_user(user_id):
     """Delete user"""
     user = db.get_or_404(User, user_id)
-    
+
     # Prevent deleting last admin
     if user.role == 'admin':
         admin_count = User.query.filter_by(role='admin', is_active=True).count()
         if admin_count <= 1:
-            flash('Cannot delete the last admin user!', 'error')
-            return redirect(url_for('settings.users_list'))
-    
+            return _err('Cannot delete the last admin user!', url_for('settings.users_list'))
+
     try:
         db.session.delete(user)
         db.session.commit()
-        flash('User deleted!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('settings.users_list'))
+        return _err(f'Error: {str(e)}', url_for('settings.users_list'))
+    return _ok('User deleted!', url_for('settings.users_list'))

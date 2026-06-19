@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% set _t = {'index':'Settings','school':'School Settings','academic':'Academic Settings','grades':'Grade Scale','traits':'Behavioural Traits','assessments':'Assessments','timetable_slots':'Timetable Slots','backup':'Backup & Restore','branches':'Branches','users':'Users','add_user':'Add User','edit_user':'Edit User'} %}
+{% block title %}{{ _t.get(settings_json.page,'Settings') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a>{% if settings_json.page != 'index' %} / <span>{{ _t.get(settings_json.page,'Settings') }}</span>{% endif %}{% endblock %}
+{% block content %}
+<div id="settings-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="settings-data">{{ settings_json|tojson }}</script>
+<script src="{{ url_for('static', filename='js/react/settings-app.js') }}" defer></script>
+{% endblock %}
