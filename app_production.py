@@ -326,6 +326,31 @@ def _tunnel_exists(exe, name):
         return False
 
 
+def _tunnel_credentials():
+    """A locally-stored tunnel credentials file (<UUID>.json) and its tunnel id.
+
+    `cloudflared tunnel create` writes ~/.cloudflared/<UUID>.json; that file is
+    all `tunnel run` needs to serve the named tunnel. Detecting the tunnel this
+    way (rather than via `tunnel list`, which calls Cloudflare's API and times
+    out on a flaky connection) means a previously-set-up tunnel keeps serving
+    at the school domain even when the network is patchy. Returns (path, uuid)
+    or (None, None).
+    """
+    import glob
+    import json as _json
+    d = os.path.expanduser('~/.cloudflared')
+    for p in sorted(glob.glob(os.path.join(d, '*.json')), key=os.path.getmtime, reverse=True):
+        try:
+            with open(p) as fh:
+                j = _json.load(fh)
+        except Exception:
+            continue
+        uuid = j.get('TunnelID') or os.path.splitext(os.path.basename(p))[0]
+        if j.get('TunnelSecret') and uuid:   # looks like a credentials file
+            return p, uuid
+    return None, None
+
+
 def _print_named_setup():
     print('\nTo serve at https://%s you need a ONE-TIME tunnel setup:' % DOMAIN)
     print('  cloudflared tunnel login                # authorize %s in the browser' % DOMAIN)
@@ -340,10 +365,16 @@ def _cloudflared_command():
     if not exe:
         return None, None
     config = os.path.expanduser('~/.cloudflared/config.yml')
+    if os.path.exists(config):       # explicit named tunnel via config.yml
+        return [exe, 'tunnel', '--config', config, 'run'], os.environ.get('CLOUDFLARE_HOSTNAME')
+    # Prefer the local credentials file: it runs the named tunnel with no API
+    # call, so a patchy connection can't knock us down to a temporary URL.
+    cred, uuid = _tunnel_credentials()
+    if cred:
+        return [exe, 'tunnel', 'run', '--cred-file', cred,
+                '--url', f'http://{HOST}:{PORT}', uuid], DOMAIN
     if _tunnel_exists(exe, TUNNEL):  # the named tunnel for the school domain
         return [exe, 'tunnel', 'run', '--url', f'http://{HOST}:{PORT}', TUNNEL], DOMAIN
-    if os.path.exists(config):       # named tunnel via config.yml
-        return [exe, 'tunnel', '--config', config, 'run'], os.environ.get('CLOUDFLARE_HOSTNAME')
     # Named tunnel not set up yet: print the exact commands, use a quick tunnel.
     _print_named_setup()
     return [exe, 'tunnel', '--url', f'http://{HOST}:{PORT}', '--no-autoupdate'], None
