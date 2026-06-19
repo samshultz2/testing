@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% set _t = {'index':'Class Timetable','edit':'Edit Timetable','backups':'Backups & Restore'} %}
+{% block title %}{{ _t.get(tt_json.page,'Timetable') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('timetable.index') }}">Timetable</a>{% if tt_json.page != 'index' %} / <span>{{ _t.get(tt_json.page,'Timetable') }}</span>{% endif %}{% endblock %}
+{% block content %}
+<div id="tt-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="tt-data">{{ tt_json|tojson }}</script>
+<script src="{{ url_for('static', filename='js/react/timetable-app.js') }}" defer></script>
+{% endblock %}

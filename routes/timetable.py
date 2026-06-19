@@ -21,6 +21,38 @@ DAYS_OF_WEEK = [
 ]
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+
+def _wants_json():
+    from utils.spa import wants_json
+    return wants_json()
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('timetable/app.html', 'tt_json', payload)
+
+
+def _ok(message, redirect_url=None, **extra):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('timetable.index'))
+
+
+def _err(message, redirect_url=None, status=400):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), status
+    flash(message, 'error')
+    return redirect(redirect_url or url_for('timetable.index'))
+
+
+def _slot_dict(s):
+    return {'id': s.id, 'name': s.name, 'is_break': s.is_break,
+            'start': s.start_time.strftime('%H:%M') if s.start_time else '',
+            'end': s.end_time.strftime('%H:%M') if s.end_time else ''}
+
+
 @timetable_bp.route('/designer')
 @login_required
 def designer():
@@ -50,9 +82,20 @@ def backups():
     if term_id:
         q = q.filter_by(term_id=term_id)
     backups = q.order_by(TimetableBackup.created_at.desc()).all()
-    selected_term = Term.query.get(term_id) if term_id else None
-    return render_template('timetable/backups.html', backups=backups, terms=terms,
-                           selected_term=selected_term, term_id=term_id)
+    return _render({
+        'page': 'backups',
+        'term_id': term_id,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'backups': [{'id': b.id,
+                     'when': b.created_at.strftime('%d %b %Y, %H:%M') if b.created_at else '',
+                     'label': b.label, 'entry_count': b.entry_count,
+                     'restore_url': url_for('timetable.restore_backup_route', backup_id=b.id),
+                     'delete_url': url_for('timetable.delete_backup', backup_id=b.id)}
+                    for b in backups],
+        'create_url': url_for('timetable.create_backup'),
+        'self_url': url_for('timetable.backups'),
+        'index_url': url_for('timetable.index'),
+    })
 
 
 @timetable_bp.route('/backups/create', methods=['POST'])
@@ -64,13 +107,12 @@ def create_backup():
     active = get_active_term()
     term_id = term_id or (active.id if active else None)
     if not term_id:
-        flash('Pick a term to back up.', 'error')
-        return redirect(url_for('timetable.backups'))
+        return _err('Pick a term to back up.', url_for('timetable.backups'))
     label = (request.form.get('label') or '').strip() or 'Manual backup'
     backup = snapshot_term(term_id, label, skip_if_empty=False)
     db.session.commit()
-    flash(f'Backed up {backup.entry_count} timetable entr(y/ies).', 'success')
-    return redirect(url_for('timetable.backups', term_id=term_id))
+    return _ok(f'Backed up {backup.entry_count} timetable entr(y/ies).',
+               url_for('timetable.backups', term_id=term_id))
 
 
 @timetable_bp.route('/backups/<int:backup_id>/restore', methods=['POST'])
@@ -86,8 +128,8 @@ def restore_backup_route(backup_id):
                       f'Auto-backup before restoring "{backup.label}"')
     n = restore_backup(backup)
     db.session.commit()
-    flash(f'Restored {n} timetable entr(y/ies) from "{backup.label}".', 'success')
-    return redirect(url_for('timetable.backups', term_id=backup.term_id))
+    return _ok(f'Restored {n} timetable entr(y/ies) from "{backup.label}".',
+               url_for('timetable.backups', term_id=backup.term_id))
 
 
 @timetable_bp.route('/backups/<int:backup_id>/delete', methods=['POST'])
@@ -98,8 +140,7 @@ def delete_backup(backup_id):
     term_id = backup.term_id
     db.session.delete(backup)
     db.session.commit()
-    flash('Backup deleted.', 'success')
-    return redirect(url_for('timetable.backups', term_id=term_id))
+    return _ok('Backup deleted.', url_for('timetable.backups', term_id=term_id))
 
 
 @timetable_bp.route('/')
@@ -162,13 +203,44 @@ def index():
         for entry in entries:
             if entry.day_of_week in timetable_grid and entry.slot_id in timetable_grid[entry.day_of_week]:
                 timetable_grid[entry.day_of_week][entry.slot_id] = entry
-    
-    return render_template('timetable/index.html',
-        terms=terms, term_id=term_id, selected_term=selected_term,
-        assignments=assignments, assignment_id=assignment_id, selected_assignment=selected_assignment,
-        slots=slots, days=DAYS_OF_WEEK, timetable_grid=timetable_grid,
-        subjects_for_class=subjects_for_class
-    )
+
+    grid = {}
+    if selected_assignment and slots:
+        for day_num, _name in DAYS_OF_WEEK:
+            for slot in slots:
+                e = timetable_grid.get(day_num, {}).get(slot.id)
+                if e and e.subject:
+                    grid[f'{day_num}_{slot.id}'] = {
+                        'subject': e.subject.short_name or e.subject.name,
+                        'teacher': e.teacher_name or ''}
+
+    return _render({
+        'page': 'index',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'term_id': term_id, 'assignment_id': assignment_id,
+        'has_term': selected_term is not None,
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'selected_assignment': ({'id': selected_assignment.id,
+                                 'display_name': selected_assignment.display_name}
+                                if (selected_assignment and slots) else None),
+        'days': DAYS_OF_WEEK,
+        'slots': [_slot_dict(s) for s in slots],
+        'grid': grid,
+        'legend': [{'short': cs.subject.short_name or cs.subject.name[:3],
+                    'name': cs.subject.name} for cs in subjects_for_class],
+        'urls': {
+            'self': url_for('timetable.index'),
+            'backups': url_for('timetable.backups'),
+            'designer': url_for('timetable.designer'),
+            'edit': (url_for('timetable.edit_timetable', assignment_id=selected_assignment.id)
+                     if selected_assignment else None),
+            'pdf': (url_for('timetable.print_timetable', assignment_id=selected_assignment.id)
+                    if selected_assignment else None),
+            'pdf_teachers': (url_for('timetable.print_timetable',
+                                     assignment_id=selected_assignment.id, teachers=1)
+                             if selected_assignment else None),
+        },
+    })
 
 
 @timetable_bp.route('/edit/<int:assignment_id>')
@@ -197,11 +269,22 @@ def edit_timetable(assignment_id):
     
     # Build lookup: {(day, slot_id): entry}
     entries_lookup = {(e.day_of_week, e.slot_id): e for e in entries}
-    
-    return render_template('timetable/edit.html',
-        assignment=assignment, slots=slots, days=DAYS_OF_WEEK,
-        subjects=subjects, entries_lookup=entries_lookup
-    )
+    grid = {f'{d}_{sid}': {'subject_id': e.subject_id, 'teacher': e.teacher_name or ''}
+            for (d, sid), e in entries_lookup.items()}
+
+    return _render({
+        'page': 'edit',
+        'assignment': {'id': assignment.id, 'display_name': assignment.display_name,
+                       'term_id': assignment.term_id},
+        'days': DAYS_OF_WEEK,
+        'slots': [_slot_dict(s) for s in slots],
+        'subjects': [{'subject_id': cs.subject_id,
+                      'label': cs.subject.short_name or cs.subject.name} for cs in subjects],
+        'entries': grid,
+        'save_url': url_for('timetable.save_timetable', assignment_id=assignment.id),
+        'cancel_url': url_for('timetable.index', term_id=assignment.term_id,
+                              assignment_id=assignment.id),
+    })
 
 
 @timetable_bp.route('/save/<int:assignment_id>', methods=['POST'])
@@ -250,13 +333,13 @@ def save_timetable(assignment_id):
                         entry.is_active = False
         
         db.session.commit()
-        flash('Timetable saved!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('timetable.index', 
-        term_id=assignment.term_id, assignment_id=assignment_id))
+        return _err(f'Error: {str(e)}',
+                    url_for('timetable.edit_timetable', assignment_id=assignment_id))
+
+    return _ok('Timetable saved!', url_for('timetable.index',
+               term_id=assignment.term_id, assignment_id=assignment_id))
 
 
 @timetable_bp.route('/copy', methods=['POST'])

@@ -148,8 +148,9 @@ def test_apply_backs_up_live_timetable_and_restore_works(app):
         bid = latest.id
 
     bpage = client.get(f'/timetable/backups?term_id={term_id}').get_data(as_text=True)
-    btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', bpage).group(1)
-    client.post(f'/timetable/backups/{bid}/restore', data={'_csrf_token': btok})
+    btok = re.search(r'name="csrf-token" content="([0-9a-f]+)"', bpage).group(1)
+    client.post(f'/timetable/backups/{bid}/restore', headers={'X-Requested-With': 'fetch'},
+                data={'_csrf_token': btok})
 
     with app.app_context():
         assert ClassTimetable.query.filter_by(
