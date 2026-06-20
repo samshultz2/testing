@@ -6,14 +6,38 @@ from tests.test_teacher_view_scoping import (
     _seed_teacher_and_students, _login_teacher, _deactivate)
 
 
-def test_form_teacher_can_manage_but_not_add(app):
+def test_form_teacher_can_manage_and_add(app):
     _seed_teacher_and_students(app)
     c = _login_teacher(app)
     try:
         j = c.get('/api/students?per_page=50').get_json()
         assert j['can_manage'] is True    # edit/delete their own class
-        assert j['can_add'] is False      # but not register new students
+        assert j['can_add'] is True       # and register new students (auto-enrolled)
     finally:
+        _deactivate(app)
+
+
+def test_form_teacher_added_student_is_auto_enrolled(app):
+    ids = _seed_teacher_and_students(app)
+    c = _login_teacher(app)
+    try:
+        r = c.post('/students/add', headers={'X-Requested-With': 'fetch'}, data={
+            'surname': 'NewKid', 'first_name': 'Auto', 'gender': 'Female',
+            'contact_name[]': 'Ma', 'phone_number[]': '08099998888', 'relationship[]': 'Mother',
+            '_csrf_token': page_token(c)})
+        assert r.status_code == 200 and r.get_json()['ok']
+        # It lands in the teacher's own (form-scoped) list — i.e. it was enrolled
+        # into their class, not left invisible.
+        names = {s['name'] for s in c.get('/api/students?per_page=50').get_json()['students']}
+        assert any('NewKid' in n for n in names)
+    finally:
+        with app.app_context():
+            s = Student.query.filter_by(surname='NewKid', first_name='Auto').first()
+            if s:
+                s.enrollments.delete()
+                s.parent_contacts.delete()
+                db.session.delete(s)
+                db.session.commit()
         _deactivate(app)
 
 

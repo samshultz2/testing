@@ -897,9 +897,9 @@ def _students_payload():
     # form teacher with write access can manage their own class's students (the
     # routes enforce form-class scope); a view-only user gets a read-only list.
     can_manage = page_can_write()
-    # Registering a brand-new student stays with admins/registrar staff — a
-    # teacher adding one wouldn't see it (their list is form-class scoped).
-    can_add = can_manage and not is_teacher()
+    # Form teachers may add students too: the add route auto-enrols a teacher's
+    # new student into their own form class, so it lands in their (scoped) list.
+    can_add = can_manage
     students = [{
         'id': s.id,
         'student_id': s.student_id,
