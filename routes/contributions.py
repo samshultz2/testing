@@ -564,14 +564,13 @@ def export_excel():
         sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
         assignment_ids = [a.id for a in sss3_assignments]
         enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
+        from utils.services.contributions import paid_by_student
+        paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
         students_data = []
         for enrollment in enrollments:
             student = enrollment.student
             assignment = enrollment.class_arm_assignment
-            total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
+            total_paid = paid_map.get(student.id, 0)
             remaining = max(0, max_due - total_paid)
             students_data.append({'name': student.full_name, 'arm': assignment.arm.name, 'max_due': max_due, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
         students_data.sort(key=lambda x: (x['arm'], x['name']))
@@ -984,15 +983,14 @@ def export_defaulters():
             cell.fill = header_fill
             cell.font = header_font
         
+        from utils.services.contributions import paid_by_student
+        paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
         idx = 1
         for enrollment in enrollments:
             student = enrollment.student
             assignment = enrollment.class_arm_assignment
-            
-            total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-                ContributionPayment.student_id == student.id,
-                ContributionPayment.session_id == active_session.id
-            ).scalar() or 0
+
+            total_paid = paid_map.get(student.id, 0)
             
             remaining = max_due - total_paid
             
