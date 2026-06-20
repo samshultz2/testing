@@ -17,30 +17,10 @@ scratchcards_bp = Blueprint('scratchcards', __name__, url_prefix='/scratch-cards
 result_portal_bp = Blueprint('result_portal', __name__, url_prefix='/check-result')
 
 
-# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
-
-def _wants_json():
-    from utils.spa import wants_json
-    return wants_json()
-
-
-def _render(payload):
-    from utils.spa import render_or_json
-    return render_or_json('scratchcards/app.html', 'sc_json', payload)
-
-
-def _ok(message, redirect_url=None, **extra):
-    if _wants_json():
-        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
-    flash(message, 'success')
-    return redirect(redirect_url or url_for('scratchcards.index'))
-
-
-def _err(message, redirect_url=None, status=400):
-    if _wants_json():
-        return jsonify({'ok': False, 'error': message}), status
-    flash(message, 'error')
-    return redirect(redirect_url or url_for('scratchcards.index'))
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
+from utils.spa import section_responders
+_wants_json, _render, _ok, _err = section_responders(
+    'scratchcards/app.html', 'sc_json', 'scratchcards.index')
 
 
 # ===========================================================================

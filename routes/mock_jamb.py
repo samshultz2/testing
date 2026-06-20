@@ -54,28 +54,9 @@ def _read_subject_scores(form, suffix=''):
 # DASHBOARD & OVERVIEW
 # =============================================================================
 
-def _wants_json():
-    from utils.spa import wants_json
-    return wants_json()
-
-
-def _ok(message, redirect_url=None):
-    if _wants_json():
-        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url})
-    flash(message, 'success')
-    return redirect(redirect_url or url_for('mock_jamb.index'))
-
-
-def _err(message, redirect_url=None):
-    if _wants_json():
-        return jsonify({'ok': False, 'error': message}), 400
-    flash(message, 'error')
-    return redirect(redirect_url or url_for('mock_jamb.index'))
-
-
-def _render(payload):
-    from utils.spa import render_or_json
-    return render_or_json('mock_jamb/app.html', 'mj_json', payload)
+from utils.spa import section_responders
+_wants_json, _render, _ok, _err = section_responders(
+    'mock_jamb/app.html', 'mj_json', 'mock_jamb.index')
 
 
 @mock_jamb_bp.route('/')
