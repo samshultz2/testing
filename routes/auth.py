@@ -110,6 +110,12 @@ def forgot_password():
     if session.get('logged_in'):
         return redirect(url_for('main.dashboard'))
     if request.method == 'POST':
+        # Throttle reset abuse (account probing + email bombing) by client IP.
+        rkey = 'forgot_pw:' + (request.remote_addr or 'unknown')
+        if login_limiter.is_rate_limited(rkey, max_attempts=8, window_minutes=15):
+            flash('Too many reset requests. Please try again later.', 'error')
+            return redirect(url_for('auth.login'))
+        login_limiter.record_attempt(rkey)
         ident = (request.form.get('identifier') or '').strip()
         if ident:
             user = User.query.filter((User.username == ident) | (User.email == ident)).first()

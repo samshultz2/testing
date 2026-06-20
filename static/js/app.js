@@ -436,3 +436,36 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e =
         setTheme(e.matches ? 'dark' : 'light');
     }
 });
+
+// =============================================================================
+// CLIENT ERROR REPORTING — surface device-side JS errors in the Error Log
+// =============================================================================
+// Throttled + deduped so a noisy loop can't flood the server. CSRF-exempt
+// diagnostic endpoint; failures here are swallowed (never error on erroring).
+(function () {
+    var sent = 0, MAX = 8, seen = {};
+    function report(message, url, stack) {
+        try {
+            if (sent >= MAX) return;
+            var key = (message || '') + '|' + (url || '');
+            if (seen[key]) return;
+            seen[key] = 1; sent++;
+            fetch('/client-error', {
+                method: 'POST', credentials: 'same-origin', keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: String(message || 'error').slice(0, 500),
+                                       url: url || location.href,
+                                       stack: String(stack || '').slice(0, 4000) })
+            }).catch(function () {});
+        } catch (e) {}
+    }
+    window.addEventListener('error', function (e) {
+        if (e && e.message) report(e.message, location.href, e.error && e.error.stack);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+        var r = e && e.reason;
+        report((r && (r.message || r)) || 'Unhandled promise rejection', location.href, r && r.stack);
+    });
+    // Let React error boundaries (and any code) report explicitly.
+    window.reportClientError = report;
+})();

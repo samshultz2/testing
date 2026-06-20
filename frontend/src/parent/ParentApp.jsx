@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { csrfToken } from '../lib/api';
 import { NavCtx, useSection } from '../lib/section';
+import { ErrorBoundary } from '../components/ui';
 
 const money = (n) => '₦' + Math.round(Number(n) || 0).toLocaleString();
 
@@ -137,7 +138,7 @@ export default function ParentApp({ data }) {
   const { data: d, go } = useSection(data);
   return (
     <NavCtx.Provider value={{ go, refresh: () => go(window.location.href, { replace: true }) }}>
-      <Home d={d} go={go} />
+      <ErrorBoundary><Home d={d} go={go} /></ErrorBoundary>
     </NavCtx.Provider>
   );
 }

@@ -1879,6 +1879,35 @@ def audit_log():
         q=q, action=action, user=user, from_s=from_s or '', to_s=to_s or '')
 
 
+@main_bp.route('/client-error', methods=['POST'])
+def client_error():
+    """Receive a client-side JS error report (from window.onerror / React error
+    boundaries) so problems on users' devices surface in the Error Log. Rate
+    limited and CSRF-exempt (it's diagnostic-only, no state change)."""
+    from utils.error_tracking import record_error
+    from utils.security import login_limiter
+    key = 'clienterr:' + (request.remote_addr or 'x')
+    if login_limiter.is_rate_limited(key, max_attempts=40, window_minutes=5):
+        return ('', 204)
+    login_limiter.record_attempt(key)
+    data = request.get_json(silent=True) or {}
+    record_error('client', (data.get('message') or 'JS error')[:500],
+                 where=(data.get('url') or '')[:300],
+                 user=session.get('username') or 'anonymous',
+                 detail=((data.get('stack') or '') + '\nUA: ' +
+                         (request.headers.get('User-Agent') or ''))[:6000])
+    return ('', 204)
+
+
+@main_bp.route('/error-log')
+@central_admin_required
+def error_log():
+    """Recent server + client errors, newest first — so an admin can see at a
+    glance what went wrong and where."""
+    from utils.error_tracking import recent_errors
+    return render_template('errors/recent.html', errors=recent_errors(200))
+
+
 # ============================================================================
 # API ENDPOINTS FOR AJAX
 # ============================================================================

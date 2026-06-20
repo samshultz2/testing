@@ -17,6 +17,16 @@ if (typeof window !== 'undefined') {
   window.addEventListener('spa:swapping', () => { _navGen += 1; });
 }
 
+// Drive the shared top progress bar during in-section navigation so the user
+// always gets a loading cue (the bar lives in base.html).
+function _progress(on) {
+  if (typeof document === 'undefined') return;
+  const bar = document.getElementById('navProgress');
+  if (!bar) return;
+  if (on) { bar.style.opacity = '1'; bar.style.width = '65%'; }
+  else { bar.style.width = '100%'; setTimeout(() => { bar.style.opacity = '0'; bar.style.width = '0'; }, 200); }
+}
+
 // Build a section URL with query params and navigate to it (no reload).
 export function navParams(go, url, params) {
   const qs = new URLSearchParams(params).toString();
@@ -41,6 +51,7 @@ export function useSection(initial) {
 
   const go = useCallback(async (url, opts = {}) => {
     setLoading(true);
+    _progress(true);
     try {
       const payload = await fetchPage(url);
       setData(payload);
@@ -50,6 +61,7 @@ export function useSection(initial) {
       window.location = url;   // cross-section / non-JSON target
     } finally {
       setLoading(false);
+      _progress(false);
     }
   }, []);
 

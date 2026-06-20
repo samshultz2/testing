@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
+import { useDraft } from '../lib/draft';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, SectionShell, Empty } from '../components/ui';
 
@@ -157,7 +158,7 @@ function UserForm({ d, notify }) {
   const save = useSave(notify);
   const edit = d.page === 'edit';
   const u = d.user || {};
-  const [f, setF] = useState(() => ({
+  const [f, setF, clearDraft] = useDraft('users-' + (edit ? 'edit-' + (u.id || '') : 'add'), {
     username: u.username || '',
     email: u.email || '',
     full_name: u.full_name || '',
@@ -174,7 +175,7 @@ function UserForm({ d, notify }) {
     view_only: !!u.view_only,
     is_active: edit ? !!u.is_active : true,
     teacher: u.teacher || { can_mark_attendance: true, can_view_student_details: true, can_print_reports: true, can_enter_results: false, can_edit_results: false },
-  }));
+  }, { omit: ['password', 'confirm_password', 'new_password'] });
   // Permission map: on add, seed from the default role's modules; on edit, the stored map.
   const [perms, setPerms] = useState(() => (edit ? { ...(u.permission_map || {}) } : moduleDefaults(d.role_defaults, u.role || 'teacher')));
   const [preset, setPreset] = useState('');
@@ -245,7 +246,7 @@ function UserForm({ d, notify }) {
       ['can_mark_attendance', 'can_view_student_details', 'can_print_reports', 'can_enter_results', 'can_edit_results']
         .forEach((k) => { if (f.teacher[k]) fields[k] = 'on'; });
     }
-    save(d.submit_url, fields, (r) => nav.go(r.redirect || d.back_url));
+    save(d.submit_url, fields, (r) => { clearDraft(); nav.go(r.redirect || d.back_url); });
   };
 
   const PermSelect = ({ pkey, ...rest }) => (

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { submitJson } from '../lib/forms';
+import { useDraft } from '../lib/draft';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, SectionShell, Empty } from '../components/ui';
@@ -215,7 +216,8 @@ function QuickEntry({ d, notify }) {
   const save = useSave(notify);
   const [date, setDate] = useState(d.today);
   const [receivedBy, setReceivedBy] = useState('');
-  const [amounts, setAmounts] = useState({});
+  // Recover a half-entered batch of amounts if the page is reloaded/navigated away.
+  const [amounts, setAmounts, clearAmounts] = useDraft('contrib-quick-entry', {});
   const [search, setSearch] = useState('');
   const [arm, setArm] = useState('');
   const [statusF, setStatusF] = useState('');
@@ -229,9 +231,9 @@ function QuickEntry({ d, notify }) {
     e.preventDefault();
     const fields = { payment_date: date, received_by: receivedBy };
     entered.forEach(([id, v]) => { fields[`amount_${id}`] = v; });
-    save(d.submit_url, fields, () => { setAmounts({}); nav.refresh(); });
+    save(d.submit_url, fields, () => { clearAmounts(); setAmounts({}); nav.refresh(); });
   };
-  const clear = () => setAmounts({});
+  const clear = () => { clearAmounts(); setAmounts({}); };
   return (
     <>
       <div className="page-header"><h1><i className="fas fa-bolt" /> Quick Payment Entry</h1>
@@ -466,9 +468,9 @@ function Expenses({ d, notify }) {
 function AddExpense({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
-  const [f, setF] = useState({ expense_date: d.today, description: '', amount: '', notes: '' });
+  const [f, setF, clearDraft] = useDraft('contrib-add-expense', { expense_date: d.today, description: '', amount: '', notes: '' });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, (r) => nav.go(r.redirect || d.back_url)); };
+  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, (r) => { clearDraft(); nav.go(r.redirect || d.back_url); }); };
   return (
     <>
       <div className="page-header"><h1><i className="fas fa-plus-circle" /> Add Expense</h1></div>
@@ -489,9 +491,9 @@ function AddExpense({ d, notify }) {
 function Settings({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
-  const [f, setF] = useState({ max_due: d.max_due, start_date: d.start_date, access_code: '' });
+  const [f, setF, clearDraft] = useDraft('contrib-settings', { max_due: d.max_due, start_date: d.start_date, access_code: '' }, { omit: ['access_code'] });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => { setF({ ...f, access_code: '' }); nav.refresh(); }); };
+  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => { clearDraft(); setF({ ...f, access_code: '' }); nav.refresh(); }); };
   return (
     <>
       <div className="page-header"><h1><i className="fas fa-cog" /> Contribution Settings</h1></div>

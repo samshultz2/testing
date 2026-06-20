@@ -15,8 +15,10 @@ from flask import session, request, abort, g
 
 _SESSION_KEY = '_csrf_token'
 _SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS', 'TRACE'}
-# Endpoints called by external services (no session / CSRF token possible).
-_EXEMPT_ENDPOINTS = {'parent.pay_webhook'}
+# Endpoints called by external services or device-side scripts (no usable
+# CSRF token). `parent.pay_webhook` is Paystack; `main.client_error` is the
+# diagnostic JS error reporter (rate-limited, no state change).
+_EXEMPT_ENDPOINTS = {'parent.pay_webhook', 'main.client_error'}
 
 
 def generate_csrf_token():

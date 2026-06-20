@@ -4,6 +4,40 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNav } from '../lib/section';
 
+// Catches render/runtime errors in a section so a crash shows a friendly panel
+// (with a reload + go-home option) instead of a blank screen, and reports the
+// error so it appears in the admin Error Log.
+export class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) {
+    try {
+      if (window.reportClientError) {
+        window.reportClientError((error && error.message) || 'React error',
+          window.location.href, (error && error.stack) || (info && info.componentStack));
+      }
+    } catch (e) { /* never throw from the boundary */ }
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card" style={{ margin: '1rem 0' }}>
+        <div className="card-body" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+          <i className="fas fa-triangle-exclamation" style={{ fontSize: 32, color: '#dc2626' }} />
+          <h3 style={{ marginTop: 12 }}>This section hit an error</h3>
+          <p className="text-muted">It’s been logged. Your other work is safe — try reloading this page.</p>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              <i className="fas fa-rotate" /> Reload
+            </button>
+            <a className="btn btn-secondary" href="/">Go to Dashboard</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
 // Wrap a section's content: intercepts clicks on internal <a href="/…"> links and
 // navigates with no reload (go() falls back to a real navigation for downloads /
 // cross-section / non-JSON targets). External, target=_blank, download and
@@ -25,7 +59,7 @@ export function SectionShell({ go, children }) {
     el.addEventListener('click', onClick);
     return () => el.removeEventListener('click', onClick);
   }, [go]);
-  return <div ref={ref}>{children}</div>;
+  return <div ref={ref}><ErrorBoundary>{children}</ErrorBoundary></div>;
 }
 
 // Context-aware in-section link (no reload) — pulls `go` from NavCtx so callers

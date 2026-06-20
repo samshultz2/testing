@@ -491,6 +491,11 @@
                             <i class="fas fa-clipboard-list"></i><span>Audit Log</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.error_log') }}" class="nav-link {% if request.endpoint == 'main.error_log' %}active{% endif %}">
+                            <i class="fas fa-triangle-exclamation"></i><span>Error Log</span>
+                        </a>
+                    </li>
                     {% endif %}
                     <li class="nav-item">
                         <a href="{{ url_for('settings.index') }}" class="nav-link">
