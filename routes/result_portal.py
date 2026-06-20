@@ -150,6 +150,11 @@ def publish(term_id):
     db.session.commit()
     state = 'released' if term.results_published else 'hidden'
     log_action('results.publish', f'{term.full_name}: {state}')
+    from utils.notify import notify_admins
+    notify_admins(f'Results {state}: {term.full_name}',
+                  f'Term results were {state} on the result portal.',
+                  url=url_for('scratchcards.index'),
+                  category='success' if term.results_published else 'info')
     # Optionally notify parents (uses the existing bulk-SMS compose flow).
     if term.results_published and request.form.get('notify') == 'on':
         flash(f'Results for {term.full_name} are now {state}.', 'success')

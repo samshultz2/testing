@@ -38,6 +38,36 @@ class Announcement(db.Model):
         return f'<Announcement {self.title!r}>'
 
 
+class Notification(db.Model):
+    """An in-app notification for a staff user (the header bell).
+
+    Addressed either to one user (``user_id``) or broadcast to a role
+    (``role``); ``role='admin'`` reaches every admin. Cheap to create via
+    ``utils.notify.notify`` and read back per user.
+    """
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    role = db.Column(db.String(20), nullable=True, index=True)   # broadcast to a role
+    title = db.Column(db.String(150), nullable=False)
+    body = db.Column(db.Text)
+    url = db.Column(db.String(300))
+    category = db.Column(db.String(20), default='info')   # info/success/warning/error
+    is_read = db.Column(db.Boolean, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=local_now, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'title': self.title, 'body': self.body or '',
+            'url': self.url, 'category': self.category, 'is_read': bool(self.is_read),
+            'when': self.created_at.strftime('%d %b %Y %H:%M') if self.created_at else '',
+        }
+
+    def __repr__(self):
+        return f'<Notification {self.title!r}>'
+
+
 class MessageTemplate(db.Model):
     """A reusable message body with {placeholders}."""
     __tablename__ = 'message_templates'

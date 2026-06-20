@@ -469,3 +469,72 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e =
     // Let React error boundaries (and any code) report explicitly.
     window.reportClientError = report;
 })();
+
+// =============================================================================
+// NOTIFICATIONS — header bell (in-app notifications)
+// =============================================================================
+(function () {
+    var btn = document.getElementById('notifBtn');
+    var menu = document.getElementById('notifMenu');
+    var list = document.getElementById('notifList');
+    var badge = document.getElementById('notifBadge');
+    if (!btn || !menu || !list) return;
+
+    function csrf() {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        return m ? m.getAttribute('content') : '';
+    }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+    function render(data) {
+        var n = (data && data.count) || 0;
+        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.hidden = false; }
+        else { badge.hidden = true; }
+        var items = (data && data.items) || [];
+        if (!items.length) { list.innerHTML = '<div class="notif-empty">No notifications</div>'; return; }
+        list.innerHTML = items.map(function (it) {
+            return '<a class="notif-item' + (it.is_read ? '' : ' unread') + '" data-id="' + it.id +
+                (it.url ? '" href="' + esc(it.url) : '') + '">' +
+                '<div class="nt">' + esc(it.title) + '</div>' +
+                (it.body ? '<div class="nb">' + esc(it.body) + '</div>' : '') +
+                '<div class="nw">' + esc(it.when) + '</div></a>';
+        }).join('');
+    }
+
+    function load() {
+        fetch('/api/notifications', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) { if (d) render(d); })
+            .catch(function () {});
+    }
+    function markRead(id) {
+        fetch('/api/notifications/' + id + '/read', { method: 'POST', credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrf(), 'X-Requested-With': 'fetch' } }).catch(function () {});
+    }
+
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = menu.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) load();
+    });
+    document.addEventListener('click', function (e) {
+        if (!menu.contains(e.target) && e.target !== btn) menu.classList.remove('open');
+    });
+    list.addEventListener('click', function (e) {
+        var a = e.target.closest('.notif-item'); if (!a) return;
+        var id = a.getAttribute('data-id');
+        if (id) markRead(id);
+        a.classList.remove('unread');
+        if (!a.getAttribute('href')) e.preventDefault();   // no link → just mark read
+    });
+    var readAll = document.getElementById('notifReadAll');
+    if (readAll) readAll.addEventListener('click', function () {
+        fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrf(), 'X-Requested-With': 'fetch' } })
+            .then(function () { load(); }).catch(function () {});
+    });
+
+    load();                                  // initial count on page load
+    setInterval(load, 120000);               // refresh every 2 min
+})();

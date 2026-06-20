@@ -220,6 +220,13 @@ def _record_online_payment(student_id, term_id, amount, reference):
         receipt_no=next_receipt_no(), received_by='Online (Paystack)')
     db.session.add(pay)
     db.session.commit()
+    try:
+        from utils.notify import notify_admins
+        notify_admins(f'Online payment: ₦{amount:,.0f}',
+                      f'{student.full_name} paid ₦{amount:,.0f} online (ref {reference}).',
+                      category='success')
+    except Exception:
+        pass
     return pay
 
 

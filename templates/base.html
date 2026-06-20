@@ -558,6 +558,16 @@
                         <span>{{ get_active_term().name }}</span>
                     </div>
                     {% endif %}
+                    <div class="notif-wrap">
+                        <button type="button" class="header-icon-btn" id="notifBtn" title="Notifications" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-bell"></i>
+                            <span class="notif-badge" id="notifBadge" hidden>0</span>
+                        </button>
+                        <div class="notif-menu" id="notifMenu" role="menu" aria-label="Notifications">
+                            <div class="notif-head"><span>Notifications</span><button type="button" id="notifReadAll" class="notif-readall">Mark all read</button></div>
+                            <div class="notif-list" id="notifList"><div class="notif-empty">No notifications</div></div>
+                        </div>
+                    </div>
                     <div class="theme-picker-wrap">
                         <button type="button" class="header-icon-btn" id="themeBtn" title="Choose theme" aria-haspopup="true" aria-expanded="false">
                             <i class="fas fa-palette"></i>
@@ -830,6 +840,20 @@
     })();
     </script>
     <style>
+    .notif-wrap{position:relative;}
+    .notif-badge{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#dc2626;color:#fff;font-size:.65rem;line-height:16px;text-align:center;font-weight:700;}
+    .notif-menu{position:absolute;right:0;top:calc(100% + 8px);width:330px;max-width:88vw;background:var(--bg-card,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);z-index:1200;display:none;overflow:hidden;}
+    .notif-menu.open{display:block;}
+    .notif-head{display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;border-bottom:1px solid var(--border-color,#eef0f2);font-weight:600;font-size:.85rem;}
+    .notif-readall{background:none;border:none;color:var(--primary,#0d6a4e);font-size:.75rem;cursor:pointer;}
+    .notif-list{max-height:60vh;overflow-y:auto;}
+    .notif-item{display:block;padding:.6rem .8rem;border-bottom:1px solid var(--border-color,#f1f3f5);text-decoration:none;color:inherit;cursor:pointer;}
+    .notif-item:hover{background:var(--hover-bg,#f6f8fa);}
+    .notif-item.unread{background:rgba(13,106,78,.06);}
+    .notif-item .nt{font-weight:600;font-size:.85rem;}
+    .notif-item .nb{font-size:.78rem;color:var(--text-muted,#6b7280);margin-top:.15rem;}
+    .notif-item .nw{font-size:.68rem;color:var(--text-muted,#9ca3af);margin-top:.2rem;}
+    .notif-empty{padding:1.4rem .8rem;text-align:center;color:var(--text-muted,#9ca3af);font-size:.85rem;}
     #navProgress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--primary);
         z-index:9999;opacity:0;transition:width .25s ease,opacity .25s ease;box-shadow:0 0 8px var(--primary);}
     .nav-section-toggle{cursor:pointer;display:flex !important;align-items:center;justify-content:space-between;}

@@ -1930,6 +1930,33 @@ def client_error():
     return ('', 204)
 
 
+@main_bp.route('/api/notifications')
+@login_required
+def api_notifications():
+    """Current user's notifications + unread count for the header bell."""
+    from utils import notify as _n
+    uid, role = _n.current_recipient()
+    return jsonify({'count': _n.unread_count(uid, role),
+                    'items': [x.to_dict() for x in _n.for_user(uid, role, limit=20)]})
+
+
+@main_bp.route('/api/notifications/<int:nid>/read', methods=['POST'])
+@login_required
+def api_notification_read(nid):
+    from utils import notify as _n
+    uid, role = _n.current_recipient()
+    _n.mark_read(uid, role, nid)
+    return ('', 204)
+
+
+@main_bp.route('/api/notifications/read-all', methods=['POST'])
+@login_required
+def api_notifications_read_all():
+    from utils import notify as _n
+    uid, role = _n.current_recipient()
+    return jsonify({'cleared': _n.mark_all_read(uid, role)})
+
+
 @main_bp.route('/error-log')
 @central_admin_required
 def error_log():
