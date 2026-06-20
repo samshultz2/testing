@@ -21,29 +21,9 @@ admin_required = manage_users_required
 
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
-
-def _wants_json():
-    from utils.spa import wants_json
-    return wants_json()
-
-
-def _render(payload):
-    from utils.spa import render_or_json
-    return render_or_json('users/app.html', 'users_json', payload)
-
-
-def _ok(message, redirect_url=None, **extra):
-    if _wants_json():
-        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url, **extra})
-    flash(message, 'success')
-    return redirect(redirect_url or url_for('users.index'))
-
-
-def _err(message, redirect_url=None, status=400):
-    if _wants_json():
-        return jsonify({'ok': False, 'error': message}), status
-    flash(message, 'error')
-    return redirect(redirect_url or url_for('users.index'))
+from utils.spa import section_responders
+_wants_json, _render, _ok, _err = section_responders(
+    'users/app.html', 'users_json', 'users.index')
 
 
 def _guard(target):
