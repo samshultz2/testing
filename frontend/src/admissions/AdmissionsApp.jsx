@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionTabs, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell } from '../components/ui';
 
 const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
 
@@ -210,7 +210,7 @@ function ApplicantDetail({ d, notify }) {
   const [busy, setBusy] = useState(false);
   const [assignment, setAssignment] = useState('');
   const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     setBusy(true);
     const r = await submitJson(url, fields);
     setBusy(false);

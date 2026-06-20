@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, SectionTabs, Empty, Autocomplete } from '../components/ui';
+import { confirm, Banner, SectionShell, SectionTabs, Empty, Autocomplete } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['compose', 'fa-paper-plane', 'Compose'],
@@ -109,7 +109,7 @@ function Announcements({ d, notify }) {
     else notify('error', r.error || 'Could not post.');
   };
   const del = async (url) => {
-    if (!window.confirm('Delete this announcement?')) return;
+    if (!await confirm('Delete this announcement?')) return;
     const r = await submitJson(url, {});
     if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
   };
@@ -175,7 +175,7 @@ function Templates({ d, notify }) {
     if (r.ok) { setF({ name: '', category: '', body: '' }); nav.refresh(); } else notify('error', r.error || 'Could not save.');
   };
   const del = async (url, name) => {
-    if (!window.confirm(`Delete template ${name}?`)) return;
+    if (!await confirm(`Delete template ${name}?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
   };
@@ -345,7 +345,7 @@ function MessageDetail({ d, notify }) {
     } catch (_) { /* ignore */ }
   };
   const action = async (url, confirmMsg, redirect) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); redirect ? nav.go(r.redirect) : nav.refresh(); }
     else notify('error', r.error || 'Action failed.');

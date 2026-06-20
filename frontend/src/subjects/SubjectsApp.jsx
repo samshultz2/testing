@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 // Shared term + class (assignment) filter bar used by the score-workflow pages.
 function ClassFilter({ d, extraTerm = false }) {
@@ -25,7 +25,7 @@ function ClassFilter({ d, extraTerm = false }) {
 function List({ d, notify }) {
   const nav = useNav();
   const del = async (url, name) => {
-    if (!window.confirm(`Delete ${name}?`)) return;
+    if (!await confirm(`Delete ${name}?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
   };
@@ -141,14 +141,14 @@ function ClassSubjects({ d, notify }) {
   const [copyFrom, setCopyFrom] = useState('');
   const go = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, class_id: d.class_id, ...extra });
   const del = async (url, name) => {
-    if (!window.confirm(`Remove ${name}?`)) return;
+    if (!await confirm(`Remove ${name}?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not remove.');
   };
   const copy = async (e) => {
     e.preventDefault();
     if (!copyFrom) { notify('error', 'Select a source term.'); return; }
-    if (!window.confirm('Copy subject assignments into this term?')) return;
+    if (!await confirm('Copy subject assignments into this term?')) return;
     const r = await submitJson(d.urls.copy, { to_term_id: d.term_id, from_term_id: copyFrom, class_id: d.class_id || '' });
     if (r.ok) { notify('success', r.message); setShowCopy(false); nav.refresh(); } else notify('error', r.error || 'Could not copy.');
   };
@@ -473,7 +473,7 @@ function BulkEntry({ d, notify }) {
 function Broadsheet({ d, notify }) {
   const nav = useNav();
   const compute = async () => {
-    if (!window.confirm("Compute and save term results and class positions for this class? This updates each student's report card.")) return;
+    if (!await confirm("Compute and save term results and class positions for this class? This updates each student's report card.")) return;
     const r = await submitJson(d.urls.compute, { term_id: d.term_id, assignment_id: d.assignment_id });
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not compute.');
   };

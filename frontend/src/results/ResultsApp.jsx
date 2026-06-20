@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 // ---- Results index ---------------------------------------------------------
 function Index({ d }) {
@@ -182,7 +182,7 @@ function Cutoffs({ d, notify }) {
     if (r.ok) { notify('success', r.message); nav.go(r.redirect); } else notify('error', r.error || 'Could not save.');
   };
   const del = async (url, course) => {
-    if (!window.confirm(`Delete ${course}?`)) return;
+    if (!await confirm(`Delete ${course}?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
   };

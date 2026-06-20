@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 function useSave(notify) {
   return async (url, fields, after, okMsg) => {
@@ -406,8 +406,8 @@ function View({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
   const u = d.user;
-  const reset = () => {
-    if (!window.confirm("Reset this user's password to a temporary one? They will have to set a new password at next login.")) return;
+  const reset = async () => {
+    if (!await confirm("Reset this user's password to a temporary one? They will have to set a new password at next login.")) return;
     save(u.reset_password_url, {});
   };
   const removeAssign = (url, type) => save(url, { type, user_id: u.id }, () => nav.refresh());
@@ -489,7 +489,7 @@ function View({ d, notify }) {
                       {a.is_form_teacher && <span className="badge badge-success">Form Teacher</span>}
                     </div>
                     <div className="data-card-actions">
-                      <button type="button" className="btn btn-sm btn-danger" onClick={() => { if (window.confirm('Remove?')) removeAssign(a.remove_url, 'class'); }}><i className="fas fa-times" /></button>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={async () => { if (await confirm('Remove?')) removeAssign(a.remove_url, 'class'); }}><i className="fas fa-times" /></button>
                     </div>
                   </div>
                 ))}</div>
@@ -508,7 +508,7 @@ function View({ d, notify }) {
                     <div className="data-card-header"><div className="data-card-title">{a.subject}</div></div>
                     <div className="data-card-row"><span className="data-card-label">Class</span><span>{a.class}</span></div>
                     <div className="data-card-actions">
-                      <button type="button" className="btn btn-sm btn-danger" onClick={() => { if (window.confirm('Remove?')) removeAssign(a.remove_url, 'subject'); }}><i className="fas fa-times" /></button>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={async () => { if (await confirm('Remove?')) removeAssign(a.remove_url, 'subject'); }}><i className="fas fa-times" /></button>
                     </div>
                   </div>
                 ))}</div>

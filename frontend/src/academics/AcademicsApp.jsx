@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 // ---- Sessions list ---------------------------------------------------------
 function Sessions({ d, notify }) {
@@ -220,7 +220,7 @@ function ViewTerm({ d, notify }) {
   const t = d.term;
   const [hf, setHf] = useState({ date: '', end_date: '', holiday_type: 'Public Holiday', reason: '' });
   const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
   };
@@ -412,7 +412,7 @@ function ViewAssignment({ d, notify }) {
   }, [search, d.available_students]);
   const toggle = (id) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const remove = async (url) => {
-    if (!window.confirm('Remove student?')) return;
+    if (!await confirm('Remove student?')) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Failed.');
   };

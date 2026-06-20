@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 function useSave(notify) {
   return async (url, fields, after, okMsg) => {
@@ -183,11 +183,11 @@ function Backups({ d, notify }) {
     e.preventDefault();
     save(d.create_url, { term_id: d.term_id || '', label }, () => { setLabel(''); nav.refresh(); });
   };
-  const restore = (b) => {
-    if (window.confirm('Restore this backup? Your current timetable for this term will be backed up first, then replaced with this one.')) save(b.restore_url, {}, () => nav.refresh());
+  const restore = async (b) => {
+    if (await confirm('Restore this backup? Your current timetable for this term will be backed up first, then replaced with this one.')) save(b.restore_url, {}, () => nav.refresh());
   };
-  const del = (b) => {
-    if (window.confirm('Delete this backup permanently?')) save(b.delete_url, {}, () => nav.refresh());
+  const del = async (b) => {
+    if (await confirm('Delete this backup permanently?')) save(b.delete_url, {}, () => nav.refresh());
   };
   const onTerm = (e) => nav.go(`${d.self_url}?term_id=${e.target.value}`);
   return (

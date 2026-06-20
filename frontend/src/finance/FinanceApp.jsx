@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['record_payment', 'fa-cash-register', 'Record Payment'],
@@ -168,7 +168,7 @@ function Items({ d, notify }) {
   const [f, setF] = useState({ name: '', description: '' });
   const [editing, setEditing] = useState(null);
   const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
   };
@@ -255,14 +255,14 @@ function Structure({ d, notify }) {
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not save.');
   };
   const clear = async () => {
-    if (!window.confirm("Remove ALL fee amounts for this class this term?")) return;
+    if (!await confirm("Remove ALL fee amounts for this class this term?")) return;
     const r = await submitJson(d.urls.clear, { term_id: d.term_id, class_id: d.class_id, arm_id: d.arm_id || '' });
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not clear.');
   };
   const copy = async (e) => {
     e.preventDefault();
     if (!copyFrom) { notify('error', 'Select a source term.'); return; }
-    if (!window.confirm('Copy the whole fee structure into this term? Existing rows are kept.')) return;
+    if (!await confirm('Copy the whole fee structure into this term? Existing rows are kept.')) return;
     const r = await submitJson(d.urls.copy, { from_term_id: copyFrom, to_term_id: d.term_id });
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not copy.');
   };
@@ -330,7 +330,7 @@ function Payments({ d, notify }) {
   const [q, setQ] = useState(d.q);
   const go = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, class_id: d.class_id, q, ...extra });
   const del = async (url, receipt, amount) => {
-    if (!window.confirm(`Delete receipt ${receipt} (${naira(amount)})?`)) return;
+    if (!await confirm(`Delete receipt ${receipt} (${naira(amount)})?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
   };
@@ -522,7 +522,7 @@ function Statement({ d, notify }) {
   const bill = d.bill;
   const [copied, setCopied] = useState(false);
   const act = async (url, fields, confirmMsg, follow) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
     else notify('error', r.error || 'Action failed.');
@@ -744,7 +744,7 @@ function Expenses({ d, notify }) {
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const go = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, category_id: d.category_id, ...extra });
   const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
   };
@@ -931,7 +931,7 @@ function EditPayment({ d, notify }) {
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
   const del = async () => {
-    if (!window.confirm(`Delete receipt ${p.receipt_no} (${naira(p.amount)})?`)) return;
+    if (!await confirm(`Delete receipt ${p.receipt_no} (${naira(p.amount)})?`)) return;
     const r = await submitJson(d.delete_url, {});
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
   };

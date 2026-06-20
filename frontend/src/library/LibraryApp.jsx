@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'],
@@ -88,7 +88,7 @@ function Books({ d, notify }) {
   const [busy, setBusy] = useState(false);
 
   const del = async (b) => {
-    if (!window.confirm(`Remove ${b.title}?`)) return;
+    if (!await confirm(`Remove ${b.title}?`)) return;
     setBusy(true);
     const r = await submitJson(b.delete_url, {});
     setBusy(false);
@@ -251,7 +251,7 @@ function Loans({ d, notify }) {
   const nav = useNav();
   const [busy, setBusy] = useState(false);
   const ret = async (l) => {
-    if (!window.confirm(`Mark '${l.book}' as returned?`)) return;
+    if (!await confirm(`Mark '${l.book}' as returned?`)) return;
     setBusy(true);
     const r = await submitJson(l.return_url, {});
     setBusy(false);

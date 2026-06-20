@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['staff', 'fa-users', 'Staff'],
@@ -223,7 +223,7 @@ function StaffDetail({ d, notify }) {
   const nav = useNav();
   const s = d.s;
   const act = async (url, fields, confirmMsg, follow) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
     else notify('error', r.error || 'Action failed.');
@@ -351,7 +351,7 @@ function Departments({ d, notify }) {
   const [name, setName] = useState('');
   const [editing, setEditing] = useState(null);
   const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
   };
@@ -419,7 +419,7 @@ function Leave({ d, notify }) {
   const [f, setF] = useState({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
   };
@@ -519,7 +519,7 @@ function PayrollDetail({ d, notify }) {
   const run = d.run;
   const [editing, setEditing] = useState(null);
   const act = async (url, fields, confirmMsg, follow) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
     else notify('error', r.error || 'Action failed.');
@@ -664,7 +664,7 @@ function Settings({ d, notify }) {
   const [ded, setDed] = useState({ name: '', kind: 'percent', value: '' });
   const set = (k, v) => setS((x) => ({ ...x, [k]: v }));
   const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
   };

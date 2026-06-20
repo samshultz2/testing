@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 
 
 // ---- Index -----------------------------------------------------------------
@@ -52,7 +52,7 @@ function Rules({ d, notify }) {
   const nav = useNav();
   const [busy, setBusy] = useState(false);
   const del = async (r) => {
-    if (!window.confirm('Delete this rule?')) return;
+    if (!await confirm('Delete this rule?')) return;
     setBusy(true);
     const res = await submitJson(r.delete_url, {});
     setBusy(false);
@@ -263,7 +263,7 @@ function GraduatePreview({ d, notify }) {
   const nav = useNav();
   const [busy, setBusy] = useState(false);
   const confirm = async () => {
-    if (!window.confirm(`Mark these ${d.students.length} SSS3 student(s) as graduates?`)) return;
+    if (!await confirm(`Mark these ${d.students.length} SSS3 student(s) as graduates?`)) return;
     setBusy(true);
     const r = await submitJson(d.confirm_url, {});
     setBusy(false);

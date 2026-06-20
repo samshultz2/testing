@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 
 const ORD = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
 
@@ -143,7 +143,7 @@ function EditExam({ d, notify }) {
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
   const del = async () => {
-    if (!window.confirm('Are you sure you want to delete this exam and ALL its results? This cannot be undone!')) return;
+    if (!await confirm('Are you sure you want to delete this exam and ALL its results? This cannot be undone!')) return;
     const r = await submitJson(d.delete_url, {});
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
   };
@@ -196,7 +196,7 @@ function EditResult({ d, notify }) {
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
   const del = async () => {
-    if (!window.confirm('Delete this result?')) return;
+    if (!await confirm('Delete this result?')) return;
     const r = await submitJson(d.delete_url, {});
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
   };
@@ -407,12 +407,12 @@ function ViewExam({ d, notify }) {
   const clearFilters = () => nav.go(d.urls.self);
 
   const delResult = async (url) => {
-    if (!window.confirm('Delete?')) return;
+    if (!await confirm('Delete?')) return;
     const r = await submitJson(url, {});
     if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
   };
   const delExam = async () => {
-    if (!window.confirm(`DELETE ${d.exam.display_name} and ALL results?`)) return;
+    if (!await confirm(`DELETE ${d.exam.display_name} and ALL results?`)) return;
     const r = await submitJson(d.urls.delete_exam, {});
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
   };

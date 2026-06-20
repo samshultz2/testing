@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -51,7 +51,7 @@ function Agenda({ d, notify }) {
   const [busy, setBusy] = useState(false);
   const go = (params) => { nav.go(d.urls.self + '?' + new URLSearchParams(params).toString()); };
   const del = async (e) => {
-    if (!window.confirm(`Delete ${e.title}?`)) return;
+    if (!await confirm(`Delete ${e.title}?`)) return;
     setBusy(true);
     const r = await submitJson(e.delete_url, {});
     setBusy(false);
@@ -123,7 +123,7 @@ function EventForm({ d, notify }) {
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save the event.');
   };
   const del = async () => {
-    if (!window.confirm('Delete this event?')) return;
+    if (!await confirm('Delete this event?')) return;
     const r = await submitJson(d.delete_url, {});
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
   };

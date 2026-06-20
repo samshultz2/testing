@@ -3,7 +3,7 @@ import { submitJson } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 const money = (n) => '₦' + Math.round(Number(n) || 0).toLocaleString();
 const armColor = (arm) => (arm === 'Iris' ? 'primary' : arm === 'Rose' ? 'danger' : arm === 'Lily' ? 'warning' : 'info');
@@ -355,7 +355,7 @@ function AddPayment({ d, notify }) {
 function PaymentsList({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
-  const del = (p) => { if (window.confirm('Delete this payment?')) save(p.delete_url, {}, () => nav.refresh()); };
+  const del = async (p) => { if (await confirm('Delete this payment?')) save(p.delete_url, {}, () => nav.refresh()); };
   const onFilter = (e) => { const v = e.target.value; nav.go(v ? `${d.urls.payments}?date=${v}` : d.urls.payments); };
   return (
     <>
@@ -398,7 +398,7 @@ function Expenses({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
   const u = d.urls;
-  const del = (e) => { if (window.confirm('Delete this expense?')) save(e.delete_url, {}, () => nav.refresh()); };
+  const del = async (e) => { if (await confirm('Delete this expense?')) save(e.delete_url, {}, () => nav.refresh()); };
   return (
     <>
       <div className="page-header"><h1><i className="fas fa-receipt" /> Expenses Management</h1>
@@ -778,9 +778,9 @@ function StudentDetail({ d }) {
 function Import({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
-  const clearAll = (e) => {
+  const clearAll = async (e) => {
     e.preventDefault();
-    if (window.confirm('Are you sure you want to DELETE ALL contribution payments and expenses? This cannot be undone!')) {
+    if (await confirm('Are you sure you want to DELETE ALL contribution payments and expenses? This cannot be undone!')) {
       save(d.clear_url, {}, () => nav.refresh());
     }
   };

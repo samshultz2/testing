@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
@@ -298,7 +298,7 @@ function TimetableSlots({ d, notify }) {
   const toggle = (i) => () => setRows(rows.map((r, j) => (j === i ? { ...r, is_break: !r.is_break } : r)));
   const s = d.settings || {};
   const generate = async () => {
-    if (!window.confirm('This will regenerate all slots based on current settings. Continue?')) return;
+    if (!await confirm('This will regenerate all slots based on current settings. Continue?')) return;
     await save(d.generate_url, {}, () => nav.refresh());
   };
   const submit = (e) => {
@@ -352,8 +352,11 @@ function Backup({ d, notify }) {
   const save = useSave(notify);
   const kb = (n) => (n / 1024);
   const createSnap = () => save(d.create_url, {}, () => nav.refresh());
-  const onRestore = (e) => {
-    if (!window.confirm('Are you sure? This will replace all current data!')) e.preventDefault();
+  const onRestore = async (e) => {
+    e.preventDefault();   // hold the native submit until the user confirms
+    const form = e.currentTarget;
+    if (await confirm({ title: 'Restore database', message: 'Are you sure? This will replace all current data!', confirmText: 'Restore', tone: 'danger' }))
+      form.submit();      // native submit (does not re-trigger onSubmit)
   };
   return (
     <>
@@ -512,8 +515,8 @@ function Branches({ d, notify }) {
 function Users({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
-  const del = (u) => {
-    if (!window.confirm(`Delete user ${u.username}?`)) return;
+  const del = async (u) => {
+    if (!await confirm(`Delete user ${u.username}?`)) return;
     save(u.delete_url, {}, () => nav.refresh());
   };
   return (
