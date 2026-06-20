@@ -25,7 +25,7 @@ const A = ({ to, className, children, title, style }) => {
 
 const Stat = ({ icon, tone, value, label }) => (
   <div className="stat-card">
-    <div className={`stat-icon ${tone}`}><i className={`fas ${icon}`} /></div>
+    <div className={`stat-icon ${tone}`}><i aria-hidden="true" className={`fas ${icon}`} /></div>
     <div className="stat-content"><h3>{value}</h3><p>{label}</p></div>
   </div>
 );
@@ -52,13 +52,13 @@ function Dashboard({ d }) {
   return (
     <>
       <div className="page-header">
-        <h1><i className="fas fa-hand-holding-usd" /> SSS3 Contributions</h1>
+        <h1><i aria-hidden="true" className="fas fa-hand-holding-usd" /> SSS3 Contributions</h1>
         <div className="header-actions">
-          <A to={u.quick_entry} className="btn btn-success"><i className="fas fa-bolt" /> Quick Entry</A>
-          <A to={u.add_payment} className="btn btn-primary"><i className="fas fa-plus" /> Add Payment</A>
-          <A to={u.import} className="btn btn-warning"><i className="fas fa-file-import" /> Import</A>
-          <a href={u.export} className="btn btn-info"><i className="fas fa-file-excel" /> Export</a>
-          <a href={u.logout} className="btn btn-secondary"><i className="fas fa-sign-out-alt" /> Exit</a>
+          <A to={u.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-bolt" /> Quick Entry</A>
+          <A to={u.add_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Payment</A>
+          <A to={u.import} className="btn btn-warning"><i aria-hidden="true" className="fas fa-file-import" /> Import</A>
+          <a href={u.export} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
+          <a href={u.logout} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-sign-out-alt" /> Exit</a>
         </div>
       </div>
       <div className="stats-grid mb-3">
@@ -90,7 +90,7 @@ function Dashboard({ d }) {
       </div></div>
 
       <div className="card mb-3" style={{ borderLeft: `4px solid ${s.net_balance >= 0 ? '#28a745' : '#dc3545'}` }}>
-        <div className="card-header"><h3><i className="fas fa-calculator" /> Financial Summary</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calculator" /> Financial Summary</h3></div>
         <div className="card-body">
           <div className="financial-grid">
             <div className="financial-item"><span className="financial-label">Total Collected</span><span className="financial-value text-success">{money(s.total_received)}</span></div>
@@ -98,8 +98,8 @@ function Dashboard({ d }) {
             <div className="financial-item financial-total"><span className="financial-label">Available Balance</span><span className={`financial-value ${netTone === 'success' ? 'text-success' : 'text-danger'}`}>{money(s.net_balance)}</span></div>
           </div>
           <div style={{ marginTop: '1rem' }}>
-            <A to={u.expenses} className="btn btn-sm btn-outline-danger"><i className="fas fa-receipt" /> View All Expenses</A>{' '}
-            <A to={u.add_expense} className="btn btn-sm btn-outline-primary"><i className="fas fa-plus" /> Add Expense</A>
+            <A to={u.expenses} className="btn btn-sm btn-outline-danger"><i aria-hidden="true" className="fas fa-receipt" /> View All Expenses</A>{' '}
+            <A to={u.add_expense} className="btn btn-sm btn-outline-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>
           </div>
         </div>
       </div>
@@ -113,7 +113,7 @@ function Dashboard({ d }) {
           ['history', 'fa-history', 'Session History', null, null, 'View past session records'],
           ['settings', 'fa-cog', 'Settings', null, null, 'Configure max due, dates']].map(([key, icon, title, badge, tone, sub]) => (
           <A key={key} to={u[key]} className="data-card" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="data-card-header"><div className="data-card-title"><i className={`fas ${icon}`} /> {title}</div>
+            <div className="data-card-header"><div className="data-card-title"><i aria-hidden="true" className={`fas ${icon}`} /> {title}</div>
               {badge != null && <span className={`badge badge-${tone}`}>{badge}</span>}</div>
             <div className="data-card-row">{sub}</div>
           </A>
@@ -121,7 +121,7 @@ function Dashboard({ d }) {
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-layer-group" /> Progress by Arm</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Progress by Arm</h3></div>
         <div className="card-body">
           {d.arms_summary.map((a) => (
             <div className="arm-progress-row" key={a.name}>
@@ -140,7 +140,7 @@ function Dashboard({ d }) {
 
       <div className="row mb-3">
         <div className="col-md-6"><div className="card h-100">
-          <div className="card-header"><h3><i className="fas fa-clock" /> Recent Payments</h3>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-clock" /> Recent Payments</h3>
             <A to={u.payments} className="btn btn-sm btn-outline-primary">View All</A></div>
           <div className="card-body" style={{ padding: 0 }}><table className="data-table"><tbody>
             {d.recent_payments.length ? d.recent_payments.map((p, i) => (
@@ -153,14 +153,14 @@ function Dashboard({ d }) {
           </tbody></table></div>
         </div></div>
         <div className="col-md-6"><div className="card h-100">
-          <div className="card-header"><h3><i className="fas fa-trophy" /> Top Contributors</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-trophy" /> Top Contributors</h3></div>
           <div className="card-body" style={{ padding: 0 }}><table className="data-table"><tbody>
             {d.top_contributors.length ? d.top_contributors.map((st, i) => (
               <tr key={i}>
                 <td><span className={`rank-badge ${i < 3 ? `top-${i + 1}` : ''}`}>{i + 1}</span>
                   <A to={st.detail_url}>{st.name.slice(0, 18)}{st.name.length > 18 ? '…' : ''}</A></td>
                 <td><strong>{money(st.total_paid)}</strong></td>
-                <td>{st.total_paid >= s.max_due ? <span className="badge badge-success"><i className="fas fa-check" /></span> : <small className="text-muted">{(st.total_paid / s.max_due * 100).toFixed(0)}%</small>}</td>
+                <td>{st.total_paid >= s.max_due ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /></span> : <small className="text-muted">{(st.total_paid / s.max_due * 100).toFixed(0)}%</small>}</td>
               </tr>
             )) : <tr><td colSpan="3" className="text-center text-muted">No payments yet</td></tr>}
           </tbody></table></div>
@@ -169,7 +169,7 @@ function Dashboard({ d }) {
 
       <div className="card">
         <div className="card-header">
-          <h3><i className="fas fa-users" /> All Students ({d.students.length})</h3>
+          <h3><i aria-hidden="true" className="fas fa-users" /> All Students ({d.students.length})</h3>
           <div className="filter-group">
             <input type="text" className="form-control" placeholder="Search students..." style={{ width: 200 }} value={search} onChange={(e) => setSearch(e.target.value)} />
             <select className="form-control" style={{ width: 120 }} value={arm} onChange={(e) => setArm(e.target.value)}>
@@ -195,10 +195,10 @@ function Dashboard({ d }) {
                     <Bar pct={st.percentage} color={st.percentage >= 100 ? '#28a745' : st.percentage >= 50 ? '#ffc107' : '#dc3545'} />
                     <small className="text-muted">{st.percentage.toFixed(0)}%</small>
                   </td>
-                  <td>{st.status === 'Paid' ? <span className="badge badge-success"><i className="fas fa-check" /> Paid</span> : <span className="badge badge-warning">Owing</span>}</td>
+                  <td>{st.status === 'Paid' ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Paid</span> : <span className="badge badge-warning">Owing</span>}</td>
                   <td>
-                    <A to={st.detail_url} className="btn btn-sm btn-info" title="View"><i className="fas fa-eye" /></A>{' '}
-                    <A to={st.add_payment_url} className="btn btn-sm btn-success" title="Add Payment"><i className="fas fa-plus" /></A>
+                    <A to={st.detail_url} className="btn btn-sm btn-info" title="View"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
+                    <A to={st.add_payment_url} className="btn btn-sm btn-success" title="Add Payment"><i aria-hidden="true" className="fas fa-plus" /></A>
                   </td>
                 </tr>
               ))}
@@ -236,8 +236,8 @@ function QuickEntry({ d, notify }) {
   const clear = () => { clearAmounts(); setAmounts({}); };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-bolt" /> Quick Payment Entry</h1>
-        <A to={d.urls.dashboard} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-bolt" /> Quick Payment Entry</h1>
+        <A to={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
       <div className="card mb-3">
         <div className="card-header"><h3>Enter Multiple Payments</h3></div>
         <div className="card-body">
@@ -264,7 +264,7 @@ function QuickEntry({ d, notify }) {
                     <div className="student-info">
                       <span className="student-name">{s.name}</span>
                       <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span>
-                      {s.remaining <= 0 && <span className="badge badge-success"><i className="fas fa-check" /></span>}
+                      {s.remaining <= 0 && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /></span>}
                     </div>
                     <div className="student-status"><small>Paid: {money(s.total_paid)} | Rem: {money(s.remaining)}</small></div>
                     <div className="student-input">
@@ -280,9 +280,9 @@ function QuickEntry({ d, notify }) {
               <div className="summary-item"><span>Total:</span><strong>{money(total)}</strong></div>
             </div>
             <div className="form-actions">
-              <button type="submit" className="btn btn-success btn-lg"><i className="fas fa-save" /> Save All Payments</button>
-              <button type="button" className="btn btn-secondary" onClick={clear}><i className="fas fa-eraser" /> Clear</button>
-              <A to={d.urls.dashboard} className="btn btn-outline-secondary"><i className="fas fa-times" /> Cancel</A>
+              <button type="submit" className="btn btn-success btn-lg"><i aria-hidden="true" className="fas fa-save" /> Save All Payments</button>
+              <button type="button" className="btn btn-secondary" onClick={clear}><i aria-hidden="true" className="fas fa-eraser" /> Clear</button>
+              <A to={d.urls.dashboard} className="btn btn-outline-secondary"><i aria-hidden="true" className="fas fa-times" /> Cancel</A>
             </div>
           </form>
         </div>
@@ -318,7 +318,7 @@ function AddPayment({ d, notify }) {
   const quick = [100, 200, 500, 1000, 2000, 5000];
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-plus-circle" /> Add Payment</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-plus-circle" /> Add Payment</h1></div>
       <div className="card"><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Student *</label>
           <select className="form-control" value={studentId} onChange={onStudent} required>
@@ -343,7 +343,7 @@ function AddPayment({ d, notify }) {
         <div className="form-group"><label className="form-label">Notes</label>
           <textarea className="form-control" rows="2" placeholder="Any additional notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         <div className="form-actions">
-          <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Payment</button>
+          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Payment</button>
           <A to={d.urls.dashboard} className="btn btn-secondary">Cancel</A>
         </div>
       </form></div></div>
@@ -359,8 +359,8 @@ function PaymentsList({ d, notify }) {
   const onFilter = (e) => { const v = e.target.value; nav.go(v ? `${d.urls.payments}?date=${v}` : d.urls.payments); };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-list" /> All Payments</h1>
-        <A to={d.urls.quick_entry} className="btn btn-success"><i className="fas fa-plus" /> Add Payments</A></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-list" /> All Payments</h1>
+        <A to={d.urls.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-plus" /> Add Payments</A></div>
       <div className="card mb-3"><div className="card-body">
         <div className="filter-group">
           <div className="form-group"><label className="form-label">Filter by Date</label>
@@ -382,7 +382,7 @@ function PaymentsList({ d, notify }) {
                   <td><A to={p.detail_url}>{p.student_name}</A></td>
                   <td><strong>{money(p.amount)}</strong></td>
                   <td>{p.received_by}</td><td>{p.notes}</td>
-                  <td><button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(p)}><i className="fas fa-trash" /></button></td>
+                  <td><button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(p)}><i aria-hidden="true" className="fas fa-trash" /></button></td>
                 </tr>
               )) : <tr><td colSpan="7" className="text-center text-muted">No payments found</td></tr>}
             </tbody>
@@ -401,10 +401,10 @@ function Expenses({ d, notify }) {
   const del = async (e) => { if (await confirm('Delete this expense?')) save(e.delete_url, {}, () => nav.refresh()); };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-receipt" /> Expenses Management</h1>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-receipt" /> Expenses Management</h1>
         <div className="header-actions">
-          <A to={u.dashboard} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A>
-          <A to={u.add_expense} className="btn btn-primary"><i className="fas fa-plus" /> Add Expense</A>
+          <A to={u.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
+          <A to={u.add_expense} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>
         </div></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_collected)} label="Total Collected" />
@@ -424,7 +424,7 @@ function Expenses({ d, notify }) {
       </div></div>
       {d.category_summary.length > 0 && (
         <div className="card mb-3">
-          <div className="card-header"><h3><i className="fas fa-chart-pie" /> Expenses by Category</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-pie" /> Expenses by Category</h3></div>
           <div className="card-body">
             {d.category_summary.map((c) => (
               <div className="category-row" key={c.name}>
@@ -437,7 +437,7 @@ function Expenses({ d, notify }) {
         </div>
       )}
       <div className="card">
-        <div className="card-header"><h3><i className="fas fa-list" /> All Expenses ({d.expenses.length})</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-list" /> All Expenses ({d.expenses.length})</h3></div>
         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
           <table className="data-table">
             <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Amount</th><th>Notes</th><th>Actions</th></tr></thead>
@@ -447,7 +447,7 @@ function Expenses({ d, notify }) {
                   <td>{i + 1}</td><td>{e.date}</td><td><strong>{e.description}</strong></td>
                   <td><strong className="text-danger">{money(e.amount)}</strong></td>
                   <td><small>{e.notes}</small></td>
-                  <td><button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(e)}><i className="fas fa-trash" /></button></td>
+                  <td><button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button></td>
                 </tr>
               )) : <tr><td colSpan="6" className="text-center text-muted">No expenses recorded yet</td></tr>}
             </tbody>
@@ -473,14 +473,14 @@ function AddExpense({ d, notify }) {
   const submit = (e) => { e.preventDefault(); save(d.submit_url, f, (r) => { clearDraft(); nav.go(r.redirect || d.back_url); }); };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-plus-circle" /> Add Expense</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-plus-circle" /> Add Expense</h1></div>
       <div className="card"><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Date *</label><input type="date" className="form-control" value={f.expense_date} onChange={set('expense_date')} required /></div>
         <div className="form-group"><label className="form-label">Description *</label><input type="text" className="form-control" value={f.description} onChange={set('description')} required placeholder="What was this expense for?" /></div>
         <div className="form-group"><label className="form-label">Amount (₦) *</label><input type="number" className="form-control" value={f.amount} onChange={set('amount')} required min="1" step="1" placeholder="Enter amount" /></div>
         <div className="form-group"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={set('notes')} placeholder="Any additional details" /></div>
         <div className="form-actions">
-          <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Expense</button>
+          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Expense</button>
           <A to={d.back_url} className="btn btn-secondary">Cancel</A>
         </div>
       </form></div></div>
@@ -496,7 +496,7 @@ function Settings({ d, notify }) {
   const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => { clearDraft(); setF({ ...f, access_code: '' }); nav.refresh(); }); };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-cog" /> Contribution Settings</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-cog" /> Contribution Settings</h1></div>
       <div className="card"><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Maximum Due Amount (₦)</label>
           <input type="number" className="form-control" value={f.max_due} onChange={set('max_due')} min="1000" step="1000" />
@@ -509,7 +509,7 @@ function Settings({ d, notify }) {
             placeholder={d.has_custom_code ? 'Leave blank to keep current' : 'Set a password (replaces the default)'} autoComplete="new-password" />
           <small className="text-muted">The password required to open this Contributions module. {d.has_custom_code ? 'A custom password is set.' : 'Currently using the built-in default.'} Leave blank to keep it unchanged.</small></div>
         <div className="form-actions">
-          <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Settings</button>
+          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Settings</button>
           <A to={d.back_url} className="btn btn-secondary">Cancel</A>
         </div>
       </form></div></div>
@@ -521,12 +521,12 @@ function Settings({ d, notify }) {
 function Report({ d }) {
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-chart-bar" /> Report by Arm</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chart-bar" /> Report by Arm</h1></div>
       {d.arms.map((a) => {
         const pct = a.total_expected > 0 ? (a.total_paid / a.total_expected * 100) : 0;
         return (
           <div className="card mb-3" key={a.name}>
-            <div className="card-header"><h3><i className="fas fa-users" /> {a.name}</h3>
+            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> {a.name}</h3>
               <div><span className="badge badge-primary">{a.total_students} students</span> <span className="badge badge-success">{a.fully_paid} paid</span></div></div>
             <div className="card-body">
               <div className="info-grid mb-3">
@@ -543,7 +543,7 @@ function Report({ d }) {
                   {a.students.map((s, i) => (
                     <tr key={i}><td>{i + 1}</td><td>{s.name}</td><td><strong>{money(s.total_paid)}</strong></td>
                       <td>{s.remaining > 0 ? money(s.remaining) : '-'}</td>
-                      <td>{s.status === 'Paid' ? <span className="badge badge-success"><i className="fas fa-check" /> Paid</span> : <span className="badge badge-warning">Ongoing</span>}</td></tr>
+                      <td>{s.status === 'Paid' ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Paid</span> : <span className="badge badge-warning">Ongoing</span>}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -551,7 +551,7 @@ function Report({ d }) {
           </div>
         );
       })}
-      <A to={d.back_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A>
+      <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
     </>
   );
 }
@@ -574,10 +574,10 @@ function Defaulters({ d }) {
   }, [d.defaulters, arm, sort]);
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-user-times" /> Defaulters List</h1>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-user-times" /> Defaulters List</h1>
         <div className="header-actions">
-          <A to={d.back_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A>
-          <a href={d.export_url} className="btn btn-info"><i className="fas fa-file-excel" /> Export List</a>
+          <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
+          <a href={d.export_url} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-excel" /> Export List</a>
         </div></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-users" tone="danger" value={d.defaulters.length} label="Total Defaulters" />
@@ -606,10 +606,10 @@ function Defaulters({ d }) {
                   <td><strong className="text-danger">{money(s.remaining)}</strong></td>
                   <td style={{ width: 100 }}><Bar pct={s.percentage} color={s.percentage >= 50 ? '#ffc107' : '#dc3545'} /><small>{s.percentage.toFixed(0)}%</small></td>
                   <td><small>{s.last_payment}</small></td>
-                  <td><A to={s.detail_url} className="btn btn-sm btn-info"><i className="fas fa-eye" /></A>{' '}
-                    <A to={s.add_payment_url} className="btn btn-sm btn-success"><i className="fas fa-plus" /></A></td>
+                  <td><A to={s.detail_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
+                    <A to={s.add_payment_url} className="btn btn-sm btn-success"><i aria-hidden="true" className="fas fa-plus" /></A></td>
                 </tr>
-              )) : <tr><td colSpan="8" className="text-center text-success"><i className="fas fa-check-circle" /> No defaulters! All students have paid in full.</td></tr>}
+              )) : <tr><td colSpan="8" className="text-center text-success"><i aria-hidden="true" className="fas fa-check-circle" /> No defaulters! All students have paid in full.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -622,8 +622,8 @@ function Defaulters({ d }) {
 function DailySummary({ d }) {
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-calendar-alt" /> Daily Collection Summary</h1>
-        <A to={d.back_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-calendar-alt" /> Daily Collection Summary</h1>
+        <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-calendar-check" tone="primary" value={d.days_count} label="Collection Days" />
         <Stat icon="fa-chart-line" tone="success" value={money(d.avg_daily)} label="Avg. Daily Collection" />
@@ -640,7 +640,7 @@ function DailySummary({ d }) {
                   <td><strong>{day.date}</strong></td><td>{day.day}</td><td>{day.count}</td>
                   <td><strong className="text-success">{money(day.amount)}</strong></td>
                   <td><small>{day.collectors}</small></td>
-                  <td><A to={day.view_url} className="btn btn-sm btn-info"><i className="fas fa-eye" /> View</A></td>
+                  <td><A to={day.view_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /> View</A></td>
                 </tr>
               )) : <tr><td colSpan="6" className="text-center text-muted">No collections recorded yet</td></tr>}
             </tbody>
@@ -655,8 +655,8 @@ function DailySummary({ d }) {
 function History({ d }) {
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-history" /> Contribution History by Session</h1>
-        <A to={d.back_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-history" /> Contribution History by Session</h1>
+        <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
       <div className="card">
         <div className="card-header"><h3>All Sessions with Contribution Data</h3></div>
         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
@@ -666,12 +666,12 @@ function History({ d }) {
               {d.sessions.length ? d.sessions.map((s) => (
                 <tr key={s.id}>
                   <td><strong>{s.name}</strong></td>
-                  <td>{s.is_active ? <span className="badge badge-success"><i className="fas fa-check" /> Active</span> : <span className="badge badge-secondary">Closed</span>}</td>
+                  <td>{s.is_active ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Active</span> : <span className="badge badge-secondary">Closed</span>}</td>
                   <td>{s.payment_count}</td>
                   <td className="text-success"><strong>{money(s.total_collected)}</strong></td>
                   <td className="text-danger">{money(s.total_expenses)}</td>
                   <td><strong className={s.net_balance >= 0 ? 'text-success' : 'text-danger'}>{money(s.net_balance)}</strong></td>
-                  <td><A to={s.view_url} className="btn btn-sm btn-info"><i className="fas fa-eye" /> View</A></td>
+                  <td><A to={s.view_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /> View</A></td>
                 </tr>
               )) : <tr><td colSpan="7" className="text-center text-muted">No contribution data found</td></tr>}
             </tbody>
@@ -686,11 +686,11 @@ function ViewSession({ d }) {
   const s = d.session;
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-calendar-alt" /> {s.name}</h1>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-calendar-alt" /> {s.name}</h1>
         <div className="header-actions">
-          {s.is_active ? <span className="badge badge-success" style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}><i className="fas fa-check" /> Active Session</span>
+          {s.is_active ? <span className="badge badge-success" style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}><i aria-hidden="true" className="fas fa-check" /> Active Session</span>
             : <span className="badge badge-secondary" style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}>Closed Session</span>}
-          <A to={d.back_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A>
+          <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
         </div></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-users" tone="primary" value={d.student_totals.length} label="Students" />
@@ -701,7 +701,7 @@ function ViewSession({ d }) {
       </div>
       <div className="row">
         <div className="col-md-8"><div className="card">
-          <div className="card-header"><h3><i className="fas fa-users" /> Student Contributions</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> Student Contributions</h3></div>
           <div className="card-body" style={{ padding: 0, overflowX: 'auto', maxHeight: 500 }}>
             <table className="data-table">
               <thead><tr><th>#</th><th>Student</th><th>Payments</th><th>Total</th></tr></thead>
@@ -712,7 +712,7 @@ function ViewSession({ d }) {
           </div>
         </div></div>
         <div className="col-md-4"><div className="card">
-          <div className="card-header"><h3><i className="fas fa-receipt" /> Expenses</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-receipt" /> Expenses</h3></div>
           <div className="card-body" style={{ padding: 0, maxHeight: 500, overflowY: 'auto' }}>
             {d.expenses.length ? (
               <table className="data-table"><tbody>{d.expenses.map((e, i) => (
@@ -732,7 +732,7 @@ function StudentDetail({ d }) {
   const pct = d.max_due > 0 ? (d.total_paid / d.max_due * 100) : 0;
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-user" /> {d.student.name}</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-user" /> {d.student.name}</h1></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-bullseye" tone="primary" value={money(d.max_due)} label="Max Due" />
         <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_paid)} label="Total Paid" />
@@ -747,7 +747,7 @@ function StudentDetail({ d }) {
       </div></div>
       <div className="row">
         <div className="col-md-6"><div className="card">
-          <div className="card-header"><h3><i className="fas fa-history" /> Payment History</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-history" /> Payment History</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             <table className="data-table"><thead><tr><th>Date</th><th>Amount</th><th>Received By</th></tr></thead>
               <tbody>{d.payments.length ? d.payments.map((p, i) => (
@@ -757,7 +757,7 @@ function StudentDetail({ d }) {
           </div>
         </div></div>
         <div className="col-md-6"><div className="card">
-          <div className="card-header"><h3><i className="fas fa-calendar-week" /> Weekly Breakdown</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calendar-week" /> Weekly Breakdown</h3></div>
           <div className="card-body" style={{ padding: 0, maxHeight: 400, overflowY: 'auto' }}>
             <table className="data-table"><thead><tr><th>Week</th><th>Period</th><th>Amount</th></tr></thead>
               <tbody>{d.weekly_data.map((w, i) => (
@@ -769,7 +769,7 @@ function StudentDetail({ d }) {
           </div>
         </div></div>
       </div>
-      <div className="mt-3"><A to={d.urls.dashboard} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A></div>
+      <div className="mt-3"><A to={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
     </>
   );
 }
@@ -786,12 +786,12 @@ function Import({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-file-import" /> Import from Excel</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-file-import" /> Import from Excel</h1></div>
       <div className="card mb-3">
         <div className="card-header"><h3>Upload Excel File</h3></div>
         <div className="card-body">
           <div className="alert alert-info">
-            <h4><i className="fas fa-info-circle" /> Expected Format</h4>
+            <h4><i aria-hidden="true" className="fas fa-info-circle" /> Expected Format</h4>
             <p>Upload your contributions Excel file with the following sheets:</p>
             <ul>
               <li><strong>Students</strong> sheet with columns: StudentID, Name, Class, Arm</li>
@@ -804,17 +804,17 @@ function Import({ d, notify }) {
             <div className="form-group"><label className="form-label">Select Excel File (.xlsx)</label>
               <input type="file" name="file" className="form-control" accept=".xlsx" required /></div>
             <div className="form-actions">
-              <button type="submit" className="btn btn-primary btn-lg"><i className="fas fa-upload" /> Import Payments</button>
+              <button type="submit" className="btn btn-primary btn-lg"><i aria-hidden="true" className="fas fa-upload" /> Import Payments</button>
               <A to={d.back_url} className="btn btn-secondary">Cancel</A>
             </div>
           </form>
         </div>
       </div>
       <div className="card">
-        <div className="card-header"><h3><i className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
         <div className="card-body">
           <p className="text-muted">Use this to clear all existing contribution data before re-importing.</p>
-          <form onSubmit={clearAll}><button type="submit" className="btn btn-danger"><i className="fas fa-trash" /> Clear All Data</button></form>
+          <form onSubmit={clearAll}><button type="submit" className="btn btn-danger"><i aria-hidden="true" className="fas fa-trash" /> Clear All Data</button></form>
         </div>
       </div>
     </>

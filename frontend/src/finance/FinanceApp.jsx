@@ -81,8 +81,8 @@ function Dashboard({ d }) {
     <>
       <div className="page-header"><h1>Finance &amp; Fees</h1>
         <div className="page-header-actions">
-          <a href={d.urls.record_payment} className="btn btn-primary"><i className="fas fa-cash-register" /> Record Payment</a>
-          <a href={d.urls.defaulters} className="btn btn-secondary"><i className="fas fa-triangle-exclamation" /> Defaulters</a>
+          <a href={d.urls.record_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>
+          <a href={d.urls.defaulters} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Defaulters</a>
         </div>
       </div>
       <Tabs d={d} />
@@ -92,23 +92,23 @@ function Dashboard({ d }) {
 
       <div className={'card mb-3 fin-steps' + (stepsOpen ? '' : ' is-collapsed')}>
         <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setStepsOpen((s) => !s)}>
-          <h3><i className="fas fa-route" /> How fees work here {!d.has_structure && <span className="badge badge-warning">Start here</span>}</h3>
-          <i className="fas fa-chevron-down" />
+          <h3><i aria-hidden="true" className="fas fa-route" /> How fees work here {!d.has_structure && <span className="badge badge-warning">Start here</span>}</h3>
+          <i aria-hidden="true" className="fas fa-chevron-down" />
         </div>
         <div className="card-body fin-steps-body">
           <div className="steps-row">
             <a href={d.urls.items} className="step"><span className="step-n">1</span><span className="step-t"><strong>Create fee items</strong><span className="text-muted text-sm">Tuition, levies, PTA — the things you charge.</span></span></a>
-            <i className="fas fa-arrow-right step-arrow" />
+            <i aria-hidden="true" className="fas fa-arrow-right step-arrow" />
             <a href={d.urls.structure} className="step"><span className="step-n">2</span><span className="step-t"><strong>Set the fee structure</strong><span className="text-muted text-sm">How much each class pays this term.</span></span></a>
-            <i className="fas fa-arrow-right step-arrow" />
+            <i aria-hidden="true" className="fas fa-arrow-right step-arrow" />
             <a href={d.urls.record_payment} className="step"><span className="step-n">3</span><span className="step-t"><strong>Record payments</strong><span className="text-muted text-sm">Search a student, enter what they paid, print the receipt.</span></span></a>
           </div>
-          <p className="text-muted text-sm mb-0 mt-2"><i className="fas fa-circle-info" /> Each student's bill, balance and the figures below are worked out automatically from steps 1–2 and the payments you record.</p>
+          <p className="text-muted text-sm mb-0 mt-2"><i aria-hidden="true" className="fas fa-circle-info" /> Each student's bill, balance and the figures below are worked out automatically from steps 1–2 and the payments you record.</p>
         </div>
       </div>
       {!d.has_structure && (
         <div className="card mb-3" style={{ borderColor: 'var(--warning)' }}><div className="card-body d-flex align-center gap-2 flex-wrap">
-          <i className="fas fa-circle-info" style={{ color: 'var(--warning)', fontSize: '1.4rem' }} />
+          <i aria-hidden="true" className="fas fa-circle-info" style={{ color: 'var(--warning)', fontSize: '1.4rem' }} />
           <div style={{ flex: 1, minWidth: 200 }}><strong>No fee structure for {d.selected_term || 'this term'} yet.</strong>
             <div className="text-muted text-sm">Finish steps 1 &amp; 2 above to start tracking collections for this term.</div></div>
           <a href={d.urls.structure} className="btn btn-primary btn-sm">Set Fee Structure</a>
@@ -116,7 +116,7 @@ function Dashboard({ d }) {
       )}
 
       <div className="kpi-row kpi-6">{kpis.map(([c, ic, v, l, isPct]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i className={'fas ' + ic} /></div>
+        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
           <div><div className="v" title={isPct ? '' : naira(v)}>{isPct ? v : nairaShort(v)}</div><div className="l">{l}</div></div></div>))}
       </div>
 
@@ -137,7 +137,7 @@ function Dashboard({ d }) {
       </div>
 
       <div className="widget">
-        <div className="wh"><h3><i className="fas fa-receipt" /> Recent payments</h3><a href={d.urls.payments} className="text-sm">View all</a></div>
+        <div className="wh"><h3><i aria-hidden="true" className="fas fa-receipt" /> Recent payments</h3><a href={d.urls.payments} className="text-sm">View all</a></div>
         <div className="wb" style={{ padding: 0 }}>
           {d.recent.length ? (
             <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -157,7 +157,7 @@ function Dashboard({ d }) {
 
 function Widget({ title, icon, children }) {
   return (
-    <div className="widget"><div className="wh"><h3><i className={'fas ' + icon} /> {title}</h3></div>
+    <div className="widget"><div className="wh"><h3><i aria-hidden="true" className={'fas ' + icon} /> {title}</h3></div>
       <div className="wb"><div className="chart-box">{children}</div></div></div>
   );
 }
@@ -181,17 +181,17 @@ function Items({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Fee Items</h1>
-        <div className="page-header-actions"><a href={d.structure_url} className="btn btn-secondary"><i className="fas fa-table-list" /> Fee Structure</a></div>
+        <div className="page-header-actions"><a href={d.structure_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-table-list" /> Fee Structure</a></div>
       </div>
       <Tabs d={d} />
       {d.is_admin && (
-        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Add Fee Item</h3></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add Fee Item</h3></div>
           <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
             <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">Name <span className="required">*</span></label>
               <input type="text" className="form-control" placeholder="e.g., Tuition, Development Levy, PTA" required value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></div>
             <div className="form-group mb-0" style={{ flex: 2, minWidth: 200 }}><label className="form-label">Description</label>
               <input type="text" className="form-control" placeholder="Optional note" value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} /></div>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Add</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
           </form></div></div>
       )}
       <div className="card"><div className="card-header"><h3>Items ({d.items.length})</h3></div>
@@ -206,8 +206,8 @@ function Items({ d, notify }) {
                     <td data-label="Description" className="text-muted">{it.description || '—'}</td>
                     <td data-label="Status">{it.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-secondary">Inactive</span>}</td>
                     {d.is_admin && <td className="actions"><div className="d-flex gap-1">
-                      <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === it.id ? null : it.id)}><i className="fas fa-edit" /></button>
-                      <button className="btn btn-danger btn-sm" onClick={() => act(it.delete_url, {}, `Delete fee item ${it.name}?`)}><i className="fas fa-trash" /></button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === it.id ? null : it.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
+                      <button className="btn btn-danger btn-sm" onClick={() => act(it.delete_url, {}, `Delete fee item ${it.name}?`)}><i aria-hidden="true" className="fas fa-trash" /></button>
                     </div></td>}
                   </tr>
                   {d.is_admin && editing === it.id && (
@@ -234,7 +234,7 @@ function ItemEdit({ it, notify, onDone }) {
       <div className="form-group mb-0" style={{ flex: 1, minWidth: 160 }}><label className="form-label">Name</label><input type="text" className="form-control" value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></div>
       <div className="form-group mb-0" style={{ flex: 2, minWidth: 200 }}><label className="form-label">Description</label><input type="text" className="form-control" value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} /></div>
       <label className="form-check mb-0"><input type="checkbox" checked={f.is_active} onChange={(e) => setF((s) => ({ ...s, is_active: e.target.checked }))} /> Active</label>
-      <button type="submit" className="btn btn-primary btn-sm"><i className="fas fa-save" /> Update</button>
+      <button type="submit" className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-save" /> Update</button>
     </form>
   );
 }
@@ -269,7 +269,7 @@ function Structure({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Fee Structure</h1>
-        <div className="page-header-actions"><a href={d.items_url} className="btn btn-secondary"><i className="fas fa-tags" /> Fee Items</a></div>
+        <div className="page-header-actions"><a href={d.items_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-tags" /> Fee Items</a></div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -282,7 +282,7 @@ function Structure({ d, notify }) {
             <select className="form-control" value={d.arm_id} onChange={(e) => go({ arm_id: e.target.value })}>
               <option value="">All arms</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         </form>
-        <p className="text-muted text-sm mb-0 mt-2"><i className="fas fa-circle-info" /> Leave <strong>All arms</strong> selected to charge every arm of the class the same. Set an arm only if that arm pays a different amount — arm-specific amounts override the all-arms figure.</p>
+        <p className="text-muted text-sm mb-0 mt-2"><i aria-hidden="true" className="fas fa-circle-info" /> Leave <strong>All arms</strong> selected to charge every arm of the class the same. Set an arm only if that arm pays a different amount — arm-specific amounts override the all-arms figure.</p>
       </div></div>
 
       {d.term_id && d.class_id ? (d.items.length ? (<>
@@ -298,12 +298,12 @@ function Structure({ d, notify }) {
                 </div>))}
             </div>
               <div className="page-header-actions mt-3">
-                {d.is_admin ? <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Structure</button>
+                {d.is_admin ? <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Structure</button>
                   : <p className="text-muted">Only admins can edit the fee structure.</p>}
               </div>
             </div></div>
         </form>
-        {d.is_admin && d.has_current && <div className="mt-2"><button className="btn btn-danger btn-sm" onClick={clear}><i className="fas fa-trash" /> Clear this class's fees</button></div>}
+        {d.is_admin && d.has_current && <div className="mt-2"><button className="btn btn-danger btn-sm" onClick={clear}><i aria-hidden="true" className="fas fa-trash" /> Clear this class's fees</button></div>}
       </>) : (
         <div className="card"><div className="card-body"><Empty icon="fa-tags" title="No fee items"><p>Create fee items first, then set their amounts here.</p><a href={d.items_url} className="btn btn-primary">Add Fee Items</a></Empty></div></div>
       )) : (
@@ -311,13 +311,13 @@ function Structure({ d, notify }) {
       )}
 
       {d.is_admin && d.term_id && (
-        <div className="card mt-3" style={{ borderColor: 'var(--info)' }}><div className="card-header"><h3><i className="fas fa-copy" /> Copy structure from another term</h3></div>
+        <div className="card mt-3" style={{ borderColor: 'var(--info)' }}><div className="card-header"><h3><i aria-hidden="true" className="fas fa-copy" /> Copy structure from another term</h3></div>
           <div className="card-body"><form onSubmit={copy} className="d-flex gap-2 align-end flex-wrap">
             <div className="form-group mb-0"><label className="form-label">Copy all classes from</label>
               <select className="form-control" required value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
                 <option value="">Select source term…</option>
                 {d.terms.filter((t) => String(t.id) !== String(d.term_id)).map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
-            <button type="submit" className="btn btn-info"><i className="fas fa-copy" /> Copy into this term</button>
+            <button type="submit" className="btn btn-info"><i aria-hidden="true" className="fas fa-copy" /> Copy into this term</button>
           </form></div></div>
       )}
     </>
@@ -337,7 +337,7 @@ function Payments({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Payments</h1>
-        <div className="page-header-actions"><a href={d.record_url} className="btn btn-primary"><i className="fas fa-cash-register" /> Record Payment</a></div>
+        <div className="page-header-actions"><a href={d.record_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a></div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -347,7 +347,7 @@ function Payments({ d, notify }) {
             <select className="form-control" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
               <option value="">All Classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Search</label><input type="text" className="form-control" value={q} placeholder="Name, ID or receipt" onChange={(e) => setQ(e.target.value)} /></div>
-          <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="submit" className="btn btn-secondary"><i className="fas fa-search" /></button></div>
+          <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="submit" className="btn btn-secondary" aria-label="Search"><i aria-hidden="true" className="fas fa-search" /></button></div>
         </form>
       </div></div>
       <div className="card"><div className="card-header"><h3>{d.payments.length} payment(s)</h3><span className="badge badge-success">Total: {naira(d.total)}</span></div>
@@ -364,9 +364,9 @@ function Payments({ d, notify }) {
                   <td data-label="By" className="text-muted text-sm">{p.received_by}</td>
                   <td data-label="Amount" className="text-right"><strong>{naira(p.amount)}</strong></td>
                   <td className="actions"><div className="d-flex gap-1">
-                    <a href={p.receipt_url} className="btn btn-secondary btn-sm" title="Receipt" data-native><i className="fas fa-receipt" /></a>
-                    <a href={p.edit_url} className="btn btn-secondary btn-sm" title="Edit"><i className="fas fa-edit" /></a>
-                    {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => del(p.delete_url, p.receipt_no, p.amount)}><i className="fas fa-trash" /></button>}
+                    <a href={p.receipt_url} className="btn btn-secondary btn-sm" title="Receipt" data-native><i aria-hidden="true" className="fas fa-receipt" /></a>
+                    <a href={p.edit_url} className="btn btn-secondary btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => del(p.delete_url, p.receipt_no, p.amount)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                   </div></td>
                 </tr>))}</tbody>
             </table></div>
@@ -406,11 +406,11 @@ function RecordPayment({ d, notify }) {
                     <a className="roster-item" href={r.pick_url} key={r.id}>
                       <div className="who"><div className="nm">{r.full_name}</div><div className="sid">{r.student_id}</div></div>
                       <div className="bal" style={{ color: balColor(r.balance) }}>{naira(r.balance)}</div>
-                      <span className="btn btn-primary btn-sm"><i className="fas fa-chevron-right" /></span>
+                      <span className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-chevron-right" /></span>
                     </a>))}</div>
                   <p className="text-muted text-sm mt-2">Showing balances for {d.roster.length} student(s). Tap a student to record a payment.</p>
                 </>) : <Empty icon="fa-users" title="" style={{ padding: '1rem' }}><p>No active students in this class arm for the selected term.</p></Empty>)
-                  : <p className="text-muted text-sm"><i className="fas fa-circle-info" /> Pick a class and arm to see its students and their balances.</p>}
+                  : <p className="text-muted text-sm"><i aria-hidden="true" className="fas fa-circle-info" /> Pick a class and arm to see its students and their balances.</p>}
               </div>
             ) : (
               <StudentSearch url={d.search_url} termId={d.term_id} onPick={(id) => goWith({ student_id: id, term_id: d.term_id })} />
@@ -427,7 +427,7 @@ function RecordPayment({ d, notify }) {
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body d-flex justify-between align-center flex-wrap gap-2">
         <div><h2 style={{ margin: 0 }}>{student.full_name}</h2><div className="text-muted">{student.student_id}</div></div>
-        <a href={d.urls.change_student} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-left" /> Change student</a>
+        <a href={d.urls.change_student} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Change student</a>
       </div></div>
       {bill ? (
         <div className="pay-grid">
@@ -441,7 +441,7 @@ function RecordPayment({ d, notify }) {
             </>) : (
               <Empty icon="fa-circle-info" title="" style={{ padding: '1rem' }}><p>No fee structure for this student's class this term.</p><a href={d.urls.structure} className="btn btn-secondary btn-sm">Set fee structure</a></Empty>
             )}
-            <a href={d.urls.statement} className="btn btn-secondary btn-sm mt-2"><i className="fas fa-file-lines" /> Full statement</a>
+            <a href={d.urls.statement} className="btn btn-secondary btn-sm mt-2"><i aria-hidden="true" className="fas fa-file-lines" /> Full statement</a>
           </div></div>
           <PayForm d={d} bill={bill} student={student} notify={notify} />
         </div>
@@ -480,7 +480,7 @@ function PayForm({ d, bill, student, notify }) {
           <div className="form-group mb-0"><label className="form-label">Received by</label><input type="text" className="form-control" placeholder="Bursar name" value={f.received_by} onChange={(e) => set('received_by', e.target.value)} /></div>
         </div>
         <div className="form-group mt-3"><label className="form-label">Notes</label><textarea className="form-control" rows="2" placeholder="Optional" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
-        <button type="submit" className="btn btn-primary w-100" disabled={busy}><i className="fas fa-check" /> Save &amp; Print Receipt</button>
+        <button type="submit" className="btn btn-primary w-100" disabled={busy}><i aria-hidden="true" className="fas fa-check" /> Save &amp; Print Receipt</button>
       </form>
     </div></div>
   );
@@ -531,19 +531,19 @@ function Statement({ d, notify }) {
     <>
       <div className="page-header"><h1>Fee Statement</h1>
         <div className="page-header-actions">
-          <a href={d.urls.record_payment} className="btn btn-primary"><i className="fas fa-cash-register" /> Record Payment</a>
+          <a href={d.urls.record_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>
           {d.pay_enabled && bill && bill.balance > 0.005 && (
-            <button className="btn btn-secondary" onClick={() => act(d.urls.payment_link, { term_id: d.term_id }, null, true)}><i className="fas fa-link" /> Online Payment Link</button>)}
+            <button className="btn btn-secondary" onClick={() => act(d.urls.payment_link, { term_id: d.term_id }, null, true)}><i aria-hidden="true" className="fas fa-link" /> Online Payment Link</button>)}
         </div>
       </div>
       <Tabs d={d} />
       {d.paylink && (
         <div className="card mb-3"><div className="card-body">
-          <strong><i className="fas fa-link" /> Share this secure payment link with the parent:</strong>
+          <strong><i aria-hidden="true" className="fas fa-link" /> Share this secure payment link with the parent:</strong>
           <div style={{ display: 'flex', gap: '.5rem', marginTop: '.5rem', flexWrap: 'wrap' }}>
             <input className="form-control" value={d.paylink} readOnly style={{ flex: 1, minWidth: 240 }} />
-            <button className="btn btn-primary" onClick={() => { navigator.clipboard.writeText(d.paylink); setCopied(true); }}><i className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} /> {copied ? 'Copied' : 'Copy'}</button>
-            <a className="btn btn-success" href={d.paylink} target="_blank" rel="noopener"><i className="fas fa-up-right-from-square" /> Open</a>
+            <button className="btn btn-primary" onClick={() => { navigator.clipboard.writeText(d.paylink); setCopied(true); }}><i aria-hidden="true" className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} /> {copied ? 'Copied' : 'Copy'}</button>
+            <a className="btn btn-success" href={d.paylink} target="_blank" rel="noopener"><i aria-hidden="true" className="fas fa-up-right-from-square" /> Open</a>
           </div>
           <p className="text-muted text-sm mt-2">The payment is recorded automatically once completed.</p>
         </div></div>
@@ -574,7 +574,7 @@ function Statement({ d, notify }) {
                   <tbody>{d.payments.map((p) => (
                     <tr key={p.id}><td data-label="Date">{p.date}</td><td data-label="Receipt"><a href={p.receipt_url} data-native>{p.receipt_no}</a></td>
                       <td data-label="Method"><span className="badge badge-info">{p.method}</span></td><td data-label="Amount" className="text-right">{naira(p.amount)}</td>
-                      <td className="actions"><a href={p.edit_url} className="btn btn-secondary btn-sm" title="Edit"><i className="fas fa-edit" /></a></td></tr>))}</tbody>
+                      <td className="actions"><a href={p.edit_url} className="btn btn-secondary btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a></td></tr>))}</tbody>
                 </table></div>
               ) : <Empty icon="fa-receipt" title="" style={{ padding: '1rem' }}><p>No payments yet</p></Empty>}
             </div></div>
@@ -591,7 +591,7 @@ function Discounts({ d, act }) {
   const [f, setF] = useState({ amount: '', reason: '' });
   const [editing, setEditing] = useState(null);
   return (
-    <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-tag" /> Discounts / Waivers</h3></div>
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-tag" /> Discounts / Waivers</h3></div>
       <div className="card-body">
         {d.discounts.length > 0 && (
           <table className="data-table table-stack no-mobile-scroll mb-3">
@@ -602,8 +602,8 @@ function Discounts({ d, act }) {
                   <td data-label="Reason">{dc.reason || '—'}</td>
                   <td data-label="Amount" className="text-right">{naira(dc.amount)}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dc.id ? null : dc.id)}><i className="fas fa-edit" /></button>
-                    <button className="btn btn-danger btn-sm" onClick={() => act(dc.delete_url, {}, 'Remove this discount?')}><i className="fas fa-trash" /></button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dc.id ? null : dc.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
+                    <button className="btn btn-danger btn-sm" onClick={() => act(dc.delete_url, {}, 'Remove this discount?')}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td>
                 </tr>
                 {editing === dc.id && (
@@ -615,7 +615,7 @@ function Discounts({ d, act }) {
         <form onSubmit={(e) => { e.preventDefault(); act(d.urls.add_discount, { ...f, student_id: d.student_id, term_id: d.term_id }); }} className="d-flex gap-2 align-end flex-wrap">
           <div className="form-group mb-0"><label className="form-label">Amount (₦)</label><input type="number" className="form-control" min="0" step="100" required value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} /></div>
           <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Reason</label><input type="text" className="form-control" placeholder="e.g., Sibling discount, Staff ward, Scholarship" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
-          <button type="submit" className="btn btn-secondary"><i className="fas fa-plus" /> Add Discount</button>
+          <button type="submit" className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add Discount</button>
         </form>
       </div></div>
   );
@@ -627,7 +627,7 @@ function DiscountEdit({ dc, act }) {
     <form onSubmit={(e) => { e.preventDefault(); act(dc.edit_url, f); }} className="d-flex gap-2 align-end flex-wrap">
       <div className="form-group mb-0"><label className="form-label">Amount (₦)</label><input type="number" className="form-control" min="0" step="100" required value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} /></div>
       <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">Reason</label><input type="text" className="form-control" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
-      <button type="submit" className="btn btn-primary btn-sm"><i className="fas fa-save" /> Update</button>
+      <button type="submit" className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-save" /> Update</button>
     </form>
   );
 }
@@ -639,7 +639,7 @@ function Defaulters({ d }) {
   return (
     <>
       <div className="page-header"><h1>Outstanding Fees</h1>
-        {d.rows.length > 0 && <div className="page-header-actions"><a href={d.message_url} className="btn btn-primary"><i className="fab fa-whatsapp" /> Message defaulters</a></div>}
+        {d.rows.length > 0 && <div className="page-header-actions"><a href={d.message_url} className="btn btn-primary"><i aria-hidden="true" className="fab fa-whatsapp" /> Message defaulters</a></div>}
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
@@ -667,8 +667,8 @@ function Defaulters({ d }) {
                   <td data-label="Paid" className="text-right">{naira(r.paid)}</td>
                   <td data-label="Balance" className="text-right"><strong style={{ color: 'var(--danger)' }}>{naira(r.balance)}</strong></td>
                   <td className="actions text-right"><div className="d-flex gap-1 justify-end">
-                    <a href={r.statement_url} className="btn btn-secondary btn-sm" title="Statement"><i className="fas fa-file-lines" /></a>
-                    <a href={r.record_url} className="btn btn-primary btn-sm" title="Record payment"><i className="fas fa-cash-register" /></a>
+                    <a href={r.statement_url} className="btn btn-secondary btn-sm" title="Statement"><i aria-hidden="true" className="fas fa-file-lines" /></a>
+                    <a href={r.record_url} className="btn btn-primary btn-sm" title="Record payment"><i aria-hidden="true" className="fas fa-cash-register" /></a>
                   </div></td>
                 </tr>))}</tbody>
             </table></div>
@@ -694,7 +694,7 @@ function Collections({ d }) {
   return (
     <>
       <div className="page-header"><h1>Collections</h1>
-        <div className="page-header-actions"><a href={d.export_url} className="btn btn-primary" data-native download><i className="fas fa-file-csv" /> Export</a></div>
+        <div className="page-header-actions"><a href={d.export_url} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a></div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -710,9 +710,9 @@ function Collections({ d }) {
         <div className="sum-card"><div className="v">{d.count}</div><div className="l">Payments</div></div>
         <div className="sum-card"><div className="v">{naira(d.count ? d.total / d.count : 0)}</div><div className="l">Average</div></div>
       </div>
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-chart-column" /> Daily collections</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-column" /> Daily collections</h3></div>
         <div className="card-body"><div className="chart-box">{d.day_chart.length ? <canvas ref={ref} /> : <Empty icon="fa-chart-column" title=""><p>No payments in this range</p></Empty>}</div></div></div>
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-wallet" /> By method</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-wallet" /> By method</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.method_rows.length ? (
             <table className="data-table table-stack no-mobile-scroll"><thead><tr><th>Method</th><th className="text-right">Amount</th></tr></thead>
@@ -762,7 +762,7 @@ function Expenses({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Expenses</h1>
-        <div className="page-header-actions"><a href={d.reports_url} className="btn btn-secondary"><i className="fas fa-chart-column" /> Reports</a></div>
+        <div className="page-header-actions"><a href={d.reports_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Reports</a></div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -779,7 +779,7 @@ function Expenses({ d, notify }) {
           </div>)}
       </div></div>
 
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Record Expense</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Record Expense</h3></div>
         <div className="card-body"><form onSubmit={add}>
           <div className="exp-fields">
             <div className="form-group mb-0"><label className="form-label">Description <span className="required">*</span></label><input type="text" className="form-control" placeholder="e.g., June electricity bill" required value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
@@ -789,7 +789,7 @@ function Expenses({ d, notify }) {
             <div className="form-group mb-0"><label className="form-label">Payee</label><input type="text" className="form-control" placeholder="Paid to" value={f.payee} onChange={(e) => set('payee', e.target.value)} /></div>
             <div className="form-group mb-0"><label className="form-label">Method</label><select className="form-control" value={f.method} onChange={(e) => set('method', e.target.value)}>{d.methods.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
           </div>
-          <div className="mt-3"><button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Record Expense</button></div>
+          <div className="mt-3"><button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Record Expense</button></div>
         </form></div></div>
 
       <div className="card"><div className="card-header"><h3>Expenses ({d.expenses.length})</h3><span className="badge badge-danger">{naira(d.total)}</span></div>
@@ -807,8 +807,8 @@ function Expenses({ d, notify }) {
                     <td data-label="Method"><span className="badge badge-info">{e.method}</span></td>
                     <td data-label="Amount" className="text-right"><strong>{naira(e.amount)}</strong></td>
                     <td className="actions"><div className="d-flex gap-1 justify-end">
-                      <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === e.id ? null : e.id)}><i className="fas fa-edit" /></button>
-                      {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => act(e.delete_url, {}, `Delete this expense (${naira(e.amount)})?`)}><i className="fas fa-trash" /></button>}
+                      <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === e.id ? null : e.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
+                      {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => act(e.delete_url, {}, `Delete this expense (${naira(e.amount)})?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                     </div></td>
                   </tr>
                   {editing === e.id && (
@@ -821,15 +821,15 @@ function Expenses({ d, notify }) {
         </div></div>
 
       {d.is_admin && (
-        <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-folder-tree" /> Expense Categories</h3></div>
+        <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-folder-tree" /> Expense Categories</h3></div>
           <div className="card-body">
             <div className="chip-row mb-3">{d.categories.map((c) => (
               <span className="chip d-flex align-center gap-1" key={c.id}>{c.name}
-                <button className="btn btn-danger btn-sm" style={{ padding: '.1rem .35rem' }} onClick={() => act(c.delete_url, {}, `Delete category ${c.name}?`)}><i className="fas fa-times" /></button>
+                <button className="btn btn-danger btn-sm" style={{ padding: '.1rem .35rem' }} onClick={() => act(c.delete_url, {}, `Delete category ${c.name}?`)}><i aria-hidden="true" className="fas fa-times" /></button>
               </span>))}</div>
             <form onSubmit={addCat} className="d-flex gap-2 align-end flex-wrap">
               <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">New category</label><input type="text" className="form-control" placeholder="e.g., Security" required value={cat} onChange={(e) => setCat(e.target.value)} /></div>
-              <button type="submit" className="btn btn-secondary"><i className="fas fa-plus" /> Add</button>
+              <button type="submit" className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add</button>
             </form>
           </div></div>
       )}
@@ -853,7 +853,7 @@ function ExpenseEdit({ e, cats, methods, notify, onDone }) {
       <div className="form-group mb-0"><label className="form-label">Date</label><input type="date" className="form-control" value={f.expense_date} onChange={(ev) => set('expense_date', ev.target.value)} /></div>
       <div className="form-group mb-0"><label className="form-label">Payee</label><input type="text" className="form-control" value={f.payee} onChange={(ev) => set('payee', ev.target.value)} /></div>
       <div className="form-group mb-0"><label className="form-label">Method</label><select className="form-control" value={f.method} onChange={(ev) => set('method', ev.target.value)}>{methods.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
-      <div className="form-group mb-0" style={{ alignSelf: 'end' }}><button type="submit" className="btn btn-primary btn-sm"><i className="fas fa-save" /> Update</button></div>
+      <div className="form-group mb-0" style={{ alignSelf: 'end' }}><button type="submit" className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-save" /> Update</button></div>
     </form>
   );
 }
@@ -865,14 +865,14 @@ function Reports({ d }) {
   return (
     <>
       <div className="page-header"><h1>Finance Reports</h1>
-        <div className="page-header-actions">{d.export_url && <a href={d.export_url} className="btn btn-primary" data-native download><i className="fas fa-file-excel" /> Export to Excel</a>}</div>
+        <div className="page-header-actions">{d.export_url && <a href={d.export_url} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Export to Excel</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
         <TermSelect value={d.term_id} terms={d.terms} onChange={(v) => navParams(nav.go, d.self_url, { term_id: v })} />
       </form></div></div>
       <div className="two-col">
-        <div className="card"><div className="card-header"><h3><i className="fas fa-scale-balanced" /> Income &amp; Expenditure {d.selected_term && `· ${d.selected_term}`}</h3></div>
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-scale-balanced" /> Income &amp; Expenditure {d.selected_term && `· ${d.selected_term}`}</h3></div>
           <div className="card-body"><div className="pl">
             <div className="pl-row"><span>Expected (after discounts)</span><span>{naira(d.payable)}</span></div>
             <div className="pl-row"><span>Discounts / waivers</span><span>{naira(d.discounts)}</span></div>
@@ -882,7 +882,7 @@ function Reports({ d }) {
             <div className="pl-row"><span>Expenditure</span><span className="neg">− {naira(d.expenses)}</span></div>
             <div className="pl-row total"><span>Net cash position</span><span className={d.net >= 0 ? 'pos' : 'neg'}>{naira(d.net)}</span></div>
           </div></div></div>
-        <div className="card"><div className="card-header"><h3><i className="fas fa-layer-group" /> Expected income by fee</h3></div>
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Expected income by fee</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             {d.item_breakdown.length ? (
               <table className="data-table no-mobile-scroll" style={{ width: '100%' }}><tbody>
@@ -890,7 +890,7 @@ function Reports({ d }) {
             ) : <Empty icon="fa-layer-group" title="" style={{ padding: '1.2rem' }}><p>No fee structure set</p></Empty>}
           </div></div>
       </div>
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-school" /> Collection by class</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-school" /> Collection by class</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.class_rows.length ? (
             <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -903,7 +903,7 @@ function Reports({ d }) {
             </table></div>
           ) : <Empty icon="fa-school" title="" style={{ padding: '1.2rem' }}><p>No data for this term</p></Empty>}
         </div></div>
-      <div className="card"><div className="card-header"><h3><i className="fas fa-wallet" /> Payments by method</h3></div>
+      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-wallet" /> Payments by method</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.method_rows.length ? (
             <table className="data-table table-stack no-mobile-scroll"><thead><tr><th>Method</th><th className="text-right">Count</th><th className="text-right">Amount</th></tr></thead>
@@ -957,9 +957,9 @@ function EditPayment({ d, notify }) {
           </div>
           <div className="form-group mt-3"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
           <div className="page-header-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Changes</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
             <a href={d.receipt_url} className="btn btn-secondary" data-native>Cancel</a>
-            {d.is_admin && <button type="button" className="btn btn-danger" style={{ marginLeft: 'auto' }} onClick={del}><i className="fas fa-trash" /> Delete</button>}
+            {d.is_admin && <button type="button" className="btn btn-danger" style={{ marginLeft: 'auto' }} onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
           </div>
         </form>
       </div></div>

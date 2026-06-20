@@ -33,8 +33,8 @@ function List({ d, notify }) {
     <>
       <div className="page-header"><h1>Subjects</h1>
         <div className="page-header-actions">
-          <a href={d.urls.bulk_add} className="btn btn-secondary"><i className="fas fa-list" /> Bulk Add</a>
-          <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-plus" /> Add</a>
+          <a href={d.urls.bulk_add} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list" /> Bulk Add</a>
+          <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>
         </div>
       </div>
       {d.categories.length ? d.categories.map((cat) => (
@@ -49,15 +49,15 @@ function List({ d, notify }) {
                     <span className="badge badge-secondary">{s.short_name}</span>
                   </div>
                   <div className="data-card-actions">
-                    <a href={s.edit_url} className="btn btn-secondary btn-sm"><i className="fas fa-edit" /></a>
-                    <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(s.delete_url, s.name)}><i className="fas fa-trash" /></button>
+                    <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(s.delete_url, s.name)}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div>
                 </div>))}
             </div>
           </div>
         </div>
       )) : (
-        <div className="card"><div className="card-body"><Empty icon="fa-book" title="No Subjects"><p>Add your first subject</p><a href={d.urls.add} className="btn btn-primary"><i className="fas fa-plus" /> Add Subject</a></Empty></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-book" title="No Subjects"><p>Add your first subject</p><a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Subject</a></Empty></div></div>
       )}
     </>
   );
@@ -97,7 +97,7 @@ function SubjectForm({ d, notify }) {
           <span className="form-hint d-block">If unchecked, the Midterm column is dropped and the Theory paper is worth 50 (instead of 40).</span>
         </div>
         <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>
           <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
         </div>
       </form></div></div>
@@ -126,7 +126,7 @@ function BulkAdd({ d, notify }) {
         <div className="form-group"><label className="form-label">Subjects (one per line)</label>
           <textarea className="form-control" rows="15" value={text} onChange={(e) => setText(e.target.value)} /></div>
         <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Add All</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Add All</button>
           <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
         </div>
       </form></div></div>
@@ -156,14 +156,14 @@ function ClassSubjects({ d, notify }) {
     <>
       <div className="page-header"><h1>Class Subjects</h1>
         <div className="page-header-actions">
-          {d.term_id && <button type="button" className="btn btn-info btn-sm" onClick={() => setShowCopy((s) => !s)}><i className="fas fa-copy" /> Copy from term</button>}
-          <a href={d.urls.assign} className="btn btn-primary"><i className="fas fa-plus" /> Assign</a>
+          {d.term_id && <button type="button" className="btn btn-info btn-sm" onClick={() => setShowCopy((s) => !s)}><i aria-hidden="true" className="fas fa-copy" /> Copy from term</button>}
+          <a href={d.urls.assign} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign</a>
         </div>
       </div>
 
       {d.term_id && showCopy && (
         <div className="card mb-3" style={{ borderColor: 'var(--info)' }}>
-          <div className="card-header"><h3><i className="fas fa-copy" /> Copy subject assignments into {d.selected_term || 'this term'}</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-copy" /> Copy subject assignments into {d.selected_term || 'this term'}</h3></div>
           <div className="card-body">
             <p className="text-muted text-sm">Copy the subject-to-class assignments (and teachers) from another term. You can modify them afterwards. Existing assignments are kept.</p>
             <form onSubmit={copy} className="d-flex gap-2 align-center flex-wrap">
@@ -171,7 +171,7 @@ function ClassSubjects({ d, notify }) {
               <select className="form-control" style={{ maxWidth: 240 }} required value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
                 <option value="">Select source term…</option>
                 {d.terms.filter((t) => String(t.id) !== String(d.term_id)).map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select>
-              <button type="submit" className="btn btn-primary"><i className="fas fa-copy" /> Copy{d.class_id ? ' (this class)' : ' (all classes)'}</button>
+              <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-copy" /> Copy{d.class_id ? ' (this class)' : ' (all classes)'}</button>
             </form>
           </div></div>
       )}
@@ -195,14 +195,14 @@ function ClassSubjects({ d, notify }) {
                   <div className="data-card-row"><span className="data-card-label">Teacher</span><span>{cs.teacher_name || '-'}</span></div>
                   {cs.arm && <div className="data-card-row"><span className="data-card-label">Arm</span><span>{cs.arm}</span></div>}
                   <div className="data-card-actions">
-                    <a href={cs.edit_url} className="btn btn-secondary btn-sm"><i className="fas fa-edit" /></a>
-                    <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(cs.delete_url, `${cs.subject} from ${cs.class_name}`)}><i className="fas fa-times" /></button>
+                    <a href={cs.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(cs.delete_url, `${cs.subject} from ${cs.class_name}`)}><i aria-hidden="true" className="fas fa-times" /></button>
                   </div>
                 </div>))}
             </div>
           </div></div>
       ) : d.term_id ? (
-        <div className="card"><div className="card-body"><Empty icon="fa-book-open" title="No Subjects Assigned"><p>Assign subjects to classes for this term</p><a href={d.urls.assign} className="btn btn-primary"><i className="fas fa-plus" /> Assign Subjects</a></Empty></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-book-open" title="No Subjects Assigned"><p>Assign subjects to classes for this term</p><a href={d.urls.assign} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign Subjects</a></Empty></div></div>
       ) : (
         <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select a Term"><p>Choose a term to view class subjects</p></Empty></div></div>
       )}
@@ -260,7 +260,7 @@ function Assign({ d, notify }) {
             </tr>))}</tbody>
         </table></div>
         <div className="page-header-actions mt-3">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Assign Selected</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Assign Selected</button>
           <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
         </div>
       </form></div></div>
@@ -290,7 +290,7 @@ function EditClassSubject({ d, notify }) {
           <div className="form-group"><label className="form-label">Teacher Name</label>
             <input type="text" className="form-control" placeholder="Enter teacher name" value={teacher} onChange={(e) => setTeacher(e.target.value)} /></div>
           <div className="page-header-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>
             <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
           </div>
         </form>
@@ -318,8 +318,8 @@ function Scores({ d, notify }) {
     <>
       <div className="page-header"><h1>Score Entry</h1>
         <div className="page-header-actions">
-          <a href={d.urls.scan} className="btn btn-primary" data-native><i className="fas fa-camera" /> Scan Score Sheet</a>
-          <a href={d.urls.import} className="btn btn-secondary" data-native><i className="fas fa-file-excel" /> Import Excel</a>
+          <a href={d.urls.scan} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan Score Sheet</a>
+          <a href={d.urls.import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Import Excel</a>
         </div>
       </div>
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
@@ -348,7 +348,7 @@ function Scores({ d, notify }) {
                   <td><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></td>
                   <td><input type="number" className="form-control" style={{ width: 100 }} min="0" max={d.max_score} step="0.5" value={scores[s.id] ?? ''} onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td></tr>))}</tbody>
             </table></div>
-            <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Scores</button></div>
+            <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Scores</button></div>
           </form></div>
         </div>
       ) : d.has_selection ? (
@@ -372,7 +372,7 @@ function Workflow({ d, notify }) {
     const ok = done && (total == null || done >= total);
     return (
       <div className="wf-step">
-        <div className={'wf-ico ' + (ok ? 'wf-done' : 'wf-todo')}><i className={'fas fa-' + (ok ? 'check' : icon)} /></div>
+        <div className={'wf-ico ' + (ok ? 'wf-done' : 'wf-todo')}><i aria-hidden="true" className={'fas fa-' + (ok ? 'check' : icon)} /></div>
         <div className="wf-body"><h4>{title}</h4><p>{desc}</p></div>
         <a href={link} className="btn btn-secondary btn-sm">{label}</a>
       </div>
@@ -392,10 +392,10 @@ function Workflow({ d, notify }) {
           <Step done={s.behaviour} total={s.students} icon="star-half-stroke" title="Behaviour rated" desc={`${s.behaviour} of ${s.students} have behaviour ratings`} link={d.urls.affective} label="Behaviour" />
         </div></div>
         <div className="card mt-3"><div className="card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" onClick={compute}><i className="fas fa-ranking-star" /> Finalize (compute results &amp; positions)</button>
-          <a href={d.urls.print_all} className="btn btn-success" data-native><i className="fas fa-print" /> Print all report cards</a>
+          <button type="button" className="btn btn-primary" onClick={compute}><i aria-hidden="true" className="fas fa-ranking-star" /> Finalize (compute results &amp; positions)</button>
+          <a href={d.urls.print_all} className="btn btn-success" data-native><i aria-hidden="true" className="fas fa-print" /> Print all report cards</a>
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '.6rem' }}>
-            <span className={'badge ' + (d.published ? 'badge-success' : 'badge-secondary')}><i className={'fas fa-' + (d.published ? 'eye' : 'eye-slash')} /> {d.published ? 'Released to parents/checker' : 'Not released'}</span>
+            <span className={'badge ' + (d.published ? 'badge-success' : 'badge-secondary')}><i aria-hidden="true" className={'fas fa-' + (d.published ? 'eye' : 'eye-slash')} /> {d.published ? 'Released to parents/checker' : 'Not released'}</span>
             <form method="POST" action={d.urls.publish} style={{ display: 'inline' }}>
               <input type="hidden" name="_csrf_token" value={csrfToken()} />
               <input type="hidden" name="next" value={d.self_url + '?term_id=' + d.term_id + '&assignment_id=' + d.assignment_id} />
@@ -404,7 +404,7 @@ function Workflow({ d, notify }) {
             </form>
           </span>
         </div></div>
-        <p className="text-muted text-sm mt-2"><i className="fas fa-info-circle" /> Releasing makes this term's results visible on the Parent Portal and the public result checker (applies to the whole term).</p>
+        <p className="text-muted text-sm mt-2"><i aria-hidden="true" className="fas fa-info-circle" /> Releasing makes this term's results visible on the Parent Portal and the public result checker (applies to the whole term).</p>
       </>) : (
         <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title=""><p>Select a term and class to see the results checklist.</p></Empty></div></div>
       )}
@@ -433,7 +433,7 @@ function BulkEntry({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Bulk Score Entry</h1>
-        <div className="page-header-actions">{d.assignment_id && <a href={d.broadsheet_url} className="btn btn-secondary"><i className="fas fa-table" /> Broadsheet</a>}</div>
+        <div className="page-header-actions">{d.assignment_id && <a href={d.broadsheet_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}</div>
       </div>
       <ClassFilter d={d} />
       {d.has_grid ? (
@@ -456,7 +456,7 @@ function BulkEntry({ d, notify }) {
             </table>
           </div></div>
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save all scores</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save all scores</button>
             <span className="text-muted text-sm">Leave a cell blank to clear it. Positions update automatically.</span>
           </div>
         </form>
@@ -494,11 +494,11 @@ function Broadsheet({ d, notify }) {
         <div className="card">
           <div className="card-header"><h3>{d.selected_assignment}</h3>
             <div className="page-header-actions">
-              <button type="button" className="btn btn-primary btn-sm" onClick={compute}><i className="fas fa-ranking-star" /> Compute results &amp; positions</button>
-              <a href={d.urls.bulk_entry} className="btn btn-secondary btn-sm"><i className="fas fa-pen-to-square" /> Bulk Entry</a>
-              <a href={d.urls.affective} className="btn btn-secondary btn-sm"><i className="fas fa-star-half-stroke" /> Behaviour</a>
-              <a href={d.urls.comments} className="btn btn-secondary btn-sm"><i className="fas fa-comment-dots" /> Comments</a>
-              <a href={d.urls.export} className="btn btn-success btn-sm" data-native download><i className="fas fa-download" /> Export</a>
+              <button type="button" className="btn btn-primary btn-sm" onClick={compute}><i aria-hidden="true" className="fas fa-ranking-star" /> Compute results &amp; positions</button>
+              <a href={d.urls.bulk_entry} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-pen-to-square" /> Bulk Entry</a>
+              <a href={d.urls.affective} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-star-half-stroke" /> Behaviour</a>
+              <a href={d.urls.comments} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-comment-dots" /> Comments</a>
+              <a href={d.urls.export} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-download" /> Export</a>
               <span className="badge badge-info">{d.rows.length} Students</span>
             </div>
           </div>
@@ -527,7 +527,7 @@ function Broadsheet({ d, notify }) {
             {d.class_subjects.map((cs) => <div key={cs.id} style={{ marginRight: '1rem', marginBottom: '0.5rem' }}><strong>{cs.short}</strong> = {cs.name}</div>)}
           </div></div></div>
       </>) : d.has_selection ? (
-        <div className="card"><div className="card-body"><Empty icon="fa-table" title="No Data"><p>No scores entered for this class yet</p><a href={d.urls.scores} className="btn btn-primary"><i className="fas fa-edit" /> Enter Scores</a></Empty></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-table" title="No Data"><p>No scores entered for this class yet</p><a href={d.urls.scores} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Enter Scores</a></Empty></div></div>
       ) : (
         <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select Options"><p>Select term and class to view broadsheet</p></Empty></div></div>
       )}
@@ -552,7 +552,7 @@ function Affective({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Behavioural Ratings</h1>
-        <div className="page-header-actions">{d.assignment_id && <a href={d.broadsheet_url} className="btn btn-secondary"><i className="fas fa-table" /> Broadsheet</a>}</div>
+        <div className="page-header-actions">{d.assignment_id && <a href={d.broadsheet_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}</div>
       </div>
       <ClassFilter d={d} />
       {d.has_students ? (
@@ -570,7 +570,7 @@ function Affective({ d, notify }) {
             </table>
           </div></div>
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save ratings</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save ratings</button>
             <span className="text-muted text-sm">Scale: 5 Excellent · 4 Very Good · 3 Good · 2 Fair · 1 Poor</span>
           </div>
         </form>
@@ -600,7 +600,7 @@ function Comments({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Report Comments</h1>
-        <div className="page-header-actions">{d.assignment_id && <a href={d.broadsheet_url} className="btn btn-secondary"><i className="fas fa-table" /> Broadsheet</a>}</div>
+        <div className="page-header-actions">{d.assignment_id && <a href={d.broadsheet_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}</div>
       </div>
       <ClassFilter d={d} />
       {d.has_students ? (
@@ -615,7 +615,7 @@ function Comments({ d, notify }) {
                 </tr>))}</tbody>
             </table>
           </div></div>
-          <div style={{ marginTop: '1rem' }}><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save comments</button></div>
+          <div style={{ marginTop: '1rem' }}><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save comments</button></div>
         </form>
       ) : d.selected ? (
         <div className="card"><div className="card-body"><Empty icon="fa-users" title=""><p>No students enrolled in this class for the term.</p></Empty></div></div>

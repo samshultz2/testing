@@ -35,9 +35,9 @@ function Index({ d }) {
       <div className="mb-4"><div className="d-flex justify-between align-center flex-wrap gap-2">
         <div><h1>Mock JAMB Examinations</h1><p className="text-muted text-sm mt-1">Track and analyze mock JAMB performance</p></div>
         <div className="d-flex gap-2">
-          <a href={d.urls.create} className="btn btn-primary"><i className="fas fa-plus" /> Create Exam</a>
-          <a href={d.urls.analytics} className="btn btn-outline"><i className="fas fa-chart-line" /> Analytics</a>
-          <a href={d.urls.predictions} className="btn btn-info"><i className="fas fa-crystal-ball" /> Predictions</a>
+          <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>
+          <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
+          <a href={d.urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-crystal-ball" /> Predictions</a>
         </div>
       </div></div>
 
@@ -53,7 +53,7 @@ function Index({ d }) {
 
       {d.exams.length > 0 && (
         <div className="stats-grid mb-4">{stats.map(([t, ic, v, l]) => (
-          <div className="stat-card" key={l}><div className={'stat-icon ' + t}><i className={'fas ' + ic} /></div>
+          <div className="stat-card" key={l}><div className={'stat-icon ' + t}><i aria-hidden="true" className={'fas ' + ic} /></div>
             <div className="stat-content"><h3>{v}</h3><p>{l}</p></div></div>))}</div>
       )}
 
@@ -69,16 +69,16 @@ function Index({ d }) {
               <div className="card" style={{ borderLeft: '4px solid var(--primary)' }} key={e.id}><div className="card-body">
                 <div className="d-flex justify-between align-center mb-2"><h4 className="mb-0">{e.display_name}</h4>
                   <span className={'badge ' + (e.is_completed ? 'badge-success' : 'badge-warning')}>{e.is_completed ? 'Completed' : 'In Progress'}</span></div>
-                <p className="text-muted text-sm mb-3"><i className="fas fa-calendar" /> {e.exam_date}</p>
+                <p className="text-muted text-sm mb-3"><i aria-hidden="true" className="fas fa-calendar" /> {e.exam_date}</p>
                 <div className="grid grid-3 gap-2 mb-3">
                   {[[e.student_count, 'Students'], [e.average_score ?? '-', 'Avg Score'], [e.above_200, '≥200']].map(([v, l], i) => (
                     <div className="text-center p-2" style={{ background: 'var(--bg-hover)', borderRadius: 'var(--border-radius-sm)' }} key={i}>
                       <div className="font-bold">{v}</div><div className="text-xs text-muted">{l}</div></div>))}
                 </div>
                 <div className="d-flex gap-2 flex-wrap">
-                  <a href={e.view_url} className="btn btn-sm btn-primary"><i className="fas fa-eye" /> View</a>
-                  <a href={e.add_url} className="btn btn-sm btn-outline"><i className="fas fa-plus" /> Add Results</a>
-                  <a href={e.bulk_url} className="btn btn-sm btn-outline"><i className="fas fa-list" /> Bulk Entry</a>
+                  <a href={e.view_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View</a>
+                  <a href={e.add_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-plus" /> Add Results</a>
+                  <a href={e.bulk_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-list" /> Bulk Entry</a>
                 </div>
               </div></div>
             ))}</div>
@@ -122,7 +122,7 @@ function CreateExam({ d, notify }) {
         <div className="form-group"><label className="form-label">Description (Optional)</label>
           <textarea className="form-control" rows="3" placeholder="Any notes about this exam..." value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
         <div className="d-flex gap-2 mt-4">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-plus" /> Create Exam</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-plus" /> Create Exam</button>
           <a href={d.urls.index} className="btn btn-secondary">Cancel</a></div>
       </form></div></div>
     </>
@@ -160,13 +160,13 @@ function EditExam({ d, notify }) {
             <textarea className="form-control" rows="3" value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
           <div className="form-check mb-4"><input type="checkbox" className="form-check-input" id="ic" checked={f.is_completed} onChange={(e) => set('is_completed', e.target.checked)} />
             <label htmlFor="ic" className="form-check-label"> Mark as Completed</label></div>
-          <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Changes</button>
+          <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
             <a href={d.view_url} className="btn btn-secondary">Cancel</a></div>
         </form>
         <hr className="my-4" />
         <div className="text-danger"><h4>Danger Zone</h4>
           <p className="text-sm">Deleting this exam will also delete all student results. This cannot be undone.</p>
-          <button type="button" className="btn btn-danger" onClick={del}><i className="fas fa-trash" /> Delete Exam</button></div>
+          <button type="button" className="btn btn-danger" onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete Exam</button></div>
       </div></div>
     </>
   );
@@ -221,11 +221,11 @@ function EditResult({ d, notify }) {
           <hr className="my-4" />
           <div className="form-group"><label className="form-label">Total Score <span className="text-danger">*</span></label>
             <input type="number" min="0" max="400" required className="form-control" value={f.total_score} onChange={(e) => set('total_score', e.target.value)} /></div>
-          <div className="d-flex gap-2 mt-4"><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Changes</button>
+          <div className="d-flex gap-2 mt-4"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
             <a href={d.view_url} className="btn btn-secondary">Cancel</a></div>
         </form>
         <hr className="my-4" />
-        <button type="button" className="btn btn-danger btn-sm" onClick={del}><i className="fas fa-trash" /> Delete Result</button>
+        <button type="button" className="btn btn-danger btn-sm" onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete Result</button>
       </div></div>
     </>
   );
@@ -250,7 +250,7 @@ function BulkEntry({ d, notify }) {
     <>
       <div className="mb-4"><div className="d-flex justify-between align-center flex-wrap gap-2">
         <div><h1>Bulk Entry</h1><p className="text-muted">{d.exam.display_name} - Enter scores for multiple students</p></div>
-        <a href={d.urls.view} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</a>
+        <a href={d.urls.view} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
       </div></div>
       {d.students.length ? (
         <form onSubmit={submit}><div className="card">
@@ -267,7 +267,7 @@ function BulkEntry({ d, notify }) {
               </tr>
             ))}</tbody>
           </table></div>
-          <div className="mt-4"><button type="submit" className="btn btn-primary btn-lg" disabled={busy}><i className="fas fa-save" /> Save All Results</button></div>
+          <div className="mt-4"><button type="submit" className="btn btn-primary btn-lg" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save All Results</button></div>
           </div></div>
         </form>
       ) : (
@@ -325,13 +325,13 @@ function AddResult({ d, notify }) {
   }
   return (
     <>
-      <PageHeader title="Add Result" actions={<a href={d.view_url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-left" /> Back</a>} />
+      <PageHeader title="Add Result" actions={<a href={d.view_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>} />
       <div className="card" style={{ maxWidth: 760 }}><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Student <span className="text-danger">*</span></label>
           <select className="form-control" required value={studentId} onChange={(e) => onStudent(e.target.value)}>
             <option value="">Select Student</option>{d.students.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
         <hr className="my-4" /><h4 className="mb-2">Subject Scores</h4>
-        <div className="entry-hint"><i className="fas fa-circle-info" />
+        <div className="entry-hint"><i aria-hidden="true" className="fas fa-circle-info" />
           <span>Enter the number of <strong>correct answers</strong> for each subject. We convert it to a score over 100 automatically — English is marked over 60 questions, every other subject over 40.</span></div>
         {rows.map((r, i) => {
           const q = qFor(r.subject); const sc = scoreOf(r);
@@ -349,10 +349,10 @@ function AddResult({ d, notify }) {
         })}
         <div className="total-box"><div><div className="total-label">Total Score</div>
           <div><span className="total-value">{total}</span> <span className="total-max">/ {d.max_total}</span></div></div>
-          <i className="fas fa-calculator" style={{ fontSize: '1.75rem', opacity: 0.6 }} /></div>
+          <i aria-hidden="true" className="fas fa-calculator" style={{ fontSize: '1.75rem', opacity: 0.6 }} /></div>
         <div className="form-check mb-4"><input type="checkbox" className="form-check-input" id="aa" checked={addAnother} onChange={(e) => setAddAnother(e.target.checked)} />
           <label htmlFor="aa" className="form-check-label"> Add another result after saving</label></div>
-        <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Result</button>
+        <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Result</button>
           <a href={d.view_url} className="btn btn-secondary">Cancel</a></div>
       </form></div></div>
     </>
@@ -434,12 +434,12 @@ function ViewExam({ d, notify }) {
 
   const actions = (
     <>
-      <a href={d.urls.add} className="btn btn-primary btn-sm" title="Add"><i className="fas fa-plus" /></a>
-      <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i className="fas fa-list" /></a>
-      <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i className="fas fa-file-excel" /></a>
-      {d.results.length > 0 && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="HD Image"><i className="fas fa-image" /></button>}
-      <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i className="fas fa-edit" /></a>
-      <a href={d.urls.index} className="btn btn-secondary btn-sm" title="Back"><i className="fas fa-arrow-left" /></a>
+      <a href={d.urls.add} className="btn btn-primary btn-sm" title="Add"><i aria-hidden="true" className="fas fa-plus" /></a>
+      <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i aria-hidden="true" className="fas fa-list" /></a>
+      <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /></a>
+      {d.results.length > 0 && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="HD Image"><i aria-hidden="true" className="fas fa-image" /></button>}
+      <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
+      <a href={d.urls.index} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /></a>
     </>
   );
 
@@ -447,7 +447,7 @@ function ViewExam({ d, notify }) {
     <>
       <div className="page-header">
         <div><h1>{d.exam.display_name}</h1>
-          <p className="text-muted text-sm"><i className="fas fa-calendar" /> {d.exam.exam_date}{d.exam.session_name ? ` | ${d.exam.session_name}` : ''}</p></div>
+          <p className="text-muted text-sm"><i aria-hidden="true" className="fas fa-calendar" /> {d.exam.exam_date}{d.exam.session_name ? ` | ${d.exam.session_name}` : ''}</p></div>
         <div className="page-header-actions">{actions}</div>
       </div>
 
@@ -465,11 +465,11 @@ function ViewExam({ d, notify }) {
           <div className="mj-stat-card"><div className="stat-value">{st.statistics.median}</div><div className="stat-label">Median</div></div>
         </div>
         <div className="charts-row">
-          <div className="card"><div className="card-header"><h3><i className="fas fa-chart-pie" /> Distribution</h3></div><div className="chart-body"><canvas ref={distRef} /></div></div>
-          {st.subject_analysis.length > 0 && <div className="card"><div className="card-header"><h3><i className="fas fa-chart-bar" /> Subjects</h3></div><div className="chart-body"><canvas ref={subjRef} /></div></div>}
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-pie" /> Distribution</h3></div><div className="chart-body"><canvas ref={distRef} /></div></div>
+          {st.subject_analysis.length > 0 && <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-bar" /> Subjects</h3></div><div className="chart-body"><canvas ref={subjRef} /></div></div>}
         </div>
         {st.subject_analysis.length > 0 && (
-          <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-book" /> Subject Analysis</h3></div>
+          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Subject Analysis</h3></div>
             <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
               <table className="subject-table">
                 <thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>Count</th><th>Avg</th><th>Max</th><th>Min</th><th>≥70</th><th>≥50</th></tr></thead>
@@ -485,7 +485,7 @@ function ViewExam({ d, notify }) {
 
       <div className="card">
         <div className="card-header">
-          <h3><i className="fas fa-list-ol" /> Results ({d.results.length})</h3>
+          <h3><i aria-hidden="true" className="fas fa-list-ol" /> Results ({d.results.length})</h3>
           <form onSubmit={applyFilters} className="filter-form">
             <input type="text" className="form-control" placeholder="Search name..." style={{ width: 140 }}
                    value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
@@ -493,7 +493,7 @@ function ViewExam({ d, notify }) {
                    value={filters.min_score} onChange={(e) => setFilters((f) => ({ ...f, min_score: e.target.value }))} />
             <input type="number" className="form-control" placeholder="Max" style={{ width: 70 }}
                    value={filters.max_score} onChange={(e) => setFilters((f) => ({ ...f, max_score: e.target.value }))} />
-            <button type="submit" className="btn btn-sm btn-primary"><i className="fas fa-search" /></button>
+            <button type="submit" className="btn btn-sm btn-primary" aria-label="Search"><i aria-hidden="true" className="fas fa-search" /></button>
             {d.has_filter && <button type="button" className="btn btn-sm btn-secondary" onClick={clearFilters}>Clear</button>}
           </form>
         </div>
@@ -508,7 +508,7 @@ function ViewExam({ d, notify }) {
                     <div>
                       <div className="student-name">{it.student.full_name}</div>
                       <div className="student-id">{it.student.student_id}</div>
-                      <a href={it.student.progress_url} className="progress-link"><i className="fas fa-chart-line" /> View Progress</a>
+                      <a href={it.student.progress_url} className="progress-link"><i aria-hidden="true" className="fas fa-chart-line" /> View Progress</a>
                     </div>
                   </div>
                   <span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span>
@@ -519,9 +519,9 @@ function ViewExam({ d, notify }) {
                     <div className="student-subject" key={i}><span>{s.name.substring(0, 10)}</span><strong>{s.score}</strong></div>))}
                 </div>
                 <div className="student-actions">
-                  <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i className="fas fa-chart-line" /></a>
-                  <a href={it.edit_url} className="btn btn-warning btn-sm"><i className="fas fa-edit" /></a>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i className="fas fa-trash" /></button>
+                  <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
+                  <a href={it.edit_url} className="btn btn-warning btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div>
               </div>
             ))}
@@ -534,15 +534,15 @@ function ViewExam({ d, notify }) {
                 <tr key={it.rank}>
                   <td><span className={'student-rank' + rankClass(it.rank)} style={{ width: 24, height: 24, fontSize: '0.7rem' }}>{it.rank}</span></td>
                   <td><strong>{it.student.full_name}</strong><br /><small style={{ color: 'var(--text-muted)' }}>{it.student.student_id}</small><br />
-                    <a href={it.student.progress_url} className="progress-link"><i className="fas fa-chart-line" /> Progress</a></td>
+                    <a href={it.student.progress_url} className="progress-link"><i aria-hidden="true" className="fas fa-chart-line" /> Progress</a></td>
                   <td><strong style={{ fontSize: '1.1rem', color: scoreColor(it.total_score) }}>{it.total_score}</strong></td>
                   {it.subjects.map((s, i) => (
                     <td key={i}>{s ? <><small>{s.name.substring(0, 8)}</small><br /><strong>{s.score}</strong></> : '-'}</td>))}
                   <td><span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span></td>
                   <td><div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i className="fas fa-chart-line" /></a>
-                    <a href={it.edit_url} className="btn btn-warning btn-sm"><i className="fas fa-edit" /></a>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i className="fas fa-trash" /></button>
+                    <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
+                    <a href={it.edit_url} className="btn btn-warning btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td>
                 </tr>))}
               </tbody>
@@ -551,14 +551,14 @@ function ViewExam({ d, notify }) {
         </>) : (
           <div className="card-body"><Empty icon="fa-clipboard-list" title="No Results">
             <p>{filters.search ? `No students found matching "${filters.search}"` : 'Add results for this exam'}</p>
-            <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-plus" /> Add</a></Empty></div>
+            <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a></Empty></div>
         )}
       </div>
 
       <div className="card mt-3" style={{ borderColor: 'var(--danger)' }}>
-        <div className="card-header" style={{ background: 'rgba(220,53,69,0.1)' }}><h3 className="text-danger"><i className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
+        <div className="card-header" style={{ background: 'rgba(220,53,69,0.1)' }}><h3 className="text-danger"><i aria-hidden="true" className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
         <div className="card-body"><p className="text-muted mb-3">Delete exam and all results permanently.</p>
-          <button type="button" className="btn btn-danger" onClick={delExam}><i className="fas fa-trash" /> Delete Exam</button></div>
+          <button type="button" className="btn btn-danger" onClick={delExam}><i aria-hidden="true" className="fas fa-trash" /> Delete Exam</button></div>
       </div>
 
       {exporting && <ExportModal d={d} st={st} onClose={() => setExporting(false)} onGenerate={doExport} />}
@@ -579,7 +579,7 @@ function ExportModal({ onClose, onGenerate }) {
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 12, maxWidth: 400, margin: '2rem auto', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}><i className="fas fa-image" /> Export HD Image</h3>
+          <h3 style={{ margin: 0, fontSize: '1.1rem' }}><i aria-hidden="true" className="fas fa-image" /> Export HD Image</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
         </div>
         <div style={{ padding: '1rem' }}>
@@ -594,7 +594,7 @@ function ExportModal({ onClose, onGenerate }) {
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: '1rem' }}>
             <option value="2">Standard (2x)</option><option value="3">HD (3x)</option><option value="4">Ultra HD (4x)</option>
           </select>
-          <button onClick={() => onGenerate(opts)} className="btn btn-primary" style={{ width: '100%' }}><i className="fas fa-download" /> Generate Image</button>
+          <button onClick={() => onGenerate(opts)} className="btn btn-primary" style={{ width: '100%' }}><i aria-hidden="true" className="fas fa-download" /> Generate Image</button>
         </div>
       </div>
     </div>
@@ -713,10 +713,10 @@ function StudentProgress({ d }) {
 
         {s.jamb_target != null && (
           <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div><strong><i className="fas fa-bullseye" /> JAMB Target: {s.jamb_target}</strong>
+            <div><strong><i aria-hidden="true" className="fas fa-bullseye" /> JAMB Target: {s.jamb_target}</strong>
               <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>Latest mock: {p.latest_score}</p></div>
             <div style={{ textAlign: 'right' }}>
-              {gap <= 0 ? <span className="badge badge-success" style={{ fontSize: '0.95rem' }}><i className="fas fa-check" /> Target met (+{-gap})</span>
+              {gap <= 0 ? <span className="badge badge-success" style={{ fontSize: '0.95rem' }}><i aria-hidden="true" className="fas fa-check" /> Target met (+{-gap})</span>
                 : <span className="badge badge-warning" style={{ fontSize: '0.95rem' }}>{gap} to go</span>}
             </div>
           </div></div>
@@ -724,15 +724,15 @@ function StudentProgress({ d }) {
 
         {pred && (<>
           <div className="prediction-card">
-            <h3 style={{ textAlign: 'center', margin: '0 0 0.5rem', fontSize: '1rem', opacity: 0.9 }}><i className="fas fa-crystal-ball" /> Predicted Real JAMB Score</h3>
+            <h3 style={{ textAlign: 'center', margin: '0 0 0.5rem', fontSize: '1rem', opacity: 0.9 }}><i aria-hidden="true" className="fas fa-crystal-ball" /> Predicted Real JAMB Score</h3>
             <div className="prediction-score">{pred.predicted_score}</div>
             <div className="prediction-range">Expected Range: {pred.predicted_range.low} - {pred.predicted_range.high}</div>
             <div className="prediction-details">
               <div className="prediction-detail"><div className="val">
                 <span className={'trend-badge ' + (pred.improvement_trend > 0 ? 'trend-improving' : pred.improvement_trend < 0 ? 'trend-declining' : 'trend-stable')}>
-                  {pred.improvement_trend > 0 ? <><i className="fas fa-arrow-up" /> +{pred.improvement_trend}</>
-                    : pred.improvement_trend < 0 ? <><i className="fas fa-arrow-down" /> {pred.improvement_trend}</>
-                    : <><i className="fas fa-minus" /> Stable</>}
+                  {pred.improvement_trend > 0 ? <><i aria-hidden="true" className="fas fa-arrow-up" /> +{pred.improvement_trend}</>
+                    : pred.improvement_trend < 0 ? <><i aria-hidden="true" className="fas fa-arrow-down" /> {pred.improvement_trend}</>
+                    : <><i aria-hidden="true" className="fas fa-minus" /> Stable</>}
                 </span></div><div className="lbl">Trend</div></div>
               <div className="prediction-detail"><div className="val">{pred.confidence_level}%</div><div className="lbl">Confidence</div></div>
               <div className="prediction-detail"><div className="val">{pred.mock_count}</div><div className="lbl">Based on Exams</div></div>
@@ -741,16 +741,16 @@ function StudentProgress({ d }) {
               {pred.recommendation}</div>
           </div>
           <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center">
-            <div><strong><i className="fas fa-file-alt" /> Want to see predicted WAEC grades?</strong>
+            <div><strong><i aria-hidden="true" className="fas fa-file-alt" /> Want to see predicted WAEC grades?</strong>
               <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>Based on your Mock JAMB subject scores</p></div>
-            <a href={d.urls.predictions} className="btn btn-primary"><i className="fas fa-chart-line" /> View All Predictions</a>
+            <a href={d.urls.predictions} className="btn btn-primary"><i aria-hidden="true" className="fas fa-chart-line" /> View All Predictions</a>
           </div></div>
         </>)}
 
-        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-chart-line" /> Score Progression</h3></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Score Progression</h3></div>
           <div className="card-body"><div className="progress-chart"><canvas ref={chartRef} /></div></div></div>
 
-        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-history" /> Exam History</h3></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-history" /> Exam History</h3></div>
           <div className="card-body"><div className="exam-timeline">
             {p.progress.map((x, i) => (
               <div className="exam-item" key={i}>
@@ -764,7 +764,7 @@ function StudentProgress({ d }) {
           </div></div></div>
 
         {latest && latest.subjects && latest.subjects.length > 0 && (
-          <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-book" /> Latest Subject Scores</h3></div>
+          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Latest Subject Scores</h3></div>
             <div className="card-body"><div className="subject-breakdown">
               {latest.subjects.map((sub, i) => (
                 <div className="subject-card" key={i}><div className="name">{sub.name}</div>
@@ -773,7 +773,7 @@ function StudentProgress({ d }) {
         )}
 
         {recs && recs.length > 0 && (
-          <div className="card"><div className="card-header"><h3><i className="fas fa-lightbulb" /> Improvement Recommendations</h3></div>
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-lightbulb" /> Improvement Recommendations</h3></div>
             <div className="card-body"><div className="recommendation-list">
               {recs.map((rec, i) => (
                 <div className={'rec-item ' + rec.priority} key={i}>
@@ -816,7 +816,7 @@ function Analytics({ d }) {
 
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-chart-bar" /> Mock JAMB Analytics</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chart-bar" /> Mock JAMB Analytics</h1></div>
       <div className="filter-bar">
         <div className="form-group mb-0">
           <label className="form-label">Academic Session</label>
@@ -836,10 +836,10 @@ function Analytics({ d }) {
             {change > 0 ? '+' : ''}{r1(change)}</div><div className="label">Change from 1st</div></div>
         </div>
 
-        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-chart-line" /> Exam Comparison</h3></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Exam Comparison</h3></div>
           <div className="card-body"><div className="chart-container"><canvas ref={chartRef} /></div></div></div>
 
-        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-table" /> Exam Statistics</h3></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-table" /> Exam Statistics</h3></div>
           <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
             <table className="comparison-table">
               <thead><tr><th>Exam</th><th>Students</th><th>Average</th><th>Change</th><th>Max</th><th>Min</th><th>≥200</th><th>≥250%</th></tr></thead>
@@ -860,7 +860,7 @@ function Analytics({ d }) {
             </table>
           </div></div>
 
-        <h3 className="mb-3"><i className="fas fa-clipboard-list" /> Detailed Breakdown</h3>
+        <h3 className="mb-3"><i aria-hidden="true" className="fas fa-clipboard-list" /> Detailed Breakdown</h3>
         {d.exams_stats.map((stats) => {
           const total = stats.student_count;
           const pct = (n) => (total > 0 ? (n / total) * 100 : 0);
@@ -898,7 +898,7 @@ function Analytics({ d }) {
       </>) : (
         <div className="card"><div className="card-body"><Empty icon="fa-chart-bar" title="No Data Yet">
           <p>Conduct mock exams to see analytics</p>
-          <a href={d.urls.create} className="btn btn-primary"><i className="fas fa-plus" /> Create Exam</a></Empty></div></div>
+          <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a></Empty></div></div>
       )}
     </>
   );

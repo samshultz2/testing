@@ -25,7 +25,7 @@ function Index({ d }) {
   const card = (url, icon, title, sub) => (
     <a key={title} href={url} onClick={(e) => { e.preventDefault(); nav.go(url); }}
        className="data-card" style={{ textDecoration: 'none', color: 'inherit' }}>
-      <div className="data-card-header"><div className="data-card-title"><i className={`fas ${icon}`} /> {title}</div></div>
+      <div className="data-card-header"><div className="data-card-title"><i aria-hidden="true" className={`fas ${icon}`} /> {title}</div></div>
       <div className="data-card-row">{sub}</div>
     </a>
   );
@@ -90,7 +90,7 @@ function School({ d, notify }) {
             </select>
             <span className="form-hint d-block">Used for all dates, times, exam windows and timestamps across the site. Default: Africa/Lagos (UTC+1).</span></div>
           <Actions>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -142,7 +142,7 @@ function Academic({ d, notify }) {
               <small className="text-muted">Minimum average to be promoted</small></div>
           </div>
           <Actions>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -181,14 +181,14 @@ function Grades({ d, notify }) {
                   <td><input type="number" className="form-control" value={r.min_score} onChange={set(i, 'min_score')} style={{ width: 80 }} placeholder="80" /></td>
                   <td><input type="number" className="form-control" value={r.max_score} onChange={set(i, 'max_score')} style={{ width: 80 }} placeholder="100" /></td>
                   <td><input type="text" className="form-control" value={r.remark} onChange={set(i, 'remark')} placeholder="Excellent" /></td>
-                  <td><button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i className="fas fa-times" /></button></td>
+                  <td><button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button></td>
                 </tr>
               ))}
             </tbody>
           </table></div>
           <Actions>
-            <button type="button" className="btn btn-secondary" onClick={add}><i className="fas fa-plus" /> Add Grade</button>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save</button>
+            <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add Grade</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -231,7 +231,7 @@ function Traits({ d, notify }) {
             </tbody>
           </table>
           <div className="mt-3">
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save traits</button>{' '}
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save traits</button>{' '}
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back to Settings</a>
           </div>
         </form>
@@ -273,14 +273,14 @@ function Assessments({ d, notify }) {
                   <td><input type="text" className="form-control" value={r.name} onChange={set(i, 'name')} placeholder="Assessment Name" /></td>
                   <td><input type="text" className="form-control" value={r.short_name} onChange={set(i, 'short_name')} style={{ width: 80 }} placeholder="CA1" /></td>
                   <td><input type="number" className="form-control" value={r.max_score} onChange={set(i, 'max_score')} style={{ width: 80 }} min="1" max="100" placeholder="10" /></td>
-                  <td><button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i className="fas fa-times" /></button></td>
+                  <td><button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button></td>
                 </tr>
               ))}
             </tbody>
           </table></div>
           <Actions>
-            <button type="button" className="btn btn-secondary" onClick={add}><i className="fas fa-plus" /> Add</button>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save</button>
+            <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -313,7 +313,7 @@ function TimetableSlots({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Timetable Slots</h1>
-        <button type="button" className="btn btn-secondary" onClick={generate}><i className="fas fa-sync" /> Auto-Generate</button></div>
+        <button type="button" className="btn btn-secondary" onClick={generate}><i aria-hidden="true" className="fas fa-sync" /> Auto-Generate</button></div>
       <div className="card mb-3"><div className="card-body">
         <p className="text-muted">School hours: {s.school_day_start || '08:20'} - {s.school_day_end || '14:10'} | Period: {s.period_duration || '40'} mins | Break: {s.break_duration || '30'} mins</p>
       </div></div>
@@ -334,7 +334,7 @@ function TimetableSlots({ d, notify }) {
               </tbody>
             </table></div>
             <Actions>
-              <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Changes</button>
+              <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
               <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
             </Actions>
           </form>
@@ -362,26 +362,26 @@ function Backup({ d, notify }) {
     <>
       <div className="page-header"><h1>Backup & Restore</h1></div>
       <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon primary"><i className="fas fa-database" /></div><div className="stat-content"><h3>{kb(d.db_size).toFixed(2)} KB</h3><p>Database Size</p></div></div>
-        <div className="stat-card"><div className="stat-icon info"><i className="fas fa-users" /></div><div className="stat-content"><h3>{d.counts.students}</h3><p>Students</p></div></div>
-        <div className="stat-card"><div className="stat-icon success"><i className="fas fa-calendar" /></div><div className="stat-content"><h3>{d.counts.sessions}</h3><p>Sessions</p></div></div>
-        <div className="stat-card"><div className="stat-icon secondary"><i className="fas fa-user-shield" /></div><div className="stat-content"><h3>{d.counts.users}</h3><p>Users</p></div></div>
+        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-database" /></div><div className="stat-content"><h3>{kb(d.db_size).toFixed(2)} KB</h3><p>Database Size</p></div></div>
+        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-users" /></div><div className="stat-content"><h3>{d.counts.students}</h3><p>Students</p></div></div>
+        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-calendar" /></div><div className="stat-content"><h3>{d.counts.sessions}</h3><p>Sessions</p></div></div>
+        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-user-shield" /></div><div className="stat-content"><h3>{d.counts.users}</h3><p>Users</p></div></div>
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-download" /> Download Backup</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-download" /> Download Backup</h3></div>
         <div className="card-body">
           <p>Download a complete backup of your database. Keep this file safe!</p>
           <Actions>
-            <a href={d.download_url} className="btn btn-primary"><i className="fas fa-download" /> Download Database (.db)</a>
-            <a href={d.export_json_url} className="btn btn-secondary"><i className="fas fa-file-code" /> Export JSON</a>
-            <button type="button" className="btn btn-secondary" onClick={createSnap}><i className="fas fa-clock-rotate-left" /> Create snapshot now</button>
+            <a href={d.download_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-download" /> Download Database (.db)</a>
+            <a href={d.export_json_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-code" /> Export JSON</a>
+            <button type="button" className="btn btn-secondary" onClick={createSnap}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Create snapshot now</button>
           </Actions>
         </div>
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-box-archive" /> Stored backups</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-box-archive" /> Stored backups</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           <p className="text-muted text-sm" style={{ padding: '.8rem 1rem 0' }}>Automatic daily snapshots are kept on the server (the latest few). Download any to keep off-device.</p>
           {d.backups.length ? (
@@ -393,22 +393,22 @@ function Backup({ d, notify }) {
                     <td data-label="File">{b.name}</td>
                     <td data-label="Date">{b.modified}</td>
                     <td data-label="Size" className="text-right">{kb(b.size).toFixed(0)} KB</td>
-                    <td className="actions"><a href={b.download_url} className="btn btn-secondary btn-sm"><i className="fas fa-download" /></a></td>
+                    <td className="actions"><a href={b.download_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-download" /></a></td>
                   </tr>
                 ))}
               </tbody>
             </table></div>
           ) : (
-            <div className="empty-state" style={{ padding: '1.2rem' }}><i className="fas fa-box-archive" /><p>No snapshots yet — they appear after the app runs or when you create one.</p></div>
+            <div className="empty-state" style={{ padding: '1.2rem' }}><i aria-hidden="true" className="fas fa-box-archive" /><p>No snapshots yet — they appear after the app runs or when you create one.</p></div>
           )}
         </div>
       </div>
 
       <div className="card">
-        <div className="card-header"><h3><i className="fas fa-upload" /> Restore Backup</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-upload" /> Restore Backup</h3></div>
         <div className="card-body">
           <div className="flash-message flash-warning mb-3">
-            <i className="fas fa-exclamation-triangle" />
+            <i aria-hidden="true" className="fas fa-exclamation-triangle" />
             <span><strong>Warning:</strong> Restoring will replace ALL current data. A backup of current data will be created automatically.</span>
           </div>
           <form method="POST" action={d.restore_url} encType="multipart/form-data" onSubmit={onRestore}>
@@ -417,7 +417,7 @@ function Backup({ d, notify }) {
               <label className="form-label">Select Backup File (.db or .sql)</label>
               <input type="file" name="file" className="form-control" accept=".db,.sql" required />
             </div>
-            <button type="submit" className="btn btn-danger"><i className="fas fa-upload" /> Restore Backup</button>
+            <button type="submit" className="btn btn-danger"><i aria-hidden="true" className="fas fa-upload" /> Restore Backup</button>
           </form>
         </div>
       </div>
@@ -463,13 +463,13 @@ function Branches({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-code-branch" /> Branches</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-code-branch" /> Branches</h1></div>
       <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
-        <i className="fas fa-info-circle" /> Central users (Director of Studies, Exams &amp; Standards, IT) see every branch.
+        <i aria-hidden="true" className="fas fa-info-circle" /> Central users (Director of Studies, Exams &amp; Standards, IT) see every branch.
         Branch users only see their own. The <strong>default</strong> branch is where new and existing unassigned records belong.
       </p>
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-plus" /> Add branch</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add branch</h3></div>
         <div className="card-body">
           <form onSubmit={add} className="filter-form" style={{ flexWrap: 'wrap', gap: '1rem' }}>
             <div className="form-group"><label className="form-label">Name <span className="text-danger">*</span></label>
@@ -480,7 +480,7 @@ function Branches({ d, notify }) {
               <input type="text" className="form-control" value={f.phone} onChange={set('phone')} /></div>
             <div className="form-group" style={{ flex: '1 1 220px' }}><label className="form-label">Address</label>
               <input type="text" className="form-control" value={f.address} onChange={set('address')} /></div>
-            <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="submit" className="btn btn-primary"><i className="fas fa-plus" /> Add</button></div>
+            <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
           </form>
         </div>
       </div>
@@ -522,7 +522,7 @@ function Users({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>User Management</h1>
-        <a href={d.add_url} onClick={(e) => { e.preventDefault(); nav.go(d.add_url); }} className="btn btn-primary"><i className="fas fa-plus" /> Add User</a></div>
+        <a href={d.add_url} onClick={(e) => { e.preventDefault(); nav.go(d.add_url); }} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add User</a></div>
       <div className="card"><div className="card-body" style={{ padding: 0 }}>
         {d.users.length ? (
           <div className="data-cards" style={{ padding: '1rem' }}>
@@ -536,8 +536,8 @@ function Users({ d, notify }) {
                 <div className="data-card-row"><span className="data-card-label">Email</span><span>{u.email || '-'}</span></div>
                 <div className="data-card-row"><span className="data-card-label">Status</span><span className={`badge ${u.is_active ? 'badge-success' : 'badge-secondary'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></div>
                 <div className="data-card-actions">
-                  <a href={u.edit_url} onClick={(e) => { e.preventDefault(); nav.go(u.edit_url); }} className="btn btn-secondary btn-sm"><i className="fas fa-edit" /> Edit</a>
-                  <button type="button" className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={() => del(u)}><i className="fas fa-trash" /></button>
+                  <a href={u.edit_url} onClick={(e) => { e.preventDefault(); nav.go(u.edit_url); }} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
+                  <button type="button" className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={() => del(u)}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div>
               </div>
             ))}
@@ -579,7 +579,7 @@ function AddUser({ d, notify }) {
           <div className="form-group"><label className="form-label">Password <span className="required">*</span></label>
             <input type="password" className="form-control" value={f.password} onChange={set('password')} required placeholder="Enter password" /></div>
           <Actions>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Create User</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Create User</button>
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Cancel</a>
           </Actions>
         </form>
@@ -625,7 +625,7 @@ function EditUser({ d, notify }) {
             <input type="checkbox" id="is_active" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} />{' '}
             <label htmlFor="is_active">Active</label></div>
           <Actions>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Changes</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Cancel</a>
           </Actions>
         </form>

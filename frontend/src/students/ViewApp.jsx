@@ -46,19 +46,19 @@ export default function ViewApp({ initial }) {
         <div>
           <h1>{s.full_name}</h1>{' '}
           <span className="badge badge-primary">{s.student_id}</span>{' '}
-          {s.is_graduated && <span className="badge badge-success"><i className="fas fa-user-graduate" /> Graduate</span>}
+          {s.is_graduated && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</span>}
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
           {canManage && <button type="button" className={'btn ' + (s.is_graduated ? 'btn-warning' : 'btn-success')} disabled={busy}
             onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.full_name}?`))
               run(urls.graduate, {}, 'Updated graduation status.'); }}>
-            <i className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo Graduate' : 'Mark as Graduate'}
+            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo Graduate' : 'Mark as Graduate'}
           </button>}
-          <a href={urls.exam_report} className="btn btn-info"><i className="fas fa-file-pdf" /> Exam Report</a>
-          <a href={urls.predictions} className="btn btn-info"><i className="fas fa-chart-line" /> Predictions</a>
-          <a href={urls.report_card} className="btn btn-success"><i className="fas fa-file-invoice" /> Report Card</a>
-          {canManage && <a href={urls.edit} className="btn btn-primary"><i className="fas fa-edit" /> Edit</a>}
-          <a href={urls.list} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</a>
+          <a href={urls.exam_report} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-pdf" /> Exam Report</a>
+          <a href={urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-chart-line" /> Predictions</a>
+          <a href={urls.report_card} className="btn btn-success"><i aria-hidden="true" className="fas fa-file-invoice" /> Report Card</a>
+          {canManage && <a href={urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
+          <a href={urls.list} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
         </div>
       </div>
 
@@ -71,7 +71,7 @@ export default function ViewApp({ initial }) {
       )}
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-user" /> Personal Info</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user" /> Personal Info</h3></div>
         <div className="card-body">
           <div className="info-grid">
             <Info label="Full Name">{s.full_name}</Info>
@@ -89,7 +89,7 @@ export default function ViewApp({ initial }) {
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-phone" /> Contacts</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-phone" /> Contacts</h3></div>
         <div className="card-body">
           {(d.contacts || []).length ? (
             <div className="data-cards">
@@ -109,7 +109,7 @@ export default function ViewApp({ initial }) {
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-school" /> Class History</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-school" /> Class History</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {(d.enrollments || []).length ? (
             <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
@@ -123,8 +123,8 @@ export default function ViewApp({ initial }) {
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-file-alt" /> WAEC</h3>
-          <a href={(d.waec || {}).add_url} className="btn btn-secondary btn-sm"><i className="fas fa-plus" /> Add</a></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC</h3>
+          <a href={(d.waec || {}).add_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
         <div className="card-body">
           {(d.waec || {}).count ? (<>
             <p>{d.waec.count} subjects recorded</p>
@@ -134,8 +134,8 @@ export default function ViewApp({ initial }) {
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-file-contract" /> JAMB</h3>
-          <a href={(d.jamb || {}).add_url} className="btn btn-secondary btn-sm"><i className="fas fa-plus" /> Add</a></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB</h3>
+          <a href={(d.jamb || {}).add_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
         <div className="card-body">
           {(d.jamb || {}).latest ? (
             <div className="info-grid">
@@ -158,7 +158,7 @@ export default function ViewApp({ initial }) {
                 <td>{r.severity && <span className={'badge ' + (r.severity === 'Major' ? 'badge-danger' : 'badge-warning')}>{r.severity}</span>}</td>
                 <td>{r.description}</td><td>{r.action_taken || '—'}</td><td className="text-muted">{r.reported_by || ''}</td>
                 <td><button type="button" className="btn btn-danger btn-sm" disabled={busy}
-                            onClick={async () => { if (await confirm('Remove this record?')) run(r.delete_url, {}, 'Record removed.'); }}><i className="fas fa-times" /></button></td>
+                            onClick={async () => { if (await confirm('Remove this record?')) run(r.delete_url, {}, 'Record removed.'); }}><i aria-hidden="true" className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -177,7 +177,7 @@ export default function ViewApp({ initial }) {
                 <td><span className={'badge ' + (v.parent_notified ? 'badge-success' : 'badge-warning')}>{v.parent_notified ? 'Yes' : 'No'}</span></td>
                 <td className="text-muted">{v.attended_by || ''}</td>
                 <td><button type="button" className="btn btn-danger btn-sm" disabled={busy}
-                            onClick={async () => { if (await confirm('Remove this visit?')) run(v.delete_url, {}, 'Visit removed.'); }}><i className="fas fa-times" /></button></td>
+                            onClick={async () => { if (await confirm('Remove this visit?')) run(v.delete_url, {}, 'Visit removed.'); }}><i aria-hidden="true" className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -190,7 +190,7 @@ export default function ViewApp({ initial }) {
 function Welfare({ title, icon, count, children }) {
   return (
     <div className="card mb-3">
-      <div className="card-header"><h3><i className={'fas ' + icon} /> {title} ({count})</h3></div>
+      <div className="card-header"><h3><i aria-hidden="true" className={'fas ' + icon} /> {title} ({count})</h3></div>
       <div className="card-body">{children}</div>
     </div>
   );
@@ -217,7 +217,7 @@ function DisciplineForm({ categories, today, disabled, onAdd }) {
         <input type="text" className="form-control" placeholder="Describe the incident" required value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
       <div className="form-group" style={{ flex: 2, minWidth: 200 }}><label className="form-label">Action taken</label>
         <input type="text" className="form-control" placeholder="e.g., Warning, parent called" value={f.action_taken} onChange={(e) => set('action_taken', e.target.value)} /></div>
-      <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm" disabled={disabled}><i className="fas fa-plus" /> Add</button></div>
+      <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm" disabled={disabled}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
     </form>
   );
 }
@@ -240,7 +240,7 @@ function ClinicForm({ today, disabled, onAdd }) {
         <input type="text" className="form-control" placeholder="e.g., Paracetamol, rest" value={f.treatment} onChange={(e) => set('treatment', e.target.value)} /></div>
       <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
         <input type="checkbox" checked={f.parent_notified} onChange={(e) => set('parent_notified', e.target.checked)} /> Parent notified</label></div>
-      <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm" disabled={disabled}><i className="fas fa-plus" /> Add</button></div>
+      <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm" disabled={disabled}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
     </form>
   );
 }

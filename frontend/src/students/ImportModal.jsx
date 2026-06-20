@@ -98,7 +98,7 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
               <div className="d-flex gap-2 mt-3" style={{ justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
                 <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={doPreview}>
-                  {busy ? 'Reading…' : <><i className="fas fa-eye" /> Preview</>}
+                  {busy ? 'Reading…' : <><i aria-hidden="true" className="fas fa-eye" /> Preview</>}
                 </button>
               </div>
             </>
@@ -130,7 +130,7 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
                       <tr key={r.row} style={(r.error || r.warn) ? { background: 'rgba(255,193,7,0.10)' } : undefined}>
                         <td>{r.row}</td>
                         <td>{r.name || <span className="text-muted">—</span>}
-                          {(r.error || r.warn) && <span title={r.error || r.warn}><i className="fas fa-triangle-exclamation text-warning" style={{ marginLeft: 4 }} /></span>}</td>
+                          {(r.error || r.warn) && <span title={r.error || r.warn}><i aria-hidden="true" className="fas fa-triangle-exclamation text-warning" style={{ marginLeft: 4 }} /></span>}</td>
                         <td className="text-muted">{summarise(r)}</td>
                       </tr>
                     ))}
@@ -150,9 +150,9 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
               )}
 
               <div className="d-flex gap-2 mt-3" style={{ justifyContent: 'space-between' }}>
-                <button type="button" className="btn btn-light" onClick={() => setPreview(null)}><i className="fas fa-arrow-left" /> Back to edit</button>
+                <button type="button" className="btn btn-light" onClick={() => setPreview(null)}><i aria-hidden="true" className="fas fa-arrow-left" /> Back to edit</button>
                 <button type="button" className="btn btn-primary" disabled={busy || preview.valid === 0} onClick={doImport}>
-                  {busy ? 'Importing…' : <><i className="fas fa-file-import" /> Import {preview.valid} student(s)</>}
+                  {busy ? 'Importing…' : <><i aria-hidden="true" className="fas fa-file-import" /> Import {preview.valid} student(s)</>}
                 </button>
               </div>
             </>

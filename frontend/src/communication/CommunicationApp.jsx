@@ -46,11 +46,11 @@ function Dashboard({ d }) {
   return (
     <>
       <div className="page-header"><h1>Parent Communication</h1>
-        <div className="page-header-actions"><a href={d.nav.compose} className="btn btn-primary"><i className="fas fa-paper-plane" /> New Message</a></div>
+        <div className="page-header-actions"><a href={d.nav.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a></div>
       </div>
       <Tabs d={d} />
       <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i className={'fas ' + ic} /></div>
+        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
           <div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}
       </div>
 
@@ -63,11 +63,11 @@ function Dashboard({ d }) {
       </div></div>
 
       <div className="cm-grid split">
-        <div className="widget"><div className="wh"><h3><i className="fas fa-comment-dots" /> By channel</h3></div>
+        <div className="widget"><div className="wh"><h3><i aria-hidden="true" className="fas fa-comment-dots" /> By channel</h3></div>
           <div className="wb"><div className="chart-box">{d.channel_chart.length
-            ? <canvas ref={ref} /> : <div className="empty-state"><i className="fas fa-comment-dots" /><p>No messages yet</p></div>}</div></div></div>
+            ? <canvas ref={ref} /> : <div className="empty-state"><i aria-hidden="true" className="fas fa-comment-dots" /><p>No messages yet</p></div>}</div></div></div>
         <div className="widget">
-          <div className="wh"><h3><i className="fas fa-clock-rotate-left" /> Recent campaigns</h3><a href={d.nav.messages} className="text-sm">View all</a></div>
+          <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent campaigns</h3><a href={d.nav.messages} className="text-sm">View all</a></div>
           <div className="wb" style={{ padding: 0 }}>
             {d.recent.length ? (
               <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -79,12 +79,12 @@ function Dashboard({ d }) {
                     <td data-label="Channel"><span className={channelBadge(m.channel)}>{m.channel}</span></td>
                     <td data-label="Sent" className="text-right">{m.sent_count}/{m.recipient_count}</td></tr>))}
                 </tbody></table></div>
-            ) : <div className="empty-state" style={{ padding: '1.5rem' }}><i className="fas fa-paper-plane" /><p>No campaigns yet</p><a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a></div>}
+            ) : <div className="empty-state" style={{ padding: '1.5rem' }}><i aria-hidden="true" className="fas fa-paper-plane" /><p>No campaigns yet</p><a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a></div>}
           </div></div>
       </div>
 
       <div className="card"><div className="card-body d-flex gap-2 flex-wrap align-center">
-        <i className="fas fa-lightbulb" style={{ color: 'var(--warning)', fontSize: '1.3rem' }} />
+        <i aria-hidden="true" className="fas fa-lightbulb" style={{ color: 'var(--warning)', fontSize: '1.3rem' }} />
         <div style={{ flex: 1, minWidth: 200 }}><strong>{d.template_count} message template(s)</strong>
           <div className="text-muted text-sm">Reusable messages with placeholders like {'{first_name}'}, {'{class}'} and {'{balance}'}.</div></div>
         <a href={d.nav.templates} className="btn btn-secondary btn-sm">Manage templates</a>
@@ -118,7 +118,7 @@ function Announcements({ d, notify }) {
     <>
       <div className="page-header"><h1>Announcements</h1></div>
       <Tabs d={d} />
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Post an announcement</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Post an announcement</h3></div>
         <div className="card-body"><form onSubmit={submit}>
           <div className="form-group"><label className="form-label">Title <span className="required">*</span></label>
             <input type="text" className="form-control" required value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
@@ -135,7 +135,7 @@ function Announcements({ d, notify }) {
               <input type="date" className="form-control" value={f.ends_on} onChange={(e) => set('ends_on', e.target.value)} /></div>
             <div className="form-group" style={{ alignSelf: 'center' }}><label className="form-check"><input type="checkbox" checked={f.is_pinned} onChange={(e) => set('is_pinned', e.target.checked)} /> Pin to top</label></div>
           </div>
-          <button className="btn btn-primary" disabled={busy}><i className="fas fa-bullhorn" /> Post</button>
+          <button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-bullhorn" /> Post</button>
         </form></div></div>
 
       <div className="card"><div className="card-header"><h3>{d.items.length} announcement(s)</h3></div>
@@ -143,11 +143,11 @@ function Announcements({ d, notify }) {
           {d.items.length ? d.items.map((a) => (
             <div className={'ann ' + a.category} key={a.id}>
               <div className="d-flex justify-between gap-2">
-                <div><strong>{a.title}</strong> {a.is_pinned && <i className="fas fa-thumbtack text-muted" title="Pinned" />}
+                <div><strong>{a.title}</strong> {a.is_pinned && <i aria-hidden="true" className="fas fa-thumbtack text-muted" title="Pinned" />}
                   {' '}<span className={catBadge(a.category)}>{a.category}</span>{' '}
                   <span className="badge badge-secondary">{a.audience}</span>{' '}
                   {!a.is_active && <span className="badge badge-secondary">Inactive</span>}</div>
-                <button className="btn btn-danger btn-sm" onClick={() => del(a.delete_url)}><i className="fas fa-trash" /></button>
+                <button className="btn btn-danger btn-sm" onClick={() => del(a.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
               </div>
               {a.body && <div className="text-secondary text-sm mt-1">{a.body}</div>}
               <div className="text-muted text-sm mt-1">{a.created_at} by {a.created_by}
@@ -183,7 +183,7 @@ function Templates({ d, notify }) {
     <>
       <div className="page-header"><h1>Message Templates</h1></div>
       <Tabs d={d} />
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> New Template</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> New Template</h3></div>
         <div className="card-body"><form onSubmit={add}>
           <div className="form-row">
             <div className="form-group"><label className="form-label">Name <span className="required">*</span></label>
@@ -195,7 +195,7 @@ function Templates({ d, notify }) {
           <div className="form-group mb-2"><label className="form-label">Body <span className="required">*</span></label>
             <div className="ph-hint">Placeholders: {d.placeholders.map((p) => <code key={p}>{p}</code>)}</div>
             <textarea className="form-control" rows="4" required placeholder="Dear {parent}, …" value={f.body} onChange={(e) => set('body', e.target.value)} /></div>
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Template</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Template</button>
         </form></div></div>
 
       <div className="card"><div className="card-header"><h3>Templates ({d.templates.length})</h3></div>
@@ -205,9 +205,9 @@ function Templates({ d, notify }) {
               <div className="d-flex justify-between align-center flex-wrap gap-1">
                 <div><strong>{t.name}</strong> {t.category && <span className="badge badge-secondary">{t.category}</span>} {!t.is_active && <span className="badge badge-warning">Inactive</span>}</div>
                 <div className="d-flex gap-1">
-                  <a href={t.use_url} className="btn btn-primary btn-sm" title="Use"><i className="fas fa-paper-plane" /></a>
-                  <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === t.id ? null : t.id)}><i className="fas fa-edit" /></button>
-                  <button className="btn btn-danger btn-sm" onClick={() => del(t.delete_url, t.name)}><i className="fas fa-trash" /></button>
+                  <a href={t.use_url} className="btn btn-primary btn-sm" title="Use"><i aria-hidden="true" className="fas fa-paper-plane" /></a>
+                  <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === t.id ? null : t.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
+                  <button className="btn btn-danger btn-sm" onClick={() => del(t.delete_url, t.name)}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div>
               </div>
               <div className="body">{t.body}</div>
@@ -238,7 +238,7 @@ function EditTemplate({ t, notify, onDone }) {
         </div>
         <div className="form-group"><label className="form-label">Body</label><textarea className="form-control" rows="4" value={f.body} onChange={(e) => set('body', e.target.value)} /></div>
         <label className="form-check mb-2"><input type="checkbox" checked={f.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Active</label>
-        <div><button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i className="fas fa-save" /> Update</button></div>
+        <div><button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Update</button></div>
       </form>
     </div>
   );
@@ -282,11 +282,11 @@ function Contacts({ d }) {
                       <div className="con-line" key={i}>
                         <span>{c.name}{c.relationship && <span className="text-muted"> ({c.relationship})</span>} {c.is_primary && <span className="badge badge-info">Primary</span>}</span>
                         <a href={'tel:' + c.phone_number}>{c.phone_number}</a>
-                        <a href={'https://wa.me/' + c.wa_intl} target="_blank" rel="noopener" title="WhatsApp"><i className="fab fa-whatsapp wa-ic" /></a>
+                        <a href={'https://wa.me/' + c.wa_intl} target="_blank" rel="noopener" title="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp wa-ic" /></a>
                       </div>
                     )) : <span className="badge badge-warning">No contact</span>}
                   </td>
-                  <td className="actions"><a href={row.student.view_url} className="btn btn-secondary btn-sm" title="Manage"><i className="fas fa-user-pen" /></a></td>
+                  <td className="actions"><a href={row.student.view_url} className="btn btn-secondary btn-sm" title="Manage"><i aria-hidden="true" className="fas fa-user-pen" /></a></td>
                 </tr>))}
               </tbody></table></div>
           ) : <Empty icon="fa-address-book" title="No students found"><p>Adjust the filters above.</p></Empty>}
@@ -306,8 +306,8 @@ function Messages({ d, notify }) {
     <>
       <div className="page-header"><h1>Message History</h1>
         <div className="page-header-actions">
-          {d.is_admin && <button className="btn btn-secondary" title="Send any scheduled campaigns that are now due" onClick={processDue}><i className="fas fa-clock-rotate-left" /> Process due</button>}
-          <a href={d.urls.compose} className="btn btn-primary"><i className="fas fa-paper-plane" /> New Message</a>
+          {d.is_admin && <button className="btn btn-secondary" title="Send any scheduled campaigns that are now due" onClick={processDue}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Process due</button>}
+          <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>
         </div>
       </div>
       <Tabs d={d} />
@@ -317,12 +317,12 @@ function Messages({ d, notify }) {
             <thead><tr><th>Date</th><th>Title</th><th>Audience</th><th>Channel</th><th className="text-right">Recipients</th><th className="text-right">Sent</th><th /></tr></thead>
             <tbody>{d.messages.map((m) => (
               <tr key={m.id}><td data-label="Date">{m.date}</td>
-                <td data-label="Title"><a href={m.url}><strong>{m.title}</strong></a>{m.status === 'Scheduled' && m.scheduled_at && <> <span className="badge badge-warning"><i className="fas fa-clock" /> {m.scheduled_at}</span></>}</td>
+                <td data-label="Title"><a href={m.url}><strong>{m.title}</strong></a>{m.status === 'Scheduled' && m.scheduled_at && <> <span className="badge badge-warning"><i aria-hidden="true" className="fas fa-clock" /> {m.scheduled_at}</span></>}</td>
                 <td data-label="Audience" className="text-muted text-sm">{m.audience_label}</td>
                 <td data-label="Channel"><span className={channelBadge(m.channel)}>{m.channel}</span></td>
                 <td data-label="Recipients" className="text-right">{m.recipient_count}</td>
                 <td data-label="Sent" className="text-right">{m.sent_count}</td>
-                <td className="actions"><a href={m.url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-right" /></a></td></tr>))}
+                <td className="actions"><a href={m.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}
             </tbody></table></div>
         ) : <Empty icon="fa-paper-plane" title="No messages yet"><p>Compose your first parent broadcast.</p><a href={d.urls.compose} className="btn btn-primary mt-2">Compose</a></Empty>}
       </div></div>
@@ -364,25 +364,25 @@ function MessageDetail({ d, notify }) {
     <>
       <div className="page-header"><h1>{m.title}</h1>
         <div className="page-header-actions">
-          <a href={d.urls.export} className="btn btn-secondary" data-native download><i className="fas fa-file-csv" /> Export CSV</a>
-          <a href={d.urls.compose} className="btn btn-primary"><i className="fas fa-paper-plane" /> New</a>
+          <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>
+          <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New</a>
         </div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <div className="d-flex justify-between flex-wrap gap-2 mb-2">
           <div><span className={channelBadge(m.channel)}>{m.channel}</span> <span className="badge badge-secondary">{m.audience_label}</span>
-            {m.status === 'Scheduled' && <> <span className="badge badge-warning"><i className="fas fa-clock" /> Scheduled {m.scheduled_at}</span></>}
+            {m.status === 'Scheduled' && <> <span className="badge badge-warning"><i aria-hidden="true" className="fas fa-clock" /> Scheduled {m.scheduled_at}</span></>}
             <span className="text-muted text-sm"> · {m.created_at} by {m.created_by}</span></div>
           <div className="text-sm"><strong>{m.sent_count}</strong> / {m.recipient_count} sent{d.failed_count ? <> · <span className="text-danger">{d.failed_count} failed</span></> : ''}{d.pending_count && m.status !== 'Sent' ? ` · ${d.pending_count} pending` : ''} · {d.segments} SMS segment(s)</div>
         </div>
         <div className="msg-body">{m.body}</div>
         <div className="d-flex gap-2 flex-wrap mt-3 align-center">
-          {m.status === 'Scheduled' && <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.cancel_schedule, 'Cancel the scheduled send?')}><i className="fas fa-clock" /> Cancel schedule</button>}
-          {d.gateway_ready && d.pending_count > 0 && <button className="btn btn-primary btn-sm" onClick={() => action(d.urls.send_gateway, `Send ${d.pending_count} pending message(s) now via ${d.gateway_label}?`)}><i className="fas fa-tower-broadcast" /> Send all via {d.gateway_label} ({d.pending_count})</button>}
-          <button className="btn btn-secondary btn-sm" onClick={copyNumbers}><i className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} /> {copied ? 'Copied!' : 'Copy all numbers'}</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.mark_all_sent, `Mark all ${m.recipient_count} recipients as sent?`)}><i className="fas fa-check-double" /> Mark all sent</button>
-          {d.is_admin && <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={() => action(d.urls.delete, 'Delete this campaign and its log?', true)}><i className="fas fa-trash" /> Delete</button>}
+          {m.status === 'Scheduled' && <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.cancel_schedule, 'Cancel the scheduled send?')}><i aria-hidden="true" className="fas fa-clock" /> Cancel schedule</button>}
+          {d.gateway_ready && d.pending_count > 0 && <button className="btn btn-primary btn-sm" onClick={() => action(d.urls.send_gateway, `Send ${d.pending_count} pending message(s) now via ${d.gateway_label}?`)}><i aria-hidden="true" className="fas fa-tower-broadcast" /> Send all via {d.gateway_label} ({d.pending_count})</button>}
+          <button className="btn btn-secondary btn-sm" onClick={copyNumbers}><i aria-hidden="true" className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} /> {copied ? 'Copied!' : 'Copy all numbers'}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.mark_all_sent, `Mark all ${m.recipient_count} recipients as sent?`)}><i aria-hidden="true" className="fas fa-check-double" /> Mark all sent</button>
+          {d.is_admin && <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={() => action(d.urls.delete, 'Delete this campaign and its log?', true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
         </div>
       </div></div>
 
@@ -399,9 +399,9 @@ function MessageDetail({ d, notify }) {
                   {r.status === 'Failed' && r.error && <div className="text-danger text-sm" title={r.error}>{r.error.slice(0, 40)}</div>}</td>
                 <td className="actions"><div className="act-links">
                   <a className={'btn btn-sm ' + (m.channel === 'SMS' ? 'btn-secondary' : 'wa-btn')} href={linkFor(r)} target="_blank" rel="noopener" title={m.channel === 'SMS' ? 'Open SMS' : 'Open WhatsApp'} onClick={() => markSent(r)}>
-                    <i className={'fa' + (m.channel === 'SMS' ? 's fa-comment-sms' : 'b fa-whatsapp')} /></a>
-                  <a className="btn btn-secondary btn-sm" href={'tel:' + r.phone} title="Call"><i className="fas fa-phone" /></a>
-                  {r.status !== 'Sent' && <button className="btn btn-secondary btn-sm" title="Mark sent" onClick={() => markSent(r)}><i className="fas fa-check" /></button>}
+                    <i aria-hidden="true" className={'fa' + (m.channel === 'SMS' ? 's fa-comment-sms' : 'b fa-whatsapp')} /></a>
+                  <a className="btn btn-secondary btn-sm" href={'tel:' + r.phone} title="Call"><i aria-hidden="true" className="fas fa-phone" /></a>
+                  {r.status !== 'Sent' && <button className="btn btn-secondary btn-sm" title="Mark sent" onClick={() => markSent(r)}><i aria-hidden="true" className="fas fa-check" /></button>}
                 </div></td>
               </tr>))}
             </tbody></table></div>
@@ -434,13 +434,13 @@ function Settings({ d, notify }) {
       <div className="page-header"><h1>SMS Gateway</h1></div>
       <Tabs d={d} />
       {d.configured ? (
-        <div className="status-banner ok"><i className="fas fa-circle-check" /><div><strong>SMS sending is active</strong> via {d.provider_label}. Campaigns can now be sent automatically from the server.
+        <div className="status-banner ok"><i aria-hidden="true" className="fas fa-circle-check" /><div><strong>SMS sending is active</strong> via {d.provider_label}. Campaigns can now be sent automatically from the server.
           {d.balance_ok ? <><br /><strong>Balance:</strong> {d.balance}</> : <><br /><span className="text-muted">Balance unavailable{d.balance ? ` (${d.balance})` : ''}.</span></>}</div></div>
       ) : (
-        <div className="status-banner off"><i className="fas fa-circle-info" /><div><strong>SMS auto-send is off.</strong> Messages currently use manual WhatsApp / SMS links. Add your provider key below and it starts working immediately — no other changes needed.</div></div>
+        <div className="status-banner off"><i aria-hidden="true" className="fas fa-circle-info" /><div><strong>SMS auto-send is off.</strong> Messages currently use manual WhatsApp / SMS links. Add your provider key below and it starts working immediately — no other changes needed.</div></div>
       )}
 
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-gear" /> Provider Configuration</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-gear" /> Provider Configuration</h3></div>
         <div className="card-body">
           {!d.is_admin && <p className="text-muted text-sm">Only administrators can change gateway settings.</p>}
           <form onSubmit={save}>
@@ -459,24 +459,24 @@ function Settings({ d, notify }) {
                   <div className="form-group"><label className="form-label">Twilio Account SID</label><input type="text" className="form-control" value={cfg.twilio_sid} placeholder="ACxxxx…" autoComplete="off" onChange={(e) => set('twilio_sid', e.target.value)} /></div>
                   <div className="form-group"><label className="form-label">Twilio Auth Token</label><input type="password" className="form-control" value={cfg.twilio_token} placeholder="Auth token" autoComplete="off" onChange={(e) => set('twilio_token', e.target.value)} /></div>
                 </div>)}
-              <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Settings</button>
+              <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Settings</button>
             </fieldset>
           </form>
         </div></div>
 
-      <div className="card"><div className="card-header"><h3><i className="fas fa-vial" /> Send a Test SMS</h3></div>
+      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-vial" /> Send a Test SMS</h3></div>
         <div className="card-body">
           {d.configured ? (
             <form onSubmit={test} className="d-flex gap-2 align-end flex-wrap">
               <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Phone number</label>
                 <input type="text" className="form-control" placeholder="08031234567" required value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-              <button type="submit" className="btn btn-secondary"><i className="fas fa-paper-plane" /> Send Test</button>
+              <button type="submit" className="btn btn-secondary"><i aria-hidden="true" className="fas fa-paper-plane" /> Send Test</button>
             </form>
           ) : <p className="text-muted mb-0">Save a configured provider above to enable the test.</p>}
         </div></div>
 
       <div className="card mt-3"><div className="card-body">
-        <h4 style={{ marginTop: 0 }}><i className="fas fa-circle-question" /> How it works</h4>
+        <h4 style={{ marginTop: 0 }}><i aria-hidden="true" className="fas fa-circle-question" /> How it works</h4>
         <ul className="text-sm text-muted" style={{ margin: 0, paddingLeft: '1.1rem', lineHeight: 1.7 }}>
           <li>With no provider, parents are reached via the one-tap WhatsApp / SMS links on each campaign — nothing else required.</li>
           <li>Pick <strong>Termii</strong> or <strong>Twilio</strong>, paste your key, and a <strong>“Send all via gateway”</strong> button appears on every campaign — messages go out from the server automatically.</li>
@@ -582,7 +582,7 @@ function Compose({ d, notify }) {
                     {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
                 <div className="aud-cards">{audCards.map(([a, ic, t]) => (
                   <div className={'aud-card' + (audience === a ? ' sel' : '')} key={a} onClick={() => setAudience(a)}>
-                    <i className={'fas ' + ic} /><div className="t">{t}</div></div>))}
+                    <i aria-hidden="true" className={'fas ' + ic} /><div className="t">{t}</div></div>))}
                 </div>
                 {(audience === 'class' || audience === 'defaulters') && (
                   <div className="form-row mt-3">
@@ -629,17 +629,17 @@ function Compose({ d, notify }) {
                 </div>
                 <div className="text-muted text-sm mb-1">Sample (first recipient):</div>
                 <div className="preview-phone mb-3"><div className="bubble">{preview.sample}</div></div>
-                <button type="button" className="btn btn-secondary w-100 mb-2" onClick={runPreview}><i className="fas fa-rotate" /> Refresh preview</button>
+                <button type="button" className="btn btn-secondary w-100 mb-2" onClick={runPreview}><i aria-hidden="true" className="fas fa-rotate" /> Refresh preview</button>
                 {d.gateway_ready && (<>
                   <label className="form-check mb-2"><input type="checkbox" checked={schedule} onChange={(e) => setSchedule(e.target.checked)} /> Schedule for later</label>
                   {schedule && <div className="form-group"><label className="form-label">Send at</label>
                     <input type="datetime-local" className="form-control" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
                     <span className="form-hint d-block">The campaign will auto-send via {d.gateway_label} at this time.</span></div>}
                 </>)}
-                <button type="submit" className="btn btn-primary w-100" disabled={busy}><i className="fas fa-paper-plane" /> {schedule ? 'Schedule campaign' : 'Create campaign'}</button>
+                <button type="submit" className="btn btn-primary w-100" disabled={busy}><i aria-hidden="true" className="fas fa-paper-plane" /> {schedule ? 'Schedule campaign' : 'Create campaign'}</button>
                 {d.gateway_ready
-                  ? <p className="text-muted text-sm mt-2 mb-0"><i className="fas fa-tower-broadcast" style={{ color: 'var(--success)' }} /> SMS gateway active ({d.gateway_label}) — after creating, send all automatically with one tap, or use the WhatsApp / SMS links.</p>
-                  : <p className="text-muted text-sm mt-2 mb-0"><i className="fas fa-circle-info" /> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export. <a href={d.urls.settings}>Add an SMS gateway</a> to auto-send.</p>}
+                  ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-tower-broadcast" style={{ color: 'var(--success)' }} /> SMS gateway active ({d.gateway_label}) — after creating, send all automatically with one tap, or use the WhatsApp / SMS links.</p>
+                  : <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export. <a href={d.urls.settings}>Add an SMS gateway</a> to auto-send.</p>}
               </div></div>
           </div>
         </div>

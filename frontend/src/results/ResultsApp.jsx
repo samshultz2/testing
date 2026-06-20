@@ -15,8 +15,8 @@ function Index({ d }) {
         {years.length > 0 && <div className="result-stat"><span className="result-stat-label">Latest Year</span><span className="result-stat-value">{years[0]}</span></div>}
       </div>
       <div className="result-type-actions">
-        <a href={dash} className="btn btn-primary"><i className="fas fa-chart-bar" /> View Dashboard</a>
-        <a href={add} className="btn btn-secondary"><i className="fas fa-plus" /> Add Results</a>
+        <a href={dash} className="btn btn-primary"><i aria-hidden="true" className="fas fa-chart-bar" /> View Dashboard</a>
+        <a href={add} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add Results</a>
       </div>
     </div>
   );
@@ -29,10 +29,10 @@ function Index({ d }) {
       </div>
       <div className="card"><div className="card-header"><h3>Quick Actions</h3></div>
         <div className="card-body"><div className="quick-actions">
-          <a href={u.add_waec} className="quick-action-card"><div className="quick-action-icon"><i className="fas fa-plus-circle" /></div><div className="quick-action-label">Add WAEC Result</div></a>
-          <a href={u.add_jamb} className="quick-action-card"><div className="quick-action-icon"><i className="fas fa-plus-circle" /></div><div className="quick-action-label">Add JAMB Result</div></a>
-          {d.waec_years.length > 0 && <a href={u.export_waec} className="quick-action-card" data-native download><div className="quick-action-icon"><i className="fas fa-file-excel" /></div><div className="quick-action-label">Export WAEC {d.waec_years[0]}</div></a>}
-          {d.jamb_years.length > 0 && <a href={u.export_jamb} className="quick-action-card" data-native download><div className="quick-action-icon"><i className="fas fa-file-excel" /></div><div className="quick-action-label">Export JAMB {d.jamb_years[0]}</div></a>}
+          <a href={u.add_waec} className="quick-action-card"><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-plus-circle" /></div><div className="quick-action-label">Add WAEC Result</div></a>
+          <a href={u.add_jamb} className="quick-action-card"><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-plus-circle" /></div><div className="quick-action-label">Add JAMB Result</div></a>
+          {d.waec_years.length > 0 && <a href={u.export_waec} className="quick-action-card" data-native download><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-file-excel" /></div><div className="quick-action-label">Export WAEC {d.waec_years[0]}</div></a>}
+          {d.jamb_years.length > 0 && <a href={u.export_jamb} className="quick-action-card" data-native download><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-file-excel" /></div><div className="quick-action-label">Export JAMB {d.jamb_years[0]}</div></a>}
         </div></div></div>
       <div className="card"><div className="card-header"><h3>Analytics Features</h3></div>
         <div className="card-body"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
@@ -41,7 +41,7 @@ function Index({ d }) {
             ['fa-calculator', '#ffc107', 'JAMB Predictions', 'ML-based JAMB score predictions from WAEC performance.'],
             ['fa-exclamation-triangle', '#dc3545', 'Risk Assessment', 'Identify at-risk students with actionable recommendations.']].map(([ic, col, t, p]) => (
             <div key={t} style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 8 }}>
-              <h4 style={{ marginBottom: '.5rem' }}><i className={'fas ' + ic} style={{ color: col }} /> {t}</h4>
+              <h4 style={{ marginBottom: '.5rem' }}><i aria-hidden="true" className={'fas ' + ic} style={{ color: col }} /> {t}</h4>
               <p style={{ fontSize: '.85rem', color: 'var(--text-muted)', margin: 0 }}>{p}</p></div>))}
         </div></div></div>
     </>
@@ -61,12 +61,12 @@ function Readiness({ d }) {
       </div>
       {d.groups.map((g) => (
         <details className={'rgroup' + (g.students.length ? '' : ' clear')} open={g.students.length > 0} key={g.key}>
-          <summary><span><i className={'fas ' + g.icon} /> {g.title}</span><span className="count">{g.students.length}</span></summary>
+          <summary><span><i aria-hidden="true" className={'fas ' + g.icon} /> {g.title}</span><span className="count">{g.students.length}</span></summary>
           {g.students.length ? (
             <div className="slist">{g.students.map((s) => (
               <div className="srow" key={s.id}><span>{s.full_name} <span className="text-muted">{s.student_id}</span></span>
                 <span><a href={s.action.url}>{s.action.label}</a></span></div>))}</div>
-          ) : <div style={{ padding: '.75rem 1rem', color: 'var(--success)', fontSize: '.85rem' }}><i className="fas fa-check-circle" /> All good here.</div>}
+          ) : <div style={{ padding: '.75rem 1rem', color: 'var(--success)', fontSize: '.85rem' }}><i aria-hidden="true" className="fas fa-check-circle" /> All good here.</div>}
         </details>))}
     </>
   );
@@ -120,12 +120,12 @@ function SubjectEnrolment({ d }) {
       </div>
       <div className="enrol-grid">
         <div className="card">
-          <div className="card-header"><h3><i className="fas fa-file-alt" /> WAEC Subjects</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Subjects</h3></div>
           <div className="chart-wrap"><canvas ref={waecRef} /></div>
           <div className="card-body" style={{ padding: 0, maxHeight: 420, overflow: 'auto' }}><Table rows={d.waec_rows} enrolled={d.waec_enrolled} /></div>
         </div>
         <div className="card">
-          <div className="card-header"><h3><i className="fas fa-file-contract" /> JAMB Subjects</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB Subjects</h3></div>
           <div className="chart-wrap"><canvas ref={jambRef} /></div>
           <div className="card-body" style={{ padding: 0, maxHeight: 420, overflow: 'auto' }}><Table rows={d.jamb_rows} enrolled={d.jamb_enrolled} jamb /></div>
         </div>
@@ -144,17 +144,17 @@ function SubjectEnrolmentDetail({ d }) {
             <span className={'badge ' + (d.exam === 'jamb' ? 'badge-primary' : 'badge-info')}>{d.exam_label}</span>{' '}
             {d.students.length} student{d.students.length === 1 ? '' : 's'} enrolled · {d.only_sss3 ? 'SSS3 / exam candidates' : 'all active students'}
           </p></div>
-        <div className="page-header-actions"><a href={d.back_url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-left" /> Back</a></div>
+        <div className="page-header-actions"><a href={d.back_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a></div>
       </div>
-      <div className="card"><div className="card-header"><h3><i className="fas fa-users" /> Enrolled Students ({d.students.length})</h3></div>
+      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> Enrolled Students ({d.students.length})</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.students.length ? (
             <div className="data-cards" style={{ padding: '1rem' }}>{d.students.map((s) => (
               <div className="data-card" key={s.id}>
-                <div className="data-card-header"><div className="data-card-title">{s.full_name}{s.is_graduated && <span className="badge badge-success" title="Graduate"><i className="fas fa-user-graduate" /></span>}</div>
+                <div className="data-card-header"><div className="data-card-title">{s.full_name}{s.is_graduated && <span className="badge badge-success" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</div>
                   <span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span></div>
                 <div className="data-card-row"><span className="data-card-label">ID</span><span>{s.student_id}</span></div>
-                <div className="data-card-actions"><a href={s.view_url} className="btn btn-secondary btn-sm w-100"><i className="fas fa-eye" /> View Profile</a></div>
+                <div className="data-card-actions"><a href={s.view_url} className="btn btn-secondary btn-sm w-100"><i aria-hidden="true" className="fas fa-eye" /> View Profile</a></div>
               </div>))}</div>
           ) : <Empty icon="fa-user-slash" title=""><p>No students enrolled for {d.subject} in this scope.</p></Empty>}
         </div></div>
@@ -196,7 +196,7 @@ function Cutoffs({ d, notify }) {
     <>
       <div className="page-header">
         <div><h1>Admission Cut-offs</h1><p className="text-muted text-sm">Manage course requirements used by the admission advisor.</p></div>
-        <div className="page-header-actions"><a href={d.urls.analytics} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-left" /> Back</a></div>
+        <div className="page-header-actions"><a href={d.urls.analytics} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a></div>
       </div>
       <div className="toolbar">
         <form className="d-flex gap-2 align-center" onSubmit={(ev) => ev.preventDefault()}>
@@ -215,7 +215,7 @@ function Cutoffs({ d, notify }) {
 
       <div className="cut-grid">
         {d.is_admin && (
-          <div className="card"><div className="card-header"><h3><i className="fas fa-pen" /> {e ? 'Edit' : 'Add'} Cut-off</h3></div>
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-pen" /> {e ? 'Edit' : 'Add'} Cut-off</h3></div>
             <div className="card-body"><form onSubmit={save}>
               <div className="form-group"><label className="form-label">University</label>
                 <input type="text" className="form-control" list="unis" required value={f.university_name} onChange={(ev) => set('university_name', ev.target.value)} />
@@ -234,12 +234,12 @@ function Cutoffs({ d, notify }) {
                 <div className="subject-checks">{d.subjects.map((s) => (
                   <label className="subject-check" key={s}><input type="checkbox" checked={f.required_subjects.includes(s)} onChange={() => toggleSubj(s)} /> {s}</label>))}</div></div>
               <div className="d-flex gap-2">
-                <button className="btn btn-primary" type="submit"><i className="fas fa-save" /> {e ? 'Update' : 'Add'}</button>
+                <button className="btn btn-primary" type="submit"><i aria-hidden="true" className="fas fa-save" /> {e ? 'Update' : 'Add'}</button>
                 {e && <a href={d.self_url + '?university=' + encodeURIComponent(d.selected)} className="btn btn-secondary">Cancel</a>}
               </div>
             </form></div></div>
         )}
-        <div className="card"><div className="card-header"><h3><i className="fas fa-list" /> {d.selected} ({d.rows.length})</h3></div>
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-list" /> {d.selected} ({d.rows.length})</h3></div>
           <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
             {d.rows.length ? (
               <table className="ctable">
@@ -250,8 +250,8 @@ function Cutoffs({ d, notify }) {
                     <td>{r.jamb_cutoff || '—'}</td><td>{r.min_credits}</td>
                     <td style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{r.required_subjects.join(', ')}</td>
                     {d.is_admin && <td style={{ whiteSpace: 'nowrap' }}>
-                      <a href={r.edit_url} className="btn btn-warning btn-sm"><i className="fas fa-edit" /></a>{' '}
-                      <button className="btn btn-danger btn-sm" type="button" onClick={() => del(r.delete_url, r.course_name)}><i className="fas fa-trash" /></button>
+                      <a href={r.edit_url} className="btn btn-warning btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>{' '}
+                      <button className="btn btn-danger btn-sm" type="button" onClick={() => del(r.delete_url, r.course_name)}><i aria-hidden="true" className="fas fa-trash" /></button>
                     </td>}
                   </tr>))}</tbody>
               </table>

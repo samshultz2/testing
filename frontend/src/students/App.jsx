@@ -108,14 +108,14 @@ export default function App({ initial }) {
   return (
     <div>
       <div className="page-header">
-        <div><h1><i className="fas fa-user-graduate" /> Students</h1></div>
+        <div><h1><i aria-hidden="true" className="fas fa-user-graduate" /> Students</h1></div>
         <div className="page-header-actions stu-toolbar">
-          {d.can_add && <a href={d.add_url} className="btn btn-primary"><i className="fas fa-plus" /> Add Student</a>}
-          {d.can_add && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i className="fas fa-paste" /> Import (paste)</button>}
+          {d.can_add && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Student</a>}
+          {d.can_add && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import (paste)</button>}
           {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
                                onClick={async () => { if (await confirm("Fill WAEC subjects from stream for students who don't have them set?"))
-                                 runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.'); }}><i className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
-          {d.trash_url && <a href={d.trash_url} className="btn btn-secondary btn-sm" title="View deleted students (restore / delete permanently)"><i className="fas fa-trash" /> Trash</a>}
+                                 runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.'); }}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
+          {d.trash_url && <a href={d.trash_url} className="btn btn-secondary btn-sm" title="View deleted students (restore / delete permanently)"><i aria-hidden="true" className="fas fa-trash" /> Trash</a>}
         </div>
       </div>
 
@@ -178,7 +178,7 @@ export default function App({ initial }) {
         {hasFilters && (
           <div style={{ marginTop: '.5rem' }}>
             <button type="button" className="btn btn-light btn-sm" onClick={resetFilters}>
-              <i className="fas fa-xmark" /> Clear filters
+              <i aria-hidden="true" className="fas fa-xmark" /> Clear filters
             </button>
           </div>
         )}
@@ -190,7 +190,7 @@ export default function App({ initial }) {
         </label>
         <span className="stu-count">{selectedIds.length ? `${selectedIds.length} selected · ` : ''}{d.total || 0} student(s){loading ? ' · loading…' : ''}</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(true)}><i className="fas fa-download" /> Export</button>
+          <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-download" /> Export</button>
           {canBulk && <>
             <select className="form-control" style={{ width: 'auto' }} value={bulkGender} onChange={(e) => setBulkGender(e.target.value)} aria-label="Bulk gender">
               <option value="">Set gender…</option>
@@ -215,13 +215,13 @@ export default function App({ initial }) {
             </>}
             {canAdmin && <button type="button" className="btn btn-danger btn-sm"
                     onClick={async () => { if (needSel() && await confirm({ title: 'Delete students', message: `Delete ${selectedIds.length} selected student(s)?`, confirmText: 'Delete', tone: 'danger' }))
-                      runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.'); }}><i className="fas fa-trash" /> Delete selected</button>}
+                      runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.'); }}><i aria-hidden="true" className="fas fa-trash" /> Delete selected</button>}
           </>}
         </span>
       </div>
 
       {students.length === 0 ? (
-        <div className="empty-state"><i className="fas fa-users" /><h3>No students found</h3><p>Try adjusting your filters.</p></div>
+        <div className="empty-state"><i aria-hidden="true" className="fas fa-users" /><h3>No students found</h3><p>Try adjusting your filters.</p></div>
       ) : (
         <div className="stu-grid">
           {students.map((s) => (
@@ -229,7 +229,7 @@ export default function App({ initial }) {
               <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} />
               <div className="stu-card-main">
                 <div className="stu-card-head">
-                  <span className="stu-name">{s.name} {s.is_graduated && <span className="badge badge-success" title="Graduate"><i className="fas fa-user-graduate" /></span>}</span>
+                  <span className="stu-name">{s.name} {s.is_graduated && <span className="badge badge-success" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</span>
                   <span className="stu-sid">{s.student_id}</span>
                 </div>
                 <div className="stu-meta">
@@ -240,15 +240,15 @@ export default function App({ initial }) {
                   {s.religion && <span>{s.religion}</span>}
                 </div>
                 <div className="stu-actions">
-                  <a href={s.url} className="btn btn-secondary btn-sm"><i className="fas fa-eye" /> View</a>
-                  {canManage && <a href={s.edit_url} className="btn btn-secondary btn-sm"><i className="fas fa-edit" /> Edit</a>}
+                  <a href={s.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
+                  {canManage && <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
                   {canManage && <button type="button" className={'btn btn-sm ' + (s.is_graduated ? 'btn-warning' : 'btn-success')}
                                         title={s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}
                                         onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`))
                                           runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
-                    <i className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /></button>}
+                    <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /></button>}
                   {canManage && <button type="button" className="btn btn-danger btn-sm" title="Delete"
-                                        onClick={async () => { if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}><i className="fas fa-trash" /></button>}
+                                        onClick={async () => { if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div>
               </div>
             </div>
@@ -258,9 +258,9 @@ export default function App({ initial }) {
 
       {(d.pages || 1) > 1 && (
         <div className="pagination" style={{ marginTop: '1rem' }}>
-          <button type="button" disabled={!d.has_prev} onClick={() => goPage(d.page - 1)} aria-label="Previous"><i className="fas fa-chevron-left" /></button>
+          <button type="button" disabled={!d.has_prev} onClick={() => goPage(d.page - 1)} aria-label="Previous"><i aria-hidden="true" className="fas fa-chevron-left" /></button>
           <span style={{ padding: '0 .6rem' }}>Page {d.page} of {d.pages}</span>
-          <button type="button" disabled={!d.has_next} onClick={() => goPage(d.page + 1)} aria-label="Next"><i className="fas fa-chevron-right" /></button>
+          <button type="button" disabled={!d.has_next} onClick={() => goPage(d.page + 1)} aria-label="Next"><i aria-hidden="true" className="fas fa-chevron-right" /></button>
         </div>
       )}
 

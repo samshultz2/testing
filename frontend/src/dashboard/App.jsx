@@ -42,8 +42,8 @@ export default function App({ data: initialData }) {
           <p>{dateLabel}{d.active_session ? ' · ' + d.active_session.name : ''}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
-          {d.active_term && <div className="term-chip"><i className="fas fa-calendar-day" /> {d.active_term.name}</div>}
-          <button type="button" onClick={() => setCustomizing(true)} className="btn btn-secondary btn-sm" title="Choose widgets"><i className="fas fa-sliders" /> Customize</button>
+          {d.active_term && <div className="term-chip"><i aria-hidden="true" className="fas fa-calendar-day" /> {d.active_term.name}</div>}
+          <button type="button" onClick={() => setCustomizing(true)} className="btn btn-secondary btn-sm" title="Choose widgets"><i aria-hidden="true" className="fas fa-sliders" /> Customize</button>
         </div>
       </div>
 
@@ -53,8 +53,8 @@ export default function App({ data: initialData }) {
       {tc !== null && tc !== undefined && (
         <div className="card">
           <div className="card-header">
-            <h3><i className="fas fa-chalkboard-teacher" /> My Classes</h3>
-            <a href={urls.week_grid} className="btn btn-secondary btn-sm"><i className="fas fa-calendar-week" /> Mark a week</a>
+            <h3><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> My Classes</h3>
+            <a href={urls.week_grid} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-calendar-week" /> Mark a week</a>
           </div>
           <div className="card-body">
             {tc.length ? (
@@ -66,9 +66,9 @@ export default function App({ data: initialData }) {
                       <span className="badge badge-info">{c.count} student{c.count === 1 ? '' : 's'}</span>
                     </div>
                     <div className="data-card-actions" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-                      <a href={c.mark_url} className="btn btn-primary btn-sm" style={{ flex: 1 }}><i className="fas fa-clipboard-check" /> Attendance</a>
-                      <a href={c.week_url} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i className="fas fa-calendar-week" /> Week</a>
-                      {d.can_results && <a href={urls.bulk_entry} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i className="fas fa-pen" /> Scores</a>}
+                      <a href={c.mark_url} className="btn btn-primary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-clipboard-check" /> Attendance</a>
+                      <a href={c.week_url} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-calendar-week" /> Week</a>
+                      {d.can_results && <a href={urls.bulk_entry} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-pen" /> Scores</a>}
                     </div>
                   </div>
                 ))}
@@ -88,9 +88,9 @@ export default function App({ data: initialData }) {
             const icon = a.category === 'Important' ? 'fa-triangle-exclamation' : a.category === 'Event' ? 'fa-calendar-day' : 'fa-bullhorn';
             return (
               <div key={i} style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeft: '4px solid ' + color, borderRadius: 'var(--radius-md)', padding: '.7rem .9rem' }}>
-                <i className={'fas ' + icon} style={{ color, marginTop: '.2rem' }} />
+                <i aria-hidden="true" className={'fas ' + icon} style={{ color, marginTop: '.2rem' }} />
                 <div style={{ flex: 1 }}><strong>{a.title}</strong>{a.body && <div className="text-muted text-sm">{a.body}</div>}</div>
-                {a.is_pinned && <i className="fas fa-thumbtack text-muted" title="Pinned" />}
+                {a.is_pinned && <i aria-hidden="true" className="fas fa-thumbtack text-muted" title="Pinned" />}
               </div>
             );
           })}
@@ -237,9 +237,9 @@ export default function App({ data: initialData }) {
                   action={<a href={urls.students_list} className="btn btn-secondary btn-sm">All</a>}>
             {(d.recent_students || []).length ? d.recent_students.map((s) => (
               <a href={s.url} className="recent-item" key={s.id}>
-                <div className={'recent-avatar ' + (s.gender === 'Male' ? 'male' : 'female')}><i className={'fas ' + (s.gender === 'Male' ? 'fa-male' : 'fa-female')} /></div>
+                <div className={'recent-avatar ' + (s.gender === 'Male' ? 'male' : 'female')}><i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-male' : 'fa-female')} /></div>
                 <div style={{ flex: 1 }}><div className="recent-name">{s.full_name}</div><div className="recent-id">{s.student_id}</div></div>
-                <i className="fas fa-chevron-right text-muted" />
+                <i aria-hidden="true" className="fas fa-chevron-right text-muted" />
               </a>
             )) : <Empty icon="fa-users">No students yet</Empty>}
           </Widget>
@@ -261,12 +261,12 @@ export default function App({ data: initialData }) {
       {/* Quick actions */}
       <Widget icon="fa-bolt" title="Quick actions">
         <div className="quick-actions">
-          <a href={urls.add_student} className="btn btn-primary"><i className="fas fa-user-plus" /> Add Student</a>
-          <a href={urls.mark_attendance} className="btn btn-success"><i className="fas fa-clipboard-check" /> Mark Attendance</a>
-          <a href={urls.scores_entry} className="btn btn-info"><i className="fas fa-edit" /> Enter Scores</a>
-          <a href={urls.scan_waec} className="btn btn-secondary"><i className="fas fa-camera" /> Scan Result</a>
-          <a href={urls.analytics_hub} className="btn btn-outline"><i className="fas fa-chart-pie" /> Analytics</a>
-          <a href={urls.readiness} className="btn btn-outline"><i className="fas fa-clipboard-check" /> Readiness</a>
+          <a href={urls.add_student} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Student</a>
+          <a href={urls.mark_attendance} className="btn btn-success"><i aria-hidden="true" className="fas fa-clipboard-check" /> Mark Attendance</a>
+          <a href={urls.scores_entry} className="btn btn-info"><i aria-hidden="true" className="fas fa-edit" /> Enter Scores</a>
+          <a href={urls.scan_waec} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-camera" /> Scan Result</a>
+          <a href={urls.analytics_hub} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>
+          <a href={urls.readiness} className="btn btn-outline"><i aria-hidden="true" className="fas fa-clipboard-check" /> Readiness</a>
         </div>
       </Widget>
     </>
@@ -277,8 +277,8 @@ function ExamCard({ kind, snap, url }) {
   return (
     <div className={'exam-card ' + kind}>
       <div className="top">
-        <span><i className={'fas ' + ICON[kind]} /> {kind === 'jamb' ? 'JAMB' : kind === 'waec' ? 'WAEC' : 'Latest Mock'} {snap && kind !== 'mock' ? snap.year : ''}</span>
-        {(snap || kind === 'mock') && <a href={url} style={{ color: '#fff', opacity: .85 }}><i className="fas fa-arrow-right" /></a>}
+        <span><i aria-hidden="true" className={'fas ' + ICON[kind]} /> {kind === 'jamb' ? 'JAMB' : kind === 'waec' ? 'WAEC' : 'Latest Mock'} {snap && kind !== 'mock' ? snap.year : ''}</span>
+        {(snap || kind === 'mock') && <a href={url} style={{ color: '#fff', opacity: .85 }}><i aria-hidden="true" className="fas fa-arrow-right" /></a>}
       </div>
       {!snap ? (
         <><div className="big">—</div><div className="sub">{kind === 'jamb' ? 'No JAMB results yet' : kind === 'waec' ? 'No WAEC results yet' : 'No mock exams yet'}</div></>

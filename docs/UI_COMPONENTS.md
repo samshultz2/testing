@@ -80,6 +80,7 @@ All exported from `frontend/src/components/ui.jsx` unless noted.
 | `L` / `Nav` | In-section link (no reload, still a real `<a>` for ctrl/middle-click) | `href`, `className`, `children` |
 | `Toolbar` | Flex filter/action row that wraps on mobile | `children` |
 | `Field` | Label + control wrapper for toolbars | `label`, `htmlFor`, `grow` |
+| `TableWrap` | Keyboard-focusable, labelled horizontal-scroll region for wide tables | `label`, `maxHeight`, `children` |
 
 ### State feedback (loading / empty / error / offline)
 | Component | When to use | Key props |
@@ -276,9 +277,15 @@ specific control should receive focus.
 - Async status updates live in a `role="status"`/`role="alert"` region (the
   feedback primitives already do this).
 
-**Responsive by default.** Wrap wide tables in a horizontal-scroll container
-(`.table-container` / `.table-responsive`) or use the `.table-stack` mobile
-pattern. Toolbars use `Toolbar`/`flexWrap`. Test at a 375px viewport.
+**Responsive by default.** Wrap wide tables in `<TableWrap label="…">` (a
+labelled, keyboard-scrollable region) or the `.table-stack` mobile pattern.
+Toolbars use `Toolbar`/`flexWrap`. Test at a 375px viewport.
+
+```jsx
+<TableWrap label="Class timetable" maxHeight={480}>
+  <table className="data-table">…</table>
+</TableWrap>
+```
 
 **Keep bundles lean.** Primitives are shared source, so esbuild dedupes them per
 bundle; prefer them over per-module copies. No new heavy dependencies — the
@@ -290,18 +297,23 @@ stack is React + Dexie only.
 
 **Done**
 - `Modal` added; `ImportModal`, `ExportModal`, dashboard `Customize` refactored onto it.
-- `confirm()` added; **students family migrated** (`students/App.jsx`,
-  `ViewApp.jsx`, `TrashApp.jsx`) as the reference implementation.
+- `confirm()` added and **rolled out to every module** — all ~50 `window.confirm`
+  call sites across the app now use the accessible dialog. (`!await confirm(x)`
+  parses as `!(await confirm(x))`, so the conversion needed no rewrapping; the
+  DB-restore form keeps a synchronous `preventDefault` and submits natively only
+  after the async confirm resolves.)
 - `Autocomplete` upgraded to full keyboard + listbox ARIA.
-- `Button` converted to `forwardRef`; `Badge` primitive added.
+- `Button` converted to `forwardRef`; `Badge` and `TableWrap` primitives added.
+- **`aria-hidden="true"` applied to all 671 decorative FontAwesome icons**
+  project-wide (two brace-aware passes); nameless icon-only buttons given
+  `aria-label`. `TableWrap` applied to the timetable grid as the reference.
 
 **Recommended next (mechanical, low-risk)**
-- Replace the remaining ~16 `window.confirm` call sites (finance, hr, results,
-  subjects, settings, academics, events, library, communication, promotion,
-  admissions, contributions, users, timetable, cbt, mock_jamb) with `await confirm(…)`.
 - Swap inline `.badge badge-*` spans for `<Badge tone>` and inline `.empty-state`
   for `<EmptyState>` as those files are next touched.
 - Adopt the idle→loading→data→empty→error recipe in dashboard, communication,
   timetable, sales (currently keep stale data / no spinner on refresh).
-- Add `aria-hidden` to decorative icons and `aria-label` to icon-only buttons in
-  the highest-debt modules (mock_jamb, communication, finance).
+- Mirror `title` → `aria-label` on the remaining icon-only **links** (`<A>` used
+  for View/Edit actions) so screen readers announce them reliably.
+- Wrap the remaining wide tables in `<TableWrap>` (most already scroll via
+  `.matrix-wrap`/`overflow:auto`, but they aren't keyboard-focusable regions).

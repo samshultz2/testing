@@ -16,15 +16,15 @@ function Index({ d }) {
     <>
       <PageHeader title="Student Promotion" />
       <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon primary"><i className="fas fa-cog" /></div>
+        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-cog" /></div>
           <div className="stat-content"><h3>{d.rules_count}</h3><p>Promotion Rules</p></div></div>
-        <div className="stat-card"><div className="stat-icon success"><i className="fas fa-calendar" /></div>
+        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-calendar" /></div>
           <div className="stat-content"><h3>{d.active_session || '-'}</h3><p>Active Session</p></div></div>
       </div>
       <div className="data-cards" style={{ padding: 0 }}>
         {links.map(([key, icon, title, desc]) => (
           <a key={key} href={d.urls[key]} className="data-card" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="data-card-header"><div className="data-card-title"><i className={'fas ' + icon} /> {title}</div></div>
+            <div className="data-card-header"><div className="data-card-title"><i aria-hidden="true" className={'fas ' + icon} /> {title}</div></div>
             <div className="data-card-row">{desc}</div>
           </a>
         ))}
@@ -60,7 +60,7 @@ function Rules({ d, notify }) {
   };
   return (
     <>
-      <PageHeader title="Promotion Rules" actions={<a href={d.add_url} className="btn btn-primary"><i className="fas fa-plus" /> Add Rule</a>} />
+      <PageHeader title="Promotion Rules" actions={<a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a>} />
       {d.rules.length ? (
         <div className="card"><div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
           {d.rules.map((r) => (
@@ -71,7 +71,7 @@ function Rules({ d, notify }) {
               <div className="data-card-row"><span className="data-card-label">Priority</span><span>{r.priority}</span></div>
               {r.required_count > 0 && <div className="data-card-row"><span className="data-card-label">Required Subjects</span><span>{r.required_count} subjects</span></div>}
               <div className="data-card-actions">
-                <button type="button" className="btn btn-danger btn-sm w-100" disabled={busy} onClick={() => del(r)}><i className="fas fa-trash" /> Delete</button>
+                <button type="button" className="btn btn-danger btn-sm w-100" disabled={busy} onClick={() => del(r)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>
               </div>
             </div>
           ))}
@@ -79,7 +79,7 @@ function Rules({ d, notify }) {
       ) : (
         <div className="card"><div className="card-body"><Empty icon="fa-list-alt" title="No Rules">
           <p>Add promotion rules to define how students are promoted</p>
-          <a href={d.add_url} className="btn btn-primary"><i className="fas fa-plus" /> Add Rule</a></Empty></div></div>
+          <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a></Empty></div></div>
       )}
       <div className="card mt-3"><div className="card-header"><h3>How Rules Work</h3></div>
         <div className="card-body">
@@ -133,7 +133,7 @@ function AddRule({ d, notify }) {
             {d.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
           <small className="text-muted">Hold Ctrl/Cmd to select multiple. Average of these subjects must meet minimum.</small></div>
         <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Rule</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Rule</button>
           <a href={d.urls.rules} className="btn btn-secondary">Cancel</a>
         </div>
       </form></div></div>
@@ -208,7 +208,7 @@ function Process({ d, notify }) {
               })}</tbody></table>
           </div></div>
           <div className="card-body"><div className="page-header-actions">
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i className="fas fa-save" /> Save Promotions</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i aria-hidden="true" className="fas fa-save" /> Save Promotions</button>
           </div></div>
         </div>
       </>) : (d.from_session_id && d.class_id
@@ -225,7 +225,7 @@ function Graduates({ d }) {
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
   return (
     <>
-      <PageHeader title="Graduates" actions={<a href={d.preview_url} className="btn btn-success"><i className="fas fa-user-graduate" /> Graduate current SSS3</a>} />
+      <PageHeader title="Graduates" actions={<a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>} />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">Graduation Session</label>
           <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value })}>
@@ -233,22 +233,22 @@ function Graduates({ d }) {
       </div></div></div>
       {d.graduates.length ? (<>
         <div className="stats-grid mb-3">
-          <div className="stat-card"><div className="stat-icon success"><i className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{d.graduates.length}</h3><p>Total Graduates</p></div></div>
-          <div className="stat-card"><div className="stat-icon info"><i className="fas fa-male" /></div><div className="stat-content"><h3>{males}</h3><p>Male</p></div></div>
-          <div className="stat-card"><div className="stat-icon secondary"><i className="fas fa-female" /></div><div className="stat-content"><h3>{females}</h3><p>Female</p></div></div>
+          <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{d.graduates.length}</h3><p>Total Graduates</p></div></div>
+          <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-male" /></div><div className="stat-content"><h3>{males}</h3><p>Male</p></div></div>
+          <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-female" /></div><div className="stat-content"><h3>{females}</h3><p>Female</p></div></div>
         </div>
         <div className="card"><div className="card-header"><h3>Graduates ({d.graduates.length})</h3></div>
           <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
             {d.graduates.map((s) => (
               <div className="data-card" key={s.id}>
-                <div className="data-card-header"><div className="data-card-title">{s.full_name}</div><span className="badge badge-success"><i className="fas fa-graduation-cap" /></span></div>
+                <div className="data-card-header"><div className="data-card-title">{s.full_name}</div><span className="badge badge-success"><i aria-hidden="true" className="fas fa-graduation-cap" /></span></div>
                 <div className="data-card-row"><span className="data-card-label">ID</span><span>{s.student_id}</span></div>
                 <div className="data-card-row"><span className="data-card-label">Gender</span><span>{s.gender}</span></div>
                 {s.graduation_date && <div className="data-card-row"><span className="data-card-label">Graduated</span><span>{s.graduation_date}</span></div>}
                 {s.graduation_session && <div className="data-card-row"><span className="data-card-label">Session</span><span>{s.graduation_session}</span></div>}
                 <div className="data-card-row"><span className="data-card-label">Results</span><span>
                   {s.has_waec && <span className="badge badge-info">WAEC</span>} {s.has_jamb && <span className="badge badge-primary">JAMB</span>}</span></div>
-                <div className="data-card-actions"><a href={s.profile_url} className="btn btn-primary btn-sm w-100"><i className="fas fa-eye" /> View Profile</a></div>
+                <div className="data-card-actions"><a href={s.profile_url} className="btn btn-primary btn-sm w-100"><i aria-hidden="true" className="fas fa-eye" /> View Profile</a></div>
               </div>
             ))}
           </div></div></div>
@@ -271,8 +271,8 @@ function GraduatePreview({ d, notify }) {
   };
   return (
     <>
-      <PageHeader title={<><i className="fas fa-user-graduate" /> Graduate SSS3 — Review</>}
-        actions={<a href={d.urls.graduates} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-left" /> Back</a>} />
+      <PageHeader title={<><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate SSS3 — Review</>}
+        actions={<a href={d.urls.graduates} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>} />
       <div className="card"><div className="card-header"><h3>Will be graduated ({d.students.length})</h3></div>
         <div className="card-body">
           {d.students.length ? (<>
@@ -281,9 +281,9 @@ function GraduatePreview({ d, notify }) {
               <tbody>{d.students.map((s, i) => <tr key={i}><td>{i + 1}</td><td>{s.student_id}</td><td>{s.full_name}</td><td>{s.gender}</td></tr>)}</tbody>
             </table></div>
             <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy} onClick={confirm}>
-              <i className="fas fa-user-graduate" /> Confirm — graduate {d.students.length} student(s)</button>
+              <i aria-hidden="true" className="fas fa-user-graduate" /> Confirm — graduate {d.students.length} student(s)</button>
           </>) : <Empty icon="fa-circle-check" title=""><p>No new SSS3 students to graduate — they're all already graduated, or no SSS3 class is set up for the active term.</p></Empty>}
-          {d.already_count > 0 && <p className="text-muted text-sm" style={{ marginTop: '1rem' }}><i className="fas fa-info-circle" /> {d.already_count} SSS3 student(s) are already graduates and will be skipped.</p>}
+          {d.already_count > 0 && <p className="text-muted text-sm" style={{ marginTop: '1rem' }}><i aria-hidden="true" className="fas fa-info-circle" /> {d.already_count} SSS3 student(s) are already graduates and will be skipped.</p>}
         </div></div>
     </>
   );
@@ -295,33 +295,33 @@ function GraduateProfile({ d }) {
   return (
     <>
       <div className="profile-header">
-        <div className="profile-avatar"><i className="fas fa-user-graduate" /></div>
+        <div className="profile-avatar"><i aria-hidden="true" className="fas fa-user-graduate" /></div>
         <div className="profile-info"><h1>{s.full_name}</h1><p>{s.student_id} • {s.gender}</p>
-          {d.graduation_session && <p><i className="fas fa-graduation-cap" /> Class of {d.graduation_session}</p>}</div>
+          {d.graduation_session && <p><i aria-hidden="true" className="fas fa-graduation-cap" /> Class of {d.graduation_session}</p>}</div>
       </div>
       <div className="page-header-actions mb-3">
-        <a href={d.urls.graduates} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back to Graduates</a>
-        <a href={d.urls.full_profile} className="btn btn-primary"><i className="fas fa-user" /> Full Profile</a>
+        <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>
+        <a href={d.urls.full_profile} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user" /> Full Profile</a>
       </div>
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-graduation-cap" /> Graduation Info</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> Graduation Info</h3></div>
         <div className="card-body"><div className="info-grid">
           <div className="info-row"><span className="text-muted">Status</span><strong><span className="badge badge-success">Graduated</span></strong></div>
           {d.graduation_date && <div className="info-row"><span className="text-muted">Graduation Date</span><strong>{d.graduation_date}</strong></div>}
           {d.graduation_session && <div className="info-row"><span className="text-muted">Session</span><strong>{d.graduation_session}</strong></div>}
         </div></div></div>
 
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-file-alt" /> WAEC Results</h3>
-        <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i className="fas fa-plus" /> Add</a></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Results</h3>
+        <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
         <div className="card-body">{d.waec_by_year.length ? d.waec_by_year.map((data, i) => (
           <div className="card" style={{ marginBottom: '1rem' }} key={i}>
             <div className="card-header"><span><strong>{data.exam_year}</strong></span>{data.exam_number && <span className="text-muted">Exam No: {data.exam_number}</span>}</div>
             <div className="card-body"><div className="subjects-grid">{data.subjects.map((r, j) => (
               <div className="subject-item" key={j}><span>{r.subject}</span><span className={'grade-badge grade-' + r.grade}>{r.grade}</span></div>))}</div></div>
           </div>
-        )) : <Empty icon="fa-file-alt" title=""><p>No WAEC results recorded</p><a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i className="fas fa-plus" /> Add WAEC Result</a></Empty>}</div></div>
+        )) : <Empty icon="fa-file-alt" title=""><p>No WAEC results recorded</p><a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add WAEC Result</a></Empty>}</div></div>
 
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-file-contract" /> JAMB Results</h3>
-        <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i className="fas fa-plus" /> Add</a></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB Results</h3>
+        <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
         <div className="card-body">{d.jamb_results.length ? d.jamb_results.map((j, i) => (
           <div className="card" style={{ marginBottom: '1rem' }} key={i}>
             <div className="card-header"><span><strong>{j.exam_year}</strong></span><span className="badge badge-primary" style={{ fontSize: '1rem' }}>{j.total_score}</span></div>
@@ -329,10 +329,10 @@ function GraduateProfile({ d }) {
               <div className="jamb-subjects">{j.subjects.map((sub, k) => (
                 <div className="subject-item" key={k}><span>{sub.name}</span><strong>{sub.score}</strong></div>))}</div></div>
           </div>
-        )) : <Empty icon="fa-file-contract" title=""><p>No JAMB results recorded</p><a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i className="fas fa-plus" /> Add JAMB Result</a></Empty>}</div></div>
+        )) : <Empty icon="fa-file-contract" title=""><p>No JAMB results recorded</p><a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add JAMB Result</a></Empty>}</div></div>
 
       {d.contacts.length > 0 && (
-        <div className="card"><div className="card-header"><h3><i className="fas fa-phone" /> Contact Information</h3></div>
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-phone" /> Contact Information</h3></div>
           <div className="card-body"><div className="data-cards" style={{ padding: 0 }}>
             {d.contacts.map((c, i) => (
               <div className="data-card" key={i}>
@@ -360,9 +360,9 @@ function History({ d }) {
       </div></div></div>
       {d.records.length ? (<>
         <div className="stats-grid mb-3">
-          <div className="stat-card"><div className="stat-icon success"><i className="fas fa-arrow-up" /></div><div className="stat-content"><h3>{count('promoted')}</h3><p>Promoted</p></div></div>
-          <div className="stat-card"><div className="stat-icon warning"><i className="fas fa-redo" /></div><div className="stat-content"><h3>{count('repeated')}</h3><p>Repeated</p></div></div>
-          <div className="stat-card"><div className="stat-icon primary"><i className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{count('graduated')}</h3><p>Graduated</p></div></div>
+          <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-arrow-up" /></div><div className="stat-content"><h3>{count('promoted')}</h3><p>Promoted</p></div></div>
+          <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-redo" /></div><div className="stat-content"><h3>{count('repeated')}</h3><p>Repeated</p></div></div>
+          <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{count('graduated')}</h3><p>Graduated</p></div></div>
         </div>
         <div className="card"><div className="card-header"><h3>Records ({d.records.length})</h3></div>
           <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>

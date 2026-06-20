@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty, TableWrap } from '../components/ui';
 
 function useSave(notify) {
   return async (url, fields, after, okMsg) => {
@@ -35,8 +35,8 @@ function Index({ d }) {
       <div className="page-header">
         <h1>Class Timetable</h1>
         <div className="page-header-actions">
-          <A to={d.urls.backups} className="btn btn-secondary"><i className="fas fa-clock-rotate-left" /> Backups &amp; Restore</A>
-          <A to={d.urls.designer} className="btn btn-secondary"><i className="fas fa-drafting-compass" /> Timetable Designer</A>
+          <A to={d.urls.backups} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Backups &amp; Restore</A>
+          <A to={d.urls.designer} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-drafting-compass" /> Timetable Designer</A>
         </div>
       </div>
       <div className="card mb-3"><div className="card-body">
@@ -60,12 +60,13 @@ function Index({ d }) {
             <div className="card-header">
               <h3>{sel.display_name}</h3>
               <div className="page-header-actions">
-                <A to={d.urls.edit} className="btn btn-primary btn-sm"><i className="fas fa-edit" /> Edit</A>
-                <A to={d.urls.pdf} target="_blank" className="btn btn-secondary btn-sm"><i className="fas fa-file-pdf" /> PDF</A>
-                <A to={d.urls.pdf_teachers} target="_blank" className="btn btn-secondary btn-sm"><i className="fas fa-file-pdf" /> PDF + teachers</A>
+                <A to={d.urls.edit} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</A>
+                <A to={d.urls.pdf} target="_blank" className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</A>
+                <A to={d.urls.pdf_teachers} target="_blank" className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF + teachers</A>
               </div>
             </div>
-            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card-body" style={{ padding: 0 }}>
+              <TableWrap label="Class timetable">
               <table className="data-table" style={{ minWidth: '100%' }}>
                 <thead><tr><th style={{ width: 100 }}>Time</th>
                   {d.days.map(([n, name]) => <th key={n} style={{ textAlign: 'center' }}>{name}</th>)}</tr></thead>
@@ -86,6 +87,7 @@ function Index({ d }) {
                   ))}
                 </tbody>
               </table>
+              </TableWrap>
             </div>
           </div>
           {d.legend.length > 0 && (
@@ -165,7 +167,7 @@ function Edit({ d, notify }) {
             </tbody>
           </table>
           <div className="card-body"><div className="page-header-actions">
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Timetable</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Timetable</button>
             <A to={d.cancel_url} className="btn btn-secondary">Cancel</A>
           </div></div>
         </form>
@@ -194,7 +196,7 @@ function Backups({ d, notify }) {
     <>
       <div className="page-header">
         <div>
-          <h1><i className="fas fa-clock-rotate-left" /> Timetable Backups &amp; Restore</h1>
+          <h1><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Timetable Backups &amp; Restore</h1>
           <p className="text-muted text-sm">A snapshot is saved automatically each time a generated timetable is applied. Restore one to bring back a previous timetable.</p>
         </div>
         {d.terms.length > 0 && (
@@ -211,7 +213,7 @@ function Backups({ d, notify }) {
             <label className="form-label">Back up the current timetable now</label>
             <input className="form-control" placeholder="Label (e.g. 'Working timetable — Term 1')" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
-          <button type="submit" className="btn btn-secondary"><i className="fas fa-floppy-disk" /> Back up now</button>
+          <button type="submit" className="btn btn-secondary"><i aria-hidden="true" className="fas fa-floppy-disk" /> Back up now</button>
         </form>
       </div></div>
       <div className="card"><div className="card-body">
@@ -223,15 +225,15 @@ function Backups({ d, notify }) {
                 <tr key={b.id}>
                   <td>{b.when}</td><td>{b.label}</td><td>{b.entry_count}</td>
                   <td className="text-right">
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => restore(b)}><i className="fas fa-rotate-left" /> Restore</button>{' '}
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => del(b)}><i className="fas fa-trash" /></button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => restore(b)}><i aria-hidden="true" className="fas fa-rotate-left" /> Restore</button>{' '}
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table></div>
         ) : (
-          <p className="text-muted text-center" style={{ padding: '1.5rem' }}><i className="fas fa-info-circle" /> No backups yet for this term. One is created automatically when you apply a generated timetable, or use “Back up now” above.</p>
+          <p className="text-muted text-center" style={{ padding: '1.5rem' }}><i aria-hidden="true" className="fas fa-info-circle" /> No backups yet for this term. One is created automatically when you apply a generated timetable, or use “Back up now” above.</p>
         )}
       </div></div>
     </>

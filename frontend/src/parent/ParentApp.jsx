@@ -29,7 +29,7 @@ function Home({ d, go }) {
               ))}
             </select>
           )}
-          <a className="logout" href={d.urls.logout}><i className="fas fa-right-from-bracket" /> Sign out</a>
+          <a className="logout" href={d.urls.logout}><i aria-hidden="true" className="fas fa-right-from-bracket" /> Sign out</a>
         </div>
       </div></div>
 
@@ -58,7 +58,7 @@ function Home({ d, go }) {
                     <input type="hidden" name="term_id" value={d.term_id || ''} />
                     <input type="number" name="amount" min="100" step="50" value={amount}
                       onChange={(e) => setAmount(e.target.value)} className="form-control" style={{ marginBottom: '.4rem' }} />
-                    <button type="submit" className="pay-btn"><i className="fas fa-credit-card" /> Pay online</button>
+                    <button type="submit" className="pay-btn"><i aria-hidden="true" className="fas fa-credit-card" /> Pay online</button>
                   </form>
                 )}
               </>
@@ -80,11 +80,11 @@ function Home({ d, go }) {
 
         <div className="sec">
           <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.5rem', flexWrap: 'wrap' }}>Results
-            {r && <a href={d.urls.report_pdf} className="pdf-link"><i className="fas fa-file-pdf" /> Download PDF</a>}
+            {r && <a href={d.urls.report_pdf} className="pdf-link"><i aria-hidden="true" className="fas fa-file-pdf" /> Download PDF</a>}
           </h2>
           {r ? (
             <>
-              <p className="muted" style={{ fontSize: '.78rem', marginTop: '-.4rem' }}><i className="fas fa-wifi" /> Tip: once opened, this page works offline — and the PDF can be saved to your phone.</p>
+              <p className="muted" style={{ fontSize: '.78rem', marginTop: '-.4rem' }}><i aria-hidden="true" className="fas fa-wifi" /> Tip: once opened, this page works offline — and the PDF can be saved to your phone.</p>
               <table>
                 <thead><tr><th>Subject</th>{r.assessment_types.map((at) => <th key={at.id}>{at.label}</th>)}<th>Total</th><th>Grade</th><th>Remark</th></tr></thead>
                 <tbody>

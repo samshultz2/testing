@@ -10,17 +10,17 @@ function Calendar({ d }) {
   return (
     <>
       <PageHeader title="Calendar" actions={<>
-        <a href={d.urls.import} className="btn btn-secondary"><i className="fas fa-file-import" /> Import</a>
-        <a href={d.urls.agenda} className="btn btn-secondary"><i className="fas fa-list" /> Agenda</a>
-        <a href={d.urls.add_event} className="btn btn-primary"><i className="fas fa-plus" /> Add Event</a>
+        <a href={d.urls.import} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-import" /> Import</a>
+        <a href={d.urls.agenda} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list" /> Agenda</a>
+        <a href={d.urls.add_event} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Event</a>
       </>} />
       <div className="card"><div className="card-body">
         <div className="cal-head">
           <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{d.month_name} {d.year}</h2>
           <div className="cal-nav">
-            <a href={d.nav.prev_url} className="btn btn-secondary btn-sm"><i className="fas fa-chevron-left" /></a>
+            <a href={d.nav.prev_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chevron-left" /></a>
             <a href={d.nav.today_url} className="btn btn-secondary btn-sm">Today</a>
-            <a href={d.nav.next_url} className="btn btn-secondary btn-sm"><i className="fas fa-chevron-right" /></a>
+            <a href={d.nav.next_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chevron-right" /></a>
           </div>
         </div>
         <div className="cal-grid">
@@ -60,8 +60,8 @@ function Agenda({ d, notify }) {
   return (
     <>
       <PageHeader title="Events" actions={<>
-        <a href={d.urls.calendar} className="btn btn-secondary"><i className="fas fa-calendar" /> Calendar</a>
-        <a href={d.urls.add_event} className="btn btn-primary"><i className="fas fa-plus" /> Add Event</a>
+        <a href={d.urls.calendar} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-calendar" /> Calendar</a>
+        <a href={d.urls.add_event} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Event</a>
       </>} />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form">
@@ -87,8 +87,8 @@ function Agenda({ d, notify }) {
                   <td data-label="Audience">{e.audience}</td>
                   <td data-label="Location">{e.location || '—'}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <a href={e.edit_url} className="btn btn-secondary btn-sm"><i className="fas fa-edit" /></a>
-                    <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(e)}><i className="fas fa-trash" /></button>
+                    <a href={e.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td>
                 </tr>
               ))}</tbody></table></div>
@@ -164,9 +164,9 @@ function EventForm({ d, notify }) {
           <div className="form-group"><label className="form-label">Description</label>
             <textarea className="form-control" rows="3" value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
           <div className="page-header-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> {editing ? 'Save' : 'Add Event'}</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save' : 'Add Event'}</button>
             <a href={d.urls.agenda} className="btn btn-secondary">Cancel</a>
-            {editing && <button type="button" className="btn btn-danger" style={{ marginLeft: 'auto' }} onClick={del}><i className="fas fa-trash" /> Delete</button>}
+            {editing && <button type="button" className="btn btn-danger" style={{ marginLeft: 'auto' }} onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
           </div>
         </form>
       </div></div>
@@ -196,7 +196,7 @@ function Import({ d, notify }) {
     <>
       <PageHeader title="Import School Calendar" />
       <div className="card" style={{ maxWidth: 640 }}>
-        <div className="card-header"><h3><i className="fas fa-file-import" /> Scan a calendar file</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-import" /> Scan a calendar file</h3></div>
         <div className="card-body">
           <p className="text-muted">Upload your school calendar as a <strong>Word document (.docx)</strong>, an <strong>image</strong> (photo/scan) or a <strong>PDF</strong>. The system reads the dates and activities and shows them for review before adding them to the calendar — no manual typing.</p>
           <form onSubmit={scan}>
@@ -205,7 +205,7 @@ function Import({ d, notify }) {
               <input type="file" className="form-control" accept=".docx,image/*,.pdf" onChange={(e) => setFile(e.target.files[0] || null)} required />
               <span className="form-hint d-block">Best results: a Word table of Week / Activity / Dates, or a clear, straight photo.</span>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-magic')} /> {busy ? 'Scanning…' : 'Scan & Review'}</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-magic')} /> {busy ? 'Scanning…' : 'Scan & Review'}</button>
             <a href={d.urls.calendar} className="btn btn-secondary">Cancel</a>
           </form>
         </div>
@@ -238,7 +238,7 @@ function ImportReview({ review, setReview, d, notify }) {
   return (
     <>
       <PageHeader title="Review Scanned Events" actions={
-        <button type="button" className="btn btn-secondary" onClick={() => setReview(null)}><i className="fas fa-redo" /> Scan another</button>} />
+        <button type="button" className="btn btn-secondary" onClick={() => setReview(null)}><i aria-hidden="true" className="fas fa-redo" /> Scan another</button>} />
       <div className="card mb-3"><div className="card-body">
         <p className="mb-0 text-muted">{rows.length} activities detected. Untick any you don't want, fix dates/titles/categories, then import. Multi-day items have an end date.</p>
       </div></div>
@@ -267,7 +267,7 @@ function ImportReview({ review, setReview, d, notify }) {
         </div>
       </div>
       <div className="page-header-actions mt-3">
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={save}><i className="fas fa-calendar-plus" /> Import selected events</button>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={save}><i aria-hidden="true" className="fas fa-calendar-plus" /> Import selected events</button>
         <a href={d.urls.calendar} className="btn btn-secondary">Cancel</a>
       </div>
     </>

@@ -12,8 +12,8 @@ function Dashboard({ d }) {
   return (
     <>
       <PageHeader icon="fa-cart-shopping" title="Sales & Inventory" actions={<>
-        <a href={u.new_sale} className="btn btn-primary"><i className="fas fa-plus" /> New Sale</a>
-        <a href={u.products} className="btn btn-secondary"><i className="fas fa-boxes-stacked" /> Products</a>
+        <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>
+        <a href={u.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
       </>} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '.75rem', marginBottom: '1rem' }}>
@@ -30,7 +30,7 @@ function Dashboard({ d }) {
 
       {d.low_stock.length > 0 && (
         <div className="card mb-3" style={{ borderColor: '#f6c23e' }}>
-          <div className="card-header"><h3><i className="fas fa-triangle-exclamation" /> Low stock</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Low stock</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             <table className="data-table table-stack no-mobile-scroll">
               <thead><tr><th>Product</th><th>Category</th><th className="text-right">In stock</th><th className="text-right">Reorder at</th></tr></thead>
@@ -105,10 +105,10 @@ function Products({ d, notify }) {
   return (
     <>
       <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={
-        <a href={d.urls.new_sale} className="btn btn-primary"><i className="fas fa-cart-plus" /> New Sale</a>} />
+        <a href={d.urls.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-cart-plus" /> New Sale</a>} />
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-plus" /> Add product</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add product</h3></div>
         <div className="card-body">
           <form onSubmit={submitAdd} className="filter-form" style={{ flexWrap: 'wrap', gap: '1rem' }}>
             <div className="form-group"><label className="form-label">Name <span className="text-danger">*</span></label>
@@ -123,7 +123,7 @@ function Products({ d, notify }) {
             <div className="form-group"><label className="form-label">Reorder at</label>
               <input type="number" className="form-control" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} /></div>
             <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-              <button className="btn btn-primary" disabled={busy}><i className="fas fa-plus" /> Add</button></div>
+              <button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
           </form>
         </div>
       </div>
@@ -231,7 +231,7 @@ function NewSale({ d, notify }) {
         </div>
 
         <div className="d-flex gap-2">
-          <button type="submit" className="btn btn-primary btn-lg" disabled={busy}><i className="fas fa-receipt" /> Complete Sale</button>
+          <button type="submit" className="btn btn-primary btn-lg" disabled={busy}><i aria-hidden="true" className="fas fa-receipt" /> Complete Sale</button>
           <a href={d.urls.dashboard} className="btn btn-secondary btn-lg">Cancel</a>
         </div>
       </form>
@@ -244,7 +244,7 @@ function History({ d }) {
   return (
     <>
       <div className="page-header">
-        <h1><i className="fas fa-clock-rotate-left" /> Sales History</h1>
+        <h1><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Sales History</h1>
         <span className="badge badge-success">{naira(d.total)}</span>
       </div>
       <div className="card"><div className="card-body" style={{ padding: 0 }}>

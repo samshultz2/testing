@@ -59,22 +59,22 @@ function Dashboard({ d }) {
   return (
     <>
       <div className="page-header"><h1>Staff &amp; HR</h1>
-        <div className="page-header-actions"><a href={d.urls.add_staff} className="btn btn-primary"><i className="fas fa-user-plus" /> Add Staff</a></div>
+        <div className="page-header-actions"><a href={d.urls.add_staff} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a></div>
       </div>
       <Tabs d={d} />
       <div className="kpi-row">{kpis.map(([c, ic, v, l, title]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i className={'fas ' + ic} /></div>
+        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
           <div><div className="v" title={title || ''}>{v}</div><div className="l">{l}</div></div></div>))}
       </div>
       <div className="hr-grid c2">
-        <div className="widget"><div className="wh"><h3><i className="fas fa-sitemap" /> Staff by department</h3></div>
+        <div className="widget"><div className="wh"><h3><i aria-hidden="true" className="fas fa-sitemap" /> Staff by department</h3></div>
           <div className="wb"><div className="chart-box">{st.dept_chart.length ? <canvas ref={deptRef} /> : <Empty icon="fa-sitemap" title=""><p>No staff yet</p></Empty>}</div></div></div>
-        <div className="widget"><div className="wh"><h3><i className="fas fa-chart-pie" /> Teaching vs non-teaching</h3></div>
+        <div className="widget"><div className="wh"><h3><i aria-hidden="true" className="fas fa-chart-pie" /> Teaching vs non-teaching</h3></div>
           <div className="wb"><div className="chart-box">{st.total ? <canvas ref={typeRef} /> : <Empty icon="fa-chart-pie" title=""><p>No staff yet</p></Empty>}</div></div></div>
       </div>
       <div className="hr-grid c2">
         <div className="widget">
-          <div className="wh"><h3><i className="fas fa-plane-departure" /> Pending leave ({st.pending_leave})</h3><a href={d.urls.leave_pending} className="text-sm">Review</a></div>
+          <div className="wh"><h3><i aria-hidden="true" className="fas fa-plane-departure" /> Pending leave ({st.pending_leave})</h3><a href={d.urls.leave_pending} className="text-sm">Review</a></div>
           <div className="wb" style={{ padding: 0 }}>
             {d.pending_leaves.length ? (
               <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -86,7 +86,7 @@ function Dashboard({ d }) {
           </div>
         </div>
         <div className="widget">
-          <div className="wh"><h3><i className="fas fa-user-clock" /> Recently added</h3><a href={d.nav.staff} className="text-sm">All staff</a></div>
+          <div className="wh"><h3><i aria-hidden="true" className="fas fa-user-clock" /> Recently added</h3><a href={d.nav.staff} className="text-sm">All staff</a></div>
           <div className="wb" style={{ padding: 0 }}>
             {d.recent.length ? (
               <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -112,8 +112,8 @@ function Staff({ d }) {
     <>
       <div className="page-header"><h1>Staff Directory</h1>
         <div className="page-header-actions">
-          <a href={d.urls.export} className="btn btn-secondary" data-native download><i className="fas fa-file-csv" /> Export</a>
-          <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-user-plus" /> Add Staff</a>
+          <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
+          <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>
         </div>
       </div>
       <Tabs d={d} />
@@ -145,7 +145,7 @@ function Staff({ d }) {
                   <td data-label="Department">{s.department}</td>
                   <td data-label="Type"><span className={typeBadge(s.staff_type)}>{s.staff_type}</span></td>
                   <td data-label="Status"><span className={statusBadge(s.status)}>{s.status}</span></td>
-                  <td className="actions"><a href={s.url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-right" /></a></td>
+                  <td className="actions"><a href={s.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
                 </tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a></Empty>}
@@ -210,7 +210,7 @@ function StaffForm({ d, notify }) {
         </div></div>
 
         <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> {d.mode === 'edit' ? 'Save Changes' : 'Add Staff'}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {d.mode === 'edit' ? 'Save Changes' : 'Add Staff'}</button>
           <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
         </div>
       </form>
@@ -233,10 +233,10 @@ function StaffDetail({ d, notify }) {
     <>
       <div className="page-header"><h1>Staff Profile</h1>
         <div className="page-header-actions">
-          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary"><i className="fas fa-phone" /></a>
-            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary"><i className="fab fa-whatsapp" /></a></>}
-          <a href={d.urls.edit} className="btn btn-primary"><i className="fas fa-edit" /> Edit</a>
-          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i className="fas fa-box-archive" /></button>}
+          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-phone" /></a>
+            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary"><i aria-hidden="true" className="fab fa-whatsapp" /></a></>}
+          <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
+          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i aria-hidden="true" className="fas fa-box-archive" /></button>}
         </div>
       </div>
 
@@ -269,14 +269,14 @@ function StaffDetail({ d, notify }) {
       <SalarySection d={d} act={act} />
       <LeaveSection d={d} act={act} notify={notify} />
       {d.payslips.length > 0 && (
-        <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-money-check-dollar" /> Payslips</h3></div>
+        <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-check-dollar" /> Payslips</h3></div>
           <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
             <thead><tr><th>Period</th><th className="text-right">Basic</th><th className="text-right">Allow.</th><th className="text-right">Deduct.</th><th className="text-right">Net</th><th /></tr></thead>
             <tbody>{d.payslips.map((ps, i) => (
               <tr key={i}><td data-label="Period">{ps.period}</td><td data-label="Basic" className="text-right">{naira(ps.basic)}</td>
                 <td data-label="Allow." className="text-right">{naira(ps.allowances)}</td><td data-label="Deduct." className="text-right">{naira(ps.total_deductions)}</td>
                 <td data-label="Net" className="text-right"><strong>{naira(ps.net)}</strong></td>
-                <td className="actions"><a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i className="fas fa-print" /></a></td></tr>))}</tbody>
+                <td className="actions"><a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i aria-hidden="true" className="fas fa-print" /></a></td></tr>))}</tbody>
           </table></div></div></div>
       )}
     </>
@@ -289,14 +289,14 @@ function SalarySection({ d, act }) {
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const submit = (e) => { e.preventDefault(); act(d.urls.adjust_salary, f, 'Update salary and record this change?'); };
   return (
-    <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-money-bill-trend-up" /> Salary &amp; increments</h3><span className="badge badge-primary" style={{ alignSelf: 'center' }}>Current: {naira(s.salary)}</span></div>
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-bill-trend-up" /> Salary &amp; increments</h3><span className="badge badge-primary" style={{ alignSelf: 'center' }}>Current: {naira(s.salary)}</span></div>
       <div className="card-body">
         {d.is_admin && (
           <form onSubmit={submit} className="d-flex gap-2 align-end flex-wrap mb-3">
             <div className="form-group mb-0"><label className="form-label">New salary (₦)</label><input type="number" className="form-control" min="0" step="500" required value={f.new_salary} onChange={(e) => set('new_salary', e.target.value)} /></div>
             <div className="form-group mb-0"><label className="form-label">Effective</label><input type="date" className="form-control" value={f.effective_date} onChange={(e) => set('effective_date', e.target.value)} /></div>
             <div className="form-group mb-0" style={{ flex: 1, minWidth: 160 }}><label className="form-label">Reason</label><input type="text" className="form-control" placeholder="e.g., Annual increment, Promotion" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
-            <button className="btn btn-primary"><i className="fas fa-arrow-trend-up" /> Apply</button>
+            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-arrow-trend-up" /> Apply</button>
           </form>
         )}
         {d.salary_history.length ? (
@@ -319,14 +319,14 @@ function LeaveSection({ d, act }) {
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const add = (e) => { e.preventDefault(); act(d.urls.add_leave, { ...f, staff_id: s.id }); };
   return (
-    <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-plane-departure" /> Leave history</h3></div>
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plane-departure" /> Leave history</h3></div>
       <div className="card-body">
         <form onSubmit={add} className="d-flex gap-2 align-end flex-wrap mb-3">
           <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.leave_type} onChange={(e) => set('leave_type', e.target.value)}>{d.leave_types.map((t) => <option key={t}>{t}</option>)}</select></div>
           <div className="form-group mb-0"><label className="form-label">From</label><input type="date" className="form-control" required value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></div>
           <div className="form-group mb-0"><label className="form-label">To</label><input type="date" className="form-control" required value={f.end_date} onChange={(e) => set('end_date', e.target.value)} /></div>
           <div className="form-group mb-0" style={{ flex: 1, minWidth: 160 }}><label className="form-label">Reason</label><input type="text" className="form-control" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
-          <button className="btn btn-secondary"><i className="fas fa-plus" /> Add</button>
+          <button className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add</button>
         </form>
         {d.leaves.length ? (
           <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -335,9 +335,9 @@ function LeaveSection({ d, act }) {
               <tr key={lv.id}><td data-label="Type">{lv.leave_type}</td><td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td>
                 <td data-label="Status"><span className={leaveBadge(lv.status)}>{lv.status}</span></td>
                 <td className="actions"><div className="d-flex gap-1 justify-end">
-                  {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" title="Approve" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i className="fas fa-check" /></button>}
-                  {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" title="Reject" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i className="fas fa-xmark" /></button>}
-                  <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete leave record?')}><i className="fas fa-trash" /></button>
+                  {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" title="Approve" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i aria-hidden="true" className="fas fa-check" /></button>}
+                  {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" title="Reject" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i aria-hidden="true" className="fas fa-xmark" /></button>}
+                  <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete leave record?')}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div></td></tr>))}</tbody>
           </table></div>
         ) : <p className="text-muted mb-0">No leave records.</p>}
@@ -366,10 +366,10 @@ function Departments({ d, notify }) {
       <div className="page-header"><h1>Departments</h1></div>
       <Tabs d={d} />
       {d.is_admin && (
-        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Add Department</h3></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add Department</h3></div>
           <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
             <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g., Sports" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-            <button className="btn btn-primary"><i className="fas fa-save" /> Add</button>
+            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
           </form></div></div>
       )}
       <div className="card"><div className="card-header"><h3>Departments ({d.departments.length})</h3></div>
@@ -382,8 +382,8 @@ function Departments({ d, notify }) {
                 <td data-label="Staff" className="text-right">{dep.count}</td>
                 <td data-label="Status">{dep.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-secondary">Inactive</span>}</td>
                 {d.is_admin && <td className="actions"><div className="d-flex gap-1 justify-end">
-                  <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dep.id ? null : dep.id)}><i className="fas fa-edit" /></button>
-                  <button className="btn btn-danger btn-sm" onClick={() => act(dep.delete_url, {}, `Delete ${dep.name}?`)}><i className="fas fa-trash" /></button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dep.id ? null : dep.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
+                  <button className="btn btn-danger btn-sm" onClick={() => act(dep.delete_url, {}, `Delete ${dep.name}?`)}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div></td>}
               </tr>
               {d.is_admin && editing === dep.id && (
@@ -408,7 +408,7 @@ function DeptEdit({ dep, notify, onDone }) {
     <form onSubmit={submit} className="d-flex gap-2 align-end flex-wrap">
       <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">Name</label><input type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} /></div>
       <label className="form-check mb-0"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active</label>
-      <button className="btn btn-primary btn-sm"><i className="fas fa-save" /> Update</button>
+      <button className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-save" /> Update</button>
     </form>
   );
 }
@@ -434,14 +434,14 @@ function Leave({ d, notify }) {
     <>
       <div className="page-header"><h1>Leave Management</h1></div>
       <Tabs d={d} />
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Record Leave</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Record Leave</h3></div>
         <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
           <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Staff</label>
             <select className="form-control" required value={f.staff_id} onChange={(e) => set('staff_id', e.target.value)}><option value="">Select…</option>{d.staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>
           <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.leave_type} onChange={(e) => set('leave_type', e.target.value)}>{d.leave_types.map((t) => <option key={t}>{t}</option>)}</select></div>
           <div className="form-group mb-0"><label className="form-label">From</label><input type="date" className="form-control" required value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></div>
           <div className="form-group mb-0"><label className="form-label">To</label><input type="date" className="form-control" required value={f.end_date} onChange={(e) => set('end_date', e.target.value)} /></div>
-          <button className="btn btn-primary"><i className="fas fa-save" /> Add</button>
+          <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
         </form></div></div>
 
       <div className="card mb-3"><div className="card-body">
@@ -461,9 +461,9 @@ function Leave({ d, notify }) {
                   <td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td>
                   <td data-label="Status"><span className={leaveBadge(lv.status)}>{lv.status}</span></td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i className="fas fa-check" /></button>}
-                    {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i className="fas fa-xmark" /></button>}
-                    <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete?')}><i className="fas fa-trash" /></button>
+                    {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i aria-hidden="true" className="fas fa-check" /></button>}
+                    {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i aria-hidden="true" className="fas fa-xmark" /></button>}
+                    <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete?')}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td></tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-plane-departure" title="No leave records"><p>Record staff leave above.</p></Empty>}
@@ -486,13 +486,13 @@ function Payroll({ d, notify }) {
       <div className="page-header"><h1>Payroll</h1></div>
       <Tabs d={d} />
       {d.is_admin && (
-        <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-plus" /> Generate Payroll</h3></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Generate Payroll</h3></div>
           <div className="card-body">
             <p className="text-muted text-sm">Creates a payslip for every active staff member using their monthly salary. You can adjust allowances/deductions afterwards.</p>
             <form onSubmit={create} className="d-flex gap-2 align-end flex-wrap">
               <div className="form-group mb-0"><label className="form-label">Month</label><select className="form-control" value={f.month} onChange={(e) => setF((s) => ({ ...s, month: e.target.value }))}>{d.months.map((m) => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div>
               <div className="form-group mb-0"><label className="form-label">Year</label><input type="number" className="form-control" min="2000" max="2100" style={{ width: 120 }} value={f.year} onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))} /></div>
-              <button className="btn btn-primary"><i className="fas fa-gears" /> Generate</button>
+              <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-gears" /> Generate</button>
             </form>
           </div></div>
       )}
@@ -505,7 +505,7 @@ function Payroll({ d, notify }) {
                 <tr key={r.id}><td data-label="Period"><a href={r.url}><strong>{r.period_label}</strong></a></td>
                   <td data-label="Staff" className="text-right">{r.count}</td><td data-label="Total" className="text-right">{naira(r.total)}</td>
                   <td data-label="Status"><span className={runBadge(r.status)}>{r.status}</span></td>
-                  <td className="actions"><a href={r.url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
+                  <td className="actions"><a href={r.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-money-check-dollar" title="No payroll yet"><p>Generate your first monthly payroll above.</p></Empty>}
         </div></div>
@@ -530,11 +530,11 @@ function PayrollDetail({ d, notify }) {
         <div className="page-header-actions">
           <span className={runBadge(run.status)} style={{ alignSelf: 'center' }}>{run.status}</span>
           {d.is_admin && run.status === 'Draft' && <>
-            <button className="btn btn-secondary" onClick={() => act(d.urls.sync_deductions, {}, "Refresh every payslip's deductions from this month's attendance?")}><i className="fas fa-rotate" /> Refresh deductions from attendance</button>
-            <button className="btn btn-primary" onClick={() => act(d.urls.finalize, { post_expense: '1' }, 'Finalize this payroll? You can optionally post the total to Finance.')}><i className="fas fa-lock" /> Finalize &amp; post to Finance</button>
+            <button className="btn btn-secondary" onClick={() => act(d.urls.sync_deductions, {}, "Refresh every payslip's deductions from this month's attendance?")}><i aria-hidden="true" className="fas fa-rotate" /> Refresh deductions from attendance</button>
+            <button className="btn btn-primary" onClick={() => act(d.urls.finalize, { post_expense: '1' }, 'Finalize this payroll? You can optionally post the total to Finance.')}><i aria-hidden="true" className="fas fa-lock" /> Finalize &amp; post to Finance</button>
           </>}
-          {d.is_admin && run.status === 'Finalized' && <button className="btn btn-success" onClick={() => act(d.urls.mark_paid, {})}><i className="fas fa-check-double" /> Mark paid</button>}
-          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this payroll run and all payslips?', true)}><i className="fas fa-trash" /></button>}
+          {d.is_admin && run.status === 'Finalized' && <button className="btn btn-success" onClick={() => act(d.urls.mark_paid, {})}><i aria-hidden="true" className="fas fa-check-double" /> Mark paid</button>}
+          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this payroll run and all payslips?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}
         </div>
       </div>
       <Tabs d={d} />
@@ -559,8 +559,8 @@ function PayrollDetail({ d, notify }) {
                     <td data-label="Attendance" className="text-right">{ps.attendance_deduction ? <span style={{ color: 'var(--danger)' }}>{naira(ps.attendance_deduction)}</span> : '—'}</td>
                     <td data-label="Net" className="text-right"><strong>{naira(ps.net)}</strong></td>
                     <td className="actions"><div className="d-flex gap-1 justify-end">
-                      <a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i className="fas fa-print" /></a>
-                      {d.is_admin && run.status === 'Draft' && <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === ps.id ? null : ps.id)}><i className="fas fa-edit" /></button>}
+                      <a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i aria-hidden="true" className="fas fa-print" /></a>
+                      {d.is_admin && run.status === 'Draft' && <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === ps.id ? null : ps.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
                     </div></td>
                   </tr>
                   {d.is_admin && run.status === 'Draft' && editing === ps.id && (
@@ -591,7 +591,7 @@ function PayslipEdit({ ps, notify, onDone }) {
       <div className="form-group mb-0"><label className="form-label">Basic</label><input type="number" className="form-control" step="100" value={f.basic} onChange={(e) => set('basic', e.target.value)} /></div>
       <div className="form-group mb-0"><label className="form-label">Allowances</label><input type="number" className="form-control" step="100" value={f.allowances} onChange={(e) => set('allowances', e.target.value)} /></div>
       <div className="form-group mb-0"><label className="form-label">Manual deductions</label><input type="number" className="form-control" step="100" value={f.deductions} onChange={(e) => set('deductions', e.target.value)} /></div>
-      <button className="btn btn-primary btn-sm"><i className="fas fa-save" /> Update</button>
+      <button className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-save" /> Update</button>
     </form>
   );
 }
@@ -634,7 +634,7 @@ function Attendance({ d, notify }) {
 
       <form onSubmit={save}>
         <div className="card"><div className="card-header"><h3>{rows.length} staff · {d.day_label}</h3>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i className="fas fa-save" /> Save</button></div>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button></div>
           <div className="card-body" style={{ padding: 0 }}>
             {rows.length ? (
               <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -650,9 +650,9 @@ function Attendance({ d, notify }) {
               </table></div>
             ) : <Empty icon="fa-user-clock" title="No active staff"><p>Add staff to mark attendance.</p></Empty>}
           </div></div>
-        {rows.length > 0 && <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save Attendance</button></div>}
+        {rows.length > 0 && <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Attendance</button></div>}
       </form>
-      <p className="text-muted text-sm mt-2"><i className="fas fa-circle-info" /> Lateness deductions are calculated from the clock-in time vs the resumption time set in <a href={d.settings_url}>Settings</a>, and flow into that month's payroll automatically.</p>
+      <p className="text-muted text-sm mt-2"><i aria-hidden="true" className="fas fa-circle-info" /> Lateness deductions are calculated from the clock-in time vs the resumption time set in <a href={d.settings_url}>Settings</a>, and flow into that month's payroll automatically.</p>
     </>
   );
 }
@@ -683,7 +683,7 @@ function Settings({ d, notify }) {
     <>
       <div className="page-header"><h1>HR Settings</h1></div>
       <Tabs d={d} />
-      <div className="card"><div className="card-header"><h3><i className="fas fa-user-clock" /> Attendance &amp; Deductions</h3></div>
+      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-clock" /> Attendance &amp; Deductions</h3></div>
         <div className="card-body"><form onSubmit={saveSettings}>
           <fieldset disabled={!d.is_admin} style={{ border: 0, padding: 0, margin: 0 }}>
             <div className="form-row">
@@ -691,11 +691,11 @@ function Settings({ d, notify }) {
               <div className="form-group"><label className="form-label">Lateness rate (₦ per minute)</label><input type="number" className="form-control" min="0" step="1" value={s.late_rate} onChange={(e) => set('late_rate', e.target.value)} /><span className="form-hint d-block">e.g. 10 → ₦10 for every minute after the resumption time.</span></div>
               <div className="form-group"><label className="form-label">Absence deduction (₦ per day)</label><input type="number" className="form-control" min="0" step="100" value={s.absence_deduction} onChange={(e) => set('absence_deduction', e.target.value)} /><span className="form-hint d-block">Flat amount deducted for each day marked absent (0 to disable).</span></div>
             </div>
-            <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Settings</button>
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Settings</button>
           </fieldset>
         </form></div></div>
 
-      <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-money-bill-trend-up" /> Recurring Deductions</h3></div>
+      <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-bill-trend-up" /> Recurring Deductions</h3></div>
         <div className="card-body">
           <p className="text-muted text-sm" style={{ marginTop: 0 }}>Deductions applied to <strong>every</strong> staff member's payslip each month — e.g. pension (a % of basic) or welfare (a fixed amount).</p>
           {d.is_admin && (
@@ -703,7 +703,7 @@ function Settings({ d, notify }) {
               <div className="form-group mb-0" style={{ flex: 2, minWidth: 160 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g. Pension, Welfare, Union dues" required value={ded.name} onChange={(e) => setDed((x) => ({ ...x, name: e.target.value }))} /></div>
               <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={ded.kind} onChange={(e) => setDed((x) => ({ ...x, kind: e.target.value }))}><option value="percent">% of basic</option><option value="fixed">Fixed ₦</option></select></div>
               <div className="form-group mb-0"><label className="form-label">Value</label><input type="number" className="form-control" min="0" step="0.5" placeholder="5 or 500" required value={ded.value} onChange={(e) => setDed((x) => ({ ...x, value: e.target.value }))} /></div>
-              <button className="btn btn-primary"><i className="fas fa-plus" /> Add</button>
+              <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</button>
             </form>
           )}
           {d.deductions.length ? (
@@ -715,8 +715,8 @@ function Settings({ d, notify }) {
                   <td data-label="Deduction">{dd.kind === 'percent' ? `${Math.round(dd.value * 100) / 100}% of basic` : `${naira(dd.value)} fixed`}</td>
                   <td data-label="Status">{dd.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-warning">Inactive</span>}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <button className="btn btn-secondary btn-sm" title="Toggle active" onClick={() => act(dd.toggle_url, {})}><i className="fas fa-power-off" /></button>
-                    <button className="btn btn-danger btn-sm" title="Delete" onClick={() => act(dd.delete_url, {}, 'Remove this deduction?')}><i className="fas fa-trash" /></button>
+                    <button className="btn btn-secondary btn-sm" title="Toggle active" onClick={() => act(dd.toggle_url, {})}><i aria-hidden="true" className="fas fa-power-off" /></button>
+                    <button className="btn btn-danger btn-sm" title="Delete" onClick={() => act(dd.delete_url, {}, 'Remove this deduction?')}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td>
                 </tr>))}</tbody>
             </table>
@@ -724,7 +724,7 @@ function Settings({ d, notify }) {
         </div></div>
 
       <div className="card mt-3"><div className="card-body">
-        <h4 style={{ marginTop: 0 }}><i className="fas fa-circle-question" /> How deductions work</h4>
+        <h4 style={{ marginTop: 0 }}><i aria-hidden="true" className="fas fa-circle-question" /> How deductions work</h4>
         <ul className="text-sm text-muted" style={{ margin: 0, paddingLeft: '1.1rem', lineHeight: 1.7 }}>
           <li>Mark daily attendance under <strong>Attendance</strong>; entering a clock-in time auto-calculates minutes late and the naira deduction.</li>
           <li>When you <strong>generate payroll</strong> for a month, each staff member's total lateness + absence deductions for that month are pre-filled into their payslip.</li>

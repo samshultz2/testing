@@ -27,14 +27,14 @@ function Index({ d, notify }) {
   return (
     <>
       <div className="page-header">
-        <h1><i className="fas fa-users-cog" /> User Management</h1>
+        <h1><i aria-hidden="true" className="fas fa-users-cog" /> User Management</h1>
         <div className="page-header-actions">
-          <A to={d.matrix_url} className="btn btn-secondary"><i className="fas fa-table-cells" /> Permission Matrix</A>
-          <A to={d.add_url} className="btn btn-primary"><i className="fas fa-plus" /> Add User</A>
+          <A to={d.matrix_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-table-cells" /> Permission Matrix</A>
+          <A to={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add User</A>
         </div>
       </div>
       <div className="card">
-        <div className="card-header"><h3><i className="fas fa-list" /> All Users ({d.users.length})</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-list" /> All Users ({d.users.length})</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.users.length ? (
             <div className="table-responsive"><table className="data-table">
@@ -48,13 +48,13 @@ function Index({ d, notify }) {
                     <td><span className={`badge badge-${u.is_active ? 'success' : 'danger'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td>{u.last_login}</td>
                     <td><div className="d-flex gap-1">
-                      <A to={u.view_url} className="btn btn-sm btn-info" title="View"><i className="fas fa-eye" /></A>
-                      <A to={u.edit_url} className="btn btn-sm btn-warning" title="Edit"><i className="fas fa-edit" /></A>
+                      <A to={u.view_url} className="btn btn-sm btn-info" title="View"><i aria-hidden="true" className="fas fa-eye" /></A>
+                      <A to={u.edit_url} className="btn btn-sm btn-warning" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></A>
                       {!u.is_self && (
                         <button type="button" onClick={() => toggle(u)}
                           className={`btn btn-sm btn-${u.is_active ? 'secondary' : 'success'}`}
                           title={u.is_active ? 'Deactivate' : 'Activate'}>
-                          <i className={`fas fa-${u.is_active ? 'ban' : 'check'}`} />
+                          <i aria-hidden="true" className={`fas fa-${u.is_active ? 'ban' : 'check'}`} />
                         </button>
                       )}
                     </div></td>
@@ -97,10 +97,10 @@ function Matrix({ d, notify }) {
   return (
     <>
       <div className="page-header">
-        <h1><i className="fas fa-table-cells" /> Permission Matrix</h1>
-        <div className="page-header-actions"><A to={d.back_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A></div>
+        <h1><i aria-hidden="true" className="fas fa-table-cells" /> Permission Matrix</h1>
+        <div className="page-header-actions"><A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
       </div>
-      <p className="matrix-note"><i className="fas fa-info-circle" /> Per cell: <strong>—</strong> no access, <strong>V</strong> view only, <strong>E</strong> view &amp; edit. A user with no cells set falls back to their role's default. <strong>Admins</strong> always have full access (shown for reference). The <strong>View only</strong> column forces every section read-only.</p>
+      <p className="matrix-note"><i aria-hidden="true" className="fas fa-info-circle" /> Per cell: <strong>—</strong> no access, <strong>V</strong> view only, <strong>E</strong> view &amp; edit. A user with no cells set falls back to their role's default. <strong>Admins</strong> always have full access (shown for reference). The <strong>View only</strong> column forces every section read-only.</p>
       <form onSubmit={submit}>
         <div className="card"><div className="card-body matrix-wrap">
           <table className="matrix">
@@ -113,7 +113,7 @@ function Matrix({ d, notify }) {
               {d.users.map((u) => (u.is_admin ? (
                 <tr key={u.id} className="admin-row">
                   <td className="user">{u.name} <span className="badge badge-warning">Admin</span></td>
-                  {d.modules.map((m) => <td key={m.key}><i className="fas fa-check" style={{ color: '#28a745' }} /></td>)}
+                  {d.modules.map((m) => <td key={m.key}><i aria-hidden="true" className="fas fa-check" style={{ color: '#28a745' }} /></td>)}
                   <td>—</td>
                 </tr>
               ) : (
@@ -136,7 +136,7 @@ function Matrix({ d, notify }) {
           </table>
         </div></div>
         <div className="d-flex gap-2 mt-3">
-          <button type="submit" className="btn btn-primary btn-lg"><i className="fas fa-save" /> Save Matrix</button>
+          <button type="submit" className="btn btn-primary btn-lg"><i aria-hidden="true" className="fas fa-save" /> Save Matrix</button>
           <A to={d.back_url} className="btn btn-secondary btn-lg">Cancel</A>
         </div>
       </form>
@@ -257,10 +257,10 @@ function UserForm({ d, notify }) {
 
   return (
     <>
-      <div className="page-header"><h1><i className={`fas fa-user-${edit ? 'edit' : 'plus'}`} /> {edit ? 'Edit User' : 'Add New User'}</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className={`fas fa-user-${edit ? 'edit' : 'plus'}`} /> {edit ? 'Edit User' : 'Add New User'}</h1></div>
       <form onSubmit={submit}>
         <div className="card mb-3">
-          <div className="card-header"><h3><i className="fas fa-user" /> Account Information</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user" /> Account Information</h3></div>
           <div className="card-body">
             <div className="form-row">
               <div className="form-group"><label className="form-label">Username {!edit && <span className="text-danger">*</span>}</label>
@@ -342,7 +342,7 @@ function UserForm({ d, notify }) {
 
         {showTeacher && (
           <div className="card mb-3">
-            <div className="card-header"><h3><i className="fas fa-key" /> Teacher Permissions</h3></div>
+            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-key" /> Teacher Permissions</h3></div>
             <div className="card-body">
               <div className="permission-grid">
                 <label className="permission-item"><input type="checkbox" checked={f.teacher.can_mark_attendance} onChange={setTeacher('can_mark_attendance')} /> <span>Mark Attendance</span></label>
@@ -351,14 +351,14 @@ function UserForm({ d, notify }) {
                 <label className="permission-item"><input type="checkbox" checked={f.teacher.can_enter_results} onChange={setTeacher('can_enter_results')} /> <span>Enter Results</span></label>
                 <label className="permission-item"><input type="checkbox" checked={f.teacher.can_edit_results} onChange={setTeacher('can_edit_results')} /> <span>Edit Results</span></label>
               </div>
-              <p className="text-muted text-sm mt-2"><i className="fas fa-info-circle" /> Teachers can only access classes and subjects assigned to them.</p>
+              <p className="text-muted text-sm mt-2"><i aria-hidden="true" className="fas fa-info-circle" /> Teachers can only access classes and subjects assigned to them.</p>
             </div>
           </div>
         )}
 
         {showModules && (
           <div className="card mb-3">
-            <div className="card-header"><h3><i className="fas fa-th-large" /> Module Access</h3></div>
+            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-th-large" /> Module Access</h3></div>
             <div className="card-body">
               <div className="permission-grid">
                 {d.modules.map((m) => {
@@ -369,13 +369,13 @@ function UserForm({ d, notify }) {
                       <label className="permission-item perm-row"><span>{m.label}</span><PermSelect pkey={m.key} /></label>
                       {subs && (
                         <details className="perm-subs" open={isCap}>
-                          <summary>{isCap ? <><i className="fas fa-key" /> Special capabilities</> : `Detailed access (${subs.length} parts)`}</summary>
+                          <summary>{isCap ? <><i aria-hidden="true" className="fas fa-key" /> Special capabilities</> : `Detailed access (${subs.length} parts)`}</summary>
                           {subs.map((s) => {
                             const sk = `${m.key}.${s.sub}`;
                             const cap = d.capabilities.includes(sk);
                             return (
                               <label key={sk} className={`permission-item perm-row perm-sub ${cap ? 'perm-cap' : ''}`}>
-                                <span>{cap ? <><i className="fas fa-key" /> </> : '↳ '}{s.label}</span><PermSelect pkey={sk} />
+                                <span>{cap ? <><i aria-hidden="true" className="fas fa-key" /> </> : '↳ '}{s.label}</span><PermSelect pkey={sk} />
                               </label>
                             );
                           })}
@@ -385,15 +385,15 @@ function UserForm({ d, notify }) {
                   );
                 })}
               </div>
-              <p className="text-muted text-sm mt-2"><i className="fas fa-info-circle" /> Choose each section's level — <strong>No access</strong>, <strong>View only</strong> or <strong>View &amp; edit</strong>. A part's level overrides the whole-module level. Admins always have full access.</p>
-              <p className="text-muted text-sm mt-1"><i className="fas fa-key" /> <strong>Special capabilities</strong> (e.g. <em>Generate Timetable</em>, <em>Generate Result Cards</em>) are extra powers not implied by module access — grant them explicitly under the module's expander.</p>
+              <p className="text-muted text-sm mt-2"><i aria-hidden="true" className="fas fa-info-circle" /> Choose each section's level — <strong>No access</strong>, <strong>View only</strong> or <strong>View &amp; edit</strong>. A part's level overrides the whole-module level. Admins always have full access.</p>
+              <p className="text-muted text-sm mt-1"><i aria-hidden="true" className="fas fa-key" /> <strong>Special capabilities</strong> (e.g. <em>Generate Timetable</em>, <em>Generate Result Cards</em>) are extra powers not implied by module access — grant them explicitly under the module's expander.</p>
               <label className="permission-item mt-2" style={{ display: 'inline-flex' }}><input type="checkbox" checked={f.view_only} onChange={chk('view_only')} /> <span>View only — can browse but not create, edit or delete</span></label>
             </div>
           </div>
         )}
 
         <div className="d-flex gap-2">
-          <button type="submit" className="btn btn-primary btn-lg"><i className="fas fa-save" /> {edit ? 'Save Changes' : 'Create User'}</button>
+          <button type="submit" className="btn btn-primary btn-lg"><i aria-hidden="true" className="fas fa-save" /> {edit ? 'Save Changes' : 'Create User'}</button>
           <A to={d.back_url} className="btn btn-secondary btn-lg">Cancel</A>
         </div>
       </form>
@@ -412,7 +412,7 @@ function View({ d, notify }) {
   };
   const removeAssign = (url, type) => save(url, { type, user_id: u.id }, () => nav.refresh());
   const perm = (active, label, icon) => (
-    <div className={`perm ${active ? 'active' : ''}`}><i className={`fas fa-${active ? icon : 'times'}`} /> {label}</div>
+    <div className={`perm ${active ? 'active' : ''}`}><i aria-hidden="true" className={`fas fa-${active ? icon : 'times'}`} /> {label}</div>
   );
   return (
     <>
@@ -423,14 +423,14 @@ function View({ d, notify }) {
           <span className={`badge badge-${u.is_active ? 'success' : 'danger'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
         </div>
         <div className="page-header-actions">
-          <A to={u.edit_url} className="btn btn-warning"><i className="fas fa-edit" /> Edit</A>
-          <button type="button" className="btn btn-secondary" onClick={reset}><i className="fas fa-key" /> Reset Password</button>
-          <A to={u.back_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A>
+          <A to={u.edit_url} className="btn btn-warning"><i aria-hidden="true" className="fas fa-edit" /> Edit</A>
+          <button type="button" className="btn btn-secondary" onClick={reset}><i aria-hidden="true" className="fas fa-key" /> Reset Password</button>
+          <A to={u.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
         </div>
       </div>
       <div className="row">
         <div className="col-md-6"><div className="card mb-3">
-          <div className="card-header"><h3><i className="fas fa-user" /> Account Info</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user" /> Account Info</h3></div>
           <div className="card-body"><div className="info-grid">
             <div className="info-item"><span className="info-label">Username</span><span className="info-value">{u.username}</span></div>
             <div className="info-item"><span className="info-label">Email</span><span className="info-value">{u.email || 'Not set'}</span></div>
@@ -441,7 +441,7 @@ function View({ d, notify }) {
         </div></div>
         {u.teacher && (
           <div className="col-md-6"><div className="card mb-3">
-            <div className="card-header"><h3><i className="fas fa-key" /> Permissions</h3></div>
+            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-key" /> Permissions</h3></div>
             <div className="card-body"><div className="permission-list">
               {perm(u.teacher.can_mark_attendance, 'Mark Attendance', 'check')}
               {perm(u.teacher.can_view_student_details, 'View Students', 'check')}
@@ -455,19 +455,19 @@ function View({ d, notify }) {
 
       {u.module_access && (
         <div className="card mb-3">
-          <div className="card-header"><h3><i className="fas fa-th-large" /> Module Access</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-th-large" /> Module Access</h3></div>
           <div className="card-body">
             {u.has_custom_modules ? (
               <div className="permission-list">
                 {u.module_access.map((m) => (
                   <div key={m.key} className={`perm ${m.level ? 'active' : ''}`}>
-                    <i className={`fas fa-${m.level === 'edit' ? 'pen' : m.level === 'view' ? 'eye' : 'times'}`} /> {m.label}
+                    <i aria-hidden="true" className={`fas fa-${m.level === 'edit' ? 'pen' : m.level === 'view' ? 'eye' : 'times'}`} /> {m.label}
                     {m.level && <span className="text-sm"> ({m.level === 'edit' ? 'edit' : 'view'})</span>}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-muted"><i className="fas fa-info-circle" /> No custom modules set — using the default access for the <strong>{u.display_role}</strong> role.</p>
+              <p className="text-muted"><i aria-hidden="true" className="fas fa-info-circle" /> No custom modules set — using the default access for the <strong>{u.display_role}</strong> role.</p>
             )}
           </div>
         </div>
@@ -477,8 +477,8 @@ function View({ d, notify }) {
         <>
           <div className="card mb-3">
             <div className="card-header">
-              <h3><i className="fas fa-chalkboard-teacher" /> Class Assignments</h3>
-              <A to={u.assign_class_url} className="btn btn-sm btn-primary"><i className="fas fa-plus" /> Assign</A>
+              <h3><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> Class Assignments</h3>
+              <A to={u.assign_class_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign</A>
             </div>
             <div className="card-body">
               {u.class_assignments.length ? (
@@ -489,7 +489,7 @@ function View({ d, notify }) {
                       {a.is_form_teacher && <span className="badge badge-success">Form Teacher</span>}
                     </div>
                     <div className="data-card-actions">
-                      <button type="button" className="btn btn-sm btn-danger" onClick={async () => { if (await confirm('Remove?')) removeAssign(a.remove_url, 'class'); }}><i className="fas fa-times" /></button>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={async () => { if (await confirm('Remove?')) removeAssign(a.remove_url, 'class'); }}><i aria-hidden="true" className="fas fa-times" /></button>
                     </div>
                   </div>
                 ))}</div>
@@ -498,8 +498,8 @@ function View({ d, notify }) {
           </div>
           <div className="card">
             <div className="card-header">
-              <h3><i className="fas fa-book" /> Subject Assignments</h3>
-              <A to={u.assign_subject_url} className="btn btn-sm btn-primary"><i className="fas fa-plus" /> Assign</A>
+              <h3><i aria-hidden="true" className="fas fa-book" /> Subject Assignments</h3>
+              <A to={u.assign_subject_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign</A>
             </div>
             <div className="card-body">
               {u.subject_assignments.length ? (
@@ -508,7 +508,7 @@ function View({ d, notify }) {
                     <div className="data-card-header"><div className="data-card-title">{a.subject}</div></div>
                     <div className="data-card-row"><span className="data-card-label">Class</span><span>{a.class}</span></div>
                     <div className="data-card-actions">
-                      <button type="button" className="btn btn-sm btn-danger" onClick={async () => { if (await confirm('Remove?')) removeAssign(a.remove_url, 'subject'); }}><i className="fas fa-times" /></button>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={async () => { if (await confirm('Remove?')) removeAssign(a.remove_url, 'subject'); }}><i aria-hidden="true" className="fas fa-times" /></button>
                     </div>
                   </div>
                 ))}</div>
@@ -535,7 +535,7 @@ function AssignClass({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-chalkboard-teacher" /> Assign Class to {d.user.name}</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> Assign Class to {d.user.name}</h1></div>
       <div className="card"><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Select Class</label>
           <select className="form-control" value={assignment_id} onChange={(e) => setAid(e.target.value)} required>
@@ -545,7 +545,7 @@ function AssignClass({ d, notify }) {
         <div className="form-group"><label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
           <input type="checkbox" checked={is_form_teacher} onChange={(e) => setFt(e.target.checked)} style={{ width: '1.2rem', height: '1.2rem' }} /> <span>Assign as Form Teacher</span></label></div>
         <div className="d-flex gap-2">
-          <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Assign</button>
+          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Assign</button>
           <A to={d.back_url} className="btn btn-secondary">Cancel</A>
         </div>
       </form></div></div>
@@ -564,7 +564,7 @@ function AssignSubject({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-book" /> Assign Subject to {d.user.name}</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-book" /> Assign Subject to {d.user.name}</h1></div>
       <div className="card"><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Select Class</label>
           <select className="form-control" value={assignment_id} onChange={(e) => setAid(e.target.value)} required>
@@ -577,7 +577,7 @@ function AssignSubject({ d, notify }) {
             {d.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select></div>
         <div className="d-flex gap-2">
-          <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Assign</button>
+          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Assign</button>
           <A to={d.back_url} className="btn btn-secondary">Cancel</A>
         </div>
       </form></div></div>

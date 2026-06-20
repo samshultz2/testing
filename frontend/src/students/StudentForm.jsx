@@ -134,8 +134,8 @@ export default function StudentForm({ data }) {
         </div>
         {isEdit && (
           <div className="page-header-actions">
-            <a href={urls.back} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back to Profile</a>
-            <a href={urls.list} className="btn btn-secondary"><i className="fas fa-users" /> All Students</a>
+            <a href={urls.back} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Profile</a>
+            <a href={urls.list} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-users" /> All Students</a>
           </div>
         )}
       </div>
@@ -180,12 +180,12 @@ export default function StudentForm({ data }) {
             <SelectField label="Relationship" value={c.relationship} onChange={(v) => setContact(i, 'relationship', v)} options={relationships} />
             <button type="button" className="btn btn-danger btn-sm sf-remove" aria-label={`Remove contact ${i + 1}`}
                     disabled={contacts.length === 1} onClick={() => removeContact(i)}>
-              <i className="fas fa-times" />
+              <i aria-hidden="true" className="fas fa-times" />
             </button>
           </div>
         ))}
         <button type="button" className="btn btn-secondary btn-sm" onClick={addContact}>
-          <i className="fas fa-plus" /> Add Contact
+          <i aria-hidden="true" className="fas fa-plus" /> Add Contact
         </button>
       </FormCard>
 
@@ -199,7 +199,7 @@ export default function StudentForm({ data }) {
                            ? 'Your form class is selected — the student will be added there.'
                            : 'Pick the class to place this student in now, or leave blank and enrol later.'} />
           ) : (
-            <p className="text-muted"><i className="fas fa-info-circle" /> No classes are set up for this term yet, or none are assigned to you. You can enrol the student into a class later.</p>
+            <p className="text-muted"><i aria-hidden="true" className="fas fa-info-circle" /> No classes are set up for this term yet, or none are assigned to you. You can enrol the student into a class later.</p>
           )}
         </FormCard>
       )}
@@ -217,7 +217,7 @@ export default function StudentForm({ data }) {
 
       <div className="page-header-actions">
         <button type="submit" className="btn btn-primary btn-lg" disabled={saving}>
-          <i className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Save Student')}
+          <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Save Student')}
         </button>
         <a href={urls.cancel} className={'btn btn-secondary btn-lg' + (saving ? ' disabled' : '')}
            onClick={(e) => saving && e.preventDefault()}>Cancel</a>

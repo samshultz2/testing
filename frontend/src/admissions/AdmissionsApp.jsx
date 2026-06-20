@@ -26,7 +26,7 @@ function Dashboard({ d }) {
     ['green', 'fa-user-graduate', s.admitted, 'Admitted'], ['red', 'fa-percent', s.conversion + '%', 'Conversion']];
   return (
     <>
-      <PageHeader title="Admissions" actions={<a href={d.urls.add} className="btn btn-primary"><i className="fas fa-user-plus" /> New Application</a>} />
+      <PageHeader title="Admissions" actions={<a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>} />
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Session</label>
@@ -35,11 +35,11 @@ function Dashboard({ d }) {
       </div></div>
 
       <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i className={'fas ' + ic} /></div><div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}</div>
+        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div><div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}</div>
 
       <div className="adm-grid split">
         <div className="widget">
-          <div className="wh"><h3><i className="fas fa-filter" /> Pipeline funnel</h3></div>
+          <div className="wh"><h3><i aria-hidden="true" className="fas fa-filter" /> Pipeline funnel</h3></div>
           <div className="wb"><div className="funnel">
             {s.funnel.map((f) => (
               <div className="funnel-row" key={f.stage}>
@@ -50,7 +50,7 @@ function Dashboard({ d }) {
           </div></div>
         </div>
         <div className="widget">
-          <div className="wh"><h3><i className="fas fa-school" /> By intended class</h3></div>
+          <div className="wh"><h3><i aria-hidden="true" className="fas fa-school" /> By intended class</h3></div>
           <div className="wb"><div className="chart-box">
             {d.class_chart.length ? <canvas ref={ref} /> : <Empty icon="fa-school" title="No applications yet" />}
           </div></div>
@@ -58,7 +58,7 @@ function Dashboard({ d }) {
       </div>
 
       <div className="widget">
-        <div className="wh"><h3><i className="fas fa-clock-rotate-left" /> Recent applications</h3><a href={d.urls.applicants} className="text-sm">View all</a></div>
+        <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent applications</h3><a href={d.urls.applicants} className="text-sm">View all</a></div>
         <div className="wb" style={{ padding: 0 }}>
           {d.recent.length ? (
             <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -85,8 +85,8 @@ function Applicants({ d }) {
   return (
     <>
       <PageHeader title="Applicants" actions={<>
-        <a href={d.urls.export} data-native className="btn btn-secondary"><i className="fas fa-file-csv" /> Export</a>
-        <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-user-plus" /> New Application</a>
+        <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
+        <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>
       </>} />
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -118,8 +118,8 @@ function Applicants({ d }) {
                   <td data-label="Class">{a.intended_class}</td>
                   <td data-label="Parent">{a.parent_name || '—'}{a.parent_phone && <div className="text-muted text-sm">{a.parent_phone}</div>}</td>
                   <td data-label="Score">{a.entrance_score}</td>
-                  <td data-label="Status"><span className={'badge ' + a.status_badge}>{a.status}</span>{a.linked && <i className="fas fa-link text-muted" title="Linked to student" style={{ marginLeft: 4 }} />}</td>
-                  <td className="actions"><a href={a.detail_url} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-right" /></a></td>
+                  <td data-label="Status"><span className={'badge ' + a.status_badge}>{a.status}</span>{a.linked && <i aria-hidden="true" className="fas fa-link text-muted" title="Linked to student" style={{ marginLeft: 4 }} />}</td>
+                  <td className="actions"><a href={a.detail_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
                 </tr>
               ))}</tbody></table></div>
           ) : <Empty icon="fa-user-plus" title="No applicants"><p>Create an application or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Application</a></Empty>}
@@ -195,7 +195,7 @@ function ApplicantForm({ d, notify }) {
         </div></div>
 
         <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> {editing ? 'Save Changes' : 'Create Application'}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save Changes' : 'Create Application'}</button>
           <a href={editing ? a.detail_url : d.urls.applicants} className="btn btn-secondary">Cancel</a>
         </div>
       </form>
@@ -222,10 +222,10 @@ function ApplicantDetail({ d, notify }) {
   return (
     <>
       <PageHeader title="Application" actions={<>
-        {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary"><i className="fas fa-phone" /></a>}
-        <a href={d.urls.edit} className="btn btn-primary"><i className="fas fa-edit" /> Edit</a>
+        {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-phone" /></a>}
+        <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
         {d.is_admin && <button type="button" className="btn btn-danger" disabled={busy}
-          onClick={() => act(d.urls.delete, {}, 'Delete this application?')}><i className="fas fa-trash" /></button>}
+          onClick={() => act(d.urls.delete, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
       </>} />
       <Tabs d={d} />
 
@@ -236,14 +236,14 @@ function ApplicantDetail({ d, notify }) {
             <h2 style={{ margin: 0 }}>{a.full_name}</h2>
             <div className="text-muted">{a.application_no}{a.intended_class && ' · ' + a.intended_class}{a.session && ' · ' + a.session}</div>
             <div className="mt-1"><span className={'badge ' + a.status_badge}>{a.status}</span>
-              {a.admitted_student_id && <a href={a.student_url} className="badge badge-success" style={{ marginLeft: 6 }}><i className="fas fa-link" /> View student</a>}</div>
+              {a.admitted_student_id && <a href={a.student_url} className="badge badge-success" style={{ marginLeft: 6 }}><i aria-hidden="true" className="fas fa-link" /> View student</a>}</div>
           </div>
         </div>
       </div></div>
 
       {!a.admitted_student_id && (
         <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
-          <div className="card-header"><h3><i className="fas fa-diagram-project" /> Move through pipeline</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-diagram-project" /> Move through pipeline</h3></div>
           <div className="card-body">
             <div className="pipe mb-2">{d.stages.map((st) => (
               <button key={st} type="button" disabled={busy} className={'btn btn-sm ' + (a.status === st ? 'btn-primary' : 'btn-secondary')} onClick={() => setStatus(st)}>{st}</button>))}</div>
@@ -255,7 +255,7 @@ function ApplicantDetail({ d, notify }) {
 
       {!a.admitted_student_id && d.is_admin && (
         <div className="card mb-3" style={{ borderColor: 'var(--success)' }}>
-          <div className="card-header"><h3><i className="fas fa-user-graduate" /> Admit &amp; convert to student</h3></div>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-graduate" /> Admit &amp; convert to student</h3></div>
           <div className="card-body">
             <p className="text-muted text-sm">Creates a student record (with the parent contact) and links it to this application. Optionally enrol into a class arm now.</p>
             <div className="d-flex gap-2 align-end flex-wrap">
@@ -264,9 +264,9 @@ function ApplicantDetail({ d, notify }) {
                   <option value="">Don't enrol yet</option>{d.assignments.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></div>
               <button type="button" className="btn btn-success" disabled={busy}
                 onClick={() => act(d.urls.convert, { assignment_id: assignment }, `Admit ${a.full_name} and create a student record?`)}>
-                <i className="fas fa-user-check" /> Admit &amp; create student</button>
+                <i aria-hidden="true" className="fas fa-user-check" /> Admit &amp; create student</button>
             </div>
-            {!a.gender && <p className="text-danger text-sm mt-2"><i className="fas fa-triangle-exclamation" /> Add the applicant's gender (Edit) before converting.</p>}
+            {!a.gender && <p className="text-danger text-sm mt-2"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Add the applicant's gender (Edit) before converting.</p>}
           </div>
         </div>
       )}

@@ -20,9 +20,9 @@ function Tabs({ d }) {
         const href = d.nav[key];
         return <a key={key} href={href} className={'fin-tab' + (active ? ' active' : '')}
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); nav.go(href); }}>
-          <i className={'fas ' + icon} /> {label}</a>;
+          <i aria-hidden="true" className={'fas ' + icon} /> {label}</a>;
       })}
-      <a href={d.nav.portal} target="_blank" rel="noopener" className="fin-tab"><i className="fas fa-up-right-from-square" /> Test Portal</a>
+      <a href={d.nav.portal} target="_blank" rel="noopener" className="fin-tab"><i aria-hidden="true" className="fas fa-up-right-from-square" /> Test Portal</a>
     </div>
   );
 }
@@ -36,8 +36,8 @@ function Dashboard({ d }) {
     <>
       <div className="page-header"><h1>CBT / Online Tests</h1>
         <div className="page-header-actions">
-          <a href={d.urls.export_all} className="btn btn-secondary" data-native download><i className="fas fa-file-excel" /> All Results</a>
-          <a href={d.urls.add} className="btn btn-primary"><i className="fas fa-plus" /> New Exam</a>
+          <a href={d.urls.export_all} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> All Results</a>
+          <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Exam</a>
         </div>
       </div>
       <Tabs d={d} />
@@ -48,7 +48,7 @@ function Dashboard({ d }) {
             <option value="all">All terms (history)</option></select></div>
       </form></div></div>
       <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i className={'fas ' + ic} /></div><div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}
+        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div><div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}
       </div>
       <div className="card"><div className="card-header"><h3>All Exams</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -62,8 +62,8 @@ function Dashboard({ d }) {
                   <td data-label="Date">{e.exam_date}</td><td data-label="Qs">{e.question_count}</td>
                   <td data-label="Status"><span className={'badge ' + (e.is_published ? 'badge-success' : 'badge-secondary')}>{e.is_published ? 'Published' : 'Draft'}</span></td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <a href={e.detail_url} className="btn btn-secondary btn-sm" title="Manage"><i className="fas fa-pen" /></a>
-                    <a href={e.results_url} className="btn btn-secondary btn-sm" title="Results"><i className="fas fa-chart-bar" /></a>
+                    <a href={e.detail_url} className="btn btn-secondary btn-sm" title="Manage"><i aria-hidden="true" className="fas fa-pen" /></a>
+                    <a href={e.results_url} className="btn btn-secondary btn-sm" title="Results"><i aria-hidden="true" className="fas fa-chart-bar" /></a>
                   </div></td>
                 </tr>))}</tbody>
             </table></div>
@@ -89,7 +89,7 @@ function Settings({ d, notify }) {
       <div className="page-header"><h1>CBT Settings</h1></div>
       <Tabs d={d} />
       <div className="card" style={{ maxWidth: 560 }}>
-        <div className="card-header"><h3><i className="fas fa-user-shield" /> Supervisor override</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-shield" /> Supervisor override</h3></div>
         <div className="card-body">
           <p className="text-muted text-sm">If a supervisor needs to help a student during an exam (e.g. a network or laptop issue), they enter this PIN on the student's screen to <strong>pause the lockdown</strong> for a few minutes — leaving fullscreen during the pause is logged but <strong>not counted</strong> as a violation. Each unlock is recorded on the student's attempt.</p>
           <form onSubmit={submit}>
@@ -97,7 +97,7 @@ function Settings({ d, notify }) {
               <div className="form-group"><label className="form-label">Supervisor PIN</label>
                 <input type="text" className="form-control" style={{ maxWidth: 200 }} placeholder="e.g. 4827" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} />
                 <span className="form-hint d-block">Leave blank to disable the override. Keep it private to invigilators.</span></div>
-              <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save</button>
+              <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>
             </fieldset>
             {!d.is_admin && <p className="text-muted text-sm mt-2">Only admins can change this.</p>}
           </form>
@@ -125,14 +125,14 @@ function LabSetup({ d }) {
       <div className="page-header"><h1>Lab / Kiosk Setup</h1></div>
       <Tabs d={d} />
       <div className="card mb-3" style={{ borderColor: 'var(--info)' }}><div className="card-body">
-        <p className="mb-2"><i className="fas fa-circle-info" style={{ color: 'var(--info)' }} /> The in-app lockdown (fullscreen, leave-detection, paste/shortcut blocking) is a strong deterrent, but a normal browser can't truly stop a new tab or <kbd>Alt</kbd>+<kbd>Tab</kbd>. Launching the laptops in <strong>kiosk mode</strong> removes the address bar, tabs and most escapes — combine it with supervisors for genuinely exam-grade control.</p>
+        <p className="mb-2"><i aria-hidden="true" className="fas fa-circle-info" style={{ color: 'var(--info)' }} /> The in-app lockdown (fullscreen, leave-detection, paste/shortcut blocking) is a strong deterrent, but a normal browser can't truly stop a new tab or <kbd>Alt</kbd>+<kbd>Tab</kbd>. Launching the laptops in <strong>kiosk mode</strong> removes the address bar, tabs and most escapes — combine it with supervisors for genuinely exam-grade control.</p>
         <div className="form-group mb-0" style={{ maxWidth: 520 }}>
           <label className="form-label">Exam portal address (students open this)</label>
           <input type="text" className="form-control" value={url} onChange={(e) => setUrl(e.target.value)} />
           <span className="form-hint d-block">Edit if your lab reaches the server on a different address. Commands below update automatically.</span>
         </div>
       </div></div>
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-rocket" /> 1 · Launch the browser in kiosk mode</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-rocket" /> 1 · Launch the browser in kiosk mode</h3></div>
         <div className="card-body">
           <div className="os-tabs">
             {[['win', 'Windows'], ['mac', 'macOS'], ['linux', 'Linux']].map(([k, lbl]) => (
@@ -146,7 +146,7 @@ function LabSetup({ d }) {
             </div>))}
           <p className="text-sm text-muted mt-2">Exit (invigilator only) varies by OS. For the strongest lockdown use Windows Assigned Access, macOS guided access, or <strong>Safe Exam Browser</strong>.</p>
         </div></div>
-      <div className="card mb-3"><div className="card-header"><h3><i className="fas fa-list-check" /> 2 · Before the exam starts</h3></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-list-check" /> 2 · Before the exam starts</h3></div>
         <div className="card-body">
           {[['Print the passwords.', 'Export each class arm\'s Student IDs + passwords (CBT → Student Passwords → Excel/Word/PDF) and hand them out.'],
             ['Set a Supervisor PIN', '(CBT → Supervisor) and share it only with invigilators — for helping students mid-exam without flagging them.'],
@@ -154,7 +154,7 @@ function LabSetup({ d }) {
             ['Open the kiosk', 'on each laptop to the address above. Students log in with their Student ID + password, then enter the exam\'s access password.']].map(([b, t], i) => (
             <div className="step" key={i}><span className="n">{i + 1}</span><div><strong>{b}</strong> {t}</div></div>))}
         </div></div>
-      <div className="card"><div className="card-header"><h3><i className="fas fa-shield-halved" /> 3 · Highest security (optional)</h3></div>
+      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-shield-halved" /> 3 · Highest security (optional)</h3></div>
         <div className="card-body"><ul className="text-sm" style={{ lineHeight: 1.8, margin: 0, paddingLeft: '1.1rem' }}>
           <li><strong>Safe Exam Browser</strong> (safeexambrowser.org) — free, purpose-built lockdown browser that blocks tab/app switching, screenshots and copy at the OS level.</li>
           <li>Use <strong>guest / restricted accounts</strong> on the laptops, disable USB ports, and disable translate / autofill features.</li>
@@ -220,7 +220,7 @@ function ExamForm({ d, notify }) {
         </div>
         <div className="form-group"><label className="form-label">Instructions</label><textarea className="form-control" rows="2" value={f.instructions} onChange={(e) => set('instructions', e.target.value)} /></div>
         <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> {d.mode === 'edit' ? 'Save' : 'Create & add questions'}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {d.mode === 'edit' ? 'Save' : 'Create & add questions'}</button>
           <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
         </div>
       </form></div></div>
@@ -235,7 +235,7 @@ function Results({ d }) {
   return (
     <>
       <div className="page-header"><h1>Results · {e.title}</h1>
-        <div className="page-header-actions"><a href={d.urls.export} className="btn btn-primary" data-native download><i className="fas fa-file-excel" /> Download Excel</a></div>
+        <div className="page-header-actions"><a href={d.urls.export} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Download Excel</a></div>
       </div>
       <div className="card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
         <div><div className="text-muted text-sm">Submissions</div><strong style={{ fontSize: '1.2rem' }}>{submittedCount}</strong></div>
@@ -253,15 +253,15 @@ function Results({ d }) {
                   <td data-label="Raw" className="text-right">{a.raw_total ? `${Math.round(a.raw_score)}/${Math.round(a.raw_total)}` : '—'}</td>
                   <td data-label="Score" className="text-right">{a.score} / {a.total}</td>
                   <td data-label="%" className="text-right"><span className={'badge ' + (a.percentage >= 50 ? 'badge-success' : 'badge-danger')}>{a.percentage}%</span></td>
-                  <td data-label="Flags">{a.violations ? <span className="badge badge-danger" title={`Left the exam page ${a.violations} time(s)`}><i className="fas fa-flag" /> {a.violations}</span> : <span className="text-muted">—</span>}</td>
+                  <td data-label="Flags">{a.violations ? <span className="badge badge-danger" title={`Left the exam page ${a.violations} time(s)`}><i aria-hidden="true" className="fas fa-flag" /> {a.violations}</span> : <span className="text-muted">—</span>}</td>
                   <td data-label="Status"><span className={'badge ' + (a.status === 'Submitted' ? 'badge-success' : 'badge-warning')}>{a.status}</span></td>
-                  <td className="actions">{a.status === 'Submitted' && <a href={a.review_url} className="btn btn-secondary btn-sm" title="Review answers" data-native><i className="fas fa-list-check" /></a>}</td>
+                  <td className="actions">{a.status === 'Submitted' && <a href={a.review_url} className="btn btn-secondary btn-sm" title="Review answers" data-native><i aria-hidden="true" className="fas fa-list-check" /></a>}</td>
                 </tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-chart-bar" title="No attempts yet"><p>Results appear here once students take the test.</p></Empty>}
         </div></div>
       {d.analysis.length > 0 && submittedCount > 0 && (
-        <div className="card mt-3"><div className="card-header"><h3><i className="fas fa-chart-simple" /> Question analysis</h3><span className="text-muted text-sm">% of {submittedCount} submission(s) correct</span></div>
+        <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-simple" /> Question analysis</h3><span className="text-muted text-sm">% of {submittedCount} submission(s) correct</span></div>
           <div className="card-body">{d.analysis.map((it, i) => (
             <div key={i} style={{ marginBottom: '.7rem' }}>
               <div className="d-flex justify-between text-sm"><span>{i + 1}. {it.text.length > 70 ? it.text.slice(0, 70) + '…' : it.text}</span><span><strong>{it.pct}%</strong> ({it.correct}/{submittedCount})</span></div>

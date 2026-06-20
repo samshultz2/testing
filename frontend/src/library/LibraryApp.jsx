@@ -43,26 +43,26 @@ function Dashboard({ d }) {
   return (
     <>
       <PageHeader title="Library" actions={<>
-        <a href={d.urls.issue} className="btn btn-primary"><i className="fas fa-hand-holding" /> Issue Book</a>
-        <a href={d.urls.add_book} className="btn btn-secondary"><i className="fas fa-plus" /> Add Book</a>
+        <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>
+        <a href={d.urls.add_book} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>
       </>} />
       <Tabs urls={d.urls} page="dashboard" />
       <div className="kpi-row">
         {kpis.map(([c, ic, v, l]) => (
-          <div className="kpi" key={l}><div className={'ic ' + c}><i className={'fas ' + ic} /></div>
+          <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
             <div><div className="v">{v}</div><div className="l">{l}</div></div></div>
         ))}
       </div>
 
       <div className="widget">
-        <div className="wh"><h3><i className="fas fa-shapes" /> By category</h3></div>
+        <div className="wh"><h3><i aria-hidden="true" className="fas fa-shapes" /> By category</h3></div>
         <div className="wb"><div className="chart-box">
           {d.cat_chart.length ? <canvas ref={ref} /> : <Empty icon="fa-book" title="No books yet" />}
         </div></div>
       </div>
 
       <div className="widget">
-        <div className="wh"><h3><i className="fas fa-clock-rotate-left" /> Recent loans</h3><a href={d.urls.loans} className="text-sm">View all</a></div>
+        <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent loans</h3><a href={d.urls.loans} className="text-sm">View all</a></div>
         <div className="wb" style={{ padding: 0 }}>
           {d.recent.length ? (
             <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -104,8 +104,8 @@ function Books({ d, notify }) {
   return (
     <>
       <PageHeader title="Catalogue" actions={<>
-        <a href={d.urls.export} data-native className="btn btn-secondary"><i className="fas fa-file-csv" /> Export</a>
-        <a href={d.urls.add_book} className="btn btn-primary"><i className="fas fa-plus" /> Add Book</a>
+        <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
+        <a href={d.urls.add_book} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>
       </>} />
       <Tabs urls={d.urls} page="books" />
 
@@ -136,9 +136,9 @@ function Books({ d, notify }) {
                   <td data-label="Avail/Total" className="text-right">
                     <span className={'badge ' + (b.copies_available ? 'badge-success' : 'badge-danger')}>{b.copies_available}</span> / {b.copies_total}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    {b.copies_available > 0 && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i className="fas fa-hand-holding" /></a>}
-                    <a href={b.edit_url} className="btn btn-secondary btn-sm"><i className="fas fa-edit" /></a>
-                    {d.is_admin && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i className="fas fa-trash" /></button>}
+                    {b.copies_available > 0 && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i aria-hidden="true" className="fas fa-hand-holding" /></a>}
+                    <a href={b.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    {d.is_admin && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                   </div></td>
                 </tr>
               ))}</tbody></table></div>
@@ -200,7 +200,7 @@ function BookForm({ d, notify }) {
           <div className="form-group"><label className="form-label">Notes</label>
             <textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
           <div className="page-header-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> {editing ? 'Save' : 'Add Book'}</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save' : 'Add Book'}</button>
             <a href={d.urls.books} className="btn btn-secondary">Cancel</a>
           </div>
         </form>
@@ -239,7 +239,7 @@ function Issue({ d, notify }) {
           <div className="form-group"><label className="form-label">Due date</label>
             <input type="date" className="form-control" value={due} onChange={(e) => setDue(e.target.value)} />
             <span className="form-hint d-block">Default loan period is {d.settings.loan_days} days{d.settings.fine_per_day ? ` · ₦${d.settings.fine_per_day}/day overdue fine` : ''}.</span></div>
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-hand-holding" /> Issue Book</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</button>
         </form>
       </div></div>
     </>
@@ -262,7 +262,7 @@ function Loans({ d, notify }) {
 
   return (
     <>
-      <PageHeader title="Loans" actions={<a href={d.urls.issue} className="btn btn-primary"><i className="fas fa-hand-holding" /> Issue Book</a>} />
+      <PageHeader title="Loans" actions={<a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>} />
       <Tabs urls={d.urls} page="loans" />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Show</label>
@@ -286,7 +286,7 @@ function Loans({ d, notify }) {
                   <td data-label="Status">{statusBadge(l)}</td>
                   <td data-label="Fine">{l.fine ? naira(l.fine) : '—'}</td>
                   <td className="actions">{l.status === 'Borrowed'
-                    ? <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => ret(l)}><i className="fas fa-rotate-left" /> Return</button>
+                    ? <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => ret(l)}><i aria-hidden="true" className="fas fa-rotate-left" /> Return</button>
                     : <span className="text-muted text-sm">{l.returned}</span>}</td>
                 </tr>
               ))}</tbody></table></div>
@@ -315,7 +315,7 @@ function Settings({ d, notify }) {
       <PageHeader title="Library Settings" />
       <Tabs urls={d.urls} page="settings" />
       <div className="card" style={{ maxWidth: 560 }}>
-        <div className="card-header"><h3><i className="fas fa-gear" /> Loan rules</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-gear" /> Loan rules</h3></div>
         <div className="card-body">
           <form onSubmit={submit}>
             <div className="form-row">
@@ -325,7 +325,7 @@ function Settings({ d, notify }) {
                 <input type="number" className="form-control" min="0" step="1" value={fine} onChange={(e) => setFine(e.target.value)} />
                 <span className="form-hint d-block">0 to disable fines.</span></div>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={busy}><i className="fas fa-save" /> Save</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>
           </form>
         </div>
       </div>

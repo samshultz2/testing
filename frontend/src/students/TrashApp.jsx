@@ -62,14 +62,14 @@ export default function TrashApp({ initial }) {
           <p className="text-muted text-sm">Restore students or remove them permanently.</p>
         </div>
         <div className="page-header-actions">
-          <a href={urls.list} className="btn btn-secondary btn-sm"><i className="fas fa-arrow-left" /> Back</a>
+          <a href={urls.list} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
         </div>
       </div>
 
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
 
       <div className="card">
-        <div className="card-header"><h3><i className="fas fa-trash" /> Deleted ({students.length})</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-trash" /> Deleted ({students.length})</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {students.length === 0 ? (
             <EmptyState icon="fa-trash" title="No deleted students." hint="Students you delete from the list show up here and can be restored." />
@@ -83,10 +83,10 @@ export default function TrashApp({ initial }) {
                   <span className="text-muted text-sm">{selected.size} selected</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem' }}>
                     <button type="button" className="btn btn-success btn-sm" disabled={busy || !selected.size} onClick={bulkRestore}>
-                      <i className="fas fa-rotate-left" /> Restore selected
+                      <i aria-hidden="true" className="fas fa-rotate-left" /> Restore selected
                     </button>
                     <button type="button" className="btn btn-danger btn-sm" disabled={busy || !selected.size} onClick={bulkPurge}>
-                      <i className="fas fa-trash" /> Delete forever
+                      <i aria-hidden="true" className="fas fa-trash" /> Delete forever
                     </button>
                   </div>
                 </div>
@@ -107,10 +107,10 @@ export default function TrashApp({ initial }) {
                     {canManage && (
                       <div className="data-card-actions" style={{ display: 'flex', gap: '.4rem' }}>
                         <button type="button" className="btn btn-success btn-sm w-100" style={{ flex: 1 }} disabled={busy} onClick={() => restoreOne(s)}>
-                          <i className="fas fa-rotate-left" /> Restore
+                          <i aria-hidden="true" className="fas fa-rotate-left" /> Restore
                         </button>
                         <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} disabled={busy} onClick={() => purgeOne(s)}>
-                          <i className="fas fa-trash" /> Delete forever
+                          <i aria-hidden="true" className="fas fa-trash" /> Delete forever
                         </button>
                       </div>
                     )}

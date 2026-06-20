@@ -37,9 +37,9 @@ function Index({ d, notify }) {
   return (
     <>
       <div className="page-header">
-        <h1><i className="fas fa-ticket" /> Result Scratch Cards</h1>
+        <h1><i aria-hidden="true" className="fas fa-ticket" /> Result Scratch Cards</h1>
         <div className="page-header-actions">
-          <A to={d.logs_url} className="btn btn-secondary"><i className="fas fa-list-check" /> Check Logs</A>
+          <A to={d.logs_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list-check" /> Check Logs</A>
         </div>
       </div>
 
@@ -50,7 +50,7 @@ function Index({ d, notify }) {
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-unlock" /> Release results to portal</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-unlock" /> Release results to portal</h3></div>
         <div className="card-body">
           <p className="text-muted text-sm">A term's results are only visible on the public checker when released here.</p>
           <table className="data-table table-stack no-mobile-scroll" style={{ width: '100%' }}>
@@ -71,7 +71,7 @@ function Index({ d, notify }) {
       </div>
 
       <div className="card mb-3">
-        <div className="card-header"><h3><i className="fas fa-plus" /> Generate cards</h3></div>
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Generate cards</h3></div>
         <div className="card-body">
           <form onSubmit={generate} className="filter-form" style={{ flexWrap: 'wrap', gap: '1rem' }}>
             <div className="form-group"><label className="form-label">How many</label><input type="number" className="form-control" value={gen.count} onChange={setG('count')} min="1" max="500" /></div>
@@ -82,7 +82,7 @@ function Index({ d, notify }) {
                 {d.terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select></div>
             <div className="form-group"><label className="form-label">Batch label (optional)</label><input type="text" className="form-control" value={gen.batch_label} onChange={setG('batch_label')} placeholder="e.g., 2025 T1 Sales" /></div>
-            <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="submit" className="btn btn-primary"><i className="fas fa-bolt" /> Generate &amp; Print</button></div>
+            <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-bolt" /> Generate &amp; Print</button></div>
           </form>
         </div>
       </div>
@@ -95,7 +95,7 @@ function Index({ d, notify }) {
               <option value="">All batches</option>
               {d.batches.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
-            {d.print_batch_url && <a href={d.print_batch_url} className="btn btn-sm btn-secondary"><i className="fas fa-print" /> Print batch</a>}
+            {d.print_batch_url && <a href={d.print_batch_url} className="btn btn-sm btn-secondary"><i aria-hidden="true" className="fas fa-print" /> Print batch</a>}
           </div>
         </div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -131,8 +131,8 @@ function Index({ d, notify }) {
 function Logs({ d }) {
   return (
     <>
-      <div className="page-header"><h1><i className="fas fa-list-check" /> Result Check Logs</h1>
-        <div className="page-header-actions"><A to={d.index_url} className="btn btn-secondary"><i className="fas fa-arrow-left" /> Back</A></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-list-check" /> Result Check Logs</h1>
+        <div className="page-header-actions"><A to={d.index_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
       </div>
       <div className="card"><div className="card-body" style={{ padding: 0 }}>
         {d.rows.length ? (

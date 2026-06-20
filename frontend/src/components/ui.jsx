@@ -30,12 +30,12 @@ export class ErrorBoundary extends React.Component {
     return (
       <div className="card" style={{ margin: '1rem 0' }}>
         <div className="card-body" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-          <i className="fas fa-triangle-exclamation" style={{ fontSize: 32, color: '#dc2626' }} />
+          <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ fontSize: 32, color: '#dc2626' }} />
           <h3 style={{ marginTop: 12 }}>This section hit an error</h3>
           <p className="text-muted">It’s been logged. Your other work is safe — try reloading this page.</p>
           <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => window.location.reload()}>
-              <i className="fas fa-rotate" /> Reload
+              <i aria-hidden="true" className="fas fa-rotate" /> Reload
             </button>
             <a className="btn btn-secondary" href="/">Go to Dashboard</a>
           </div>
@@ -437,6 +437,20 @@ export function Select({ id, value, onChange, options, placeholder, disabled }) 
 
 export function Toolbar({ children }) {
   return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>{children}</div>;
+}
+
+// Horizontal-scroll container for wide tables on narrow screens. Unlike a plain
+// overflow:auto <div>, this is a labelled, keyboard-focusable region: keyboard
+// users can Tab to it and scroll with the arrow keys, and screen readers
+// announce it (WAI-ARIA "scrollable region" pattern). Pass `maxHeight` to also
+// cap vertical height with a sticky-friendly scroll area.
+export function TableWrap({ label = 'Table', children, maxHeight }) {
+  return (
+    <div className="table-responsive" role="region" aria-label={label} tabIndex={0}
+         style={maxHeight ? { maxHeight, overflow: 'auto' } : undefined}>
+      {children}
+    </div>
+  );
 }
 
 export const Button = React.forwardRef(function Button({ variant = 'primary', size, children, ...rest }, ref) {

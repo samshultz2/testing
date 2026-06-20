@@ -17,7 +17,7 @@ function Index({ d }) {
       <div className="stats-grid">
         {cards.map(([key, tone, icon, title, sub]) => (
           <a key={key} href={d.urls[key]} data-native={['export_students', 'export_template'].includes(key) || undefined} className="stat-card" style={{ textDecoration: 'none' }}>
-            <div className={'stat-icon ' + tone}><i className={'fas ' + icon} /></div>
+            <div className={'stat-icon ' + tone}><i aria-hidden="true" className={'fas ' + icon} /></div>
             <div className="stat-content"><h3>{title}</h3><p>{sub}</p></div>
           </a>
         ))}
@@ -66,7 +66,7 @@ function Summary({ d }) {
     <>
       <PageHeader title="Summary Report" />
       <div className="stats-grid">{kpis.map(([t, ic, v, l]) => (
-        <div className="stat-card" key={l}><div className={'stat-icon ' + t}><i className={'fas ' + ic} /></div>
+        <div className="stat-card" key={l}><div className={'stat-icon ' + t}><i aria-hidden="true" className={'fas ' + ic} /></div>
           <div className="stat-content"><h3>{v}</h3><p>{l}</p></div></div>))}</div>
       <ChartCard title="Gender Distribution" url={d.chart_urls.gender} type="doughnut" />
       <ChartCard title="Attendance Trend" url={d.chart_urls.attendance} type="line" />
@@ -99,7 +99,7 @@ function ExportClass({ d }) {
               <div className="data-card" key={a.id}>
                 <div className="data-card-header"><div className="data-card-title">{a.display_name}</div></div>
                 <div className="data-card-row"><span className="data-card-label">Students</span><span>{a.student_count}</span></div>
-                <div className="data-card-actions"><a href={a.export_url} data-native className="btn btn-success btn-sm w-100"><i className="fas fa-download" /> Export</a></div>
+                <div className="data-card-actions"><a href={a.export_url} data-native className="btn btn-success btn-sm w-100"><i aria-hidden="true" className="fas fa-download" /> Export</a></div>
               </div>
             ))}</div>
           </>) : d.term_id ? <Empty icon="fa-school" title="No Classes" style={{ marginTop: '1rem' }}><p>No class assignments for this term</p></Empty>
@@ -132,7 +132,7 @@ function Import({ d, notify }) {
       <PageHeader title="Import Students" />
       {result && (
         <div className="card mb-3" style={{ borderColor: 'var(--success)' }}><div className="card-body">
-          <p className="mb-1"><i className="fas fa-circle-check text-success" /> {result.message}</p>
+          <p className="mb-1"><i aria-hidden="true" className="fas fa-circle-check text-success" /> {result.message}</p>
           {result.warnings.length > 0 && (
             <ul className="text-muted text-sm" style={{ margin: '.5rem 0 0', paddingLeft: '1.2rem' }}>
               {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -159,7 +159,7 @@ function Import({ d, notify }) {
             Pick both a class and an arm to enrol every imported student into that class for the current term. Leave blank to import without a class.</p>
           <div className="form-group"><label className="form-label">Select File</label>
             <input type="file" className="form-control" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files[0] || null)} required /></div>
-          <button type="submit" className="btn btn-primary" disabled={busy}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-upload')} /> {busy ? 'Importing…' : 'Import'}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-upload')} /> {busy ? 'Importing…' : 'Import'}</button>
         </form>
       </div></div>
     </>
