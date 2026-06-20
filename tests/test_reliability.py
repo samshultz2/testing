@@ -61,3 +61,13 @@ def test_forgot_password_rate_limited(app):
         last = c.post('/forgot-password', data={'identifier': 'nobody@example.com',
                                                 '_csrf_token': token}, follow_redirects=True)
     assert 'Too many reset requests' in last.get_data(as_text=True)
+
+
+def test_soft_nav_css_marker_present(app):
+    """Soft navigation relies on the spa-css marker to carry each page's CSS;
+    without it, swapped pages render unstyled until a reload."""
+    html = _admin(app).get('/users/').get_data(as_text=True)
+    head = html.split('</head>')[0]
+    assert 'spa-css-marker' in head
+    # the page's extra_css must come AFTER the marker (so soft-nav swaps it)
+    assert head.index('spa-css-marker') < head.rindex('<style')

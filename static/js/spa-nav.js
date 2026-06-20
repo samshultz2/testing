@@ -61,6 +61,41 @@
     });
   }
 
+  // Everything in <head> after the marker is the current page's {% block extra_css %}.
+  function pageHeadNodes(d) {
+    var marker = d.querySelector('head meta[name="spa-css-marker"]');
+    var out = [];
+    if (marker) { var n = marker.nextElementSibling; while (n) { out.push(n); n = n.nextElementSibling; } }
+    return out;
+  }
+
+  function syncHead(doc) {
+    // Swap the page-specific styles so the new body is styled immediately,
+    // instead of looking broken until a manual reload.
+    pageHeadNodes(document).forEach(function (n) { n.remove(); });   // drop current page's CSS
+    pageHeadNodes(doc).forEach(function (node) {                     // add destination's CSS
+      document.head.appendChild(document.importNode(node, true));
+    });
+  }
+
+  function syncBodyScripts(doc) {
+    // Page-specific scripts from {% block extra_js %} live in <body> outside
+    // .page-content; re-run the destination's so per-page JS works after a swap.
+    document.querySelectorAll('script[data-spa-extra]').forEach(function (n) { n.remove(); });
+    var live = {};
+    Array.prototype.forEach.call(document.body.querySelectorAll('script'),
+      function (s) { if (!s.closest('.page-content')) live[s.outerHTML] = 1; });
+    doc.body.querySelectorAll('script').forEach(function (node) {
+      if (node.closest('.page-content')) return;   // section bundle — handled by reexec()
+      if (live[node.outerHTML]) return;            // a base script, already running
+      var s = document.createElement('script');
+      if (node.src) s.src = node.src; else s.textContent = node.textContent;
+      if (node.type) s.type = node.type;
+      s.setAttribute('data-spa-extra', '1');
+      document.body.appendChild(s);
+    });
+  }
+
   function swap(html) {
     var doc = new DOMParser().parseFromString(html, 'text/html');
     var fresh = doc.querySelector('.page-content');
@@ -69,10 +104,12 @@
     // Tell every loaded section it's being detached (stops stale history handlers).
     window.dispatchEvent(new Event('spa:swapping'));
 
+    syncHead(doc);                                  // page CSS first, so no flash of unstyled body
     var cur = document.querySelector('.page-content');
     var imported = document.importNode(fresh, true);
     cur.parentNode.replaceChild(imported, cur);
     reexec(imported);
+    syncBodyScripts(doc);                           // page-specific extra_js
 
     // Breadcrumb, title, flashes, and sidebar/bottom-nav active state.
     var nb = doc.querySelector('.breadcrumb'), cb = document.querySelector('.breadcrumb');
