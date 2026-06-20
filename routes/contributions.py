@@ -114,16 +114,17 @@ def dashboard():
     total_received = 0
     fully_paid_count = 0
     arms_summary = {}
-    
+
+    # One batched query for every student's total (was a SUM per student → N+1).
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
+
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
         arm_name = assignment.arm.name
-        
-        total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
+
+        total_paid = paid_map.get(student.id, 0)
         remaining = max_due - total_paid
         status = 'Paid' if remaining <= 0 else 'Ongoing'
         
@@ -235,14 +236,13 @@ def quick_entry():
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
     max_due = float(ContributionSettings.get('max_due', 20000))
     
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
     students_list = []
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
-        total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
+        total_paid = paid_map.get(student.id, 0)
         students_list.append({'id': student.id, 'name': student.full_name, 'arm': assignment.arm.name, 'total_paid': total_paid, 'remaining': max(0, max_due - total_paid)})
     students_list.sort(key=lambda x: (x['arm'], x['name']))
     
@@ -512,6 +512,8 @@ def report():
         return redirect(url_for('contributions.dashboard'))
     max_due = float(ContributionSettings.get('max_due', 20000))
     arms_data = {}
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id)   # one query for the whole session
     sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
     for assignment in sss3_assignments:
         arm_name = assignment.arm.name
@@ -521,10 +523,7 @@ def report():
         arm_fully_paid = 0
         for enrollment in enrollments:
             student = enrollment.student
-            total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
+            total_paid = paid_map.get(student.id, 0)
             remaining = max(0, max_due - total_paid)
             if remaining <= 0:
                 arm_fully_paid += 1
@@ -849,16 +848,16 @@ def defaulters():
     
     defaulters_list = []
     total_outstanding = 0
-    
+
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
+
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
-        
-        total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
-        
+
+        total_paid = paid_map.get(student.id, 0)
+
         remaining = max_due - total_paid
         
         if remaining > 0:

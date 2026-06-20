@@ -112,9 +112,12 @@ section/stream scope, and a **form-teacher** scope for attendance/student data.
 
 ### P0 — Safe, high-value, behaviour-preserving (do first)
 1. ✅ **Extract the SPA helpers** into `utils.spa.section_responders(template,
-   var, default_endpoint, enrich=…)`. Done for `settings/users/timetable/
-   academics/contributions`; 🔜 roll out to the remaining ~15 blueprints
-   (mechanical; the test suite is the safety net).
+   var, default_endpoint, enrich=…)`. **Done for 13 blueprints** (settings,
+   users, timetable, academics, contributions, cbt, communication, finance, hr,
+   results, subjects, scratchcards, mock_jamb). The remaining 5
+   (events/promotion/sales/admissions/library) keep bespoke helpers with
+   different signatures (`tone`/`info` params, narrower `_wants_json`) — left as-is
+   to avoid behaviour change.
 2. 🔜 **Delete dead duplicates** (`utils/security.py` unused CSRF + contributions
    helpers) once a grep confirms zero importers.
 3. 🔜 **Centralise `_urls()`/nav builders** into one helper per concept.
@@ -123,13 +126,15 @@ section/stream scope, and a **form-teacher** scope for attendance/student data.
    scale later).
 
 ### P1 — Structural (moderate effort)
-5. 🔜 **Introduce a domain/service layer** (`utils/services/…`): move scoring,
-   report cards, fee billing and attendance maths out of routes; controllers
-   become thin (parse → call service → `_ok/_err`).
+5. ◑ **Domain/service layer started** (`utils/services/…`): the first module,
+   `utils/services/contributions.paid_by_student`, was extracted and the
+   Contributions **dashboard, report, defaulters and quick-entry** routes now
+   call it (one `GROUP BY` instead of a SUM-per-student — was the worst N+1).
+   🔜 continue extracting scoring, report cards, fee billing and attendance maths.
 6. 🔜 **Split the god files** by feature into sub-modules/blueprints
    (`generator`, `main`, `results`).
-7. 🔜 **Kill the N+1s**: replace per-row `func.sum`/`count` loops with single
-   `GROUP BY` queries and `joinedload` for the read models.
+7. ◑ **Kill the N+1s** — done for the contributions fund (4 routes); 🔜 the same
+   batched-map pattern still applies to the attendance and subjects loops.
 8. 🔜 **One schema source of truth**: make Alembic authoritative; restrict
    `create_all()` to dev/test; remove runtime `ALTER`.
 
