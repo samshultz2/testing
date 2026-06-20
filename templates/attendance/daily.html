@@ -13,6 +13,32 @@
     </div>
 </div>
 
+{% if selected_assignment and week_days %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-calendar-week"></i> This week at a glance{% if week %} — Week {{ week.week_number }}{% endif %}</h3></div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Day</th><th>Present (AM)</th><th>Absent (AM)</th><th>Present (PM)</th><th>Absent (PM)</th><th>AM %</th><th></th></tr></thead>
+            <tbody>
+            {% for wd in week_days %}
+            {% set s = wd.summary %}
+            {% set pct = (s.morning_present / s.total_students * 100) if s.total_students else 0 %}
+            <tr {% if wd.date == target_date %}style="background:var(--gray-50);font-weight:600;"{% endif %}>
+                <td data-label="Day"><strong>{{ wd.date.strftime('%a') }}</strong> <span class="text-muted">{{ wd.date.strftime('%d %b') }}</span></td>
+                <td data-label="Present (AM)" class="text-success">{{ s.morning_present }}</td>
+                <td data-label="Absent (AM)" class="text-danger">{{ s.morning_absent }}</td>
+                <td data-label="Present (PM)" class="text-success">{{ s.afternoon_present }}</td>
+                <td data-label="Absent (PM)" class="text-danger">{{ s.afternoon_absent }}</td>
+                <td data-label="AM %"><span class="badge {% if pct >= 75 %}badge-success{% elif pct >= 50 %}badge-warning{% else %}badge-danger{% endif %}">{{ '%.0f'|format(pct) }}%</span></td>
+                <td data-label=""><a class="btn btn-sm btn-secondary" href="{{ url_for('attendance.daily_summary', assignment_id=selected_assignment.id, date=wd.date.strftime('%Y-%m-%d')) }}"><i class="fas fa-eye"></i></a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% if summary %}
 <div class="stats-grid mb-3">
     <div class="stat-card"><div class="stat-icon primary"><i class="fas fa-users"></i></div><div class="stat-content"><h3>{{ summary.total_students }}</h3><p>Total</p></div></div>

@@ -11,10 +11,10 @@ from models import (
 )
 from utils.access_control import (
     login_required, can_access_class, can_mark_attendance,
-    filter_classes_for_user, can_access_module
+    filter_classes_for_user, can_access_module, auto_select_assignment
 )
 from utils.branch_scope import require_branch_access
-from utils.helpers import is_school_day
+from utils.helpers import is_school_day, pick_current_week
 from utils.calculations import (
     get_daily_attendance_summary, get_weekly_attendance_summary,
     get_termly_attendance_summary, mark_attendance_bulk, mark_all_present
@@ -88,7 +88,11 @@ def mark_attendance_page():
         assignments = filter_classes_for_user(all_assignments, form_only=True)
         weeks = Week.query.filter_by(term_id=term_id).order_by(Week.week_number).all()
         holidays = Holiday.query.filter_by(term_id=term_id).all()
-    
+
+    # A form teacher lands on their own class without picking it.
+    if not assignment_id:
+        assignment_id = auto_select_assignment(assignments)
+
     if assignment_id:
         selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
         enrollments = StudentEnrollment.query.filter_by(
@@ -249,8 +253,11 @@ def week_grid():
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('attendance.week_grid'))
 
+    # Default to the form teacher's class and the current week.
+    if not assignment_id:
+        assignment_id = auto_select_assignment(assignments)
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
-    selected_week = db.session.get(Week, week_id) if week_id else (weeks[0] if weeks else None)
+    selected_week = db.session.get(Week, week_id) if week_id else pick_current_week(weeks)
 
     enrollments, school_days, existing = [], [], {}
     if selected_assignment and selected_week:
@@ -391,8 +398,14 @@ def daily_summary():
             ClassArmAssignment.query.filter_by(term_id=active_term.id).all(),
             form_only=True)
 
+    # A form teacher lands on their own class without picking it.
+    if not assignment_id:
+        assignment_id = auto_select_assignment(assignments)
+
     summary = None
     selected_assignment = None
+    week = None
+    week_days = []   # per-day breakdown for the whole school week, at a glance
 
     if assignment_id:
         if not can_access_class(assignment_id):
@@ -401,11 +414,26 @@ def daily_summary():
         selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
         summary = get_daily_attendance_summary(assignment_id, target_date)
 
+        if active_term:
+            weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.week_number).all()
+            week = pick_current_week(weeks, on=target_date)
+            if week:
+                holiday_dates = {h.date for h in Holiday.query.filter_by(term_id=active_term.id).all()}
+                today = date.today()
+                d = week.start_date
+                while d <= week.end_date:
+                    if d.weekday() < 5 and d not in holiday_dates and d <= today:
+                        s = get_daily_attendance_summary(assignment_id, d)
+                        week_days.append({'date': d, 'summary': s})
+                    d += timedelta(days=1)
+
     return render_template('attendance/daily.html',
         assignments=assignments,
         selected_assignment=selected_assignment,
         target_date=target_date,
-        summary=summary
+        summary=summary,
+        week=week,
+        week_days=week_days,
     )
 
 
@@ -529,11 +557,18 @@ def weekly_summary():
         all_assignments = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
         assignments = filter_classes_for_user(all_assignments, form_only=True)
         weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.week_number).all()
-    
+
+    # Default to the form teacher's class and the current week.
+    if not assignment_id:
+        assignment_id = auto_select_assignment(assignments)
+    if not week_id:
+        cw = pick_current_week(weeks)
+        week_id = cw.id if cw else None
+
     summary = None
     selected_assignment = None
     selected_week = None
-    
+
     if assignment_id and week_id:
         selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
         selected_week = db.session.get(Week, week_id)

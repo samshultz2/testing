@@ -650,6 +650,22 @@ def can_view_student_details():
     return False
 
 
+def auto_select_assignment(assignments):
+    """The class a form teacher should land on by default.
+
+    When the current user is a teacher whose accessible (form) classes is
+    exactly one, return that class's id so selectors pre-select it. Admins and
+    multi-class users get no auto-selection (they choose). `assignments` should
+    already be filtered via filter_classes_for_user(..., form_only=True).
+    """
+    try:
+        if is_teacher() and len(assignments) == 1:
+            return assignments[0].id
+    except Exception:
+        pass
+    return None
+
+
 def filter_classes_for_user(assignments, form_only=False):
     """Filter ClassArmAssignment objects to those the current user may access.
 

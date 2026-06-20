@@ -412,3 +412,17 @@ def safe_redirect(fallback):
     if ref and ref.startswith(request.host_url):
         return redirect(ref)
     return redirect(fallback)
+
+
+def pick_current_week(weeks, on=None):
+    """The Week to pre-select: the one containing `on` (default today), else the
+    most recently started week, else the first. `weeks` is an ordered list of
+    Week objects. Returns None for an empty list."""
+    if not weeks:
+        return None
+    on = on or date.today()
+    for w in weeks:
+        if w.start_date and w.end_date and w.start_date <= on <= w.end_date:
+            return w
+    started = [w for w in weeks if w.start_date and w.start_date <= on]
+    return started[-1] if started else weeks[0]
