@@ -1,8 +1,15 @@
 /* Reusable, accessible UI primitives for the attendance SPA.
    Styling leans on the app's existing .btn/.form-control classes plus a few
    scoped .att-* classes defined in the host template, so it matches the theme. */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { useNav } from '../lib/section';
+
+// Elements that can hold keyboard focus — used by the modal focus trap.
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),' +
+  'select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 // Catches render/runtime errors in a section so a crash shows a friendly panel
 // (with a reload + go-home option) instead of a blank screen, and reports the
@@ -129,26 +136,53 @@ export function Autocomplete({ label, required, url, initialText, onPick, placeh
   const [picked, setPicked] = useState(!!initialText);
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);   // keyboard-highlighted option index
   const tRef = useRef();
+  const listId = useId();
+  const labelId = useId();
+
   const onInput = (v) => {
-    setText(v); setPicked(false); onPick('');
+    setText(v); setPicked(false); onPick(''); setActive(-1);
     clearTimeout(tRef.current);
     if (v.trim().length < minChars) { setList([]); setOpen(false); return; }
     tRef.current = setTimeout(async () => {
       try {
         const r = await fetch(url + '?q=' + encodeURIComponent(v.trim()), { credentials: 'same-origin' });
         const rows = await r.json();
-        setList(rows); setOpen(rows.length > 0);
+        setList(rows); setOpen(rows.length > 0); setActive(rows.length ? 0 : -1);
       } catch (_) { /* ignore */ }
     }, 220);
   };
-  const pick = (o) => { setText(o.label); setPicked(true); onPick(o.id); setOpen(false); };
+  const pick = (o) => { setText(o.label); setPicked(true); onPick(o.id); setOpen(false); setActive(-1); };
+
+  const onKeyDown = (e) => {
+    if (!open || !list.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => (i + 1) % list.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => (i - 1 + list.length) % list.length); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(list[active]); } }
+    else if (e.key === 'Escape') { setOpen(false); setActive(-1); }
+  };
+
   return (
     <div className="form-group ac-wrap">
-      <label className="form-label">{label}{required && <span className="required"> *</span>}</label>
+      <label className="form-label" id={labelId}>{label}{required && <span className="required" aria-hidden="true"> *</span>}</label>
       <input type="text" className={'form-control' + (picked ? ' picked' : '')} value={text} placeholder={placeholder}
-             autoComplete="off" onChange={(e) => onInput(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
-      {open && <div className="ac-list">{list.map((o) => <div key={o.id} onMouseDown={() => pick(o)}>{o.label}</div>)}</div>}
+             autoComplete="off" role="combobox" aria-expanded={open} aria-controls={listId}
+             aria-autocomplete="list" aria-labelledby={labelId} aria-required={required || undefined}
+             aria-activedescendant={open && active >= 0 ? listId + '-' + active : undefined}
+             onChange={(e) => onInput(e.target.value)} onKeyDown={onKeyDown}
+             onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {open && (
+        <div className="ac-list" role="listbox" id={listId} aria-labelledby={labelId}>
+          {list.map((o, i) => (
+            <div key={o.id} id={listId + '-' + i} role="option" aria-selected={i === active}
+                 className={i === active ? 'active' : undefined}
+                 onMouseDown={() => pick(o)} onMouseEnter={() => setActive(i)}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -244,6 +278,136 @@ export function Toast({ tone = 'success', children, onClose, duration = 4000 }) 
   );
 }
 
+// Accessible modal dialog. Renders into a portal at <body> so it's never
+// clipped by an ancestor's overflow/transform. Handles the things every modal
+// needs and which the hand-rolled ones kept getting wrong:
+//   • focus is moved into the dialog on open and restored to the trigger on close
+//   • Tab/Shift+Tab are trapped inside the dialog
+//   • Escape closes; background scroll is locked while open
+//   • clicking the backdrop closes (a drag that starts inside the panel does not)
+// Props: title, icon, onClose, footer, size ('sm'|'md'|'lg'|'xl'), labelledBy,
+// closeOnBackdrop (default true), initialFocusRef (element to focus first).
+export function Modal({ title, icon, onClose, children, footer, size = 'md',
+                       closeOnBackdrop = true, initialFocusRef, ariaLabel }) {
+  const panelRef = useRef(null);
+  const titleId = useId();
+  // Keep the latest onClose without re-running the mount effect (callers usually
+  // pass an inline arrow, which would otherwise steal focus on every render).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const prevFocus = document.activeElement;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // Move focus into the dialog (caller's choice, else first focusable, else panel).
+    const panel = panelRef.current;
+    const first = (initialFocusRef && initialFocusRef.current) ||
+      (panel && panel.querySelector(FOCUSABLE)) || panel;
+    if (first && first.focus) first.focus();
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeRef.current && closeRef.current(); return; }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const f = Array.from(panelRef.current.querySelectorAll(FOCUSABLE))
+        .filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (!f.length) { e.preventDefault(); return; }
+      const lo = f[0], hi = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === lo) { e.preventDefault(); hi.focus(); }
+      else if (!e.shiftKey && document.activeElement === hi) { e.preventDefault(); lo.focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      document.body.style.overflow = prevOverflow;
+      if (prevFocus && prevFocus.focus) prevFocus.focus();   // restore to trigger
+    };
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- mount/unmount only
+
+  const maxWidth = { sm: 420, md: 560, lg: 760, xl: 960 }[size] || 560;
+  // mousedown target check: a click that *starts* on the backdrop closes; a drag
+  // that starts inside the panel and releases on the backdrop does not.
+  const onBackdrop = (e) => { if (closeOnBackdrop && e.target === e.currentTarget) closeRef.current && closeRef.current(); };
+
+  return createPortal(
+    <div role="presentation" onMouseDown={onBackdrop}
+         style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 3000,
+                  display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                  padding: '5vh 1rem', overflowY: 'auto' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" tabIndex={-1}
+           aria-labelledby={title ? titleId : undefined}
+           aria-label={!title ? ariaLabel : undefined}
+           style={{ background: 'var(--bg-card, #fff)', color: 'inherit', borderRadius: 12,
+                    width: '100%', maxWidth, boxShadow: '0 20px 60px rgba(0,0,0,.3)',
+                    overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+        {title && (
+          <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                           gap: 12, padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color, #e5e7eb)' }}>
+            <h3 id={titleId} style={{ margin: 0, fontSize: '1.05rem' }}>
+              {icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}
+            </h3>
+            <button type="button" aria-label="Close" onClick={() => closeRef.current && closeRef.current()}
+                    style={{ background: 'none', border: 'none', fontSize: 22, lineHeight: 1,
+                             cursor: 'pointer', color: 'inherit', opacity: .6 }}>×</button>
+          </header>
+        )}
+        <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto' }}>{children}</div>
+        {footer && (
+          <footer style={{ display: 'flex', gap: '.6rem', justifyContent: 'flex-end',
+                           padding: '.85rem 1.25rem', borderTop: '1px solid var(--border-color, #e5e7eb)' }}>
+            {footer}
+          </footer>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// Themed, accessible confirmation dialog used imperatively via confirm() below.
+function ConfirmDialog({ title = 'Please confirm', message, confirmText = 'Confirm',
+                        cancelText = 'Cancel', tone = 'primary', icon, onResolve }) {
+  const okRef = useRef(null);
+  return (
+    <Modal title={title} icon={icon} size="sm" onClose={() => onResolve(false)} initialFocusRef={okRef}
+           footer={<>
+             <Button variant="light" onClick={() => onResolve(false)}>{cancelText}</Button>
+             <Button ref={okRef} variant={tone === 'danger' ? 'danger' : 'primary'}
+                     onClick={() => onResolve(true)}>{confirmText}</Button>
+           </>}>
+      <p style={{ margin: 0, lineHeight: 1.5 }}>{message}</p>
+    </Modal>
+  );
+}
+
+// Promise-based replacement for window.confirm(): themed, accessible, non-blocking.
+// Usage:  if (await confirm('Delete this student?')) doDelete();
+//   or:   if (await confirm({ title, message, confirmText: 'Delete', tone: 'danger' })) …
+// Resolves true on confirm, false on cancel / Escape / backdrop.
+export function confirm(opts) {
+  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const done = (val) => { root.unmount(); host.remove(); resolve(val); };
+    root.render(<ConfirmDialog {...o} onResolve={done} />);
+  });
+}
+
+// Status badge mapped onto the app's existing .badge-* theme classes, so a tone
+// name ('success'/'danger'/…) is the single way to label state across modules.
+export function Badge({ tone = 'secondary', icon, children, title }) {
+  const cls = { success: 'success', danger: 'danger', error: 'danger', warn: 'warning',
+                warning: 'warning', info: 'info', primary: 'primary', secondary: 'secondary',
+                gray: 'secondary' }[tone] || 'secondary';
+  return (
+    <span className={'badge badge-' + cls} title={title}>
+      {icon && <i className={'fas ' + icon} aria-hidden="true" />}{icon && children ? ' ' : ''}{children}
+    </span>
+  );
+}
+
 export function Pill({ tone = 'gray', children }) {
   const t = {
     green: ['#dcfce7', '#166534'], red: ['#fee2e2', '#991b1b'],
@@ -275,10 +439,10 @@ export function Toolbar({ children }) {
   return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>{children}</div>;
 }
 
-export function Button({ variant = 'primary', size, children, ...rest }) {
+export const Button = React.forwardRef(function Button({ variant = 'primary', size, children, ...rest }, ref) {
   const cls = ['btn', 'btn-' + variant, size === 'sm' ? 'btn-sm' : ''].filter(Boolean).join(' ');
-  return <button type="button" className={cls} {...rest}>{children}</button>;
-}
+  return <button ref={ref} type="button" className={cls} {...rest}>{children}</button>;
+});
 
 // Headline stat cards (e.g. attendance rate / students / school days).
 export function StatCards({ items }) {

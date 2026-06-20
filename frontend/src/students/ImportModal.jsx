@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
+import { Modal } from '../components/ui';
 
 // Friendly labels for the recognised field keys.
 const FIELD_LABELS = {
@@ -51,16 +52,8 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
     : 0;
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true"
-         style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
-      <div className="card" style={{ maxWidth: 760, margin: '1.5rem auto' }}>
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 className="card-title"><i className="fas fa-paste" /> Import students from pasted text</h3>
-          <button type="button" className="att-x" onClick={onClose} aria-label="Close"
-                  style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer' }}>×</button>
-        </div>
-        <div className="card-body">
-          {err && <div className="alert alert-danger" role="alert">{err}</div>}
+    <Modal title="Import students from pasted text" icon="fa-paste" size="lg" onClose={onClose}>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
 
           {result ? (
             <>
@@ -164,9 +157,7 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
               </div>
             </>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

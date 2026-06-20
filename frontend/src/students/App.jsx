@@ -3,6 +3,7 @@ import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
+import { confirm } from '../components/ui';
 
 const SORTS = [
   ['surname|asc', 'Name A–Z'], ['surname|desc', 'Name Z–A'],
@@ -112,8 +113,8 @@ export default function App({ initial }) {
           {d.can_add && <a href={d.add_url} className="btn btn-primary"><i className="fas fa-plus" /> Add Student</a>}
           {d.can_add && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i className="fas fa-paste" /> Import (paste)</button>}
           {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
-                               onClick={() => window.confirm("Fill WAEC subjects from stream for students who don't have them set?")
-                                 && runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.')}><i className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
+                               onClick={async () => { if (await confirm("Fill WAEC subjects from stream for students who don't have them set?"))
+                                 runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.'); }}><i className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
           {d.trash_url && <a href={d.trash_url} className="btn btn-secondary btn-sm" title="View deleted students (restore / delete permanently)"><i className="fas fa-trash" /> Trash</a>}
         </div>
       </div>
@@ -213,8 +214,8 @@ export default function App({ initial }) {
                       onClick={() => needSel() && runAction(d.bulk_subject_url, { subject: bulkSubject, student_ids: selectedIds }, 'Subject added.')}>Add (SSS3)</button>
             </>}
             {canAdmin && <button type="button" className="btn btn-danger btn-sm"
-                    onClick={() => needSel() && window.confirm(`Delete ${selectedIds.length} selected student(s)?`)
-                      && runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.')}><i className="fas fa-trash" /> Delete selected</button>}
+                    onClick={async () => { if (needSel() && await confirm({ title: 'Delete students', message: `Delete ${selectedIds.length} selected student(s)?`, confirmText: 'Delete', tone: 'danger' }))
+                      runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.'); }}><i className="fas fa-trash" /> Delete selected</button>}
           </>}
         </span>
       </div>
@@ -243,11 +244,11 @@ export default function App({ initial }) {
                   {canManage && <a href={s.edit_url} className="btn btn-secondary btn-sm"><i className="fas fa-edit" /> Edit</a>}
                   {canManage && <button type="button" className={'btn btn-sm ' + (s.is_graduated ? 'btn-warning' : 'btn-success')}
                                         title={s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}
-                                        onClick={() => window.confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)
-                                          && runAction(s.graduate_url, {}, 'Updated graduation status.')}>
+                                        onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`))
+                                          runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
                     <i className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /></button>}
                   {canManage && <button type="button" className="btn btn-danger btn-sm" title="Delete"
-                                        onClick={() => window.confirm(`Delete ${s.name}?`) && runAction(s.delete_url, {}, 'Student deleted.')}><i className="fas fa-trash" /></button>}
+                                        onClick={async () => { if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}><i className="fas fa-trash" /></button>}
                 </div>
               </div>
             </div>

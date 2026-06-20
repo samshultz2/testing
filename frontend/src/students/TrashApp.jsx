@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { postForm } from '../lib/forms';
-import { Banner, EmptyState } from '../components/ui';
+import { Banner, EmptyState, confirm } from '../components/ui';
 
 export default function TrashApp({ initial }) {
   const [students, setStudents] = useState(initial.students || []);
@@ -43,13 +43,16 @@ export default function TrashApp({ initial }) {
   };
 
   const restoreOne = (s) => act(s.restore_url, {}, [s.id], `${s.full_name} restored.`);
-  const purgeOne = (s) => window.confirm(`Permanently delete ${s.full_name}? This cannot be undone.`)
-    && act(s.purge_url, {}, [s.id], `${s.full_name} permanently deleted.`);
+  const purgeOne = async (s) => {
+    if (await confirm({ title: 'Delete permanently', message: `Permanently delete ${s.full_name}? This cannot be undone.`, confirmText: 'Delete permanently', tone: 'danger' }))
+      act(s.purge_url, {}, [s.id], `${s.full_name} permanently deleted.`);
+  };
   const bulkRestore = () => selected.size
     && act(urls.bulk_restore, { student_ids: [...selected] }, [...selected], `${selected.size} student(s) restored.`);
-  const bulkPurge = () => selected.size
-    && window.confirm(`Permanently delete ${selected.size} student(s)? This cannot be undone.`)
-    && act(urls.bulk_purge, { student_ids: [...selected] }, [...selected], `${selected.size} student(s) permanently deleted.`);
+  const bulkPurge = async () => {
+    if (selected.size && await confirm({ title: 'Delete permanently', message: `Permanently delete ${selected.size} student(s)? This cannot be undone.`, confirmText: 'Delete permanently', tone: 'danger' }))
+      act(urls.bulk_purge, { student_ids: [...selected] }, [...selected], `${selected.size} student(s) permanently deleted.`);
+  };
 
   return (
     <div>

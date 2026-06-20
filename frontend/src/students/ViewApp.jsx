@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
+import { confirm } from '../components/ui';
 
 function Info({ label, children }) {
   return (
@@ -49,8 +50,8 @@ export default function ViewApp({ initial }) {
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
           {canManage && <button type="button" className={'btn ' + (s.is_graduated ? 'btn-warning' : 'btn-success')} disabled={busy}
-            onClick={() => window.confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.full_name}?`)
-              && run(urls.graduate, {}, 'Updated graduation status.')}>
+            onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.full_name}?`))
+              run(urls.graduate, {}, 'Updated graduation status.'); }}>
             <i className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo Graduate' : 'Mark as Graduate'}
           </button>}
           <a href={urls.exam_report} className="btn btn-info"><i className="fas fa-file-pdf" /> Exam Report</a>
@@ -157,7 +158,7 @@ export default function ViewApp({ initial }) {
                 <td>{r.severity && <span className={'badge ' + (r.severity === 'Major' ? 'badge-danger' : 'badge-warning')}>{r.severity}</span>}</td>
                 <td>{r.description}</td><td>{r.action_taken || '—'}</td><td className="text-muted">{r.reported_by || ''}</td>
                 <td><button type="button" className="btn btn-danger btn-sm" disabled={busy}
-                            onClick={() => window.confirm('Remove this record?') && run(r.delete_url, {}, 'Record removed.')}><i className="fas fa-times" /></button></td>
+                            onClick={async () => { if (await confirm('Remove this record?')) run(r.delete_url, {}, 'Record removed.'); }}><i className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -176,7 +177,7 @@ export default function ViewApp({ initial }) {
                 <td><span className={'badge ' + (v.parent_notified ? 'badge-success' : 'badge-warning')}>{v.parent_notified ? 'Yes' : 'No'}</span></td>
                 <td className="text-muted">{v.attended_by || ''}</td>
                 <td><button type="button" className="btn btn-danger btn-sm" disabled={busy}
-                            onClick={() => window.confirm('Remove this visit?') && run(v.delete_url, {}, 'Visit removed.')}><i className="fas fa-times" /></button></td>
+                            onClick={async () => { if (await confirm('Remove this visit?')) run(v.delete_url, {}, 'Visit removed.'); }}><i className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
           </table></div>
