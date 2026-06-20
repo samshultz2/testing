@@ -18,9 +18,9 @@ function Calendar({ d }) {
         <div className="cal-head">
           <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{d.month_name} {d.year}</h2>
           <div className="cal-nav">
-            <a href={d.nav.prev_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chevron-left" /></a>
+            <a href={d.nav.prev_url} className="btn btn-secondary btn-sm" aria-label="Previous"><i aria-hidden="true" className="fas fa-chevron-left" /></a>
             <a href={d.nav.today_url} className="btn btn-secondary btn-sm">Today</a>
-            <a href={d.nav.next_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chevron-right" /></a>
+            <a href={d.nav.next_url} className="btn btn-secondary btn-sm" aria-label="Next"><i aria-hidden="true" className="fas fa-chevron-right" /></a>
           </div>
         </div>
         <div className="cal-grid">
@@ -87,7 +87,7 @@ function Agenda({ d, notify }) {
                   <td data-label="Audience">{e.audience}</td>
                   <td data-label="Location">{e.location || '—'}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <a href={e.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    <a href={e.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
                     <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td>
                 </tr>

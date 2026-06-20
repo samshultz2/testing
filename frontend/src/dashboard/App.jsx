@@ -3,11 +3,13 @@ import Chart, { chartTheme } from './charts';
 import { Kpi, Widget, Empty, ChartBox, naira, nairaShort } from './components';
 import Customize from './Customize';
 import { apiGet } from '../lib/api';
+import { Toast } from '../components/ui';
 
 const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboard-list' };
 
 export default function App({ data: initialData }) {
   const [data, setData] = useState(initialData);
+  const [toast, setToast] = useState(null);   // surface a refresh failure instead of silently keeping stale data
   const d = data || {};
   const enabled = d.enabled || [];
   const has = (k) => enabled.includes(k);
@@ -16,7 +18,10 @@ export default function App({ data: initialData }) {
   const [customizing, setCustomizing] = useState(false);
 
   // Re-fetch widget data in place after customising — no full page reload.
-  const refresh = async () => { try { setData(await apiGet('/api/dashboard/data')); } catch (e) { /* keep current */ } };
+  const refresh = async () => {
+    try { setData(await apiGet('/api/dashboard/data')); }
+    catch (e) { setToast({ tone: 'warn', text: 'Couldn’t refresh the dashboard — showing the last loaded data.' }); }
+  };
 
   const doughnut = (extra) => ({
     responsive: true, maintainAspectRatio: false,
@@ -35,6 +40,7 @@ export default function App({ data: initialData }) {
 
   return (
     <>
+      {toast && <Toast tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
       {/* Hero */}
       <div className="dash-hero">
         <div>
@@ -278,7 +284,7 @@ function ExamCard({ kind, snap, url }) {
     <div className={'exam-card ' + kind}>
       <div className="top">
         <span><i aria-hidden="true" className={'fas ' + ICON[kind]} /> {kind === 'jamb' ? 'JAMB' : kind === 'waec' ? 'WAEC' : 'Latest Mock'} {snap && kind !== 'mock' ? snap.year : ''}</span>
-        {(snap || kind === 'mock') && <a href={url} style={{ color: '#fff', opacity: .85 }}><i aria-hidden="true" className="fas fa-arrow-right" /></a>}
+        {(snap || kind === 'mock') && <a href={url} style={{ color: '#fff', opacity: .85 }} aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a>}
       </div>
       {!snap ? (
         <><div className="big">—</div><div className="sub">{kind === 'jamb' ? 'No JAMB results yet' : kind === 'waec' ? 'No WAEC results yet' : 'No mock exams yet'}</div></>

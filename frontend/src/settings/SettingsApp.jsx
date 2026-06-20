@@ -393,13 +393,13 @@ function Backup({ d, notify }) {
                     <td data-label="File">{b.name}</td>
                     <td data-label="Date">{b.modified}</td>
                     <td data-label="Size" className="text-right">{kb(b.size).toFixed(0)} KB</td>
-                    <td className="actions"><a href={b.download_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-download" /></a></td>
+                    <td className="actions"><a href={b.download_url} className="btn btn-secondary btn-sm" aria-label="Download"><i aria-hidden="true" className="fas fa-download" /></a></td>
                   </tr>
                 ))}
               </tbody>
             </table></div>
           ) : (
-            <div className="empty-state" style={{ padding: '1.2rem' }}><i aria-hidden="true" className="fas fa-box-archive" /><p>No snapshots yet — they appear after the app runs or when you create one.</p></div>
+            <Empty icon="fa-box-archive" title="No snapshots yet"><p>They appear after the app runs or when you create one.</p></Empty>
           )}
         </div>
       </div>

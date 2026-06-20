@@ -520,7 +520,7 @@ function ViewExam({ d, notify }) {
                 </div>
                 <div className="student-actions">
                   <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
-                  <a href={it.edit_url} className="btn btn-warning btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                  <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
                   <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div>
               </div>
@@ -541,7 +541,7 @@ function ViewExam({ d, notify }) {
                   <td><span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span></td>
                   <td><div style={{ display: 'flex', gap: '0.25rem' }}>
                     <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
-                    <a href={it.edit_url} className="btn btn-warning btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>
+                    <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
                     <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td>
                 </tr>))}

@@ -145,7 +145,7 @@ function Staff({ d }) {
                   <td data-label="Department">{s.department}</td>
                   <td data-label="Type"><span className={typeBadge(s.staff_type)}>{s.staff_type}</span></td>
                   <td data-label="Status"><span className={statusBadge(s.status)}>{s.status}</span></td>
-                  <td className="actions"><a href={s.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
+                  <td className="actions"><a href={s.url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
                 </tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a></Empty>}
@@ -233,8 +233,8 @@ function StaffDetail({ d, notify }) {
     <>
       <div className="page-header"><h1>Staff Profile</h1>
         <div className="page-header-actions">
-          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-phone" /></a>
-            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary"><i aria-hidden="true" className="fab fa-whatsapp" /></a></>}
+          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /></a>
+            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /></a></>}
           <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
           {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i aria-hidden="true" className="fas fa-box-archive" /></button>}
         </div>
@@ -505,7 +505,7 @@ function Payroll({ d, notify }) {
                 <tr key={r.id}><td data-label="Period"><a href={r.url}><strong>{r.period_label}</strong></a></td>
                   <td data-label="Staff" className="text-right">{r.count}</td><td data-label="Total" className="text-right">{naira(r.total)}</td>
                   <td data-label="Status"><span className={runBadge(r.status)}>{r.status}</span></td>
-                  <td className="actions"><a href={r.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
+                  <td className="actions"><a href={r.url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-money-check-dollar" title="No payroll yet"><p>Generate your first monthly payroll above.</p></Empty>}
         </div></div>

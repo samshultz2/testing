@@ -3,7 +3,7 @@ import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
-import { confirm } from '../components/ui';
+import { confirm, Empty } from '../components/ui';
 
 const SORTS = [
   ['surname|asc', 'Name A–Z'], ['surname|desc', 'Name Z–A'],
@@ -221,7 +221,7 @@ export default function App({ initial }) {
       </div>
 
       {students.length === 0 ? (
-        <div className="empty-state"><i aria-hidden="true" className="fas fa-users" /><h3>No students found</h3><p>Try adjusting your filters.</p></div>
+        <Empty icon="fa-users" title="No students found"><p>Try adjusting your filters.</p></Empty>
       ) : (
         <div className="stu-grid">
           {students.map((s) => (

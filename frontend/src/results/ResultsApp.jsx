@@ -250,7 +250,7 @@ function Cutoffs({ d, notify }) {
                     <td>{r.jamb_cutoff || '—'}</td><td>{r.min_credits}</td>
                     <td style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{r.required_subjects.join(', ')}</td>
                     {d.is_admin && <td style={{ whiteSpace: 'nowrap' }}>
-                      <a href={r.edit_url} className="btn btn-warning btn-sm"><i aria-hidden="true" className="fas fa-edit" /></a>{' '}
+                      <a href={r.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>{' '}
                       <button className="btn btn-danger btn-sm" type="button" onClick={() => del(r.delete_url, r.course_name)}><i aria-hidden="true" className="fas fa-trash" /></button>
                     </td>}
                   </tr>))}</tbody>

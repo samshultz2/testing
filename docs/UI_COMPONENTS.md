@@ -308,12 +308,20 @@ stack is React + Dexie only.
   project-wide (two brace-aware passes); nameless icon-only buttons given
   `aria-label`. `TableWrap` applied to the timetable grid as the reference.
 
-**Recommended next (mechanical, low-risk)**
-- Swap inline `.badge badge-*` spans for `<Badge tone>` and inline `.empty-state`
-  for `<EmptyState>` as those files are next touched.
-- Adopt the idle→loading→data→empty→error recipe in dashboard, communication,
-  timetable, sales (currently keep stale data / no spinner on refresh).
-- Mirror `title` → `aria-label` on the remaining icon-only **links** (`<A>` used
-  for View/Edit actions) so screen readers announce them reliably.
+- All **truly nameless icon-only** buttons/links now have an `aria-label`
+  (icon→label map for plain `<a>`/`<button>`; `title` added to the custom `<A>`
+  links, which surfaces as the accessible name). Icon-only elements that already
+  had a `title` were left as-is — `title` is the accessible-name fallback.
+- Inline `.empty-state` blocks consolidated onto `<Empty>` (students, sales,
+  settings, communication). Dashboard now surfaces a refresh failure via `Toast`
+  instead of silently keeping stale data.
+- **Notifications dropdown is mobile-responsive**: on ≤640px it drops to a
+  fixed, near-full-width sheet under the header instead of an absolutely
+  positioned 330px box that overflowed the viewport.
+
+**Recommended next (low priority)**
+- `<Badge>` exists and renders the same `.badge-*` classes; converting the
+  ~100 existing inline `.badge` spans is pure churn (identical output), so it's
+  deferred — use `<Badge>` in new/touched code.
 - Wrap the remaining wide tables in `<TableWrap>` (most already scroll via
   `.matrix-wrap`/`overflow:auto`, but they aren't keyboard-focusable regions).

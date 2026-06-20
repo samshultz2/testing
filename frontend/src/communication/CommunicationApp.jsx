@@ -65,7 +65,7 @@ function Dashboard({ d }) {
       <div className="cm-grid split">
         <div className="widget"><div className="wh"><h3><i aria-hidden="true" className="fas fa-comment-dots" /> By channel</h3></div>
           <div className="wb"><div className="chart-box">{d.channel_chart.length
-            ? <canvas ref={ref} /> : <div className="empty-state"><i aria-hidden="true" className="fas fa-comment-dots" /><p>No messages yet</p></div>}</div></div></div>
+            ? <canvas ref={ref} /> : <Empty icon="fa-comment-dots" title="No messages yet" />}</div></div></div>
         <div className="widget">
           <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent campaigns</h3><a href={d.nav.messages} className="text-sm">View all</a></div>
           <div className="wb" style={{ padding: 0 }}>
@@ -79,7 +79,7 @@ function Dashboard({ d }) {
                     <td data-label="Channel"><span className={channelBadge(m.channel)}>{m.channel}</span></td>
                     <td data-label="Sent" className="text-right">{m.sent_count}/{m.recipient_count}</td></tr>))}
                 </tbody></table></div>
-            ) : <div className="empty-state" style={{ padding: '1.5rem' }}><i aria-hidden="true" className="fas fa-paper-plane" /><p>No campaigns yet</p><a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a></div>}
+            ) : <Empty icon="fa-paper-plane" title="No campaigns yet"><a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a></Empty>}
           </div></div>
       </div>
 
@@ -322,7 +322,7 @@ function Messages({ d, notify }) {
                 <td data-label="Channel"><span className={channelBadge(m.channel)}>{m.channel}</span></td>
                 <td data-label="Recipients" className="text-right">{m.recipient_count}</td>
                 <td data-label="Sent" className="text-right">{m.sent_count}</td>
-                <td className="actions"><a href={m.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}
+                <td className="actions"><a href={m.url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}
             </tbody></table></div>
         ) : <Empty icon="fa-paper-plane" title="No messages yet"><p>Compose your first parent broadcast.</p><a href={d.urls.compose} className="btn btn-primary mt-2">Compose</a></Empty>}
       </div></div>

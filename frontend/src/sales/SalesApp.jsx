@@ -205,8 +205,7 @@ function NewSale({ d, notify }) {
                 </tr>
               ))}</tbody>
             </table>
-            {!d.products.length && <div className="empty-state" style={{ padding: '1.2rem' }}>
-              <p>No products in stock. <a href={d.urls.products}>Add some</a>.</p></div>}
+            {!d.products.length && <Empty icon="fa-box-open" title="No products in stock"><a href={d.urls.products}>Add some</a></Empty>}
           </div>
         </div>
 

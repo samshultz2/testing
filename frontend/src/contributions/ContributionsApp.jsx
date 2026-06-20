@@ -606,8 +606,8 @@ function Defaulters({ d }) {
                   <td><strong className="text-danger">{money(s.remaining)}</strong></td>
                   <td style={{ width: 100 }}><Bar pct={s.percentage} color={s.percentage >= 50 ? '#ffc107' : '#dc3545'} /><small>{s.percentage.toFixed(0)}%</small></td>
                   <td><small>{s.last_payment}</small></td>
-                  <td><A to={s.detail_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
-                    <A to={s.add_payment_url} className="btn btn-sm btn-success"><i aria-hidden="true" className="fas fa-plus" /></A></td>
+                  <td><A to={s.detail_url} title="View" className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
+                    <A to={s.add_payment_url} title="Add payment" className="btn btn-sm btn-success"><i aria-hidden="true" className="fas fa-plus" /></A></td>
                 </tr>
               )) : <tr><td colSpan="8" className="text-center text-success"><i aria-hidden="true" className="fas fa-check-circle" /> No defaulters! All students have paid in full.</td></tr>}
             </tbody>

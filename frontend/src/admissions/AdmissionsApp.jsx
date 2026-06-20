@@ -119,7 +119,7 @@ function Applicants({ d }) {
                   <td data-label="Parent">{a.parent_name || '—'}{a.parent_phone && <div className="text-muted text-sm">{a.parent_phone}</div>}</td>
                   <td data-label="Score">{a.entrance_score}</td>
                   <td data-label="Status"><span className={'badge ' + a.status_badge}>{a.status}</span>{a.linked && <i aria-hidden="true" className="fas fa-link text-muted" title="Linked to student" style={{ marginLeft: 4 }} />}</td>
-                  <td className="actions"><a href={a.detail_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
+                  <td className="actions"><a href={a.detail_url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
                 </tr>
               ))}</tbody></table></div>
           ) : <Empty icon="fa-user-plus" title="No applicants"><p>Create an application or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Application</a></Empty>}
@@ -222,7 +222,7 @@ function ApplicantDetail({ d, notify }) {
   return (
     <>
       <PageHeader title="Application" actions={<>
-        {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-phone" /></a>}
+        {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /></a>}
         <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
         {d.is_admin && <button type="button" className="btn btn-danger" disabled={busy}
           onClick={() => act(d.urls.delete, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
