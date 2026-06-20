@@ -116,6 +116,9 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
                 {preview.rows.some((r) => r.error) && (
                   <span className="badge badge-warning">{preview.rows.filter((r) => r.error).length} need a missing name</span>
                 )}
+                {preview.rows.some((r) => r.warn) && (
+                  <span className="badge badge-warning">{preview.rows.filter((r) => r.warn).length} may be misaligned</span>
+                )}
                 <span className="badge badge-info">{preview.total} rows total</span>
               </div>
               <p className="text-sm" style={{ margin: '0 0 0.5rem' }}>
@@ -131,10 +134,10 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
                   <thead><tr><th>#</th><th>Name</th><th>Details</th></tr></thead>
                   <tbody>
                     {preview.rows.map((r) => (
-                      <tr key={r.row} style={r.error ? { background: 'rgba(255,193,7,0.10)' } : undefined}>
+                      <tr key={r.row} style={(r.error || r.warn) ? { background: 'rgba(255,193,7,0.10)' } : undefined}>
                         <td>{r.row}</td>
                         <td>{r.name || <span className="text-muted">—</span>}
-                          {r.error && <span title={r.error}><i className="fas fa-triangle-exclamation text-warning" style={{ marginLeft: 4 }} /></span>}</td>
+                          {(r.error || r.warn) && <span title={r.error || r.warn}><i className="fas fa-triangle-exclamation text-warning" style={{ marginLeft: 4 }} /></span>}</td>
                         <td className="text-muted">{summarise(r)}</td>
                       </tr>
                     ))}

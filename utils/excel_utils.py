@@ -314,6 +314,72 @@ def _split_phones(value):
     return out
 
 
+# Columns whose VALUE has a recognisable shape — used to re-align a pasted row
+# that is missing a comma (and would otherwise shift every later value left).
+_STRONG_FIELDS = {'gender', 'dob', 'parent_phone'}
+_DATE_SHAPE = re.compile(r'^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}$'
+                         r'|^\d{1,2}\s+[A-Za-z]{3,9}\.?\s+\d{2,4}$'
+                         r'|^[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{2,4}$')
+
+
+def _looks_like(field, value):
+    """Does ``value`` plausibly belong to a strongly-typed column?"""
+    v = (value or '').strip()
+    if not v:
+        return False
+    if field == 'gender':
+        return v.lower() in {'m', 'f', 'male', 'female', 'boy', 'girl'}
+    if field == 'dob':
+        return bool(_DATE_SHAPE.match(v))
+    if field == 'parent_phone':
+        digits = re.sub(r'\D', '', v)
+        # mostly-digits and a plausible phone length (handles multi-number cells)
+        return len(digits) >= 7 and len(re.sub(r'[\d\s()+\-/,]', '', v)) == 0
+    return False
+
+
+def _realign_short_row(cells, fields):
+    """Best-effort repair for a pasted row missing one or more commas.
+
+    Walks the header ``fields`` and the row ``cells`` together; when the row is
+    short, a strongly-typed column whose value doesn't match its shape (or a
+    free-text column sitting on a value that clearly belongs to a later typed
+    column) is treated as an omitted value and a blank is inserted — so e.g. an
+    address no longer slides into the Religion column. Correctly-sized rows and
+    rows it can't confidently fix are returned unchanged-in-length (padded at the
+    end only). Returns the aligned list (length == len(fields))."""
+    cells = list(cells)
+    if len(cells) >= len(fields):
+        return cells
+    out, ci, n = [], 0, len(fields)
+    later_strong = [
+        {fields[j] for j in range(i + 1, n) if fields[j] in _STRONG_FIELDS}
+        for i in range(n)
+    ]
+    for fi in range(n):
+        field = fields[fi]
+        if ci >= len(cells):
+            out.append('')                       # ran out of values → blank
+            continue
+        cell = cells[ci]
+        short = (len(cells) - ci) < (n - fi)     # still missing value(s) ahead
+        if field in _STRONG_FIELDS:
+            if _looks_like(field, cell):
+                out.append(cell); ci += 1
+            else:
+                out.append('')                   # typed value omitted here
+        else:
+            # A free-text column carrying a value that clearly belongs to a later
+            # typed column → this column's value was omitted.
+            if short and any(_looks_like(t, cell) for t in later_strong[fi]):
+                out.append('')
+            else:
+                out.append(cell); ci += 1
+    while ci < len(cells):                       # safety: keep any leftover
+        out.append(cells[ci]); ci += 1
+    return out[:n] if len(out) > n else out + [''] * (n - len(out))
+
+
 def rows_from_pasted_text(text):
     """Parse copy-pasted tabular text into row tuples (header row first).
 
@@ -322,6 +388,10 @@ def rows_from_pasted_text(text):
     handled by the csv module. Blank lines are dropped. This feeds the same
     header-matching importer as the .xlsx/.csv paths, so a plain paste of just
     'Surname, First Name' works like a full sheet.
+
+    Rows with fewer cells than the header are **re-aligned** by content (see
+    ``_realign_short_row``) so a missing comma no longer shifts later values into
+    the wrong column and silently drops data.
     """
     import csv
     lines = [ln for ln in (text or '').splitlines() if ln.strip()]
@@ -332,8 +402,15 @@ def rows_from_pasted_text(text):
     # skipinitialspace so '..., "No 1, Main St", ...' (note the space before the
     # opening quote, common in hand-typed/pasted lists) is read as one quoted
     # field instead of splitting on the comma inside the quotes.
-    return [tuple(r) for r in csv.reader(io.StringIO('\n'.join(lines)),
+    rows = [tuple(r) for r in csv.reader(io.StringIO('\n'.join(lines)),
                                          delimiter=delim, skipinitialspace=True)]
+    if len(rows) <= 1:
+        return rows
+    header = rows[0]
+    fields = [_HEADER_ALIASES.get(_norm_header(c)) for c in header]
+    if not any(f in _STRONG_FIELDS for f in fields):
+        return rows                              # nothing typed to anchor on
+    return [header] + [tuple(_realign_short_row(r, fields)) for r in rows[1:]]
 
 
 def preview_student_rows(rows):
@@ -373,8 +450,15 @@ def preview_student_rows(rows):
         # At least one name present → importable (the other is left blank).
         valid += 1
         partial = not (surname and first_name)
+        # A strongly-typed column still holding a value of the wrong shape means
+        # a missing comma shifted the row and the realigner couldn't fully fix it
+        # — surface it so the user can spot/repair it before importing.
+        misaligned = [f for f in _STRONG_FIELDS
+                      if (col(row, f) or '').strip() and not _looks_like(f, col(row, f))]
         out.append({'row': row_num,
                     'error': 'Only one name — will import, please complete it' if partial else None,
+                    'warn': ('Some columns may be misaligned — check '
+                             + ', '.join(sorted(misaligned))) if misaligned else None,
                     'name': ' '.join(p for p in [surname, first_name] if p),
                     'details': {'gender': _normalise_gender(col(row, 'gender')) or 'Unknown',
                                 'religion': col(row, 'religion'),
