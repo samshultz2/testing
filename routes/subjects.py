@@ -539,6 +539,13 @@ def save_scores():
         student_ids = request.form.getlist('student_id[]')
         scores = request.form.getlist('score[]')
 
+        # A teacher may only save scores for a subject they actually teach in
+        # this class (admins pass). Resolve the subject from the class-subject.
+        cs = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
+        if not can_enter_results(assignment_id, cs.subject_id if cs else None):
+            return _err('You can only enter scores for the subjects you teach in this class.',
+                        url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+
         at = db.session.get(AssessmentType, assessment_type_id)
         max_score = at.max_score if at else None
         saved = 0
@@ -693,6 +700,10 @@ def bulk_entry():
             term_id=term_id, class_id=selected.class_id, is_active=True)
             .filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected.arm_id))
             .join(Subject).order_by(Subject.name).all())
+        # A teacher only sees/saves the subjects they actually teach in this class
+        # (admins/eligible staff keep all). Scopes both the grid and the save loop.
+        class_subjects = [cs for cs in class_subjects
+                          if can_enter_results(assignment_id, cs.subject_id)]
         enrollments = (StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True)
             .join(Student).order_by(Student.surname, Student.first_name).all())
@@ -1293,7 +1304,13 @@ def import_scores():
             term_id = request.form.get('term_id', type=int)
             assignment_id = request.form.get('assignment_id', type=int)
             class_subject_id = request.form.get('class_subject_id', type=int)
-            
+
+            # Teachers may only import scores for a subject they teach here.
+            cs = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
+            if not can_enter_results(assignment_id, cs.subject_id if cs else None):
+                flash('You can only enter scores for the subjects you teach in this class.', 'error')
+                return redirect(url_for('subjects.import_scores'))
+
             if 'file' not in request.files:
                 flash('No file selected.', 'error')
                 return redirect(url_for('subjects.import_scores'))
@@ -1603,8 +1620,9 @@ def scoresheet_save():
         flash('Missing class/subject context.', 'error')
         return redirect(url_for('subjects.scoresheet_scan'))
 
-    if not can_access_class(assignment_id):
-        flash('You do not have access to this class.', 'error')
+    # Teachers may only save scores for a subject they teach in this class.
+    if not can_enter_results(assignment_id, class_subject.subject_id):
+        flash('You can only enter scores for the subjects you teach in this class.', 'error')
         return redirect(url_for('subjects.scoresheet_scan'))
 
     sheet_cols = _sheet_columns(class_subject)
