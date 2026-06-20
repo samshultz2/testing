@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiGet, apiPost, isPermanent } from '../../lib/api';
 import { cachePut, cacheGet, enqueue } from '../../lib/offline';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill } from '../../components/ui';
+import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
 
 const key = (aid, wid) => `week|${aid}|${wid}`;
 
@@ -17,6 +17,7 @@ export default function WeekGrid() {
   const [state, setState] = useState({ idle: true });
   const [marks, setMarks] = useState({});           // {eid: {date: {am, pm}}}
   const [msg, setMsg] = useState(null);
+  const [toast, setToast] = useState(null);   // floating save confirmation (no scroll)
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -86,10 +87,10 @@ export default function WeekGrid() {
     setBusy(true);
     try {
       const r = await apiPost('/attendance/api/week/mark', payload);
-      setMsg({ tone: 'success', text: `Saved ${r.saved} entries for the week.` });
+      setToast({ tone: 'success', text: `Saved ${r.saved} entries for the week.` });
     } catch (e) {
-      if (isPermanent(e)) setMsg({ tone: 'error', text: `Couldn’t save: ${e.message}` });
-      else { await enqueue('/attendance/api/week/mark', payload); await sync.refresh(); setMsg({ tone: 'warn', text: 'Offline — the week is queued, will sync on reconnect.' }); }
+      if (isPermanent(e)) setToast({ tone: 'error', text: `Couldn’t save: ${e.message}` });
+      else { await enqueue('/attendance/api/week/mark', payload); await sync.refresh(); setToast({ tone: 'warn', text: 'Offline — the week is queued, will sync on reconnect.' }); }
     } finally { setBusy(false); }
   };
 
@@ -115,6 +116,7 @@ export default function WeekGrid() {
       </Toolbar>
 
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+      {toast && <Toast tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
 
       {state.idle && <EmptyState icon="fa-table-cells-large" title="Pick a class and week" hint="Load a whole week as a grid — handy for catching up a backlog. Loaded grids cache for offline use." />}
       {state.loading && <Spinner label="Loading week…" />}

@@ -214,6 +214,36 @@ export function Banner({ tone = 'info', children, onClose }) {
   );
 }
 
+// Floating, auto-dismissing confirmation pinned to the bottom of the viewport —
+// so feedback for an action (e.g. Save) is visible right where the button is,
+// no scrolling up to find it. Auto-closes after a few seconds.
+export function Toast({ tone = 'success', children, onClose, duration = 4000 }) {
+  useEffect(() => {
+    if (!onClose) return undefined;
+    const t = setTimeout(onClose, duration);
+    return () => clearTimeout(t);
+  }, [onClose, duration]);
+  const tones = {
+    info: ['#1e40af', '#eff6ff'], success: ['#166534', '#f0fdf4'],
+    warn: ['#92400e', '#fffbeb'], error: ['#991b1b', '#fef2f2'],
+  };
+  const [fg, bg] = tones[tone] || tones.success;
+  const icon = { success: 'fa-circle-check', warn: 'fa-triangle-exclamation', error: 'fa-circle-xmark', info: 'fa-circle-info' }[tone] || 'fa-circle-check';
+  return (
+    <div role="status" aria-live="polite" style={{
+      position: 'fixed', left: '50%', bottom: 'max(20px, env(safe-area-inset-bottom))',
+      transform: 'translateX(-50%)', zIndex: 3000, background: bg, color: fg,
+      border: '1px solid ' + fg + '33', borderRadius: 10, padding: '.7rem 1rem',
+      boxShadow: '0 8px 28px rgba(0,0,0,.18)', display: 'flex', gap: 10, alignItems: 'center',
+      fontSize: 14, fontWeight: 600, maxWidth: '92vw' }}>
+      <i className={'fas ' + icon} aria-hidden="true" />
+      <span>{children}</span>
+      {onClose && <button type="button" aria-label="Dismiss" onClick={onClose}
+        style={{ background: 'none', border: 'none', color: fg, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>}
+    </div>
+  );
+}
+
 export function Pill({ tone = 'gray', children }) {
   const t = {
     green: ['#dcfce7', '#166534'], red: ['#fee2e2', '#991b1b'],

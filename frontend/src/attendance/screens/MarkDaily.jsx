@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiGet, apiPost, isPermanent } from '../../lib/api';
 import { cachePut, cacheGet, enqueue } from '../../lib/offline';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill } from '../../components/ui';
+import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
 
 const key = (aid, date) => `roster|${aid}|${date}`;
 
@@ -37,6 +37,7 @@ export default function MarkDaily() {
   const [state, setState] = useState({ idle: true });   // idle | loading | data | error
   const [present, setPresent] = useState({});
   const [msg, setMsg] = useState(null);
+  const [toast, setToast] = useState(null);   // floating save confirmation (no scroll)
   const [busy, setBusy] = useState(false);
   const [weekCached, setWeekCached] = useState(false);
 
@@ -108,10 +109,10 @@ export default function MarkDaily() {
     setBusy(true);
     try {
       const r = await apiPost('/attendance/api/mark', payload);
-      setMsg({ tone: 'success', text: `Saved ${r.count} student(s).` });
+      setToast({ tone: 'success', text: `Saved ${r.count} student(s) — ${session}.` });
     } catch (e) {
-      if (isPermanent(e)) { setMsg({ tone: 'error', text: `Couldn’t save: ${e.message}` }); }
-      else { await enqueue('/attendance/api/mark', payload); await sync.refresh(); setMsg({ tone: 'warn', text: 'Offline — queued, will sync when you reconnect.' }); }
+      if (isPermanent(e)) { setToast({ tone: 'error', text: `Couldn’t save: ${e.message}` }); }
+      else { await enqueue('/attendance/api/mark', payload); await sync.refresh(); setToast({ tone: 'warn', text: 'Offline — queued, will sync when you reconnect.' }); }
     } finally { setBusy(false); }
   };
 
@@ -154,6 +155,7 @@ export default function MarkDaily() {
       </Toolbar>
 
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
+      {toast && <Toast tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
 
       {state.idle && <EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class and date to load its register. Loaded classes are cached so you can re-open them offline." />}
       {state.loading && <Spinner label="Loading register…" />}
