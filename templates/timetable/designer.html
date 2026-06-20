@@ -434,10 +434,17 @@ function clearRows(){ if(rows.length && !confirm('Clear all sessions?')) return;
 // Some quick-add columns have a recognisable value shape — used to re-align a
 // line that's missing a comma so later values don't shift into the wrong field.
 var TT_STRONG={date:1,day:1,time:1,dur:1};
+// Day names incl. common abbreviations (Tue/Tues/Wed/Weds/Thu/Thur/Thurs…),
+// each mapped to its canonical full name so sorting/grouping stays consistent.
+var DAY_ALIAS={mon:'Monday',monday:'Monday',tue:'Tuesday',tues:'Tuesday',tuesday:'Tuesday',
+    wed:'Wednesday',weds:'Wednesday',wednesday:'Wednesday',thu:'Thursday',thur:'Thursday',
+    thurs:'Thursday',thursday:'Thursday',fri:'Friday',friday:'Friday',sat:'Saturday',
+    saturday:'Saturday',sun:'Sunday',sunday:'Sunday'};
+function canonDay(v){ return DAY_ALIAS[(v||'').trim().toLowerCase().replace(/\.+$/,'')] || (v||'').trim(); }
 function ttLooks(field, v){
     v=(v||'').trim(); if(!v) return false;
     if(field==='date') return !!parseDateAny(v);
-    if(field==='day') return DAY_ORDER.indexOf(v.charAt(0).toUpperCase()+v.slice(1).toLowerCase())>=0;
+    if(field==='day') return !!DAY_ALIAS[v.toLowerCase().replace(/\.+$/,'')];
     if(field==='time'){ var m=v.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
         if(!m) return false; var h=+m[1]; return m[3]?(h>=1&&h<=12):(h>=0&&h<=23); }
     if(field==='dur') return /^\d{1,3}$/.test(v);
@@ -448,7 +455,9 @@ function ttLooks(field, v){
 // value doesn't match its shape (or a free-text field sitting on a value that
 // clearly belongs to a later typed field) is treated as omitted and a blank is
 // inserted — so e.g. a missing Class/Stream no longer shoves the time into the
-// duration column. Correctly-sized lines are returned unchanged.
+// duration column. A present-but-empty cell (e.g. a leading ", " to skip the
+// date) is a real blank value and is kept in place. Correctly-sized lines are
+// returned unchanged, and trailing fields (e.g. Teacher) may simply be left off.
 function realignBulk(parts, fields){
     parts=parts.slice(); var n=fields.length;
     if(parts.length>=n) return parts;
@@ -459,6 +468,7 @@ function realignBulk(parts, fields){
         var f=fields[fi];
         if(ci>=parts.length){ out.push(''); continue; }
         var cell=(parts[ci]||'').trim(), short=(parts.length-ci)<(n-fi);
+        if(cell===''){ out.push(parts[ci]); ci++; continue; }   // present-but-blank value
         if(TT_STRONG[f]){
             if(ttLooks(f,cell)){ out.push(parts[ci]); ci++; }
             else out.push('');                       // typed value omitted here
@@ -482,7 +492,9 @@ function bulkAdd(){
         fields.forEach(function(f,idx){
             if(idx<parts.length){
                 var val=(parts[idx]||'').trim();
-                r[f] = (f==='time') ? normTime(val) : (f==='date' ? toISO(val) : val);
+                r[f] = (f==='time') ? normTime(val)
+                     : (f==='date') ? toISO(val)
+                     : (f==='day') ? canonDay(val) : val;
             }
         });
         if(r.date && !r.day){ var a=dayFromDate(r.date); if(a) r.day=a; }
