@@ -79,3 +79,40 @@ def test_add_and_delete_expense_json(app):
     assert d['ok']
     with app.app_context():
         assert db.session.get(ContributionExpense, eid) is None
+
+
+def test_access_post_requires_csrf(app):
+    """The access form must carry a CSRF token (it's a state-changing POST)."""
+    c = app.test_client()
+    token = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': token})
+    # No token -> rejected by the global CSRF guard.
+    assert c.post('/contributions/access', data={'access_code': ACCESS_CODE}).status_code == 400
+    # The standalone access page now embeds the token so the form works.
+    page = c.get('/contributions/access').get_data(as_text=True)
+    assert 'name="_csrf_token"' in page
+
+
+def test_configurable_access_password(app):
+    """An admin inside the module can change the access password; the new one
+    works and the default stops working."""
+    c = _client(app)
+    r = c.post('/contributions/settings', headers={'X-Requested-With': 'fetch'},
+               data={'max_due': '20000', 'start_date': '2025-01-06',
+                     'access_code': 'newpass99', '_csrf_token': _ptoken(c)}).get_json()
+    assert r['ok']
+    with app.app_context():
+        assert ContributionSettings.get('access_code') == 'newpass99'
+    # A fresh session: the new password grants access...
+    c2 = app.test_client()
+    tok = login_token(c2)
+    c2.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    assert c2.post('/contributions/access', data={'access_code': 'newpass99', '_csrf_token': tok},
+                   follow_redirects=False).status_code in (302, 303)
+    assert c2.get('/contributions/settings').status_code == 200
+    # ...and the old default no longer does.
+    c3 = app.test_client()
+    tok3 = login_token(c3)
+    c3.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok3})
+    c3.post('/contributions/access', data={'access_code': ACCESS_CODE, '_csrf_token': tok3})
+    assert c3.get('/contributions/settings', follow_redirects=False).status_code in (302, 303)

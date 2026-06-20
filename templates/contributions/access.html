@@ -97,6 +97,7 @@
         {% endwith %}
         
         <form method="POST">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <input type="password" name="access_code" placeholder="••••••••" autofocus required>
             </div>

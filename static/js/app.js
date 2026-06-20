@@ -349,9 +349,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Theme
     setTheme(getPreferredTheme());
 
-    // Hide write controls on view-only pages
+    // Hide write controls on view-only pages (and again after each soft-nav swap,
+    // since the page body is replaced without a full reload).
     hideWriteControls();
-    
+    window.addEventListener('spa:loaded', function () { try { hideWriteControls(); } catch (e) {} });
+
     // Mobile menu
     const menuBtn = document.getElementById('mobileMenuBtn');
     if (menuBtn) menuBtn.addEventListener('click', openSidebar);

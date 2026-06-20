@@ -7,6 +7,16 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 export const NavCtx = createContext({ go: (u) => { window.location = u; }, refresh: () => {} });
 export const useNav = () => useContext(NavCtx);
 
+// Global soft-navigation coordination: the app-wide `spa-nav.js` layer can swap
+// the whole page (e.g. when the sidebar menu is used to jump to another section).
+// When it does, any section mounted into the now-detached DOM must stop reacting
+// to history events. Each loaded bundle keeps its own generation counter; a swap
+// bumps it, so handlers captured before the swap become no-ops.
+let _navGen = 0;
+if (typeof window !== 'undefined') {
+  window.addEventListener('spa:swapping', () => { _navGen += 1; });
+}
+
 // Build a section URL with query params and navigate to it (no reload).
 export function navParams(go, url, params) {
   const qs = new URLSearchParams(params).toString();
@@ -48,7 +58,11 @@ export function useSection(initial) {
   }, []);
 
   useEffect(() => {
-    const onPop = () => fetchPage(window.location.href).then(setData).catch(() => {});
+    const myGen = _navGen;   // if a global swap happens later, this instance is stale
+    const onPop = () => {
+      if (_navGen !== myGen) return;   // the page was swapped out by the global nav
+      fetchPage(window.location.href).then(setData).catch(() => {});
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);

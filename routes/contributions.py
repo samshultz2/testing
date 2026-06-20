@@ -14,8 +14,14 @@ from sqlalchemy import func
 
 contributions_bp = Blueprint('contributions', __name__, url_prefix='/contributions')
 
-ACCESS_CODE = "64665842"
+DEFAULT_ACCESS_CODE = "64665842"
 SESSION_KEY = "contributions_access"
+
+
+def _access_code():
+    """The current access code: a configurable value stored in settings, or the
+    built-in default when none has been set (so nobody is ever locked out)."""
+    return ContributionSettings.get('access_code', DEFAULT_ACCESS_CODE) or DEFAULT_ACCESS_CODE
 
 
 def contributions_access_required(f):
@@ -81,7 +87,7 @@ def _urls():
 def access_page():
     if request.method == 'POST':
         code = request.form.get('access_code', '').strip()
-        if code == ACCESS_CODE:
+        if code and code == _access_code():
             session[SESSION_KEY] = True
             flash('Access granted!', 'success')
             return redirect(url_for('contributions.dashboard'))
@@ -498,6 +504,10 @@ def settings():
             start_date = request.form.get('start_date', '2025-01-06')
             ContributionSettings.set('max_due', max_due)
             ContributionSettings.set('start_date', start_date)
+            # Optional: change the access password. Blank = keep the current one.
+            new_code = (request.form.get('access_code') or '').strip()
+            if new_code:
+                ContributionSettings.set('access_code', new_code)
         except Exception as e:
             return _err(f'Error: {str(e)}', url_for('contributions.settings'))
         return _ok('Settings updated', url_for('contributions.settings'))
@@ -505,6 +515,7 @@ def settings():
     start_date = ContributionSettings.get('start_date', '2025-01-06')
     return _render({
         'page': 'settings', 'max_due': max_due, 'start_date': start_date,
+        'has_custom_code': ContributionSettings.get('access_code') is not None,
         'submit_url': url_for('contributions.settings'),
         'back_url': url_for('contributions.dashboard'),
     })

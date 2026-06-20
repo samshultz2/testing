@@ -1400,7 +1400,9 @@ def edit_student(student_id):
 @admin_required
 def delete_student(student_id):
     """Delete a student (soft delete)"""
+    from utils.access_control import assert_student_access
     student = db.get_or_404(Student, student_id)
+    assert_student_access(student)   # no deleting another branch's/class's student by id
 
     try:
         student.is_active = False

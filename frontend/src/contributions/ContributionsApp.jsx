@@ -489,9 +489,9 @@ function AddExpense({ d, notify }) {
 function Settings({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
-  const [f, setF] = useState({ max_due: d.max_due, start_date: d.start_date });
+  const [f, setF] = useState({ max_due: d.max_due, start_date: d.start_date, access_code: '' });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => nav.refresh()); };
+  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => { setF({ ...f, access_code: '' }); nav.refresh(); }); };
   return (
     <>
       <div className="page-header"><h1><i className="fas fa-cog" /> Contribution Settings</h1></div>
@@ -502,6 +502,10 @@ function Settings({ d, notify }) {
         <div className="form-group"><label className="form-label">Start Date (Week 1)</label>
           <input type="date" className="form-control" value={f.start_date} onChange={set('start_date')} />
           <small className="text-muted">The date when Week 1 starts (for weekly breakdown)</small></div>
+        <div className="form-group"><label className="form-label">Access Password</label>
+          <input type="password" className="form-control" value={f.access_code} onChange={set('access_code')}
+            placeholder={d.has_custom_code ? 'Leave blank to keep current' : 'Set a password (replaces the default)'} autoComplete="new-password" />
+          <small className="text-muted">The password required to open this Contributions module. {d.has_custom_code ? 'A custom password is set.' : 'Currently using the built-in default.'} Leave blank to keep it unchanged.</small></div>
         <div className="form-actions">
           <button type="submit" className="btn btn-primary"><i className="fas fa-save" /> Save Settings</button>
           <A to={d.back_url} className="btn btn-secondary">Cancel</A>

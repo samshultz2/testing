@@ -61,6 +61,15 @@ def _err(message, redirect_url=None, status=400):
     return redirect(redirect_url or url_for('cbt.dashboard'))
 
 
+def _exam_403(exam_id):
+    """Load a staff-managed CBT exam by id, enforcing branch access so a guessed
+    id can't reach another branch's exam (central users still see everything)."""
+    from utils.branch_scope import require_branch_access
+    e = db.get_or_404(CBTExam, exam_id)
+    require_branch_access(e.branch_id)
+    return e
+
+
 def _nav_urls():
     return {'dashboard': url_for('cbt.dashboard'), 'add_exam': url_for('cbt.add_exam'),
             'bank': url_for('cbt.bank'), 'passwords': url_for('cbt.passwords'),
@@ -262,7 +271,7 @@ def add_exam():
 @cbt_bp.route('/exams/<int:exam_id>')
 @login_required
 def exam_detail(exam_id):
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     questions = e.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     return render_template('cbt/exam_detail.html', e=e, questions=questions)
 
@@ -270,7 +279,7 @@ def exam_detail(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_exam(exam_id):
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     if request.method == 'POST':
         _read_exam(e)
         db.session.commit()
@@ -282,7 +291,7 @@ def edit_exam(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/publish', methods=['POST'])
 @login_required
 def toggle_publish(exam_id):
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     if not e.is_published and e.question_count == 0:
         flash('Add at least one question before publishing.', 'error')
         return redirect(url_for('cbt.exam_detail', exam_id=e.id))
@@ -297,7 +306,7 @@ def toggle_publish(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/delete', methods=['POST'])
 @admin_required
 def delete_exam(exam_id):
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     db.session.delete(e)
     db.session.commit()
     flash('Exam deleted.', 'success')
@@ -307,7 +316,7 @@ def delete_exam(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/questions/add', methods=['POST'])
 @login_required
 def add_question(exam_id):
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     text = (request.form.get('question_text') or '').strip()
     correct = (request.form.get('correct_option') or '').strip().upper()
     if not text or correct not in ('A', 'B', 'C', 'D'):
@@ -334,7 +343,7 @@ def add_question(exam_id):
 def import_questions_file(exam_id):
     """Bulk-add questions to an exam from an uploaded Excel/CSV file."""
     from utils import cbt_import
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     f = request.files.get('file')
     if not f or not f.filename:
         flash('Choose an Excel or CSV file.', 'error')
@@ -362,7 +371,7 @@ def import_questions_file(exam_id):
 @login_required
 def import_from_bank(exam_id):
     """Pick questions from the bank to copy into an exam."""
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     if request.method == 'POST':
         ids = request.form.getlist('bank_id', type=int)
         nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
@@ -516,7 +525,7 @@ def bank_template():
 @cbt_bp.route('/exams/<int:exam_id>/results')
 @login_required
 def results(exam_id):
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     attempts = (e.attempts.join(Student).order_by(Student.surname, Student.first_name).all())
     submitted = [a for a in attempts if a.status == 'Submitted']
     avg = round(sum(a.score for a in submitted) / len(submitted), 1) if submitted else 0
@@ -555,7 +564,7 @@ def results(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/monitor')
 @login_required
 def monitor(exam_id):
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     # Central users get a branch filter (CBT is school-wide); branch users are
     # already scoped to their own branch.
     from utils.branch_scope import is_central
@@ -592,7 +601,7 @@ def monitor_data(exam_id):
     fingerprints/attempts can be filtered by branch to make tracking easier.
     Branch users are always restricted to their own branch.
     """
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     now = timeutil.now()
     qcount = e.question_count
     # Resolve the branch filter: branch users -> their branch; a central user may
@@ -757,7 +766,7 @@ def _safe_sheet_title(text):
 @login_required
 def results_export(exam_id):
     from openpyxl import Workbook
-    e = db.get_or_404(CBTExam, exam_id)
+    e = _exam_403(exam_id)
     wb = Workbook()
     ws = wb.active
     ws.title = _safe_sheet_title(e.subject.name if e.subject else 'Results')
