@@ -12,7 +12,7 @@ from models import (
 )
 from utils.access_control import (
     login_required, admin_required, central_admin_required, is_admin, is_teacher,
-    get_accessible_class_ids, is_sss3_form_teacher
+    get_accessible_class_ids, is_sss3_form_teacher, page_can_write
 )
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
@@ -893,7 +893,13 @@ def _students_payload():
     per_page = min(request.args.get('per_page', 20, type=int) or 20, 100)
     pg = _students_query().paginate(page=page, per_page=per_page, error_out=False)
     class_map = _page_class_map(pg.items)
-    can_manage = not is_teacher()   # teachers get a read-only list
+    # Edit/delete follow the user's WRITE permission on the students module. A
+    # form teacher with write access can manage their own class's students (the
+    # routes enforce form-class scope); a view-only user gets a read-only list.
+    can_manage = page_can_write()
+    # Registering a brand-new student stays with admins/registrar staff — a
+    # teacher adding one wouldn't see it (their list is form-class scoped).
+    can_add = can_manage and not is_teacher()
     students = [{
         'id': s.id,
         'student_id': s.student_id,
@@ -934,7 +940,7 @@ def _students_payload():
             'subjects': list(WAEC_SUBJECTS),
         },
         'can_manage': can_manage,
-        'can_add': can_manage,
+        'can_add': can_add,
         'can_admin': is_admin(),   # admin-only bulk tools (add subject / delete)
         # Mass-assign gender/stream: admins and teachers (teachers are scoped to
         # their own form students server-side).
@@ -1197,7 +1203,9 @@ def _student_view_payload(student):
     contacts = student.parent_contacts.all()
     discipline = sorted(student.discipline_records.all(), key=lambda r: (r.date or date.min), reverse=True)
     clinic = sorted(student.clinic_visits.all(), key=lambda v: (v.date or date.min), reverse=True)
-    can_manage = not is_teacher()
+    # Edit/welfare controls follow write permission (the route already enforces
+    # branch + form-class scope), so a form teacher can manage their own student.
+    can_manage = page_can_write()
     sid = student.id
     return {
         'student': {
@@ -1396,9 +1404,11 @@ def edit_student(student_id):
 
 
 @main_bp.route('/students/<int:student_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_student(student_id):
-    """Delete a student (soft delete)"""
+    """Soft-delete a student. A form teacher may delete their own class's
+    students (write permission is enforced by enforce_write_level; form-class
+    scope by assert_student_access) — not another class's or branch's."""
     from utils.access_control import assert_student_access
     student = db.get_or_404(Student, student_id)
     assert_student_access(student)   # no deleting another branch's/class's student by id
