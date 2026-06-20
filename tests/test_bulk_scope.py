@@ -55,6 +55,6 @@ def test_teacher_payload_bulk_but_not_admin(app):
         j = c.get('/api/students?per_page=5').get_json()
         assert j['can_bulk'] is True      # can mass-assign (their class)
         assert j['can_admin'] is False    # but not the admin-only delete/subject
-        assert j['can_add'] is False
+        assert j['can_add'] is True
     finally:
         _deactivate(app)

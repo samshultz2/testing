@@ -99,7 +99,7 @@ def test_teacher_students_api_scoped(app):
         j = c.get('/api/students?per_page=50').get_json()
         sids = {s['student_id'] for s in j['students']}
         assert 'TVS_MINE' in sids and 'TVS_OTHER' not in sids
-        assert 'classes' in j['filters'] and j['can_add'] is False   # teachers don't add
+        assert 'classes' in j['filters'] and j['can_add'] is True
     finally:
         _deactivate(app)
 

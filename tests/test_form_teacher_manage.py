@@ -19,6 +19,12 @@ def test_form_teacher_can_manage_and_add(app):
 
 def test_form_teacher_added_student_is_auto_enrolled(app):
     ids = _seed_teacher_and_students(app)
+    from models import Term
+    with app.app_context():   # make the teacher's term the sole active one
+        prior = {t.id: t.is_active for t in Term.query.all()}
+        Term.query.update({Term.is_active: False})
+        Term.query.filter_by(name='TVS-Term').update({Term.is_active: True})
+        db.session.commit()
     c = _login_teacher(app)
     try:
         r = c.post('/students/add', headers={'X-Requested-With': 'fetch'}, data={
@@ -37,7 +43,9 @@ def test_form_teacher_added_student_is_auto_enrolled(app):
                 s.enrollments.delete()
                 s.parent_contacts.delete()
                 db.session.delete(s)
-                db.session.commit()
+            for t in Term.query.all():     # restore prior active-term state
+                t.is_active = prior.get(t.id, False)
+            db.session.commit()
         _deactivate(app)
 
 
