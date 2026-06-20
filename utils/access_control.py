@@ -671,6 +671,19 @@ def can_view_student_details():
     return False
 
 
+def is_sss3_form_teacher():
+    """True if the current user is a teacher who is form teacher of an SSS3 class
+    (gates the SSS3-only WAEC subject filter/tools)."""
+    teacher = get_teacher_profile()
+    if not teacher:
+        return False
+    for caa_id in teacher.form_class_ids:
+        caa = db.session.get(ClassArmAssignment, caa_id)
+        if caa and caa.school_class and caa.school_class.name == 'SSS3':
+            return True
+    return False
+
+
 def auto_select_assignment(assignments):
     """The class a form teacher should land on by default.
 

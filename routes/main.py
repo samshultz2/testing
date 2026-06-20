@@ -12,7 +12,7 @@ from models import (
 )
 from utils.access_control import (
     login_required, admin_required, central_admin_required, is_admin, is_teacher,
-    get_accessible_class_ids
+    get_accessible_class_ids, is_sss3_form_teacher
 )
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
@@ -935,7 +935,12 @@ def _students_payload():
         },
         'can_manage': can_manage,
         'can_add': can_manage,
-        'can_admin': is_admin(),   # admin-only bulk tools (set stream / add subject / delete)
+        'can_admin': is_admin(),   # admin-only bulk tools (add subject / delete)
+        # Mass-assign gender/stream: admins and teachers (teachers are scoped to
+        # their own form students server-side).
+        'can_bulk': is_admin() or is_teacher(),
+        # The SSS3-only WAEC subject filter/tools: admins + SSS3 form teachers.
+        'can_sss3': is_admin() or is_sss3_form_teacher(),
         'add_url': url_for('main.add_student'),
         'import_url': url_for('main.import_students'),
         'enrolment': _student_form_options(with_enrolment=True)['enrolment'] if can_manage else None,
@@ -1410,10 +1415,25 @@ def delete_student(student_id):
     return redirect(url_for('main.students_list'))
 
 
+def _manageable_student_ids(ids):
+    """Restrict a list of student ids to those the current user may bulk-edit:
+    branch-scoped, and a teacher only their own form-class students. Prevents a
+    crafted id list from touching another branch's (or class's) students."""
+    from utils.branch_scope import scope_query
+    from utils.access_control import teacher_form_student_ids
+    allowed = {s.id for s in scope_query(
+        Student.query.filter(Student.id.in_(ids)), Student).all()}
+    tids = teacher_form_student_ids()
+    if tids is not None:
+        allowed &= tids
+    return [i for i in ids if i in allowed]
+
+
 @main_bp.route('/students/bulk-stream', methods=['POST'])
-@admin_required
+@login_required
 def bulk_set_stream():
-    """Set the stream/track for several students at once."""
+    """Set the stream/track for several students at once (scoped to the caller's
+    students — a teacher is limited to their own form class)."""
     stream = request.form.get('stream') or None
     student_ids = request.form.getlist('student_ids')
 
@@ -1426,6 +1446,9 @@ def bulk_set_stream():
         ids = [int(i) for i in student_ids]
     except (TypeError, ValueError):
         return jsonify({'error': 'Invalid student ids'}), 400
+    ids = _manageable_student_ids(ids)
+    if not ids:
+        return jsonify({'error': 'No students you can edit were selected'}), 403
 
     updated = Student.query.filter(Student.id.in_(ids)).update(
         {Student.stream: stream}, synchronize_session=False
@@ -1455,9 +1478,10 @@ def bulk_set_stream():
 
 
 @main_bp.route('/students/bulk-gender', methods=['POST'])
-@admin_required
+@login_required
 def bulk_set_gender():
-    """Set the gender for several students at once."""
+    """Set the gender for several students at once (scoped to the caller's
+    students — a teacher is limited to their own form class)."""
     gender = request.form.get('gender') or None
     student_ids = request.form.getlist('student_ids')
 
@@ -1469,6 +1493,9 @@ def bulk_set_gender():
         ids = [int(i) for i in student_ids]
     except (TypeError, ValueError):
         return jsonify({'error': 'Invalid student ids'}), 400
+    ids = _manageable_student_ids(ids)
+    if not ids:
+        return jsonify({'error': 'No students you can edit were selected'}), 403
 
     updated = Student.query.filter(Student.id.in_(ids)).update(
         {Student.gender: gender}, synchronize_session=False

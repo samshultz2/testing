@@ -65,7 +65,9 @@ export default function App({ initial }) {
   const students = d.students || [];
   const filters = d.filters || {};
   const canManage = !!d.can_manage;
-  const canAdmin = !!d.can_admin;   // admin-only bulk tools
+  const canAdmin = !!d.can_admin;   // admin-only bulk tools (subject / delete)
+  const canBulk = !!d.can_bulk;     // mass-assign gender/stream (admins + teachers, scoped)
+  const canSss3 = !!d.can_sss3;     // SSS3-only WAEC subject filter/tools
   const setFilter = (k, v) => setQuery((q) => ({ ...q, [k]: v, page: 1 }));
   const goPage = (p) => setQuery((q) => ({ ...q, page: p }));
   const hasFilters = !!(search || query.gender || query.religion || query.stream
@@ -159,12 +161,12 @@ export default function App({ initial }) {
               {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
-          <Field label="WAEC subject (SSS3)">
+          {canSss3 && <Field label="WAEC subject (SSS3)">
             <select className="form-control" value={query.subject} onChange={(e) => setFilter('subject', e.target.value)}>
               <option value="">All</option>
               {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
-          </Field>
+          </Field>}
           <Field label="Sort by">
             <select className="form-control" value={query.sort + '|' + query.order}
                     onChange={(e) => { const [s, o] = e.target.value.split('|'); setQuery((q) => ({ ...q, sort: s, order: o, page: 1 })); }}>
@@ -188,7 +190,7 @@ export default function App({ initial }) {
         <span className="stu-count">{selectedIds.length ? `${selectedIds.length} selected · ` : ''}{d.total || 0} student(s){loading ? ' · loading…' : ''}</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(true)}><i className="fas fa-download" /> Export</button>
-          {canAdmin && <>
+          {canBulk && <>
             <select className="form-control" style={{ width: 'auto' }} value={bulkGender} onChange={(e) => setBulkGender(e.target.value)} aria-label="Bulk gender">
               <option value="">Set gender…</option>
               <option value="Male">Male</option>
@@ -202,15 +204,17 @@ export default function App({ initial }) {
             </select>
             <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStream} title="Also fills WAEC subjects from the stream where not already set"
                     onClick={() => needSel() && runAction(d.bulk_stream_url, { stream: bulkStream, student_ids: selectedIds }, 'Stream updated.')}>Apply</button>
-            <select className="form-control" style={{ width: 'auto' }} value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} aria-label="Bulk WAEC subject">
-              <option value="">Add WAEC subject…</option>
-              {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkSubject} title="SSS3 students only"
-                    onClick={() => needSel() && runAction(d.bulk_subject_url, { subject: bulkSubject, student_ids: selectedIds }, 'Subject added.')}>Add (SSS3)</button>
-            <button type="button" className="btn btn-danger btn-sm"
+            {canSss3 && <>
+              <select className="form-control" style={{ width: 'auto' }} value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} aria-label="Bulk WAEC subject">
+                <option value="">Add WAEC subject…</option>
+                {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <button type="button" className="btn btn-primary btn-sm" disabled={!bulkSubject} title="SSS3 students only"
+                      onClick={() => needSel() && runAction(d.bulk_subject_url, { subject: bulkSubject, student_ids: selectedIds }, 'Subject added.')}>Add (SSS3)</button>
+            </>}
+            {canAdmin && <button type="button" className="btn btn-danger btn-sm"
                     onClick={() => needSel() && window.confirm(`Delete ${selectedIds.length} selected student(s)?`)
-                      && runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.')}><i className="fas fa-trash" /> Delete selected</button>
+                      && runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.')}><i className="fas fa-trash" /> Delete selected</button>}
           </>}
         </span>
       </div>
