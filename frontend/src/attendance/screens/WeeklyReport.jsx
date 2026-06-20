@@ -9,9 +9,10 @@ import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequire
 // attendance rate, student/school-day/roll-call counts, week totals (AM/PM/
 // combined, male/female, max possible) and a per-student daily breakdown.
 export default function WeeklyReport() {
-  const { classes = [], weeks = [], online, sync = {} } = useCtx();
-  const [assignmentId, setAssignmentId] = useState('');
-  const [weekId, setWeekId] = useState(weeks.length ? String(weeks[0].id) : '');
+  const { classes = [], weeks = [], online, sync = {}, default_class, default_week } = useCtx();
+  const [assignmentId, setAssignmentId] = useState(default_class ? String(default_class) : '');
+  const [weekId, setWeekId] = useState(
+    default_week ? String(default_week) : (weeks.length ? String(weeks[0].id) : ''));
 
   // Don't compute the report until any marks queued offline have been flushed,
   // otherwise a reconnect could show server stats that omit this week's marks.

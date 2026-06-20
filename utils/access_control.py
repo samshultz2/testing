@@ -583,6 +583,27 @@ def can_mark_attendance(class_arm_assignment_id=None):
     return False
 
 
+def can_view_attendance(class_arm_assignment_id=None):
+    """Check if current user can VIEW attendance for a class.
+
+    A teacher may view attendance only for the class they are *form teacher* of
+    — not subject classes they merely teach in (mirrors marking). Admins and
+    other non-teacher staff keep their branch/section scope. Use on every
+    attendance view route/report so a guessed class id can't reveal another
+    class's register.
+    """
+    if class_arm_assignment_id is not None and not can_access_class(class_arm_assignment_id):
+        return False
+    if is_admin():
+        return True
+    teacher = get_teacher_profile()
+    if teacher:                       # actual teachers: their form class(es) only
+        if class_arm_assignment_id is None:
+            return True
+        return teacher.is_form_teacher_of(class_arm_assignment_id)
+    return True                       # non-teacher staff: branch/section scope above
+
+
 def can_enter_results(class_arm_assignment_id=None, subject_id=None):
     """Check if current user can enter results"""
     # Branch/section gate first (applies to admins too).

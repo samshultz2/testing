@@ -11,8 +11,8 @@ const round1 = (n) => Math.round(n * 10) / 10;
 // attendance rate, counts, gender table, session (AM/PM) table, term info,
 // performance bands and the per-student weekly breakdown with totals.
 export default function TermlyReport() {
-  const { classes = [], term, online, sync = {} } = useCtx();
-  const [assignmentId, setAssignmentId] = useState('');
+  const { classes = [], term, online, sync = {}, default_class } = useCtx();
+  const [assignmentId, setAssignmentId] = useState(default_class ? String(default_class) : '');
 
   // Wait for queued offline marks to flush before computing the report.
   const pending = sync.pending || 0;

@@ -7,10 +7,12 @@ import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner
 const key = (aid, wid) => `week|${aid}|${wid}`;
 
 export default function WeekGrid() {
-  const { classes = [], weeks = [], sync, initial } = useCtx();
+  const { classes = [], weeks = [], sync, initial, default_class, default_week } = useCtx();
   const seeded = initial && classes.some((c) => String(c.id) === String(initial.assignmentId));
-  const [assignmentId, setAssignmentId] = useState(seeded ? String(initial.assignmentId) : '');
-  const [weekId, setWeekId] = useState(weeks[0] ? String(weeks[0].id) : '');
+  const [assignmentId, setAssignmentId] = useState(
+    seeded ? String(initial.assignmentId) : (default_class ? String(default_class) : ''));
+  const [weekId, setWeekId] = useState(
+    default_week ? String(default_week) : (weeks[0] ? String(weeks[0].id) : ''));
   const [split, setSplit] = useState(false);
   const [state, setState] = useState({ idle: true });
   const [marks, setMarks] = useState({});           // {eid: {date: {am, pm}}}

@@ -6,8 +6,9 @@ import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequire
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
-  const { classes = [], today, online, sync = {} } = useCtx();
-  const [assignmentId, setAssignmentId] = useState('');
+  const { classes = [], today, online, sync = {}, default_class } = useCtx();
+  // A form teacher lands on their own class without picking it.
+  const [assignmentId, setAssignmentId] = useState(default_class ? String(default_class) : '');
   const [date, setDate] = useState(today || '');
 
   // Wait for queued offline marks to flush before computing the summary.
@@ -21,6 +22,15 @@ export default function DailySummary() {
     [assignmentId, date, online, syncing]
   );
 
+  // Whole-week breakdown: every school day at a glance (no date-by-date picking).
+  const [week] = useAsync(
+    () => (ready
+      ? apiGet(`/attendance/api/report/week-totals?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`)
+      : Promise.resolve(null)),
+    [assignmentId, date, online, syncing]
+  );
+
+  const pct = (present, total) => (total ? Math.round(present / total * 100) : 0);
   const d = state.data;
   const flag = (v) => v == null ? <Pill tone="gray">—</Pill>
     : v ? <Pill tone="green">Present</Pill> : <Pill tone="red">Absent</Pill>;
@@ -45,6 +55,37 @@ export default function DailySummary() {
         : state.error ? <ErrorState detail={state.error.message} />
         : d && (
           <>
+            {week.data && week.data.days && week.data.days.length > 0 && (
+              <div className="att-grid-wrap" style={{ marginBottom: 14 }}>
+                <table className="att-grid" aria-label="This week at a glance">
+                  <thead>
+                    <tr>
+                      <th scope="col" colSpan="6" style={{ textAlign: 'left' }}>
+                        <i className="fas fa-calendar-week" aria-hidden="true" /> This week at a glance{week.data.week_number ? ` — Week ${week.data.week_number}` : ''}
+                      </th>
+                    </tr>
+                    <tr>
+                      <th scope="col">Day</th><th scope="col">AM present</th><th scope="col">AM absent</th>
+                      <th scope="col">PM present</th><th scope="col">PM absent</th><th scope="col">AM %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {week.data.days.map((wd) => (
+                      <tr key={wd.date} className={wd.date === date ? 'is-active' : ''}>
+                        <td><button type="button" onClick={() => setDate(wd.date)}
+                          style={{ background: 'none', border: 'none', padding: 0, color: '#0d6a4e', fontWeight: 600, cursor: 'pointer' }}>
+                          {new Date(wd.date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </button></td>
+                        <td>{wd.am_present}</td><td>{wd.am_absent}</td>
+                        <td>{wd.pm_present}</td><td>{wd.pm_absent}</td>
+                        <td><Pill tone={pct(wd.am_present, wd.total) >= 75 ? 'green' : pct(wd.am_present, wd.total) >= 50 ? 'amber' : 'red'}>{pct(wd.am_present, wd.total)}%</Pill></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
               <strong>{d.class_name}</strong>
               <span style={{ color: '#6b7280' }}>{new Date(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>

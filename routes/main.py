@@ -788,24 +788,18 @@ def _students_query():
     # Branch + section/stream scope first.
     query = scope_query(Student.query.filter_by(is_active=True), Student)
     query = scope_students(query)
-
-    # Teachers are further limited to their assigned classes; other non-admin
-    # roles rely on the branch/section/stream scope above.
     active_term = get_active_term()
-    if is_teacher() and active_term:
-        accessible_class_ids = get_accessible_class_ids()
-        if accessible_class_ids:
-            query = query.join(
-                StudentEnrollment, Student.id == StudentEnrollment.student_id
-            ).join(
-                ClassArmAssignment,
-                StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id
-            ).filter(
-                ClassArmAssignment.term_id == active_term.id,
-                ClassArmAssignment.id.in_(accessible_class_ids)
-            )
+
+    # Teachers see only the students they are FORM teacher of — not every class
+    # they merely teach a subject in. Other non-admin roles rely on the
+    # branch/section/stream scope above.
+    if is_teacher():
+        from utils.access_control import teacher_form_student_ids
+        form_ids = teacher_form_student_ids()   # set of their form-class student ids
+        if form_ids:
+            query = query.filter(Student.id.in_(form_ids))
         else:
-            query = query.filter(Student.id == -1)   # no accessible classes
+            query = query.filter(Student.id == -1)   # not a form teacher of anyone
 
     if search:
         search_term = f"%{search}%"

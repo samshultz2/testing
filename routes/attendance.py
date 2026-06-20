@@ -10,7 +10,7 @@ from models import (
     Week, Holiday, Attendance, Term, AcademicSession
 )
 from utils.access_control import (
-    login_required, can_access_class, can_mark_attendance,
+    login_required, can_access_class, can_mark_attendance, can_view_attendance,
     filter_classes_for_user, can_access_module, auto_select_assignment
 )
 from utils.branch_scope import require_branch_access
@@ -56,7 +56,7 @@ def mark_attendance_page():
         return redirect(url_for('main.dashboard'))
     
     # Check class access if class is selected
-    if assignment_id and not can_access_class(assignment_id):
+    if assignment_id and not can_view_attendance(assignment_id):
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('attendance.mark_attendance_page'))
     
@@ -249,7 +249,7 @@ def week_grid():
         weeks = Week.query.filter_by(term_id=term_id).order_by(Week.week_number).all()
         holidays = Holiday.query.filter_by(term_id=term_id).all()
 
-    if assignment_id and not can_access_class(assignment_id):
+    if assignment_id and not can_view_attendance(assignment_id):
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('attendance.week_grid'))
 
@@ -408,7 +408,7 @@ def daily_summary():
     week_days = []   # per-day breakdown for the whole school week, at a glance
 
     if assignment_id:
-        if not can_access_class(assignment_id):
+        if not can_view_attendance(assignment_id):   # teachers: their form class only
             flash('You do not have access to this class.', 'error')
             return redirect(url_for('attendance.daily_summary'))
         selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
@@ -544,7 +544,7 @@ def weekly_summary():
     week_id = request.args.get('week_id', type=int)
     
     # Check class access
-    if assignment_id and not can_access_class(assignment_id):
+    if assignment_id and not can_view_attendance(assignment_id):
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('attendance.weekly_summary'))
     
@@ -596,7 +596,7 @@ def export_weekly():
 
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     require_branch_access(assignment.branch_id)
-    if not can_access_class(assignment_id):
+    if not can_view_attendance(assignment_id):   # teachers: their form class only
         abort(403)
     week = db.get_or_404(Week, week_id)
 
@@ -625,7 +625,7 @@ def termly_summary():
     term_id = request.args.get('term_id', type=int)
     
     # Check class access
-    if assignment_id and not can_access_class(assignment_id):
+    if assignment_id and not can_view_attendance(assignment_id):
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('attendance.termly_summary'))
     
@@ -676,7 +676,7 @@ def export_termly():
 
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     require_branch_access(assignment.branch_id)
-    if not can_access_class(assignment_id):
+    if not can_view_attendance(assignment_id):   # teachers: their form class only
         abort(403)
     term = db.get_or_404(Term, term_id)
 
@@ -843,7 +843,7 @@ def export_termly():
 def api_daily_summary(assignment_id, date_str):
     """API endpoint for daily attendance summary"""
     require_branch_access(db.get_or_404(ClassArmAssignment, assignment_id).branch_id)
-    if not can_access_class(assignment_id):
+    if not can_view_attendance(assignment_id):   # teachers: their form class only
         return jsonify({'error': 'forbidden'}), 403
     try:
         target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -862,7 +862,7 @@ def api_check_attendance():
     
     if not assignment_id or not target_date:
         return jsonify({'exists': False})
-    if not can_access_class(assignment_id):
+    if not can_view_attendance(assignment_id):   # teachers: their form class only
         return jsonify({'error': 'forbidden'}), 403
 
     target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
@@ -1043,17 +1043,27 @@ def api_context():
              for t in Term.query.join(AcademicSession)
              .order_by(AcademicSession.name.desc(), Term.term_number).all()]
     classes, weeks, holidays = [], [], []
+    default_class, default_week = None, None
     if term:
-        classes = [{'id': a.id, 'name': a.display_name} for a in filter_classes_for_user(
-            ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)]
+        form_classes = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
+        classes = [{'id': a.id, 'name': a.display_name} for a in form_classes]
+        week_rows = Week.query.filter_by(term_id=term.id).order_by(Week.week_number).all()
         weeks = [{'id': w.id, 'number': w.week_number,
                   'start': w.start_date.isoformat(), 'end': w.end_date.isoformat()}
-                 for w in Week.query.filter_by(term_id=term.id).order_by(Week.week_number).all()]
+                 for w in week_rows]
         holidays = [h.date.isoformat() for h in Holiday.query.filter_by(term_id=term.id).all()]
+        # Pre-selection: a form teacher lands on their class; everyone on the
+        # current week.
+        default_class = auto_select_assignment(form_classes)
+        cw = pick_current_week(week_rows)
+        default_week = cw.id if cw else None
     return jsonify({
         'term': {'id': term.id, 'name': term.full_name} if term else None,
         'terms': terms, 'classes': classes, 'weeks': weeks, 'holidays': holidays,
         'today': date.today().isoformat(),
+        'default_class': default_class,   # form teacher's class (SPA auto-selects)
+        'default_week': default_week,     # current week (SPA auto-selects)
         'can_mark': can_mark_attendance(),   # gates the marking tabs in the SPA
     })
 
@@ -1222,7 +1232,7 @@ def _scoped_caa(assignment_id):
     if not caa:
         return None, (jsonify({'error': 'invalid assignment'}), 400)
     require_branch_access(caa.branch_id)
-    if not can_access_class(caa.id):
+    if not can_view_attendance(caa.id):   # teachers: their form class only
         return None, (jsonify({'error': 'forbidden'}), 403)
     return caa, None
 
@@ -1249,6 +1259,39 @@ def api_report_daily():
         'holiday': {'reason': hol.reason, 'type': hol.holiday_type} if hol else None,
         **_jsonable(summary),
     })
+
+
+@attendance_bp.route('/api/report/week-totals')
+@login_required
+def api_week_totals():
+    """Per-day attendance totals for the whole school week containing a date, so
+    the daily summary can show every day at a glance instead of one at a time."""
+    caa, err = _scoped_caa(request.args.get('assignment_id', type=int))
+    if err:
+        return err
+    ds = request.args.get('date')
+    try:
+        on = datetime.strptime(ds, '%Y-%m-%d').date() if ds else date.today()
+    except Exception:
+        return jsonify({'error': 'bad date'}), 400
+    weeks = Week.query.filter_by(term_id=caa.term_id).order_by(Week.week_number).all()
+    week = pick_current_week(weeks, on=on)
+    days = []
+    if week:
+        holiday_dates = {h.date for h in Holiday.query.filter_by(term_id=caa.term_id).all()}
+        today = date.today()
+        d = week.start_date
+        while d <= week.end_date:
+            if d.weekday() < 5 and d not in holiday_dates and d <= today:
+                s = get_daily_attendance_summary(caa.id, d)
+                days.append({
+                    'date': d.isoformat(),
+                    'total': s['total_students'],
+                    'am_present': s['morning_present'], 'am_absent': s['morning_absent'],
+                    'pm_present': s['afternoon_present'], 'pm_absent': s['afternoon_absent'],
+                })
+            d += timedelta(days=1)
+    return jsonify({'week_number': week.week_number if week else None, 'days': days})
 
 
 @attendance_bp.route('/api/report/weekly')
@@ -1575,7 +1618,7 @@ def print_register():
         assignments = filter_classes_for_user(
             ClassArmAssignment.query.filter_by(term_id=term_id).all(), form_only=True)
 
-    if assignment_id and not can_access_class(assignment_id):
+    if assignment_id and not can_view_attendance(assignment_id):
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('attendance.print_register'))
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None

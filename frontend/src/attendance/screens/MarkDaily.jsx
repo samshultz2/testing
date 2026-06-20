@@ -25,10 +25,12 @@ function weekdays(iso) {
 const initialsOf = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 
 export default function MarkDaily() {
-  const { classes = [], today, online, sync, initial } = useCtx();
+  const { classes = [], today, online, sync, initial, default_class } = useCtx();
   // Seed from a deep link only when that class belongs to the loaded term.
   const seeded = initial && classes.some((c) => String(c.id) === String(initial.assignmentId));
-  const [assignmentId, setAssignmentId] = useState(seeded ? String(initial.assignmentId) : '');
+  // A form teacher lands on their own class without picking it.
+  const [assignmentId, setAssignmentId] = useState(
+    seeded ? String(initial.assignmentId) : (default_class ? String(default_class) : ''));
   const [date, setDate] = useState((seeded && initial.date) || today || '');
   const [session, setSession] = useState('morning');    // morning | afternoon
   const [autoCopyPm, setAutoCopyPm] = useState(true);   // morning also seeds afternoon
