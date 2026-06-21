@@ -14,14 +14,17 @@ from sqlalchemy import func
 
 contributions_bp = Blueprint('contributions', __name__, url_prefix='/contributions')
 
-DEFAULT_ACCESS_CODE = "64665842"
 SESSION_KEY = "contributions_access"
 
 
 def _access_code():
-    """The current access code: a configurable value stored in settings, or the
-    built-in default when none has been set (so nobody is ever locked out)."""
-    return ContributionSettings.get('access_code', DEFAULT_ACCESS_CODE) or DEFAULT_ACCESS_CODE
+    """The configured access code, or None if an administrator has not set one.
+
+    There is deliberately NO built-in default: a shared, source-visible code is
+    no protection. Until an admin sets one, only admins can enter the module
+    (to configure it)."""
+    code = ContributionSettings.get('access_code', None)
+    return code.strip() if isinstance(code, str) and code.strip() else None
 
 
 def contributions_access_required(f):
@@ -73,8 +76,20 @@ def access_page():
     if not session.get('logged_in'):
         return redirect(url_for('auth.login'))
     if request.method == 'POST':
+        import secrets
+        from utils.access_control import is_admin
+        configured = _access_code()
         code = request.form.get('access_code', '').strip()
-        if code and code == _access_code():
+        if configured is None:
+            # Not configured yet: let an admin in to bootstrap a code; others wait.
+            if is_admin():
+                session[SESSION_KEY] = True
+                flash('Access granted. Please set an access code in Settings so '
+                      'other staff can use this module.', 'success')
+                return redirect(url_for('contributions.settings'))
+            flash('This module has not been set up yet. Please ask an '
+                  'administrator to configure an access code.', 'error')
+        elif code and secrets.compare_digest(code, configured):
             session[SESSION_KEY] = True
             flash('Access granted!', 'success')
             return redirect(url_for('contributions.dashboard'))

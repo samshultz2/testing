@@ -17,9 +17,10 @@ exposure, infrastructure). **Method:** code review of `config.py`, `routes/*.py`
 - **Contributions hardened (the one finding):** the hidden contributions module
   was gated by a shared access code only and was reachable anonymously. It now
   requires a logged-in staff session *first* (the code is a second factor), and
-  the wholesale `clear-all` op is **admin-only** and audit-logged. (The
-  hardcoded default access code `64665842` remains for backward-compat now that
-  login is required — flagged for follow-up.)
+  the wholesale `clear-all` op is **admin-only** and audit-logged. The hardcoded
+  default access code has been **removed entirely** (a source-visible shared code
+  is no protection): until an admin configures one, only admins may enter the
+  module to set it; the code check uses constant-time comparison.
 - **Permission groups** added: a `PermissionGroup` template provides a user's
   base module permissions; per-user overrides win ('none' revokes a group
   grant). Branch-scoped (central templates + own-branch groups). Full CRUD UI

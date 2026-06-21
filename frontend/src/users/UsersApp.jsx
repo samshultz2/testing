@@ -78,7 +78,9 @@ function Matrix({ d, notify }) {
   const save = useSave(notify);
   const [rows, setRows] = useState(() => {
     const m = {};
-    d.users.forEach((u) => { m[u.id] = { perms: { ...u.perms }, view_only: u.view_only }; });
+    // For grouped users the cells edit per-user OVERRIDES (so leaving a cell on
+    // "Inherit" keeps the group's grant live); for others, their own perms.
+    d.users.forEach((u) => { m[u.id] = { perms: { ...(u.group_name ? u.own_perms : u.perms) }, view_only: u.view_only }; });
     return m;
   });
   const setCell = (uid, key, val) => setRows((r) => ({ ...r, [uid]: { ...r[uid], perms: { ...r[uid].perms, [key]: val } } }));
@@ -101,7 +103,7 @@ function Matrix({ d, notify }) {
         <h1><i aria-hidden="true" className="fas fa-table-cells" /> Permission Matrix</h1>
         <div className="page-header-actions"><A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
       </div>
-      <p className="matrix-note"><i aria-hidden="true" className="fas fa-info-circle" /> Per cell: <strong>—</strong> no access, <strong>V</strong> view only, <strong>E</strong> view &amp; edit. A user with no cells set falls back to their role's default. <strong>Admins</strong> always have full access (shown for reference). The <strong>View only</strong> column forces every section read-only.</p>
+      <p className="matrix-note"><i aria-hidden="true" className="fas fa-info-circle" /> Per cell: <strong>—</strong> no access, <strong>V</strong> view only, <strong>E</strong> view &amp; edit. For a user in a <strong><i aria-hidden="true" className="fas fa-layer-group" /> group</strong>, the first option (<strong>·V</strong>/<strong>·E</strong>/<strong>·—</strong>) means <em>inherit</em> the group's level and <strong>✕</strong> revokes it; V/E override it. A user with no cells set falls back to their group or role default. <strong>Admins</strong> always have full access. The <strong>View only</strong> column forces every section read-only.</p>
       <form onSubmit={submit}>
         <div className="card"><div className="card-body matrix-wrap">
           <table className="matrix">
@@ -119,14 +121,22 @@ function Matrix({ d, notify }) {
                 </tr>
               ) : (
                 <tr key={u.id}>
-                  <td className="user"><A to={u.view_url}>{u.name}</A> <span className="badge badge-secondary">{u.display_role}</span></td>
-                  {d.modules.map((m) => (
+                  <td className="user"><A to={u.view_url}>{u.name}</A> <span className="badge badge-secondary">{u.display_role}</span>
+                    {u.group_name && <div className="text-sm text-muted"><i aria-hidden="true" className="fas fa-layer-group" /> {u.group_name}</div>}</td>
+                  {d.modules.map((m) => {
+                    const g = u.group_name ? u.group_perms[m.key] : null;
+                    return (
                     <td key={m.key}>
-                      <select className="matrix-sel" value={rows[u.id].perms[m.key] || ''} onChange={(e) => setCell(u.id, m.key, e.target.value)}>
-                        <option value="">—</option><option value="view">V</option><option value="edit">E</option>
+                      <select className="matrix-sel" value={rows[u.id].perms[m.key] || ''} onChange={(e) => setCell(u.id, m.key, e.target.value)}
+                        title={u.group_name ? `Group grants: ${g ? (g === 'edit' ? 'edit' : 'view') : 'none'}` : undefined}>
+                        {u.group_name
+                          ? <option value="">{g ? (g === 'edit' ? '·E' : '·V') : '·—'}</option>
+                          : <option value="">—</option>}
+                        <option value="view">V</option><option value="edit">E</option>
+                        {u.group_name && <option value="none">✕</option>}
                       </select>
                     </td>
-                  ))}
+                  ); })}
                   <td><input type="checkbox" checked={rows[u.id].view_only} onChange={(e) => setView(u.id, e.target.checked)} /></td>
                 </tr>
               )))}

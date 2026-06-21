@@ -277,10 +277,11 @@ def matrix():
             before = (dict(u.permission_map), bool(u.view_only))
             new_perms = _read_perms(request.form, prefix=f'perm_{u.id}_')
             # The matrix grid doesn't manage capability sub-sections — keep any
-            # the user already has so a coarse save can't wipe them.
+            # the user holds as their OWN override so a coarse save can't wipe
+            # them (group-inherited caps are left to the group, not frozen here).
             for ck in CAPABILITY_SUBSECTIONS:
-                if ck in u.permission_map:
-                    new_perms[ck] = u.permission_map[ck]
+                if ck in u.own_permissions:
+                    new_perms[ck] = u.own_permissions[ck]
             u.set_permissions(restrict_grant_perms(new_perms, u))
             u.view_only = request.form.get(f'view_{u.id}') == 'on'
             after = (dict(u.permission_map), bool(u.view_only))
@@ -303,6 +304,9 @@ def matrix():
             'id': u.id, 'name': u.full_name or u.username,
             'display_role': u.get_display_role(), 'is_admin': u.role == 'admin',
             'view_only': bool(u.view_only), 'perms': dict(u.permission_map),
+            'own_perms': dict(u.own_permissions),
+            'group_perms': (u.permission_group.permission_map if u.permission_group else {}),
+            'group_name': (u.permission_group.name if u.permission_group else None),
             'view_url': url_for('users.view_user', user_id=u.id),
         } for u in users],
     })

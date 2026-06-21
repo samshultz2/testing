@@ -9,8 +9,16 @@ from tests.conftest import login_token
 ACCESS_CODE = '64665842'
 
 
+def _set_code(app, code=ACCESS_CODE):
+    """Ensure a known contributions access code is configured (shared test DB)."""
+    from models import ContributionSettings
+    with app.app_context():
+        ContributionSettings.set('access_code', code)
+
+
 def _client(app):
     """Logged-in client that has also passed the contributions access gate."""
+    _set_code(app)
     c = app.test_client()
     token = login_token(c)
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': token})
@@ -26,6 +34,7 @@ def _ptoken(client):
 
 
 def test_access_gate_blocks_then_grants(app):
+    _set_code(app)                       # a code IS configured for this test
     c = app.test_client()
     token = login_token(c)
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': token})
@@ -33,7 +42,7 @@ def test_access_gate_blocks_then_grants(app):
     # Without the code, the settings page bounces to the access page.
     r = c.get('/contributions/settings', follow_redirects=False)
     assert r.status_code in (302, 303) and '/contributions/access' in r.headers['Location']
-    # Wrong code stays out; right code lets the next request through.
+    # Wrong code stays out — even for an admin, once a code is configured.
     c.post('/contributions/access', data={'access_code': 'wrong', '_csrf_token': token})
     assert c.get('/contributions/settings', follow_redirects=False).status_code in (302, 303)
     c.post('/contributions/access', data={'access_code': ACCESS_CODE, '_csrf_token': token})
@@ -131,3 +140,19 @@ def test_access_page_requires_login(app):
     # And a protected route likewise bounces an anonymous client to login.
     r2 = c.get('/contributions/settings', follow_redirects=False)
     assert r2.status_code in (302, 303) and '/login' in r2.headers['Location']
+
+
+def test_unconfigured_module_lets_admin_bootstrap(app):
+    """With no code configured there is no built-in default: an admin is let in
+    (to set one) and steered to Settings; the posted value is irrelevant."""
+    _set_code(app, '')                   # simulate "not configured"
+    c = app.test_client()
+    token = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': token})
+    token = _ptoken(c)
+    r = c.post('/contributions/access',
+               data={'access_code': 'anything', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303) and '/contributions/settings' in r.headers['Location']
+    assert c.get('/contributions/settings').status_code == 200
+    _set_code(app)                       # restore for other tests
