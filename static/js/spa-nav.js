@@ -81,6 +81,10 @@
   function syncBodyScripts(doc) {
     // Page-specific scripts from {% block extra_js %} live in <body> outside
     // .page-content; re-run the destination's so per-page JS works after a swap.
+    // NOTE: these scripts re-execute in the global scope on every navigation, so
+    // page-level extra_js must NOT use top-level `const`/`let` (their lexical
+    // bindings persist across swaps and throw "already declared" on re-run) —
+    // use `var`/`function` at top level, which redeclare harmlessly.
     document.querySelectorAll('script[data-spa-extra]').forEach(function (n) { n.remove(); });
     var live = {};
     Array.prototype.forEach.call(document.body.querySelectorAll('script'),

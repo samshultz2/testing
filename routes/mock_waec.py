@@ -16,7 +16,8 @@ from models import db, Student, AcademicSession
 from models.mock_waec import (MockWAECExam, MockWAECResult, MockWAECAnalytics,
                               waec_grade_from_score, PASS_GRADES)
 from utils.helpers import (login_required, get_active_session, get_sss3_students,
-                           WAEC_SUBJECTS, WAEC_GRADES)
+                           WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS,
+                           STREAM_WAEC_SUBJECTS, student_subject_map)
 from utils.access_control import admin_required
 from utils.branch_scope import require_branch_access, branch_for_new, scope_query
 from utils.csrf import csrf_protect
@@ -190,6 +191,7 @@ def add_result(exam_id):
             return redirect(url_for('mock_waec.add_result', exam_id=exam_id))
         subjects = request.form.getlist('subject[]')
         scores = request.form.getlist('score[]')
+        grades = request.form.getlist('grade[]')
         saved = 0
         for i, subject in enumerate(subjects):
             subject = (subject or '').strip()
@@ -200,7 +202,10 @@ def add_result(exam_id):
                 score = max(0, min(100, int(raw)))
             except (TypeError, ValueError):
                 continue
-            _upsert_result(student_id, exam_id, subject, score)
+            # Honour an edited grade only if it's a valid WAEC grade; else derive.
+            supplied = (grades[i].strip().upper() if i < len(grades) else '')
+            grade = supplied if supplied in WAEC_GRADES else None
+            _upsert_result(student_id, exam_id, subject, score, grade)
             saved += 1
         db.session.commit()
         recompute_student_safe(student_id)
@@ -208,7 +213,9 @@ def add_result(exam_id):
         return redirect(url_for('mock_waec.view_exam', exam_id=exam_id))
 
     return render_template('mock_waec/add_result.html',
-        exam=exam, students=students, subjects=WAEC_SUBJECTS)
+        exam=exam, students=students, subjects=WAEC_SUBJECTS, grades=WAEC_GRADES,
+        default_subjects=WAEC_DEFAULT_SUBJECTS, stream_defaults=STREAM_WAEC_SUBJECTS,
+        subject_map=student_subject_map(students))
 
 
 # =============================================================================

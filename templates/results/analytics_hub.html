@@ -343,30 +343,49 @@
     {% endif %}
 </div>
 
+<!-- ============ MOCK WAEC PROGRESSION ============ -->
+<div class="section-title"><i class="fas fa-clipboard-check"></i> Mock WAEC Progression <span class="text-muted text-sm">(active session)</span></div>
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort credit trajectory</h3></div>
+    {% if mock_waec_trend %}
+    <div class="chart-wrap"><canvas id="mockWaecTrendChart"></canvas></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Mock</th><th>Students</th><th>Avg credits</th><th>&ge;5 credits</th></tr></thead>
+        <tbody>
+            {% for m in mock_waec_trend %}
+            <tr><td>{{ m.label }}</td><td>{{ m.students }}</td><td><strong>{{ m.avg_credits }}</strong></td><td>{{ m.with_5_credits_pct }}%</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock WAEC results recorded for the active session yet. <a href="{{ url_for('mock_waec.index') }}">Set up a mock exam &rarr;</a></div>
+    {% endif %}
+</div>
+
 {% endif %}
 </div><!-- /#analyticsContent -->
 
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
 <script>
-const baseOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} };
+var baseOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} };
 
 {% if jamb_stats %}
-const jd = {{ jamb_stats.distribution | tojson }};
+var jd = {{ jamb_stats.distribution | tojson }};
 new Chart(document.getElementById('jambDist'), {
     type:'bar',
     data:{ labels:Object.keys(jd), datasets:[{ data:Object.values(jd),
         backgroundColor:['#dc3545','#fd7e14','#ffc107','#20c997','#17a2b8','#007bff','#28a745'], borderRadius:5 }] },
     options:{ ...baseOpts, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
 });
-const js = {{ jamb_stats.subject_analysis[:10] | tojson }};
+var js = {{ jamb_stats.subject_analysis[:10] | tojson }};
 new Chart(document.getElementById('jambSubj'), {
     type:'bar',
     data:{ labels:js.map(s=>s.subject.slice(0,12)), datasets:[{ data:js.map(s=>s.mean_score),
         backgroundColor:js.map(s=>s.mean_score>=70?'#28a745':s.mean_score>=50?'#ffc107':'#dc3545'), borderRadius:5 }] },
     options:{ ...baseOpts, indexAxis:'y', scales:{ x:{ beginAtZero:true, max:100 } } }
 });
-const jg = {{ jamb_gender | tojson }};
+var jg = {{ jamb_gender | tojson }};
 new Chart(document.getElementById('jambGender'), {
     type:'doughnut',
     data:{ labels:Object.keys(jg), datasets:[{ data:Object.values(jg), backgroundColor:['#667eea','#f56991','#bdc3c7'] }] },
@@ -375,14 +394,14 @@ new Chart(document.getElementById('jambGender'), {
 {% endif %}
 
 {% if waec_stats %}
-const wg = {{ waec_stats.grade_distribution | tojson }};
+var wg = {{ waec_stats.grade_distribution | tojson }};
 new Chart(document.getElementById('waecGrades'), {
     type:'bar',
     data:{ labels:Object.keys(wg), datasets:[{ data:Object.values(wg),
         backgroundColor:['#28a745','#20c997','#17a2b8','#007bff','#6f42c1','#ffc107','#fd7e14','#e83e8c','#dc3545'], borderRadius:5 }] },
     options:{ ...baseOpts, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
 });
-const wgen = {{ waec_gender | tojson }};
+var wgen = {{ waec_gender | tojson }};
 new Chart(document.getElementById('waecGender'), {
     type:'doughnut',
     data:{ labels:Object.keys(wgen), datasets:[{ data:Object.values(wgen), backgroundColor:['#0891b2','#f56991','#bdc3c7'] }] },
@@ -390,8 +409,8 @@ new Chart(document.getElementById('waecGender'), {
 });
 {% endif %}
 
-const yoyJamb = {{ (yoy.jamb_trends if yoy else []) | tojson }};
-const yoyWaec = {{ (yoy.waec_trends if yoy else []) | tojson }};
+var yoyJamb = {{ (yoy.jamb_trends if yoy else []) | tojson }};
+var yoyWaec = {{ (yoy.waec_trends if yoy else []) | tojson }};
 if (document.getElementById('yoyChart')) {
     const yearsSet = [...new Set([...yoyJamb.map(t=>t.year), ...yoyWaec.map(t=>t.year)])].sort();
     new Chart(document.getElementById('yoyChart'), {
@@ -406,7 +425,7 @@ if (document.getElementById('yoyChart')) {
 }
 
 // Mock JAMB cohort trajectory across the session's mocks.
-const mockTrend = {{ mock_trend | tojson }};
+var mockTrend = {{ mock_trend | tojson }};
 if (document.getElementById('mockTrendChart') && mockTrend.length) {
     new Chart(document.getElementById('mockTrendChart'), {
         type:'line',
@@ -419,9 +438,23 @@ if (document.getElementById('mockTrendChart') && mockTrend.length) {
     });
 }
 
+// Mock WAEC cohort trajectory: average credits + % reaching 5 credits per mock.
+var mockWaecTrend = {{ mock_waec_trend | tojson }};
+if (document.getElementById('mockWaecTrendChart') && mockWaecTrend.length) {
+    new Chart(document.getElementById('mockWaecTrendChart'), {
+        type:'line',
+        data:{ labels:mockWaecTrend.map(m=>m.label), datasets:[
+            { label:'Average credits', data:mockWaecTrend.map(m=>m.avg_credits), borderColor:'#0ea5e9', backgroundColor:'rgba(14,165,233,.12)', tension:.3, fill:true, yAxisID:'y' },
+            { label:'% with 5+ credits', data:mockWaecTrend.map(m=>m.with_5_credits_pct), borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.1)', tension:.3, yAxisID:'y1' }
+        ]},
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+            scales:{ y:{ position:'left', max:9, title:{display:true,text:'Credits /9'} }, y1:{ position:'right', max:100, grid:{drawOnChartArea:false}, title:{display:true,text:'% with 5+'} } } }
+    });
+}
+
 // Gender comparison charts
 {% if jamb_gender_stats %}
-const jgc = {{ jamb_gender_stats | tojson }};
+var jgc = {{ jamb_gender_stats | tojson }};
 new Chart(document.getElementById('jambGenderCmp'), {
     type:'bar',
     data:{ labels:jgc.map(g=>g.gender), datasets:[
@@ -433,7 +466,7 @@ new Chart(document.getElementById('jambGenderCmp'), {
 });
 {% endif %}
 {% if waec_gender_stats %}
-const wgc = {{ waec_gender_stats | tojson }};
+var wgc = {{ waec_gender_stats | tojson }};
 new Chart(document.getElementById('waecGenderCmp'), {
     type:'bar',
     data:{ labels:wgc.map(g=>g.gender), datasets:[

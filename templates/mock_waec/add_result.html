@@ -2,35 +2,112 @@
 {% block title %}Add Mock WAEC Result - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Add result</span>{% endblock %}
 
+{% block extra_css %}
+<style>
+.mw-row{display:grid;grid-template-columns:1fr 110px 110px;gap:.6rem;margin-bottom:.5rem;align-items:center}
+.mw-row.is-empty{display:none}
+.mw-head{display:grid;grid-template-columns:1fr 110px 110px;gap:.6rem;font-size:.8rem;color:var(--text-muted);font-weight:600;margin-bottom:.35rem}
+.entry-hint{display:flex;gap:.6rem;background:var(--primary-light);color:var(--primary);border-radius:8px;padding:.7rem 1rem;font-size:.85rem;margin-bottom:1rem;line-height:1.4}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header"><div><h1>Add result &mdash; {{ exam.display_name }}</h1>
-    <p class="text-muted text-sm">Enter a score (0&ndash;100) for each subject taken; blanks are skipped. Grades are auto-calculated.</p></div></div>
+<div class="page-header"><div><h1>Add result &mdash; {{ exam.display_name }}</h1></div></div>
 
-<div class="card" style="max-width:760px;">
-    <div class="card-body">
-        <form method="POST">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label class="form-label">Student <span class="text-danger">*</span></label>
-                <select name="student_id" class="form-control" required>
-                    <option value="">— Select SSS3 student —</option>
-                    {% for s in students %}<option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>{% endfor %}
-                </select>
-            </div>
+<div class="card" style="max-width:680px;"><div class="card-body">
+{% if students %}
+    <form method="POST">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label class="form-label">Student <span class="text-danger">*</span></label>
+            <select name="student_id" id="studentSelect" class="form-control" required>
+                <option value="">— Select SSS3 student —</option>
+                {% for s in students %}<option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>{% endfor %}
+            </select>
+        </div>
 
-            <div class="subject-grid" style="display:grid;grid-template-columns:1fr 110px;gap:.5rem;align-items:center;">
-                {% for subj in subjects %}
-                <label class="mb-0">{{ subj }}</label>
-                <input type="number" min="0" max="100" name="score[]" class="form-control" placeholder="—">
-                <input type="hidden" name="subject[]" value="{{ subj }}">
-                {% endfor %}
-            </div>
+        <div class="entry-hint"><i class="fas fa-circle-info"></i>
+            <span>Subjects fill from the student's registered WAEC subjects. Enter a score (0&ndash;100) &mdash; the grade is auto-calculated and can be overridden if it's wrong. Blank scores are skipped.</span>
+        </div>
 
-            <div class="d-flex gap-2 mt-3">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save results</button>
-                <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary">Cancel</a>
-            </div>
-        </form>
+        <div class="mw-head"><span>Subject</span><span>Score</span><span>Grade</span></div>
+        {% for i in range(12) %}
+        <div class="mw-row is-empty">
+            <select name="subject[]" class="form-control mw-subject">
+                <option value="">Select Subject</option>
+                {% for subj in subjects %}<option value="{{ subj }}">{{ subj }}</option>{% endfor %}
+            </select>
+            <input type="number" min="0" max="100" name="score[]" class="form-control mw-score" placeholder="—">
+            <select name="grade[]" class="form-control mw-grade">
+                <option value="">—</option>
+                {% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+            </select>
+        </div>
+        {% endfor %}
+
+        <div class="page-header-actions mt-3">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save results</button>
+            <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+{% else %}
+    <div class="empty-state"><i class="fas fa-user-slash"></i>
+        <p>No SSS3 students found for the current term. Set up SSS3 class enrolment first.</p>
+        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-primary">Back</a>
     </div>
-</div>
+{% endif %}
+</div></div>
+
+<script>
+(function () {
+    var SUBJECT_MAP = {{ subject_map | tojson }};
+    var DEFAULTS = {{ default_subjects | tojson }};
+    var STREAM_DEFAULTS = {{ stream_defaults | tojson }};
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.mw-row'));
+
+    function gradeFromScore(v) {
+        if (v === '' || v === null || isNaN(v)) return '';
+        var s = Math.max(0, Math.min(100, parseInt(v, 10)));
+        if (s >= 75) return 'A1'; if (s >= 70) return 'B2'; if (s >= 65) return 'B3';
+        if (s >= 60) return 'C4'; if (s >= 55) return 'C5'; if (s >= 50) return 'C6';
+        if (s >= 45) return 'D7'; if (s >= 40) return 'E8'; return 'F9';
+    }
+
+    function subjectsForStudent(entry) {
+        if (!entry) return DEFAULTS;
+        if (entry.waec && entry.waec.length) return entry.waec;          // registered subjects win
+        if (entry.stream && STREAM_DEFAULTS[entry.stream]) return STREAM_DEFAULTS[entry.stream];
+        return DEFAULTS;
+    }
+
+    function applySubjects(list) {
+        list = list || [];
+        rows.forEach(function (row, idx) {
+            var subj = list[idx] || '';
+            row.querySelector('.mw-subject').value = subj;
+            row.classList.toggle('is-empty', !subj);   // only show rows with a subject
+            if (!subj) {
+                row.querySelector('.mw-score').value = '';
+                row.querySelector('.mw-grade').value = '';
+            }
+        });
+    }
+
+    // Score -> auto-derive grade (unless the user has hand-edited that grade).
+    rows.forEach(function (row) {
+        var score = row.querySelector('.mw-score');
+        var grade = row.querySelector('.mw-grade');
+        score.addEventListener('input', function () {
+            if (grade.dataset.touched) return;
+            grade.value = gradeFromScore(score.value);
+        });
+        grade.addEventListener('change', function () { grade.dataset.touched = '1'; });
+    });
+
+    var sel = document.getElementById('studentSelect');
+    if (sel) sel.addEventListener('change', function () {
+        applySubjects(subjectsForStudent(SUBJECT_MAP[this.value]));
+    });
+})();
+</script>
 {% endblock %}

@@ -127,8 +127,8 @@
 
 {% block extra_js %}
 <script>
-const allSubjects = {{ subjects|tojson }};
-const grades = {{ grades|tojson }};
+var allSubjects = {{ subjects|tojson }};
+var grades = {{ grades|tojson }};
 
 function addSubject() {
     const subjectSelect = document.getElementById('newSubject');

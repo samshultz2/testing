@@ -191,7 +191,7 @@
 {% block extra_js %}
 <script>
 {% if year_comparison and year_comparison|length > 1 %}
-const yoyCtx = document.getElementById('yoyChart').getContext('2d');
+var yoyCtx = document.getElementById('yoyChart').getContext('2d');
 new Chart(yoyCtx, {
     type: 'line',
     data: {

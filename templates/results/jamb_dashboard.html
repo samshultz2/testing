@@ -858,9 +858,9 @@
 <script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
 <script>
 // Student data for export
-const studentsData = {{ students|tojson }};
-const selectedYear = {{ selected_year|tojson }};
-const schoolStats = {{ school_stats|tojson if school_stats else 'null' }};
+var studentsData = {{ students|tojson }};
+var selectedYear = {{ selected_year|tojson }};
+var schoolStats = {{ school_stats|tojson if school_stats else 'null' }};
 
 // Show export modal
 function exportAsImage() {

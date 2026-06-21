@@ -1363,8 +1363,28 @@ def analytics_hub():
         cutoff=cutoff,
         at_risk=_at_risk_register(limit=25),
         mock_trend=_mock_jamb_trend(bid),
+        mock_waec_trend=_mock_waec_trend(bid),
         recompute_url=url_for('results.recompute_analytics'),
     )
+
+
+def _mock_waec_trend(branch_id):
+    """School-level Mock WAEC progression for the active session (branch-scoped):
+    one point per mock exam, showing whether the cohort is climbing toward the
+    5-credit WASSCE benchmark."""
+    from models.mock_waec import MockWAECAnalytics
+    session = get_active_session()
+    if not session:
+        return []
+    out = []
+    for c in MockWAECAnalytics.compare_mock_exams(session.id, branch_id):
+        out.append({
+            'label': c['exam'].display_name,
+            'avg_credits': c['avg_credits'],
+            'students': c['student_count'],
+            'with_5_credits_pct': c['with_5_credits_pct'],
+        })
+    return out
 
 
 def _mock_jamb_trend(branch_id):
