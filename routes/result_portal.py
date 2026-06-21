@@ -135,8 +135,26 @@ def publish(term_id):
                   f'Term results were {state} on the result portal.',
                   url=url_for('scratchcards.index'),
                   category='success' if term.results_published else 'info')
-    # Optionally notify parents (uses the existing bulk-SMS compose flow).
+    # Optionally notify parents: queue a *Draft* SMS campaign for staff to review
+    # and send (never auto-dispatched). Falls back to the compose page if there
+    # are no reachable parents.
     if term.results_published and request.form.get('notify') == 'on':
+        from flask import session
+        from utils import comms
+        from models import MessageTemplate
+        tpl = MessageTemplate.query.filter(MessageTemplate.name.ilike('%result%'),
+                                           MessageTemplate.is_active == True).first()
+        body = tpl.body if tpl else (
+            'Dear {parent}, {term} results for {student} have been released. '
+            'Please check the result portal. - {school}')
+        draft = comms.create_draft_campaign(
+            body, audience='all', term=term,
+            title=f'Results released: {term.full_name}',
+            created_by=session.get('username') or 'system')
+        if draft:
+            flash(f'Results for {term.full_name} are now released.', 'success')
+            flash('A draft SMS to parents is ready — review the recipients and send.', 'info')
+            return redirect(url_for('comms.message_detail', message_id=draft.id))
         flash(f'Results for {term.full_name} are now {state}.', 'success')
         flash('Send this SMS to notify parents that results are released.', 'info')
         return redirect(url_for('comms.compose', audience='all', notice='results'))

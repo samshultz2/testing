@@ -273,3 +273,44 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
             'balance': balances.get(s.id),
         })
     return out
+
+
+def create_draft_campaign(body, *, audience='all', term=None, title=None,
+                          channel='SMS', class_id=None, arm_id=None,
+                          student_ids=None, created_by='system'):
+    """Create a *Draft* campaign (status='Draft') with one personalised recipient
+    per reachable parent in ``audience``.
+
+    A Draft is never auto-dispatched (only 'Scheduled' campaigns are), so this is
+    safe to call from automated triggers: it queues an SMS for a human to review
+    and send. Returns the Message, or None when the body is empty or no recipient
+    has a phone number.
+    """
+    from models import Message, MessageRecipient
+    from utils.branch_scope import branch_for_new
+
+    body = (body or '').strip()
+    if not body:
+        return None
+    targets = resolve_audience(audience, term, class_id=class_id, arm_id=arm_id,
+                               student_ids=student_ids or [])
+    reachable = [t for t in targets if t['phone']]
+    if not reachable:
+        return None
+
+    label = title or f'{audience.title()} ({len(reachable)})'
+    msg = Message(title=title or label, body=body, channel=channel,
+                  audience=audience, audience_label=label,
+                  term_id=term.id if term else None, branch_id=branch_for_new(),
+                  created_by=created_by, recipient_count=len(reachable),
+                  status='Draft', scheduled_at=None)
+    db.session.add(msg)
+    db.session.flush()
+    for t in reachable:
+        ctx = build_context(t['student'], term, t['parent_name'], t['balance'])
+        db.session.add(MessageRecipient(
+            message_id=msg.id, student_id=t['student'].id,
+            parent_name=t['parent_name'], phone=t['phone'],
+            body=render(body, ctx)))
+    db.session.commit()
+    return msg
