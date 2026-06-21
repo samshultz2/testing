@@ -53,3 +53,8 @@ pytest==8.3.3
 # Optional: enables the Claude-vision OCR fallback (set OCR_VISION_FALLBACK=1 and
 # ANTHROPIC_API_KEY). Not required for the default Tesseract OCR.
 # anthropic==0.69.0
+
+# Optional: external error monitoring via Sentry. Activate by installing this and
+# setting SENTRY_DSN (see utils/monitoring.py). The app runs fine without it —
+# the always-on in-app Error Log + email alerts need no extra packages.
+# sentry-sdk[flask]>=2.0

@@ -83,6 +83,13 @@ def create_app(config_class=None):
         for _w in config_class.security_warnings():
             print('SECURITY: ' + _w, file=sys.stderr)
 
+    # Optional Sentry error monitoring (opt-in via SENTRY_DSN; no-op otherwise).
+    try:
+        from utils.monitoring import init_sentry
+        init_sentry(app)
+    except Exception:
+        pass
+
     # Ensure instance folder exists
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'instance'), exist_ok=True)

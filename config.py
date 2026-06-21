@@ -113,6 +113,8 @@ class Config:
     # Minimum seconds between alert emails, so an error storm can't flood inboxes.
     ERROR_ALERT_MIN_INTERVAL = int(os.environ.get('ERROR_ALERT_MIN_INTERVAL', '900'))
     SENTRY_DSN = os.environ.get('SENTRY_DSN', '')  # empty => Sentry disabled
+    SENTRY_TRACES_SAMPLE_RATE = float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0') or 0)
+    SENTRY_ENVIRONMENT = os.environ.get('SENTRY_ENVIRONMENT', os.environ.get('APP_ENV', ''))
 
     # Field-level encryption at rest (AES-256-GCM). When set, sensitive
     # recoverable fields (e.g. student portal passwords) are encrypted in the
