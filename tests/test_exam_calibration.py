@@ -66,3 +66,28 @@ def test_calibration_empty_when_no_pairs(app):
         s = db.session.get(Student, sid)
         summary = EI.calibration_summary([s])
         assert summary['jamb']['n'] == 0 and summary['waec']['n'] == 0
+
+
+def test_calibration_query_count_bounded_for_empty_pool(app):
+    """Students with no results add no per-student queries — only the bulk loads."""
+    from sqlalchemy import event
+    from models import db
+
+    def count(n_students):
+        ids = [_student(app) for _ in range(n_students)]
+        with app.app_context():
+            students = [db.session.get(Student, i) for i in ids]
+            c = {'q': 0}
+            eng = db.engine
+
+            def before(*a, **k):
+                c['q'] += 1
+            event.listen(eng, 'before_cursor_execute', before)
+            try:
+                EI.calibration_summary(students)
+            finally:
+                event.remove(eng, 'before_cursor_execute', before)
+            return c['q']
+
+    # No valid pairs in either cohort -> query count must not grow with N.
+    assert count(2) == count(8)

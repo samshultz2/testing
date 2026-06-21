@@ -256,58 +256,84 @@ def cohort_readiness(students, session_id=None):
 # --------------------------------------------------------------------------- #
 # Mock -> real calibration
 # --------------------------------------------------------------------------- #
-def _student_pool(students):
+def _student_ids(students):
     if students is not None:
-        return students
+        return [s.id for s in students]
     from models import Student
-    return Student.query.all()
+    return [sid for (sid,) in db.session.query(Student.id).all()]
+
+
+def _latest_mock_session(model_result, model_exam, ids):
+    """Map student_id -> session_id of their highest-numbered mock sitting, via one
+    bulk query (so we don't probe per student)."""
+    from models import db
+    best = {}
+    for sid, session_id, num in (db.session.query(
+            model_result.student_id, model_exam.session_id, model_exam.exam_number)
+            .join(model_exam, model_result.mock_exam_id == model_exam.id)
+            .filter(model_result.student_id.in_(ids)).all()):
+        if sid not in best or num > best[sid][0]:
+            best[sid] = (num, session_id)
+    return {sid: v[1] for sid, v in best.items()}
 
 
 def jamb_calibration(students=None):
     """Measure how well the Mock JAMB predictor matched reality for students who
     have both mocks and an actual JAMB score. Returns ``n``, ``mae`` (mean
     absolute error), ``bias`` (mean predicted − actual; +ve = over-predicts) and
-    ``within_20_pct``. A consistent bias is the signal to recalibrate."""
+    ``within_tol_pct``. A consistent bias is the signal to recalibrate.
+
+    Bulk-loads actual scores and each student's latest mock session up front, so
+    the (expensive) per-student prediction runs only for students who have both."""
+    from models import db, JAMBResult
     from models.mock_jamb import MockJAMBAnalytics, MockJAMBResult, MockJAMBExam
+    ids = _student_ids(students)
+    if not ids:
+        return _error_summary([], 0, tol=20)
+    actual = {}
+    for sid, score in (db.session.query(JAMBResult.student_id, JAMBResult.total_score)
+                       .filter(JAMBResult.student_id.in_(ids),
+                               JAMBResult.total_score.isnot(None)).all()):
+        actual[sid] = max(actual.get(sid, score), score)
+    latest_session = _latest_mock_session(MockJAMBResult, MockJAMBExam, ids)
     errors, n = [], 0
-    for s in _student_pool(students):
-        real = [r.total_score for r in s.jamb_results.all() if r.total_score is not None]
-        if not real:
+    for sid in ids:
+        if sid not in actual or sid not in latest_session:
             continue
-        latest = (MockJAMBResult.query.filter_by(student_id=s.id).join(MockJAMBExam)
-                  .order_by(MockJAMBExam.exam_number.desc()).first())
-        if not latest:
-            continue
-        pred = MockJAMBAnalytics.predict_real_jamb(s.id, latest.exam.session_id)
+        pred = MockJAMBAnalytics.predict_real_jamb(sid, latest_session[sid])
         if not pred:
             continue
-        errors.append(pred['predicted_score'] - max(real))
+        errors.append(pred['predicted_score'] - actual[sid])
         n += 1
     return _error_summary(errors, n, tol=20)
 
 
 def waec_calibration(students=None):
     """As :func:`jamb_calibration` but for predicted vs actual WAEC *credit count*
-    (error tolerance ±1 credit)."""
+    (error tolerance ±1 credit). Same bulk-load-then-predict-valid-pairs shape."""
+    from models import db, WAECResult
     from models.mock_waec import (MockWAECAnalytics, MockWAECResult, MockWAECExam,
                                   PASS_GRADES as W_PASS)
+    from collections import defaultdict
+    ids = _student_ids(students)
+    if not ids:
+        return _error_summary([], 0, tol=1)
+    by_year = defaultdict(lambda: defaultdict(set))        # sid -> year -> credited subjects
+    for sid, year, subj, grade in (db.session.query(
+            WAECResult.student_id, WAECResult.exam_year, WAECResult.subject, WAECResult.grade)
+            .filter(WAECResult.student_id.in_(ids)).all()):
+        if grade in W_PASS:
+            by_year[sid][year].add(subj)
+    actual = {sid: max(len(s) for s in years.values()) for sid, years in by_year.items()}
+    latest_session = _latest_mock_session(MockWAECResult, MockWAECExam, ids)
     errors, n = [], 0
-    for s in _student_pool(students):
-        by_year = {}
-        for r in s.waec_results.all():
-            by_year.setdefault(r.exam_year, {})[r.subject] = r.grade
-        if not by_year:
+    for sid in ids:
+        if sid not in actual or sid not in latest_session:
             continue
-        actual = max(len({sub for sub, g in subs.items() if g in W_PASS})
-                     for subs in by_year.values())
-        latest = (MockWAECResult.query.filter_by(student_id=s.id).join(MockWAECExam)
-                  .order_by(MockWAECExam.exam_number.desc()).first())
-        if not latest:
-            continue
-        pred = MockWAECAnalytics.predict_waec(s.id, latest.exam.session_id)
+        pred = MockWAECAnalytics.predict_waec(sid, latest_session[sid])
         if not pred:
             continue
-        errors.append(pred['predicted_credits'] - actual)
+        errors.append(pred['predicted_credits'] - actual[sid])
         n += 1
     return _error_summary(errors, n, tol=1)
 
