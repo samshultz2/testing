@@ -6,7 +6,7 @@ from utils.helpers import get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, PromotionRule, PromotionRecord,
     Term, AcademicSession, SchoolClass, StudentScore, ClassSubject, Subject,
-    SchoolSettings
+    SchoolSettings, ClassArm
 )
 from utils.helpers import login_required, get_sss3_enrolled_students, safe_redirect
 from utils.access_control import admin_required
@@ -401,8 +401,21 @@ def process_promotion():
             students_data.sort(key=lambda x: x['average'] or 0, reverse=True)
     
     classes_json = [{'id': c.id, 'name': c.name} for c in classes]
+    # Streams (class arms) available per class, so the UI can prefill a dropdown
+    # for the chosen destination class. Falls back to the global stream list.
+    from utils.helpers import STREAMS
+    from collections import defaultdict
+    arm_pairs = (db.session.query(ClassArmAssignment.class_id, ClassArm.name)
+                 .join(ClassArm, ClassArmAssignment.arm_id == ClassArm.id)
+                 .filter(ClassArm.is_active.is_(True)).distinct().all())
+    class_streams = defaultdict(list)
+    for cid, arm_name in arm_pairs:
+        if arm_name and arm_name not in class_streams[cid]:
+            class_streams[cid].append(arm_name)
+    class_streams_json = {str(cid): sorted(names) for cid, names in class_streams.items()}
     return _render({
         'page': 'process', 'sessions': _sessions_json(), 'classes': classes_json,
+        'class_streams': class_streams_json, 'streams': list(STREAMS),
         'from_session_id': from_session_id or '', 'to_session_id': to_session_id or '',
         'class_id': class_id or '', 'threshold': promotion_threshold,
         'selected_class_name': selected_class.name if selected_class else '',
@@ -567,14 +580,21 @@ def enroll_promoted():
             ).first()
             
             arm_id = old_enrollment.class_arm_assignment.arm_id if old_enrollment else None
-            
-            # Find assignment for new class
-            assignment = ClassArmAssignment.query.filter_by(
-                term_id=first_term.id,
-                class_id=promo.to_class_id,
-                arm_id=arm_id
-            ).first()
-            
+
+            assignment = None
+            # Prefer the explicitly chosen stream (arm) for the destination class.
+            if promo.stream:
+                assignment = (ClassArmAssignment.query.join(ClassArm)
+                              .filter(ClassArmAssignment.term_id == first_term.id,
+                                      ClassArmAssignment.class_id == promo.to_class_id,
+                                      ClassArm.name == promo.stream).first())
+            # Otherwise keep the same arm as before.
+            if not assignment and arm_id is not None:
+                assignment = ClassArmAssignment.query.filter_by(
+                    term_id=first_term.id,
+                    class_id=promo.to_class_id,
+                    arm_id=arm_id
+                ).first()
             if not assignment:
                 # Try any arm
                 assignment = ClassArmAssignment.query.filter_by(

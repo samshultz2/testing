@@ -142,16 +142,42 @@ function AddRule({ d, notify }) {
 }
 
 // ---- Process ---------------------------------------------------------------
+// Streams (class arms) available for a destination class, falling back to the
+// global stream list when a class has no arms configured yet.
+function streamsForClass(d, classId) {
+  const byClass = (d.class_streams && d.class_streams[String(classId)]) || [];
+  return byClass.length ? byClass : (d.streams || []);
+}
+
 function Process({ d, notify }) {
   const nav = useNav();
+  const defaultClass = d.classes[0] ? String(d.classes[0].id) : '';
   const [rows, setRows] = useState(() => d.students.map((s) => ({
     id: s.id, action: s.recommendation.status === 'graduated' ? 'graduated'
       : (s.recommendation.status === 'promote' ? 'promoted' : (s.recommendation.status === 'repeat' ? 'repeated' : 'skip')),
-    to_class_id: s.recommendation.to_class ? String(s.recommendation.to_class) : (d.classes[0] ? String(d.classes[0].id) : ''),
+    to_class_id: s.recommendation.to_class ? String(s.recommendation.to_class) : defaultClass,
     stream: s.recommendation.stream || '', average: s.average,
+    isGrad: s.recommendation.status === 'graduated',
   })));
   const [busy, setBusy] = useState(false);
+  const [sel, setSel] = useState(() => new Set());      // selected student ids
+  const [bulk, setBulk] = useState({ action: 'promoted', to_class_id: defaultClass, stream: '' });
   const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // Only non-graduating rows can be bulk-promoted to a class/stream.
+  const selectableIds = rows.filter((r) => !r.isGrad).map((r) => r.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => sel.has(id));
+  const toggleAll = () => setSel(allSelected ? new Set() : new Set(selectableIds));
+
+  const applyBulk = () => {
+    if (!sel.size) { notify('error', 'Select at least one student first.'); return; }
+    setRows((rs) => rs.map((r) => (sel.has(r.id) && !r.isGrad ? {
+      ...r, action: bulk.action,
+      to_class_id: bulk.action === 'promoted' ? (bulk.to_class_id || r.to_class_id) : r.to_class_id,
+      stream: bulk.action === 'promoted' && bulk.stream !== '' ? bulk.stream : r.stream,
+    } : r)));
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -163,6 +189,8 @@ function Process({ d, notify }) {
     setBusy(false);
     if (res.ok) nav.go(res.redirect); else notify('error', res.error || 'Could not save promotions.');
   };
+
+  const bulkStreams = streamsForClass(d, bulk.to_class_id);
 
   return (
     <>
@@ -182,27 +210,56 @@ function Process({ d, notify }) {
       {d.students.length ? (<>
         <div className="card mb-3"><div className="card-body">
           <p><strong>Promotion Threshold:</strong> {d.threshold}%</p>
-          <p className="text-muted">Students are evaluated based on their Third Term average scores.</p>
+          <p className="text-muted">Students are evaluated based on their Third Term average scores. Tick students and use the bar below to promote many at once.</p>
         </div></div>
+
+        {/* Bulk action bar — apply one action/class/stream to all ticked students. */}
+        <div className="card mb-3"><div className="card-body"><div className="filter-form" style={{ alignItems: 'flex-end' }}>
+          <div className="form-group"><label className="form-label">With {sel.size} selected</label>
+            <select className="form-control" value={bulk.action} onChange={(e) => setBulk((b) => ({ ...b, action: e.target.value }))}>
+              <option value="promoted">Promote</option><option value="repeated">Repeat</option><option value="skip">Skip</option>
+            </select></div>
+          {bulk.action === 'promoted' && (<>
+            <div className="form-group"><label className="form-label">Promote to</label>
+              <select className="form-control" value={bulk.to_class_id} onChange={(e) => setBulk((b) => ({ ...b, to_class_id: e.target.value, stream: '' }))}>
+                {d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Stream</label>
+              <select className="form-control" value={bulk.stream} onChange={(e) => setBulk((b) => ({ ...b, stream: e.target.value }))}>
+                <option value="">— No change —</option>
+                {bulkStreams.map((nm) => <option key={nm} value={nm}>{nm}</option>)}</select></div>
+          </>)}
+          <div className="form-group"><button type="button" className="btn btn-secondary" onClick={applyBulk}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Apply to selected</button></div>
+        </div></div></div>
+
         <div className="card">
           <div className="card-header"><h3>{d.selected_class_name} Students ({d.students.length})</h3></div>
           <div className="card-body" style={{ padding: 0 }}><div className="table-container">
-            <table className="data-table"><thead><tr><th>Student</th><th>Average</th><th>Recommendation</th><th>Action</th><th>Promote To</th><th>Stream</th></tr></thead>
+            <table className="data-table"><thead><tr>
+              <th style={{ width: 32 }}><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /></th>
+              <th>Student</th><th>Average</th><th>Recommendation</th><th>Action</th><th>Promote To</th><th>Stream</th></tr></thead>
               <tbody>{d.students.map((s, i) => {
-                const isGrad = s.recommendation.status === 'graduated';
+                const r = rows[i];
+                const isGrad = r.isGrad;
+                const rowStreams = streamsForClass(d, r.to_class_id);
+                // Keep the current value selectable even if not in the class's list.
+                const opts = r.stream && !rowStreams.includes(r.stream) ? [r.stream, ...rowStreams] : rowStreams;
                 return (
                   <tr key={s.id}>
+                    <td>{isGrad ? null : <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggle(s.id)} aria-label={'Select ' + s.name} />}</td>
                     <td>{s.name}<br /><small className="text-muted">{s.assignment}</small></td>
                     <td>{s.average != null ? <span className={'badge ' + (s.over_threshold ? 'badge-success' : 'badge-warning')}>{s.average}%</span> : <span className="text-muted">No scores</span>}</td>
                     <td>{s.existing_status ? <span className="badge badge-info">{s.existing_status}</span> : s.recommendation.message}</td>
-                    <td><select className="form-control" style={{ width: 120 }} value={rows[i].action} onChange={(e) => setRow(i, 'action', e.target.value)}>
+                    <td><select className="form-control" style={{ width: 120 }} value={r.action} onChange={(e) => setRow(i, 'action', e.target.value)}>
                       <option value="skip">Skip</option>
                       {isGrad ? <option value="graduated">Graduate</option> : <><option value="promoted">Promote</option><option value="repeated">Repeat</option></>}
                     </select></td>
                     <td>{isGrad ? <span className="text-muted">N/A</span> : (
-                      <select className="form-control" style={{ width: 100 }} value={rows[i].to_class_id} onChange={(e) => setRow(i, 'to_class_id', e.target.value)}>
+                      <select className="form-control" style={{ width: 110 }} value={r.to_class_id} onChange={(e) => setRow(i, 'to_class_id', e.target.value)}>
                         {d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>)}</td>
-                    <td><input type="text" className="form-control" style={{ width: 100 }} placeholder="Stream" value={rows[i].stream} onChange={(e) => setRow(i, 'stream', e.target.value)} /></td>
+                    <td>{isGrad ? <span className="text-muted">N/A</span> : (
+                      <select className="form-control" style={{ width: 120 }} value={r.stream} onChange={(e) => setRow(i, 'stream', e.target.value)}>
+                        <option value="">— None —</option>
+                        {opts.map((nm) => <option key={nm} value={nm}>{nm}</option>)}</select>)}</td>
                   </tr>
                 );
               })}</tbody></table>
@@ -392,11 +449,17 @@ export default function PromotionApp({ data }) {
   const [msg, setMsg] = useState(null);
   const notify = (tone, text) => setMsg({ tone, text });
   const Screen = SCREENS[d.page] || Index;
+  // Remount the Process screen whenever its student set changes (new class/
+  // session), so row state is re-derived instead of going stale — otherwise
+  // rows[i] is undefined for the new list and the render crashes.
+  const screenKey = d.page === 'process'
+    ? 'process:' + (d.students || []).map((s) => s.id).join('-')
+    : d.page;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
         {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-        <Screen d={d} notify={notify} />
+        <Screen key={screenKey} d={d} notify={notify} />
       </SectionShell>
     </NavCtx.Provider>
   );
