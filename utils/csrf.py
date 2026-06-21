@@ -30,6 +30,14 @@ def generate_csrf_token():
     return token
 
 
+def rotate_csrf_token():
+    """Issue a brand-new CSRF token. Call on login/logout so a token captured
+    before authentication can't be reused against the new session."""
+    token = secrets.token_hex(32)
+    session[_SESSION_KEY] = token
+    return token
+
+
 def _submitted_token():
     return (
         request.form.get('_csrf_token')

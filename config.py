@@ -161,13 +161,28 @@ class Config:
     ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
 
+    # When True (ProductionConfig), security_errors() block startup. Base/dev/
+    # test leave it False so local work isn't gated on a full .env.
+    ENFORCE_SECURITY = False
+
+    @classmethod
+    def security_errors(cls):
+        """Fatal misconfigurations that must block a production boot."""
+        e = []
+        if not os.environ.get('SECRET_KEY'):
+            e.append('SECRET_KEY must be set in the environment (.env) for production.')
+        if not cls.FIELD_ENCRYPTION_KEY:
+            e.append('FIELD_ENCRYPTION_KEY must be set so student/parent portal '
+                     'passwords are encrypted at rest.')
+        return e
+
     @classmethod
     def security_warnings(cls):
         """Operational security advisories for the active configuration.
 
         Returned at startup by the app factory (see app.py) and logged, so
-        misconfigurations are visible instead of silent. Add hard-failure
-        enforcement here once a deployment's .env is known-complete.
+        misconfigurations are visible instead of silent. Hard failures live in
+        security_errors() and are enforced when ENFORCE_SECURITY is True.
         """
         w = []
         if not os.environ.get('SECRET_KEY'):
@@ -196,6 +211,7 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
+    ENFORCE_SECURITY = True   # security_errors() block startup
     # Secure by default in production; flip SESSION_COOKIE_SECURE=0 in the
     # environment only for a plain-HTTP LAN/Termux deployment (the cookie is
     # otherwise not sent over HTTP and login would appear to "not work").
@@ -221,7 +237,13 @@ config = {
 
 def get_config():
     """Select a config class from APP_ENV / FLASK_ENV (default: development)."""
-    name = (os.environ.get('APP_ENV')
-            or os.environ.get('FLASK_ENV')
-            or 'default').strip().lower()
+    name = (os.environ.get('APP_ENV') or os.environ.get('FLASK_ENV') or '').strip().lower()
+    if not name:
+        # Defaulting to development means DEBUG=True — dangerous if this is
+        # actually a deployment. Make the implicit choice visible.
+        import sys
+        print('SECURITY: APP_ENV/FLASK_ENV is not set — defaulting to '
+              'DEVELOPMENT (DEBUG on). Set APP_ENV=production for deployments.',
+              file=sys.stderr)
+        name = 'default'
     return config.get(name, config['default'])

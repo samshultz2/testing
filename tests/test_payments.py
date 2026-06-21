@@ -23,6 +23,9 @@ def _login(app):
     tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
                     c.get('/parent/login').get_data(as_text=True)).group(1)
     c.post('/parent/login', data={'student_id': 'PAY1', 'password': 'pass123', '_csrf_token': tok})
+    # The CSRF token rotates on login (fixation fix) — return the current one.
+    with c.session_transaction() as sess:
+        tok = sess.get('_csrf_token', tok)
     return c, sid, tid, tok
 
 

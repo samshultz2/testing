@@ -61,15 +61,20 @@ def create_app(config_class=None):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Surface security advisories at startup (these were previously defined on
+    # Enforce/surface security configuration at startup (previously defined on
     # the config but never invoked). Skip under tests to keep output clean.
     if not app.config.get('TESTING'):
-        try:
-            import sys
-            for _w in config_class.security_warnings():
-                print('SECURITY: ' + _w, file=sys.stderr)
-        except Exception:
-            pass
+        import sys
+        # Fail closed in production: refuse to boot if a critical secret is
+        # missing (SECRET_KEY, FIELD_ENCRYPTION_KEY).
+        if app.config.get('ENFORCE_SECURITY'):
+            errors = config_class.security_errors()
+            if errors:
+                raise RuntimeError(
+                    'Refusing to start — fix these security settings:\n  - '
+                    + '\n  - '.join(errors))
+        for _w in config_class.security_warnings():
+            print('SECURITY: ' + _w, file=sys.stderr)
 
     # Ensure instance folder exists
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)

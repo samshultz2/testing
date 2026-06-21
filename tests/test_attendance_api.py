@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from config import Config
 from models import (db, Branch, User, Student, ClassArmAssignment, SchoolClass,
                     ClassArm, Term, AcademicSession, StudentEnrollment, Week, Attendance, Holiday)
-from tests.conftest import login_token
+from tests.conftest import login_token, auth_csrf
 
 
 def _setup(app):
@@ -60,7 +60,7 @@ def _admin(app):
     c = app.test_client()
     tok = login_token(c)
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
-    return c, tok
+    return c, auth_csrf(c)   # token rotates on login
 
 
 def _other_branch_admin(app):
@@ -78,7 +78,7 @@ def _other_branch_admin(app):
     c = app.test_client()
     tok = login_token(c)
     c.post('/login', data={'username': 'aa_reportadmin', 'password': 'Secret123', '_csrf_token': tok})
-    return c, tok
+    return c, auth_csrf(c)   # token rotates on login
 
 
 def test_roster_returns_students_and_week(app):
@@ -182,6 +182,7 @@ def test_cross_branch_is_forbidden(app):
     c = app.test_client()
     tok = login_token(c)
     c.post('/login', data={'username': 'aa_branchadmin', 'password': 'Secret123', '_csrf_token': tok})
+    tok = auth_csrf(c)   # token rotates on login
     # roster + mark on a class in the DEFAULT branch -> 403 for the other-branch admin
     assert c.get(f'/attendance/api/roster?assignment_id={ids["caa"]}&date={ids["date"]}').status_code == 403
     m = c.post('/attendance/api/mark',
@@ -304,6 +305,7 @@ def test_view_only_user_reports_yes_marking_no(app):
     c = app.test_client()
     tok = login_token(c)
     c.post('/login', data={'username': 'aa_viewer', 'password': 'Secret123', '_csrf_token': tok})
+    tok = auth_csrf(c)   # token rotates on login
     # SPA shell + context open for a viewer; context advertises no marking
     assert c.get('/attendance/app').status_code == 200
     ctx = c.get('/attendance/api/context').get_json()

@@ -45,6 +45,14 @@ def page_token(client):
     return m.group(1) if m else None
 
 
+def auth_csrf(client):
+    """The session CSRF token AFTER login. Logins now rotate the token (session-
+    fixation fix), so a token captured before login is no longer valid for
+    post-login POSTs — read the current one straight from the session."""
+    with client.session_transaction() as sess:
+        return sess.get('_csrf_token')
+
+
 @pytest.fixture()
 def auth_client(app):
     client = app.test_client()

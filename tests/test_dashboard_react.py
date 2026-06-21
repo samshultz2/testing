@@ -3,7 +3,7 @@ scoped so a user never receives data for a module they can't access."""
 import json
 from config import Config
 from models import db, Branch, User
-from tests.conftest import login_token
+from tests.conftest import login_token, auth_csrf
 
 
 def _admin(app):
@@ -43,6 +43,7 @@ def test_dashboard_widgets_save_api(app):
     c = app.test_client()
     tok = login_token(c)
     c.post('/login', data={'username': 'dre_saver', 'password': 'Secret123', '_csrf_token': tok})
+    tok = auth_csrf(c)   # token rotates on login
     # save in mixed order incl. a non-permitted widget — persisted in registry order
     r = c.post('/api/dashboard/widgets', headers={'X-CSRFToken': tok},
                json={'widgets': ['finance', 'people', 'kpi']})

@@ -41,7 +41,29 @@ Critical/High items before any internet-facing deployment.
   `ENV_FILE_LOADED` records whether a file was applied. `.env.example` updated to
   the new secure defaults.
 
-**Still open:** H2, H3, H4, H5, H6, H7 and the Medium/Low items below.
+**Pass 2 (2026-06-21) — fixed:**
+- **H4 / H3 / M1** — production now **fails closed**: `Config.security_errors()`
+  (enforced when `ENFORCE_SECURITY`, set on `ProductionConfig`) blocks startup if
+  `SECRET_KEY` or `FIELD_ENCRYPTION_KEY` is missing. `get_config()` warns loudly
+  when `APP_ENV`/`FLASK_ENV` is unset (silent default to DEBUG). Verified the app
+  refuses to boot without the secrets and boots with them.
+- **H2** — all four login paths (staff, legacy admin, parent, CBT) now
+  `session.clear()` and mint a fresh CSRF token (`rotate_csrf_token()`), so a
+  pre-auth session/token can't be reused after privilege elevation.
+- **M6** — CBT supervisor PIN compared with `hmac.compare_digest`.
+- **M7** — **not applicable**: verified `ContributionExpense` has no student/
+  branch and `ContributionPayment` is session/student-scoped; the contributions
+  module has no branch dimension at all, so there is no tenant boundary to cross.
+  (The original IDOR concern was a false positive.)
+
+**Still open:** H3 (deeper fix — stop storing *recoverable* portal passwords),
+H5 (nonce CSP), H6 (portal PIN entropy + per-account lockout), H7 (restore
+confirmation/audit), M3 (rate limiting + bound expensive jobs), M4 (single-use
+TTL reset tokens), M5 (enumeration oracle), and the Low items.
+
+> Note on H3: production now *requires* `FIELD_ENCRYPTION_KEY` (passwords are
+> encrypted at rest), but the design still stores a *recoverable* value. Moving
+> to hash-only storage with one-time PIN display remains recommended.
 
 ## Severity summary
 

@@ -14,6 +14,7 @@ def _client(app):
     c = app.test_client()
     token = login_token(c)
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': token})
+    token = _ptoken(c)   # CSRF token rotates on login
     c.post('/contributions/access', data={'access_code': ACCESS_CODE, '_csrf_token': token})
     return c
 
@@ -28,6 +29,7 @@ def test_access_gate_blocks_then_grants(app):
     c = app.test_client()
     token = login_token(c)
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': token})
+    token = _ptoken(c)   # CSRF token rotates on login
     # Without the code, the settings page bounces to the access page.
     r = c.get('/contributions/settings', follow_redirects=False)
     assert r.status_code in (302, 303) and '/contributions/access' in r.headers['Location']
@@ -107,6 +109,7 @@ def test_configurable_access_password(app):
     c2 = app.test_client()
     tok = login_token(c2)
     c2.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    tok = _ptoken(c2)   # CSRF token rotates on login
     assert c2.post('/contributions/access', data={'access_code': 'newpass99', '_csrf_token': tok},
                    follow_redirects=False).status_code in (302, 303)
     assert c2.get('/contributions/settings').status_code == 200
@@ -114,5 +117,6 @@ def test_configurable_access_password(app):
     c3 = app.test_client()
     tok3 = login_token(c3)
     c3.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok3})
+    tok3 = _ptoken(c3)   # CSRF token rotates on login
     c3.post('/contributions/access', data={'access_code': ACCESS_CODE, '_csrf_token': tok3})
     assert c3.get('/contributions/settings', follow_redirects=False).status_code in (302, 303)

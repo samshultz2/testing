@@ -11,6 +11,7 @@ Two surfaces:
 from datetime import datetime, timedelta
 from utils.helpers import get_active_term, safe_redirect
 from functools import wraps
+import hmac
 import io
 import os
 import random
@@ -1056,7 +1057,10 @@ def login():
         student = Student.query.filter_by(student_id=student_id, is_active=True).first()
         if student and student.check_portal_password(password):
             login_limiter.clear_attempts(rkey)
+            session.clear()           # prevent session fixation
             session[PORTAL_KEY] = student.id
+            from utils.csrf import rotate_csrf_token
+            rotate_csrf_token()
             ev_id = _record_login_event(student, event='login')
             if ev_id:
                 session['cbt_login_event'] = ev_id
@@ -1272,7 +1276,7 @@ def supervisor_unlock(exam_id):
         return jsonify({'ok': False}), 400
     pin = (request.form.get('pin') or '').strip()
     real = (SchoolSettings.get('cbt_supervisor_pin', '') or '').strip()
-    if not real or pin != real:
+    if not real or not hmac.compare_digest(pin, real):
         return jsonify({'ok': False, 'error': 'Wrong supervisor PIN'}), 403
     minutes = request.form.get('minutes', type=int) or 3
     minutes = max(1, min(minutes, 15))

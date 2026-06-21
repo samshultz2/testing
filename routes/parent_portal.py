@@ -110,8 +110,11 @@ def login():
         student = Student.query.filter_by(student_id=sid).first()
         if student and student.is_active and student.check_portal_password(pw):
             login_limiter.clear_attempts(rkey)
+            session.clear()           # prevent session fixation
             session[PKEY] = student.id
             session[AUTHKEY] = student.id
+            from utils.csrf import rotate_csrf_token
+            rotate_csrf_token()
             session.permanent = True
             return redirect(url_for('parent.home'))
         login_limiter.record_attempt(rkey)

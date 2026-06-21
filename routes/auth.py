@@ -56,7 +56,9 @@ def login():
                     return redirect(url_for('auth.login'))
                 _clear_login_failures()
 
-                # Successful user login
+                # Successful user login. Drop any pre-login session and mint a
+                # fresh CSRF token so a fixed session/token can't be reused.
+                session.clear()
                 session['logged_in'] = True
                 session['user_id'] = user.id
                 session['user'] = user.full_name or user.username
@@ -68,6 +70,8 @@ def login():
                 if user.theme:
                     session['theme'] = user.theme
                 session['must_change_password'] = bool(user.must_change_password)
+                from utils.csrf import rotate_csrf_token
+                rotate_csrf_token()
                 session.permanent = True
                 
                 # Update last login
@@ -89,6 +93,7 @@ def login():
         if (Config.ENABLE_LEGACY_LOGIN and Config.ADMIN_PASSWORD and password
                 and hmac.compare_digest(password, Config.ADMIN_PASSWORD)):
             _clear_login_failures()
+            session.clear()           # prevent session fixation
             session['logged_in'] = True
             session['user'] = 'Admin'
             session['role'] = 'admin'
@@ -96,6 +101,8 @@ def login():
             from utils.org_scope import set_session_org
             set_session_scope(None)   # legacy admin is central
             set_session_org(None)
+            from utils.csrf import rotate_csrf_token
+            rotate_csrf_token()
             session.permanent = True
             flash('Welcome back, Admin!', 'success')
             return redirect(url_for('main.dashboard'))
