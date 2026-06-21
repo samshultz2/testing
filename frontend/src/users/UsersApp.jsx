@@ -196,9 +196,23 @@ function UserForm({ d, notify }) {
     permission_group_id: u.permission_group_id ? String(u.permission_group_id) : '',
     teacher: u.teacher || { can_mark_attendance: true, can_view_student_details: true, can_print_reports: true, can_enter_results: false, can_edit_results: false },
   }, { omit: ['password', 'confirm_password', 'new_password'], signature: editSig });
-  // Per-user OVERRIDES (not the effective map): on edit, the stored overrides;
-  // on add with no group, seed from the role's default modules.
-  const [perms, setPerms] = useState(() => (edit ? { ...(u.own_permissions || {}) } : moduleDefaults(d.role_defaults, u.role || 'teacher')));
+  // Per-user OVERRIDES shown in the module selects. On add, seed from the role's
+  // default modules. On edit, seed so the form displays the user's SAVED effective
+  // access (permission_map) — not just own_permissions, which omits access derived
+  // from the role/defaults and left the selects blank, forcing admins to re-pick
+  // permissions they'd already set. Keys whose effective level the group already
+  // grants stay blank (shown as "Inherit"), so we don't silently convert
+  // group-inherited access into per-user overrides.
+  const [perms, setPerms] = useState(() => {
+    if (!edit) return moduleDefaults(d.role_defaults, u.role || 'teacher');
+    const eff = u.permission_map || {};
+    const grp = u.group_permissions || {};
+    const seed = {};
+    Object.keys(eff).forEach((k) => { if (eff[k] && eff[k] !== grp[k]) seed[k] = eff[k]; });
+    // Keep any explicit overrides (e.g. a 'none' revoke) that don't surface in eff.
+    Object.entries(u.own_permissions || {}).forEach(([k, v]) => { if (v && !(k in seed)) seed[k] = v; });
+    return seed;
+  });
   const groups = d.groups || [];
   const groupPerms = (groups.find((g) => String(g.id) === String(f.permission_group_id)) || {}).permissions || null;
   const [preset, setPreset] = useState('');
