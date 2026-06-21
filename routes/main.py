@@ -1088,6 +1088,8 @@ def add_student():
             db.session.commit()
             log_action('student.create', target=student)
             view_url = url_for('main.view_student', student_id=student.id)
+            from utils.notify import notify_student_change
+            notify_student_change('create', student=student, url=view_url)
             if enrolled_label:
                 flash(f'{FlashMessages.STUDENT_CREATED} Enrolled in {enrolled_label}.', 'success')
             else:
@@ -1169,6 +1171,9 @@ def import_students():
         class_arm_assignment_id=caa.id if caa else None)
     if created:
         log_action('student.import', detail=f'Imported {created} students')
+        from utils.notify import notify_student_change
+        notify_student_change('import', detail=f'{created} student(s) imported',
+                              url=url_for('main.students_list'))
         flash(f'Imported {created} student(s).'
               + (f' Enrolled in {caa.display_name}.' if caa else ''), 'success')
     return jsonify({'ok': True, 'created': created, 'messages': messages,
@@ -1359,6 +1364,9 @@ def edit_student(student_id):
 
             db.session.commit()
             log_action('student.update', target=student)
+            from utils.notify import notify_student_change
+            notify_student_change('update', student=student,
+                                  url=url_for('main.view_student', student_id=student.id))
             flash(FlashMessages.STUDENT_UPDATED, 'success')
             dest = _safe_next(request.form.get('return_to'),
                               url_for('main.view_student', student_id=student.id))
@@ -1417,6 +1425,8 @@ def delete_student(student_id):
         student.is_active = False
         db.session.commit()
         log_action('delete_student', f'{student.full_name} ({student.student_id})')
+        from utils.notify import notify_student_change
+        notify_student_change('delete', detail=f'{student.full_name} ({student.student_id})')
         flash(FlashMessages.STUDENT_DELETED, 'success')
     except Exception as e:
         db.session.rollback()

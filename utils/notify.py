@@ -33,6 +33,30 @@ def notify_admins(title, body='', url=None, category='info'):
     return notify(title, body, url, role='admin', category=category)
 
 
+_STUDENT_CHANGE_TITLES = {
+    'create': 'Student added',
+    'update': 'Student updated',
+    'delete': 'Student removed',
+    'import': 'Students imported',
+    'bulk_delete': 'Students deleted',
+}
+
+
+def notify_student_change(action, *, student=None, detail='', url=None):
+    """Bell admins when a student record changes.
+
+    ``action`` is one of create/update/delete/import/bulk_delete. When a
+    ``student`` instance is given, a "Name (ID)" label is derived for the body.
+    Best-effort like all notifications — never breaks the triggering action.
+    """
+    title = _STUDENT_CHANGE_TITLES.get(action, 'Student change')
+    if student is not None and not detail:
+        name = getattr(student, 'full_name', '') or ''
+        sid = getattr(student, 'student_id', '') or ''
+        detail = f'{name} ({sid})'.strip()
+    return notify_admins(title, body=detail, url=url, category='student')
+
+
 def current_recipient():
     """(user_id, role) for the logged-in user — including the legacy password
     admin (no user_id, treated as the 'admin' role)."""

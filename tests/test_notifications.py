@@ -44,3 +44,27 @@ def test_mark_read_and_read_all(app):
 
 def test_notifications_require_login(app):
     assert app.test_client().get('/api/notifications', follow_redirects=False).status_code in (302, 303)
+
+
+def test_notify_student_change_bells_admins(app):
+    with app.app_context():
+        from utils.notify import notify_student_change
+
+        class _S:
+            full_name = 'Ada Lovelace'
+            student_id = 'STU-001'
+        notify_student_change('create', student=_S(), url='/student/1')
+    c = _admin(app)
+    items = c.get('/api/notifications').get_json()['items']
+    hit = next((it for it in items if it['title'] == 'Student added'), None)
+    assert hit is not None
+    assert 'Ada Lovelace' in hit['body'] and 'STU-001' in hit['body']
+
+
+def test_notify_student_change_unknown_action_label(app):
+    with app.app_context():
+        from utils.notify import notify_student_change
+        notify_student_change('frobnicate', detail='x')
+    c = _admin(app)
+    titles = [it['title'] for it in c.get('/api/notifications').get_json()['items']]
+    assert 'Student change' in titles      # safe fallback title
