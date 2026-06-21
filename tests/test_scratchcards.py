@@ -68,7 +68,7 @@ def test_invalid_pin_rejected(app):
     resp = client.post('/check-result/',
                        data={'student_id': 'STU90002', 'pin': 'WRONGPIN0000',
                              '_csrf_token': tok}, follow_redirects=True)
-    assert b'Invalid card PIN' in resp.data
+    assert b'Student ID or card PIN is incorrect' in resp.data
 
 
 def test_valid_card_not_consumed_without_result(app):
@@ -112,6 +112,6 @@ def test_bound_card_rejects_other_student(app):
     resp = client.post('/check-result/',
                        data={'student_id': 'STU90021', 'pin': pin, '_csrf_token': tok},
                        follow_redirects=True)
-    assert b'not valid for that Student ID' in resp.data
+    assert b'Student ID or card PIN is incorrect' in resp.data
     with app.app_context():
         assert ScratchCard.query.filter_by(pin=pin).first().used_count == 0

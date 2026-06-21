@@ -417,6 +417,11 @@ function Backup({ d, notify }) {
               <label className="form-label">Select Backup File (.db or .sql)</label>
               <input type="file" name="file" className="form-control" accept=".db,.sql" required />
             </div>
+            <div className="form-group">
+              <label className="form-label">Type <code>RESTORE</code> to confirm you want to replace all current data</label>
+              <input type="text" name="confirm" className="form-control" autoComplete="off"
+                     placeholder="RESTORE" pattern="RESTORE" required />
+            </div>
             <button type="submit" className="btn btn-danger"><i aria-hidden="true" className="fas fa-upload" /> Restore Backup</button>
           </form>
         </div>

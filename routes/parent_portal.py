@@ -99,17 +99,22 @@ def login():
     if session.get(PKEY):
         return redirect(url_for('parent.home'))
     if request.method == 'POST':
-        # Throttle credential guessing by client IP.
+        sid = (request.form.get('student_id') or '').strip()
+        pw = request.form.get('password') or ''
+        # Throttle by client IP AND by target account, so spreading a brute-force
+        # across many IPs still trips a per-account lockout (Student IDs are
+        # enumerable, so IP-only throttling alone is bypassable).
         rkey = f"parent_login:{request.remote_addr or 'unknown'}"
-        if login_limiter.is_rate_limited(rkey, max_attempts=10, window_minutes=15):
+        akey = f"parent_login_acct:{sid.lower()}" if sid else rkey
+        if (login_limiter.is_rate_limited(rkey, max_attempts=10, window_minutes=15)
+                or login_limiter.is_rate_limited(akey, max_attempts=8, window_minutes=15)):
             wait = login_limiter.get_remaining_time(rkey, 15) // 60 + 1
             flash(f'Too many attempts. Please try again in about {wait} minute(s).', 'error')
             return redirect(url_for('parent.login'))
-        sid = (request.form.get('student_id') or '').strip()
-        pw = request.form.get('password') or ''
         student = Student.query.filter_by(student_id=sid).first()
         if student and student.is_active and student.check_portal_password(pw):
             login_limiter.clear_attempts(rkey)
+            login_limiter.clear_attempts(akey)
             session.clear()           # prevent session fixation
             session[PKEY] = student.id
             session[AUTHKEY] = student.id
@@ -118,6 +123,7 @@ def login():
             session.permanent = True
             return redirect(url_for('parent.home'))
         login_limiter.record_attempt(rkey)
+        login_limiter.record_attempt(akey)
         flash('Invalid Student ID or password.', 'error')
         return redirect(url_for('parent.login'))
     return render_template('parent/login.html')

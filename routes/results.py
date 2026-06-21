@@ -9,6 +9,7 @@ from models import (db, Student, WAECResult, JAMBResult, UniversityCutoff, Schoo
                     ClassArmAssignment, TermSummary)
 import json as _json
 from utils.access_control import login_required, admin_required
+from utils.security import rate_limited
 from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 from utils.audit import log_action
 from utils.helpers import (
@@ -317,6 +318,7 @@ def add_waec():
 
 @results_bp.route('/waec/scan', methods=['GET', 'POST'])
 @login_required
+@rate_limited('ocr', max_requests=30, window_minutes=10)
 def scan_waec():
     """Upload a WAEC result image, OCR it, and review before saving."""
     from utils.waec_ocr import (
@@ -717,6 +719,7 @@ def add_jamb():
 
 @results_bp.route('/jamb/scan', methods=['GET', 'POST'])
 @login_required
+@rate_limited('ocr', max_requests=30, window_minutes=10)
 def scan_jamb():
     """Upload a JAMB result image/PDF, OCR it, and review before saving."""
     from utils.waec_ocr import (
@@ -802,6 +805,7 @@ def _read_uploaded_text(file):
 
 @results_bp.route('/scan/batch', methods=['GET', 'POST'])
 @login_required
+@rate_limited('ocr', max_requests=30, window_minutes=10)
 def scan_batch():
     """Batch-scan several WAEC or JAMB results, each routed to its student."""
     from utils.waec_ocr import parse_waec_result, parse_jamb_result, match_student

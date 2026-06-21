@@ -28,9 +28,21 @@ def test_forgot_password_resets_and_emails(app, monkeypatch):
            follow_redirects=True)
     with app.app_context():
         u = User.query.filter_by(username='mailuser').first()
-        assert u.must_change_password is True
-        assert not u.check_password('secret123')   # password was reset
+        # New flow: a single-use reset LINK is emailed; the live password is NOT
+        # changed until the user follows the link and sets a new one.
+        assert u.check_password('secret123')        # still valid
+        assert u.reset_token_hash and u.reset_token_expires
     assert sent and sent[0][0] == 'm@example.com'
+    body = sent[0][2]
+    assert '/reset-password/' in body               # a link, not a password
+    path = re.search(r'/reset-password/\S+', body).group(0).rstrip('.')
+    c.post(path, data={'password': 'NewPass123', 'confirm': 'NewPass123',
+                       '_csrf_token': _tok(c)}, follow_redirects=True)
+    with app.app_context():
+        u = User.query.filter_by(username='mailuser').first()
+        assert u.check_password('NewPass123')        # now changed
+        assert not u.check_password('secret123')
+        assert u.reset_token_hash is None            # token consumed (single use)
 
 
 def test_forgot_password_unknown_is_generic(app, monkeypatch):

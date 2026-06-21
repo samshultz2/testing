@@ -13,6 +13,7 @@ from models import (
 )
 from utils.helpers import login_required
 from utils.access_control import admin_required, central_admin_required, is_admin
+from utils.security import rate_limited
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 
@@ -552,6 +553,7 @@ def download_backup_file(name):
 
 @settings_bp.route('/backup/download')
 @central_admin_required
+@rate_limited('db_export', max_requests=12, window_minutes=10)
 def download_backup():
     """Download database backup"""
     try:
@@ -578,6 +580,7 @@ def download_backup():
 
 @settings_bp.route('/backup/export-json')
 @central_admin_required
+@rate_limited('db_export', max_requests=12, window_minutes=10)
 def export_json():
     """Export all data to JSON"""
     try:
@@ -651,6 +654,12 @@ def restore_backup():
         flash('Please upload a .db (SQLite) or .sql (PostgreSQL) backup file.', 'error')
         return redirect(url_for('settings.backup_page'))
 
+    # Wholesale live-DB replacement is destructive and admin-equivalent — require
+    # an explicit typed confirmation in addition to the central-admin gate.
+    if (request.form.get('confirm') or '').strip().upper() != 'RESTORE':
+        flash('Type RESTORE to confirm the database replacement.', 'error')
+        return redirect(url_for('settings.backup_page'))
+
     # Stage the upload to a temp file, then let the backend-aware helper apply it.
     suffix = '.sql' if file.filename.lower().endswith('.sql') else '.db'
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
@@ -673,6 +682,14 @@ def restore_backup():
                 flash('That .sql file does not look like a PostgreSQL dump.', 'error')
                 return redirect(url_for('settings.backup_page'))
         ok, message = restore_database(current_app, tmp_path, file.filename)
+        # Audit this high-impact action regardless of outcome.
+        try:
+            from utils.audit import log_action
+            log_action('settings.restore_database',
+                       detail=('ok' if ok else 'failed') + f': {file.filename}',
+                       target_type='database', target_label=file.filename)
+        except Exception:
+            pass
         flash(message, 'success' if ok else 'error')
     except Exception as e:
         flash(f'Error restoring backup: {str(e)}', 'error')

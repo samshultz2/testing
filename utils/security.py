@@ -127,6 +127,29 @@ class RateLimiter:
 login_limiter = RateLimiter()
 
 
+def rate_limited(bucket, max_requests=10, window_minutes=15):
+    """Decorator: throttle an expensive/abusable endpoint per user+IP.
+
+    Backed by the shared DB limiter, so the cap holds across all workers. Use on
+    CPU/IO-heavy routes (OCR, full exports, DB downloads) so one client can't
+    stall the single-worker app. Returns HTTP 429 when the cap is hit.
+    """
+    from functools import wraps
+    from flask import request, session, abort
+
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            who = session.get('user_id') or session.get('user') or (request.remote_addr or 'anon')
+            key = f'rl:{bucket}:{who}'
+            if login_limiter.is_rate_limited(key, max_requests, window_minutes):
+                abort(429, description='You are doing that too often. Please wait a moment and try again.')
+            login_limiter.record_attempt(key)
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 # =============================================================================
 # PASSWORD MANAGEMENT
 # =============================================================================
@@ -344,14 +367,24 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     # Referrer policy
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    # Content Security Policy
+    # Content Security Policy.
+    # NOTE: script-src still allows 'unsafe-inline'/'unsafe-eval' because the app
+    # has many inline <script> blocks; removing them safely requires a per-request
+    # nonce on every inline script (tracked as audit H5 — deferred to avoid
+    # breaking the UI). The directives below add the *non-breaking* hardening:
+    # block plugins/objects, lock <base>, and forbid being framed or posting forms
+    # cross-origin.
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
         "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
         "img-src 'self' data: blob:; "
-        "connect-src 'self';"
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'self'; "
+        "form-action 'self';"
     )
     return response
 

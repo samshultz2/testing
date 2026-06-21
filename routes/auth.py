@@ -115,7 +115,9 @@ def login():
 
 @auth_bp.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    """Self-service reset: emails a one-time password the user must change."""
+    """Self-service reset: emails a single-use, time-limited reset LINK. The live
+    password is left intact until the user actually sets a new one (so triggering
+    a reset for someone else can't lock them out)."""
     from utils import mailer
     if session.get('logged_in'):
         return redirect(url_for('main.dashboard'))
@@ -130,20 +132,47 @@ def forgot_password():
         if ident:
             user = User.query.filter((User.username == ident) | (User.email == ident)).first()
             if user and user.email and user.is_active and mailer.is_configured():
-                import secrets
-                temp = secrets.token_urlsafe(6)
-                user.set_password(temp)
-                user.must_change_password = True
+                raw = user.set_reset_token(ttl_minutes=60)   # password untouched
                 db.session.commit()
-                school = 'PosyHub'
-                mailer.send_email(user.email, f'{school} password reset',
+                link = url_for('auth.reset_password', uid=user.id, token=raw, _external=True)
+                mailer.send_email(user.email, 'EduSyncra password reset',
                                   f'Hello {user.full_name or user.username},\n\n'
-                                  f'Your temporary password is: {temp}\n\n'
-                                  f'Please sign in and set a new password.\n')
+                                  f'We received a request to reset your password. Use this '
+                                  f'link within 1 hour to set a new one:\n\n{link}\n\n'
+                                  f'If you did not request this, you can ignore this email — '
+                                  f'your current password still works.\n')
         # Generic response (avoid revealing whether an account exists).
-        flash('If a matching account exists, a reset email has been sent.', 'info')
+        flash('If a matching account exists, a reset link has been sent.', 'info')
         return redirect(url_for('auth.login'))
     return render_template('auth/forgot_password.html')
+
+
+@auth_bp.route('/reset-password/<int:uid>/<token>', methods=['GET', 'POST'])
+def reset_password(uid, token):
+    """Set a new password via a single-use, time-limited token from the email."""
+    if session.get('logged_in'):
+        return redirect(url_for('main.dashboard'))
+    user = User.query.get(uid)
+    if not user or not user.is_active or not user.check_reset_token(token):
+        flash('This reset link is invalid or has expired. Please request a new one.', 'error')
+        return redirect(url_for('auth.forgot_password'))
+    if request.method == 'POST':
+        pw = request.form.get('password') or ''
+        confirm = request.form.get('confirm') or ''
+        if pw != confirm:
+            flash('The two passwords do not match.', 'error')
+            return render_template('auth/reset_password.html', uid=uid, token=token)
+        ok, msg = is_password_strong(pw)
+        if not ok:
+            flash(msg, 'error')
+            return render_template('auth/reset_password.html', uid=uid, token=token)
+        user.set_password(pw)
+        user.clear_reset_token()          # single use
+        user.must_change_password = False
+        db.session.commit()
+        flash('Your password has been reset. Please sign in.', 'success')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password.html', uid=uid, token=token)
 
 
 @auth_bp.route('/logout')

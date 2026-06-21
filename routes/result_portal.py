@@ -207,13 +207,17 @@ def check():
         student = Student.query.filter_by(student_id=student_id).first()
         card = ScratchCard.query.filter_by(pin=pin).first()
 
+        # Anti-enumeration: a wrong Student ID, a wrong PIN, and a card bound to
+        # someone else all return ONE generic message, so an attacker can't probe
+        # which sequential Student IDs exist. The internal audit log stays specific.
+        _BAD_CREDS = 'The Student ID or card PIN is incorrect.'
         if not student:
             _log_check(card, None, None, False, f'unknown student id {student_id}')
-            flash('Student ID not found.', 'error')
+            flash(_BAD_CREDS, 'error')
             return render_template('scratchcards/check.html', **ctx)
         if not card:
             _log_check(None, student, None, False, 'invalid pin')
-            flash('Invalid card PIN.', 'error')
+            flash(_BAD_CREDS, 'error')
             return render_template('scratchcards/check.html', **ctx)
         if not card.can_use():
             _log_check(card, student, None, False, 'card exhausted/disabled')
@@ -221,7 +225,7 @@ def check():
             return render_template('scratchcards/check.html', **ctx)
         if card.student_id and card.student_id != student.id:
             _log_check(card, student, None, False, 'card bound to another student')
-            flash('This card is not valid for that Student ID.', 'error')
+            flash(_BAD_CREDS, 'error')
             return render_template('scratchcards/check.html', **ctx)
 
         # Resolve term: a card-bound term wins, else the chosen published term.

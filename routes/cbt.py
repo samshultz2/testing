@@ -35,6 +35,16 @@ from utils.useragent import parse_user_agent
 cbt_bp = Blueprint('cbt', __name__, url_prefix='/cbt')
 cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
 
+# Auto-generated portal PINs are printed on credential sheets and typed by
+# students/parents, so we use an unambiguous alphabet (no 0/O/1/I/L) and 8
+# characters (~40 bits) — far stronger than the old 24-bit 6-hex token while
+# staying easy to read and key in.
+_PIN_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+
+def _gen_portal_pin(n=8):
+    return ''.join(secrets.choice(_PIN_ALPHABET) for _ in range(n))
+
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
 from utils.spa import section_responders
@@ -821,7 +831,7 @@ def passwords():
         elif action == 'generate' and students:
             generated = []
             for s in students:
-                pw = secrets.token_hex(3)   # 6-char one-time password
+                pw = _gen_portal_pin()      # ~40-bit readable PIN
                 s.set_portal_password(pw)
                 generated.append((s, pw))
             db.session.commit()
@@ -1047,16 +1057,20 @@ def login():
         return redirect(url_for('cbt_portal.home'))
     if request.method == 'POST':
         from utils.security import login_limiter
+        student_id = (request.form.get('student_id') or '').strip()
+        password = request.form.get('password') or ''
+        # Throttle by client IP AND by target account (enumerable Student IDs).
         rkey = f"cbt_login:{request.remote_addr or 'unknown'}"
-        if login_limiter.is_rate_limited(rkey, max_attempts=15, window_minutes=15):
+        akey = f"cbt_login_acct:{student_id.lower()}" if student_id else rkey
+        if (login_limiter.is_rate_limited(rkey, max_attempts=15, window_minutes=15)
+                or login_limiter.is_rate_limited(akey, max_attempts=10, window_minutes=15)):
             wait = login_limiter.get_remaining_time(rkey, 15) // 60 + 1
             flash(f'Too many attempts. Try again in about {wait} minute(s).', 'error')
             return render_template('cbt/portal_login.html')
-        student_id = (request.form.get('student_id') or '').strip()
-        password = request.form.get('password') or ''
         student = Student.query.filter_by(student_id=student_id, is_active=True).first()
         if student and student.check_portal_password(password):
             login_limiter.clear_attempts(rkey)
+            login_limiter.clear_attempts(akey)
             session.clear()           # prevent session fixation
             session[PORTAL_KEY] = student.id
             from utils.csrf import rotate_csrf_token
@@ -1066,6 +1080,7 @@ def login():
                 session['cbt_login_event'] = ev_id
             return redirect(url_for('cbt_portal.home'))
         login_limiter.record_attempt(rkey)
+        login_limiter.record_attempt(akey)
         flash('Invalid student ID or password.', 'error')
     return render_template('cbt/portal_login.html')
 

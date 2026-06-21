@@ -5,10 +5,11 @@ legacy login by default, granting unauthenticated central-admin to anyone. The
 fix removes the built-in password and makes legacy login inert unless explicitly
 enabled AND configured with a strong ADMIN_PASSWORD.
 """
+import io
 import os
 
 from config import Config
-from tests.conftest import login_token
+from tests.conftest import login_token, auth_csrf
 
 
 def _attempt(client, password):
@@ -50,3 +51,18 @@ def test_no_builtin_default_in_source():
     assert 'posyhubcomng' not in src, 'remove the hardcoded default password'
     # ADMIN_PASSWORD must derive only from the environment (no literal fallback).
     assert os.environ.get('ADMIN_PASSWORD') == Config.ADMIN_PASSWORD
+
+
+def test_db_restore_requires_typed_confirmation(app):
+    """The destructive DB restore must reject an upload lacking the typed
+    RESTORE confirmation, even from a central admin (audit H7)."""
+    client = app.test_client()
+    tok = login_token(client)
+    client.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    tok = auth_csrf(client)
+    # Valid-looking .db file but NO confirm field -> rejected before any restore.
+    data = {'_csrf_token': tok,
+            'file': (io.BytesIO(b'SQLite format 3\x00not-a-real-db'), 'backup.db')}
+    r = client.post('/settings/backup/restore', data=data,
+                    content_type='multipart/form-data', follow_redirects=False)
+    assert r.status_code in (302, 303)        # bounced back, no restore attempted

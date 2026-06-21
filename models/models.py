@@ -957,6 +957,11 @@ class User(db.Model):
     theme = db.Column(db.String(20))
     # Force a password change on next login (set for new accounts / admin resets).
     must_change_password = db.Column(db.Boolean, default=False)
+    # Single-use, time-limited password-reset token (stored hashed). Used by the
+    # self-service reset so we never overwrite the live password before the user
+    # actually sets a new one. See routes/auth.py.
+    reset_token_hash = db.Column(db.String(256))
+    reset_token_expires = db.Column(db.DateTime)
     # JSON list of dashboard widget keys this user has enabled (None => defaults).
     dashboard_prefs = db.Column(db.Text)
 
@@ -1001,6 +1006,28 @@ class User(db.Model):
     def check_password(self, password):
         """Verify password"""
         return check_password_hash(self.password_hash, password)
+
+    def set_reset_token(self, ttl_minutes=60):
+        """Issue a single-use reset token: store its hash + expiry, return the
+        raw token (to embed in the emailed link). The live password is untouched."""
+        import secrets
+        from datetime import timedelta
+        raw = secrets.token_urlsafe(32)
+        self.reset_token_hash = generate_password_hash(raw)
+        self.reset_token_expires = local_now() + timedelta(minutes=ttl_minutes)
+        return raw
+
+    def check_reset_token(self, raw):
+        """True if `raw` matches the stored, unexpired reset token."""
+        if not raw or not self.reset_token_hash or not self.reset_token_expires:
+            return False
+        if local_now() > self.reset_token_expires:
+            return False
+        return check_password_hash(self.reset_token_hash, raw)
+
+    def clear_reset_token(self):
+        self.reset_token_hash = None
+        self.reset_token_expires = None
 
     @property
     def permission_map(self):
@@ -1314,6 +1341,10 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0')
         if 'dashboard_prefs' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN dashboard_prefs TEXT')
+        if 'reset_token_hash' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN reset_token_hash VARCHAR(256)')
+        if 'reset_token_expires' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN reset_token_expires DATETIME')
     except Exception:
         pass
 

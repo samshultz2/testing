@@ -56,10 +56,33 @@ Critical/High items before any internet-facing deployment.
   module has no branch dimension at all, so there is no tenant boundary to cross.
   (The original IDOR concern was a false positive.)
 
-**Still open:** H3 (deeper fix — stop storing *recoverable* portal passwords),
-H5 (nonce CSP), H6 (portal PIN entropy + per-account lockout), H7 (restore
-confirmation/audit), M3 (rate limiting + bound expensive jobs), M4 (single-use
-TTL reset tokens), M5 (enumeration oracle), and the Low items.
+**Pass 3 (2026-06-21) — fixed:**
+- **M5** — the public result checker now returns one generic "Student ID or card
+  PIN is incorrect" for wrong-ID / wrong-PIN / card-bound-to-another (kills the
+  enumeration oracle); the internal audit log stays specific.
+- **M4** — self-service reset now emails a **single-use, 1-hour reset link**
+  (`User.set_reset_token`/`check_reset_token`/`clear_reset_token`, hashed +
+  expiry) instead of overwriting the live password. New
+  `/reset-password/<uid>/<token>` page. Triggering a reset for someone else no
+  longer locks them out.
+- **H6** — auto portal PINs are now 8 chars from an unambiguous alphabet
+  (~40 bits, up from 24), and parent + CBT logins throttle per **account**
+  (Student ID) in addition to per IP, so a distributed brute-force still trips a
+  lockout.
+- **H7** — DB restore now requires a typed `RESTORE` confirmation (UI + server)
+  and writes an audit-log entry on every attempt.
+- **M3** — added a DB-backed `@rate_limited` decorator; applied to the OCR
+  scan endpoints (30/10min) and DB download/JSON export (12/10min). **The
+  OR-Tools timetable solver was intentionally left untouched** per request.
+- **H5 (safe parts)** — CSP hardened with `object-src 'none'`, `base-uri 'self'`,
+  `frame-ancestors 'self'`, `form-action 'self'`. `'unsafe-inline'`/`'unsafe-eval'`
+  retained (removing needs a per-script nonce migration) — flagged, not done.
+
+**Still open (deferred / by design):**
+- **H3 (deeper)** — production already *requires* field encryption; switching to
+  hash-only storage was declined because it breaks credential-sheet reprinting.
+- **H5 (full)** — nonce-based CSP migration across all inline scripts.
+- **M3 (solver)** — bounding the OR-Tools solver time, intentionally skipped.
 
 > Note on H3: production now *requires* `FIELD_ENCRYPTION_KEY` (passwords are
 > encrypted at rest), but the design still stores a *recoverable* value. Moving
