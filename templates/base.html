@@ -719,6 +719,18 @@
     }
     .branch-switch-menu a:hover { background: var(--gray-50); }
     .branch-switch-menu a.active { background: var(--primary); color: #fff; }
+    /* Mobile: never let the branch switcher overrun / cover the hamburger.
+       The right cluster is allowed to shrink and the branch name truncates,
+       so the menu button always keeps space and stays tappable. */
+    @media (max-width: 768px) {
+        .header-right { min-width: 0; flex-shrink: 1; }
+        .branch-switch { position: relative; min-width: 0; }
+        .branch-switch-btn { max-width: 40vw; }
+        .branch-switch-btn span {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .mobile-menu-btn { position: relative; z-index: 2; }
+    }
     </style>
     
     <script>
