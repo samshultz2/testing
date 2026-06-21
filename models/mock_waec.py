@@ -18,6 +18,10 @@ DISTINCTION_GRADES = {'A1', 'B2', 'B3'}
 GRADE_POINTS = {'A1': 1, 'B2': 2, 'B3': 3, 'C4': 4, 'C5': 5,
                 'C6': 6, 'D7': 7, 'E8': 8, 'F9': 9}
 
+# Admission to a Nigerian tertiary institution needs 5 credits *including* these
+# two — 5 credits alone (e.g. failing English) does not qualify a student.
+CORE_SUBJECTS = ('English Language', 'Mathematics')
+
 
 def waec_grade_from_score(score):
     """Map a 0-100 score to its WASSCE grade. Returns None for a missing score."""
@@ -126,6 +130,9 @@ class MockWAECAnalytics:
         credits = sum(1 for g in grades if g in PASS_GRADES)
         distinctions = sum(1 for g in grades if g in DISTINCTION_GRADES)
         fails = sum(1 for g in grades if g in ('E8', 'F9'))
+        # Which of English/Maths are credited — 5 credits without these don't admit.
+        credited = {r.subject for r in results if r.grade in PASS_GRADES}
+        missing_core = [s for s in CORE_SUBJECTS if s not in credited]
         return {
             'subjects': len(results),
             'credits': credits,
@@ -133,6 +140,10 @@ class MockWAECAnalytics:
             'fails': fails,
             'average_score': round(sum(scores) / len(scores), 1) if scores else None,
             'has_5_credits': credits >= 5,
+            'has_core': not missing_core,
+            'missing_core': missing_core,
+            # The admission-grade flag: 5 credits *and* both English and Maths.
+            'has_5_incl_core': credits >= 5 and not missing_core,
         }
 
     @staticmethod
@@ -172,6 +183,8 @@ class MockWAECAnalytics:
                 'distinctions': s['distinctions'],
                 'average_score': s['average_score'],
                 'has_5_credits': s['has_5_credits'],
+                'has_5_incl_core': s['has_5_incl_core'],
+                'missing_core': s['missing_core'],
             })
 
         if len(progress) >= 2:
@@ -190,6 +203,8 @@ class MockWAECAnalytics:
             'trend': trend,
             'latest_credits': progress[-1]['credits'],
             'best_credits': max(p['credits'] for p in progress),
+            'latest_has_5_incl_core': progress[-1]['has_5_incl_core'],
+            'latest_missing_core': progress[-1]['missing_core'],
         }
 
     @staticmethod
@@ -207,6 +222,7 @@ class MockWAECAnalytics:
             by_student.setdefault(r.student_id, []).append(r)
         summaries = [MockWAECAnalytics._summarise(rs) for rs in by_student.values()]
         with_5 = sum(1 for s in summaries if s['has_5_credits'])
+        with_5_core = sum(1 for s in summaries if s['has_5_incl_core'])
 
         # Per-subject performance.
         by_subject = {}
@@ -235,6 +251,9 @@ class MockWAECAnalytics:
             'statistics': {
                 'with_5_credits': with_5,
                 'with_5_credits_pct': round(with_5 / len(summaries) * 100, 1) if summaries else 0,
+                # The honest admission metric: 5 credits including English & Maths.
+                'with_5_incl_core': with_5_core,
+                'with_5_incl_core_pct': round(with_5_core / len(summaries) * 100, 1) if summaries else 0,
                 'avg_credits': round(sum(s['credits'] for s in summaries) / len(summaries), 1) if summaries else 0,
             },
             'grade_distribution': dist,
@@ -285,9 +304,15 @@ class MockWAECAnalytics:
                    else 'AVERAGE' if predicted_credits >= 5 else 'POOR')
         exam_count = progress['exam_count']
         confidence = min(90, 55 + exam_count * 10)
+        # Project the core-subject requirement from the most recent sitting.
+        missing_core = progress.get('latest_missing_core', list(CORE_SUBJECTS))
+        meets_incl_core = predicted_credits >= 5 and not missing_core
         return {
             'predicted_credits': predicted_credits,
             'meets_minimum': predicted_credits >= 5,
+            # The admission-grade projection: 5 credits *and* English & Maths.
+            'meets_minimum_incl_core': meets_incl_core,
+            'missing_core': missing_core,
             'quality': quality,
             'confidence': confidence,
             'trend': progress['trend'],
