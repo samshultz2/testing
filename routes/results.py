@@ -1372,9 +1372,15 @@ def analytics_hub():
                 'mean_jamb': round(sum(ys) / len(ys), 1),
             }
 
+    # Trends from data we capture but didn't previously analyse.
+    from utils import exam_trends
+    active_sess = get_active_session()
     return render_template('results/analytics_hub.html',
         years=years,
         selected_year=year,
+        jamb_subjects=exam_trends.jamb_subject_breakdown(bid, year),
+        waec_subject_gains=exam_trends.mock_waec_subject_gains(active_sess.id) if active_sess else {},
+        attendance_corr=exam_trends.attendance_performance_correlation(get_sss3_students(), 'jamb'),
         class_compare=class_compare,
         internal_corr=internal_corr,
         waec_stats=waec_stats,

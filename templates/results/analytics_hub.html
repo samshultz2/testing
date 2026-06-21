@@ -364,6 +364,47 @@
 </div>
 
 {% endif %}
+<!-- Subject-level JAMB performance (captured but previously unused) -->
+{% if jamb_subjects %}
+<div class="section-title"><i class="fas fa-list-ol"></i> JAMB subject performance <span class="tag jamb">JAMB</span></div>
+<div class="card" style="padding:0;overflow-x:auto;">
+<table class="table" style="font-size:.85rem;margin:0;">
+    <thead><tr><th>Subject</th><th>Sat</th><th>Average</th><th>Best</th><th>Lowest</th></tr></thead>
+    <tbody>
+    {% for r in jamb_subjects %}
+    <tr><td>{{ r.subject }}</td><td>{{ r.count }}</td><td><strong>{{ r.average }}</strong></td><td>{{ r.max }}</td><td>{{ r.min }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+<!-- Mock WAEC subject value-added across the term -->
+{% if waec_subject_gains and waec_subject_gains.subjects %}
+<div class="section-title"><i class="fas fa-arrow-trend-up"></i> Mock WAEC subject value-added <span class="tag waec">WAEC</span></div>
+<p class="text-muted text-sm" style="margin:0 0 .5rem;">Average score change from {{ waec_subject_gains.first_exam }} to {{ waec_subject_gains.latest_exam }} (weakest movers first).</p>
+<div class="card" style="padding:0;overflow-x:auto;">
+<table class="table" style="font-size:.85rem;margin:0;">
+    <thead><tr><th>Subject</th><th>First</th><th>Latest</th><th>Gain</th></tr></thead>
+    <tbody>
+    {% for r in waec_subject_gains.subjects %}
+    <tr><td>{{ r.subject }}</td><td>{{ r.first }}</td><td>{{ r.latest }}</td>
+        <td style="color:{{ '#137333' if r.gain > 0 else '#b3261e' if r.gain < 0 else 'inherit' }};font-weight:700;">{{ '%+.1f'|format(r.gain) }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+<!-- Attendance <-> results correlation -->
+{% if attendance_corr and attendance_corr.coefficient is not none %}
+<div class="section-title"><i class="fas fa-user-check"></i> Attendance ↔ JAMB</div>
+<div class="card"><div class="card-body" style="font-size:.9rem;">
+    Across <strong>{{ attendance_corr.n }}</strong> SSS3 students with both attendance and a JAMB score, the correlation between attendance rate and JAMB score is
+    <strong>{{ attendance_corr.coefficient }}</strong> — <strong>{{ attendance_corr.strength }}</strong>.
+    <span class="text-muted">Higher attendance tends to track {{ 'higher' if attendance_corr.coefficient > 0 else 'lower' }} scores.</span>
+</div></div>
+{% endif %}
 </div><!-- /#analyticsContent -->
 
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
