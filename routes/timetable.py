@@ -544,8 +544,13 @@ def print_timetable(assignment_id):
 
     suffix = 'with-teachers' if include_teachers else 'no-teachers'
     fname = f'timetable_{assignment.display_name.replace(" ", "_")}_{suffix}.pdf'
-    return send_file(buf, mimetype='application/pdf', as_attachment=False,
+    resp = send_file(buf, mimetype='application/pdf', as_attachment=False,
                      download_name=fname)
+    # Always regenerate from current data — never let the browser or service
+    # worker serve a stale copy (an old cached no-teachers PDF was being shown
+    # instead of the current design).
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 # ============================================================================
