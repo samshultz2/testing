@@ -20,6 +20,7 @@ instance/*.db.backup
 instance/*.sqlite
 instance/backups/
 instance/.secret_key
+instance/*.jsonl
 /school.db
 
 # Uploads (user-generated)

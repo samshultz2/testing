@@ -103,6 +103,17 @@ class Config:
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
     LOG_FILE = os.environ.get('LOG_FILE', '')  # empty => stderr only
 
+    # Error monitoring. Errors are persisted to a JSONL file (so the in-app Error
+    # Log survives restarts) and, when ALERT_EMAIL is set, server errors trigger
+    # a throttled email alert. Sentry is opt-in via SENTRY_DSN.
+    ERROR_LOG_FILE = os.environ.get(
+        'ERROR_LOG_FILE', os.path.join(BASE_DIR, 'instance', 'errors.jsonl'))
+    ERROR_LOG_MAX = int(os.environ.get('ERROR_LOG_MAX', '2000'))  # lines kept
+    ALERT_EMAIL = os.environ.get('ALERT_EMAIL', '')  # recipient(s); comma-separated
+    # Minimum seconds between alert emails, so an error storm can't flood inboxes.
+    ERROR_ALERT_MIN_INTERVAL = int(os.environ.get('ERROR_ALERT_MIN_INTERVAL', '900'))
+    SENTRY_DSN = os.environ.get('SENTRY_DSN', '')  # empty => Sentry disabled
+
     # Field-level encryption at rest (AES-256-GCM). When set, sensitive
     # recoverable fields (e.g. student portal passwords) are encrypted in the
     # database. Generate a key with:
