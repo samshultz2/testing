@@ -6,6 +6,11 @@ import tempfile
 import pytest
 
 os.environ['POSYHUB_TESTING'] = '1'
+# Legacy shared-password login now has no built-in password and is off by
+# default; the suite exercises it, so opt in with a known test password before
+# config is imported (real env vars still win via setdefault).
+os.environ.setdefault('ENABLE_LEGACY_LOGIN', '1')
+os.environ.setdefault('ADMIN_PASSWORD', 'test-admin-secret-pw')
 
 from app import create_app  # noqa: E402
 from config import Config  # noqa: E402

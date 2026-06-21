@@ -60,7 +60,17 @@ def create_app(config_class=None):
         config_class = get_config()
     app = Flask(__name__)
     app.config.from_object(config_class)
-    
+
+    # Surface security advisories at startup (these were previously defined on
+    # the config but never invoked). Skip under tests to keep output clean.
+    if not app.config.get('TESTING'):
+        try:
+            import sys
+            for _w in config_class.security_warnings():
+                print('SECURITY: ' + _w, file=sys.stderr)
+        except Exception:
+            pass
+
     # Ensure instance folder exists
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'instance'), exist_ok=True)

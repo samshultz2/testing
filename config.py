@@ -7,13 +7,21 @@ from datetime import timedelta
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-# Load settings from a .env file in the project root (if python-dotenv is
-# installed). Real OS environment variables still take precedence.
+# Load settings from a .env file in the project root so deployments keep secrets
+# out of source. Real OS environment variables still take precedence. Auth and
+# crypto now depend on these values being loaded, so a failure is surfaced
+# loudly instead of being silently swallowed.
+_ENV_FILE = os.path.join(BASE_DIR, '.env')
+ENV_FILE_LOADED = False
 try:
     from dotenv import load_dotenv
-    load_dotenv(os.path.join(BASE_DIR, '.env'))
-except Exception:
-    pass
+    ENV_FILE_LOADED = load_dotenv(_ENV_FILE)   # True only when the file exists
+except ImportError:
+    if os.path.exists(_ENV_FILE):
+        import sys
+        print('SECURITY WARNING: python-dotenv is not installed, so .env is '
+              'being IGNORED. Run: pip install -r requirements.txt',
+              file=sys.stderr)
 
 
 def _load_secret_key():
@@ -105,11 +113,12 @@ class Config:
 
     # Application settings
     APP_NAME = "EduSyncra"
-    # Legacy shared-password login (kept for backwards compatibility). Set
-    # ADMIN_PASSWORD via the environment in production and disable legacy login
-    # once real user accounts exist (ENABLE_LEGACY_LOGIN=0).
-    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or "posyhubcomng"
-    ENABLE_LEGACY_LOGIN = _as_bool(os.environ.get('ENABLE_LEGACY_LOGIN'), default=True)
+    # Legacy shared-password login (backwards compatibility only). There is NO
+    # built-in password: legacy login is inert unless you both enable it and set
+    # a strong ADMIN_PASSWORD in the environment / .env. Prefer real user
+    # accounts and leave this disabled.
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or None
+    ENABLE_LEGACY_LOGIN = _as_bool(os.environ.get('ENABLE_LEGACY_LOGIN'), default=False)
 
     # Online payments (Paystack). Empty keys => the feature stays disabled.
     PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
@@ -152,6 +161,33 @@ class Config:
     ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
 
+    @classmethod
+    def security_warnings(cls):
+        """Operational security advisories for the active configuration.
+
+        Returned at startup by the app factory (see app.py) and logged, so
+        misconfigurations are visible instead of silent. Add hard-failure
+        enforcement here once a deployment's .env is known-complete.
+        """
+        w = []
+        if not os.environ.get('SECRET_KEY'):
+            w.append('SECRET_KEY is not set — using a generated/persisted key. '
+                     'Set SECRET_KEY in .env for stable, secure sessions.')
+        if cls.ENABLE_LEGACY_LOGIN and not cls.ADMIN_PASSWORD:
+            w.append('ENABLE_LEGACY_LOGIN is on but ADMIN_PASSWORD is unset — '
+                     'legacy login is inert (no password to match).')
+        if cls.ENABLE_LEGACY_LOGIN and cls.ADMIN_PASSWORD:
+            w.append('Legacy shared-password login is ENABLED. Disable it '
+                     '(ENABLE_LEGACY_LOGIN=0) once real user accounts exist.')
+        if not cls.FIELD_ENCRYPTION_KEY:
+            w.append('FIELD_ENCRYPTION_KEY is not set — portal passwords are '
+                     'stored without encryption at rest. Set it in .env.')
+        if not cls._IS_POSTGRES:
+            w.append('Running on SQLite — PostgreSQL is recommended for '
+                     'production (set DATABASE_URL).')
+        return w
+
+
 class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
@@ -160,28 +196,11 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
-    # In production, sessions should not survive a secret-key change, and we
-    # want secure defaults. Cookies are only marked Secure when served over
-    # HTTPS — keep SESSION_COOKIE_SECURE=1 in the environment once TLS is in
-    # front (e.g. behind nginx). It is left configurable because LAN/Termux
-    # deployments may run plain HTTP initially.
+    # Secure by default in production; flip SESSION_COOKIE_SECURE=0 in the
+    # environment only for a plain-HTTP LAN/Termux deployment (the cookie is
+    # otherwise not sent over HTTP and login would appear to "not work").
+    SESSION_COOKIE_SECURE = _as_bool(os.environ.get('SESSION_COOKIE_SECURE'), default=True)
     ENABLE_HSTS = _as_bool(os.environ.get('ENABLE_HSTS'), default=True)
-
-    @staticmethod
-    def warnings():
-        """Return a list of production-readiness warnings (non-fatal)."""
-        msgs = []
-        if not os.environ.get('SECRET_KEY'):
-            msgs.append('SECRET_KEY is not set in the environment; using a '
-                        'generated/persisted key. Set SECRET_KEY for production.')
-        if Config.ENABLE_LEGACY_LOGIN and not os.environ.get('ADMIN_PASSWORD'):
-            msgs.append('Legacy shared-password login is enabled with the '
-                        'default password. Set ADMIN_PASSWORD or '
-                        'ENABLE_LEGACY_LOGIN=0.')
-        if not Config._IS_POSTGRES:
-            msgs.append('Running on SQLite. PostgreSQL is recommended for '
-                        'production (set DATABASE_URL).')
-        return msgs
 
 
 class TestingConfig(Config):

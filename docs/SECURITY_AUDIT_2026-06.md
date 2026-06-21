@@ -24,6 +24,25 @@ Critical/High items before any internet-facing deployment.
 
 ---
 
+## Remediation log
+
+**Pass 1 (2026-06-20) — fixed:**
+- **C1** — removed the hardcoded `ADMIN_PASSWORD` fallback; legacy login now
+  requires both `ENABLE_LEGACY_LOGIN=1` **and** a configured `ADMIN_PASSWORD`,
+  and defaults **off**. `auth.py` guards on a configured password.
+  `ProductionConfig`'s never-invoked `warnings()` was replaced by
+  `Config.security_warnings()`, now **called at startup** and logged.
+  Regression tests in `tests/test_security_login.py`.
+- **H1** — `ProductionConfig.SESSION_COOKIE_SECURE` now defaults **True**
+  (opt-out via env for plain-HTTP LAN).
+- **L2** — login throttle is cleared only after the `is_active` check.
+- **.env** — loader hardened: a present-but-unreadable `.env` (missing
+  python-dotenv) now prints a loud warning instead of silently no-op'ing, and
+  `ENV_FILE_LOADED` records whether a file was applied. `.env.example` updated to
+  the new secure defaults.
+
+**Still open:** H2, H3, H4, H5, H6, H7 and the Medium/Low items below.
+
 ## Severity summary
 
 | ID | Sev | Finding |

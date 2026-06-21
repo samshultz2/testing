@@ -50,11 +50,12 @@ def login():
             user = User.query.filter_by(username=username).first()
 
             if user and user.check_password(password):
-                _clear_login_failures()
                 if not user.is_active:
+                    # Don't clear the throttle for a deactivated account.
                     flash('Your account has been deactivated. Contact administrator.', 'error')
                     return redirect(url_for('auth.login'))
-                
+                _clear_login_failures()
+
                 # Successful user login
                 session['logged_in'] = True
                 session['user_id'] = user.id
@@ -82,8 +83,10 @@ def login():
                 flash('Invalid credentials. Please try again.', 'error')
                 return redirect(url_for('auth.login'))
 
-        # Legacy admin password login (only when explicitly enabled)
-        if (Config.ENABLE_LEGACY_LOGIN and password
+        # Legacy admin password login — only when explicitly enabled AND a
+        # password is configured. There is no built-in/default password, so an
+        # unconfigured deployment cannot be logged into via this path.
+        if (Config.ENABLE_LEGACY_LOGIN and Config.ADMIN_PASSWORD and password
                 and hmac.compare_digest(password, Config.ADMIN_PASSWORD)):
             _clear_login_failures()
             session['logged_in'] = True

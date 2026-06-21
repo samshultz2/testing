@@ -28,7 +28,7 @@ disk encryption) and a **missing brute-force throttle on public endpoints**.
 | # | Severity | Finding | Status / Recommendation |
 |---|----------|---------|--------------------------|
 | 1 | **High** | **No rate limiting on public endpoints** — `/check-result` (scratch-card PIN) and `/parent` login can be brute-forced. Attempts are logged but not throttled. | **Open.** Apply the existing `RateLimiter` (utils/security.py) keyed by IP (+ student id) to both. |
-| 2 | Medium | **Default shared admin password** `posyhubcomng`, and legacy shared-password login enabled by default. | Mitigated by startup `PRODUCTION:` warnings. **Set `ADMIN_PASSWORD`** and set `ENABLE_LEGACY_LOGIN=0` once real accounts exist. |
+| 2 | ~~Critical~~ **Fixed** | **Default shared admin password** `posyhubcomng` + legacy login on by default (the "mitigated by warnings" note was wrong — `warnings()` was never called). | **Resolved 2026-06:** hardcoded password removed; legacy login is off by default and inert unless `ENABLE_LEGACY_LOGIN=1` **and** a strong `ADMIN_PASSWORD` are set. Advisories are now logged at startup. See `docs/SECURITY_AUDIT_2026-06.md`. |
 | 3 | Medium | **No TLS in transit** (LAN/Termux is plain HTTP). | Closes on server deploy — HTTPS via nginx+certbot. "AES-256 in transit" = TLS. |
 | 4 | Medium | **Backups & uploads stored unencrypted** on disk. | Enable **disk/volume encryption** on the server (covers DB files, daily backups, uploads). Manual backups can also be AES-256 encrypted via `BACKUP_ENCRYPTION_KEY`. |
 | 5 | Low | `SECRET_KEY` auto-generated/persisted if unset. | Set `SECRET_KEY` explicitly in production (warned at startup). |
