@@ -150,6 +150,13 @@ class Config:
     # Backups
     BACKUP_RETENTION = int(os.environ.get('BACKUP_RETENTION', '10'))
 
+    # Automated fee reminders. Opt-in: when enabled, a background job prepares a
+    # Draft SMS campaign to fee defaulters for the active term and bells admins to
+    # review and send it. Nothing is sent automatically — the human send-gate is
+    # kept. A new draft is prepared at most once per FEE_REMINDER_INTERVAL_DAYS.
+    FEE_REMINDER_ENABLED = _as_bool(os.environ.get('FEE_REMINDER_ENABLED'), default=False)
+    FEE_REMINDER_INTERVAL_DAYS = int(os.environ.get('FEE_REMINDER_INTERVAL_DAYS', '7'))
+
     # Optional Claude-vision OCR fallback (needs ANTHROPIC_API_KEY + the
     # `anthropic` package). Off by default — Tesseract is the default engine.
     OCR_VISION_FALLBACK = _as_bool(os.environ.get('OCR_VISION_FALLBACK'), default=False)

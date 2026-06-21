@@ -38,12 +38,18 @@ def _start_scheduled_messages_worker(app):
     import time
 
     def _loop():
+        last_daily = None
         while True:
             time.sleep(60)
             try:
                 with app.app_context():
                     from utils.comms import dispatch_due_scheduled
                     dispatch_due_scheduled()
+                    today = time.strftime('%Y%m%d')
+                    if today != last_daily:
+                        from utils.reminders import run_fee_reminders
+                        run_fee_reminders(app)   # opt-in; no-op unless enabled
+                        last_daily = today
             except Exception:
                 pass
 

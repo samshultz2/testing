@@ -25,6 +25,7 @@ os.environ['RUN_INPROCESS_JOBS'] = '0'
 from app import create_app  # noqa: E402
 from utils.backup import auto_backup  # noqa: E402
 from utils.comms import dispatch_due_scheduled  # noqa: E402
+from utils.reminders import run_fee_reminders  # noqa: E402
 
 POLL_SECONDS = int(os.environ.get('JOBS_POLL_SECONDS', '60'))
 
@@ -32,15 +33,16 @@ POLL_SECONDS = int(os.environ.get('JOBS_POLL_SECONDS', '60'))
 def main():
     app = create_app()
     app.logger.info('Background jobs worker started (poll=%ss).', POLL_SECONDS)
-    last_backup_day = None
+    last_daily = None
     while True:
         try:
             with app.app_context():
                 dispatch_due_scheduled()
                 today = time.strftime('%Y%m%d')
-                if today != last_backup_day:
+                if today != last_daily:
                     auto_backup(app)
-                    last_backup_day = today
+                    run_fee_reminders(app)   # opt-in; no-op unless enabled
+                    last_daily = today
         except Exception as exc:
             app.logger.error('jobs worker error: %s', exc)
         time.sleep(POLL_SECONDS)
