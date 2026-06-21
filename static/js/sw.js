@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
 // pick them up promptly. Static assets also use stale-while-revalidate below,
 // so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v81';
+const CACHE_VERSION = 'v82';
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
@@ -130,24 +130,40 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Page navigations: network-first, fall back to cached page, then offline page.
-  if (req.mode === 'navigate') {
+  // Page requests: full-page navigations AND in-app SPA soft-navigations (which
+  // arrive as fetch() with the X-Requested-With: spa-nav header, NOT mode
+  // 'navigate'). Both must be cached, or pages reached only via the in-app menu
+  // are never stored and won't open offline. Network-first so online always wins;
+  // the HTML is cached under the bare URL so navigate and SPA requests share one
+  // entry and a visited page opens offline.
+  const isPage = req.mode === 'navigate'
+    || req.headers.get('X-Requested-With') === 'spa-nav';
+  if (isPage) {
     e.respondWith(
       fetch(req).then((res) => {
-        // Only cache genuine HTML pages. Files served inline as navigations
-        // (PDF previews, downloads) must never enter the cache, or stale copies
-        // get served back later — which showed users an outdated PDF design and
-        // sent download links into a cached app shell.
+        // Only cache genuine HTML pages — never files served inline as
+        // navigations (PDF previews, downloads), or stale copies get served back.
         const ct = res.headers.get('Content-Type') || '';
         const disp = res.headers.get('Content-Disposition') || '';
         if (res.ok && ct.indexOf('text/html') !== -1 && disp.indexOf('attachment') === -1) {
           const copy = res.clone();
-          caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy));
+          caches.open(RUNTIME_CACHE).then((c) => c.put(req.url, copy));
         }
         return res;
       }).catch(() =>
-        caches.match(req).then((hit) => hit || caches.match(OFFLINE_URL))
+        // Offline: serve the cached page (ignoreVary so a page cached under a
+        // different header set — e.g. Vary: Cookie — still matches), else the
+        // generic offline page.
+        caches.match(req.url, { ignoreVary: true })
+          .then((hit) => hit || caches.match(OFFLINE_URL))
+          .then((resp) => resp || new Response(
+            '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            + '<body style="font-family:system-ui;text-align:center;padding:3rem 1rem;color:#334">'
+            + '<h1>You are offline</h1><p>This page hasn\'t been saved for offline use yet. '
+            + 'Reconnect, open it once, and it will be available offline next time.</p>',
+            { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 200 }))
       )
     );
+    return;
   }
 });
