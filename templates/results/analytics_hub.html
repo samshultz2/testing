@@ -303,7 +303,11 @@
 <div class="two-col mb-3">
     <div class="card">
         <div class="card-header"><h3><i class="fas fa-wave-square"></i> Year-over-Year</h3></div>
+        {% if yoy and (yoy.jamb_trends or yoy.waec_trends) %}
         <div class="chart-wrap"><canvas id="yoyChart"></canvas></div>
+        {% else %}
+        <div class="card-body text-muted"><i class="fas fa-info-circle"></i> Need at least two years of WAEC/JAMB data to chart a year-over-year trend.</div>
+        {% endif %}
     </div>
     {% if projection %}
     <div class="proj-card">
@@ -317,6 +321,25 @@
     </div>
     {% else %}
     <div class="card"><div class="card-body text-muted"><i class="fas fa-info-circle"></i> Need at least two years of JAMB data to project a trend.</div></div>
+    {% endif %}
+</div>
+
+<!-- ============ MOCK JAMB PROGRESSION ============ -->
+<div class="section-title"><i class="fas fa-flask"></i> Mock JAMB Progression <span class="text-muted text-sm">(active session)</span></div>
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort mock-score trajectory</h3></div>
+    {% if mock_trend %}
+    <div class="chart-wrap"><canvas id="mockTrendChart"></canvas></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Mock</th><th>Students</th><th>Average</th><th>&ge;200</th></tr></thead>
+        <tbody>
+            {% for m in mock_trend %}
+            <tr><td>{{ m.label }}</td><td>{{ m.students }}</td><td><strong>{{ m.average }}</strong></td><td>{{ m.above_200_pct }}%</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock JAMB results recorded for the active session yet. <a href="{{ url_for('mock_jamb.index') }}">Set up a mock exam &rarr;</a></div>
     {% endif %}
 </div>
 
@@ -367,8 +390,8 @@ new Chart(document.getElementById('waecGender'), {
 });
 {% endif %}
 
-const yoyJamb = {{ yoy.jamb_trends | tojson }};
-const yoyWaec = {{ yoy.waec_trends | tojson }};
+const yoyJamb = {{ (yoy.jamb_trends if yoy else []) | tojson }};
+const yoyWaec = {{ (yoy.waec_trends if yoy else []) | tojson }};
 if (document.getElementById('yoyChart')) {
     const yearsSet = [...new Set([...yoyJamb.map(t=>t.year), ...yoyWaec.map(t=>t.year)])].sort();
     new Chart(document.getElementById('yoyChart'), {
@@ -379,6 +402,20 @@ if (document.getElementById('yoyChart')) {
         ]},
         options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
             scales:{ y:{ position:'left', title:{display:true,text:'JAMB'} }, y1:{ position:'right', max:100, grid:{drawOnChartArea:false}, title:{display:true,text:'WAEC %'} } } }
+    });
+}
+
+// Mock JAMB cohort trajectory across the session's mocks.
+const mockTrend = {{ mock_trend | tojson }};
+if (document.getElementById('mockTrendChart') && mockTrend.length) {
+    new Chart(document.getElementById('mockTrendChart'), {
+        type:'line',
+        data:{ labels:mockTrend.map(m=>m.label), datasets:[
+            { label:'Average score', data:mockTrend.map(m=>m.average), borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.12)', tension:.3, fill:true, yAxisID:'y' },
+            { label:'% ≥ 200', data:mockTrend.map(m=>m.above_200_pct), borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.1)', tension:.3, yAxisID:'y1' }
+        ]},
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+            scales:{ y:{ position:'left', suggestedMax:400, title:{display:true,text:'Mean /400'} }, y1:{ position:'right', max:100, grid:{drawOnChartArea:false}, title:{display:true,text:'% ≥ 200'} } } }
     });
 }
 

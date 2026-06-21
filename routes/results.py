@@ -1362,8 +1362,34 @@ def analytics_hub():
         projection=projection,
         cutoff=cutoff,
         at_risk=_at_risk_register(limit=25),
+        mock_trend=_mock_jamb_trend(bid),
         recompute_url=url_for('results.recompute_analytics'),
     )
+
+
+def _mock_jamb_trend(branch_id):
+    """School-level Mock JAMB progression for the active session (branch-scoped):
+    one point per mock exam, in order. Drives the Mock JAMB trend chart and shows
+    whether the cohort is climbing toward the JAMB benchmarks."""
+    from models.mock_jamb import MockJAMBExam
+    session = get_active_session()
+    if not session:
+        return []
+    q = MockJAMBExam.query.filter_by(session_id=session.id)
+    if branch_id is not None:
+        q = q.filter(MockJAMBExam.branch_id == branch_id)
+    out = []
+    for ex in q.order_by(MockJAMBExam.exam_number).all():
+        scores = [r.total_score for r in ex.results.all()]
+        if not scores:
+            continue
+        out.append({
+            'label': ex.display_name,
+            'average': round(sum(scores) / len(scores), 1),
+            'students': len(scores),
+            'above_200_pct': round(sum(1 for s in scores if s >= 200) / len(scores) * 100, 1),
+        })
+    return out
 
 
 @results_bp.route('/analytics/export')
@@ -1710,14 +1736,16 @@ def api_student_risk(student_id):
 
 def _at_risk_register(limit=None):
     """The persisted at-risk register: latest stored assessment per in-scope
-    student, RED/AMBER only, highest risk first. Reads engine rows (no recompute)."""
+    SSS3 student, RED/AMBER only, highest risk first. Reads engine rows (the
+    analysis is for SSS3 only, so non-SSS3 assessments are excluded)."""
     from models.analytics_models import StudentRiskAssessment
+    sss3_ids = {s.id for s in get_sss3_students()}
     rows = (scope_by_student(StudentRiskAssessment.query, StudentRiskAssessment)
             .order_by(StudentRiskAssessment.overall_risk_score.desc())
             .all())
     seen, out = set(), []
     for r in rows:
-        if r.student_id in seen:
+        if r.student_id in seen or r.student_id not in sss3_ids:
             continue
         seen.add(r.student_id)
         if r.risk_level not in ('RED', 'AMBER'):
@@ -1751,7 +1779,9 @@ def recompute_analytics():
     import, since per-student rows are otherwise only written on results changes."""
     from utils.analytics_engine import AnalyticsEngine
     bid = viewing_branch_id()
-    n = AnalyticsEngine.recompute_all_students(branch_id=bid)
+    # SSS3 only — the cohort this analysis is about (already branch-scoped).
+    sss3_ids = [s.id for s in get_sss3_students()]
+    n = AnalyticsEngine.recompute_all_students(student_ids=sss3_ids)
     years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().all() if y[0]]
     for yr in sorted(years, reverse=True)[:5]:
         try:
