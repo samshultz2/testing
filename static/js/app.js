@@ -342,6 +342,36 @@ function buildBottomNav(items) {
     if (more) more.addEventListener('click', openSidebar);
 }
 
+// Recompute the active section and rebuild the bottom nav for the current URL.
+// Called after each SPA swap (the bottom nav is JS-built, so syncActive in
+// spa-nav.js can't restyle it — it must be regenerated for the new page).
+function refreshBottomNav() {
+    var list = document.querySelector('.sidebar-nav > ul');
+    if (!list) return;
+    var groups = [], current = { header: null, items: [] };
+    Array.prototype.forEach.call(list.children, function (li) {
+        if (li.classList.contains('nav-section')) {
+            if (current.header || current.items.length) groups.push(current);
+            current = { header: li, items: [] };
+        } else { current.items.push(li); }
+    });
+    if (current.header || current.items.length) groups.push(current);
+
+    var path = window.location.pathname, bestLink = null, bestLen = -1;
+    list.querySelectorAll('a.nav-link[href]').forEach(function (a) {
+        var p;
+        try { p = new URL(a.href).pathname; } catch (e) { return; }
+        if (p === '/') { if (path === '/' && bestLen < 0) { bestLink = a; bestLen = 0; } return; }
+        if (path === p || path.indexOf(p + '/') === 0 || path.indexOf(p) === 0) {
+            if (p.length > bestLen) { bestLink = a; bestLen = p.length; }
+        }
+    });
+    var activeLi = bestLink ? bestLink.closest('li') : null;
+    var activeGroup = null;
+    groups.forEach(function (g) { if (activeLi && g.items.indexOf(activeLi) >= 0) activeGroup = g; });
+    buildBottomNav(activeGroup ? activeGroup.items : []);
+}
+
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
@@ -353,6 +383,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // since the page body is replaced without a full reload).
     hideWriteControls();
     window.addEventListener('spa:loaded', function () { try { hideWriteControls(); } catch (e) {} });
+    // Rebuild the mobile bottom nav so its active item tracks the soft-navigated page.
+    window.addEventListener('spa:loaded', function () { try { refreshBottomNav(); } catch (e) {} });
 
     // Mobile menu
     const menuBtn = document.getElementById('mobileMenuBtn');

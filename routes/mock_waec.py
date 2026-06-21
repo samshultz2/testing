@@ -6,6 +6,7 @@ real WAEC section but marked out of 100 with auto-derived A1-F9 grades. Includes
 single-student entry, a paste-and-preview bulk importer, per-student progression,
 school analytics, Excel export, and live feeding of the analytics inference engine.
 """
+import re
 from datetime import datetime
 
 from flask import (Blueprint, request, redirect, url_for, flash, render_template,
@@ -23,11 +24,9 @@ from utils.branch_scope import require_branch_access, branch_for_new, scope_quer
 from utils.csrf import csrf_protect
 from utils.web_exports import xlsx_response
 from utils.analytics_engine import recompute_student_safe
+from utils.subject_match import canonical_subject
 
 mock_waec_bp = Blueprint('mock_waec', __name__, url_prefix='/mock-waec')
-
-_CANON_SUBJECTS = {s.upper(): s for s in WAEC_SUBJECTS}
-
 
 # =============================================================================
 # DASHBOARD
@@ -222,26 +221,76 @@ def add_result(exam_id):
 # RESULT ENTRY — paste & preview bulk importer
 # =============================================================================
 
-def _match_student_index():
-    """Build lookup maps (admission-no -> student, full-name -> student) over the
-    SSS3 cohort, for resolving pasted rows to students."""
-    by_admission, by_name = {}, {}
+def _name_tokens(text):
+    """Normalised alphabetic tokens of a name (uppercase, punctuation dropped)."""
+    return [t for t in re.sub(r'[^A-Za-z ]+', ' ', (text or '').upper()).split() if t]
+
+
+def _build_student_index():
+    """Index the SSS3 cohort for flexible matching: by admission number, by exact
+    normalised full name, and by (surname, first-name) token sets so a pasted name
+    can match even when middle names are missing, shortened, or reordered."""
+    by_admission, by_fullname, token_rows = {}, {}, []
     for s in get_sss3_students():
         if s.student_id:
             by_admission[s.student_id.strip().upper()] = s
-        by_name[s.full_name.strip().upper()] = s
-    return by_admission, by_name
+        full = _name_tokens(s.full_name)
+        by_fullname.setdefault(' '.join(full), s)
+        # Required anchors: surname + first name (middle names are optional).
+        anchors = set(_name_tokens(s.surname)) | set(_name_tokens(s.first_name))
+        token_rows.append((s, anchors, set(full)))
+    return by_admission, by_fullname, token_rows
+
+
+def _token_covered(needle, haystack):
+    """True if *needle* matches any token in *haystack* exactly or as a >=3-char
+    prefix (so 'Tobi' matches 'Tobiloba' and vice-versa)."""
+    for tok in haystack:
+        if tok == needle or (len(needle) >= 3 and len(tok) >= 3
+                             and (tok.startswith(needle) or needle.startswith(tok))):
+            return True
+    return False
+
+
+def _resolve_student(index, ident):
+    """Resolve a pasted identifier to a student. Returns ``(student, message)``;
+    *student* is ``None`` when there is no confident single match."""
+    by_admission, by_fullname, token_rows = index
+    key = ident.strip().upper()
+    if key in by_admission:                       # admission number is exact & unambiguous
+        return by_admission[key], ''
+
+    toks = _name_tokens(ident)
+    norm = ' '.join(toks)
+    if norm in by_fullname:
+        return by_fullname[norm], ''
+    if not toks:
+        return None, f'No SSS3 student matches "{ident}"'
+
+    # Anchor match: every required (surname + first name) token of a candidate is
+    # present in the pasted name; pasted middle names are ignored.
+    in_set = set(toks)
+    candidates = [s for s, anchors, _full in token_rows
+                  if anchors and all(_token_covered(a, in_set) for a in anchors)]
+    if len(candidates) == 1:
+        return candidates[0], 'Matched by name (middle name ignored)' if norm != ' '.join(
+            _name_tokens(candidates[0].full_name)) else ''
+    if len(candidates) > 1:
+        names = ', '.join(c.full_name for c in candidates[:3])
+        return None, f'"{ident}" matches {len(candidates)} students ({names}…) — use admission no'
+    return None, f'No SSS3 student matches "{ident}"'
 
 
 def _parse_paste(text):
     """Parse pasted CSV lines into preview rows.
 
     Each line: ``student, subject, score[, grade]`` where *student* is an
-    admission number or full name. Grade is optional (auto-derived from score).
+    admission number or name (middle names optional), and *subject* may be an
+    abbreviation (Eng, Maths, CRS…). Grade is optional (auto-derived from score).
     Returns ``(rows, ok_count)`` — every row carries a status so the preview can
     show exactly what will (and won't) be imported.
     """
-    by_admission, by_name = _match_student_index()
+    index = _build_student_index()
     rows, ok = [], 0
     for lineno, raw in enumerate(text.splitlines(), 1):
         line = raw.strip()
@@ -259,21 +308,23 @@ def _parse_paste(text):
         ident, subject_raw, score_raw = parts[0], parts[1], parts[2]
         grade_raw = parts[3] if len(parts) >= 4 else ''
 
-        # Resolve student.
-        student = by_admission.get(ident.upper()) or by_name.get(ident.upper())
+        # Resolve student (admission no, exact name, or anchor/middle-name match).
+        student, msg = _resolve_student(index, ident)
         if not student:
-            row['message'] = f'No SSS3 student matches "{ident}"'
+            row['message'] = msg
             rows.append(row)
             continue
         row['student'] = student
         row['student_id'] = student.id
         row['student_name'] = student.full_name
+        if msg:
+            row['message'] = msg
 
-        # Canonicalise subject against the WAEC list (case-insensitive).
-        subject = _CANON_SUBJECTS.get(subject_raw.upper(), subject_raw.strip().title())
-        row['subject'] = subject
-        if subject_raw.upper() not in _CANON_SUBJECTS:
-            row['message'] = 'Unrecognised subject (will still be saved)'
+        # Canonicalise subject (handles abbreviations); keep raw if unrecognised.
+        canon = canonical_subject(subject_raw)
+        row['subject'] = canon or subject_raw.strip().title()
+        if not canon:
+            row['message'] = f'Unrecognised subject "{subject_raw}" (will still be saved)'
 
         # Score.
         try:

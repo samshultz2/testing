@@ -11,6 +11,45 @@ from models.analytics_models import StudentRiskAssessment
 from tests.conftest import login_token, auth_csrf
 
 
+def test_subject_aliases():
+    from utils.subject_match import canonical_subject
+    assert canonical_subject('Eng') == 'English Language'
+    assert canonical_subject('english language') == 'English Language'
+    assert canonical_subject('MATHS') == 'Mathematics'
+    assert canonical_subject('F. Maths') == 'Further Mathematics'
+    assert canonical_subject('Econs') == 'Economics'
+    assert canonical_subject('CRS') == 'Christian Religious Studies'
+    assert canonical_subject('Agric') == 'Agricultural Science'
+    assert canonical_subject('Computer') == 'Computer Studies'
+    assert canonical_subject('Basket Weaving') is None
+
+
+def test_name_match_tolerates_missing_middle_name(app):
+    """Paste preview resolves a student by name when the scoresheet drops or
+    reorders the middle name, and flags a genuinely unknown name."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=5)
+    with app.app_context():
+        db.session.add(Student(student_id='NM001', first_name='John',
+                               middle_name='Adewale', surname='Okafor', gender='Male'))
+        db.session.commit()
+    c = _admin_client(app)
+    tok = auth_csrf(c)
+
+    def preview(data):
+        return c.post(f'/mock-waec/exam/{exam_id}/results/paste',
+                      data={'_csrf_token': tok, 'action': 'preview', 'data': data}).get_data(as_text=True)
+
+    # Middle name dropped + order reversed -> still matches "Okafor John Adewale".
+    html = preview('John Okafor, Maths, 70')
+    assert 'Okafor John Adewale' in html and b'ready' in html.encode()
+    html = preview('Okafor John, Eng, 55')
+    assert 'Okafor John Adewale' in html
+    # Unknown name -> flagged, nothing to import.
+    html = preview('Zainab Yusuf, Maths, 50')
+    assert 'No SSS3 student matches' in html
+
+
 def test_grade_boundaries():
     assert waec_grade_from_score(75) == 'A1'
     assert waec_grade_from_score(74) == 'B2'
@@ -62,7 +101,8 @@ def test_paste_preview_then_confirm_creates_results(app):
     sid = _student(app, adm)
     c = _admin_client(app)
     tok = auth_csrf(c)
-    data = f"{adm}, Mathematics, 72\n{adm}, English Language, 64"
+    # Abbreviated subjects must canonicalise (Maths -> Mathematics, Eng -> English Language).
+    data = f"{adm}, Maths, 72\n{adm}, Eng, 64"
 
     # Preview shows ready rows without persisting anything.
     r = c.post(f'/mock-waec/exam/{exam_id}/results/paste',
