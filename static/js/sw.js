@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
 // pick them up promptly. Static assets also use stale-while-revalidate below,
 // so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v82';
+const CACHE_VERSION = 'v83';
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
@@ -163,6 +163,25 @@ self.addEventListener('fetch', (e) => {
             + 'Reconnect, open it once, and it will be available offline next time.</p>',
             { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 200 }))
       )
+    );
+    return;
+  }
+
+  // In-app data requests: section JSON payloads (fetchPage) and apiGet calls,
+  // marked by the headers the app sends (X-Requested-With: fetch / Accept: json).
+  // Network-first so online is always fresh; the JSON is cached so dynamic
+  // screens still render their last-known data offline.
+  const wantsData = req.headers.get('X-Requested-With') === 'fetch'
+    || (req.headers.get('Accept') || '').indexOf('application/json') !== -1;
+  if (wantsData) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(RUNTIME_CACHE).then((c) => c.put(req.url, copy));
+        }
+        return res;
+      }).catch(() => caches.match(req.url, { ignoreVary: true }))
     );
     return;
   }

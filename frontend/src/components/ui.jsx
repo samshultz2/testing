@@ -196,6 +196,26 @@ export function Spinner({ label = 'Loading…' }) {
   );
 }
 
+// Skeleton placeholders for screens that fetch their own data (use while the
+// first load is in flight). Reuses the shimmer styles injected by section.js.
+export function Skeleton({ width = '100%', height = 14, style }) {
+  return <div className="sk-bar" style={{ width, height, margin: 0, ...style }} aria-hidden="true" />;
+}
+
+export function SkeletonCards({ count = 5 }) {
+  return (
+    <div aria-busy="true" aria-live="polite">
+      <div className="sk-bar sk-title" aria-hidden="true" />
+      {Array.from({ length: count }).map((_, i) => (
+        <div className="sk-card" key={i}>
+          <div className="sk-bar" aria-hidden="true" />
+          <div className="sk-bar short" aria-hidden="true" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function EmptyState({ icon = 'fa-inbox', title, hint, action }) {
   return (
     <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#6b7280' }}>
