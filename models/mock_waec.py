@@ -163,6 +163,12 @@ class MockWAECAnalytics:
         if session_id:
             q = q.filter(MockWAECExam.session_id == session_id)
         rows = q.order_by(MockWAECExam.exam_number).all()
+        return MockWAECAnalytics._progress_from_rows(student_id, rows)
+
+    @staticmethod
+    def _progress_from_rows(student_id, rows):
+        """Build the progress dict from already-loaded rows (each with ``.exam``).
+        Lets a cohort be computed from one batched query."""
         if not rows:
             return None
 
@@ -287,7 +293,12 @@ class MockWAECAnalytics:
     def predict_waec(student_id, session_id=None):
         """Predict real-WAEC outcome (expected credits + quality) from the mock
         trajectory. Weights recent sittings more heavily."""
-        progress = MockWAECAnalytics.get_student_progress(student_id, session_id)
+        return MockWAECAnalytics._predict_from_progress(
+            MockWAECAnalytics.get_student_progress(student_id, session_id))
+
+    @staticmethod
+    def _predict_from_progress(progress):
+        """Pure prediction from a progress dict (reusable by a batched caller)."""
         if not progress:
             return None
 

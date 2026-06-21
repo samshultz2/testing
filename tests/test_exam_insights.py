@@ -159,3 +159,38 @@ def test_cohort_funnel_counts(app):
         assert f['counts']['NO_DATA'] == 1
         assert f['projected_5_incl_core'] == 2     # ready + conditional
         assert f['projected_both'] == 1            # only ready clears both
+
+
+def test_cohort_readiness_query_count_is_bounded(app):
+    """The funnel must run a fixed number of queries regardless of cohort size."""
+    from sqlalchemy import event
+    from models import db
+
+    def build(n):
+        ssid, we, je1, je2 = _ready_setup(app)
+        ids = []
+        for _ in range(n):
+            sid = _student(app)
+            _add_waec(app, sid, we, FIVE_CORE)
+            _add_jamb(app, sid, je1, 210); _add_jamb(app, sid, je2, 220)
+            ids.append(sid)
+        return ssid, ids
+
+    def count(ssid, ids):
+        with app.app_context():
+            students = [db.session.get(Student, i) for i in ids]
+            c = {'q': 0}
+            eng = db.engine
+
+            def before(*a, **k):
+                c['q'] += 1
+            event.listen(eng, 'before_cursor_execute', before)
+            try:
+                EI.cohort_readiness(students, ssid)
+            finally:
+                event.remove(eng, 'before_cursor_execute', before)
+            return c['q']
+
+    s1, ids1 = build(2)
+    s2, ids2 = build(6)
+    assert count(s1, ids1) == count(s2, ids2)     # constant in cohort size

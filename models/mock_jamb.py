@@ -125,10 +125,16 @@ class MockJAMBAnalytics:
         if session_id:
             query = query.filter(MockJAMBExam.session_id == session_id)
         results = query.order_by(MockJAMBExam.exam_number).all()
-        
+        return MockJAMBAnalytics._progress_from_results(student_id, results)
+
+    @staticmethod
+    def _progress_from_results(student_id, results):
+        """Build the progress dict from already-loaded, exam-ordered results (each
+        with its ``.exam`` available). Lets a cohort be computed from one batched
+        query instead of one query per student."""
         if not results:
             return None
-        
+
         progress_data = []
         prev_score = None
         
@@ -244,7 +250,13 @@ class MockJAMBAnalytics:
     
     @staticmethod
     def predict_real_jamb(student_id, session_id):
-        progress = MockJAMBAnalytics.get_student_progress(student_id, session_id)
+        return MockJAMBAnalytics._predict_from_progress(
+            MockJAMBAnalytics.get_student_progress(student_id, session_id))
+
+    @staticmethod
+    def _predict_from_progress(progress):
+        """Pure prediction from a progress dict (so a batched caller can reuse the
+        exact same maths without re-querying)."""
         if not progress or progress['exam_count'] < 2:
             return None
 

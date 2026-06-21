@@ -124,16 +124,24 @@ def post_utme_aggregate(jamb_score, grades):
             'aggregate': round(utme + olevel, 1), 'scheme': '50/50 UTME+O’level'}
 
 
-def admission_readiness(student, session_id=None):
+_UNSET = object()
+
+
+def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET):
     """Combine the projected WAEC + JAMB outlook into a single readiness verdict
     with specific, actionable blockers.
 
     ``status`` is one of READY / CONDITIONAL / AT_RISK / NOT_READY / NO_DATA.
     Also returns the broad course categories the student is projected to qualify
     for (5 credits incl. English & Maths, the category's required subject credits,
-    and the category JAMB cut-off all met)."""
-    waec = projected_waec(student, session_id)
-    jamb = projected_jamb(student, session_id)
+    and the category JAMB cut-off all met).
+
+    ``waec`` / ``jamb`` may be passed pre-computed (e.g. from a batched cohort
+    pass) to avoid per-student queries; omit them for the single-student path."""
+    if waec is _UNSET:
+        waec = projected_waec(student, session_id)
+    if jamb is _UNSET:
+        jamb = projected_jamb(student, session_id)
     if not waec and not jamb:
         return {'status': 'NO_DATA', 'blockers': [], 'waec': None, 'jamb': None,
                 'eligible_categories': [], 'aggregate': None, 'source': None}
@@ -223,11 +231,19 @@ def cohort_readiness(students, session_id=None):
     """Aggregate :func:`admission_readiness` across an iterable of students into a
     funnel: status counts, plus how many are projected to get 5 credits incl.
     core, to clear the JAMB baseline, and to clear *both* (admission-ready)."""
+    students = list(students)
+    ids = [s.id for s in students]
+    # Project the whole cohort with a fixed handful of bulk queries, then build
+    # each verdict from the pre-computed projections (no per-student queries).
+    waec_map = _batch_projected_waec(ids, session_id)
+    jamb_map = _batch_projected_jamb(ids, session_id)
+
     counts = {k: 0 for k in STATUSES}
     proj_core = proj_jamb = proj_both = assessed = 0
     rows = []
     for st in students:
-        r = admission_readiness(st, session_id)
+        r = admission_readiness(st, session_id,
+                                waec=waec_map.get(st.id), jamb=jamb_map.get(st.id))
         counts[r['status']] += 1
         meets_ssc = bool(r['waec'] and r['waec']['meets_ssc'])
         jamb_ok = bool(r['jamb'] and r['jamb']['score'] >= JAMB_BASELINE)
@@ -251,6 +267,110 @@ def cohort_readiness(students, session_id=None):
         'projected_both_pct': pct(proj_both),
         'rows': rows,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Batched projections (one set of bulk queries for a whole cohort)
+# --------------------------------------------------------------------------- #
+def _batch_projected_jamb(ids, session_id):
+    """{student_id -> projected_jamb dict} for the cohort, mirroring
+    :func:`projected_jamb`. Prefers actual JAMB; else the Mock JAMB prediction.
+    Two queries (actual + mocks) regardless of cohort size."""
+    from collections import defaultdict
+    from sqlalchemy.orm import contains_eager
+    from models import db, JAMBResult
+    from models.mock_jamb import MockJAMBAnalytics, MockJAMBResult, MockJAMBExam
+    out = {}
+    if not ids:
+        return out
+    actual = {}
+    for sid, score in (db.session.query(JAMBResult.student_id, JAMBResult.total_score)
+                       .filter(JAMBResult.student_id.in_(ids),
+                               JAMBResult.total_score.isnot(None)).all()):
+        actual[sid] = max(actual.get(sid, score), score)
+    for sid, score in actual.items():
+        out[sid] = {'source': 'actual', 'score': score, 'confidence': 100,
+                    'band': _jamb_band(score)}
+
+    remaining = [i for i in ids if i not in actual]
+    if remaining and session_id:
+        by_student = defaultdict(list)
+        rows = (MockJAMBResult.query.join(MockJAMBExam)
+                .options(contains_eager(MockJAMBResult.exam))
+                .filter(MockJAMBResult.student_id.in_(remaining),
+                        MockJAMBExam.session_id == session_id)
+                .order_by(MockJAMBResult.student_id, MockJAMBExam.exam_number).all())
+        for r in rows:
+            by_student[r.student_id].append(r)
+        for sid, srows in by_student.items():
+            pred = MockJAMBAnalytics._predict_from_progress(
+                MockJAMBAnalytics._progress_from_results(sid, srows))
+            if pred:
+                score = pred['predicted_score']
+                out[sid] = {'source': 'mock', 'score': score,
+                            'confidence': pred.get('confidence_level'),
+                            'range': pred.get('predicted_range'), 'band': _jamb_band(score)}
+    return out
+
+
+def _batch_projected_waec(ids, session_id):
+    """{student_id -> projected_waec dict} for the cohort, mirroring
+    :func:`projected_waec`. Prefers actual WAEC; else the Mock WAEC projection."""
+    from collections import defaultdict
+    from sqlalchemy.orm import contains_eager
+    from models import db, WAECResult
+    from models.mock_waec import (MockWAECAnalytics, MockWAECResult, MockWAECExam,
+                                  PASS_GRADES as W_PASS)
+    out = {}
+    if not ids:
+        return out
+
+    # Actual WAEC — best year by credit count.
+    by_student_year = defaultdict(lambda: defaultdict(dict))    # sid -> year -> {subject: grade}
+    for sid, year, subj, grade in (db.session.query(
+            WAECResult.student_id, WAECResult.exam_year, WAECResult.subject, WAECResult.grade)
+            .filter(WAECResult.student_id.in_(ids)).all()):
+        by_student_year[sid][year][subj] = grade
+    for sid, years in by_student_year.items():
+        best = max(years.values(), key=lambda subs: sum(1 for g in subs.values() if g in PASS_GRADES))
+        credited = {s: g for s, g in best.items() if g in PASS_GRADES}
+        missing_core = [s for s in CORE_SUBJECTS if s not in credited]
+        out[sid] = {'source': 'actual', 'credits': len(credited),
+                    'credited_subjects': sorted(credited),
+                    'credited_grades': list(credited.values()),
+                    'missing_core': missing_core,
+                    'meets_ssc': len(credited) >= 5 and not missing_core, 'confidence': 100}
+
+    remaining = [i for i in ids if i not in out]
+    if remaining and session_id:
+        by_student = defaultdict(list)
+        rows = (MockWAECResult.query.join(MockWAECExam)
+                .options(contains_eager(MockWAECResult.exam))
+                .filter(MockWAECResult.student_id.in_(remaining),
+                        MockWAECExam.session_id == session_id)
+                .order_by(MockWAECResult.student_id, MockWAECExam.exam_number).all())
+        for r in rows:
+            by_student[r.student_id].append(r)
+        for sid, srows in by_student.items():
+            pred = MockWAECAnalytics._predict_from_progress(
+                MockWAECAnalytics._progress_from_rows(sid, srows))
+            if not pred:
+                continue
+            # Most recent grade per subject across the student's sittings.
+            seen, credited = set(), {}
+            for r in sorted(srows, key=lambda r: (r.exam.exam_number, r.id), reverse=True):
+                if r.subject in seen:
+                    continue
+                seen.add(r.subject)
+                if r.grade in W_PASS:
+                    credited[r.subject] = r.grade
+            out[sid] = {'source': 'mock', 'credits': pred['predicted_credits'],
+                        'credited_subjects': sorted(credited),
+                        'credited_grades': list(credited.values()),
+                        'missing_core': pred['missing_core'],
+                        'meets_ssc': pred['meets_minimum_incl_core'],
+                        'quality': pred['quality'], 'confidence': pred['confidence']}
+    return out
 
 
 # --------------------------------------------------------------------------- #
