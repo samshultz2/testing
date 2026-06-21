@@ -19,6 +19,53 @@ def _pearson(xs, ys):
     return cov / (vx ** 0.5 * vy ** 0.5)
 
 
+def _mean_sd(xs):
+    """Population mean and standard deviation, or (mean, None) when SD is
+    undefined (fewer than 2 points)."""
+    n = len(xs)
+    if n == 0:
+        return None, None
+    m = sum(xs) / n
+    if n < 2:
+        return m, None
+    var = sum((x - m) ** 2 for x in xs) / n
+    return m, var ** 0.5
+
+
+def standardized_mock_jamb_progress(student_id, session_id=None):
+    """The student's standing in each Mock JAMB sitting expressed as a z-score and
+    percentile relative to that sitting's cohort.
+
+    A raw 220 on a hard mock is not the same as 220 on an easy one; standardizing
+    against each sitting's mean/SD makes the trend reflect *relative* movement,
+    robust to a sitting being unusually hard or easy. Returns None if the student
+    sat no mocks in scope."""
+    from models.mock_jamb import MockJAMBExam
+    q = MockJAMBExam.query
+    if session_id:
+        q = q.filter_by(session_id=session_id)
+    points = []
+    for ex in q.order_by(MockJAMBExam.exam_number).all():
+        results = ex.results.all()
+        scores = [r.total_score for r in results]
+        mine = next((r.total_score for r in results if r.student_id == student_id), None)
+        if mine is None:
+            continue
+        m, sd = _mean_sd(scores)
+        points.append({
+            'exam': ex.display_name, 'exam_number': ex.exam_number, 'score': mine,
+            'cohort_mean': round(m, 1) if m is not None else None,
+            'cohort_size': len(scores),
+            'z': round((mine - m) / sd, 2) if sd else None,
+            'percentile': round(sum(1 for s in scores if s <= mine) / len(scores) * 100) if scores else None,
+        })
+    if not points:
+        return None
+    zs = [p['z'] for p in points if p['z'] is not None]
+    return {'points': points, 'latest': points[-1],
+            'z_trend': round(zs[-1] - zs[0], 2) if len(zs) >= 2 else None}
+
+
 def _strength(r):
     if r is None:
         return 'insufficient data'

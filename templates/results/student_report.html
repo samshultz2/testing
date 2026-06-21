@@ -111,6 +111,19 @@
         </table>
         {% else %}<p class="muted">No mock exams taken.</p>{% endif %}
 
+        {% if standing and standing.latest.z is not none %}
+        {% set L = standing.latest %}
+        <div class="summary-chips" style="margin-top:.5rem;">
+            <span class="chip" title="Standing relative to the cohort in {{ L.exam }} — adjusts for how hard or easy that sitting was">
+                Relative standing: <strong>{{ L.percentile }}th percentile</strong>
+                ({{ '%+.1f'|format(L.z) }} SD vs {{ L.cohort_size }} peers)
+            </span>
+            {% if standing.z_trend is not none %}
+            <span class="chip">Standing trend: <strong>{{ '%+.1f'|format(standing.z_trend) }} SD</strong></span>
+            {% endif %}
+        </div>
+        {% endif %}
+
         {% if prediction %}
         <div class="pred" style="margin-top:.75rem;">
             <div style="font-size:.85rem;opacity:.9;">Predicted real JAMB score</div>

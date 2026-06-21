@@ -1007,10 +1007,13 @@ def student_report(student_id):
 
     # Forward-looking readiness from the mock trajectory (actionable before the
     # real exams), plus the intended JAMB-combination check.
-    from utils import exam_insights
+    from utils import exam_insights, exam_trends
     readiness = exam_insights.admission_readiness(
         student, active_session.id if active_session else None)
     jamb_combo = exam_insights.jamb_subject_combo_check(student)
+    # Difficulty-adjusted standing among peers (z-score / percentile per sitting).
+    standing = exam_trends.standardized_mock_jamb_progress(
+        student_id, active_session.id if active_session else None)
 
     return render_template('results/student_report.html',
         student=student,
@@ -1021,6 +1024,7 @@ def student_report(student_id):
         admission=admission,
         readiness=readiness,
         jamb_combo=jamb_combo,
+        standing=standing,
         generated=_date.today()
     )
 

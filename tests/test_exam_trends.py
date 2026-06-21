@@ -100,3 +100,25 @@ def test_attendance_correlates_with_results(app):
         assert res['n'] == 3
         assert res['coefficient'] is not None and res['coefficient'] > 0.5
         assert 'positive' in res['strength']
+
+
+def test_standardized_standing(app):
+    from models import AcademicSession
+    from models.mock_jamb import MockJAMBExam, MockJAMBResult
+    with app.app_context():
+        ss = AcademicSession(name='ZS ' + uuid.uuid4().hex[:5]); db.session.add(ss); db.session.flush()
+        ex = MockJAMBExam(name='Z1', exam_number=1, session_id=ss.id, exam_date=date(2025, 1, 1))
+        db.session.add(ex); db.session.flush()
+        ids = []
+        for total in (200, 220, 240):
+            st = Student(student_id='ZS' + uuid.uuid4().hex[:7].upper(), first_name='Z',
+                         surname='S', gender='Male')
+            db.session.add(st); db.session.flush()
+            db.session.add(MockJAMBResult(student_id=st.id, mock_exam_id=ex.id, total_score=total))
+            ids.append(st.id)
+        db.session.commit()
+        top = T.standardized_mock_jamb_progress(ids[2], ss.id)   # the 240 scorer
+        assert top['latest']['percentile'] == 100
+        assert top['latest']['z'] > 0
+        bottom = T.standardized_mock_jamb_progress(ids[0], ss.id)  # the 200 scorer
+        assert bottom['latest']['z'] < 0
