@@ -149,6 +149,15 @@
       .catch(function () { window.location = url; });   // never leave the user stuck
   }
 
+  // Links that return a file (PDF/Excel/CSV…) or a standalone print page must be
+  // handled natively by the browser — soft-loading them fetches the file as if it
+  // were a page and dumps the user into the app shell instead of downloading.
+  function isFileLink(u) {
+    return /\.(pdf|xlsx?|csv|docx?|pptx?|zip|png|jpe?g|svg|txt)$/i.test(u.pathname)
+        || /(^|\/)(export|download|print)(\/|$|_)/i.test(u.pathname)
+        || /[?&](format|export)=(pdf|xlsx?|csv|excel|word|docx?)/i.test(u.search);
+  }
+
   // Intercept menu + in-page link clicks only (not header controls).
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -161,6 +170,7 @@
     var url;
     try { url = new URL(a.href); } catch (_) { return; }
     if (url.origin !== location.origin) return;
+    if (isFileLink(url)) return;                 // let the browser download/open it
     e.preventDefault();
     softLoad(a.href, true);
   });

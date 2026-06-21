@@ -169,6 +169,14 @@ function UserForm({ d, notify }) {
   const save = useSave(notify);
   const edit = d.page === 'edit';
   const u = d.user || {};
+  // Signature of the server's current values, so a draft saved before an edit is
+  // discarded once the save lands (otherwise the stale draft re-blanks fields on
+  // reopen). Unchanged baseline = genuine unsaved work, still recovered.
+  const editSig = edit ? JSON.stringify([
+    u.email, u.full_name, u.phone, u.role, u.section, u.stream, u.manage_scope,
+    u.rank, u.view_only, u.scope, u.branch_id, u.is_active, u.permission_group_id,
+    u.own_permissions, u.teacher,
+  ]) : null;
   const [f, setF, clearDraft] = useDraft('users-' + (edit ? 'edit-' + (u.id || '') : 'add'), {
     username: u.username || '',
     email: u.email || '',
@@ -187,7 +195,7 @@ function UserForm({ d, notify }) {
     is_active: edit ? !!u.is_active : true,
     permission_group_id: u.permission_group_id ? String(u.permission_group_id) : '',
     teacher: u.teacher || { can_mark_attendance: true, can_view_student_details: true, can_print_reports: true, can_enter_results: false, can_edit_results: false },
-  }, { omit: ['password', 'confirm_password', 'new_password'] });
+  }, { omit: ['password', 'confirm_password', 'new_password'], signature: editSig });
   // Per-user OVERRIDES (not the effective map): on edit, the stored overrides;
   // on add with no group, seed from the role's default modules.
   const [perms, setPerms] = useState(() => (edit ? { ...(u.own_permissions || {}) } : moduleDefaults(d.role_defaults, u.role || 'teacher')));

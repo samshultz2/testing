@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
 // pick them up promptly. Static assets also use stale-while-revalidate below,
 // so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v80';
+const CACHE_VERSION = 'v81';
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
@@ -134,8 +134,16 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy));
+        // Only cache genuine HTML pages. Files served inline as navigations
+        // (PDF previews, downloads) must never enter the cache, or stale copies
+        // get served back later — which showed users an outdated PDF design and
+        // sent download links into a cached app shell.
+        const ct = res.headers.get('Content-Type') || '';
+        const disp = res.headers.get('Content-Disposition') || '';
+        if (res.ok && ct.indexOf('text/html') !== -1 && disp.indexOf('attachment') === -1) {
+          const copy = res.clone();
+          caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy));
+        }
         return res;
       }).catch(() =>
         caches.match(req).then((hit) => hit || caches.match(OFFLINE_URL))
