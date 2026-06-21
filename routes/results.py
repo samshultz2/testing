@@ -10,6 +10,7 @@ from models import (db, Student, WAECResult, JAMBResult, UniversityCutoff, Schoo
 import json as _json
 from utils.access_control import login_required, admin_required
 from utils.security import rate_limited
+from utils.analytics_engine import recompute_student_safe
 from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 from utils.audit import log_action
 from utils.helpers import (
@@ -298,6 +299,7 @@ def add_waec():
                     results_added += 1
             
             db.session.commit()
+            recompute_student_safe(student_id)   # refresh persisted analytics
             flash(f'{results_added} WAEC results saved!', 'success')
             return redirect(url_for('results.view_waec_student', student_id=student_id))
             
@@ -437,6 +439,7 @@ def edit_waec(student_id, year):
                     db.session.add(result)
             
             db.session.commit()
+            recompute_student_safe(student_id)
             log_action('results.waec_edit', detail=f'{year}', target=student)
             flash('WAEC results updated!', 'success')
             return redirect(url_for('results.view_waec_student', student_id=student_id))
@@ -471,7 +474,8 @@ def delete_waec(student_id, year):
     try:
         deleted = WAECResult.query.filter_by(student_id=student_id, exam_year=year).delete()
         db.session.commit()
-        
+        recompute_student_safe(student_id)
+
         if deleted:
             log_action('results.waec_delete', detail=f'{deleted} result(s), {year}', target=student)
             flash(f'Deleted {deleted} WAEC results for {student.full_name} ({year}).', 'success')
@@ -497,6 +501,7 @@ def delete_waec_single(result_id):
     try:
         db.session.delete(result)
         db.session.commit()
+        recompute_student_safe(student_id)
         flash(f'Deleted {subject} result.', 'success')
     except Exception as e:
         db.session.rollback()
@@ -702,6 +707,7 @@ def add_jamb():
                 db.session.add(result)
             
             db.session.commit()
+            recompute_student_safe(student_id)
             flash('JAMB result saved!', 'success')
             return redirect(url_for('results.jamb_list'))
             
@@ -818,6 +824,7 @@ def scan_batch():
     if request.method == 'POST' and request.form.get('action') == 'save':
         count = int(request.form.get('count', 0))
         saved = 0
+        touched = set()
         for i in range(count):
             if not request.form.get(f'include_{i}'):
                 continue
@@ -825,6 +832,7 @@ def scan_batch():
             year = request.form.get(f'year_{i}', type=int)
             if not student_id or not year:
                 continue
+            touched.add(student_id)
             data = json.loads(request.form.get(f'data_{i}', '{}'))
             if exam == 'waec':
                 for row in data.get('subjects', []):
@@ -849,6 +857,8 @@ def scan_batch():
                     db.session.add(target)
                 saved += 1
         db.session.commit()
+        for sid in touched:
+            recompute_student_safe(sid)
         flash(f'Saved {saved} {exam.upper()} result(s) from batch scan.', 'success')
         return redirect(url_for('results.waec_list' if exam == 'waec' else 'results.jamb_list'))
 
@@ -1350,7 +1360,9 @@ def analytics_hub():
         waec_gender_stats=waec_gender_stats,
         jamb_gender_stats=jamb_gender_stats,
         projection=projection,
-        cutoff=cutoff
+        cutoff=cutoff,
+        at_risk=_at_risk_register(limit=25),
+        recompute_url=url_for('results.recompute_analytics'),
     )
 
 
@@ -1694,6 +1706,60 @@ def api_student_risk(student_id):
     require_branch_access(db.get_or_404(Student, student_id).branch_id)
     risk = AcademicAnalytics.calculate_student_risk_score(student_id)
     return jsonify(risk)
+
+
+def _at_risk_register(limit=None):
+    """The persisted at-risk register: latest stored assessment per in-scope
+    student, RED/AMBER only, highest risk first. Reads engine rows (no recompute)."""
+    from models.analytics_models import StudentRiskAssessment
+    rows = (scope_by_student(StudentRiskAssessment.query, StudentRiskAssessment)
+            .order_by(StudentRiskAssessment.overall_risk_score.desc())
+            .all())
+    seen, out = set(), []
+    for r in rows:
+        if r.student_id in seen:
+            continue
+        seen.add(r.student_id)
+        if r.risk_level not in ('RED', 'AMBER'):
+            continue
+        out.append({
+            'student_id': r.student_id,
+            'student_name': r.student.full_name if r.student else '',
+            'risk_level': r.risk_level,
+            'overall_risk_score': r.overall_risk_score,
+            'risk_factors': _json.loads(r.risk_factors or '[]'),
+            'recommendations': _json.loads(r.recommendations or '[]'),
+            'assessment_date': r.assessment_date.isoformat() if r.assessment_date else None,
+        })
+        if limit and len(out) >= limit:
+            break
+    return out
+
+
+@results_bp.route('/api/at-risk')
+@login_required
+def api_at_risk():
+    out = _at_risk_register()
+    return jsonify({'count': len(out), 'students': out})
+
+
+@results_bp.route('/analytics/recompute', methods=['POST'])
+@admin_required
+def recompute_analytics():
+    """Backfill/refresh persisted analytics for all in-scope students (and the
+    WAEC↔JAMB correlation for recent years). Use after first deploy or a bulk
+    import, since per-student rows are otherwise only written on results changes."""
+    from utils.analytics_engine import AnalyticsEngine
+    bid = viewing_branch_id()
+    n = AnalyticsEngine.recompute_all_students(branch_id=bid)
+    years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().all() if y[0]]
+    for yr in sorted(years, reverse=True)[:5]:
+        try:
+            AnalyticsEngine.recompute_correlation(yr, branch_id=bid)
+        except Exception:
+            db.session.rollback()
+    log_action('analytics.recompute', detail=f'{n} student(s), branch={bid or "all"}')
+    return _ok(f'Recomputed analytics for {n} student(s).', url_for('results.analytics_hub'))
 
 
 @results_bp.route('/api/predict-jamb/<int:student_id>')

@@ -48,10 +48,38 @@
             </select>
         </form>
         <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
+        <form method="POST" action="{{ recompute_url }}" class="d-inline" title="Recompute risk &amp; JAMB predictions for all students in view">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Recompute</button>
+        </form>
         {% if selected_year %}
         <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>
         <button type="button" onclick="exportAnalyticsImage()" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>
         <button type="button" onclick="window.print()" class="btn btn-secondary btn-sm" title="Print / Save as PDF"><i class="fas fa-file-pdf"></i></button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card no-print" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-triangle-exclamation"></i> At-Risk Register {% if at_risk %}<span class="badge badge-danger">{{ at_risk|length }}</span>{% endif %}</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if at_risk %}
+        <div class="table-responsive"><table class="data-table">
+            <thead><tr><th>Student</th><th>Risk</th><th>Score</th><th>Key factors</th><th></th></tr></thead>
+            <tbody>
+                {% for s in at_risk %}
+                <tr>
+                    <td><strong>{{ s.student_name }}</strong></td>
+                    <td><span class="badge badge-{{ 'danger' if s.risk_level == 'RED' else 'warning' }}">{{ s.risk_level }}</span></td>
+                    <td>{{ s.overall_risk_score }}</td>
+                    <td class="text-sm">{{ s.risk_factors[:2]|join('; ') }}{% if s.risk_factors|length > 2 %} …{% endif %}</td>
+                    <td><a href="{{ url_for('results.view_waec_student', student_id=s.student_id) }}" class="btn btn-sm btn-info" title="View student"><i class="fas fa-eye"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+        {% else %}
+        <div class="empty-state" style="padding:1.5rem;"><i class="fas fa-shield-heart"></i><p>No at-risk students on record. If you've just imported results, click <strong>Recompute</strong> to build the register.</p></div>
         {% endif %}
     </div>
 </div>
