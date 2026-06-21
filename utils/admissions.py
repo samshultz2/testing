@@ -84,3 +84,62 @@ def convert_to_student(applicant, assignment_id=None):
     applicant.decision_date = date.today()
     db.session.commit()
     return student, None
+
+
+# Decisions worth telling people about: admins get a bell, and the parent gets an
+# email when an address is on file (admissions is the one place we hold a parent
+# email — the student records are phone-first).
+DECISION_NOTIFY_STATUSES = {'Offered', 'Admitted', 'Rejected', 'Waitlisted'}
+
+
+def _decision_message(applicant):
+    """(subject, heading, paragraphs) for the parent email about a decision."""
+    name = applicant.full_name
+    greeting = f'Dear {applicant.parent_name or "Parent/Guardian"},'
+    cls = applicant.intended_class.name if applicant.intended_class else 'the school'
+    status = applicant.status
+    if status == 'Offered':
+        return (f'Admission offer for {name}', 'Admission offer',
+                [greeting, f'We are pleased to offer {name} a place in {cls}.',
+                 'Please contact the school to accept the offer and complete enrolment.'])
+    if status == 'Admitted':
+        return (f'{name} has been admitted', 'Admission confirmed',
+                [greeting, f'Congratulations! {name} has been admitted to {cls}.',
+                 'We look forward to welcoming your ward. The school will share next steps.'])
+    if status == 'Waitlisted':
+        return (f'Update on {name}’s application', 'Application waitlisted',
+                [greeting, f'{name} has been placed on our waiting list for {cls}.',
+                 'We will contact you should a place become available.'])
+    # Rejected
+    return (f'Update on {name}’s application', 'Application update',
+            [greeting,
+             f'Thank you for your interest in our school. Unfortunately we are '
+             f'unable to offer {name} admission at this time.',
+             'We wish you the very best.'])
+
+
+def notify_decision(applicant):
+    """Bell admins and (if a parent email is on file) email the parent about an
+    admission decision. Best-effort — never raises into the caller."""
+    if applicant.status not in DECISION_NOTIFY_STATUSES:
+        return
+    name = applicant.full_name
+    try:
+        from utils.notify import notify_admins
+        notify_admins(f'Applicant {applicant.status.lower()}: {name}',
+                      f'Application {applicant.application_no or ""} is now '
+                      f'{applicant.status}.', category='admissions')
+    except Exception:
+        pass
+    email = (applicant.parent_email or '').strip()
+    if not email:
+        return
+    try:
+        from utils import mailer
+        if not mailer.is_configured():
+            return
+        subject, heading, paragraphs = _decision_message(applicant)
+        html = mailer.branded_html(heading, paragraphs)
+        mailer.send_email_async(email, subject, '\n\n'.join(paragraphs), html=html)
+    except Exception:
+        pass

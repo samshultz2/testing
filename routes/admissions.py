@@ -277,6 +277,7 @@ def set_status(applicant_id):
         if score is not None:
             a.entrance_score = score
         db.session.commit()
+        admissions.notify_decision(a)   # bell admins + email parent on a decision
     return _ok(f'Status set to {new_status}.', url_for('admissions.applicant_detail', applicant_id=applicant_id))
 
 
