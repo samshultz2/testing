@@ -2084,9 +2084,14 @@ def predictions_dashboard():
     from utils.exam_analytics import WAECJAMBCorrelation
     
     correlation_data = WAECJAMBCorrelation.get_correlation_analysis()
-    
+
+    # How well the mock-based predictors have matched real outcomes (in scope).
+    from utils import exam_insights
+    calibration = exam_insights.calibration_summary(get_sss3_students())
+
     return render_template('results/predictions_dashboard.html',
-        correlation_data=correlation_data
+        correlation_data=correlation_data,
+        calibration=calibration,
     )
 
 

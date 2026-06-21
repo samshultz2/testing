@@ -38,7 +38,38 @@
         <h1><i class="fas fa-crystal-ball"></i> Predictions Dashboard</h1>
         <p class="text-muted">WAEC-JAMB correlation analysis and student predictions</p>
     </div>
+    <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm"><i class="fas fa-graduation-cap"></i> Admission readiness</a>
 </div>
+
+{# How well our mock-based predictors matched the real outcomes (for students who #}
+{# have both). A consistent bias is the cue to recalibrate. #}
+{% if calibration and (calibration.jamb.n or calibration.waec.n) %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-bullseye"></i> Prediction Accuracy (mock → real)</h3></div>
+    <div class="card-body">
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;">
+            {% set j = calibration.jamb %}
+            {% if j.n %}
+            <div style="flex:1;min-width:220px;border:1px solid var(--border-color);border-radius:8px;padding:.75rem;">
+                <div style="font-weight:700;margin-bottom:.3rem;">JAMB score <span class="text-muted" style="font-weight:400;font-size:.8rem;">· {{ j.n }} student(s) with both</span></div>
+                <div>Mean error (MAE): <strong>{{ j.mae }}</strong> pts</div>
+                <div>Bias: <strong>{{ j.bias }}</strong> pts <span class="text-muted" style="font-size:.8rem;">({{ 'over-predicts' if j.bias > 0 else 'under-predicts' if j.bias < 0 else 'unbiased' }})</span></div>
+                <div>Within ±{{ j.tolerance }}: <strong>{{ j.within_tol_pct }}%</strong></div>
+            </div>
+            {% endif %}
+            {% set w = calibration.waec %}
+            {% if w.n %}
+            <div style="flex:1;min-width:220px;border:1px solid var(--border-color);border-radius:8px;padding:.75rem;">
+                <div style="font-weight:700;margin-bottom:.3rem;">WAEC credits <span class="text-muted" style="font-weight:400;font-size:.8rem;">· {{ w.n }} student(s) with both</span></div>
+                <div>Mean error (MAE): <strong>{{ w.mae }}</strong> credits</div>
+                <div>Bias: <strong>{{ w.bias }}</strong> <span class="text-muted" style="font-size:.8rem;">({{ 'over-predicts' if w.bias > 0 else 'under-predicts' if w.bias < 0 else 'unbiased' }})</span></div>
+                <div>Within ±{{ w.tolerance }}: <strong>{{ w.within_tol_pct }}%</strong></div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Feature Cards -->
 <div class="feature-cards">

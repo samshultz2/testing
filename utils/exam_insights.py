@@ -251,3 +251,76 @@ def cohort_readiness(students, session_id=None):
         'projected_both_pct': pct(proj_both),
         'rows': rows,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Mock -> real calibration
+# --------------------------------------------------------------------------- #
+def _student_pool(students):
+    if students is not None:
+        return students
+    from models import Student
+    return Student.query.all()
+
+
+def jamb_calibration(students=None):
+    """Measure how well the Mock JAMB predictor matched reality for students who
+    have both mocks and an actual JAMB score. Returns ``n``, ``mae`` (mean
+    absolute error), ``bias`` (mean predicted − actual; +ve = over-predicts) and
+    ``within_20_pct``. A consistent bias is the signal to recalibrate."""
+    from models.mock_jamb import MockJAMBAnalytics, MockJAMBResult, MockJAMBExam
+    errors, n = [], 0
+    for s in _student_pool(students):
+        real = [r.total_score for r in s.jamb_results.all() if r.total_score is not None]
+        if not real:
+            continue
+        latest = (MockJAMBResult.query.filter_by(student_id=s.id).join(MockJAMBExam)
+                  .order_by(MockJAMBExam.exam_number.desc()).first())
+        if not latest:
+            continue
+        pred = MockJAMBAnalytics.predict_real_jamb(s.id, latest.exam.session_id)
+        if not pred:
+            continue
+        errors.append(pred['predicted_score'] - max(real))
+        n += 1
+    return _error_summary(errors, n, tol=20)
+
+
+def waec_calibration(students=None):
+    """As :func:`jamb_calibration` but for predicted vs actual WAEC *credit count*
+    (error tolerance ±1 credit)."""
+    from models.mock_waec import (MockWAECAnalytics, MockWAECResult, MockWAECExam,
+                                  PASS_GRADES as W_PASS)
+    errors, n = [], 0
+    for s in _student_pool(students):
+        by_year = {}
+        for r in s.waec_results.all():
+            by_year.setdefault(r.exam_year, {})[r.subject] = r.grade
+        if not by_year:
+            continue
+        actual = max(len({sub for sub, g in subs.items() if g in W_PASS})
+                     for subs in by_year.values())
+        latest = (MockWAECResult.query.filter_by(student_id=s.id).join(MockWAECExam)
+                  .order_by(MockWAECExam.exam_number.desc()).first())
+        if not latest:
+            continue
+        pred = MockWAECAnalytics.predict_waec(s.id, latest.exam.session_id)
+        if not pred:
+            continue
+        errors.append(pred['predicted_credits'] - actual)
+        n += 1
+    return _error_summary(errors, n, tol=1)
+
+
+def _error_summary(errors, n, tol):
+    if not n:
+        return {'n': 0}
+    mae = round(sum(abs(e) for e in errors) / n, 2)
+    bias = round(sum(errors) / n, 2)
+    within = round(sum(1 for e in errors if abs(e) <= tol) / n * 100, 1)
+    return {'n': n, 'mae': mae, 'bias': bias, 'tolerance': tol, 'within_tol_pct': within}
+
+
+def calibration_summary(students=None):
+    """Both calibration views for the predictions dashboard."""
+    return {'jamb': jamb_calibration(students), 'waec': waec_calibration(students)}
