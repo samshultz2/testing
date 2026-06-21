@@ -388,6 +388,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('mock_waec.index') }}" class="nav-link {% if 'mock_waec' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-clipboard-check"></i><span>Mock WAEC</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('results.analytics_hub') }}" class="nav-link {% if request.endpoint == 'results.analytics_hub' %}active{% endif %}">
                             <i class="fas fa-chart-pie"></i><span>Exam Analytics</span>
                         </a>

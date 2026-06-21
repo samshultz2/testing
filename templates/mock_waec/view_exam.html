@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>{{ exam.display_name }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }}</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('mock_waec.add_result', exam_id=exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add result</a>
+        <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste import</a>
+        <a href="{{ url_for('mock_waec.export_results', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Export</a>
+        <a href="{{ url_for('mock_waec.edit_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-pen"></i></a>
+    </div>
+</div>
+
+{% if stats and stats.statistics %}
+<div class="kpi-row d-flex gap-2 mb-3" style="flex-wrap:wrap;">
+    <div class="kpi"><div class="kpi-value">{{ stats.student_count }}</div><div class="kpi-label">Students</div></div>
+    <div class="kpi"><div class="kpi-value">{{ stats.statistics.avg_credits }}</div><div class="kpi-label">Avg credits</div></div>
+    <div class="kpi"><div class="kpi-value">{{ stats.statistics.with_5_credits }}</div><div class="kpi-label">With 5+ credits</div></div>
+    <div class="kpi"><div class="kpi-value">{{ stats.statistics.with_5_credits_pct }}%</div><div class="kpi-label">5-credit rate</div></div>
+</div>
+{% endif %}
+
+{% if students %}
+<div class="card">
+    <div class="card-header"><h3>Results ({{ students|length }} students)</h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Student</th><th>Subjects</th><th>Credits</th><th>Distinctions</th><th>Avg</th><th>Grades</th><th></th></tr></thead>
+        <tbody>
+            {% for s in students %}
+            <tr>
+                <td><strong>{{ s.student.full_name }}</strong><div class="text-muted text-sm">{{ s.student.student_id }}</div></td>
+                <td>{{ s.subjects }}</td>
+                <td><span class="badge badge-{{ 'success' if s.has_5_credits else 'warning' }}">{{ s.credits }}</span></td>
+                <td>{{ s.distinctions }}</td>
+                <td>{{ s.average_score if s.average_score is not none else '—' }}</td>
+                <td class="text-sm">
+                    {% for r in s.results %}<span title="{{ r.subject }}: {{ r.score }}">{{ r.subject[:4] }} <strong>{{ r.grade }}</strong></span>{% if not loop.last %} &middot; {% endif %}{% endfor %}
+                </td>
+                <td><a href="{{ url_for('mock_waec.student_progress', student_id=s.student.id) }}" class="btn btn-sm btn-info" title="Progression"><i class="fas fa-chart-line"></i></a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+
+{% if stats and stats.subject_analysis %}
+<div class="card mt-3">
+    <div class="card-header"><h3>Subject performance</h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Subject</th><th>Entries</th><th>Average</th><th>Pass rate (C6+)</th></tr></thead>
+        <tbody>
+            {% for sa in stats.subject_analysis %}
+            <tr><td>{{ sa.subject }}</td><td>{{ sa.count }}</td><td>{{ sa.average }}</td><td>{{ sa.pass_rate }}%</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-inbox"></i><h3>No results recorded</h3>
+    <p>Add results one student at a time, or paste a batch.</p>
+    <div class="d-flex gap-2 justify-center">
+        <a href="{{ url_for('mock_waec.add_result', exam_id=exam.id) }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add result</a>
+        <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="btn btn-secondary"><i class="fas fa-paste"></i> Paste import</a>
+    </div>
+</div></div></div>
+{% endif %}
+{% endblock %}

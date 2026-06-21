@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Mock WAEC - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Mock WAEC Examinations</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Mock WAEC</h1>
+        <p class="text-muted text-sm">Internal WASSCE rehearsals &mdash; scored /100, graded A1&ndash;F9, multiple per session</p>
+    </div>
+    <div class="page-header-actions">
+        <form method="GET" class="d-flex gap-2 align-center">
+            <label class="form-label mb-0">Session</label>
+            <select name="session_id" class="form-control" style="max-width:170px;" onchange="this.form.submit()">
+                {% for s in sessions %}<option value="{{ s.id }}" {% if s.id == selected_session_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+            </select>
+        </form>
+        <a href="{{ url_for('mock_waec.create_exam') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Mock WAEC</a>
+    </div>
+</div>
+
+{% if exams %}
+<div class="card mb-3">
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Exam</th><th>Date</th><th>Students</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+            {% for e in exams %}
+            <tr>
+                <td><strong>{{ e.display_name }}</strong><div class="text-muted text-sm">{{ e.name }}</div></td>
+                <td>{{ e.exam_date.strftime('%d %b %Y') if e.exam_date else '—' }}</td>
+                <td>{{ e.student_count }}</td>
+                <td>{% if e.is_completed %}<span class="badge badge-success">Completed</span>{% else %}<span class="badge badge-warning">In progress</span>{% endif %}</td>
+                <td class="d-flex gap-1">
+                    <a href="{{ url_for('mock_waec.view_exam', exam_id=e.id) }}" class="btn btn-sm btn-info" title="View"><i class="fas fa-eye"></i></a>
+                    <a href="{{ url_for('mock_waec.add_result', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Add result"><i class="fas fa-plus"></i></a>
+                    <a href="{{ url_for('mock_waec.paste_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Paste import"><i class="fas fa-paste"></i></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+
+{% if comparison %}
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort progression this session</h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Mock</th><th>Students</th><th>Avg credits</th><th>% with 5+ credits</th></tr></thead>
+        <tbody>
+            {% for c in comparison %}
+            <tr><td>{{ c.exam.display_name }}</td><td>{{ c.student_count }}</td><td><strong>{{ c.avg_credits }}</strong></td><td>{{ c.with_5_credits_pct }}%</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-clipboard-check"></i><h3>No Mock WAEC exams yet</h3>
+    <p>Create the first mock for this session to start recording results.</p>
+    <a href="{{ url_for('mock_waec.create_exam') }}" class="btn btn-primary"><i class="fas fa-plus"></i> New Mock WAEC</a>
+</div></div></div>
+{% endif %}
+{% endblock %}

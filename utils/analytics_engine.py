@@ -42,10 +42,22 @@ class AnalyticsEngine:
         mock trend feeds trend-risk; sub-benchmark mock/JAMB scores feed academic
         risk. Everything degrades gracefully when a student lacks that data."""
         from models.mock_jamb import MockJAMBAnalytics
+        from models.mock_waec import MockWAECAnalytics
         from models import JAMBResult
 
         extra = {'academic': 0, 'trend': 0}
         factors = []
+
+        # Mock WAEC trajectory: credit count is the WASSCE success metric.
+        waec_prog = MockWAECAnalytics.get_student_progress(student_id)
+        if waec_prog and waec_prog['exam_count'] >= 1:
+            credits = waec_prog['latest_credits']
+            if credits < 5:
+                extra['academic'] += 25
+                factors.append(f"Latest mock WAEC below 5 credits ({credits})")
+            if waec_prog['exam_count'] >= 2 and waec_prog['credit_change'] < 0:
+                extra['trend'] += 20
+                factors.append(f"Mock WAEC credits declining ({waec_prog['credit_change']:+d})")
 
         # Mock JAMB trajectory across all of the student's mocks (time-ordered).
         progress = MockJAMBAnalytics.get_student_progress(student_id)

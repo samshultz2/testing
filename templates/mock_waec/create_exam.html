@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if exam else 'Create' }} Mock WAEC - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>{{ 'Edit' if exam else 'Create' }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header"><div><h1>{{ 'Edit Mock WAEC' if exam else 'Create Mock WAEC' }}</h1></div></div>
+
+<div class="card" style="max-width:680px;">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('mock_waec.edit_exam', exam_id=exam.id) if exam else url_for('mock_waec.create_exam') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+            {% if not exam %}
+            <div class="form-group">
+                <label class="form-label">Session <span class="text-danger">*</span></label>
+                <select name="session_id" class="form-control" required>
+                    {% for s in sessions %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Mock number <span class="text-danger">*</span></label>
+                <select name="exam_number" class="form-control" required>
+                    {% for n in [1,2,3,4] %}<option value="{{ n }}">{{ {1:'First',2:'Second',3:'Third',4:'Fourth'}[n] }} Mock WAEC</option>{% endfor %}
+                </select>
+                <small class="text-muted">Numbers already used in a session are rejected on save.</small>
+            </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-control" value="{{ exam.name if exam else '' }}" placeholder="Auto-generated if left blank">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Exam date <span class="text-danger">*</span></label>
+                <input type="date" name="exam_date" class="form-control" value="{{ exam.exam_date.isoformat() if exam and exam.exam_date else '' }}" {{ '' if exam else 'required' }}>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2">{{ exam.description if exam else '' }}</textarea>
+            </div>
+            {% if exam %}
+            <div class="form-group">
+                <label class="d-flex align-center gap-2"><input type="checkbox" name="is_completed" {% if exam.is_completed %}checked{% endif %}> Mark as completed</label>
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ 'Save changes' if exam else 'Create exam' }}</button>
+                <a href="{{ url_for('mock_waec.index') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

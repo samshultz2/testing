@@ -11,6 +11,7 @@ from routes import auth_bp, main_bp, academics_bp, attendance_bp, results_bp, re
 from routes.generator import generator_bp
 from routes.contributions import contributions_bp
 from routes.mock_jamb import mock_jamb_bp
+from routes.mock_waec import mock_waec_bp
 from routes.finance import finance_bp
 from routes.communication import comms_bp
 from routes.hr import hr_bp
@@ -106,6 +107,7 @@ def create_app(config_class=None):
     app.register_blueprint(generator_bp)
     app.register_blueprint(contributions_bp)
     app.register_blueprint(mock_jamb_bp)
+    app.register_blueprint(mock_waec_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(finance_bp)
     app.register_blueprint(comms_bp)
