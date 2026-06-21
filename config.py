@@ -159,6 +159,10 @@ class Config:
     FEE_REMINDER_ENABLED = _as_bool(os.environ.get('FEE_REMINDER_ENABLED'), default=False)
     FEE_REMINDER_INTERVAL_DAYS = int(os.environ.get('FEE_REMINDER_INTERVAL_DAYS', '7'))
 
+    # Persistent-absence alerts: bell admins when a student is absent this many
+    # consecutive school days in a row. 0 disables the alerts.
+    ABSENCE_ALERT_DAYS = int(os.environ.get('ABSENCE_ALERT_DAYS', '3'))
+
     # Optional Claude-vision OCR fallback (needs ANTHROPIC_API_KEY + the
     # `anthropic` package). Off by default — Tesseract is the default engine.
     OCR_VISION_FALLBACK = _as_bool(os.environ.get('OCR_VISION_FALLBACK'), default=False)

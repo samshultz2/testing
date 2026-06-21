@@ -329,6 +329,8 @@ def week_save():
                 rec.marked_by = marked_by
                 saved += 1
         db.session.commit()
+        from utils.attendance_alerts import check_absence_alerts
+        check_absence_alerts([e.id for e in enrollments])   # bell admins on long absences
         flash(f'Saved attendance for {len(enrollments)} student(s) across '
               f'{len(school_days)} day(s) of {week.week_number and "Week %d" % week.week_number}.',
               'success')
