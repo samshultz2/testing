@@ -78,7 +78,9 @@ separate process.
 pruned to `BACKUP_RETENTION`). Manual: `bash scripts/backup_db.sh`. Restore via
 script: `bash scripts/restore_db.sh instance/backups/school_XXXX.sql`, or from
 the **Settings → Backup** page (upload the `.sql` dump — it is applied with
-`psql`; a pre-restore snapshot is taken automatically).
+`psql`; a pre-restore snapshot is taken automatically). To schedule backups
+independently of the app (systemd timer or cron) and to verify a backup, see
+[docs/BACKUPS.md](BACKUPS.md).
 
 ### Optional: nginx on Termux/proot
 

@@ -1,0 +1,28 @@
+# Background jobs worker for EduSyncra: dispatches scheduled SMS campaigns,
+# ensures a daily database backup, and prepares opt-in fee reminders. Run this
+# ONCE per deployment (not per gunicorn worker) and start the web app with
+# RUN_INPROCESS_JOBS=0 so jobs fire exactly once.
+#
+#   sudo cp deploy/edusyncra-jobs.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now edusyncra-jobs
+#
+# Adjust User, WorkingDirectory, and the venv path to your install.
+
+[Unit]
+Description=EduSyncra background jobs worker (SMS dispatch, daily backup, reminders)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=edusyncra
+WorkingDirectory=/opt/edusyncra
+EnvironmentFile=/opt/edusyncra/.env
+Environment=RUN_INPROCESS_JOBS=0
+ExecStart=/opt/edusyncra/.venv/bin/python scripts/run_jobs.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
