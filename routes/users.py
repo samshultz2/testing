@@ -5,7 +5,8 @@ Handles user CRUD, role management, and teacher assignments
 from flask import (Blueprint, render_template, request, redirect, url_for, flash,
                    session, jsonify)
 from utils.helpers import get_active_term
-from models import db, ClassArmAssignment, Subject, User, Teacher, TeacherClassAssignment, TeacherSubjectAssignment
+from models import (db, ClassArmAssignment, Subject, User, Teacher, TeacherClassAssignment,
+                    TeacherSubjectAssignment, PermissionGroup)
 from utils.access_control import (MODULES, manage_users_required, can_manage,
                                   current_manage_scope, current_rank, get_current_user,
                                   restrict_grant_perms, CAPABILITY_SUBSECTIONS)
@@ -34,6 +35,50 @@ def _guard(target):
     return None
 
 
+# --- Permission groups: branch-scoped visibility / management ----------------
+def _my_branch_id():
+    me = get_current_user()
+    return me.branch_id if me else None
+
+
+def _groups_in_scope():
+    """Active groups the current manager may ASSIGN: central templates (no branch)
+    plus, for a branch manager, their own branch's groups."""
+    q = PermissionGroup.query.filter_by(is_active=True)
+    if current_manage_scope() == 'central':
+        return q.order_by(PermissionGroup.name).all()
+    bid = _my_branch_id()
+    return (q.filter((PermissionGroup.branch_id.is_(None)) | (PermissionGroup.branch_id == bid))
+             .order_by(PermissionGroup.name).all())
+
+
+def _group_assignable(g):
+    """May the current manager assign this group to a user?"""
+    if g is None:
+        return True
+    if current_manage_scope() == 'central':
+        return True
+    return g.branch_id is None or g.branch_id == _my_branch_id()
+
+
+def _group_manageable(g):
+    """May the current manager edit/delete this group? (central groups are
+    central-only; a branch manager owns only their own branch's groups)."""
+    if g is None:
+        return False
+    if current_manage_scope() == 'central':
+        return True
+    return g.branch_id is not None and g.branch_id == _my_branch_id()
+
+
+def _group_json(g):
+    return {'id': g.id, 'name': g.name, 'description': g.description or '',
+            'branch_id': g.branch_id, 'permissions': g.permission_map,
+            'manageable': _group_manageable(g),
+            'edit_url': url_for('users.edit_group', group_id=g.id),
+            'delete_url': url_for('users.delete_group', group_id=g.id)}
+
+
 def _role_badge(u):
     if u.is_super_admin:
         return 'danger'
@@ -60,6 +105,7 @@ def _form_meta():
         'branches': [{'id': b.id, 'name': b.name, 'is_default': b.is_default}
                      for b in Branch.query.order_by(Branch.name).all()],
         'presets': presets_for_form(),
+        'groups': [_group_json(g) for g in _groups_in_scope()],
     }
 
 
@@ -121,7 +167,11 @@ def _user_edit(u):
     d['manage_scope'] = u.manage_scope or 'none'
     d['rank'] = u.rank or 0
     d['view_only'] = bool(u.view_only)
-    d['permission_map'] = dict(u.permission_map)
+    d['permission_map'] = dict(u.permission_map)        # effective (group + overrides)
+    d['own_permissions'] = dict(u.own_permissions)      # per-user overrides only
+    d['permission_group_id'] = u.permission_group_id
+    d['group_permissions'] = (u.permission_group.permission_map
+                              if u.permission_group else {})
     d['teacher'] = _teacher_perms(u.teacher_profile if u.is_teacher else None)
     return d
 
@@ -154,17 +204,33 @@ def _clamp_management_fields(user, role):
         user.manage_scope = ms if ms in ('none', 'branch') else 'none'
 
 
+def _apply_group(user, role):
+    """Set the user's permission group from the form, honouring assign-scope.
+    Admins ignore groups (they always have full access)."""
+    if role == 'admin':
+        user.permission_group_id = None
+        return
+    gid = request.form.get('permission_group_id', type=int)
+    if gid:
+        g = db.session.get(PermissionGroup, gid)
+        user.permission_group_id = g.id if (g and g.is_active and _group_assignable(g)) else None
+    else:
+        user.permission_group_id = None
+
+
 def _read_perms(form, prefix='perm_'):
     """Build {module_key|module.sub: 'view'|'edit'} from per-module selects."""
     from utils.access_control import MODULE_SUBSECTIONS
     perms = {}
     for key in MODULES:
         lvl = form.get(f'{prefix}{key}')
-        if lvl in ('view', 'edit'):
+        # 'none' is a per-user override that REVOKES a group-granted permission;
+        # absent/'inherit' leaves it to the group.
+        if lvl in ('view', 'edit', 'none'):
             perms[key] = lvl
         for sub in MODULE_SUBSECTIONS.get(key, {}):
             slvl = form.get(f'{prefix}{key}.{sub}')
-            if slvl in ('view', 'edit'):
+            if slvl in ('view', 'edit', 'none'):
                 perms[f'{key}.{sub}'] = slvl
     # Legacy checkbox fallback (older form posts a 'modules' list = full access).
     if not perms:
@@ -184,6 +250,7 @@ def index():
     return _render({
         'page': 'index',
         'matrix_url': url_for('users.matrix'),
+        'groups_url': url_for('users.groups'),
         'add_url': url_for('users.add_user'),
         'users': [{
             'id': u.id, 'username': u.username, 'full_name': u.full_name or '',
@@ -285,7 +352,8 @@ def add_user():
             )
             user.set_password(password)
             user.must_change_password = request.form.get('require_pw_change') == 'on'
-            # Fine-grained per-module access levels (admins always have full access).
+            # Permission group (base) + fine-grained per-user overrides.
+            _apply_group(user, role)
             if role != 'admin':
                 user.set_permissions(restrict_grant_perms(_read_perms(request.form), user))
             user.view_only = request.form.get('view_only') == 'on'
@@ -359,7 +427,8 @@ def edit_user(user_id):
         user.role = request.form.get('role', user.role)
         user.is_active = request.form.get('is_active') == 'on'
 
-        # Fine-grained per-module access levels (admins always have full access).
+        # Permission group (base) + fine-grained per-user overrides.
+        _apply_group(user, user.role)
         if user.role == 'admin':
             user.set_permissions({})
         else:
@@ -449,6 +518,84 @@ def delete_user(user_id):
         db.session.rollback()
         return _err(f'Error deleting user: {str(e)}', url_for('users.index'))
     return _ok(f'User "{username}" deleted successfully!', url_for('users.index'))
+
+
+# ============================================================================
+# PERMISSION GROUPS
+# ============================================================================
+@users_bp.route('/groups')
+@admin_required
+def groups():
+    """Manage permission-group templates the current manager may see."""
+    from models import Branch
+    return _render({
+        'page': 'groups',
+        'add_url': url_for('users.add_group'),
+        'back_url': url_for('users.index'),
+        'modules': [{'key': k, 'label': v} for k, v in MODULES.items()],
+        'can_pick_branch': current_manage_scope() == 'central',
+        'branches': [{'id': b.id, 'name': b.name}
+                     for b in Branch.query.order_by(Branch.name).all()],
+        'groups': [{**_group_json(g),
+                    'branch_name': (g.branch.name if g.branch else 'All branches'),
+                    'user_count': User.query.filter_by(permission_group_id=g.id).count()}
+                   for g in _groups_in_scope()],
+    })
+
+
+def _save_group_fields(g):
+    """Apply name/description/branch/permissions from the form to ``g``."""
+    g.name = (request.form.get('name') or g.name or '').strip()
+    g.description = (request.form.get('description') or '').strip() or None
+    if current_manage_scope() == 'central':
+        g.branch_id = request.form.get('branch_id', type=int) or None
+    elif g.id is None:                       # new branch-manager group => own branch
+        g.branch_id = _my_branch_id()
+    perms = {k: v for k, v in _read_perms(request.form).items() if v in ('view', 'edit')}
+    g.set_permissions(restrict_grant_perms(perms, None))
+
+
+@users_bp.route('/groups/add', methods=['POST'])
+@admin_required
+def add_group():
+    if not (request.form.get('name') or '').strip():
+        return _err('Group name is required.', url_for('users.groups'))
+    g = PermissionGroup(created_by_id=session.get('user_id'))
+    _save_group_fields(g)
+    db.session.add(g)
+    db.session.commit()
+    log_action('permgroup.create', f'{g.name} (branch={g.branch_id}, perms={g.permission_map})')
+    return _ok(f'Group "{g.name}" created.', url_for('users.groups'))
+
+
+@users_bp.route('/groups/<int:group_id>/edit', methods=['POST'])
+@admin_required
+def edit_group(group_id):
+    g = db.get_or_404(PermissionGroup, group_id)
+    if not _group_manageable(g):
+        return _err('You are not allowed to manage that group.',
+                    url_for('users.groups'), status=403)
+    before = dict(g.permission_map)
+    _save_group_fields(g)
+    db.session.commit()
+    log_action('permgroup.update', f'{g.name}: perms {before}→{g.permission_map}')
+    return _ok(f'Group "{g.name}" updated.', url_for('users.groups'))
+
+
+@users_bp.route('/groups/<int:group_id>/delete', methods=['POST'])
+@admin_required
+def delete_group(group_id):
+    g = db.get_or_404(PermissionGroup, group_id)
+    if not _group_manageable(g):
+        return _err('You are not allowed to manage that group.',
+                    url_for('users.groups'), status=403)
+    name = g.name
+    # Detach members first: they keep their own overrides, lose the group base.
+    User.query.filter_by(permission_group_id=g.id).update({'permission_group_id': None})
+    db.session.delete(g)
+    db.session.commit()
+    log_action('permgroup.delete', f'{name}')
+    return _ok(f'Group "{name}" deleted.', url_for('users.groups'))
 
 
 @users_bp.route('/<int:user_id>/assign-class', methods=['GET', 'POST'])

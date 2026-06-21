@@ -27,6 +27,11 @@ def _access_code():
 def contributions_access_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Two gates: the user must be a logged-in staff member first (so this
+        # hidden module is never reachable anonymously), THEN hold the access
+        # code. The code is a second factor, never the only protection.
+        if not session.get('logged_in'):
+            return redirect(url_for('auth.login'))
         if not session.get(SESSION_KEY):
             return redirect(url_for('contributions.access_page'))
         return f(*args, **kwargs)
@@ -65,6 +70,8 @@ def _urls():
 
 @contributions_bp.route('/access', methods=['GET', 'POST'])
 def access_page():
+    if not session.get('logged_in'):
+        return redirect(url_for('auth.login'))
     if request.method == 'POST':
         code = request.form.get('access_code', '').strip()
         if code and code == _access_code():
@@ -813,11 +820,18 @@ def import_excel():
 @contributions_bp.route('/clear-all', methods=['POST'])
 @contributions_access_required
 def clear_all_data():
-    """Clear all contribution data"""
+    """Clear all contribution data — admin only (wholesale destructive op)."""
+    from utils.access_control import is_admin
+    if not is_admin():
+        return _err('Only an administrator can clear all contribution data.',
+                    url_for('contributions.import_excel'), status=403)
     try:
-        ContributionPayment.query.delete()
-        ContributionExpense.query.delete()
+        n_pay = ContributionPayment.query.delete()
+        n_exp = ContributionExpense.query.delete()
         db.session.commit()
+        from utils.audit import log_action
+        log_action('contributions.clear_all',
+                   f'deleted {n_pay} payment(s), {n_exp} expense(s)')
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('contributions.import_excel'))

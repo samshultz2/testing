@@ -30,6 +30,7 @@ function Index({ d, notify }) {
         <h1><i aria-hidden="true" className="fas fa-users-cog" /> User Management</h1>
         <div className="page-header-actions">
           <A to={d.matrix_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-table-cells" /> Permission Matrix</A>
+          <A to={d.groups_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-layer-group" /> Permission Groups</A>
           <A to={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add User</A>
         </div>
       </div>
@@ -174,10 +175,14 @@ function UserForm({ d, notify }) {
     rank: u.rank || 0,
     view_only: !!u.view_only,
     is_active: edit ? !!u.is_active : true,
+    permission_group_id: u.permission_group_id ? String(u.permission_group_id) : '',
     teacher: u.teacher || { can_mark_attendance: true, can_view_student_details: true, can_print_reports: true, can_enter_results: false, can_edit_results: false },
   }, { omit: ['password', 'confirm_password', 'new_password'] });
-  // Permission map: on add, seed from the default role's modules; on edit, the stored map.
-  const [perms, setPerms] = useState(() => (edit ? { ...(u.permission_map || {}) } : moduleDefaults(d.role_defaults, u.role || 'teacher')));
+  // Per-user OVERRIDES (not the effective map): on edit, the stored overrides;
+  // on add with no group, seed from the role's default modules.
+  const [perms, setPerms] = useState(() => (edit ? { ...(u.own_permissions || {}) } : moduleDefaults(d.role_defaults, u.role || 'teacher')));
+  const groups = d.groups || [];
+  const groupPerms = (groups.find((g) => String(g.id) === String(f.permission_group_id)) || {}).permissions || null;
   const [preset, setPreset] = useState('');
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -239,8 +244,11 @@ function UserForm({ d, notify }) {
       if (f.require_pw_change) fields.require_pw_change = 'on';
     }
     if (f.view_only) fields.view_only = 'on';
-    // Module access selects (whole + sub-parts).
-    if (showModules) Object.entries(perms).forEach(([k, v]) => { if (v) fields[`perm_${k}`] = v; });
+    // Permission group (base) + per-user override selects (whole + sub-parts).
+    if (showModules) {
+      fields.permission_group_id = f.permission_group_id || '';
+      Object.entries(perms).forEach(([k, v]) => { if (v) fields[`perm_${k}`] = v; });
+    }
     // Teacher capability checkboxes.
     if (showTeacher) {
       ['can_mark_attendance', 'can_view_student_details', 'can_print_reports', 'can_enter_results', 'can_edit_results']
@@ -249,11 +257,18 @@ function UserForm({ d, notify }) {
     save(d.submit_url, fields, (r) => { clearDraft(); nav.go(r.redirect || d.back_url); });
   };
 
-  const PermSelect = ({ pkey, ...rest }) => (
-    <select className="form-control perm-select" value={perms[pkey] || ''} onChange={(e) => setPerm(pkey, e.target.value)} {...rest}>
-      <option value="">No access</option><option value="view">View only</option><option value="edit">View &amp; edit</option>
-    </select>
-  );
+  const PermSelect = ({ pkey, ...rest }) => {
+    const g = groupPerms ? groupPerms[pkey] : null;
+    return (
+      <select className="form-control perm-select" value={perms[pkey] || ''} onChange={(e) => setPerm(pkey, e.target.value)} {...rest}>
+        {groupPerms
+          ? <option value="">{g ? `Inherit (${g === 'edit' ? 'view & edit' : 'view'})` : 'Inherit (no access)'}</option>
+          : <option value="">No access</option>}
+        <option value="view">View only</option><option value="edit">View &amp; edit</option>
+        {groupPerms && <option value="none">No access (revoke)</option>}
+      </select>
+    );
+  };
 
   return (
     <>
@@ -360,6 +375,16 @@ function UserForm({ d, notify }) {
           <div className="card mb-3">
             <div className="card-header"><h3><i aria-hidden="true" className="fas fa-th-large" /> Module Access</h3></div>
             <div className="card-body">
+              {groups.length > 0 && (
+                <div className="form-group">
+                  <label className="form-label"><i aria-hidden="true" className="fas fa-layer-group" /> Permission group <span className="text-muted">(base template)</span></label>
+                  <select className="form-control" value={f.permission_group_id} onChange={set('permission_group_id')}>
+                    <option value="">— None (set each module individually) —</option>
+                    {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                  <small className="text-muted">{groupPerms ? 'The group sets the baseline below; change any module to override it ("Revoke" removes a group grant).' : 'Optional: pick a group to grant a ready-made set of permissions.'}</small>
+                </div>
+              )}
               <div className="permission-grid">
                 {d.modules.map((m) => {
                   const subs = d.subsections[m.key];
@@ -585,9 +610,111 @@ function AssignSubject({ d, notify }) {
   );
 }
 
+// ---- Permission groups ------------------------------------------------------
+function Groups({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const [editing, setEditing] = useState(null);
+  const start = (g) => setEditing(g
+    ? { id: g.id, name: g.name, description: g.description || '', branch_id: g.branch_id || '', permissions: { ...g.permissions }, edit_url: g.edit_url }
+    : { id: null, name: '', description: '', branch_id: '', permissions: {} });
+  const setField = (k, v) => setEditing((e) => ({ ...e, [k]: v }));
+  const setPerm = (key, val) => setEditing((e) => { const p = { ...e.permissions }; if (val) p[key] = val; else delete p[key]; return { ...e, permissions: p }; });
+  const submit = (ev) => {
+    ev.preventDefault();
+    if (!editing.name.trim()) { notify('error', 'Group name is required.'); return; }
+    const fields = { name: editing.name, description: editing.description };
+    if (d.can_pick_branch) fields.branch_id = editing.branch_id || '';
+    Object.entries(editing.permissions).forEach(([k, v]) => { if (v) fields[`perm_${k}`] = v; });
+    save(editing.id ? editing.edit_url : d.add_url, fields, (r) => { setEditing(null); nav.go(r.redirect || d.back_url); });
+  };
+  const del = (g) => { if (window.confirm(`Delete group "${g.name}"? Members keep their own permissions but lose this group's.`)) save(g.delete_url, {}, () => nav.refresh()); };
+  const summary = (perms) => {
+    const keys = Object.keys(perms);
+    if (!keys.length) return <span className="text-muted">No modules</span>;
+    return keys.map((k) => <span key={k} className="badge badge-secondary" style={{ marginRight: 4 }}>{(d.modules.find((m) => m.key === k) || {}).label || k}: {perms[k]}</span>);
+  };
+  return (
+    <>
+      <div className="page-header">
+        <h1><i aria-hidden="true" className="fas fa-layer-group" /> Permission Groups</h1>
+        <div className="page-header-actions">
+          <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Users</A>
+          {!editing && <button type="button" className="btn btn-primary" onClick={() => start(null)}><i aria-hidden="true" className="fas fa-plus" /> New Group</button>}
+        </div>
+      </div>
+
+      {editing && (
+        <form onSubmit={submit} className="card mb-3">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-edit" /> {editing.id ? 'Edit Group' : 'New Group'}</h3></div>
+          <div className="card-body">
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Name <span className="text-danger">*</span></label>
+                <input className="form-control" value={editing.name} onChange={(e) => setField('name', e.target.value)} required /></div>
+              <div className="form-group"><label className="form-label">Description</label>
+                <input className="form-control" value={editing.description} onChange={(e) => setField('description', e.target.value)} /></div>
+            </div>
+            {d.can_pick_branch && (
+              <div className="form-group"><label className="form-label">Branch scope</label>
+                <select className="form-control" value={editing.branch_id} onChange={(e) => setField('branch_id', e.target.value)}>
+                  <option value="">All branches (central template)</option>
+                  {d.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select></div>
+            )}
+            <label className="form-label mt-2">Module permissions</label>
+            <div className="permission-grid">
+              {d.modules.map((m) => (
+                <label className="permission-item perm-row" key={m.key}><span>{m.label}</span>
+                  <select className="form-control perm-select" value={editing.permissions[m.key] || ''} onChange={(e) => setPerm(m.key, e.target.value)}>
+                    <option value="">No access</option><option value="view">View only</option><option value="edit">View &amp; edit</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+            <div className="d-flex gap-2 mt-3">
+              <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> {editing.id ? 'Save Group' : 'Create Group'}</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div className="card">
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-list" /> Groups ({d.groups.length})</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.groups.length ? (
+            <div className="table-responsive"><table className="data-table">
+              <thead><tr><th>Name</th><th>Scope</th><th>Members</th><th>Permissions</th><th>Actions</th></tr></thead>
+              <tbody>
+                {d.groups.map((g) => (
+                  <tr key={g.id}>
+                    <td><strong>{g.name}</strong>{g.description && <div className="text-sm text-muted">{g.description}</div>}</td>
+                    <td>{g.branch_name}</td>
+                    <td>{g.user_count}</td>
+                    <td>{summary(g.permissions)}</td>
+                    <td><div className="d-flex gap-1">
+                      {g.manageable ? (
+                        <>
+                          <button type="button" className="btn btn-sm btn-warning" title="Edit" onClick={() => start(g)}><i aria-hidden="true" className="fas fa-edit" /></button>
+                          <button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(g)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                        </>
+                      ) : <span className="text-muted text-sm">Central</span>}
+                    </div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+          ) : <Empty icon="fa-layer-group" title="No Groups">Create a group to grant a ready-made set of permissions to users.</Empty>}
+        </div>
+      </div>
+    </>
+  );
+}
+
 const SCREENS = {
   index: Index, matrix: Matrix, add: UserForm, edit: UserForm,
   view: View, assign_class: AssignClass, assign_subject: AssignSubject,
+  groups: Groups,
 };
 
 export default function UsersApp({ data }) {

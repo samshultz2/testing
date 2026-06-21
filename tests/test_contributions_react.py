@@ -120,3 +120,14 @@ def test_configurable_access_password(app):
     tok3 = _ptoken(c3)   # CSRF token rotates on login
     c3.post('/contributions/access', data={'access_code': ACCESS_CODE, '_csrf_token': tok3})
     assert c3.get('/contributions/settings', follow_redirects=False).status_code in (302, 303)
+
+
+def test_access_page_requires_login(app):
+    """The hidden module must not be reachable anonymously — even the code prompt
+    redirects to the staff login (audit: contributions outside RBAC)."""
+    c = app.test_client()
+    r = c.get('/contributions/access', follow_redirects=False)
+    assert r.status_code in (302, 303) and '/login' in r.headers['Location']
+    # And a protected route likewise bounces an anonymous client to login.
+    r2 = c.get('/contributions/settings', follow_redirects=False)
+    assert r2.status_code in (302, 303) and '/login' in r2.headers['Location']

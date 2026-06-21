@@ -935,9 +935,12 @@ class User(db.Model):
     # JSON list of module keys this (non-admin) user may access. Empty/None =>
     # fall back to the role's default module set. Admins ignore this (see all).
     allowed_modules = db.Column(db.Text)
-    # JSON dict {module_key: 'view'|'edit'} — granular per-module access level.
-    # Supersedes allowed_modules; 'view' means read-only for that section.
+    # JSON dict {module_key: 'view'|'edit'|'none'} — per-user permission OVERRIDES
+    # layered on top of the assigned permission group ('none' revokes a
+    # group-granted permission). With no group, this is just the user's own perms.
     permissions = db.Column(db.Text)
+    # Optional permission-group template (the base permissions for this user).
+    permission_group_id = db.Column(db.Integer, db.ForeignKey('permission_groups.id'))
     # When True, the user may browse but cannot create/edit/delete anything
     # (enforced globally for unsafe HTTP methods). The 'readonly' role implies this too.
     view_only = db.Column(db.Boolean, default=False)
@@ -989,6 +992,7 @@ class User(db.Model):
     teacher_profile = db.relationship('Teacher', backref='user', uselist=False, cascade='all, delete-orphan')
     created_by = db.relationship('User', remote_side=[id], backref='created_users')
     branch = db.relationship('Branch')
+    permission_group = db.relationship('PermissionGroup', foreign_keys=[permission_group_id])
 
     @property
     def is_central(self):
@@ -1030,22 +1034,44 @@ class User(db.Model):
         self.reset_token_expires = None
 
     @property
-    def permission_map(self):
-        """Effective per-module access levels: {module_key: 'view'|'edit'}.
+    def own_permissions(self):
+        """The user's per-module OVERRIDES (not the group): {key: 'view'|'edit'|'none'}.
 
-        Reads the granular ``permissions`` column; falls back to the legacy
-        ``allowed_modules`` list (granting 'view' if globally view-only, else 'edit').
+        'none' means "explicitly revoke this even if the group grants it". This is
+        the raw stored map; the effective access is ``permission_map``.
         """
         import json
         if self.permissions:
             try:
                 v = json.loads(self.permissions)
                 if isinstance(v, dict):
-                    return {k: ('edit' if lvl == 'edit' else 'view')
-                            for k, lvl in v.items()}
+                    return {k: lvl for k, lvl in v.items()
+                            if lvl in ('view', 'edit', 'none')}
             except (ValueError, TypeError):
                 pass
-        if self.allowed_modules:
+        return {}
+
+    @property
+    def permission_map(self):
+        """Effective per-module access: {module_key: 'view'|'edit'}.
+
+        The assigned permission group provides the base; the user's own overrides
+        are layered on top (an override of 'none' revokes a group permission).
+        With no group and no overrides, falls back to the legacy
+        ``allowed_modules`` list.
+        """
+        import json
+        base = {}
+        grp = self.permission_group
+        if grp is not None and grp.is_active is not False:   # None default => active
+            base = dict(grp.permission_map)
+        overrides = self.own_permissions
+        for k, lvl in overrides.items():
+            if lvl == 'none':
+                base.pop(k, None)
+            else:
+                base[k] = ('edit' if lvl == 'edit' else 'view')
+        if not grp and not overrides and self.allowed_modules:
             try:
                 lst = json.loads(self.allowed_modules)
                 if isinstance(lst, list):
@@ -1053,13 +1079,13 @@ class User(db.Model):
                     return {k: lvl for k in lst}
             except (ValueError, TypeError):
                 pass
-        return {}
+        return base
 
     def set_permissions(self, perm_map):
-        """Store {module_key: 'view'|'edit'} (drops anything else)."""
+        """Store the per-user override map {key: 'view'|'edit'|'none'}."""
         import json
-        clean = {k: ('edit' if v == 'edit' else 'view')
-                 for k, v in (perm_map or {}).items() if v in ('view', 'edit')}
+        clean = {k: v for k, v in (perm_map or {}).items()
+                 if v in ('view', 'edit', 'none')}
         self.permissions = json.dumps(clean) if clean else None
 
     def module_level(self, key):
@@ -1103,6 +1129,50 @@ class User(db.Model):
     
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
+
+
+class PermissionGroup(db.Model):
+    """A named template of module permissions.
+
+    Assigning a user to a group gives them the group's permissions as a base;
+    per-user overrides (User.own_permissions) are then layered on top (a 'none'
+    override revokes a group-granted permission). A group with a branch_id is
+    only offered to / managed by that branch; a NULL branch_id is a central
+    (school-wide) template usable everywhere.
+    """
+    __tablename__ = 'permission_groups'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.String(255))
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
+    permissions = db.Column(db.Text)   # JSON {module|module.sub: 'view'|'edit'}
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    branch = db.relationship('Branch')
+
+    @property
+    def permission_map(self):
+        import json
+        if self.permissions:
+            try:
+                v = json.loads(self.permissions)
+                if isinstance(v, dict):
+                    return {k: ('edit' if lvl == 'edit' else 'view')
+                            for k, lvl in v.items() if lvl in ('view', 'edit')}
+            except (ValueError, TypeError):
+                pass
+        return {}
+
+    def set_permissions(self, perm_map):
+        import json
+        clean = {k: ('edit' if v == 'edit' else 'view')
+                 for k, v in (perm_map or {}).items() if v in ('view', 'edit')}
+        self.permissions = json.dumps(clean) if clean else None
+
+    def __repr__(self):
+        return f'<PermissionGroup {self.name}>'
 
 
 class Teacher(db.Model):
@@ -1231,6 +1301,24 @@ class AuditLog(db.Model):
 # UTILITY FUNCTIONS
 # ============================================================================
 
+def _adapt_ddl(stmt, dialect):
+    """Adapt a (SQLite-flavoured) ALTER TABLE statement to the active dialect.
+
+    The lightweight migrations below are written with SQLite type names. On
+    PostgreSQL ``DATETIME`` is not a real type and BOOLEAN columns reject integer
+    literal defaults, so translate those before executing. (Most of these ALTERs
+    are skipped on an established DB because the column already exists; this only
+    matters the first time a genuinely new column is added on Postgres.)
+    """
+    if dialect == 'sqlite':
+        return stmt
+    import re
+    out = re.sub(r'\bDATETIME\b', 'TIMESTAMP', stmt)
+    out = re.sub(r'\bBOOLEAN DEFAULT 1\b', 'BOOLEAN DEFAULT TRUE', out)
+    out = re.sub(r'\bBOOLEAN DEFAULT 0\b', 'BOOLEAN DEFAULT FALSE', out)
+    return out
+
+
 def _ensure_student_exam_columns():
     """
     Lightweight migration: add the optional WAEC/JAMB enrolment columns to the
@@ -1345,6 +1433,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN reset_token_hash VARCHAR(256)')
         if 'reset_token_expires' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN reset_token_expires DATETIME')
+        if 'permission_group_id' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN permission_group_id INTEGER')
     except Exception:
         pass
 
@@ -1451,9 +1541,10 @@ def _ensure_student_exam_columns():
         pass
 
     if statements:
+        dialect = db.engine.dialect.name
         with db.engine.begin() as conn:
             for stmt in statements:
-                conn.execute(text(stmt))
+                conn.execute(text(_adapt_ddl(stmt, dialect)))
 
     _ensure_indexes()
 

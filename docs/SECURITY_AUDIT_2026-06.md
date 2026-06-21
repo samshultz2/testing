@@ -9,6 +9,26 @@ exposure, infrastructure). **Method:** code review of `config.py`, `routes/*.py`
 > password is "Mitigated by startup warnings" — but `ProductionConfig.warnings()`
 > is **never called anywhere**, so there is no mitigation in effect.
 
+**Pass 4 (2026-06-21) — authorization sweep + permission groups:**
+- A full route-by-route authorization audit found **no unauthenticated or
+  under-privileged gaps** in the staff app: `@login_required` discipline is
+  consistent and the app-level `enforce_write_level`/`enforce_module_access`/
+  `enforce_subsection_access` gates cover every blueprint in `BLUEPRINT_MODULE`.
+- **Contributions hardened (the one finding):** the hidden contributions module
+  was gated by a shared access code only and was reachable anonymously. It now
+  requires a logged-in staff session *first* (the code is a second factor), and
+  the wholesale `clear-all` op is **admin-only** and audit-logged. (The
+  hardcoded default access code `64665842` remains for backward-compat now that
+  login is required — flagged for follow-up.)
+- **Permission groups** added: a `PermissionGroup` template provides a user's
+  base module permissions; per-user overrides win ('none' revokes a group
+  grant). Branch-scoped (central templates + own-branch groups). Full CRUD UI
+  under Users → Permission Groups, and a group picker on the user form.
+- **Postgres migration fix:** the lightweight column migrations used SQLite-only
+  `DATETIME`/`BOOLEAN DEFAULT 0/1`, which crashed app startup on PostgreSQL the
+  first time a new `DATETIME` column was added. DDL is now adapted per dialect
+  (`DATETIME`→`TIMESTAMP`, boolean integer defaults→`TRUE`/`FALSE`).
+
 ## Overall posture
 
 The codebase is **security-conscious and well above average** for its category:
