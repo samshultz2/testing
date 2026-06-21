@@ -1823,7 +1823,12 @@ def results_list():
         db.func.min(GenTimetableResult.generated_at).label('generated_at'),
         db.func.count(db.distinct(GenTimetableResult.class_name + GenTimetableResult.arm_name)).label('class_count')
     ).filter(GenTimetableResult.school_level == level).group_by(GenTimetableResult.batch_id).order_by(db.desc('generated_at')).all()
-    return render_template('generator/results_list.html', batches=batches, level=level)
+    from models import ActiveTimetableBatch
+    from utils.branch_scope import viewing_branch_id
+    from utils.access_control import can_generate_timetable
+    active_batch_id = ActiveTimetableBatch.active_batch_id(viewing_branch_id(), level)
+    return render_template('generator/results_list.html', batches=batches, level=level,
+                           active_batch_id=active_batch_id, can_publish=can_generate_timetable())
 
 
 @generator_bp.route('/results/<batch_id>')
@@ -1852,12 +1857,11 @@ def view_results(batch_id):
     )
 
 
-@generator_bp.route('/results/<batch_id>/apply', methods=['POST'])
-@timetable_generate_required
-def apply_results(batch_id):
+def _apply_batch(batch_id):
     """Publish a generated batch into the per-class timetable views
-    (ClassTimetable) for the active term. Replaces existing entries for the
-    classes it covers (one button, all classes)."""
+    (ClassTimetable) for the active term, replacing existing entries for the
+    classes it covers. Returns ``(applied, message, category)``; ``applied`` is
+    None when nothing could be published."""
     from models import (SchoolClass, ClassArm, ClassArmAssignment, ClassTimetable,
                         TimetableSlot)
     from utils.helpers import get_active_term
@@ -1867,13 +1871,11 @@ def apply_results(batch_id):
     level = get_current_level()
     results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level).all()
     if not results:
-        flash('No results found for this batch.', 'error')
-        return redirect(url_for('generator.results_list'))
+        return None, 'No results found for this batch.', 'error'
 
     term = get_active_term()
     if not term:
-        flash('Set an active term first — class timetables are stored per term.', 'error')
-        return redirect(url_for('generator.view_results', batch_id=batch_id))
+        return None, 'Set an active term first — class timetables are stored per term.', 'error'
 
     # Teaching periods, in school-day order (breaks excluded). The generator
     # numbers periods 1..N positionally, so we map a result's period_number to
@@ -1881,9 +1883,8 @@ def apply_results(batch_id):
     teaching = (TimetableSlot.query.filter_by(is_active=True, is_break=False)
                 .order_by(TimetableSlot.order, TimetableSlot.slot_number).all())
     if not teaching:
-        flash('No class periods are configured. Set them up under '
-              'Settings → Timetable Slots, then apply again.', 'error')
-        return redirect(url_for('generator.view_results', batch_id=batch_id))
+        return None, ('No class periods are configured. Set them up under '
+                      'Settings → Timetable Slots, then apply again.'), 'error'
 
     def slot_for_period(p):
         return teaching[p - 1] if isinstance(p, int) and 1 <= p <= len(teaching) else None
@@ -1992,8 +1993,34 @@ def apply_results(batch_id):
                 + ', '.join(str(p) for p in sorted(missing_slots)) + '.')
     if skipped_branch:
         msg += f' Skipped {skipped_branch} class(es) outside your branch.'
-    flash(msg, 'success' if applied else 'warning')
+    return applied, msg, ('success' if applied else 'warning')
+
+
+@generator_bp.route('/results/<batch_id>/apply', methods=['POST'])
+@timetable_generate_required
+def apply_results(batch_id):
+    """Publish a generated batch into the per-class timetables for the active term."""
+    applied, msg, cat = _apply_batch(batch_id)
+    flash(msg, cat)
     return redirect(url_for('generator.view_results', batch_id=batch_id))
+
+
+@generator_bp.route('/results/<batch_id>/set-in-use', methods=['POST'])
+@timetable_generate_required
+def set_in_use(batch_id):
+    """Publish a batch live AND mark it the timetable currently 'in use' for this
+    branch + school level (one in-use batch per branch/level)."""
+    from models import ActiveTimetableBatch
+    from utils.branch_scope import viewing_branch_id
+    from utils.access_control import get_current_user
+    applied, msg, cat = _apply_batch(batch_id)
+    if applied:
+        user = get_current_user()
+        ActiveTimetableBatch.set_active(viewing_branch_id(), get_current_level(),
+                                        batch_id, user.id if user else None)
+        db.session.commit()
+    flash(msg, cat)
+    return redirect(url_for('generator.results_list'))
 
 
 @generator_bp.route('/results/<batch_id>/edit/<class_name>/<arm_name>')

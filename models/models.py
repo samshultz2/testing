@@ -2171,6 +2171,38 @@ class GenTimetableResult(db.Model):
         return days[self.day_of_week] if 0 <= self.day_of_week < 5 else ''
 
 
+class ActiveTimetableBatch(db.Model):
+    """The generated timetable batch currently marked 'in use' (published live)
+    for a branch + school level. One row per (branch, level)."""
+    __tablename__ = 'active_timetable_batches'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    school_level = db.Column(db.String(10), default='sss')   # 'jss' or 'sss'
+    batch_id = db.Column(db.String(50), nullable=False)
+    set_at = db.Column(db.DateTime, default=local_now)
+    set_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    __table_args__ = (
+        db.UniqueConstraint('branch_id', 'school_level', name='uq_active_timetable_branch_level'),
+    )
+
+    @staticmethod
+    def active_batch_id(branch_id, level):
+        row = ActiveTimetableBatch.query.filter_by(branch_id=branch_id, school_level=level).first()
+        return row.batch_id if row else None
+
+    @staticmethod
+    def set_active(branch_id, level, batch_id, user_id=None):
+        row = ActiveTimetableBatch.query.filter_by(branch_id=branch_id, school_level=level).first()
+        if not row:
+            row = ActiveTimetableBatch(branch_id=branch_id, school_level=level)
+            db.session.add(row)
+        row.batch_id = batch_id
+        row.set_at = local_now()
+        row.set_by_user_id = user_id
+
+
 class GenSettings(db.Model):
     """Generator settings including school info for printing"""
     __tablename__ = 'gen_settings'
