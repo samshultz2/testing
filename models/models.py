@@ -2189,18 +2189,32 @@ class ActiveTimetableBatch(db.Model):
 
     @staticmethod
     def active_batch_id(branch_id, level):
-        row = ActiveTimetableBatch.query.filter_by(branch_id=branch_id, school_level=level).first()
-        return row.batch_id if row else None
+        # Defensive: on a database whose schema predates this table (e.g. an
+        # Alembic deployment that hasn't run the migration yet), reading must not
+        # break the page — just report 'no batch in use' until the table exists.
+        try:
+            row = ActiveTimetableBatch.query.filter_by(branch_id=branch_id, school_level=level).first()
+            return row.batch_id if row else None
+        except Exception:
+            db.session.rollback()
+            return None
 
     @staticmethod
     def set_active(branch_id, level, batch_id, user_id=None):
-        row = ActiveTimetableBatch.query.filter_by(branch_id=branch_id, school_level=level).first()
-        if not row:
-            row = ActiveTimetableBatch(branch_id=branch_id, school_level=level)
-            db.session.add(row)
-        row.batch_id = batch_id
-        row.set_at = local_now()
-        row.set_by_user_id = user_id
+        # Defensive (see active_batch_id): if the table doesn't exist yet, don't
+        # fail the publish that already happened — just skip recording the marker.
+        try:
+            row = ActiveTimetableBatch.query.filter_by(branch_id=branch_id, school_level=level).first()
+            if not row:
+                row = ActiveTimetableBatch(branch_id=branch_id, school_level=level)
+                db.session.add(row)
+            row.batch_id = batch_id
+            row.set_at = local_now()
+            row.set_by_user_id = user_id
+            return True
+        except Exception:
+            db.session.rollback()
+            return False
 
 
 class GenSettings(db.Model):
