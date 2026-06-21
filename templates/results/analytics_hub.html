@@ -47,6 +47,7 @@
                 {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
             </select>
         </form>
+        <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm" title="Cohort admission-readiness funnel"><i class="fas fa-graduation-cap"></i> Readiness</a>
         <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
         <form method="POST" action="{{ recompute_url }}" class="d-inline" title="Recompute risk &amp; JAMB predictions for all students in view">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

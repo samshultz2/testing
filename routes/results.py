@@ -1005,6 +1005,13 @@ def student_report(student_id):
     from utils.admission import assess_admission
     admission = assess_admission(student)
 
+    # Forward-looking readiness from the mock trajectory (actionable before the
+    # real exams), plus the intended JAMB-combination check.
+    from utils import exam_insights
+    readiness = exam_insights.admission_readiness(
+        student, active_session.id if active_session else None)
+    jamb_combo = exam_insights.jamb_subject_combo_check(student)
+
     return render_template('results/student_report.html',
         student=student,
         waec_years=waec_years,
@@ -1012,6 +1019,8 @@ def student_report(student_id):
         mock_progress=mock_progress,
         prediction=prediction,
         admission=admission,
+        readiness=readiness,
+        jamb_combo=jamb_combo,
         generated=_date.today()
     )
 
@@ -1170,6 +1179,23 @@ def readiness():
                                   'action': _action(g['key'], s.id)} for s in g['students']]}
                    for g in groups],
     })
+
+
+@results_bp.route('/admission-readiness')
+@login_required
+def readiness_funnel():
+    """Cohort admission-readiness funnel: how many SSS3 students are projected to
+    get 5 credits incl. English & Maths, clear the JAMB baseline, and clear both
+    (admission-ready) — from actual results where available, else the mocks."""
+    from utils import exam_insights
+    session = get_active_session()
+    students = get_sss3_students()
+    funnel = exam_insights.cohort_readiness(students, session.id if session else None)
+    # Rows sorted worst-first so intervention candidates surface at the top.
+    order = {'NOT_READY': 0, 'AT_RISK': 1, 'CONDITIONAL': 2, 'READY': 3, 'NO_DATA': 4}
+    rows = sorted(funnel['rows'], key=lambda r: order.get(r['readiness']['status'], 9))
+    return render_template('results/readiness_funnel.html',
+                           funnel=funnel, rows=rows, active_session=session)
 
 
 @results_bp.route('/analytics')

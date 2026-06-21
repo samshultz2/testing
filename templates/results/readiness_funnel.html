@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Admission Readiness - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <span>Admission Readiness</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin:.5rem 0 1rem}
+@media(min-width:900px){.kpi-grid{grid-template-columns:repeat(5,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.85rem;text-align:center}
+.kpi .n{font-size:1.6rem;font-weight:800;line-height:1}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem}
+.funnel{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem}
+.funnel .step{flex:1;min-width:150px;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid var(--primary);border-radius:var(--radius-md);padding:.7rem .85rem}
+.funnel .step .n{font-size:1.3rem;font-weight:800}
+.funnel .step .l{font-size:.75rem;color:var(--text-muted)}
+.st{font-weight:700;font-size:.78rem;padding:.12rem .5rem;border-radius:var(--radius-full);white-space:nowrap}
+.st.READY{color:#137333;background:#e6f4ea}.st.CONDITIONAL{color:#946200;background:#fef7e0}
+.st.AT_RISK{color:#b06000;background:#fde9d9}.st.NOT_READY{color:#b3261e;background:#fce8e6}
+.st.NO_DATA{color:#5f6368;background:#f1f3f4}
+.rtable{width:100%;border-collapse:collapse;font-size:.85rem}
+.rtable th,.rtable td{padding:.45rem .5rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
+    <div>
+        <h1 style="margin:0;"><i class="fas fa-graduation-cap"></i> Admission Readiness</h1>
+        <p class="text-muted text-sm" style="margin:.2rem 0 0;">Projected from actual results where available, otherwise the Mock WAEC/JAMB trajectory{% if active_session %} · {{ active_session.name }}{% endif %}. Guidance only.</p>
+    </div>
+    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-line"></i> Analytics hub</a>
+</div>
+
+{% set c = funnel.counts %}
+<div class="kpi-grid">
+    <div class="kpi"><div class="n" style="color:#137333">{{ c.READY }}</div><div class="l">Admission-ready</div></div>
+    <div class="kpi"><div class="n" style="color:#946200">{{ c.CONDITIONAL }}</div><div class="l">Conditional</div></div>
+    <div class="kpi"><div class="n" style="color:#b06000">{{ c.AT_RISK }}</div><div class="l">At risk</div></div>
+    <div class="kpi"><div class="n" style="color:#b3261e">{{ c.NOT_READY }}</div><div class="l">Not ready</div></div>
+    <div class="kpi"><div class="n" style="color:#5f6368">{{ c.NO_DATA }}</div><div class="l">No data yet</div></div>
+</div>
+
+<div class="funnel">
+    <div class="step"><div class="n">{{ funnel.total }}</div><div class="l">SSS3 students</div></div>
+    <div class="step"><div class="n">{{ funnel.projected_5_incl_core }} <small style="font-size:.7rem;color:var(--text-muted)">({{ funnel.projected_5_incl_core_pct }}%)</small></div><div class="l">Projected 5 credits incl. English &amp; Maths</div></div>
+    <div class="step"><div class="n">{{ funnel.projected_jamb_ok }} <small style="font-size:.7rem;color:var(--text-muted)">({{ funnel.projected_jamb_ok_pct }}%)</small></div><div class="l">Projected JAMB ≥ 180</div></div>
+    <div class="step" style="border-left-color:#137333"><div class="n" style="color:#137333">{{ funnel.projected_both }} <small style="font-size:.7rem;color:var(--text-muted)">({{ funnel.projected_both_pct }}%)</small></div><div class="l">Clear <strong>both</strong> — admission-ready</div></div>
+</div>
+
+<div class="card" style="padding:0;overflow-x:auto;">
+<table class="rtable">
+    <thead><tr><th>Student</th><th>Status</th><th>Proj. credits</th><th>Proj. JAMB</th><th>Aggregate</th><th>Blockers</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+    {% set rd = r.readiness %}
+    <tr>
+        <td>{{ r.student.full_name }}</td>
+        <td><span class="st {{ rd.status }}">{{ rd.status.replace('_',' ').title() }}</span></td>
+        <td>{% if rd.waec %}{{ rd.waec.credits }}{% if rd.waec.missing_core %} <span class="text-muted" style="font-size:.72rem">(no {{ rd.waec.missing_core|join('/') }})</span>{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if rd.jamb %}{{ rd.jamb.score }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if rd.aggregate %}{{ rd.aggregate.aggregate }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td style="font-size:.78rem;color:var(--text-muted)">{{ rd.blockers|join('; ') if rd.blockers else '—' }}</td>
+        <td><a href="{{ url_for('results.student_report', student_id=r.student.id) }}" class="btn btn-sm btn-info" title="Report"><i class="fas fa-eye"></i></a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
