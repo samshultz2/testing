@@ -40,8 +40,14 @@ def standardized_mock_jamb_progress(student_id, session_id=None):
     against each sitting's mean/SD makes the trend reflect *relative* movement,
     robust to a sitting being unusually hard or easy. Returns None if the student
     sat no mocks in scope."""
-    from models.mock_jamb import MockJAMBExam
-    q = MockJAMBExam.query
+    from models.mock_jamb import MockJAMBExam, MockJAMBResult
+    # Only the sittings this student actually sat — don't load cohorts for exams
+    # that can't contribute a point.
+    sat_ids = {r.mock_exam_id for r in
+               MockJAMBResult.query.filter_by(student_id=student_id).all()}
+    if not sat_ids:
+        return None
+    q = MockJAMBExam.query.filter(MockJAMBExam.id.in_(sat_ids))
     if session_id:
         q = q.filter_by(session_id=session_id)
     points = []
@@ -133,46 +139,53 @@ def mock_waec_subject_gains(session_id):
 # --------------------------------------------------------------------------- #
 # Attendance <-> results correlation
 # --------------------------------------------------------------------------- #
-def _attendance_rate(student):
-    """Student's attendance rate (%) across all marked days, or None if none."""
-    from models import Attendance, StudentEnrollment
-    rows = (Attendance.query
-            .join(StudentEnrollment, Attendance.enrollment_id == StudentEnrollment.id)
-            .filter(StudentEnrollment.student_id == student.id).all())
-    if not rows:
-        return None
-    present = sum(int(bool(r.morning_present)) + int(bool(r.afternoon_present)) for r in rows)
-    return present / (2 * len(rows)) * 100
-
-
-def _perf_metric(student, metric):
-    from models.mock_waec import PASS_GRADES as W_PASS
-    if metric == 'jamb':
-        scores = [r.total_score for r in student.jamb_results.all() if r.total_score is not None]
-        return max(scores) if scores else None
-    # waec credits (best year)
-    by_year = {}
-    for r in student.waec_results.all():
-        by_year.setdefault(r.exam_year, {})[r.subject] = r.grade
-    if not by_year:
-        return None
-    return max(len({s for s, g in subs.items() if g in W_PASS}) for subs in by_year.values())
-
-
 def attendance_performance_correlation(students, metric='jamb'):
     """Pearson correlation between attendance rate and exam performance (best
     JAMB score, or best-year WAEC credit count). Returns the coefficient, sample
-    size and a plain-language strength label."""
+    size and a plain-language strength label.
+
+    Batched: a fixed two queries (attendance + the chosen result table) over the
+    whole cohort, rather than per-student lookups."""
+    from collections import defaultdict
+    from models import db, Attendance, StudentEnrollment, JAMBResult, WAECResult
+    from models.mock_waec import PASS_GRADES as W_PASS
+
+    ids = [s.id for s in students]
+    if not ids:
+        return {'n': 0, 'metric': metric, 'coefficient': None, 'strength': _strength(None)}
+
+    # Attendance rate per student — one query for the whole cohort.
+    present, marked = defaultdict(int), defaultdict(int)
+    for sid, am, pm in (db.session.query(
+            StudentEnrollment.student_id, Attendance.morning_present, Attendance.afternoon_present)
+            .join(Attendance, Attendance.enrollment_id == StudentEnrollment.id)
+            .filter(StudentEnrollment.student_id.in_(ids)).all()):
+        marked[sid] += 1
+        present[sid] += int(bool(am)) + int(bool(pm))
+
+    # Performance per student — one query.
+    perf = {}
+    if metric == 'jamb':
+        for sid, score in (db.session.query(JAMBResult.student_id, JAMBResult.total_score)
+                           .filter(JAMBResult.student_id.in_(ids),
+                                   JAMBResult.total_score.isnot(None)).all()):
+            perf[sid] = max(perf.get(sid, score), score)
+    else:
+        by_year = defaultdict(lambda: defaultdict(set))      # sid -> year -> credited subjects
+        for sid, year, subj, grade in (db.session.query(
+                WAECResult.student_id, WAECResult.exam_year, WAECResult.subject, WAECResult.grade)
+                .filter(WAECResult.student_id.in_(ids)).all()):
+            if grade in W_PASS:
+                by_year[sid][year].add(subj)
+        for sid, years in by_year.items():
+            perf[sid] = max(len(s) for s in years.values())
+
     xs, ys = [], []
-    for s in students:
-        rate = _attendance_rate(s)
-        if rate is None:
+    for sid in ids:
+        if marked[sid] == 0 or sid not in perf:
             continue
-        perf = _perf_metric(s, metric)
-        if perf is None:
-            continue
-        xs.append(rate)
-        ys.append(perf)
+        xs.append(present[sid] / (2 * marked[sid]) * 100)
+        ys.append(perf[sid])
     r = _pearson(xs, ys)
     return {'n': len(xs), 'metric': metric,
             'coefficient': round(r, 2) if r is not None else None,

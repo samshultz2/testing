@@ -122,3 +122,29 @@ def test_standardized_standing(app):
         assert top['latest']['z'] > 0
         bottom = T.standardized_mock_jamb_progress(ids[0], ss.id)  # the 200 scorer
         assert bottom['latest']['z'] < 0
+
+
+def test_attendance_correlation_query_count_is_bounded(app):
+    """The correlation must not scale queries with the number of students."""
+    from sqlalchemy import event
+    from models import db
+    small_ids = [_enroll_with_attendance(app, 3, 1, 200 + i) for i in range(2)]
+    big_ids = [_enroll_with_attendance(app, 3, 1, 210 + i) for i in range(8)]
+
+    def count_queries(ids):
+        with app.app_context():
+            students = [db.session.get(Student, i) for i in ids]
+            n = {'q': 0}
+            eng = db.engine
+
+            def before(*a, **k):
+                n['q'] += 1
+            event.listen(eng, 'before_cursor_execute', before)
+            try:
+                T.attendance_performance_correlation(students, metric='jamb')
+            finally:
+                event.remove(eng, 'before_cursor_execute', before)
+            return n['q']
+
+    assert count_queries(small_ids) == count_queries(big_ids)   # constant in cohort size
+    assert count_queries(big_ids) <= 3                          # attendance + results (+ slack)

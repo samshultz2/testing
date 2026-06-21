@@ -6,9 +6,9 @@ trajectory, so SSS3 students get an actionable readiness picture *before* they
 sit the real exams. Everything prefers actual results when they exist (a real
 sitting beats a mock) and degrades gracefully when a signal is missing.
 """
+from models.mock_waec import CORE_SUBJECTS          # single source of truth
 from utils.admission import COURSE_CATEGORIES, PASS_GRADES
 
-CORE_SUBJECTS = ('English Language', 'Mathematics')
 JAMB_BASELINE = 180          # the cut-off many courses accept as a floor
 
 # O'level grade -> points for a typical 50/50 post-UTME aggregate (A1=6 … C6=1).
