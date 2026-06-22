@@ -15,17 +15,6 @@ from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES
 _MAX_IMAGE_PIXELS = 50_000_000       # ~50 MP — reject decompression bombs
 _OCR_TIMEOUT_SECONDS = 25            # per Tesseract pass
 _MAX_PDF_OCR_PAGES = 25              # cap pages rendered+OCR'd from a scanned PDF
-# Tesseract is roughly quadratic in image size; a 12 MP phone photo is far larger
-# than it needs to be to read text. Downscaling to this longest-edge gives a big
-# speed-up with no real accuracy loss (often better). Small images are still
-# upscaled to _MIN_OCR_DIM. Orientation detection runs on a cheap thumbnail.
-_MAX_OCR_DIM = 2200
-_MIN_OCR_DIM = 1600
-_OSD_MAX_DIM = 1000
-# Tesseract OSD reports an orientation confidence; below this we leave the image
-# as-is. A low-confidence reading on a sparse page would otherwise flip an
-# already-upright slip 180° and garble every line.
-_OSD_MIN_CONFIDENCE = 2.0
 
 # Valid WAEC grade tokens.
 _GRADE_SET = set(WAEC_GRADES)
@@ -91,20 +80,11 @@ def tesseract_available():
 
 
 def _auto_orient(img, pytesseract):
-    """Use Tesseract OSD to fix a sideways/upside-down photo (best effort).
-
-    OSD is run on a small thumbnail — orientation doesn't need full resolution,
-    and a full-res OSD pass was a big part of the per-image cost."""
+    """Use Tesseract OSD to fix a sideways/upside-down photo (best effort)."""
     try:
-        probe = img
-        if max(img.size) > _OSD_MAX_DIM:
-            s = _OSD_MAX_DIM / max(img.size)
-            probe = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))))
-        osd = pytesseract.image_to_osd(probe)
+        osd = pytesseract.image_to_osd(img)
         m = re.search(r'Rotate:\s*(\d+)', osd)
-        conf_m = re.search(r'Orientation confidence:\s*([\d.]+)', osd)
-        conf = float(conf_m.group(1)) if conf_m else 0.0
-        if m and conf >= _OSD_MIN_CONFIDENCE:
+        if m:
             angle = int(m.group(1))
             if angle:
                 # OSD reports the rotation needed to make text upright.
@@ -131,17 +111,10 @@ def extract_text(image_bytes):
     img = _auto_orient(img, pytesseract)
     img = ImageOps.grayscale(img)
     img = ImageOps.autocontrast(img)
-    # Downscale large photos (the big speed-up) and upscale tiny ones.
-    longest = max(img.size)
-    if longest > _MAX_OCR_DIM:
-        scale = _MAX_OCR_DIM / longest
-        img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))))
-    elif longest < _MIN_OCR_DIM:
-        scale = _MIN_OCR_DIM / longest
+    if max(img.size) < 1600:
+        scale = 1600 / max(img.size)
         img = img.resize((int(img.width * scale), int(img.height * scale)))
-    # Bound a single OCR pass so a crafted image can't hang a worker. We let
-    # Tesseract pick the engine (default OEM): forcing --oem 1 (LSTM-only) gave no
-    # measurable speed-up but could hang on server builds without the LSTM data.
+    # Bound a single OCR pass so a crafted image can't hang a worker.
     return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS)
 
 
