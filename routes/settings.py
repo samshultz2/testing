@@ -66,7 +66,52 @@ def index():
             'users': url_for('settings.users_list'),
             'branches': url_for('settings.branches'),
             'backup': url_for('settings.backup_page'),
+            'ocr': url_for('settings.ocr_settings'),
         },
+    })
+
+
+@settings_bp.route('/ocr', methods=['GET', 'POST'])
+@login_required
+def ocr_settings():
+    """Optional Claude-vision OCR for WAEC/JAMB scans — manage the API key, the
+    on/off toggle, and the model. The key is stored encrypted at rest (when
+    FIELD_ENCRYPTION_KEY is set) and never sent back to the browser in full."""
+    if not is_admin():
+        return _err('Only an admin can change OCR settings.', url_for('settings.index'))
+
+    if request.method == 'POST':
+        try:
+            enabled = (request.form.get('enabled') or '').strip().lower() in ('1', 'true', 'on', 'yes')
+            model = (request.form.get('model') or 'claude-haiku-4-5').strip()
+            SchoolSettings.set('ocr_vision_enabled', enabled, 'bool', 'Use Claude vision for WAEC/JAMB scans')
+            SchoolSettings.set('ocr_vision_model', model, 'string', 'Claude model for vision OCR')
+            if (request.form.get('clear_key') or '').strip().lower() in ('1', 'true', 'on', 'yes'):
+                SchoolSettings.set('ocr_vision_api_key', '', 'string', 'Anthropic API key (encrypted)')
+            else:
+                new_key = (request.form.get('api_key') or '').strip()
+                if new_key:                          # only overwrite when a real key is supplied
+                    from utils.crypto import encrypt
+                    SchoolSettings.set('ocr_vision_api_key', encrypt(new_key), 'string',
+                                       'Anthropic API key (encrypted)')
+        except Exception as e:
+            return _err(f'Error: {str(e)}', url_for('settings.ocr_settings'))
+        return _ok('OCR settings saved.', url_for('settings.ocr_settings'))
+
+    from utils.waec_ocr import _vision_config, vision_available
+    cfg = _vision_config()
+    return _render({
+        'page': 'ocr',
+        'enabled': cfg['enabled'],
+        'model': cfg['model'],
+        'has_key': cfg['has_key'],
+        'key_masked': cfg['key_masked'],
+        'key_source': cfg['key_source'],          # 'settings' | 'env' | None
+        'anthropic_installed': cfg['installed'],
+        'active': vision_available(),
+        'models': ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'],
+        'submit_url': url_for('settings.ocr_settings'),
+        'back_url': url_for('settings.index'),
     })
 
 

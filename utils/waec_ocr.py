@@ -490,19 +490,52 @@ def parse_jamb_result(text):
     }
 
 
-def vision_available():
-    """True if the optional Claude-vision fallback is configured and usable."""
+def _vision_config():
+    """Resolve the vision-OCR config from the Settings page (DB) first, then env /
+    Config. Never returns the raw key to callers that only need status — it does
+    include ``key`` for the extractor, plus a masked form and presence flags for
+    the settings UI."""
     import os
     from config import Config
-    if not getattr(Config, 'OCR_VISION_FALLBACK', False):
-        return False
-    if not os.environ.get('ANTHROPIC_API_KEY'):
-        return False
+    enabled = bool(getattr(Config, 'OCR_VISION_FALLBACK', False))
+    model = getattr(Config, 'OCR_VISION_MODEL', 'claude-haiku-4-5')
+    key = os.environ.get('ANTHROPIC_API_KEY', '') or ''
+    env_key = bool(key)
+    key_source = 'env' if key else None
+    try:                                  # DB settings override env/Config when present
+        from models import SchoolSettings
+        from utils.crypto import decrypt
+        ev = SchoolSettings.get('ocr_vision_enabled', None)
+        if ev is not None:
+            enabled = bool(ev)
+        mv = (SchoolSettings.get('ocr_vision_model', '') or '').strip()
+        if mv:
+            model = mv
+        kv = (SchoolSettings.get('ocr_vision_api_key', '') or '').strip()
+        if kv:
+            dec = decrypt(kv)
+            if dec:
+                key, key_source = dec, 'settings'
+    except Exception:
+        pass
     try:
         import anthropic  # noqa: F401
-        return True
+        installed = True
     except Exception:
-        return False
+        installed = False
+    masked = ''
+    if key:
+        masked = (key[:7] + '…' + key[-4:]) if len(key) > 14 else '••••••'
+    return {'enabled': enabled, 'model': model, 'key': key, 'has_key': bool(key),
+            'key_masked': masked, 'env_key': env_key, 'key_source': key_source,
+            'installed': installed}
+
+
+def vision_available():
+    """True if the optional Claude-vision OCR is enabled, has a key, and the
+    ``anthropic`` package is importable."""
+    cfg = _vision_config()
+    return bool(cfg['enabled'] and cfg['has_key'] and cfg['installed'])
 
 
 def vision_extract(image_bytes, exam='waec', media_type='image/png'):
@@ -511,15 +544,15 @@ def vision_extract(image_bytes, exam='waec', media_type='image/png'):
     same dict shape as parse_waec_result / parse_jamb_result, or None on any
     failure (so callers can fall back to Tesseract).
     """
-    if not vision_available():
+    cfg = _vision_config()
+    if not (cfg['enabled'] and cfg['has_key'] and cfg['installed']):
         return None
     try:
         import base64
         import json
         import anthropic
-        from config import Config
 
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=cfg['key'])
         data = base64.standard_b64encode(image_bytes).decode('utf-8')
 
         if exam == 'jamb':
@@ -541,7 +574,7 @@ def vision_extract(image_bytes, exam='waec', media_type='image/png'):
             )
 
         message = client.messages.create(
-            model=getattr(Config, 'OCR_VISION_MODEL', 'claude-opus-4-8'),
+            model=cfg['model'],
             max_tokens=2000,
             messages=[{
                 "role": "user",
