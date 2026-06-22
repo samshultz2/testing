@@ -165,8 +165,10 @@ class Config:
 
     # Optional Claude-vision OCR fallback (needs ANTHROPIC_API_KEY + the
     # `anthropic` package). Off by default — Tesseract is the default engine.
+    # Defaults to the cheapest vision-capable model (Haiku); OCR of result slips
+    # doesn't need a frontier model, and Haiku is ~5x cheaper than Opus.
     OCR_VISION_FALLBACK = _as_bool(os.environ.get('OCR_VISION_FALLBACK'), default=False)
-    OCR_VISION_MODEL = os.environ.get('OCR_VISION_MODEL', 'claude-opus-4-8')
+    OCR_VISION_MODEL = os.environ.get('OCR_VISION_MODEL', 'claude-haiku-4-5')
 
     # Session
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
