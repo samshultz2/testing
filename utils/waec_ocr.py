@@ -139,9 +139,10 @@ def extract_text(image_bytes):
     elif longest < _MIN_OCR_DIM:
         scale = _MIN_OCR_DIM / longest
         img = img.resize((int(img.width * scale), int(img.height * scale)))
-    # Bound a single OCR pass so a crafted image can't hang a worker. --oem 1 uses
-    # the faster LSTM engine only (default runs legacy+LSTM).
-    return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS, config='--oem 1')
+    # Bound a single OCR pass so a crafted image can't hang a worker. We let
+    # Tesseract pick the engine (default OEM): forcing --oem 1 (LSTM-only) gave no
+    # measurable speed-up but could hang on server builds without the LSTM data.
+    return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS)
 
 
 def pdf_available():
