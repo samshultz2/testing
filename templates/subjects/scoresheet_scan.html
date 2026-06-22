@@ -5,6 +5,7 @@
 <div class="page-header">
     <h1>Scan Score Sheet</h1>
     <div class="page-header-actions">
+        <a href="{{ url_for('subjects.scoresheet_paste', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-clipboard"></i> Paste CSV / AI</a>
         <a href="{{ url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-keyboard"></i> Manual Entry</a>
     </div>
 </div>

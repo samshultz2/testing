@@ -502,6 +502,7 @@ def scores_entry():
         'self_url': url_for('subjects.scores_entry'),
         'save_url': url_for('subjects.save_scores'),
         'urls': {'scan': url_for('subjects.scoresheet_scan', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
+                 'paste': url_for('subjects.scoresheet_paste', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'import': url_for('subjects.import_scores', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or '')},
     })
 
@@ -1576,6 +1577,114 @@ def scoresheet_scan():
         )
 
     return render_template('subjects/scoresheet_scan.html', **ctx)
+
+
+# Tokens that mean "no score" in a pasted cell.
+_PASTE_BLANKS = {'', '-', '--', '–', 'nil', 'absent', 'a', 'x', 'na', 'n/a'}
+
+
+def _parse_pasted_scores(text, num_columns):
+    """Parse pasted comma/tab-separated rows into ``[{'identifier', 'cells'}]``.
+
+    One student per line: the first field is the identifier (admission number or
+    name), the remaining fields are scores in the sheet's column order. Blank /
+    dash / 'absent' cells become empty. A leading header row is skipped."""
+    import re as _re
+    rows = []
+    for raw in text.splitlines():
+        line = raw.strip().strip(',').strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in _re.split(r'[,\t]', line)]
+        ident = parts[0].strip() if parts else ''
+        if not ident:
+            continue
+        # Skip an obvious header line — the first field is a header label, not a
+        # real student (column headers like CA1/CA2 legitimately contain digits,
+        # so we key off the identifier word, not the trailing cells).
+        key = _re.sub(r'[^a-z]', '', ident.lower())
+        if key in {'name', 'names', 'fullname', 'student', 'students', 'studentname',
+                   'adm', 'admno', 'admission', 'admissionnumber', 'admissionno',
+                   'sn', 'sno', 'no', 'reg', 'regno', 'serial'}:
+            continue
+        cells = []
+        for c in parts[1:1 + num_columns]:
+            c = c.strip()
+            if c.lower() in _PASTE_BLANKS:
+                cells.append('')
+            else:
+                m = _re.search(r'\d+(?:\.\d+)?', c)
+                cells.append(m.group(0) if m else '')
+        rows.append({'identifier': ident, 'cells': cells})
+    return rows
+
+
+@subjects_bp.route('/scores/paste', methods=['GET', 'POST'])
+@login_required
+def scoresheet_paste():
+    """Paste comma-separated scores (e.g. produced by asking an external AI to read
+    a photographed sheet) into an editable, student-matched grid — no OCR, no API
+    keys. Reuses the same review/confirm grid and save path as the scanner."""
+    if not can_enter_results() and not is_admin():
+        flash('You do not have permission to enter scores.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from utils.waec_ocr import match_student
+
+    ctx = _scan_selector_context()
+    cs = db.session.get(ClassSubject, ctx['class_subject_id']) if ctx['class_subject_id'] else None
+    sheet_cols = _sheet_columns(cs) if cs else []
+    ctx['columns'] = sheet_cols
+
+    if request.method == 'POST':
+        assignment_id = ctx['assignment_id']
+        assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+        if not (assignment and cs):
+            flash('Select a class and subject before pasting.', 'error')
+            return render_template('subjects/scoresheet_paste.html', **ctx)
+        if not can_access_class(assignment_id):
+            flash('You do not have access to this class.', 'error')
+            return redirect(url_for('subjects.scoresheet_paste'))
+
+        pasted = (request.form.get('data') or '').strip()
+        if not pasted:
+            flash('Paste the comma-separated rows first.', 'error')
+            return render_template('subjects/scoresheet_paste.html', pasted=pasted, **ctx)
+
+        parsed = _parse_pasted_scores(pasted, len(sheet_cols))
+        if not parsed:
+            flash('No rows could be read from the pasted text. Check the format.', 'warning')
+            return render_template('subjects/scoresheet_paste.html', pasted=pasted, **ctx)
+
+        enrollments = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True
+        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        students = [e.student for e in enrollments]
+        by_student_id = {s.student_id: s for s in students}
+
+        rows = []
+        for p in parsed:
+            matched = by_student_id.get(p['identifier'])
+            student_num = p['identifier'] if matched else ''
+            if not matched:                                   # fall back to fuzzy name match
+                matched, _ = match_student(p['identifier'], students)
+            cell_map = {}
+            for (at, _mx), value in zip(sheet_cols, p['cells']):
+                cell_map[at.id] = value
+            rows.append({
+                'student_num': student_num,
+                'name': p['identifier'],
+                'matched_id': matched.id if matched else None,
+                'cells': cell_map,
+            })
+
+        return render_template('subjects/scoresheet_review.html',
+            term_id=ctx['term_id'], assignment_id=assignment_id, class_subject_id=ctx['class_subject_id'],
+            assignment=assignment, class_subject=cs,
+            columns=sheet_cols, rows=rows, students=students,
+        )
+
+    return render_template('subjects/scoresheet_paste.html', **ctx)
 
 
 @subjects_bp.route('/scores/scan/save', methods=['POST'])

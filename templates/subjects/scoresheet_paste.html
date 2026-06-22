@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Paste Scores - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Paste Scores</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Paste Scores</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('subjects.scoresheet_scan', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-camera"></i> Scan instead</a>
+        <a href="{{ url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-keyboard"></i> Manual entry</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 1: Select Class &amp; Subject</h3></div>
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group">
+                <label class="form-label">Term</label>
+                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Term</option>
+                    {% for term in terms %}
+                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}
+                    <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Subject</label>
+                <select name="class_subject_id" class="form-control" onchange="this.form.submit()">
+                    <option value="">Select Subject</option>
+                    {% for cs in class_subjects %}
+                    <option value="{{ cs.id }}" {% if class_subject_id == cs.id %}selected{% endif %}>{{ cs.subject.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if assignment_id and class_subject_id and columns %}
+{% set col_labels = columns | map(attribute='0') | map(attribute='short_name') | list %}
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 2: Get the data as CSV from an AI</h3></div>
+    <div class="card-body">
+        <p class="text-muted">Take a photo of the score sheet, upload it to a chatbot (Claude, Gemini, ChatGPT…), and paste it this prompt. Then copy its answer into Step&nbsp;3. No API key needed.</p>
+        <label class="form-label">Prompt to give the AI (with your photo)</label>
+        <pre id="ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.75rem;font-size:.85rem;">Read this score sheet. Output one line per student as comma-separated values in EXACTLY this column order:
+AdmissionNumber, {{ col_labels | join(', ') }}
+Rules: use the student's admission number as the first value (or full name if there's no number). Use a dash (-) for any blank or absent cell. Do not include a header row, totals, or any extra text — just the rows.</pre>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('ai-prompt').innerText).then(()=>{this.innerHTML='<i class=\'fas fa-check\'></i> Copied';})"><i class="fas fa-copy"></i> Copy prompt</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Step 3: Paste the AI's answer</h3></div>
+    <div class="card-body">
+        <p class="text-muted">Columns, in order: <strong>{{ col_labels | join(' · ') }}</strong>. You'll preview &amp; correct everything before saving — totals are computed automatically.</p>
+        <form method="POST">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="term_id" value="{{ term_id }}">
+            <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+            <input type="hidden" name="class_subject_id" value="{{ class_subject_id }}">
+            <div class="form-group">
+                <label class="form-label">Pasted rows (CSV) <span class="required">*</span></label>
+                <textarea name="data" class="form-control" rows="12" required
+                    placeholder="PIO4047023, 5, 5, -, 4, 10, 14, 21, ...&#10;JM24252502, 4, 5, 5, 3, 9, 12, 18, ...">{{ pasted or '' }}</textarea>
+                <span class="form-hint d-block">One student per line. First value = admission number or name; then the scores in the column order above. Dash (-) for blank.</span>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-eye"></i> Preview</button>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-hand-pointer"></i>
+            <h3>Select Options Above</h3>
+            <p>Choose a term, class and subject to get the paste format for that subject.</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
