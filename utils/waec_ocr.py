@@ -13,8 +13,13 @@ from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES
 
 # Resource limits for OCR on untrusted uploads (DoS hardening).
 _MAX_IMAGE_PIXELS = 50_000_000       # ~50 MP — reject decompression bombs
-_OCR_TIMEOUT_SECONDS = 25            # per Tesseract pass
+_OCR_TIMEOUT_SECONDS = 60            # per Tesseract pass (generous for slow CPUs)
 _MAX_PDF_OCR_PAGES = 25              # cap pages rendered+OCR'd from a scanned PDF
+# Tesseract cost grows ~quadratically with pixels, so a full-resolution phone
+# photo (often 12-20 MP) can blow the time budget on a slow CPU. Shrinking the
+# longest edge to this before OCR is the single biggest speed-up and does not
+# change the recognition engine. Tiny images are still upscaled (below).
+_MAX_OCR_DIM = 2200
 
 # Valid WAEC grade tokens.
 _GRADE_SET = set(WAEC_GRADES)
@@ -108,6 +113,11 @@ def extract_text(image_bytes):
     # Preprocess: orient via EXIF + OSD, grayscale, autocontrast and upscale a
     # little — this noticeably improves OCR on photographed slips.
     img = ImageOps.exif_transpose(img)
+    # Downscale a large photo BEFORE orientation + OCR so a big phone photo can't
+    # exceed the Tesseract time budget (this is the fix for "process timeout").
+    if max(img.size) > _MAX_OCR_DIM:
+        scale = _MAX_OCR_DIM / max(img.size)
+        img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))))
     img = _auto_orient(img, pytesseract)
     img = ImageOps.grayscale(img)
     img = ImageOps.autocontrast(img)
