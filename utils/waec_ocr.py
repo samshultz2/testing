@@ -19,7 +19,10 @@ _MAX_PDF_OCR_PAGES = 25              # cap pages rendered+OCR'd from a scanned P
 # photo (often 12-20 MP) can blow the time budget on a slow CPU. Shrinking the
 # longest edge to this before OCR is the single biggest speed-up and does not
 # change the recognition engine. Tiny images are still upscaled (below).
-_MAX_OCR_DIM = 2200
+_MAX_OCR_DIM = 1800
+# Orientation detection (OSD) is a separate full Tesseract pass and is often the
+# bigger cost — it doesn't need full resolution, so run it on a small thumbnail.
+_OSD_MAX_DIM = 1000
 
 # Valid WAEC grade tokens.
 _GRADE_SET = set(WAEC_GRADES)
@@ -85,9 +88,16 @@ def tesseract_available():
 
 
 def _auto_orient(img, pytesseract):
-    """Use Tesseract OSD to fix a sideways/upside-down photo (best effort)."""
+    """Use Tesseract OSD to fix a sideways/upside-down photo (best effort).
+
+    OSD runs on a small thumbnail — orientation doesn't need full resolution and
+    a full-size OSD pass is often the single biggest cost of a scan."""
     try:
-        osd = pytesseract.image_to_osd(img)
+        probe = img
+        if max(img.size) > _OSD_MAX_DIM:
+            s = _OSD_MAX_DIM / max(img.size)
+            probe = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))))
+        osd = pytesseract.image_to_osd(probe)
         m = re.search(r'Rotate:\s*(\d+)', osd)
         if m:
             angle = int(m.group(1))
