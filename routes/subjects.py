@@ -1496,10 +1496,11 @@ def scoresheet_scan():
 
     from utils.waec_ocr import (
         tesseract_available, extract_text, extract_text_from_pdf,
-        parse_score_sheet, match_student,
+        parse_score_sheet, match_student, vision_available, vision_extract_scoresheet,
     )
 
     ctx = _scan_selector_context()
+    ctx['vision_on'] = vision_available()      # Claude reads handwriting when a key is set
 
     if request.method == 'POST':
         term_id = ctx['term_id']
@@ -1517,7 +1518,7 @@ def scoresheet_scan():
             flash('You do not have access to this class.', 'error')
             return redirect(url_for('subjects.scoresheet_scan'))
 
-        if not tesseract_available():
+        if not tesseract_available() and not vision_available():
             flash('OCR engine (Tesseract) is not available on the server.', 'error')
             return render_template('subjects/scoresheet_scan.html', **ctx)
 
@@ -1527,17 +1528,23 @@ def scoresheet_scan():
             return render_template('subjects/scoresheet_scan.html', **ctx)
 
         data = upload.read()
-        try:
-            if upload.filename.lower().endswith('.pdf'):
-                text = extract_text_from_pdf(data)
-            else:
-                text = extract_text(data)
-        except Exception as e:
-            flash(f'Could not read the image: {e}', 'error')
-            return render_template('subjects/scoresheet_scan.html', **ctx)
-
+        is_pdf = upload.filename.lower().endswith('.pdf')
         sheet_cols = _sheet_columns(class_subject)
-        parsed = parse_score_sheet(text, num_columns=len(sheet_cols))
+
+        # Prefer Claude vision when configured (reads handwriting); fall back to
+        # Tesseract text parsing on any failure or for PDFs.
+        parsed = None
+        if not is_pdf and vision_available():
+            col_labels = [(at.short_name or at.name) for at, _mx in sheet_cols]
+            parsed = vision_extract_scoresheet(data, col_labels, upload.mimetype or 'image/png')
+
+        if parsed is None:
+            try:
+                text = extract_text_from_pdf(data) if is_pdf else extract_text(data)
+            except Exception as e:
+                flash(f'Could not read the image: {e}', 'error')
+                return render_template('subjects/scoresheet_scan.html', **ctx)
+            parsed = parse_score_sheet(text, num_columns=len(sheet_cols))
 
         if not parsed:
             flash('No student rows could be detected. Try a clearer, straight photo.', 'warning')

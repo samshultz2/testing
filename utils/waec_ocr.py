@@ -609,6 +609,75 @@ def vision_extract(image_bytes, exam='waec', media_type='image/png'):
         return None
 
 
+# Tokens a cell can hold that mean "no score".
+_SHEET_BLANKS = {'', '-', '--', '–', 'nil', 'absent', 'a', 'x', 'na', 'n/a'}
+
+
+def vision_extract_scoresheet(image_bytes, column_labels, media_type='image/png'):
+    """Read a handwritten class broadsheet image with Claude vision.
+
+    ``column_labels`` is the ordered list of assessment-column names the scores
+    map to (e.g. ['1st CA', '2nd CA', 'H.A', '3rd CA', 'P/ME', 'CBT', 'PBT']).
+    Returns ``[{'student_num': str, 'name': str, 'cells': [str, ...]}]`` (same
+    shape as parse_score_sheet) or None on any failure, so the caller falls back
+    to Tesseract. The result is always shown in the review grid before saving."""
+    cfg = _vision_config()
+    if not (cfg['enabled'] and cfg['has_key'] and cfg['installed']):
+        return None
+    try:
+        import base64
+        import json
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=cfg['key'])
+        data = base64.standard_b64encode(image_bytes).decode('utf-8')
+        ncol = len(column_labels)
+        cols = ', '.join(column_labels)
+        instruction = (
+            "This is a Nigerian school class broadsheet (score sheet). Every row is "
+            "one student — read ALL rows top to bottom. For each student give their "
+            "printed admission/student number (empty string if none), their full "
+            "name, and the handwritten scores in EXACTLY this column order:\n"
+            f"{cols}\n"
+            "Scores are small numbers; use \"\" for any blank, dash, or absent cell. "
+            "Ignore the printed Exam-Total and Grand-Total columns. Do not invent "
+            'rows. Return ONLY JSON: {"rows": [{"student_num": str, "name": str, '
+            '"scores": [str, ...]}]} with one entry per student.'
+        )
+        message = client.messages.create(
+            model=cfg['model'],
+            max_tokens=8000,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}},
+                    {"type": "text", "text": instruction},
+                ],
+            }],
+        )
+        text = next((b.text for b in message.content if b.type == "text"), "").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text[text.find("{"):text.rfind("}") + 1]
+        parsed = json.loads(text)
+
+        rows = []
+        for r in parsed.get('rows', []):
+            name = (r.get('name') or '').strip()
+            if not name:
+                continue
+            cells = []
+            for v in (r.get('scores') or [])[:ncol]:
+                v = '' if v is None else str(v).strip()
+                cells.append('' if v.lower() in _SHEET_BLANKS else v)
+            cells += [''] * (ncol - len(cells))            # pad short rows
+            rows.append({'student_num': (r.get('student_num') or '').strip(),
+                         'name': name, 'cells': cells})
+        return rows or None
+    except Exception:
+        return None
+
+
 def match_student(name, students):
     """
     Auto-match the extracted name to a student. Returns (student_or_None, score).

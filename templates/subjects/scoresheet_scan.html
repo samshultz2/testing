@@ -53,6 +53,11 @@
         student numbers, names and each assessment column (1st/2nd/3rd CA, Holiday Assignment, Midterm/Practical,
         CBT and Theory). You can review and correct everything before saving — the Exam&nbsp;Total and Grand&nbsp;Total
         are calculated automatically, so you don't need those columns.</p>
+        {% if vision_on %}
+        <p style="color:#137333;font-size:.85rem;margin:-.3rem 0 .6rem;"><i class="fas fa-robot"></i> AI Vision is on — handwritten scores will be read. Always review before saving.</p>
+        {% else %}
+        <p class="text-muted" style="font-size:.82rem;margin:-.3rem 0 .6rem;">Tip: handwritten sheets read poorly with the free engine. Turn on AI Vision in <a href="{{ url_for('settings.ocr_settings') }}">Settings → AI Vision OCR</a>, or use <a href="{{ url_for('subjects.scoresheet_paste', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}">Paste CSV</a>.</p>
+        {% endif %}
         <form method="POST" enctype="multipart/form-data">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="term_id" value="{{ term_id }}">
