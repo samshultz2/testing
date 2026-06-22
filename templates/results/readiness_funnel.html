@@ -17,8 +17,14 @@
 .st.READY{color:#137333;background:#e6f4ea}.st.CONDITIONAL{color:#946200;background:#fef7e0}
 .st.AT_RISK{color:#b06000;background:#fde9d9}.st.NOT_READY{color:#b3261e;background:#fce8e6}
 .st.NO_DATA{color:#5f6368;background:#f1f3f4}
-.rtable{width:100%;border-collapse:collapse;font-size:.85rem}
+.rwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.rtable{width:100%;border-collapse:collapse;font-size:.85rem;min-width:620px}
 .rtable th,.rtable td{padding:.45rem .5rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}
+.rtable td.num,.rtable th.num{white-space:nowrap}
+@media(max-width:560px){
+  .rtable{min-width:480px;font-size:.8rem}
+  .rtable .col-agg{display:none}      /* aggregate is secondary — it's on the student report */
+}
 </style>
 {% endblock %}
 
@@ -47,23 +53,23 @@
     <div class="step" style="border-left-color:#137333"><div class="n" style="color:#137333">{{ funnel.projected_both }} <small style="font-size:.7rem;color:var(--text-muted)">({{ funnel.projected_both_pct }}%)</small></div><div class="l">Clear <strong>both</strong> — admission-ready</div></div>
 </div>
 
-<div class="card" style="padding:0;overflow-x:auto;">
+<div class="card" style="padding:0;"><div class="rwrap">
 <table class="rtable">
-    <thead><tr><th>Student</th><th>Status</th><th>Proj. credits</th><th>Proj. JAMB</th><th>Aggregate</th><th>Blockers</th><th></th></tr></thead>
+    <thead><tr><th>Student</th><th class="num">Status</th><th class="num">Proj. credits</th><th class="num">Proj. JAMB</th><th class="num col-agg">Aggregate</th><th>Blockers</th><th class="num"></th></tr></thead>
     <tbody>
     {% for r in rows %}
     {% set rd = r.readiness %}
     <tr>
         <td>{{ r.student.full_name }}</td>
-        <td><span class="st {{ rd.status }}">{{ rd.status.replace('_',' ').title() }}</span></td>
-        <td>{% if rd.waec %}{{ rd.waec.credits }}{% if rd.waec.missing_core %} <span class="text-muted" style="font-size:.72rem">(no {{ rd.waec.missing_core|join('/') }})</span>{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-        <td>{% if rd.jamb %}{{ rd.jamb.score }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-        <td>{% if rd.aggregate %}{{ rd.aggregate.aggregate }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-        <td style="font-size:.78rem;color:var(--text-muted)">{{ rd.blockers|join('; ') if rd.blockers else '—' }}</td>
-        <td><a href="{{ url_for('results.student_report', student_id=r.student.id) }}" class="btn btn-sm btn-info" title="Report"><i class="fas fa-eye"></i></a></td>
+        <td class="num"><span class="st {{ rd.status }}">{{ rd.status.replace('_',' ').title() }}</span></td>
+        <td class="num">{% if rd.waec %}{{ rd.waec.credits }}{% if rd.waec.missing_core %} <span class="text-muted" style="font-size:.72rem">(no {{ rd.waec.missing_core|join('/') }})</span>{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td class="num">{% if rd.jamb %}{{ rd.jamb.score }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td class="num col-agg">{% if rd.aggregate %}{{ rd.aggregate.aggregate }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td style="font-size:.78rem;color:var(--text-muted);min-width:160px">{{ rd.blockers|join('; ') if rd.blockers else '—' }}</td>
+        <td class="num"><a href="{{ url_for('results.student_report', student_id=r.student.id) }}" class="btn btn-sm btn-info" title="Report"><i class="fas fa-eye"></i></a></td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
-</div>
+</div></div>
 {% endblock %}
