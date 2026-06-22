@@ -91,3 +91,39 @@ def test_calibration_query_count_bounded_for_empty_pool(app):
 
     # No valid pairs in either cohort -> query count must not grow with N.
     assert count(2) == count(8)
+
+
+def test_calibrate_jamb_pure():
+    # No calibration, or too few samples -> unchanged.
+    assert EI.calibrate_jamb(200, None) == (200, None)
+    assert EI.calibrate_jamb(200, {'bias': 12, 'n': 3}) == (200, None)
+    assert EI.calibrate_jamb(200, {'bias': 0.4, 'n': 50}) == (200, None)   # bias too small
+    # Over-prediction is subtracted; under-prediction added; both clamped 0..400.
+    assert EI.calibrate_jamb(200, {'bias': 12, 'n': 10}) == (188, 12.0)
+    assert EI.calibrate_jamb(200, {'bias': -15, 'n': 10}) == (215, -15.0)
+    assert EI.calibrate_jamb(390, {'bias': -20, 'n': 10}) == (400, -20.0)
+
+
+def test_projected_jamb_applies_calibration(app):
+    ssid = _session(app); sid = _student(app)
+    with app.app_context():
+        for n, total in ((1, 200), (2, 210)):
+            ex = MockJAMBExam(name=f'PJ{n}', exam_number=n, session_id=ssid,
+                              exam_date=date(2025, 1, n))
+            db.session.add(ex); db.session.flush()
+            db.session.add(MockJAMBResult(student_id=sid, mock_exam_id=ex.id, total_score=total))
+        db.session.commit()
+        st = db.session.get(Student, sid)
+        raw = EI.projected_jamb(st, ssid)                       # uncalibrated
+        cal = EI.projected_jamb(st, ssid, {'bias': 15, 'n': 12})
+        assert cal['score'] == max(0, raw['score'] - 15)
+        assert cal['calibrated_by'] == 15.0 and cal['raw_score'] == raw['score']
+
+
+def test_get_jamb_bias_is_cached(app):
+    from models.analytics_models import AnalyticsCache
+    with app.app_context():
+        b1 = EI.get_jamb_bias()
+        assert 'bias' in b1 and 'n' in b1
+        assert AnalyticsCache.get(EI.JAMB_BIAS_CACHE_KEY) is not None   # persisted
+        assert EI.get_jamb_bias() == b1                                 # served from cache

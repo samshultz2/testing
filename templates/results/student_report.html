@@ -129,6 +129,7 @@
             <div style="font-size:.85rem;opacity:.9;">Predicted real JAMB score</div>
             <div class="big">{{ prediction.predicted_score }}</div>
             <div style="font-size:.85rem;opacity:.9;">Expected range {{ prediction.predicted_range.low }}–{{ prediction.predicted_range.high }} · {{ prediction.confidence_level }}% confidence</div>
+            {% if prediction.calibrated_by is defined %}<div style="font-size:.78rem;opacity:.85;"><i class="fas fa-bullseye"></i> Calibrated {{ '%+.0f'|format(-prediction.calibrated_by) }} from the historical mock bias (raw {{ prediction.raw_score }})</div>{% endif %}
         </div>
         {% endif %}
     </div>

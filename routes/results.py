@@ -1006,10 +1006,18 @@ def student_report(student_id):
     admission = assess_admission(student)
 
     # Forward-looking readiness from the mock trajectory (actionable before the
-    # real exams), plus the intended JAMB-combination check.
+    # real exams), plus the intended JAMB-combination check. The mock-based
+    # prediction is corrected by the historical mock->real bias (cached).
     from utils import exam_insights, exam_trends
+    bias = exam_insights.get_jamb_bias()
+    if prediction:
+        adj, applied = exam_insights.calibrate_jamb(prediction.get('predicted_score'), bias)
+        if applied is not None:
+            prediction['raw_score'] = prediction.get('predicted_score')
+            prediction['predicted_score'] = adj
+            prediction['calibrated_by'] = applied
     readiness = exam_insights.admission_readiness(
-        student, active_session.id if active_session else None)
+        student, active_session.id if active_session else None, calibration=bias)
     jamb_combo = exam_insights.jamb_subject_combo_check(student)
     # Difficulty-adjusted standing among peers (z-score / percentile per sitting).
     standing = exam_trends.standardized_mock_jamb_progress(
@@ -1194,12 +1202,14 @@ def readiness_funnel():
     from utils import exam_insights
     session = get_active_session()
     students = get_sss3_students()
-    funnel = exam_insights.cohort_readiness(students, session.id if session else None)
+    bias = exam_insights.get_jamb_bias()      # historical mock->real correction (cached)
+    funnel = exam_insights.cohort_readiness(
+        students, session.id if session else None, calibration=bias)
     # Rows sorted worst-first so intervention candidates surface at the top.
     order = {'NOT_READY': 0, 'AT_RISK': 1, 'CONDITIONAL': 2, 'READY': 3, 'NO_DATA': 4}
     rows = sorted(funnel['rows'], key=lambda r: order.get(r['readiness']['status'], 9))
     return render_template('results/readiness_funnel.html',
-                           funnel=funnel, rows=rows, active_session=session)
+                           funnel=funnel, rows=rows, active_session=session, bias=bias)
 
 
 @results_bp.route('/analytics')

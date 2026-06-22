@@ -10,6 +10,22 @@ from models.mock_waec import CORE_SUBJECTS          # single source of truth
 from utils.admission import COURSE_CATEGORIES, PASS_GRADES
 
 JAMB_BASELINE = 180          # the cut-off many courses accept as a floor
+MIN_CALIBRATION_SAMPLE = 8   # need a real history before trusting the measured bias
+
+
+def calibrate_jamb(raw, calibration):
+    """Adjust a raw mock-based JAMB prediction by the historically measured bias
+    (mean predicted − actual). Over-prediction (+ve bias) is subtracted off.
+
+    Only applied once there's a meaningful sample and a bias worth correcting.
+    Returns ``(score, applied_bias_or_None)`` where ``applied_bias`` is None when
+    no correction was made."""
+    if raw is None or not calibration:
+        return raw, None
+    bias, n = calibration.get('bias'), calibration.get('n')
+    if not bias or not n or n < MIN_CALIBRATION_SAMPLE or abs(bias) < 1:
+        return raw, None
+    return max(0, min(400, round(raw - bias))), round(bias, 1)
 
 # O'level grade -> points for a typical 50/50 post-UTME aggregate (A1=6 … C6=1).
 OLEVEL_POINTS = {'A1': 6, 'B2': 5, 'B3': 4, 'C4': 3, 'C5': 2, 'C6': 1}
@@ -91,9 +107,11 @@ def projected_waec(student, session_id=None):
     }
 
 
-def projected_jamb(student, session_id=None):
+def projected_jamb(student, session_id=None, calibration=None):
     """Best available JAMB outlook. Prefers the best actual JAMB score; otherwise
-    the Mock JAMB prediction. Returns a dict with ``score``/``band`` or None."""
+    the Mock JAMB prediction, optionally corrected by the historically measured
+    mock→real bias (see :func:`calibrate_jamb`). Returns a dict with
+    ``score``/``band`` or None."""
     actual = [r.total_score for r in student.jamb_results.all() if r.total_score is not None]
     if actual:
         score = max(actual)
@@ -105,10 +123,20 @@ def projected_jamb(student, session_id=None):
     pred = MockJAMBAnalytics.predict_real_jamb(student.id, session_id)
     if not pred:
         return None
-    score = pred['predicted_score']
-    return {'source': 'mock', 'score': score,
-            'confidence': pred.get('confidence_level'),
-            'range': pred.get('predicted_range'), 'band': _jamb_band(score)}
+    return _mock_jamb_dict(pred, calibration)
+
+
+def _mock_jamb_dict(pred, calibration):
+    """Build the mock-source projected_jamb dict, applying calibration if available."""
+    raw = pred['predicted_score']
+    score, applied = calibrate_jamb(raw, calibration)
+    out = {'source': 'mock', 'score': score,
+           'confidence': pred.get('confidence_level'),
+           'range': pred.get('predicted_range'), 'band': _jamb_band(score)}
+    if applied is not None:
+        out['calibrated_by'] = applied      # bias subtracted (predicted − actual)
+        out['raw_score'] = raw
+    return out
 
 
 def post_utme_aggregate(jamb_score, grades):
@@ -127,7 +155,7 @@ def post_utme_aggregate(jamb_score, grades):
 _UNSET = object()
 
 
-def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET):
+def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET, calibration=None):
     """Combine the projected WAEC + JAMB outlook into a single readiness verdict
     with specific, actionable blockers.
 
@@ -141,7 +169,7 @@ def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET):
     if waec is _UNSET:
         waec = projected_waec(student, session_id)
     if jamb is _UNSET:
-        jamb = projected_jamb(student, session_id)
+        jamb = projected_jamb(student, session_id, calibration)
     if not waec and not jamb:
         return {'status': 'NO_DATA', 'blockers': [], 'waec': None, 'jamb': None,
                 'eligible_categories': [], 'aggregate': None, 'source': None}
@@ -227,16 +255,20 @@ def jamb_subject_combo_check(student):
 STATUSES = ('READY', 'CONDITIONAL', 'AT_RISK', 'NOT_READY', 'NO_DATA')
 
 
-def cohort_readiness(students, session_id=None):
+def cohort_readiness(students, session_id=None, calibration=None):
     """Aggregate :func:`admission_readiness` across an iterable of students into a
     funnel: status counts, plus how many are projected to get 5 credits incl.
-    core, to clear the JAMB baseline, and to clear *both* (admission-ready)."""
+    core, to clear the JAMB baseline, and to clear *both* (admission-ready).
+
+    ``calibration`` (a :func:`jamb_calibration` result) is injected by the caller
+    so the bias is computed/cached once, keeping this function's query count
+    bounded regardless of cohort size."""
     students = list(students)
     ids = [s.id for s in students]
     # Project the whole cohort with a fixed handful of bulk queries, then build
     # each verdict from the pre-computed projections (no per-student queries).
     waec_map = _batch_projected_waec(ids, session_id)
-    jamb_map = _batch_projected_jamb(ids, session_id)
+    jamb_map = _batch_projected_jamb(ids, session_id, calibration)
 
     counts = {k: 0 for k in STATUSES}
     proj_core = proj_jamb = proj_both = assessed = 0
@@ -272,10 +304,10 @@ def cohort_readiness(students, session_id=None):
 # --------------------------------------------------------------------------- #
 # Batched projections (one set of bulk queries for a whole cohort)
 # --------------------------------------------------------------------------- #
-def _batch_projected_jamb(ids, session_id):
+def _batch_projected_jamb(ids, session_id, calibration=None):
     """{student_id -> projected_jamb dict} for the cohort, mirroring
-    :func:`projected_jamb`. Prefers actual JAMB; else the Mock JAMB prediction.
-    Two queries (actual + mocks) regardless of cohort size."""
+    :func:`projected_jamb`. Prefers actual JAMB; else the calibrated Mock JAMB
+    prediction. Two queries (actual + mocks) regardless of cohort size."""
     from collections import defaultdict
     from sqlalchemy.orm import contains_eager
     from models import db, JAMBResult
@@ -306,10 +338,7 @@ def _batch_projected_jamb(ids, session_id):
             pred = MockJAMBAnalytics._predict_from_progress(
                 MockJAMBAnalytics._progress_from_results(sid, srows))
             if pred:
-                score = pred['predicted_score']
-                out[sid] = {'source': 'mock', 'score': score,
-                            'confidence': pred.get('confidence_level'),
-                            'range': pred.get('predicted_range'), 'band': _jamb_band(score)}
+                out[sid] = _mock_jamb_dict(pred, calibration)
     return out
 
 
@@ -379,7 +408,7 @@ def _batch_projected_waec(ids, session_id):
 def _student_ids(students):
     if students is not None:
         return [s.id for s in students]
-    from models import Student
+    from models import db, Student
     return [sid for (sid,) in db.session.query(Student.id).all()]
 
 
@@ -470,3 +499,27 @@ def _error_summary(errors, n, tol):
 def calibration_summary(students=None):
     """Both calibration views for the predictions dashboard."""
     return {'jamb': jamb_calibration(students), 'waec': waec_calibration(students)}
+
+
+JAMB_BIAS_CACHE_KEY = 'jamb_calibration_bias'
+
+
+def get_jamb_bias(ttl_seconds=43200, refresh=False):
+    """Historical mock→real JAMB bias ({'bias','n'}), cached in AnalyticsCache.
+
+    Computed from the whole student pool (graduates with both mocks and a real
+    score), so current-cohort predictions can be corrected by it without paying
+    the cost on every page load. Recomputed when the cache is cold/stale or
+    ``refresh`` is set. Best-effort — never raises into the caller."""
+    from models.analytics_models import AnalyticsCache
+    try:
+        if not refresh:
+            cached = AnalyticsCache.get(JAMB_BIAS_CACHE_KEY)
+            if cached is not None:
+                return cached
+        cal = jamb_calibration()
+        data = {'bias': cal.get('bias'), 'n': cal.get('n')}
+        AnalyticsCache.set(JAMB_BIAS_CACHE_KEY, data, ttl_seconds)
+        return data
+    except Exception:
+        return {'bias': None, 'n': 0}

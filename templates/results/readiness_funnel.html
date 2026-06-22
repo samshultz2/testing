@@ -32,7 +32,8 @@
 <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
     <div>
         <h1 style="margin:0;"><i class="fas fa-graduation-cap"></i> Admission Readiness</h1>
-        <p class="text-muted text-sm" style="margin:.2rem 0 0;">Projected from actual results where available, otherwise the Mock WAEC/JAMB trajectory{% if active_session %} · {{ active_session.name }}{% endif %}. Guidance only.</p>
+        <p class="text-muted text-sm" style="margin:.2rem 0 0;">Projected from actual results where available, otherwise the Mock WAEC/JAMB trajectory{% if active_session %} · {{ active_session.name }}{% endif %}. Guidance only.
+        {% if bias and bias.n and bias.n >= 8 and bias.bias and (bias.bias >= 1 or bias.bias <= -1) %}<br><i class="fas fa-bullseye"></i> JAMB projections corrected by the historical mock bias ({{ '%+.0f'|format(-bias.bias) }} pts, from {{ bias.n }} past students).{% endif %}</p>
     </div>
     <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-line"></i> Analytics hub</a>
 </div>
