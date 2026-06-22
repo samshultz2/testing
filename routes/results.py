@@ -393,6 +393,31 @@ def scan_waec():
     )
 
 
+@results_bp.route('/waec/paste', methods=['GET', 'POST'])
+@login_required
+def paste_waec():
+    """Enter a WAEC result by pasting it as text (e.g. a result screenshot read by
+    an external AI) — no OCR, no API key. Reuses the scan review + save flow."""
+    from utils.waec_ocr import parse_waec_result, match_student
+    students = get_sss3_students()
+    if request.method == 'POST':
+        text = (request.form.get('data') or '').strip()
+        if not text:
+            flash('Paste the result text first.', 'error')
+            return render_template('results/waec_paste.html', subjects=WAEC_SUBJECTS, current_year=_date.today().year)
+        parsed = parse_waec_result(text)
+        if not parsed.get('subjects'):
+            flash('No subjects/grades could be read from the pasted text.', 'warning')
+            return render_template('results/waec_paste.html', subjects=WAEC_SUBJECTS, pasted=text, current_year=_date.today().year)
+        year = request.form.get('exam_year', type=int)
+        matched, score = match_student(parsed.get('name'), students)
+        return render_template('results/waec_scan_review.html',
+            students=students, subjects=WAEC_SUBJECTS, grades=WAEC_GRADES,
+            parsed=parsed, matched=matched, match_score=score, preview='',
+            current_year=year or parsed.get('year') or _date.today().year, raw_text=text)
+    return render_template('results/waec_paste.html', subjects=WAEC_SUBJECTS, current_year=_date.today().year)
+
+
 @results_bp.route('/waec/student/<int:student_id>')
 @login_required
 def view_waec_student(student_id):
@@ -793,6 +818,31 @@ def scan_jamb():
         ocr_ready=tesseract_available(),
         pdf_ready=pdf_available()
     )
+
+
+@results_bp.route('/jamb/paste', methods=['GET', 'POST'])
+@login_required
+def paste_jamb():
+    """Enter a JAMB result by pasting it as text (e.g. read by an external AI) —
+    no OCR. Reuses the JAMB scan review + save flow."""
+    from utils.waec_ocr import parse_jamb_result, match_student
+    students = get_sss3_students()
+    if request.method == 'POST':
+        text = (request.form.get('data') or '').strip()
+        if not text:
+            flash('Paste the result text first.', 'error')
+            return render_template('results/jamb_paste.html', subjects=WAEC_SUBJECTS, current_year=_date.today().year)
+        parsed = parse_jamb_result(text)
+        if parsed.get('total_score') is None and not parsed.get('subjects'):
+            flash('No JAMB score/subjects could be read from the pasted text.', 'warning')
+            return render_template('results/jamb_paste.html', subjects=WAEC_SUBJECTS, pasted=text, current_year=_date.today().year)
+        year = request.form.get('exam_year', type=int)
+        matched, score = match_student(parsed.get('name'), students)
+        return render_template('results/jamb_scan_review.html',
+            students=students, subjects=WAEC_SUBJECTS, parsed=parsed, matched=matched,
+            match_score=score, preview='',
+            current_year=year or parsed.get('year') or _date.today().year, raw_text=text)
+    return render_template('results/jamb_paste.html', subjects=WAEC_SUBJECTS, current_year=_date.today().year)
 
 
 def _read_uploaded_text(file):
