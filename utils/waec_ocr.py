@@ -6,10 +6,17 @@ list of {subject, grade} pairs. OCR is never perfect, so the result is always
 shown to the user for review/correction before anything is saved.
 """
 import io
+import os
 import re
 import difflib
 
 from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES
+
+# Auto-orientation (OSD) is a second Tesseract pass — roughly 40% of a scan's
+# time. It only helps sideways/upside-down photos; if you always upload upright
+# images or screenshots, set WAEC_OCR_AUTO_ORIENT=0 to skip it and (almost) halve
+# scan time on a slow CPU.
+_AUTO_ORIENT = os.environ.get('WAEC_OCR_AUTO_ORIENT', '1').strip().lower() not in ('0', 'false', 'no')
 
 # Resource limits for OCR on untrusted uploads (DoS hardening).
 _MAX_IMAGE_PIXELS = 50_000_000       # ~50 MP — reject decompression bombs
@@ -22,7 +29,10 @@ _MAX_PDF_OCR_PAGES = 25              # cap pages rendered+OCR'd from a scanned P
 _MAX_OCR_DIM = 1800
 # Orientation detection (OSD) is a separate full Tesseract pass and is often the
 # bigger cost — it doesn't need full resolution, so run it on a small thumbnail.
-_OSD_MAX_DIM = 1000
+_OSD_MAX_DIM = 800
+# Only upscale genuinely small images (tiny photos benefit); an image already at
+# least this wide is left at native size so we don't OCR more pixels than needed.
+_MIN_OCR_DIM = 1300
 
 # Valid WAEC grade tokens.
 _GRADE_SET = set(WAEC_GRADES)
@@ -128,11 +138,12 @@ def extract_text(image_bytes):
     if max(img.size) > _MAX_OCR_DIM:
         scale = _MAX_OCR_DIM / max(img.size)
         img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))))
-    img = _auto_orient(img, pytesseract)
+    if _AUTO_ORIENT:
+        img = _auto_orient(img, pytesseract)
     img = ImageOps.grayscale(img)
     img = ImageOps.autocontrast(img)
-    if max(img.size) < 1600:
-        scale = 1600 / max(img.size)
+    if max(img.size) < _MIN_OCR_DIM:
+        scale = _MIN_OCR_DIM / max(img.size)
         img = img.resize((int(img.width * scale), int(img.height * scale)))
     # Bound a single OCR pass so a crafted image can't hang a worker.
     return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS)
