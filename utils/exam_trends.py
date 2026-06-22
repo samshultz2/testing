@@ -6,7 +6,11 @@ value-added across sittings, and the attendance <-> results correlation.
 
 def _pearson(xs, ys):
     """Pearson correlation of two equal-length sequences, or None when it's
-    undefined (fewer than 2 points or a flat series)."""
+    undefined (fewer than 2 points or a flat series).
+
+    Kept distinct from AcademicAnalytics._pearson_correlation, which returns 0.0
+    for the degenerate case; here None is meaningful — it drives the
+    'insufficient data' strength label rather than implying zero correlation."""
     n = len(xs)
     if n < 2:
         return None

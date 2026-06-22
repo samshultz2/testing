@@ -7,7 +7,7 @@ sit the real exams. Everything prefers actual results when they exist (a real
 sitting beats a mock) and degrades gracefully when a signal is missing.
 """
 from models.mock_waec import CORE_SUBJECTS          # single source of truth
-from utils.admission import COURSE_CATEGORIES, PASS_GRADES
+from utils.admission import COURSE_CATEGORIES, PASS_GRADES, best_year_credits
 
 JAMB_BASELINE = 180          # the cut-off many courses accept as a floor
 MIN_CALIBRATION_SAMPLE = 8   # need a real history before trusting the measured bias
@@ -64,9 +64,7 @@ def projected_waec(student, session_id=None):
     for r in student.waec_results.all():
         by_year.setdefault(r.exam_year, {})[r.subject] = r.grade
     if by_year:
-        best = max(by_year.values(),
-                   key=lambda subs: sum(1 for g in subs.values() if g in PASS_GRADES))
-        credited = {s: g for s, g in best.items() if g in PASS_GRADES}
+        credited, _ = best_year_credits(by_year)
         missing_core = [s for s in CORE_SUBJECTS if s not in credited]
         return {
             'source': 'actual',
@@ -361,8 +359,7 @@ def _batch_projected_waec(ids, session_id):
             .filter(WAECResult.student_id.in_(ids)).all()):
         by_student_year[sid][year][subj] = grade
     for sid, years in by_student_year.items():
-        best = max(years.values(), key=lambda subs: sum(1 for g in subs.values() if g in PASS_GRADES))
-        credited = {s: g for s, g in best.items() if g in PASS_GRADES}
+        credited, _ = best_year_credits(years)
         missing_core = [s for s in CORE_SUBJECTS if s not in credited]
         out[sid] = {'source': 'actual', 'credits': len(credited),
                     'credited_subjects': sorted(credited),

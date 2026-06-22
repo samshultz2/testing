@@ -71,8 +71,7 @@ __all__ = [
 
 # Analytics models
 from models.analytics_models import (
-    InternalExam, InternalExamResult, StudentPerformanceSnapshot,
-    SubjectPerformanceMetrics, WAECJAMBCorrelation, UniversityCutoff,
+    WAECJAMBCorrelation, UniversityCutoff,
     StudentRiskAssessment, AcademicPrediction, AnalyticsCache
 )
 
