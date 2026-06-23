@@ -172,6 +172,129 @@ def view_exam(exam_id):
 
 
 # =============================================================================
+# BROADSHEET — the full score+grade matrix, printable, with the summary block
+# =============================================================================
+
+@mock_waec_bp.route('/exam/<int:exam_id>/broadsheet')
+@login_required
+def broadsheet(exam_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    bs = MockWAECAnalytics.get_broadsheet(exam_id)
+    return render_template('mock_waec/broadsheet.html', exam=exam, bs=bs,
+                           grade_classes=_GRADE_CLASS)
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/export')
+@login_required
+def broadsheet_export(exam_id):
+    """Wide broadsheet workbook: a column per subject (score + grade), with the
+    per-subject offered/passed/failed/average rows beneath, just like the sheet."""
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    bs = MockWAECAnalytics.get_broadsheet(exam_id)
+    subjects = bs['subjects']
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Broadsheet'
+    ws.append(['S/N', 'Admission No', 'Student'] + subjects + ['Credits', 'Avg %'])
+    for i, row in enumerate(bs['rows'], 1):
+        line = [i, row['student'].student_id, row['student'].full_name]
+        for subj in subjects:
+            r = row['cells'].get(subj)
+            line.append(f'{r.score} {r.grade}' if r and r.score is not None else '')
+        line += [row['credits'], row['average_score'] if row['average_score'] is not None else '']
+        ws.append(line)
+
+    ws.append([])
+    ss = bs['subject_summary']
+    def _summary_row(label, fn):
+        ws.append(['', '', label] + [fn(ss[s]) for s in subjects] + ['', ''])
+    _summary_row('No. offered', lambda d: d['offered'])
+    _summary_row('No. passed', lambda d: d['passed'])
+    _summary_row('No. failed', lambda d: d['failed'])
+    _summary_row('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '')
+    _summary_row('Average grade', lambda d: d['avg_grade'])
+
+    return xlsx_response(wb, f'mock_waec_broadsheet_{exam.exam_number}_'
+                             f'{exam.session.name.replace("/", "-")}.xlsx')
+
+
+# Grade -> CSS badge tone, shared by the broadsheet and grid templates.
+_GRADE_CLASS = {
+    'A1': 'a1', 'B2': 'b', 'B3': 'b', 'C4': 'c', 'C5': 'c', 'C6': 'c',
+    'D7': 'd', 'E8': 'e', 'F9': 'f',
+}
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/analytics')
+@login_required
+def analytics(exam_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = MockWAECAnalytics.get_analytics(exam_id)
+    return render_template('mock_waec/analytics.html', exam=exam, a=data,
+                           grade_classes=_GRADE_CLASS)
+
+
+# =============================================================================
+# GRID ENTRY — fast spreadsheet-style entry across the whole cohort
+# =============================================================================
+
+@mock_waec_bp.route('/exam/<int:exam_id>/grid', methods=['GET', 'POST'])
+@login_required
+@csrf_protect
+def grid_entry(exam_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    students = get_sss3_students()
+
+    # Column subjects: the ones chosen (checkbox form), else the exam's existing
+    # subjects merged with the sensible defaults.
+    existing = [s for (s,) in db.session.query(MockWAECResult.subject)
+                .filter_by(mock_exam_id=exam_id).distinct().all()]
+    chosen = [c for c in request.values.getlist('col') if c in WAEC_SUBJECTS]
+    if chosen:
+        subjects = MockWAECAnalytics._ordered_subjects(set(chosen))
+    else:
+        subjects = MockWAECAnalytics._ordered_subjects(set(existing) | set(WAEC_DEFAULT_SUBJECTS))
+
+    if request.method == 'POST' and request.form.get('action') == 'save':
+        cols = [c for c in request.form.getlist('col') if c in WAEC_SUBJECTS] or subjects
+        touched, saved = set(), 0
+        for s in students:
+            for subj in cols:
+                raw = (request.form.get(f'score_{s.id}_{_slug(subj)}') or '').strip()
+                if raw == '':
+                    continue                       # blank = leave untouched
+                try:
+                    score = max(0, min(100, int(round(float(raw)))))
+                except (TypeError, ValueError):
+                    continue
+                _upsert_result(s.id, exam_id, subj, score, None)
+                touched.add(s.id)
+                saved += 1
+        db.session.commit()
+        for sid in touched:
+            recompute_student_safe(sid)
+        flash(f'Saved {saved} score(s) for {len(touched)} student(s).', 'success')
+        return redirect(url_for('mock_waec.grid_entry', exam_id=exam_id, col=cols))
+
+    # Prefill from existing results.
+    score_map = {(r.student_id, r.subject): r.score
+                 for r in MockWAECResult.query.filter_by(mock_exam_id=exam_id).all()}
+    return render_template('mock_waec/grid_entry.html',
+        exam=exam, students=students, subjects=subjects, all_subjects=WAEC_SUBJECTS,
+        score_map=score_map, slug=_slug)
+
+
+def _slug(subject):
+    """Form-field-safe key for a subject name."""
+    return re.sub(r'[^a-z0-9]+', '-', (subject or '').lower()).strip('-')
+
+
+# =============================================================================
 # RESULT ENTRY — single student
 # =============================================================================
 

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Analytics — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Analytics</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.an-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+.an-bar-row { display: flex; align-items: center; gap: .6rem; margin: 6px 0; font-size: .82rem; }
+.an-bar-row .lab { width: 130px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.an-bar-track { flex: 1; background: rgba(135,135,135,.16); border-radius: 6px; height: 14px; overflow: hidden; }
+.an-bar-fill { height: 100%; border-radius: 6px; background: var(--primary); }
+.an-bar-row .val { width: 64px; text-align: right; flex: none; color: var(--text-muted); }
+.an-dist { display: flex; gap: 2px; height: 90px; align-items: flex-end; }
+.an-dist .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.an-dist .col .bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
+.an-dist .col small { font-size: .66rem; }
+.g-a1 .bar, .gb-a1 { background: #047857; } .g-b .bar, .gb-b { background: #0d9488; }
+.g-c .bar, .gb-c { background: #2563eb; } .g-d .bar, .gb-d { background: #b45309; }
+.g-e .bar, .gb-e { background: #c2410c; } .g-f .bar, .gb-f { background: #dc2626; }
+.g-a1 { color: #047857; } .g-b { color: #0d9488; } .g-c { color: #2563eb; }
+.g-d { color: #b45309; } .g-e { color: #c2410c; } .g-f { color: #dc2626; }
+.an-pill { display:inline-block; font-weight:700; padding:0 4px; border-radius:3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Analytics — {{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }}</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('mock_waec.broadsheet', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-list"></i> Broadsheet</a>
+        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+{% if not a or a.empty %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-chart-column"></i><h3>No results yet</h3>
+    <p>Enter scores to unlock analytics.</p>
+    <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-primary"><i class="fas fa-table-cells"></i> Grid entry</a>
+</div></div></div>
+{% else %}
+
+<div class="kpi-row d-flex gap-2 mb-3" style="flex-wrap:wrap;">
+    <div class="kpi"><div class="kpi-value">{{ a.school.students }}</div><div class="kpi-label">Students</div></div>
+    <div class="kpi"><div class="kpi-value">{{ a.school.avg_credits }}</div><div class="kpi-label">Avg credits</div></div>
+    <div class="kpi"><div class="kpi-value">{{ a.school.with_5_incl_core_pct }}%</div><div class="kpi-label">5 credits incl. Eng &amp; Maths</div></div>
+    <div class="kpi"><div class="kpi-value">{{ a.core.english_pct if a.core.english_pct is not none else '—' }}%</div><div class="kpi-label">English credit rate</div></div>
+    <div class="kpi"><div class="kpi-value">{{ a.core.maths_pct if a.core.maths_pct is not none else '—' }}%</div><div class="kpi-label">Maths credit rate</div></div>
+</div>
+
+<div class="an-grid">
+    <div class="card">
+        <div class="card-header"><h3>Subject difficulty (by pass rate)</h3></div>
+        <div class="card-body">
+            {% for d in a.difficulty %}
+            <div class="an-bar-row">
+                <span class="lab" title="{{ d.subject }}">{{ d.subject }}</span>
+                <span class="an-bar-track"><span class="an-bar-fill" style="width: {{ d.pass_rate }}%; background: {{ '#dc2626' if d.pass_rate < 40 else '#b45309' if d.pass_rate < 60 else '#0d9488' }};"></span></span>
+                <span class="val">{{ d.pass_rate }}% · <span class="g-{{ grade_classes.get(d.avg_grade, '') }}">{{ d.avg_grade }}</span></span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Credits per student</h3></div>
+        <div class="card-body">
+            {% for h in a.credit_histogram %}
+            <div class="an-bar-row">
+                <span class="lab">{{ h.credits }} credit{{ '' if h.credits == 1 else 's' }}{{ ' (admit-grade)' if h.credits >= 5 else '' }}</span>
+                <span class="an-bar-track"><span class="an-bar-fill" style="width: {{ h.pct }}%; background: {{ '#0d9488' if h.credits >= 5 else '#b45309' }};"></span></span>
+                <span class="val">{{ h.count }} · {{ h.pct }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Grade distribution (whole exam)</h3></div>
+        <div class="card-body">
+            <div class="an-dist">
+                {% set maxc = a.grade_distribution.values() | max %}
+                {% for g in a.grade_order %}
+                <div class="col g-{{ grade_classes.get(g, '') }}">
+                    <small>{{ a.grade_distribution[g] }}</small>
+                    <div class="bar gb-{{ grade_classes.get(g, '') }}" style="height: {{ (a.grade_distribution[g] / maxc * 78) if maxc else 0 }}px;"></div>
+                    <small><strong>{{ g }}</strong></small>
+                    <small>{{ a.grade_distribution_pct[g] }}%</small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Most-failed subjects</h3></div>
+        <div class="card-body">
+            <table class="data-table">
+                <thead><tr><th>Subject</th><th>Failed</th><th>Offered</th><th>Pass rate</th></tr></thead>
+                <tbody>
+                    {% for d in a.most_failed %}
+                    <tr><td>{{ d.subject }}</td><td><strong class="g-f">{{ d.failed }}</strong></td><td>{{ d.offered }}</td><td>{{ d.pass_rate }}%</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><h3>Per-subject grade spread</h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Subject</th><th>Offered</th><th>Avg %</th><th>Avg grade</th><th>Pass %</th>{% for g in a.grade_order %}<th>{{ g }}</th>{% endfor %}</tr></thead>
+        <tbody>
+            {% for subj in a.subjects %}
+            {% set d = a.subject_summary[subj] %}
+            <tr>
+                <td><strong>{{ subj }}</strong></td>
+                <td>{{ d.offered }}</td>
+                <td>{{ d.avg_score if d.avg_score is not none else '—' }}</td>
+                <td><span class="g-{{ grade_classes.get(d.avg_grade, '') }}">{{ d.avg_grade }}</span></td>
+                <td>{{ d.pass_rate }}%</td>
+                {% for g in a.grade_order %}<td>{{ d.distribution[g] or '' }}</td>{% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+{% endif %}
+{% endblock %}

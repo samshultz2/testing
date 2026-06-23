@@ -272,6 +272,169 @@ class MockWAECAnalytics:
         }
 
     @staticmethod
+    def _ordered_subjects(present):
+        """Subjects in canonical WAEC order (core first), extras appended A-Z."""
+        try:
+            from utils.helpers import WAEC_SUBJECTS
+            order = {name: i for i, name in enumerate(WAEC_SUBJECTS)}
+        except Exception:
+            order = {}
+        return sorted(present, key=lambda s: (order.get(s, len(order)), s))
+
+    @staticmethod
+    def get_broadsheet(exam_id):
+        """The full score+grade matrix for an exam plus the per-subject summary
+        block (offered / passed / failed / average score / average grade / grade
+        spread) that schools record under their hand-written broadsheets.
+
+        Returns ``None`` when the exam is missing. ``rows`` is empty (but the
+        shape is still valid) when no results have been entered yet.
+        """
+        exam = db.session.get(MockWAECExam, exam_id)
+        if not exam:
+            return None
+
+        from models.models import Student
+        results = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
+                   .join(Student).all())
+        grade_order = list(GRADE_POINTS)          # A1..F9 in order
+
+        cells, students, present = {}, {}, set()
+        for r in results:
+            present.add(r.subject)
+            cells.setdefault(r.student_id, {})[r.subject] = r
+            students[r.student_id] = r.student
+        subjects = MockWAECAnalytics._ordered_subjects(present)
+
+        # One row per student (admission-register order: surname, first name).
+        rows = []
+        for sid, student in students.items():
+            srs = list(cells[sid].values())
+            summary = MockWAECAnalytics._summarise(srs)
+            rows.append({
+                'student': student,
+                'cells': cells[sid],                       # {subject: MockWAECResult}
+                'credits': summary['credits'],
+                'distinctions': summary['distinctions'],
+                'average_score': summary['average_score'],
+                'has_5_incl_core': summary['has_5_incl_core'],
+                'total_score': sum(r.score for r in srs if r.score is not None),
+            })
+        rows.sort(key=lambda x: ((x['student'].surname or '').lower(),
+                                 (x['student'].first_name or '').lower()))
+
+        # Per-subject summary column (matches the foot of a paper broadsheet).
+        subject_summary = {}
+        for subj in subjects:
+            srs = [cells[sid][subj] for sid in cells if subj in cells[sid]]
+            scores = [r.score for r in srs if r.score is not None]
+            offered = len(srs)
+            passed = sum(1 for r in srs if r.grade in PASS_GRADES)
+            avg = round(sum(scores) / len(scores), 1) if scores else None
+            dist = {g: 0 for g in grade_order}
+            for r in srs:
+                if r.grade in dist:
+                    dist[r.grade] += 1
+            subject_summary[subj] = {
+                'offered': offered,
+                'passed': passed,
+                'failed': offered - passed,
+                'avg_score': avg,
+                'avg_grade': waec_grade_from_score(avg) if avg is not None else '—',
+                'pass_rate': round(passed / offered * 100, 1) if offered else 0,
+                'distribution': dist,
+            }
+
+        # Whole-exam grade spread (counts + percentages), for the school summary.
+        total_entries = len(results)
+        overall_dist = {g: 0 for g in grade_order}
+        for r in results:
+            if r.grade in overall_dist:
+                overall_dist[r.grade] += 1
+        overall_pct = {g: (round(overall_dist[g] / total_entries * 100, 1)
+                           if total_entries else 0) for g in grade_order}
+
+        summaries = [MockWAECAnalytics._summarise(list(cells[sid].values())) for sid in cells]
+        n = len(summaries)
+        school = {
+            'students': n,
+            'subject_entries': total_entries,
+            'with_5_credits': sum(1 for s in summaries if s['has_5_credits']),
+            'with_5_incl_core': sum(1 for s in summaries if s['has_5_incl_core']),
+            'with_5_incl_core_pct': round(
+                sum(1 for s in summaries if s['has_5_incl_core']) / n * 100, 1) if n else 0,
+            'avg_credits': round(sum(s['credits'] for s in summaries) / n, 1) if n else 0,
+        }
+
+        return {
+            'exam': exam,
+            'subjects': subjects,
+            'rows': rows,
+            'subject_summary': subject_summary,
+            'grade_order': grade_order,
+            'grade_distribution': overall_dist,
+            'grade_distribution_pct': overall_pct,
+            'school': school,
+        }
+
+    @staticmethod
+    def get_analytics(exam_id):
+        """Deeper, derived insights on top of the broadsheet: subject-difficulty
+        ranking, per-subject grade spread, the cohort credit histogram, and the
+        core-subject (English/Maths) credit rates that decide admissions."""
+        bs = MockWAECAnalytics.get_broadsheet(exam_id)
+        if not bs or not bs['rows']:
+            return bs and {'exam': bs['exam'], 'empty': True}
+
+        ss = bs['subject_summary']
+        subjects = bs['subjects']
+
+        # Subject difficulty: hardest (lowest pass rate) first.
+        difficulty = sorted(
+            ({'subject': s, **ss[s]} for s in subjects),
+            key=lambda d: (d['pass_rate'], d['avg_score'] if d['avg_score'] is not None else 0))
+
+        # Credit histogram across students (0..9 credits).
+        from collections import Counter
+        credit_counts = Counter(r['credits'] for r in bs['rows'])
+        n = len(bs['rows'])
+        credit_histogram = [{
+            'credits': k,
+            'count': credit_counts.get(k, 0),
+            'pct': round(credit_counts.get(k, 0) / n * 100, 1) if n else 0,
+        } for k in range(0, 10)]
+
+        # Core-subject credit rates (5 credits don't admit without English & Maths).
+        def _credit_rate(subject):
+            d = ss.get(subject)
+            if not d or not d['offered']:
+                return None
+            return round(d['passed'] / d['offered'] * 100, 1)
+
+        return {
+            'exam': bs['exam'],
+            'empty': False,
+            'school': bs['school'],
+            'subjects': subjects,
+            'subject_summary': ss,
+            'grade_order': bs['grade_order'],
+            'grade_distribution': bs['grade_distribution'],
+            'grade_distribution_pct': bs['grade_distribution_pct'],
+            'difficulty': difficulty,
+            'easiest': list(reversed(difficulty))[:5],
+            'hardest': difficulty[:5],
+            'most_failed': sorted(
+                ({'subject': s, **ss[s]} for s in subjects),
+                key=lambda d: d['failed'], reverse=True)[:5],
+            'credit_histogram': credit_histogram,
+            'core': {
+                'english_pct': _credit_rate('English Language'),
+                'maths_pct': _credit_rate('Mathematics'),
+                'both_pct': bs['school']['with_5_incl_core_pct'],
+            },
+        }
+
+    @staticmethod
     def compare_mock_exams(session_id, branch_id=None):
         q = MockWAECExam.query.filter_by(session_id=session_id)
         if branch_id is not None:

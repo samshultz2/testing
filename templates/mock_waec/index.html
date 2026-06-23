@@ -32,8 +32,10 @@
                 <td>{% if e.is_completed %}<span class="badge badge-success">Completed</span>{% else %}<span class="badge badge-warning">In progress</span>{% endif %}</td>
                 <td class="d-flex gap-1">
                     <a href="{{ url_for('mock_waec.view_exam', exam_id=e.id) }}" class="btn btn-sm btn-info" title="View"><i class="fas fa-eye"></i></a>
-                    <a href="{{ url_for('mock_waec.add_result', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Add result"><i class="fas fa-plus"></i></a>
-                    <a href="{{ url_for('mock_waec.paste_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Paste import"><i class="fas fa-paste"></i></a>
+                    <a href="{{ url_for('mock_waec.broadsheet', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Broadsheet"><i class="fas fa-table-list"></i></a>
+                    <a href="{{ url_for('mock_waec.grid_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Grid entry"><i class="fas fa-table-cells"></i></a>
+                    <a href="{{ url_for('mock_waec.analytics', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Analytics"><i class="fas fa-chart-column"></i></a>
+                    <a href="{{ url_for('mock_waec.paste_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Paste / CSV import"><i class="fas fa-paste"></i></a>
                 </td>
             </tr>
             {% endfor %}
