@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Result{% if single %} — {{ slips[0].student.full_name }}{% endif %} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Result{{ 's' if not single }}</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.slip { max-width: 760px; margin: 0 auto 1.5rem; border: 2px solid #000; padding: 18px 22px; background: #fff; color: #000; }
+.slip-head { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
+.slip-head h2 { margin: 0; font-size: 1.5rem; letter-spacing: .5px; }
+.slip-head .sub { font-weight: 700; }
+.slip-meta { display: flex; flex-wrap: wrap; gap: 4px 28px; margin-bottom: 12px; font-size: .95rem; }
+.slip-meta b { display: inline-block; min-width: 90px; }
+.slip-table { width: 100%; border-collapse: collapse; }
+.slip-table th, .slip-table td { border: 1px solid #000; padding: 6px 10px; font-size: .95rem; }
+.slip-table th { background: #eee; text-align: left; font-weight: 700; }
+.slip-table td.c { text-align: center; }
+.slip-grade { font-weight: 800; }
+.pass { color: #047857; } .fail { color: #b91c1c; }
+.slip-summary { margin-top: 12px; border: 1px solid #000; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: .95rem; }
+.slip-summary b { font-weight: 800; }
+.slip-foot { margin-top: 26px; display: flex; justify-content: space-between; font-size: .9rem; }
+.slip-sign { border-top: 1px solid #000; padding-top: 4px; min-width: 200px; text-align: center; }
+
+@media print {
+  .sidebar, .topbar, .breadcrumb, .page-header-actions, .btn, .no-print { display: none !important; }
+  .page-content, .main-content, .content { margin: 0 !important; padding: 0 !important; }
+  body { background: #fff !important; }
+  .slip { max-width: none; margin: 0; border-width: 2px; page-break-after: always; }
+  .slip:last-child { page-break-after: auto; }
+  @page { size: A4 portrait; margin: 12mm; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+    <div><h1>Result{{ 's' if not single }}</h1>
+        <p class="text-muted text-sm">{{ exam.display_name }} · {{ exam.session.name if exam.session }}{% if not single %} · {{ slips|length }} students{% endif %}</p></div>
+    <div class="page-header-actions">
+        <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print</button>
+        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+{% for slip in slips %}
+{% set s = slip.summary %}
+<div class="slip">
+    <div class="slip-head">
+        <h2>{{ app_name }}</h2>
+        <div class="sub">{{ exam.display_name }} — Statement of Result</div>
+        <div class="text-sm">{{ exam.session.name if exam.session }}{% if exam.exam_date %} · {{ exam.exam_date.strftime('%d %B %Y') }}{% endif %}</div>
+    </div>
+    <div class="slip-meta">
+        <div><b>Name:</b> {{ slip.student.full_name }}</div>
+        <div><b>Adm. No:</b> {{ slip.student.student_id }}</div>
+        {% if slip.student.stream %}<div><b>Stream:</b> {{ slip.student.stream }}</div>{% endif %}
+        <div><b>Gender:</b> {{ slip.student.gender }}</div>
+    </div>
+
+    {% if s and s.results %}
+    <table class="slip-table">
+        <thead><tr><th style="width:36px;">#</th><th>Subject</th><th style="width:80px;" class="c">Score</th><th style="width:80px;" class="c">Grade</th><th style="width:110px;" class="c">Remark</th></tr></thead>
+        <tbody>
+            {% for r in s.results %}
+            <tr>
+                <td class="c">{{ loop.index }}</td>
+                <td>{{ r.subject }}</td>
+                <td class="c">{{ r.score if r.score is not none else '—' }}</td>
+                <td class="c slip-grade">{{ r.grade or '—' }}</td>
+                <td class="c {{ 'pass' if r.is_pass else 'fail' }}">{{ 'Credit' if r.is_pass else 'Fail' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="slip-summary">
+        <div><b>Subjects:</b> {{ s.subjects }}</div>
+        <div><b>Credits (C6+):</b> {{ s.credits }}</div>
+        <div><b>Distinctions (A1–B3):</b> {{ s.distinctions }}</div>
+        <div><b>Average:</b> {{ s.average_score if s.average_score is not none else '—' }}%</div>
+        <div><b>5 credits incl. Eng &amp; Maths:</b> {{ 'YES' if s.has_5_incl_core else 'NO' }}</div>
+        {% if s.missing_core %}<div class="fail"><b>Missing core:</b> {{ s.missing_core|join(', ') }}</div>{% endif %}
+    </div>
+    {% else %}
+    <p class="text-muted">No results recorded for this student.</p>
+    {% endif %}
+
+    <div class="slip-foot">
+        <div class="slip-sign">Class Teacher</div>
+        <div class="slip-sign">Principal</div>
+    </div>
+</div>
+{% endfor %}
+
+{% if not slips %}
+<div class="card no-print"><div class="card-body"><p class="text-muted">No results to print.</p></div></div>
+{% endif %}
+{% endblock %}

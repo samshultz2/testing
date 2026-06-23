@@ -10,6 +10,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ url_for('mock_waec.broadsheet', exam_id=exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-table-list"></i> Broadsheet</a>
+        <a href="{{ url_for('mock_waec.result_slips_all', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-print"></i> Print results</a>
         <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
         <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-cells"></i> Grid entry</a>
         <a href="{{ url_for('mock_waec.add_result', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add result</a>
@@ -44,7 +45,11 @@
                 <td class="text-sm">
                     {% for r in s.results %}<span title="{{ r.subject }}: {{ r.score }}">{{ r.subject[:4] }} <strong>{{ r.grade }}</strong></span>{% if not loop.last %} &middot; {% endif %}{% endfor %}
                 </td>
-                <td><a href="{{ url_for('mock_waec.student_progress', student_id=s.student.id) }}" class="btn btn-sm btn-info" title="Progression"><i class="fas fa-chart-line"></i></a></td>
+                <td style="white-space:nowrap;">
+                    <a href="{{ url_for('mock_waec.edit_student_results', exam_id=exam.id, student_id=s.student.id) }}" class="btn btn-sm btn-primary" title="Edit / add / remove subjects"><i class="fas fa-pen"></i></a>
+                    <a href="{{ url_for('mock_waec.result_slip', exam_id=exam.id, student_id=s.student.id) }}" class="btn btn-sm btn-success" title="Print result slip"><i class="fas fa-print"></i></a>
+                    <a href="{{ url_for('mock_waec.student_progress', student_id=s.student.id) }}" class="btn btn-sm btn-info" title="Progression"><i class="fas fa-chart-line"></i></a>
+                </td>
             </tr>
             {% endfor %}
         </tbody>

@@ -42,7 +42,7 @@
         <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }}</p>
     </div>
     <div class="page-header-actions">
-        <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print</button>
+        <a href="{{ url_for('mock_waec.broadsheet_print', exam_id=exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print (A4)</a>
         <a href="{{ url_for('mock_waec.broadsheet_export', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
         <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-info btn-sm no-print"><i class="fas fa-chart-column"></i> Analytics</a>
         <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-cells"></i> Grid entry</a>

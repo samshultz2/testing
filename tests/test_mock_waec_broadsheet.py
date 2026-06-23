@@ -163,3 +163,56 @@ def test_grid_blank_leaves_untouched(app):
         row = MockWAECResult.query.filter_by(mock_exam_id=exam_id, student_id=sid,
                                              subject='Mathematics').first()
         assert row is not None and row.score == 60
+
+
+def test_per_student_crud(app):
+    """Edit, add and delete a single student's subject results."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=20)
+    sid = _student(app, 'CR' + uuid.uuid4().hex[:5].upper(), 'Uche', 'Crud')
+    _seed_results(app, exam_id, sid, {'Mathematics': 40, 'English Language': 55})
+    c = _admin(app)
+    base = f'/mock-waec/exam/{exam_id}/student/{sid}/edit'
+    assert c.get(base).status_code == 200
+
+    with app.app_context():
+        mid = MockWAECResult.query.filter_by(mock_exam_id=exam_id, student_id=sid,
+                                             subject='Mathematics').first().id
+
+    # EDIT: bump Maths to 78 -> grade re-derives to A1.
+    tok = auth_csrf(c)
+    c.post(base, data={'_csrf_token': tok, f'score_{mid}': '78'}, follow_redirects=True)
+    with app.app_context():
+        m = db.session.get(MockWAECResult, mid)
+        assert m.score == 78 and m.grade == 'A1'
+
+    # ADD: a missing subject (grade auto-derived).
+    c.post(base, data={'_csrf_token': tok, 'add': '1', 'subject': 'Biology',
+                       'score': '63', 'grade': ''}, follow_redirects=True)
+    with app.app_context():
+        bio = MockWAECResult.query.filter_by(mock_exam_id=exam_id, student_id=sid,
+                                             subject='Biology').first()
+        assert bio is not None and bio.score == 63 and bio.grade == 'C4'
+
+    # DELETE: remove Maths.
+    c.post(base, data={'_csrf_token': tok, 'delete_id': str(mid)}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(MockWAECResult, mid) is None
+
+
+def test_result_slip_and_print_views(app):
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=21)
+    sid = _student(app, 'SL' + uuid.uuid4().hex[:5].upper(), 'Ada', 'Slip')
+    _seed_results(app, exam_id, sid, {'Mathematics': 72, 'English Language': 64, 'Biology': 30})
+    c = _admin(app)
+
+    html = c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip').get_data(as_text=True)
+    assert 'Statement of Result' in html and 'Slip Ada' in html
+    assert 'Credit' in html and 'Fail' in html
+
+    assert c.get(f'/mock-waec/exam/{exam_id}/slips').status_code == 200
+
+    pr = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
+    assert 'No. offered' in pr and 'Average grade' in pr and 'Slip Ada' in pr
+    assert c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print?cols=0').status_code == 200

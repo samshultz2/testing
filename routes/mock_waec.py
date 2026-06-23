@@ -185,6 +185,26 @@ def broadsheet(exam_id):
                            grade_classes=_GRADE_CLASS)
 
 
+@mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/print')
+@login_required
+def broadsheet_print(exam_id):
+    """A4 print layout of the full broadsheet — bold, full-bleed, nothing hidden.
+    With many subjects the columns are split across page-groups (``cols`` per
+    group, 0 = all on one wide page) so the text stays large and readable; each
+    group repeats the S/N + Name columns and paginates vertically across pages."""
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    bs = MockWAECAnalytics.get_broadsheet(exam_id)
+    subs = bs['subjects'] if bs else []
+    per = request.args.get('cols', default=8, type=int)
+    if per and per > 0 and len(subs) > per:
+        groups = [subs[i:i + per] for i in range(0, len(subs), per)]
+    else:
+        groups = [subs]
+    return render_template('mock_waec/broadsheet_print.html', exam=exam, bs=bs,
+                           groups=groups, grade_classes=_GRADE_CLASS)
+
+
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/export')
 @login_required
 def broadsheet_export(exam_id):
@@ -528,6 +548,111 @@ def delete_result(result_id):
     recompute_student_safe(student_id)
     flash('Result deleted.', 'success')
     return redirect(url_for('mock_waec.view_exam', exam_id=exam_id))
+
+
+# =============================================================================
+# PER-STUDENT CRUD — edit / add / delete a single student's subject results
+# =============================================================================
+
+@mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/edit',
+                    methods=['GET', 'POST'])
+@login_required
+@csrf_protect
+def edit_student_results(exam_id, student_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    student = db.get_or_404(Student, student_id)
+
+    def _clean_score(raw):
+        return max(0, min(100, int(round(float(raw)))))
+
+    if request.method == 'POST':
+        if request.form.get('delete_id'):                       # delete one subject
+            rid = request.form.get('delete_id', type=int)
+            row = MockWAECResult.query.filter_by(
+                id=rid, mock_exam_id=exam_id, student_id=student_id).first()
+            if row:
+                subj = row.subject
+                db.session.delete(row)
+                db.session.commit()
+                recompute_student_safe(student_id)
+                flash(f'{subj} removed.', 'success')
+        elif request.form.get('add'):                           # add a subject
+            subject = (request.form.get('subject') or '').strip()
+            raw = (request.form.get('score') or '').strip()
+            grade_in = (request.form.get('grade') or '').strip().upper()
+            if not subject or raw == '':
+                flash('Pick a subject and enter a score.', 'error')
+            else:
+                try:
+                    grade = grade_in if grade_in in WAEC_GRADES else None
+                    _upsert_result(student_id, exam_id, subject, _clean_score(raw), grade)
+                    db.session.commit()
+                    recompute_student_safe(student_id)
+                    flash(f'{subject} saved.', 'success')
+                except (TypeError, ValueError):
+                    flash('Invalid score — use a number 0–100.', 'error')
+        else:                                                    # save all edits
+            changed = 0
+            for row in MockWAECResult.query.filter_by(
+                    mock_exam_id=exam_id, student_id=student_id).all():
+                raw = (request.form.get(f'score_{row.id}') or '').strip()
+                if raw == '':
+                    continue
+                try:
+                    score = _clean_score(raw)
+                except (TypeError, ValueError):
+                    continue
+                grade_in = (request.form.get(f'grade_{row.id}') or '').strip().upper()
+                row.apply_score(score, grade_in if grade_in in WAEC_GRADES else None)
+                changed += 1
+            db.session.commit()
+            recompute_student_safe(student_id)
+            flash(f'Updated {changed} subject(s).', 'success')
+        return redirect(url_for('mock_waec.edit_student_results',
+                                exam_id=exam_id, student_id=student_id))
+
+    results = (MockWAECResult.query
+               .filter_by(mock_exam_id=exam_id, student_id=student_id)
+               .order_by(MockWAECResult.subject).all())
+    have = {r.subject for r in results}
+    available = [s for s in WAEC_SUBJECTS if s not in have]
+    summary = MockWAECAnalytics._summarise(results) if results else None
+    return render_template('mock_waec/edit_student.html', exam=exam, student=student,
+        results=results, available=available, grades=WAEC_GRADES, summary=summary)
+
+
+# =============================================================================
+# PRINTABLE RESULT SLIPS — one student, or every student
+# =============================================================================
+
+@mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip')
+@login_required
+def result_slip(exam_id, student_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    student = db.get_or_404(Student, student_id)
+    summary = MockWAECAnalytics.get_student_exam_summary(student_id, exam_id)
+    return render_template('mock_waec/result_slip.html',
+        exam=exam, slips=[{'student': student, 'summary': summary}], single=True)
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/slips')
+@login_required
+def result_slips_all(exam_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    by_student = {}
+    for r in MockWAECResult.query.filter_by(mock_exam_id=exam_id).join(Student).all():
+        by_student.setdefault(r.student_id, {'student': r.student, 'results': []})
+        by_student[r.student_id]['results'].append(r)
+    slips = []
+    for info in by_student.values():
+        summary = MockWAECAnalytics._summarise(info['results'])
+        summary['results'] = sorted(info['results'], key=lambda x: x.subject)
+        slips.append({'student': info['student'], 'summary': summary})
+    slips.sort(key=lambda s: (s['student'].surname or '', s['student'].first_name or ''))
+    return render_template('mock_waec/result_slip.html', exam=exam, slips=slips, single=False)
 
 
 # =============================================================================
