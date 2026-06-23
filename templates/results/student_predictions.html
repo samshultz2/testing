@@ -73,28 +73,65 @@
     </div>
 </div>
 
-{% if not has_mock_results %}
+{% if not has_any_mock %}
 <div class="card">
     <div class="card-body text-center py-5">
         <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-        <h3>No Mock JAMB Results</h3>
-        <p class="text-muted">This student hasn't taken any Mock JAMB exams yet.</p>
-        <p class="text-muted">Predictions require at least one Mock JAMB result with subject scores.</p>
-        <a href="{{ url_for('mock_jamb.index') }}" class="btn btn-primary mt-2"><i class="fas fa-plus"></i> Add Mock JAMB Result</a>
+        <h3>No mock results yet</h3>
+        <p class="text-muted">Predictions are built from this student's <strong>Mock WAEC</strong> and <strong>Mock JAMB</strong> sittings — there aren't any recorded yet.</p>
+        <div class="d-flex gap-2 justify-center mt-2">
+            <a href="{{ url_for('mock_waec.index') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Mock WAEC</a>
+            <a href="{{ url_for('mock_jamb.index') }}" class="btn btn-secondary"><i class="fas fa-plus"></i> Mock JAMB</a>
+        </div>
     </div>
 </div>
 {% else %}
 
-<!-- Debug info (remove after testing) -->
-{% if debug_info %}
-<div class="debug-box">
-    <strong>Debug: Mock JAMB Data Found ({{ debug_info|length }} results)</strong>
-    {% for d in debug_info %}
-    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:4px">
-        <strong>Result #{{ d.id }}:</strong> Total={{ d.total_score }}<br>
-        {{ d.subject1 }}: {{ d.subject1_score }} | {{ d.subject2 }}: {{ d.subject2_score }} | {{ d.subject3 }}: {{ d.subject3_score }} | {{ d.subject4 }}: {{ d.subject4_score }}
+{% if readiness and readiness.status != 'NO_DATA' %}
+{% set st = readiness.status %}
+{% set tone = {'READY':'#16a34a','CONDITIONAL':'#ca8a04','AT_RISK':'#ea580c','NOT_READY':'#dc2626'}.get(st, '#6b7280') %}
+<div class="card mb-3" style="border-left:5px solid {{ tone }}">
+    <div class="card-body">
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;">
+            <div>
+                <div class="text-muted text-sm">Admission readiness — projected from mocks</div>
+                <h2 style="margin:.1rem 0;color:{{ tone }}">{{ st.replace('_',' ').title() }}</h2>
+                <div class="text-muted text-sm">WAEC from <strong>{{ 'real results' if (readiness.waec and readiness.waec.source=='actual') else 'Mock WAEC' }}</strong>,
+                    JAMB from <strong>{{ 'real results' if (readiness.jamb and readiness.jamb.source=='actual') else 'Mock JAMB' }}</strong></div>
+            </div>
+            <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ readiness.waec.credits if readiness.waec else '—' }}</div>
+                    <div class="text-muted text-sm">Projected credits</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ readiness.jamb.score if readiness.jamb else '—' }}</div>
+                    <div class="text-muted text-sm">Projected JAMB</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ 'YES' if (readiness.waec and readiness.waec.meets_ssc) else 'NO' }}</div>
+                    <div class="text-muted text-sm">5 credits incl. Eng &amp; Maths</div>
+                </div>
+                {% if readiness.aggregate %}
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ readiness.aggregate.aggregate }}</div>
+                    <div class="text-muted text-sm">Post-UTME aggregate</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% if readiness.blockers %}
+        <div class="mt-2"><strong class="text-sm">What's standing in the way:</strong>
+            <ul style="margin:.3rem 0 0;padding-left:1.1rem;">
+                {% for b in readiness.blockers %}<li class="text-sm">{{ b }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if readiness.eligible_categories %}
+        <div class="mt-2 text-sm"><strong>Projected to qualify for:</strong> {{ readiness.eligible_categories|join(', ') }}</div>
+        {% endif %}
+        <div class="mt-2"><a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-sm btn-outline">Whole-class readiness</a></div>
     </div>
-    {% endfor %}
 </div>
 {% endif %}
 
@@ -103,8 +140,8 @@
     <div class="col-md-6">
         <div class="prediction-card">
             <div class="prediction-header" style="background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)">
-                <h3><i class="fas fa-file-alt"></i> Predicted WAEC Performance</h3>
-                <div class="subtitle">Based on Mock JAMB Results</div>
+                <h3><i class="fas fa-file-alt"></i> WAEC subject outlook</h3>
+                <div class="subtitle">Cross-check derived from Mock JAMB</div>
             </div>
             <div class="prediction-body">
                 {% if waec_from_mock and waec_from_mock.subject_predictions %}

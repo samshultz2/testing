@@ -1198,14 +1198,16 @@ def readiness():
     students = get_sss3_students()
     total = len(students)
 
+    # Readiness is judged from the MOCKS (Mock WAEC / Mock JAMB), since real JAMB
+    # (2nd term) and WAEC (3rd term) don't exist yet for most of the cohort.
     no_stream, no_jamb, no_waec, no_jamb_subjects, no_waec_subjects = [], [], [], [], []
     below_target = []
     for s in students:
         if not s.stream:
             no_stream.append(s)
-        if s.jamb_results.count() == 0:
+        if s.mock_jamb_results.count() == 0:
             no_jamb.append(s)
-        if s.waec_results.count() == 0:
+        if s.mock_waec_results.count() == 0:
             no_waec.append(s)
         if not s.jamb_subject_list:
             no_jamb_subjects.append(s)
@@ -1218,9 +1220,9 @@ def readiness():
                 below_target.append(s)
 
     groups = [
-        {'key': 'no_jamb', 'title': 'No JAMB result entered', 'icon': 'fa-file-contract', 'students': no_jamb},
-        {'key': 'no_waec', 'title': 'No WAEC result entered', 'icon': 'fa-file-alt', 'students': no_waec},
-        {'key': 'below_target', 'title': 'Below their JAMB target', 'icon': 'fa-bullseye', 'students': below_target},
+        {'key': 'no_jamb', 'title': 'No Mock JAMB result yet', 'icon': 'fa-file-contract', 'students': no_jamb},
+        {'key': 'no_waec', 'title': 'No Mock WAEC result yet', 'icon': 'fa-file-alt', 'students': no_waec},
+        {'key': 'below_target', 'title': 'Mock JAMB below their target', 'icon': 'fa-bullseye', 'students': below_target},
         {'key': 'no_stream', 'title': 'No stream / track set', 'icon': 'fa-route', 'students': no_stream},
         {'key': 'no_jamb_subjects', 'title': 'No JAMB subjects on profile', 'icon': 'fa-list', 'students': no_jamb_subjects},
         {'key': 'no_waec_subjects', 'title': 'No WAEC subjects on profile', 'icon': 'fa-list-check', 'students': no_waec_subjects},
@@ -1228,10 +1230,14 @@ def readiness():
     ready = total - len({s.id for g in groups for s in g['students']})
 
     def _action(key, sid):
-        if key in ('no_jamb', 'no_jamb_subjects'):
-            return {'label': 'JAMB', 'url': url_for('results.add_jamb')}
-        if key in ('no_waec', 'no_waec_subjects'):
-            return {'label': 'WAEC', 'url': url_for('results.add_waec')}
+        if key == 'no_jamb':
+            return {'label': 'Mock JAMB', 'url': url_for('mock_jamb.index')}
+        if key == 'no_waec':
+            return {'label': 'Mock WAEC', 'url': url_for('mock_waec.index')}
+        if key == 'no_jamb_subjects':
+            return {'label': 'JAMB subjects', 'url': url_for('main.edit_student', student_id=sid)}
+        if key == 'no_waec_subjects':
+            return {'label': 'WAEC subjects', 'url': url_for('main.edit_student', student_id=sid)}
         return {'label': 'Edit', 'url': url_for('main.edit_student', student_id=sid)}
 
     return _render({
@@ -2155,13 +2161,21 @@ def predictions_dashboard():
     
     correlation_data = WAECJAMBCorrelation.get_correlation_analysis()
 
-    # How well the mock-based predictors have matched real outcomes (in scope).
     from utils import exam_insights
-    calibration = exam_insights.calibration_summary(get_sss3_students())
+    students = get_sss3_students()
+    calibration = exam_insights.calibration_summary(students)
+
+    # Forecast the whole cohort straight from the mocks (Mock WAEC -> WAEC,
+    # Mock JAMB -> JAMB) — most students have no real WAEC/JAMB yet.
+    session = get_active_session()
+    cohort = exam_insights.cohort_readiness(
+        students, session.id if session else None,
+        calibration=exam_insights.get_jamb_bias())
 
     return render_template('results/predictions_dashboard.html',
         correlation_data=correlation_data,
         calibration=calibration,
+        cohort=cohort,
     )
 
 
@@ -2171,64 +2185,52 @@ def student_predictions(student_id):
     """Comprehensive predictions for a specific student"""
     from utils.exam_analytics import WAECJAMBCorrelation, MockJAMBAnalytics
     from models.mock_jamb import MockJAMBResult
-    
+    from models.mock_waec import MockWAECResult
+    from utils import exam_insights
+
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
-    
-    # Get mock exam history first to check data
+
     mock_results = MockJAMBResult.query.filter_by(student_id=student_id).all()
-    
-    # Debug: Print mock results info
-    debug_info = []
-    for mr in mock_results:
-        debug_info.append({
-            'id': mr.id,
-            'total_score': mr.total_score,
-            'subject1': mr.subject1,
-            'subject1_score': mr.subject1_score,
-            'subject2': mr.subject2,
-            'subject2_score': mr.subject2_score,
-            'subject3': mr.subject3,
-            'subject3_score': mr.subject3_score,
-            'subject4': mr.subject4,
-            'subject4_score': mr.subject4_score,
-        })
-    
-    # Get all available predictions
-    waec_from_mock = None
+    mock_waec_count = MockWAECResult.query.filter_by(student_id=student_id).count()
+
+    # Headline: a mocks-driven admission-readiness verdict. WAEC is projected from
+    # the student's Mock WAEC trajectory and JAMB from Mock JAMB — most students
+    # have neither real result yet (JAMB is sat in 2nd term, WAEC in 3rd).
+    readiness = exam_insights.admission_readiness(student)
+
+    waec_from_mock = None      # subject-grade cross-check derived from Mock JAMB
     jamb_prediction = None
-    
     if mock_results:
         try:
             waec_from_mock = WAECJAMBCorrelation.predict_waec_from_mock_jamb(student_id)
-        except Exception as e:
-            print(f"WAEC prediction error: {e}")
-        
+        except Exception:
+            pass
         try:
             jamb_prediction = MockJAMBAnalytics.predict_real_jamb(student_id)
-        except Exception as e:
-            print(f"JAMB prediction error: {e}")
-    
-    # Check if student has actual WAEC results
-    waec_years = db.session.query(WAECResult.exam_year).filter_by(student_id=student_id).distinct().all()
-    waec_years = [y[0] for y in waec_years]
-    
+        except Exception:
+            pass
+
+    waec_years = [y[0] for y in db.session.query(WAECResult.exam_year)
+                  .filter_by(student_id=student_id).distinct().all()]
     jamb_from_waec = None
     if waec_years:
         try:
             jamb_from_waec = WAECJAMBCorrelation.predict_jamb_from_waec(student_id, waec_years[0])
-        except Exception as e:
-            print(f"JAMB from WAEC error: {e}")
-    
+        except Exception:
+            pass
+
     return render_template('results/student_predictions.html',
         student=student,
+        readiness=readiness,
         waec_from_mock=waec_from_mock,
         jamb_prediction=jamb_prediction,
         jamb_from_waec=jamb_from_waec,
         waec_years=waec_years,
         has_mock_results=len(mock_results) > 0,
+        has_any_mock=(len(mock_results) > 0 or mock_waec_count > 0),
         mock_count=len(mock_results),
-        debug_info=debug_info
+        mock_waec_count=mock_waec_count,
     )
 
 

@@ -41,6 +41,39 @@
     <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm"><i class="fas fa-graduation-cap"></i> Admission readiness</a>
 </div>
 
+{# Cohort forecast straight from the mocks — the predictions that matter before #}
+{# real JAMB (2nd term) and WAEC (3rd term) exist. #}
+{% if cohort and cohort.assessed %}
+<div class="card mb-3">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h3><i class="fas fa-graduation-cap"></i> Forecast from mocks ({{ cohort.assessed }} of {{ cohort.total }} students)</h3>
+        <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-sm btn-secondary">Full funnel</a>
+    </div>
+    <div class="card-body">
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;text-align:center;">
+            <div style="flex:1;min-width:150px;border:1px solid var(--border-color);border-radius:8px;padding:.8rem;">
+                <div style="font-size:1.7rem;font-weight:800;">{{ cohort.projected_5_incl_core }}</div>
+                <div class="text-muted text-sm">5 credits incl. Eng &amp; Maths ({{ cohort.projected_5_incl_core_pct }}%)</div>
+            </div>
+            <div style="flex:1;min-width:150px;border:1px solid var(--border-color);border-radius:8px;padding:.8rem;">
+                <div style="font-size:1.7rem;font-weight:800;">{{ cohort.projected_jamb_ok }}</div>
+                <div class="text-muted text-sm">Projected to clear JAMB baseline ({{ cohort.projected_jamb_ok_pct }}%)</div>
+            </div>
+            <div style="flex:1;min-width:150px;border:1px solid var(--border-color);border-radius:8px;padding:.8rem;">
+                <div style="font-size:1.7rem;font-weight:800;color:#16a34a;">{{ cohort.projected_both }}</div>
+                <div class="text-muted text-sm">Admission-ready (both) ({{ cohort.projected_both_pct }}%)</div>
+            </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem;">
+            {% for k, tone in [('READY','#16a34a'),('CONDITIONAL','#ca8a04'),('AT_RISK','#ea580c'),('NOT_READY','#dc2626')] %}
+            <span class="badge" style="background:{{ tone }};color:#fff;">{{ k.replace('_',' ').title() }}: {{ cohort.counts[k] }}</span>
+            {% endfor %}
+        </div>
+        <p class="text-muted text-sm" style="margin:.6rem 0 0;">WAEC projected from Mock WAEC, JAMB from Mock JAMB. Open a student to see their full forecast.</p>
+    </div>
+</div>
+{% endif %}
+
 {# How well our mock-based predictors matched the real outcomes (for students who #}
 {# have both). A consistent bias is the cue to recalibrate. #}
 {% if calibration and (calibration.jamb.n or calibration.waec.n) %}

@@ -207,12 +207,21 @@ def test_result_slip_and_print_views(app):
     _seed_results(app, exam_id, sid, {'Mathematics': 72, 'English Language': 64, 'Biology': 30})
     c = _admin(app)
 
-    html = c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip').get_data(as_text=True)
-    assert 'Statement of Result' in html and 'Slip Ada' in html
-    assert 'Credit' in html and 'Fail' in html
-
+    # Preview wrappers (HTML) offer the COMPETENCE-heading toggle + embed the PDF.
+    prev = c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip').get_data(as_text=True)
+    assert 'COMPETENCE RESULT' in prev and '/slip.pdf' in prev
     assert c.get(f'/mock-waec/exam/{exam_id}/slips').status_code == 200
+    assert 'COMPETENCE RESULT' in c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
 
-    pr = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
-    assert 'No. offered' in pr and 'Average grade' in pr and 'Slip Ada' in pr
-    assert c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print?cols=0').status_code == 200
+    # Server-side PDFs render (preview = inline) for slip, all slips and broadsheet.
+    for path in (f'/mock-waec/exam/{exam_id}/student/{sid}/slip.pdf',
+                 f'/mock-waec/exam/{exam_id}/slips.pdf',
+                 f'/mock-waec/exam/{exam_id}/broadsheet.pdf',
+                 f'/mock-waec/exam/{exam_id}/broadsheet.pdf?title=0&cols=0'):
+        r = c.get(path)
+        assert r.status_code == 200
+        assert r.headers['Content-Type'] == 'application/pdf'
+        assert r.get_data()[:5] == b'%PDF-'
+    # Download variant attaches the file.
+    dl = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?download=1')
+    assert 'attachment' in dl.headers.get('Content-Disposition', '')

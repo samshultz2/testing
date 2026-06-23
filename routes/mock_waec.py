@@ -10,10 +10,10 @@ import re
 from datetime import datetime
 
 from flask import (Blueprint, request, redirect, url_for, flash, render_template,
-                   abort)
+                   abort, send_file)
 from openpyxl import Workbook
 
-from models import db, Student, AcademicSession
+from models import db, Student, AcademicSession, SchoolSettings
 from models.mock_waec import (MockWAECExam, MockWAECResult, MockWAECAnalytics,
                               waec_grade_from_score, PASS_GRADES)
 from utils.helpers import (login_required, get_active_session, get_sss3_students,
@@ -194,15 +194,30 @@ def broadsheet_print(exam_id):
     group repeats the S/N + Name columns and paginates vertically across pages."""
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
+    return render_template('mock_waec/pdf_preview.html', exam=exam,
+        title='Broadsheet (PDF)', show_cols=True,
+        pdf_url=url_for('mock_waec.broadsheet_pdf_view', exam_id=exam_id),
+        back_url=url_for('mock_waec.broadsheet', exam_id=exam_id))
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/broadsheet.pdf')
+@login_required
+def broadsheet_pdf_view(exam_id):
+    """Server-side broadsheet PDF — school header, optional COMPETENCE RESULT
+    banner, no admission numbers. Previews inline; ?download=1 to save."""
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
     bs = MockWAECAnalytics.get_broadsheet(exam_id)
-    subs = bs['subjects'] if bs else []
+    if not bs or not bs['rows']:
+        flash('No results recorded yet.', 'warning')
+        return redirect(url_for('mock_waec.broadsheet', exam_id=exam_id))
+    from utils.mock_waec_pdf import broadsheet_pdf
     per = request.args.get('cols', default=8, type=int)
-    if per and per > 0 and len(subs) > per:
-        groups = [subs[i:i + per] for i in range(0, len(subs), per)]
-    else:
-        groups = [subs]
-    return render_template('mock_waec/broadsheet_print.html', exam=exam, bs=bs,
-                           groups=groups, grade_classes=_GRADE_CLASS)
+    buf = broadsheet_pdf(bs, exam, _school_profile(),
+                         show_title=_want_title(), per=(per if per and per > 0 else 0))
+    name = f"broadsheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
+    return send_file(buf, mimetype='application/pdf',
+                     as_attachment=request.args.get('download') == '1', download_name=name)
 
 
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/export')
@@ -626,22 +641,20 @@ def edit_student_results(exam_id, student_id):
 # PRINTABLE RESULT SLIPS — one student, or every student
 # =============================================================================
 
-@mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip')
-@login_required
-def result_slip(exam_id, student_id):
-    exam = db.get_or_404(MockWAECExam, exam_id)
-    require_branch_access(exam.branch_id)
-    student = db.get_or_404(Student, student_id)
-    summary = MockWAECAnalytics.get_student_exam_summary(student_id, exam_id)
-    return render_template('mock_waec/result_slip.html',
-        exam=exam, slips=[{'student': student, 'summary': summary}], single=True)
+def _school_profile():
+    """School identity for printed results, straight from Settings → School."""
+    g = SchoolSettings.get
+    return {'name': g('school_name', '') or '', 'address': g('school_address', '') or '',
+            'phone': g('school_phone', '') or '', 'email': g('school_email', '') or '',
+            'motto': g('school_motto', '') or ''}
 
 
-@mock_waec_bp.route('/exam/<int:exam_id>/slips')
-@login_required
-def result_slips_all(exam_id):
-    exam = db.get_or_404(MockWAECExam, exam_id)
-    require_branch_access(exam.branch_id)
+def _slips_for(exam_id, student_id=None):
+    """List of {student, summary} slips — one student or the whole exam (A–Z)."""
+    if student_id is not None:
+        student = db.get_or_404(Student, student_id)
+        return [{'student': student,
+                 'summary': MockWAECAnalytics.get_student_exam_summary(student_id, exam_id)}]
     by_student = {}
     for r in MockWAECResult.query.filter_by(mock_exam_id=exam_id).join(Student).all():
         by_student.setdefault(r.student_id, {'student': r.student, 'results': []})
@@ -652,7 +665,62 @@ def result_slips_all(exam_id):
         summary['results'] = sorted(info['results'], key=lambda x: x.subject)
         slips.append({'student': info['student'], 'summary': summary})
     slips.sort(key=lambda s: (s['student'].surname or '', s['student'].first_name or ''))
-    return render_template('mock_waec/result_slip.html', exam=exam, slips=slips, single=False)
+    return slips
+
+
+def _want_title():
+    """COMPETENCE RESULT banner on by default; ?title=0 turns it off."""
+    return request.args.get('title', '1') != '0'
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip')
+@login_required
+def result_slip(exam_id, student_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    student = db.get_or_404(Student, student_id)
+    return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
+        title=f'Result — {student.full_name}',
+        pdf_url=url_for('mock_waec.result_slip_pdf', exam_id=exam_id, student_id=student_id),
+        back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/slips')
+@login_required
+def result_slips_all(exam_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
+        title='Results (PDF)',
+        pdf_url=url_for('mock_waec.result_slips_pdf_view', exam_id=exam_id),
+        back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip.pdf')
+@login_required
+def result_slip_pdf(exam_id, student_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    from utils.mock_waec_pdf import result_slips_pdf
+    buf = result_slips_pdf(_slips_for(exam_id, student_id), exam,
+                           _school_profile(), show_title=_want_title())
+    student = db.session.get(Student, student_id)
+    name = f"result_{(student.full_name if student else student_id)}.pdf".replace(' ', '_')
+    return send_file(buf, mimetype='application/pdf',
+                     as_attachment=request.args.get('download') == '1', download_name=name)
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/slips.pdf')
+@login_required
+def result_slips_pdf_view(exam_id):
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    from utils.mock_waec_pdf import result_slips_pdf
+    buf = result_slips_pdf(_slips_for(exam_id), exam, _school_profile(),
+                           show_title=_want_title())
+    name = f"results_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
+    return send_file(buf, mimetype='application/pdf',
+                     as_attachment=request.args.get('download') == '1', download_name=name)
 
 
 # =============================================================================

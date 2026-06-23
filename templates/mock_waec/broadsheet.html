@@ -72,7 +72,7 @@
     <div class="bs-wrap"><table class="bs-table">
         <thead>
             <tr>
-                <th>S/N</th><th>Adm.</th><th class="name">Name of Student</th>
+                <th>S/N</th><th class="name">Name of Student</th>
                 {% for subj in bs.subjects %}<th class="subj"><span>{{ subj }}</span></th>{% endfor %}
                 <th>Cr</th><th>Avg%</th>
             </tr>
@@ -81,7 +81,6 @@
             {% for row in bs.rows %}
             <tr>
                 <td>{{ loop.index }}</td>
-                <td>{{ row.student.student_id }}</td>
                 <td class="name">{{ row.student.full_name }}</td>
                 {% for subj in bs.subjects %}
                     {% set r = row.cells.get(subj) %}
@@ -93,11 +92,11 @@
             {% endfor %}
         </tbody>
         <tfoot>
-            <tr><td class="lab" colspan="3">No. who offered</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].offered }}</td>{% endfor %}<td colspan="2"></td></tr>
-            <tr><td class="lab" colspan="3">No. passed (C6+)</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].passed }}</td>{% endfor %}<td colspan="2"></td></tr>
-            <tr><td class="lab" colspan="3">No. failed</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].failed }}</td>{% endfor %}<td colspan="2"></td></tr>
-            <tr><td class="lab" colspan="3">Average score %</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].avg_score if bs.subject_summary[subj].avg_score is not none else '—' }}</td>{% endfor %}<td colspan="2"></td></tr>
-            <tr><td class="lab" colspan="3">Average grade</td>{% for subj in bs.subjects %}<td><span class="g g-{{ grade_classes.get(bs.subject_summary[subj].avg_grade, '') }}">{{ bs.subject_summary[subj].avg_grade }}</span></td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">No. who offered</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].offered }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">No. passed (C6+)</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].passed }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">No. failed</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].failed }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">Average score %</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].avg_score if bs.subject_summary[subj].avg_score is not none else '—' }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">Average grade</td>{% for subj in bs.subjects %}<td><span class="g g-{{ grade_classes.get(bs.subject_summary[subj].avg_grade, '') }}">{{ bs.subject_summary[subj].avg_grade }}</span></td>{% endfor %}<td colspan="2"></td></tr>
         </tfoot>
     </table></div>
 </div>

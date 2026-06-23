@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>{{ title }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div><h1>{{ title }}</h1>
+        <p class="text-muted text-sm">{{ exam.display_name }}{% if exam.session %} · {{ exam.session.name }}{% endif %} — generated as a PDF you can preview, download or print.</p></div>
+    <div class="page-header-actions">
+        <a id="dl" href="#" class="btn btn-success btn-sm"><i class="fas fa-download"></i> Download PDF</a>
+        <a href="{{ back_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="card mb-2"><div class="card-body" style="display:flex;flex-wrap:wrap;gap:1.2rem;align-items:center;">
+    <label style="display:flex;align-items:center;gap:.4rem;margin:0;font-weight:600;">
+        <input type="checkbox" id="titleChk" checked> Include the <strong>“COMPETENCE RESULT”</strong> heading
+    </label>
+    {% if show_cols %}
+    <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Layout:
+        <select id="colsSel" class="form-control" style="width:auto;">
+            <option value="8">Split (8 subjects / sheet)</option>
+            <option value="0">One wide page (all subjects)</option>
+        </select>
+    </label>
+    {% endif %}
+    <span class="text-muted text-sm">School details come from Settings → School.</span>
+</div></div>
+
+<iframe id="pdf" title="PDF preview" style="width:100%;height:78vh;border:1px solid var(--border-color);border-radius:var(--radius-md);background:#fff;"></iframe>
+
+<script>
+(function () {
+  var base = "{{ pdf_url }}";
+  var iframe = document.getElementById('pdf');
+  var dl = document.getElementById('dl');
+  var titleChk = document.getElementById('titleChk');
+  var colsSel = document.getElementById('colsSel');
+  function build(extra) {
+    var p = [];
+    if (!titleChk.checked) p.push('title=0');
+    if (colsSel) p.push('cols=' + colsSel.value);
+    if (extra) p.push(extra);
+    return base + (p.length ? ('?' + p.join('&')) : '');
+  }
+  function refresh() {
+    iframe.src = build('');
+    dl.href = build('download=1');
+  }
+  titleChk.addEventListener('change', refresh);
+  if (colsSel) colsSel.addEventListener('change', refresh);
+  refresh();
+})();
+</script>
+{% endblock %}
