@@ -6,7 +6,7 @@ from datetime import date
 from config import Config
 from models import db, Student, AcademicSession
 from models.mock_waec import MockWAECExam, MockWAECResult, MockWAECAnalytics, waec_grade_from_score
-from tests.conftest import login_token, auth_csrf
+from tests.conftest import login_token, auth_csrf, enroll_sss3
 
 
 def _admin(app):
@@ -90,6 +90,7 @@ def test_grid_entry_saves_with_derived_grades(app):
     ssid = _session(app)
     exam_id = _exam(app, ssid, n=13)
     sid = _student(app, 'GR' + uuid.uuid4().hex[:5].upper(), 'Dele', 'Ddd')
+    enroll_sss3(app, sid)
     c = _admin(app)
 
     # The grid page renders an input for this student.
@@ -108,6 +109,20 @@ def test_grid_entry_saves_with_derived_grades(app):
             mock_exam_id=exam_id, student_id=sid).all()}
         assert rows['Mathematics'].score == 75 and rows['Mathematics'].grade == 'A1'
         assert rows['English Language'].score == 48 and rows['English Language'].grade == 'D7'
+
+
+def test_grid_lists_only_enrolled_sss3(app):
+    """Only SSS3 students sit Mock WAEC: a student not enrolled in SSS3 must not
+    appear on the entry grid (no silent fall-back to the whole school)."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=16)
+    enrolled = _student(app, 'OK' + uuid.uuid4().hex[:5].upper(), 'Hadi', 'Hhh')
+    enroll_sss3(app, enrolled)
+    outsider = _student(app, 'NO' + uuid.uuid4().hex[:5].upper(), 'Zara', 'Zzz')
+    c = _admin(app)
+    html = c.get(f'/mock-waec/exam/{exam_id}/grid').get_data(as_text=True)
+    assert f'score_{enrolled}_' in html
+    assert f'score_{outsider}_' not in html
 
 
 def test_analytics_page_and_method(app):

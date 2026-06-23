@@ -8,7 +8,7 @@ from models import db, Student, AcademicSession
 from models.mock_waec import (MockWAECExam, MockWAECResult, MockWAECAnalytics,
                               waec_grade_from_score)
 from models.analytics_models import StudentRiskAssessment
-from tests.conftest import login_token, auth_csrf
+from tests.conftest import login_token, auth_csrf, enroll_sss3
 
 
 def test_subject_aliases():
@@ -30,9 +30,12 @@ def test_name_match_tolerates_missing_middle_name(app):
     ssid = _session(app)
     exam_id = _exam(app, ssid, n=5)
     with app.app_context():
-        db.session.add(Student(student_id='NM001', first_name='John',
-                               middle_name='Adewale', surname='Okafor', gender='Male'))
+        st = Student(student_id='NM001', first_name='John',
+                     middle_name='Adewale', surname='Okafor', gender='Male')
+        db.session.add(st)
         db.session.commit()
+        nm_id = st.id
+    enroll_sss3(app, nm_id)
     c = _admin_client(app)
     tok = auth_csrf(c)
 
@@ -99,6 +102,7 @@ def test_paste_preview_then_confirm_creates_results(app):
     exam_id = _exam(app, ssid)
     adm = 'MW' + uuid.uuid4().hex[:6].upper()
     sid = _student(app, adm)
+    enroll_sss3(app, sid)
     c = _admin_client(app)
     tok = auth_csrf(c)
     # Abbreviated subjects must canonicalise (Maths -> Mathematics, Eng -> English Language).

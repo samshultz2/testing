@@ -281,14 +281,32 @@ def infer_stream_from_jamb(student):
     return None
 
 
+def get_sss3_class():
+    """The graduating class (SSS3) — the only class that sits WAEC, JAMB, Mock
+    JAMB and Mock WAEC. Matched by the canonical name first, then tolerant of
+    common spellings (SS3, 'SSS 3', 'Senior Secondary 3'), so a slightly
+    different class name never silently widens these exams to the whole school.
+    """
+    import re
+    from models import SchoolClass
+    cls = SchoolClass.query.filter_by(name='SSS3').first()
+    if cls:
+        return cls
+    for c in SchoolClass.query.all():
+        norm = re.sub(r'[^a-z0-9]', '', (c.name or '').lower())
+        if norm in ('sss3', 'ss3', 'seniorsecondary3', 'seniorsecondaryschool3'):
+            return c
+    return None
+
+
 def _sss3_enrolled_map():
     """Return {id: Student} for active SSS3 students enrolled in the active term."""
     from models import (
-        Student, SchoolClass, ClassArmAssignment, StudentEnrollment
+        Student, ClassArmAssignment, StudentEnrollment
     )
 
     active_term = get_active_term()
-    sss3 = SchoolClass.query.filter_by(name='SSS3').first()
+    sss3 = get_sss3_class()
 
     students = {}
     if sss3 and active_term:
@@ -339,7 +357,13 @@ def get_sss3_students():
     if students:
         return sorted(students.values(), key=lambda s: (s.surname or '', s.first_name or ''))
 
-    # Fallback: SSS3/active term not configured yet.
+    # Nobody resolved. Only WAEC/JAMB/Mock students are SSS3, so once the school
+    # is configured (an SSS3 class exists *and* a term is active) we must NOT
+    # widen to the whole school — an empty list correctly says "no SSS3 enrolled
+    # for this term yet". The all-students fallback is reserved for a brand-new
+    # setup where SSS3 or the active term hasn't been created at all.
+    if get_sss3_class() is not None and get_active_term() is not None:
+        return []
     return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
 
 

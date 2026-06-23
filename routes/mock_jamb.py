@@ -426,8 +426,9 @@ def bulk_entry(exam_id):
     # Get active term to find enrolled students
     active_term = get_active_term()
     
-    # Get SS3 students (most likely to take mock JAMB)
-    sss3 = SchoolClass.query.filter_by(name='SSS3').first()
+    # Only SSS3 sit Mock JAMB — resolve the class tolerantly of naming.
+    from utils.helpers import get_sss3_class
+    sss3 = get_sss3_class()
     
     students = []
     if sss3 and active_term:

@@ -6,7 +6,7 @@ from config import Config
 from models import db, Student, WAECResult
 from models.analytics_models import StudentRiskAssessment, AcademicPrediction
 from utils.analytics_engine import AnalyticsEngine, recompute_student_safe
-from tests.conftest import login_token, auth_csrf
+from tests.conftest import login_token, auth_csrf, enroll_sss3
 
 
 def _make_student(app, name='Engine Test One'):
@@ -132,6 +132,7 @@ def test_at_risk_register_lists_only_elevated(app):
     c = app.test_client()
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
     sid = _make_student(app, 'Engine AtRisk')
+    enroll_sss3(app, sid)            # only SSS3 students appear on the register
     _give_waec(app, sid, {'ENGLISH LANGUAGE': 'F9', 'MATHEMATICS': 'F9', 'BIOLOGY': 'F9'})
     with app.app_context():
         AnalyticsEngine.recompute_student(sid)
