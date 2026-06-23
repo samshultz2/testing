@@ -35,13 +35,13 @@ if (typeof document !== 'undefined' && !document.getElementById('skeletonStyles'
   st.id = 'skeletonStyles';
   st.textContent =
     '@keyframes skShimmer{0%{background-position:-468px 0}100%{background-position:468px 0}}'
-    + '#sectionSkeleton{position:absolute;inset:0;background:var(--bg,#fff);z-index:50;padding:1rem 1.25rem;overflow:hidden}'
+    + '#sectionSkeleton{position:absolute;inset:0;background:var(--bg-body,#fff);z-index:50;padding:1rem 1.25rem;overflow:hidden}'
     + '#sectionSkeleton .sk-bar{height:14px;border-radius:6px;margin:10px 0;background:rgba(135,135,135,.16);'
     + 'background-image:linear-gradient(90deg,rgba(135,135,135,.12) 0,rgba(135,135,135,.28) 40px,rgba(135,135,135,.12) 80px);'
     + 'background-size:600px 100%;animation:skShimmer 1.15s infinite linear}'
     + '#sectionSkeleton .sk-title{height:26px;width:42%;margin-bottom:20px}'
     + '#sectionSkeleton .sk-bar.short{width:55%}'
-    + '#sectionSkeleton .sk-card{border:1px solid rgba(135,135,135,.18);border-radius:10px;padding:14px 16px;margin-bottom:12px}';
+    + '#sectionSkeleton .sk-card{background:var(--bg-card,transparent);border:1px solid var(--border-color,rgba(135,135,135,.18));border-radius:10px;padding:14px 16px;margin-bottom:12px}';
   document.head.appendChild(st);
 }
 
