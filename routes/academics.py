@@ -712,8 +712,12 @@ def add_assignment():
         if not all([term_id, class_id]):
             return _err('Term and class are required.',
                         url_for('academics.assignments_list', term_id=term_id or ''))
-        if not arm_id:                                   # no arm picked -> default arm
-            arm_id = ClassArm.default().id
+        from models import SchoolSettings
+        if not arm_id:                                   # no arm picked
+            if bool(SchoolSettings.get('uses_class_arms', True)):
+                return _err('Pick an arm for this class.',
+                            url_for('academics.assignments_list', term_id=term_id))
+            arm_id = ClassArm.default().id               # arm-less school -> default arm
         existing = ClassArmAssignment.query.filter_by(
             term_id=term_id, class_id=class_id, arm_id=arm_id).first()
         if existing:
@@ -739,6 +743,10 @@ def setup_term_classes():
     term_id = request.form.get('term_id', type=int)
     if not term_id:
         return _err('Select a term first.', url_for('academics.assignments_list'))
+    from models import SchoolSettings
+    if bool(SchoolSettings.get('uses_class_arms', True)):
+        return _err('This is for schools without arms — turn arms off first.',
+                    url_for('academics.assignments_list', term_id=term_id))
     try:
         from utils.branch_scope import branch_for_new
         arm = ClassArm.default()

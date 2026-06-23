@@ -225,6 +225,11 @@ def academic_settings():
             SchoolSettings.set('periods_per_day', request.form.get('periods_per_day', '8'), 'int')
             SchoolSettings.set('promotion_threshold', request.form.get('promotion_threshold', '50'), 'float')
             SchoolSettings.set('pass_mark', request.form.get('pass_mark', '50'), 'int')
+            uses_arms = (request.form.get('uses_class_arms') or '').strip().lower() in ('1', 'true', 'on', 'yes')
+            SchoolSettings.set('uses_class_arms', uses_arms, 'bool', 'School streams classes into arms')
+            if not uses_arms:
+                from models import ClassArm
+                ClassArm.default()                        # provision the hidden default arm
         except Exception as e:
             return _err(f'Error: {str(e)}', url_for('settings.academic_settings'))
         return _ok('Academic settings updated!', url_for('settings.academic_settings'))

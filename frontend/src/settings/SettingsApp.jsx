@@ -110,8 +110,10 @@ function Academic({ d, notify }) {
     period_duration: s.period_duration || '40', break_duration: s.break_duration || '30',
     periods_per_day: s.periods_per_day || '8', pass_mark: s.pass_mark || '50',
     promotion_threshold: s.promotion_threshold || '50',
+    uses_class_arms: (s.uses_class_arms ?? 'true') !== 'false' ? '1' : '0',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const toggle = (k) => (e) => setF({ ...f, [k]: e.target.checked ? '1' : '0' });
   const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => nav.refresh()); };
   return (
     <>
@@ -141,6 +143,14 @@ function Academic({ d, notify }) {
             <div className="form-group"><label className="form-label">Promotion Threshold (%)</label>
               <input type="number" className="form-control" value={f.promotion_threshold} onChange={set('promotion_threshold')} min="30" max="70" step="0.1" />
               <small className="text-muted">Minimum average to be promoted</small></div>
+          </div>
+          <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Class Structure</h4>
+          <div className="form-group">
+            <label className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+              <input type="checkbox" checked={f.uses_class_arms === '1'} onChange={toggle('uses_class_arms')} />
+              <span>This school streams classes into arms (e.g. SSS1 A, SSS1 B)</span>
+            </label>
+            <small className="text-muted d-block">Turn off if your classes are just SSS1, SSS2… with no arms — then set them up under Academics → Class Setup.</small>
           </div>
           <Actions>
             <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
