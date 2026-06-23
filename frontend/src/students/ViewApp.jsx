@@ -115,7 +115,7 @@ export default function ViewApp({ initial }) {
             <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
               <table className="data-table">
                 <thead><tr><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
-                <tbody>{d.enrollments.map((e, i) => <tr key={i}><td>{e.term}</td><td>{e.class}</td><td>{e.arm}</td></tr>)}</tbody>
+                <tbody>{d.enrollments.map((e, i) => <tr key={i}><td>{e.term}</td><td>{e.class}</td><td>{e.arm || '—'}</td></tr>)}</tbody>
               </table>
             </div>
           ) : <div className="empty-state"><p>Not enrolled yet</p></div>}

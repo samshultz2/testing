@@ -919,7 +919,7 @@ def _students_payload():
                         else url_for('promotion.mark_graduate', student_id=s.id),
     } for s in pg.items]
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
     return {
         'students': students,
         'page': pg.page, 'pages': pg.pages or 1, 'total': pg.total,

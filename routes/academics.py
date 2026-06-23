@@ -923,7 +923,7 @@ def api_get_assignments(term_id):
         'id': a.id,
         'name': a.display_name,
         'class_name': a.school_class.name,
-        'arm_name': a.arm.name
+        'arm_name': a.arm_label
     } for a in assignments])
 
 

@@ -448,7 +448,7 @@ def bulk_entry(exam_id):
                 
                 students.append({
                     'student': enrollment.student,
-                    'arm': assignment.arm.name,
+                    'arm': assignment.arm_label,
                     'existing_result': existing
                 })
     

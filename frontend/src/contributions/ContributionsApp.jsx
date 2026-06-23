@@ -120,7 +120,7 @@ function Dashboard({ d }) {
         ))}
       </div>
 
-      <div className="card mb-3">
+      {d.arms_summary.some((a) => a.name) && <div className="card mb-3">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Progress by Arm</h3></div>
         <div className="card-body">
           {d.arms_summary.map((a) => (
@@ -136,7 +136,7 @@ function Dashboard({ d }) {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       <div className="row mb-3">
         <div className="col-md-6"><div className="card h-100">
@@ -188,7 +188,7 @@ function Dashboard({ d }) {
                 <tr key={st.id}>
                   <td>{i + 1}</td>
                   <td><strong>{st.name}</strong></td>
-                  <td><span className={`badge badge-${armColor(st.arm)}`}>{st.arm}</span></td>
+                  <td>{st.arm ? <span className={`badge badge-${armColor(st.arm)}`}>{st.arm}</span> : <span className="text-muted">—</span>}</td>
                   <td><strong>{money(st.total_paid)}</strong></td>
                   <td>{st.remaining > 0 ? <span className="text-danger">{money(st.remaining)}</span> : <span className="text-success">-</span>}</td>
                   <td style={{ width: 100 }}>
@@ -263,7 +263,7 @@ function QuickEntry({ d, notify }) {
                   <div className={`student-entry ${has ? 'has-amount' : ''}`} key={s.id}>
                     <div className="student-info">
                       <span className="student-name">{s.name}</span>
-                      <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span>
+                      {s.arm && <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span>}
                       {s.remaining <= 0 && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /></span>}
                     </div>
                     <div className="student-status"><small>Paid: {money(s.total_paid)} | Rem: {money(s.remaining)}</small></div>
@@ -526,7 +526,7 @@ function Report({ d }) {
         const pct = a.total_expected > 0 ? (a.total_paid / a.total_expected * 100) : 0;
         return (
           <div className="card mb-3" key={a.name}>
-            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> {a.name}</h3>
+            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> {a.name || 'All Students'}</h3>
               <div><span className="badge badge-primary">{a.total_students} students</span> <span className="badge badge-success">{a.fully_paid} paid</span></div></div>
             <div className="card-body">
               <div className="info-grid mb-3">
@@ -601,7 +601,7 @@ function Defaulters({ d }) {
               {list.length ? list.map((s, i) => (
                 <tr key={s.id}>
                   <td>{i + 1}</td><td><strong>{s.name}</strong></td>
-                  <td><span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span></td>
+                  <td>{s.arm ? <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span> : <span className="text-muted">—</span>}</td>
                   <td>{money(s.total_paid)}</td>
                   <td><strong className="text-danger">{money(s.remaining)}</strong></td>
                   <td style={{ width: 100 }}><Bar pct={s.percentage} color={s.percentage >= 50 ? '#ffc107' : '#dc3545'} /><small>{s.percentage.toFixed(0)}%</small></td>

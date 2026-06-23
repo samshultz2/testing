@@ -50,7 +50,7 @@ def student_placement_label(student_id, term_id):
         return '', ''
     asg = enr.class_arm_assignment
     return (asg.school_class.name if asg.school_class else '',
-            asg.arm.name if asg.arm else '')
+            asg.arm_label)
 
 
 def build_context(student, term, parent_name='Parent', balance=None):

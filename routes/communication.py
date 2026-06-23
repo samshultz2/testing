@@ -286,7 +286,7 @@ def compose():
     term = _term_from(request.values.get('term_id', type=int))
     terms = Term.query.order_by(Term.id.desc()).all()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
     templates = MessageTemplate.query.filter_by(is_active=True).order_by(MessageTemplate.name).all()
 
     if request.method == 'POST':

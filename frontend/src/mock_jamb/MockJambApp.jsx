@@ -260,7 +260,7 @@ function BulkEntry({ d, notify }) {
             <tbody>{d.students.map((s) => (
               <tr key={s.id}>
                 <td><strong>{s.full_name}</strong><div className="text-xs text-muted">{s.student_id}</div></td>
-                <td>{s.arm}</td>
+                <td>{s.arm || '—'}</td>
                 <td><input type="number" className="form-control" style={{ width: 100 }} min="0" max="400" placeholder="0-400"
                            value={scores[s.id]} onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td>
                 <td><span className={'badge ' + (s.entered ? 'badge-success' : 'badge-secondary')}>{s.entered ? 'Entered' : 'Pending'}</span></td>

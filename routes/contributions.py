@@ -144,7 +144,7 @@ def dashboard():
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
-        arm_name = assignment.arm.name
+        arm_name = assignment.arm_label
 
         total_paid = paid_map.get(student.id, 0)
         remaining = max_due - total_paid
@@ -265,7 +265,7 @@ def quick_entry():
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
         total_paid = paid_map.get(student.id, 0)
-        students_list.append({'id': student.id, 'name': student.full_name, 'arm': assignment.arm.name, 'total_paid': total_paid, 'remaining': max(0, max_due - total_paid)})
+        students_list.append({'id': student.id, 'name': student.full_name, 'arm': assignment.arm_label, 'total_paid': total_paid, 'remaining': max(0, max_due - total_paid)})
     students_list.sort(key=lambda x: (x['arm'], x['name']))
     
     if request.method == 'POST':
@@ -317,7 +317,7 @@ def add_payment():
     sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
-    students_list = [{'id': e.student.id, 'name': f"{e.student.full_name} ({e.class_arm_assignment.arm.name})"} for e in enrollments]
+    students_list = [{'id': e.student.id, 'name': (f"{e.student.full_name} ({e.class_arm_assignment.arm_label})" if e.class_arm_assignment.arm_label else e.student.full_name)} for e in enrollments]
     students_list.sort(key=lambda x: x['name'])
     
     if request.method == 'POST':
@@ -538,7 +538,7 @@ def report():
     paid_map = paid_by_student(active_session.id)   # one query for the whole session
     sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
     for assignment in sss3_assignments:
-        arm_name = assignment.arm.name
+        arm_name = assignment.arm_label
         enrollments = StudentEnrollment.query.filter_by(class_arm_assignment_id=assignment.id, is_active=True).all()
         arm_students = []
         arm_total_paid = 0
@@ -594,7 +594,7 @@ def export_excel():
             assignment = enrollment.class_arm_assignment
             total_paid = paid_map.get(student.id, 0)
             remaining = max(0, max_due - total_paid)
-            students_data.append({'name': student.full_name, 'arm': assignment.arm.name, 'max_due': max_due, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
+            students_data.append({'name': student.full_name, 'arm': assignment.arm_label, 'max_due': max_due, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
         students_data.sort(key=lambda x: (x['arm'], x['name']))
         for i, s in enumerate(students_data, 1):
             ws_students.append([i, s['name'], s['arm'], s['max_due'], s['total_paid'], s['remaining'], s['status']])
@@ -896,7 +896,7 @@ def defaulters():
             defaulters_list.append({
                 'id': student.id,
                 'name': student.full_name,
-                'arm': assignment.arm.name,
+                'arm': assignment.arm_label,
                 'total_paid': total_paid,
                 'remaining': remaining,
                 'percentage': (total_paid / max_due * 100) if max_due > 0 else 0,
@@ -1027,7 +1027,7 @@ def export_defaulters():
                 ws.append([
                     idx,
                     student.full_name,
-                    assignment.arm.name,
+                    assignment.arm_label,
                     total_paid,
                     remaining,
                     f"{(total_paid/max_due*100):.1f}%"

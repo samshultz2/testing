@@ -145,7 +145,7 @@ def export_class_students():
                 pass
         ws.column_dimensions[column].width = min(max_length + 2, 30)
     
-    filename = f"students_{assignment.school_class.name}_{assignment.arm.name}.xlsx"
+    filename = f"students_{assignment.display_name.replace(' ', '_')}.xlsx"
 
     return xlsx_response(wb, filename)
 
@@ -191,6 +191,8 @@ def import_students():
             assignment_id = None
             class_id = request.form.get('class_id', type=int)
             arm_id = request.form.get('arm_id', type=int)
+            if class_id and not arm_id:
+                arm_id = ClassArm.default().id          # arm-less school
             if class_id and arm_id:
                 term = get_active_term()
                 if not term:
@@ -235,7 +237,7 @@ def import_students():
         return redirect(url_for('reports.import_students'))
 
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
     return _render({
         'page': 'import',
         'classes': [{'id': c.id, 'name': c.name} for c in classes],

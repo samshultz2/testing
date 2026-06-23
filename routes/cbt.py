@@ -153,7 +153,7 @@ def dashboard():
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'exams': [{'id': e.id, 'title': e.title,
                    'subject': e.subject.name if e.subject else '—',
-                   'class_name': (e.school_class.name if e.school_class else '—') + (f' {e.arm.name}' if e.arm else ''),
+                   'class_name': (e.school_class.name if e.school_class else '—') + (f' {e.arm.name}' if e.arm and not e.arm.is_default else ''),
                    'exam_date': e.exam_date.strftime('%d %b %Y') if e.exam_date else '',
                    'question_count': e.question_count, 'is_published': bool(e.is_published),
                    'detail_url': url_for('cbt.exam_detail', exam_id=e.id),
@@ -191,7 +191,7 @@ def _exam_choices():
     return {
         'subjects': Subject.query.filter_by(is_active=True).order_by(Subject.name).all(),
         'classes': SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all(),
-        'arms': ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all(),
+        'arms': ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all(),
         'terms': Term.query.order_by(Term.id.desc()).all(),
     }
 
@@ -807,7 +807,7 @@ def passwords():
     class_id = request.values.get('class_id', type=int)
     arm_id = request.values.get('arm_id', type=int)
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -864,7 +864,8 @@ def _password_roster(class_id, arm_id, term):
 def _roster_label(class_id, arm_id, classes, arms):
     cls = next((c for c in classes if c.id == class_id), None)
     arm = next((a for a in arms if a.id == arm_id), None)
-    return ' '.join(p for p in [cls.name if cls else 'All students', arm.name if arm else ''] if p)
+    return ' '.join(p for p in [cls.name if cls else 'All students',
+                                 arm.name if arm and not arm.is_default else ''] if p)
 
 
 @cbt_bp.route('/passwords/export')

@@ -364,7 +364,7 @@ def structure():
 
     terms = Term.query.order_by(Term.id.desc()).all()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
     items = FeeItem.query.filter_by(is_active=True).order_by(FeeItem.name).all()
 
     current = {}
@@ -895,7 +895,7 @@ def defaulters():
                 rows.append({
                     'student': e.student,
                     'class_name': asg.school_class.name if asg.school_class else '—',
-                    'arm_name': asg.arm.name if asg.arm else '',
+                    'arm_name': asg.arm_label,
                     'billed': payable, 'paid': paid, 'balance': balance,
                 })
                 totals['billed'] += payable

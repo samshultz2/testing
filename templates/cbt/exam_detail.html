@@ -24,7 +24,7 @@
     <div>
         <span class="badge {{ 'badge-success' if e.is_published else 'badge-secondary' }}">{{ 'Published' if e.is_published else 'Draft' }}</span>
         <span class="badge badge-info">{{ e.subject.name if e.subject else 'No subject' }}</span>
-        <span class="badge badge-secondary">{{ e.school_class.name if e.school_class else 'No class' }}{% if e.arm %} {{ e.arm.name }}{% endif %}</span>
+        <span class="badge badge-secondary">{{ e.school_class.name if e.school_class else 'No class' }}{% if e.arm and not e.arm.is_default %} {{ e.arm.name }}{% endif %}</span>
         <span class="text-muted text-sm">· {{ e.exam_date.strftime('%d %b %Y') if e.exam_date }} · {{ e.window_label }} · {{ e.duration_minutes }} min</span>
     </div>
     <div class="text-sm"><i class="fas fa-key text-muted"></i> Access password: <strong>{{ e.access_password }}</strong> · {{ e.question_count }} Q · {{ e.total_marks }} marks</div>

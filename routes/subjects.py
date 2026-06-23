@@ -316,7 +316,7 @@ def assign_class_subjects():
 
     terms = Term.query.order_by(Term.id.desc()).all()
     classes = SchoolClass.query.order_by(SchoolClass.level).all()
-    arms = ClassArm.query.order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_default=False).order_by(ClassArm.name).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
 
     return _render({
@@ -1265,7 +1265,7 @@ def export_broadsheet():
                 pass
         ws.column_dimensions[column].width = min(max_length + 2, 30)
     
-    filename = f"broadsheet_{selected_assignment.school_class.name}_{selected_assignment.arm.name}_{selected_term.name}.xlsx"
+    filename = f"broadsheet_{selected_assignment.display_name.replace(' ', '_')}_{selected_term.name}.xlsx"
 
     return xlsx_response(wb, filename)
 

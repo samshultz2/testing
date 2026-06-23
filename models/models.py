@@ -298,6 +298,14 @@ class ClassArmAssignment(db.Model):
         return cls
 
     @property
+    def arm_label(self):
+        """Just the arm name, or '' for the hidden default ('General') arm.
+        Use this anywhere the arm is shown on its own (badges, columns, CSV)."""
+        if self.arm and not getattr(self.arm, 'is_default', False):
+            return self.arm.name
+        return ''
+
+    @property
     def full_display_name(self):
         """display_name plus the term."""
         term = self.term.full_name if self.term else ''
