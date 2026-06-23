@@ -357,30 +357,54 @@ function Arms({ d, notify }) {
 // ---- Assignments (class setup) ---------------------------------------------
 function Assignments({ d, notify }) {
   const nav = useNav();
+  const usesArms = d.uses_arms;
   const [f, setF] = useState({ class_id: '', arm_id: '', form_teacher: '' });
   const add = async (e) => {
     e.preventDefault();
-    if (!f.class_id || !f.arm_id) { notify('error', 'Class and arm are required.'); return; }
+    if (!f.class_id) { notify('error', 'Pick a class.'); return; }
+    if (usesArms && !f.arm_id) { notify('error', 'Class and arm are required.'); return; }
     const r = await submitJson(d.add_url, { ...f, term_id: d.term_id });
     if (r.ok) { setF({ class_id: '', arm_id: '', form_teacher: '' }); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
+  };
+  const toggleArms = async (on) => {
+    const r = await submitJson(d.toggle_url, { uses_arms: on ? '1' : '0' });
+    if (r.ok) { notify('success', on ? 'Arms enabled.' : 'Arms turned off — classes won\'t need arms.'); nav.refresh(); } else notify('error', r.error || 'Could not save.');
+  };
+  const setupAll = async () => {
+    const r = await submitJson(d.setup_url, { term_id: d.term_id });
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not set up.');
   };
   return (
     <>
       <div className="page-header"><h1>Class Setup</h1></div>
-      <div className="card mb-3"><div className="card-body"><form className="filter-form">
-        <div className="form-group"><label className="form-label">Select Term</label>
-          <select className="form-control" value={d.term_id} onChange={(e) => navParams(nav.go, d.self_url, { term_id: e.target.value })}>
-            <option value="">Select Term</option>{d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
-      </form></div></div>
+      <div className="card mb-3"><div className="card-body">
+        <form className="filter-form">
+          <div className="form-group"><label className="form-label">Select Term</label>
+            <select className="form-control" value={d.term_id} onChange={(e) => navParams(nav.go, d.self_url, { term_id: e.target.value })}>
+              <option value="">Select Term</option>{d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
+        </form>
+        <label className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginTop: '.6rem' }}>
+          <input type="checkbox" checked={usesArms} onChange={(e) => toggleArms(e.target.checked)} />
+          <span>This school streams classes into arms (e.g. SSS1 A, SSS1 B)</span>
+        </label>
+        {!usesArms && <span className="form-hint d-block">Off: classes are just SSS1, SSS2… — no arm needed.</span>}
+      </div></div>
 
       {d.selected_term && (<>
-        <div className="card mb-3"><div className="card-header"><h3>Add Class-Arm</h3></div>
-          <div className="card-body"><form onSubmit={add} className="filter-form">
-            <div className="form-group"><label className="form-label">Class</label><select className="form-control" required value={f.class_id} onChange={(e) => setF((s) => ({ ...s, class_id: e.target.value }))}><option value="">Select</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Arm</label><select className="form-control" required value={f.arm_id} onChange={(e) => setF((s) => ({ ...s, arm_id: e.target.value }))}><option value="">Select</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Teacher</label><input type="text" className="form-control" placeholder="Name" value={f.form_teacher} onChange={(e) => setF((s) => ({ ...s, form_teacher: e.target.value }))} /></div>
-            <div className="filter-actions"><button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
-          </form></div></div>
+        <div className="card mb-3"><div className="card-header"><h3>{usesArms ? 'Add Class-Arm' : 'Add Class to Term'}</h3></div>
+          <div className="card-body">
+            {!usesArms && (
+              <p style={{ marginTop: 0 }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={setupAll}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Set up all classes for this term</button>
+                <span className="form-hint d-block">Adds every class at once so you can start enrolling students.</span>
+              </p>)}
+            <form onSubmit={add} className="filter-form">
+              <div className="form-group"><label className="form-label">Class</label><select className="form-control" required value={f.class_id} onChange={(e) => setF((s) => ({ ...s, class_id: e.target.value }))}><option value="">Select</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              {usesArms && (
+                <div className="form-group"><label className="form-label">Arm</label><select className="form-control" required value={f.arm_id} onChange={(e) => setF((s) => ({ ...s, arm_id: e.target.value }))}><option value="">Select</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>)}
+              <div className="form-group"><label className="form-label">Teacher</label><input type="text" className="form-control" placeholder="Name" value={f.form_teacher} onChange={(e) => setF((s) => ({ ...s, form_teacher: e.target.value }))} /></div>
+              <div className="filter-actions"><button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
+            </form></div></div>
 
         <div className="card"><div className="card-header"><h3>{d.selected_term.name} Classes</h3></div>
           <div className="card-body" style={{ padding: 0 }}>

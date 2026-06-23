@@ -407,7 +407,8 @@ def process_promotion():
     from collections import defaultdict
     arm_pairs = (db.session.query(ClassArmAssignment.class_id, ClassArm.name)
                  .join(ClassArm, ClassArmAssignment.arm_id == ClassArm.id)
-                 .filter(ClassArm.is_active.is_(True)).distinct().all())
+                 .filter(ClassArm.is_active.is_(True),
+                         ClassArm.is_default.is_(False)).distinct().all())   # hide the default arm
     class_streams = defaultdict(list)
     for cid, arm_name in arm_pairs:
         if arm_name and arm_name not in class_streams[cid]:

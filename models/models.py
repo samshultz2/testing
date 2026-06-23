@@ -226,18 +226,43 @@ class SchoolClass(db.Model):
 
 
 class ClassArm(db.Model):
-    """Class arm (Rose, Lily, etc.)"""
+    """Class arm (Rose, Lily, etc.).
+
+    A school that doesn't stream its classes (just SSS1/SSS2/SSS3, no arms) uses
+    a single hidden "General" arm (``is_default``): every class gets one
+    assignment on it, and its name is omitted everywhere a class is shown."""
     __tablename__ = 'class_arms'
-    
+
+    DEFAULT_NAME = 'General'
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(30), unique=True, nullable=False)
     description = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
+    # The single auto "no-arm" arm for schools that don't use streams.
+    is_default = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=local_now)
-    
+
     # Relationships
     assignments = db.relationship('ClassArmAssignment', backref='arm', lazy='dynamic')
-    
+
+    @staticmethod
+    def default():
+        """Return (creating if needed) the hidden 'General' arm used by schools
+        that don't stream their classes."""
+        arm = ClassArm.query.filter_by(is_default=True).first()
+        if arm is None:
+            # Reuse a same-named arm if one exists (e.g. created before this flag).
+            arm = ClassArm.query.filter_by(name=ClassArm.DEFAULT_NAME).first()
+            if arm is None:
+                arm = ClassArm(name=ClassArm.DEFAULT_NAME,
+                               description='Default arm (schools without streams)')
+                db.session.add(arm)
+            arm.is_default = True
+            arm.is_active = True
+            db.session.flush()
+        return arm
+
     def __repr__(self):
         return f'<ClassArm {self.name}>'
 
@@ -265,13 +290,18 @@ class ClassArmAssignment(db.Model):
     
     @property
     def display_name(self):
-        """Return formatted name like 'JSS1 Rose'"""
-        return f"{self.school_class.name} {self.arm.name}"
-    
+        """Class + arm, e.g. 'JSS1 Rose'. The hidden default ('General') arm is
+        omitted, so an arm-less school just sees 'JSS1'."""
+        cls = self.school_class.name if self.school_class else ''
+        if self.arm and not getattr(self.arm, 'is_default', False):
+            return f"{cls} {self.arm.name}"
+        return cls
+
     @property
     def full_display_name(self):
-        """Return full name with term"""
-        return f"{self.school_class.name} {self.arm.name} - {self.term.full_name}"
+        """display_name plus the term."""
+        term = self.term.full_name if self.term else ''
+        return f"{self.display_name} - {term}"
     
     def __repr__(self):
         return f'<ClassArmAssignment {self.display_name}>'
@@ -1346,6 +1376,14 @@ def _ensure_student_exam_columns():
         subj_cols = {c['name'] for c in inspect(db.engine).get_columns('subjects')}
         if 'has_practical' not in subj_cols:
             statements.append('ALTER TABLE subjects ADD COLUMN has_practical BOOLEAN DEFAULT 1')
+    except Exception:
+        pass
+
+    # class_arms.is_default (the hidden 'General' arm for arm-less schools).
+    try:
+        ca_cols = {c['name'] for c in inspect(db.engine).get_columns('class_arms')}
+        if 'is_default' not in ca_cols:
+            statements.append('ALTER TABLE class_arms ADD COLUMN is_default BOOLEAN DEFAULT 0')
     except Exception:
         pass
 

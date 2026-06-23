@@ -612,8 +612,8 @@ def add_class():
 @academics_bp.route('/arms')
 @login_required
 def arms_list():
-    """List all class arms"""
-    arms = ClassArm.query.order_by(ClassArm.name).all()
+    """List all class arms (the hidden default 'General' arm is never shown)."""
+    arms = ClassArm.query.filter_by(is_default=False).order_by(ClassArm.name).all()
     return _render({
         'page': 'arms',
         'arms': [{'id': a.id, 'name': a.name, 'description': a.description or ''} for a in arms],
@@ -669,45 +669,55 @@ def assignments_list():
             SchoolClass
         ).order_by(SchoolClass.level).all()
     
+    from models import SchoolSettings
+    uses_arms = bool(SchoolSettings.get('uses_class_arms', True))
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    # Real arms only — the hidden default 'General' arm is never a pickable choice.
+    arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
 
     return _render({
         'page': 'assignments',
         'term_id': term_id or '',
+        'uses_arms': uses_arms,
         'selected_term': ({'id': selected_term.id, 'name': selected_term.name}
                           if selected_term else None),
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'classes': [{'id': c.id, 'name': c.name} for c in classes],
         'arms': [{'id': a.id, 'name': a.name} for a in arms],
         'assignments': [{'id': a.id,
-                         'name': f'{a.school_class.name} {a.arm.name}' if a.school_class and a.arm else a.display_name,
+                         'name': a.display_name,
                          'form_teacher': a.form_teacher_name or '',
                          'students': a.enrollments.filter_by(is_active=True).count(),
                          'view_url': url_for('academics.view_assignment', assignment_id=a.id)}
                         for a in assignments],
         'self_url': url_for('academics.assignments_list'),
-        'add_url': url_for('academics.add_assignment')})
+        'add_url': url_for('academics.add_assignment'),
+        'setup_url': url_for('academics.setup_term_classes'),
+        'toggle_url': url_for('academics.set_uses_arms')})
 
 
 @academics_bp.route('/assignments/add', methods=['POST'])
 @login_required
 def add_assignment():
-    """Create a class arm assignment"""
+    """Create a class arm assignment. The arm is optional: when the school
+    doesn't use arms (or none is chosen), the hidden default 'General' arm is
+    used so the class shows as just 'SSS1'."""
     try:
         term_id = request.form.get('term_id', type=int)
         class_id = request.form.get('class_id', type=int)
         arm_id = request.form.get('arm_id', type=int)
         form_teacher = request.form.get('form_teacher', '').strip()
         form_teacher_phone = request.form.get('form_teacher_phone', '').strip()
-        
-        if not all([term_id, class_id, arm_id]):
-            return _err('Term, class, and arm are required.',
+
+        if not all([term_id, class_id]):
+            return _err('Term and class are required.',
                         url_for('academics.assignments_list', term_id=term_id or ''))
+        if not arm_id:                                   # no arm picked -> default arm
+            arm_id = ClassArm.default().id
         existing = ClassArmAssignment.query.filter_by(
             term_id=term_id, class_id=class_id, arm_id=arm_id).first()
         if existing:
-            return _err('This class-arm combination already exists for this term.',
+            return _err('This class is already set up for this term.',
                         url_for('academics.assignments_list', term_id=term_id))
 
         db.session.add(ClassArmAssignment(
@@ -715,10 +725,57 @@ def add_assignment():
             form_teacher_name=form_teacher or None,
             form_teacher_phone=form_teacher_phone or None))
         db.session.commit()
-        return _ok('Class arm assignment created!', url_for('academics.assignments_list', term_id=term_id))
+        return _ok('Class set up for the term!', url_for('academics.assignments_list', term_id=term_id))
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('academics.assignments_list', term_id=term_id or ''))
+
+
+@academics_bp.route('/assignments/setup-all', methods=['POST'])
+@login_required
+def setup_term_classes():
+    """One click for arm-less schools: give every active class a default-arm
+    assignment for the term so students can be enrolled without picking arms."""
+    term_id = request.form.get('term_id', type=int)
+    if not term_id:
+        return _err('Select a term first.', url_for('academics.assignments_list'))
+    try:
+        from utils.branch_scope import branch_for_new
+        arm = ClassArm.default()
+        bid = branch_for_new()
+        existing = {a.class_id for a in ClassArmAssignment.query.filter_by(
+            term_id=term_id, arm_id=arm.id).all()}
+        created = 0
+        for c in SchoolClass.query.filter_by(is_active=True).all():
+            if c.id in existing:
+                continue
+            db.session.add(ClassArmAssignment(term_id=term_id, class_id=c.id,
+                                              arm_id=arm.id, branch_id=bid))
+            created += 1
+        db.session.commit()
+        return _ok(f'{created} class(es) set up for the term.',
+                   url_for('academics.assignments_list', term_id=term_id))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('academics.assignments_list', term_id=term_id or ''))
+
+
+@academics_bp.route('/uses-arms', methods=['POST'])
+@login_required
+def set_uses_arms():
+    """Toggle whether this school streams classes into arms. When turned off the
+    default arm is provisioned so class setup needs no arm."""
+    from models import SchoolSettings
+    on = (request.form.get('uses_arms') or '').strip().lower() in ('1', 'true', 'on', 'yes')
+    try:
+        SchoolSettings.set('uses_class_arms', on, 'bool', 'School streams classes into arms')
+        if not on:
+            ClassArm.default()                            # ensure it exists
+        db.session.commit()
+        return _ok('Saved.', url_for('academics.assignments_list'))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('academics.assignments_list'))
 
 
 @academics_bp.route('/assignments/<int:assignment_id>')

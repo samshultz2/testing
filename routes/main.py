@@ -1227,7 +1227,8 @@ def _student_view_payload(student):
                       'phone_number': c.phone_number, 'relationship': c.relationship} for c in contacts],
         'enrollments': [{'term': e.class_arm_assignment.term.name,
                          'class': e.class_arm_assignment.school_class.name,
-                         'arm': e.class_arm_assignment.arm.name} for e in enrollments],
+                         'arm': ('' if e.class_arm_assignment.arm.is_default
+                                 else e.class_arm_assignment.arm.name)} for e in enrollments],
         'waec': {'count': len(waec_results),
                  'add_url': url_for('results.add_waec') + f'?student_id={sid}',
                  'view_url': url_for('results.view_waec_student', student_id=sid)},
