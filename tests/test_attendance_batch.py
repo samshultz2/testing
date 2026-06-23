@@ -103,6 +103,36 @@ def test_week_batch_save_split_sessions(app):
         assert rec.afternoon_present is False
 
 
+def test_daily_save_bells_admins(app):
+    """Marking a class register bells admins with a 'Register marked' note."""
+    from models import Notification
+    tid, aid, wid, eids = _class_week(app)
+    c = _admin(app)
+    tok = _ptoken(c, f'/attendance/mark?term_id={tid}&assignment_id={aid}&date=2026-05-18')
+    # Only the first student present.
+    c.post('/attendance/mark/save', data={
+        'term_id': tid, 'assignment_id': aid, 'week_id': wid, 'date': '2026-05-18',
+        'session_type': 'morning', '_csrf_token': tok, 'present[]': str(eids[0]),
+    }, follow_redirects=True)
+    j = c.get('/api/notifications').get_json()
+    hit = next((it for it in j['items'] if it['title'].startswith('Register marked')), None)
+    assert hit is not None
+    assert '1/2 present' in hit['body'] and '1 absent' in hit['body']
+
+
+def test_notify_attendance_marked_helper(app):
+    with app.app_context():
+        from utils.notify import notify_attendance_marked
+        notify_attendance_marked(class_label='SSS1 Rose', date_label='18 May 2026',
+                                 session_label='Morning', present=20, total=25,
+                                 marked_by='Mr A', url='/attendance/daily')
+    c = _admin(app)
+    items = c.get('/api/notifications').get_json()['items']
+    hit = next((it for it in items if it['title'] == 'Register marked: SSS1 Rose — 18 May 2026'), None)
+    assert hit is not None
+    assert '20/25 present' in hit['body'] and '5 absent' in hit['body'] and 'by Mr A' in hit['body']
+
+
 def test_week_batch_save(app):
     tid, aid, wid, eids = _class_week(app)
     c = _admin(app)

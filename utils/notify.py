@@ -57,6 +57,28 @@ def notify_student_change(action, *, student=None, detail='', url=None):
     return notify_admins(title, body=detail, url=url, category='student')
 
 
+def notify_attendance_marked(*, class_label, date_label='', session_label='',
+                             present=None, total=None, marked_by='', url=None):
+    """Bell admins that a class register was marked.
+
+    Best-effort like all notifications — never breaks the save that triggered it.
+    """
+    title = f'Register marked: {class_label}'.strip()
+    if date_label:
+        title += f' — {date_label}'
+    bits = []
+    if present is not None and total is not None:
+        absent = max(total - present, 0)
+        bits.append(f'{present}/{total} present')
+        if absent:
+            bits.append(f'{absent} absent')
+    if session_label:
+        bits.append(session_label)
+    if marked_by:
+        bits.append(f'by {marked_by}')
+    return notify_admins(title, body=' · '.join(bits), url=url, category='attendance')
+
+
 def current_recipient():
     """(user_id, role) for the logged-in user — including the legacy password
     admin (no user_id, treated as the 'admin' role)."""

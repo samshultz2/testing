@@ -12,6 +12,38 @@ const SORTS = [
   ['age|desc', 'Oldest (by age)'], ['age|asc', 'Youngest (by age)'],
 ];
 
+// Filters are kept in React state (not the URL), so they'd be lost the moment
+// you open a student and come back. We stash them per-tab and restore them when
+// returning from a student's detail/edit page.
+const FILTER_KEY = 'students:filters';
+
+function cameFromStudentPage() {
+  try {
+    const r = new URL(document.referrer);
+    return r.origin === window.location.origin && /\/students\/\d+/.test(r.pathname);
+  } catch (e) { return false; }
+}
+
+function startState(applied, page) {
+  const base = {
+    gender: applied.gender || '', religion: applied.religion || '', stream: applied.stream || '',
+    subject: applied.subject || '', class_id: applied.class_id || '', arm_id: applied.arm_id || '',
+    sort: applied.sort || 'surname', order: applied.order || 'asc', search: applied.search || '',
+    page: page || 1,
+  };
+  const urlHasFilters = !!(applied.gender || applied.religion || applied.stream || applied.subject
+    || applied.class_id || applied.arm_id || applied.search);
+  if (!urlHasFilters && cameFromStudentPage()) {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(FILTER_KEY) || 'null');
+      if (saved && typeof saved === 'object') {
+        return { query: { ...base, ...saved, page: saved.page || 1 }, restored: true };
+      }
+    } catch (e) { /* ignore bad/empty storage */ }
+  }
+  return { query: base, restored: false };
+}
+
 // Reusable labelled filter field (label above the control).
 function Field({ label, full, children }) {
   return (
@@ -25,13 +57,9 @@ function Field({ label, full, children }) {
 export default function App({ initial }) {
   const [data, setData] = useState(initial || {});
   const a = (initial && initial.applied) || {};
-  const [query, setQuery] = useState({
-    gender: a.gender || '', religion: a.religion || '', stream: a.stream || '',
-    subject: a.subject || '', class_id: a.class_id || '', arm_id: a.arm_id || '',
-    sort: a.sort || 'surname', order: a.order || 'asc', search: a.search || '',
-    page: (initial && initial.page) || 1,
-  });
-  const [search, setSearch] = useState(a.search || '');
+  const start = useRef(startState(a, initial && initial.page)).current;
+  const [query, setQuery] = useState(start.query);
+  const [search, setSearch] = useState(start.query.search || '');
   const [selected, setSelected] = useState(new Set());
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -40,7 +68,9 @@ export default function App({ initial }) {
   const [bulkStream, setBulkStream] = useState('');
   const [bulkGender, setBulkGender] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
-  const skip = useRef(true);
+  // When filters were restored, the server-rendered page doesn't match them, so
+  // let the first effect run fetch fresh (filtered) data instead of skipping it.
+  const skip = useRef(!start.restored);
 
   const load = useCallback(async (q) => {
     setLoading(true);
@@ -54,6 +84,19 @@ export default function App({ initial }) {
   useEffect(() => {
     if (skip.current) { skip.current = false; return; }
     load(query);
+  }, [query, load]);
+
+  // Remember the active filters so returning from a student page keeps them.
+  useEffect(() => {
+    try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(query)); } catch (e) { /* ignore */ }
+  }, [query]);
+
+  // Returning via the browser's back/forward cache shows a stale snapshot — so
+  // re-fetch on restore to pick up any edits made while away.
+  useEffect(() => {
+    const onShow = (e) => { if (e.persisted) load(query); };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
   }, [query, load]);
 
   // Debounced search → query.

@@ -24,6 +24,19 @@ from utils.excel_utils import export_attendance_to_excel
 attendance_bp = Blueprint('attendance', __name__, url_prefix='/attendance')
 
 
+def _actor_name(default='Admin'):
+    """Display name of whoever is marking attendance, for the audit trail and
+    the 'register marked' notification."""
+    try:
+        from utils.access_control import get_current_user
+        u = get_current_user()
+        if u:
+            return (getattr(u, 'full_name', None) or getattr(u, 'username', None) or default)
+    except Exception:
+        pass
+    return default
+
+
 @attendance_bp.route('/')
 @login_required
 def index():
@@ -184,21 +197,35 @@ def save_attendance():
         # Check if auto-copy to afternoon is enabled (default True for morning)
         auto_copy = request.form.get('auto_copy_afternoon', 'on') == 'on'
         
+        marked_by = _actor_name()
         count = mark_attendance_bulk(
             all_enrollment_ids,
             target_date,
             week_id,
             session_type,
             present_ids,
-            marked_by='Admin',
+            marked_by=marked_by,
             auto_copy_to_afternoon=auto_copy if session_type == 'morning' else False
         )
-        
+
         if session_type == 'morning' and auto_copy:
             flash(f'Attendance saved for {count} students! (Morning & Afternoon)', 'success')
         else:
             flash(f'Attendance saved for {count} students!', 'success')
-        
+
+        # Bell admins that this class register was taken.
+        assignment = db.session.get(ClassArmAssignment, assignment_id)
+        if assignment:
+            from utils.notify import notify_attendance_marked
+            notify_attendance_marked(
+                class_label=assignment.display_name,
+                date_label=target_date.strftime('%d %b %Y'),
+                session_label=(session_type or '').capitalize(),
+                present=len(present_ids), total=len(all_enrollment_ids),
+                marked_by=marked_by,
+                url=url_for('attendance.daily_summary', assignment_id=assignment_id,
+                            date=target_date.isoformat()))
+
     except Exception as e:
         db.session.rollback()
         flash(f'Error saving attendance: {str(e)}', 'error')
@@ -308,7 +335,7 @@ def week_save():
         Attendance.enrollment_id.in_([e.id for e in enrollments]),
         Attendance.date.in_(school_days)).all()}
 
-    marked_by = request.form.get('marked_by') or 'Admin'
+    marked_by = request.form.get('marked_by') or _actor_name()
     split = request.form.get('sessions') == 'split'   # AM/PM ticks vs whole-day
     saved = 0
     try:
@@ -334,6 +361,14 @@ def week_save():
         flash(f'Saved attendance for {len(enrollments)} student(s) across '
               f'{len(school_days)} day(s) of {week.week_number and "Week %d" % week.week_number}.',
               'success')
+        assignment = db.session.get(ClassArmAssignment, assignment_id)
+        if assignment:
+            from utils.notify import notify_attendance_marked
+            notify_attendance_marked(
+                class_label=assignment.display_name,
+                date_label=(f'Week {week.week_number}' if week.week_number else ''),
+                present=None, total=None, marked_by=marked_by,
+                url=url_for('attendance.week_grid', term_id=term_id, assignment_id=assignment_id))
     except Exception as e:
         db.session.rollback()
         flash(f'Error saving attendance: {str(e)}', 'error')
@@ -365,9 +400,20 @@ def mark_all_present_route():
         enrollment_ids = [e.id for e in enrollments]
         
         count = mark_all_present(enrollment_ids, target_date, week_id, session_type)
-        
+
         flash(f'All {count} students marked as present!', 'success')
-        
+
+        assignment = db.session.get(ClassArmAssignment, assignment_id)
+        if assignment:
+            from utils.notify import notify_attendance_marked
+            notify_attendance_marked(
+                class_label=assignment.display_name,
+                date_label=target_date.strftime('%d %b %Y'),
+                session_label=(session_type or '').capitalize(),
+                present=count, total=len(enrollment_ids), marked_by=_actor_name(),
+                url=url_for('attendance.daily_summary', assignment_id=assignment_id,
+                            date=target_date.isoformat()))
+
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
