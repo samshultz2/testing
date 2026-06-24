@@ -76,6 +76,18 @@ def _pagesize(orient):
     return A4 if orient == 'portrait' else landscape(A4)
 
 
+def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
+    """Largest subjects-per-sheet that keeps each subject column at least ``min_w``
+    wide, so headers never collapse into an un-renderable sliver. A requested
+    ``per`` (incl. 0 = "one wide page") is reduced to this when it wouldn't fit;
+    the sheet then splits across pages instead of overflowing."""
+    room = usable - sn_w - name_w - reserve
+    fit = max(1, int(room / min_w)) if min_w > 0 else n
+    if not per or per <= 0 or per > fit:
+        return fit
+    return per
+
+
 def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
     """Full score+grade matrix. Wide subject sets split across pages (``per``
     columns each); no admission numbers. ``opts['summary']`` toggles the
@@ -87,11 +99,13 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
     doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f'Broadsheet — {exam.display_name}')
+    usable = page[0] - 16 * mm
+    sn_w, name_w = 9 * mm, 52 * mm
+    per = _fit_per(usable, sn_w, name_w, 24 * mm, 11 * mm, per, len(bs['subjects']))
     groups = _groups(bs['subjects'], per)
     ss = bs['subject_summary']
     nrows = len(bs['rows'])
     show_summary = _opt(opts, 'summary')
-    usable = page[0] - 16 * mm
     e = []
     for gi, group in enumerate(groups):
         last = gi == len(groups) - 1
@@ -100,7 +114,6 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)
 
-        sn_w, name_w = 9 * mm, 52 * mm
         tail = 2 if last else 0
         sub_w = (usable - sn_w - name_w) / (len(group) + tail)
 
@@ -165,8 +178,12 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
     doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f'Blank broadsheet — {exam.display_name}')
-    groups = _groups(subjects, per)
     usable = page[0] - 16 * mm
+    sn_w, name_w = 9 * mm, 52 * mm
+    # Each subject needs two writable columns (Score + Grade), so reserve ~16mm
+    # per subject and split onto more sheets rather than crushing the columns.
+    per = _fit_per(usable, sn_w, name_w, 0, 16 * mm, per, len(subjects))
+    groups = _groups(subjects, per)
     nstud = len(students)
     e = []
     for gi, group in enumerate(groups):
@@ -175,7 +192,6 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)
 
-        sn_w, name_w = 9 * mm, 52 * mm
         pair_w = (usable - sn_w - name_w) / len(group)      # width per subject
         cell_w = pair_w / 2                                  # Score | Grade
 

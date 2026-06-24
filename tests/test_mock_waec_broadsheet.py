@@ -303,3 +303,23 @@ def test_broadsheet_orientation_and_blank_columns(app):
         assert b.status_code == 200 and b.get_data()[:5] == b'%PDF-'
     # Preview pages expose the orientation control.
     assert 'orientSel' in c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
+
+
+def test_blank_sheet_portrait_one_wide_many_subjects(app):
+    """Regression: portrait + one-wide-page + many subjects must not blow up the
+    layout — it splits across sheets instead of crushing the columns."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=42)
+    sid = _student(app, 'PW' + uuid.uuid4().hex[:5].upper(), 'Many', 'Subs')
+    enroll_sss3(app, sid)
+    with app.app_context():
+        db.session.get(Student, sid).waec_subjects = (
+            'English Language,Mathematics,Civic Education,Biology,Physics,Chemistry,'
+            'Agricultural Science,Christian Religious Studies,Literature in English,'
+            'Economics,Commerce,Geography,Government,Further Mathematics,Data Processing')
+        db.session.commit()
+    c = _admin(app)
+    r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf?orient=portrait&cols=0')
+    assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
+    r2 = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf?orient=landscape&cols=0')
+    assert r2.status_code == 200 and r2.get_data()[:5] == b'%PDF-'
