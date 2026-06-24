@@ -36,6 +36,14 @@
                     <a href="{{ url_for('mock_waec.grid_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Grid entry"><i class="fas fa-table-cells"></i></a>
                     <a href="{{ url_for('mock_waec.analytics', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Analytics"><i class="fas fa-chart-column"></i></a>
                     <a href="{{ url_for('mock_waec.paste_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Paste / CSV import"><i class="fas fa-paste"></i></a>
+                    <a href="{{ url_for('mock_waec.edit_exam', exam_id=e.id) }}" class="btn btn-sm btn-warning" title="Edit exam"><i class="fas fa-pen"></i></a>
+                    {% if user_permissions.is_admin %}
+                    <form method="post" action="{{ url_for('mock_waec.delete_exam', exam_id=e.id) }}" style="display:inline;"
+                          onsubmit="return confirm('Delete {{ e.display_name }} and ALL its results? This cannot be undone.');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Delete exam"><i class="fas fa-trash"></i></button>
+                    </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

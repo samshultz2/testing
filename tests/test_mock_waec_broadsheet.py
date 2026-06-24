@@ -250,3 +250,36 @@ def test_blank_recording_sheet_and_pdf_options(app):
     for q in ('address=0&contact=0&motto=0&summary=0&title=0',):
         assert c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?{q}').status_code == 200
         assert c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip.pdf?{q}&signatures=0').status_code == 200
+
+
+def test_exam_crud_controls(app):
+    """Create exists; the dashboard and view now expose Edit + Delete, and both
+    the update and delete actions work end-to-end."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=30)
+    sid = _student(app, 'EX' + uuid.uuid4().hex[:5].upper(), 'Ife', 'Crud')
+    _seed_results(app, exam_id, sid, {'Mathematics': 70})
+    c = _admin(app)
+
+    # Controls are surfaced (admin sees the delete form).
+    idx = c.get('/mock-waec/').get_data(as_text=True)
+    assert f'/exam/{exam_id}/edit' in idx and f'/exam/{exam_id}/delete' in idx
+    view = c.get(f'/mock-waec/exam/{exam_id}').get_data(as_text=True)
+    assert f'/exam/{exam_id}/delete' in view
+
+    # UPDATE: rename + mark completed.
+    tok = auth_csrf(c)
+    c.post(f'/mock-waec/exam/{exam_id}/edit', data={
+        '_csrf_token': tok, 'name': 'Renamed Mock', 'is_completed': 'on'},
+        follow_redirects=True)
+    with app.app_context():
+        ex = db.session.get(MockWAECExam, exam_id)
+        assert ex.name == 'Renamed Mock' and ex.is_completed is True
+
+    # DELETE: exam and its results go.
+    r = c.post(f'/mock-waec/exam/{exam_id}/delete', data={'_csrf_token': tok},
+               follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        assert db.session.get(MockWAECExam, exam_id) is None
+        assert MockWAECResult.query.filter_by(mock_exam_id=exam_id).count() == 0
