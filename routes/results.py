@@ -2035,7 +2035,8 @@ def export_waec():
     ws.column_dimensions['A'].width = 5
     ws.column_dimensions['B'].width = 12
     ws.column_dimensions['C'].width = 25
-    
+
+    ws.delete_cols(2)        # drop the admission-number column from the printout
     return xlsx_response(wb, f'waec_results_{year}.xlsx')
 
 
@@ -2093,6 +2094,7 @@ def export_jamb():
         ws.cell(row=row, column=11, value=r.subject4 or '-').border = border
         ws.cell(row=row, column=12, value=r.subject4_score or '-').border = border
     
+    ws.delete_cols(2)        # drop the admission-number column from the printout
     return xlsx_response(wb, f'jamb_results_{year}.xlsx')
 
 

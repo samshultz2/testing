@@ -267,9 +267,9 @@ def broadsheet_export(exam_id):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Broadsheet'
-    ws.append(['S/N', 'Admission No', 'Student'] + subjects + ['Credits', 'Avg %'])
+    ws.append(['S/N', 'Student'] + subjects + ['Credits', 'Avg %'])
     for i, row in enumerate(bs['rows'], 1):
-        line = [i, row['student'].student_id, row['student'].full_name]
+        line = [i, row['student'].full_name]
         for subj in subjects:
             r = row['cells'].get(subj)
             line.append(f'{r.score} {r.grade}' if r and r.score is not None else '')
@@ -279,7 +279,7 @@ def broadsheet_export(exam_id):
     ws.append([])
     ss = bs['subject_summary']
     def _summary_row(label, fn):
-        ws.append(['', '', label] + [fn(ss[s]) for s in subjects] + ['', ''])
+        ws.append(['', label] + [fn(ss[s]) for s in subjects] + ['', ''])
     _summary_row('No. offered', lambda d: d['offered'])
     _summary_row('No. passed', lambda d: d['passed'])
     _summary_row('No. failed', lambda d: d['failed'])
@@ -798,9 +798,9 @@ def export_results(exam_id):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Mock WAEC'
-    ws.append(['Student', 'Admission No', 'Subject', 'Score', 'Grade'])
+    ws.append(['Student', 'Subject', 'Score', 'Grade'])
     results = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
                .join(Student).order_by(Student.surname, MockWAECResult.subject).all())
     for r in results:
-        ws.append([r.student.full_name, r.student.student_id, r.subject, r.score, r.grade])
+        ws.append([r.student.full_name, r.subject, r.score, r.grade])
     return xlsx_response(wb, f'mock_waec_{exam.exam_number}_{exam.session.name.replace("/", "-")}.xlsx')

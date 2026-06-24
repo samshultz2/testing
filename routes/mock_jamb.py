@@ -785,6 +785,7 @@ def export_results(exam_id):
     
     filename = f"mock_jamb_{exam.exam_number}_{exam.session.name.replace('/', '_')}.xlsx"
 
+    ws.delete_cols(2)        # drop the admission-number column from the printout
     return xlsx_response(wb, filename)
 
 
