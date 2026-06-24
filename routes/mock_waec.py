@@ -195,7 +195,7 @@ def broadsheet_print(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam,
-        title='Broadsheet (PDF)', show_cols=True, options=_OPTS_BROADSHEET,
+        title='Broadsheet (PDF)', show_cols=True, show_orient=True, options=_OPTS_BROADSHEET,
         pdf_url=url_for('mock_waec.broadsheet_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.broadsheet', exam_id=exam_id))
 
@@ -214,7 +214,8 @@ def broadsheet_pdf_view(exam_id):
     from utils.mock_waec_pdf import broadsheet_pdf
     per = request.args.get('cols', default=8, type=int)
     buf = broadsheet_pdf(bs, exam, _school_profile(),
-                         opts=_pdf_opts(), per=(per if per and per > 0 else 0))
+                         opts=_pdf_opts(), per=(per if per and per > 0 else 0),
+                         orient=request.args.get('orient', 'landscape'))
     name = f"broadsheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
@@ -226,7 +227,7 @@ def broadsheet_blank(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=True,
-        title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
+        show_orient=True, title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
         pdf_url=url_for('mock_waec.broadsheet_blank_pdf', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
@@ -244,9 +245,10 @@ def broadsheet_blank_pdf(exam_id):
     union = set().union(*offered.values()) if offered else set()
     subjects = MockWAECAnalytics._ordered_subjects(union or set(WAEC_DEFAULT_SUBJECTS))
     from utils.mock_waec_pdf import blank_broadsheet_pdf
-    per = request.args.get('cols', default=8, type=int)
+    per = request.args.get('cols', default=6, type=int)
     buf = blank_broadsheet_pdf(students, offered, subjects, exam, _school_profile(),
-                               opts=_pdf_opts(), per=(per if per and per > 0 else 0))
+                               opts=_pdf_opts(), per=(per if per and per > 0 else 0),
+                               orient=request.args.get('orient', 'landscape'))
     name = f"recording_sheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)

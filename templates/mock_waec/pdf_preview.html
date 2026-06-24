@@ -21,10 +21,18 @@
             <input type="checkbox" class="pdf-opt" data-param="{{ param }}" checked> {{ label }}
         </label>
         {% endfor %}
+        {% if show_orient %}
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Orientation:
+            <select id="orientSel" class="form-control" style="width:auto;">
+                <option value="landscape">Landscape</option>
+                <option value="portrait">Portrait</option>
+            </select>
+        </label>
+        {% endif %}
         {% if show_cols %}
         <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Layout:
             <select id="colsSel" class="form-control" style="width:auto;">
-                <option value="8">Split (8 subjects / sheet)</option>
+                <option value="">Split across sheets</option>
                 <option value="0">One wide page</option>
             </select>
         </label>
@@ -48,13 +56,15 @@
   var openTab2 = document.getElementById('openTab2');
   var fallback = document.getElementById('pdfFallback');
   var colsSel = document.getElementById('colsSel');
+  var orientSel = document.getElementById('orientSel');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
   var lastBlob = null;
 
   function build(extra) {
     var p = [];
     opts.forEach(function (o) { if (!o.checked) p.push(o.dataset.param + '=0'); });
-    if (colsSel) p.push('cols=' + colsSel.value);
+    if (orientSel) p.push('orient=' + orientSel.value);
+    if (colsSel && colsSel.value !== '') p.push('cols=' + colsSel.value);
     if (extra) p.push(extra);
     return base + (p.length ? ('?' + p.join('&')) : '');
   }
@@ -77,6 +87,7 @@
   }
   opts.forEach(function (o) { o.addEventListener('change', refresh); });
   if (colsSel) colsSel.addEventListener('change', refresh);
+  if (orientSel) orientSel.addEventListener('change', refresh);
   refresh();
 })();
 </script>

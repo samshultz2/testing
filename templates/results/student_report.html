@@ -44,7 +44,7 @@
         <div>
             <h1>{{ student.full_name }}</h1>
             <div class="meta">
-                {{ student.student_id }}{% if student.gender %} · {{ student.gender }}{% endif %}{% if student.stream %} · {{ student.stream }}{% endif %}
+                {% if student.gender %}{{ student.gender }}{% endif %}{% if student.stream %} · {{ student.stream }}{% endif %}
                 {% if student.is_graduated %} · Graduate{% endif %}
             </div>
         </div>

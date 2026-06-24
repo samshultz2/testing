@@ -71,20 +71,27 @@ def _groups(subjects, per):
             if per and len(subjects) > per else [subjects])
 
 
-def broadsheet_pdf(bs, exam, school, opts=None, per=8):
+def _pagesize(orient):
+    """A4, landscape by default. ``orient='portrait'`` for tall paper."""
+    return A4 if orient == 'portrait' else landscape(A4)
+
+
+def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
     """Full score+grade matrix. Wide subject sets split across pages (``per``
     columns each); no admission numbers. ``opts['summary']`` toggles the
-    per-subject offered/passed/failed/average rows."""
+    per-subject offered/passed/failed/average rows. ``orient`` is landscape or
+    portrait A4, filling the page with an 8mm margin."""
     _styles()
+    page = _pagesize(orient)
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm,
+    doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f'Broadsheet — {exam.display_name}')
     groups = _groups(bs['subjects'], per)
     ss = bs['subject_summary']
     nrows = len(bs['rows'])
     show_summary = _opt(opts, 'summary')
-    usable = landscape(A4)[0] - 16 * mm
+    usable = page[0] - 16 * mm
     e = []
     for gi, group in enumerate(groups):
         last = gi == len(groups) - 1
@@ -147,17 +154,20 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8):
     return buf
 
 
-def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None, per=8):
+def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
+                         per=6, orient='landscape'):
     """A blank recording sheet: student names down the side, every offered subject
-    across the top, empty cells to write scores in. Subjects a student does not
-    offer are shaded out so they're not filled by mistake."""
+    across the top with its own **Score** and **Grade** columns to write into.
+    Subjects a student does not offer are shaded out. Landscape or portrait A4."""
     _styles()
+    page = _pagesize(orient)
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm,
+    doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f'Blank broadsheet — {exam.display_name}')
     groups = _groups(subjects, per)
-    usable = landscape(A4)[0] - 16 * mm
+    usable = page[0] - 16 * mm
+    nstud = len(students)
     e = []
     for gi, group in enumerate(groups):
         sub = f'{exam.display_name} — Recording Sheet'
@@ -165,35 +175,50 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None, p
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)
 
-        sn_w, name_w = 9 * mm, 56 * mm
-        sub_w = (usable - sn_w - name_w) / len(group)
-        header = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
-        header += [Paragraph(s, _S['colhead']) for s in group]
-        data = [header]
-        shaded = []                       # (row, col) cells to grey out
+        sn_w, name_w = 9 * mm, 52 * mm
+        pair_w = (usable - sn_w - name_w) / len(group)      # width per subject
+        cell_w = pair_w / 2                                  # Score | Grade
+
+        # Two-row header: subject name spanning its Score+Grade columns, then the
+        # Score / Grade sub-labels.
+        h1 = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
+        h2 = ['', '']
+        for s in group:
+            h1 += [Paragraph(s, _S['colhead']), '']
+            h2 += [Paragraph('Score', _S['colhead']), Paragraph('Grade', _S['colhead'])]
+        data = [h1, h2]
+        shaded = []
         for i, st in enumerate(students, 1):
             line = [str(i), Paragraph(st.full_name, _S['name'])]
             take = offered.get(st.id) or set()
             for ci, s in enumerate(group):
-                line.append('')
+                line += ['', '']
                 if take and s not in take:
-                    shaded.append((2 + ci, i))     # col index, row index
+                    shaded.append((2 + ci * 2, 1 + i))      # row index incl. 2 header rows
+
+        # row index helper: data row for student i is at table row (i + 1) [0,1 are headers]
             data.append(line)
 
-        widths = [sn_w, name_w] + [sub_w] * len(group)
-        t = Table(data, colWidths=widths, repeatRows=1, rowHeights=[None] + [9 * mm] * len(students))
+        widths = [sn_w, name_w] + [cell_w] * (2 * len(group))
+        t = Table(data, colWidths=widths, repeatRows=2,
+                  rowHeights=[None, None] + [8.5 * mm] * nstud)
         style = [
             ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BACKGROUND', (0, 0), (-1, 0), _HEAD),
+            ('BACKGROUND', (0, 0), (-1, 1), _HEAD),
+            ('SPAN', (0, 0), (0, 1)),          # S/N spans both header rows
+            ('SPAN', (1, 0), (1, 1)),          # Name spans both header rows
             ('TOPPADDING', (0, 0), (-1, -1), 2.5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
         ]
-        for col, rw in shaded:
-            style.append(('BACKGROUND', (col, rw), (col, rw), _SHADE))
+        for j in range(len(group)):           # subject name spans its 2 columns
+            c0 = 2 + j * 2
+            style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
+        for col, rw in shaded:                 # shade Score+Grade of non-offered
+            style.append(('BACKGROUND', (col, rw), (col + 1, rw), _SHADE))
         t.setStyle(TableStyle(style))
         e.append(t)
         if gi != len(groups) - 1:
@@ -224,9 +249,9 @@ def result_slips_pdf(slips, exam, school, opts=None):
 
         meta = [
             [Paragraph(f'<b>Name:</b> {student.full_name}', _S['cell']),
-             Paragraph(f'<b>Adm. No:</b> {student.student_id}', _S['cell'])],
-            [Paragraph(f"<b>Stream:</b> {student.stream or '—'}", _S['cell']),
-             Paragraph(f'<b>Gender:</b> {student.gender or "—"}', _S['cell'])],
+             Paragraph(f"<b>Stream:</b> {student.stream or '—'}", _S['cell'])],
+            [Paragraph(f'<b>Gender:</b> {student.gender or "—"}', _S['cell']),
+             Paragraph('', _S['cell'])],
         ]
         mt = Table(meta, colWidths=[95 * mm, 87 * mm])
         mt.setStyle(TableStyle([('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))

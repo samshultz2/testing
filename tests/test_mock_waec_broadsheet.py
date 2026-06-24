@@ -283,3 +283,23 @@ def test_exam_crud_controls(app):
     with app.app_context():
         assert db.session.get(MockWAECExam, exam_id) is None
         assert MockWAECResult.query.filter_by(mock_exam_id=exam_id).count() == 0
+
+
+def test_broadsheet_orientation_and_blank_columns(app):
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=41)
+    sid = _student(app, 'OR' + uuid.uuid4().hex[:5].upper(), 'Tobi', 'Land')
+    enroll_sss3(app, sid)
+    with app.app_context():
+        db.session.get(Student, sid).waec_subjects = 'Mathematics,English Language,Biology'
+        db.session.commit()
+    _seed_results(app, exam_id, sid, {'Mathematics': 70})
+    c = _admin(app)
+    # Both orientations render for filled and blank broadsheets.
+    for orient in ('landscape', 'portrait'):
+        a = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?orient={orient}')
+        b = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf?orient={orient}')
+        assert a.status_code == 200 and a.get_data()[:5] == b'%PDF-'
+        assert b.status_code == 200 and b.get_data()[:5] == b'%PDF-'
+    # Preview pages expose the orientation control.
+    assert 'orientSel' in c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
