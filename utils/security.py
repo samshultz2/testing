@@ -382,6 +382,9 @@ def add_security_headers(response):
         "img-src 'self' data: blob:; "
         "connect-src 'self'; "
         "object-src 'none'; "
+        # Allow our own pages plus blob: PDFs (the Mock-WAEC result/broadsheet
+        # previews embed a server-generated PDF as a blob in an <iframe>).
+        "frame-src 'self' blob:; "
         "base-uri 'self'; "
         "frame-ancestors 'self'; "
         "form-action 'self';"

@@ -1,8 +1,8 @@
-"""Server-side PDFs for Mock WAEC — the broadsheet and student result slips.
-
-Rendered with reportlab (no headless browser needed) so they preview/print
-identically. School identity (name, address, …) comes from SchoolSettings, and
-the bold "COMPETENCE RESULT" banner is optional.
+"""Server-side PDFs for Mock WAEC — broadsheet, blank recording sheet and result
+slips. Rendered with reportlab (no headless browser) so they preview/print the
+same everywhere. School identity comes from SchoolSettings; an ``opts`` dict
+controls which optional blocks (COMPETENCE banner, address, contact, motto,
+summary, signatures) are included.
 """
 import io
 
@@ -10,13 +10,14 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
                                 Spacer, PageBreak)
 
 _BLACK = colors.black
 _HEAD = colors.HexColor('#d9d9d9')
 _FOOT = colors.HexColor('#eeeeee')
+_SHADE = colors.HexColor('#cfcfcf')
 
 _S = {}
 
@@ -38,42 +39,51 @@ def _styles():
                                    alignment=TA_CENTER, fontName='Helvetica-Bold')
     _S['name'] = ParagraphStyle('nm', parent=base['Normal'], fontSize=8.5, leading=9.5,
                                 fontName='Helvetica-Bold')
-    _S['h'] = ParagraphStyle('h', parent=base['Normal'], fontSize=11, spaceBefore=8,
-                             spaceAfter=4, fontName='Helvetica-Bold')
     _S['cell'] = ParagraphStyle('c', parent=base['Normal'], fontSize=10)
     return _S
 
 
-def _school_header(e, school, show_title, subtitle):
+def _opt(opts, key, default=True):
+    return default if opts is None else opts.get(key, default)
+
+
+def _school_header(e, school, opts, subtitle):
     """School identity block + optional COMPETENCE RESULT banner + a subtitle."""
     _styles()
     if school.get('name'):
         e.append(Paragraph((school['name'] or '').upper(), _S['school']))
-    line = ' · '.join(x for x in (school.get('address'), school.get('phone'),
-                                  school.get('email')) if x)
-    if line:
-        e.append(Paragraph(line, _S['addr']))
-    if school.get('motto'):
+    if _opt(opts, 'address') and school.get('address'):
+        e.append(Paragraph(school['address'], _S['addr']))
+    if _opt(opts, 'contact'):
+        contact = ' · '.join(x for x in (school.get('phone'), school.get('email')) if x)
+        if contact:
+            e.append(Paragraph(contact, _S['addr']))
+    if _opt(opts, 'motto') and school.get('motto'):
         e.append(Paragraph('<i>%s</i>' % school['motto'], _S['addr']))
-    if show_title:
+    if _opt(opts, 'title'):
         e.append(Paragraph('COMPETENCE RESULT', _S['comp']))
     if subtitle:
         e.append(Paragraph(subtitle, _S['exam']))
 
 
-def broadsheet_pdf(bs, exam, school, show_title=True, per=8):
+def _groups(subjects, per):
+    return ([subjects[i:i + per] for i in range(0, len(subjects), per)]
+            if per and len(subjects) > per else [subjects])
+
+
+def broadsheet_pdf(bs, exam, school, opts=None, per=8):
     """Full score+grade matrix. Wide subject sets split across pages (``per``
-    columns each) so the print stays bold and readable; no admission numbers."""
+    columns each); no admission numbers. ``opts['summary']`` toggles the
+    per-subject offered/passed/failed/average rows."""
     _styles()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f'Broadsheet — {exam.display_name}')
-    subs = bs['subjects']
-    groups = ([subs[i:i + per] for i in range(0, len(subs), per)]
-              if per and len(subs) > per else [subs])
+    groups = _groups(bs['subjects'], per)
     ss = bs['subject_summary']
     nrows = len(bs['rows'])
+    show_summary = _opt(opts, 'summary')
     usable = landscape(A4)[0] - 16 * mm
     e = []
     for gi, group in enumerate(groups):
@@ -81,7 +91,7 @@ def broadsheet_pdf(bs, exam, school, show_title=True, per=8):
         sub = f'{exam.display_name} — Broadsheet'
         if len(groups) > 1:
             sub += f' (Sheet {gi + 1} of {len(groups)})'
-        _school_header(e, school, show_title, sub)
+        _school_header(e, school, opts, sub)
 
         sn_w, name_w = 9 * mm, 52 * mm
         tail = 2 if last else 0
@@ -101,31 +111,34 @@ def broadsheet_pdf(bs, exam, school, show_title=True, per=8):
                 line += [str(row['credits']),
                          (str(row['average_score']) if row['average_score'] is not None else '')]
             data.append(line)
-        for label, fn in (('No. offered', lambda d: d['offered']),
-                          ('No. passed (C6+)', lambda d: d['passed']),
-                          ('No. failed', lambda d: d['failed']),
-                          ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
-                          ('Average grade', lambda d: d['avg_grade'])):
-            rr = ['', label] + [str(fn(ss[s])) for s in group]
-            if last:
-                rr += ['', '']
-            data.append(rr)
+        if show_summary:
+            for label, fn in (('No. offered', lambda d: d['offered']),
+                              ('No. passed (C6+)', lambda d: d['passed']),
+                              ('No. failed', lambda d: d['failed']),
+                              ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
+                              ('Average grade', lambda d: d['avg_grade'])):
+                rr = ['', label] + [str(fn(ss[s])) for s in group]
+                if last:
+                    rr += ['', '']
+                data.append(rr)
 
         widths = [sn_w, name_w] + [sub_w] * (len(group) + tail)
         t = Table(data, colWidths=widths, repeatRows=1)
-        t.setStyle(TableStyle([
+        style = [
             ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 1), (-1, nrows), 9.5),
-            ('FONTSIZE', (0, nrows + 1), (-1, -1), 8.5),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('BACKGROUND', (0, 0), (-1, 0), _HEAD),
-            ('BACKGROUND', (0, nrows + 1), (-1, -1), _FOOT),
             ('TOPPADDING', (0, 0), (-1, -1), 2.5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
-        ]))
+        ]
+        if show_summary:
+            style.append(('FONTSIZE', (0, nrows + 1), (-1, -1), 8.5))
+            style.append(('BACKGROUND', (0, nrows + 1), (-1, -1), _FOOT))
+        t.setStyle(TableStyle(style))
         e.append(t)
         if not last:
             e.append(PageBreak())
@@ -134,8 +147,65 @@ def broadsheet_pdf(bs, exam, school, show_title=True, per=8):
     return buf
 
 
-def result_slips_pdf(slips, exam, school, show_title=True):
-    """One A4 "Statement of Result" per student."""
+def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None, per=8):
+    """A blank recording sheet: student names down the side, every offered subject
+    across the top, empty cells to write scores in. Subjects a student does not
+    offer are shaded out so they're not filled by mistake."""
+    _styles()
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm,
+                            bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
+                            title=f'Blank broadsheet — {exam.display_name}')
+    groups = _groups(subjects, per)
+    usable = landscape(A4)[0] - 16 * mm
+    e = []
+    for gi, group in enumerate(groups):
+        sub = f'{exam.display_name} — Recording Sheet'
+        if len(groups) > 1:
+            sub += f' (Sheet {gi + 1} of {len(groups)})'
+        _school_header(e, school, opts, sub)
+
+        sn_w, name_w = 9 * mm, 56 * mm
+        sub_w = (usable - sn_w - name_w) / len(group)
+        header = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
+        header += [Paragraph(s, _S['colhead']) for s in group]
+        data = [header]
+        shaded = []                       # (row, col) cells to grey out
+        for i, st in enumerate(students, 1):
+            line = [str(i), Paragraph(st.full_name, _S['name'])]
+            take = offered.get(st.id) or set()
+            for ci, s in enumerate(group):
+                line.append('')
+                if take and s not in take:
+                    shaded.append((2 + ci, i))     # col index, row index
+            data.append(line)
+
+        widths = [sn_w, name_w] + [sub_w] * len(group)
+        t = Table(data, colWidths=widths, repeatRows=1, rowHeights=[None] + [9 * mm] * len(students))
+        style = [
+            ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (0, 0), (-1, 0), _HEAD),
+            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ]
+        for col, rw in shaded:
+            style.append(('BACKGROUND', (col, rw), (col, rw), _SHADE))
+        t.setStyle(TableStyle(style))
+        e.append(t)
+        if gi != len(groups) - 1:
+            e.append(PageBreak())
+    doc.build(e)
+    buf.seek(0)
+    return buf
+
+
+def result_slips_pdf(slips, exam, school, opts=None):
+    """One A4 "Statement of Result" per student. ``opts`` toggles the summary box
+    and signature lines (plus the shared school-identity / banner blocks)."""
     _styles()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=12 * mm, bottomMargin=12 * mm,
@@ -143,12 +213,14 @@ def result_slips_pdf(slips, exam, school, show_title=True):
                             title=f'Results — {exam.display_name}')
     e = []
     session = exam.session.name if exam.session else ''
+    show_summary = _opt(opts, 'summary')
+    show_sign = _opt(opts, 'signatures')
     for idx, slip in enumerate(slips):
         student, s = slip['student'], slip['summary']
         sub = f'{exam.display_name} — Statement of Result'
         if session:
             sub += f' · {session}'
-        _school_header(e, school, show_title, sub)
+        _school_header(e, school, opts, sub)
 
         meta = [
             [Paragraph(f'<b>Name:</b> {student.full_name}', _S['cell']),
@@ -185,32 +257,34 @@ def result_slips_pdf(slips, exam, school, show_title=True):
             e.append(t)
             e.append(Spacer(1, 6))
 
-            core = ', '.join(s.get('missing_core') or []) or 'None'
-            summ = [
-                [Paragraph(f"<b>Subjects:</b> {s['subjects']}", _S['cell']),
-                 Paragraph(f"<b>Credits (C6+):</b> {s['credits']}", _S['cell'])],
-                [Paragraph(f"<b>Distinctions (A1–B3):</b> {s['distinctions']}", _S['cell']),
-                 Paragraph(f"<b>Average:</b> {s['average_score'] if s['average_score'] is not None else '—'}%", _S['cell'])],
-                [Paragraph(f"<b>5 credits incl. English &amp; Maths:</b> {'YES' if s['has_5_incl_core'] else 'NO'}", _S['cell']),
-                 Paragraph(f"<b>Missing core:</b> {core}", _S['cell'])],
-            ]
-            st = Table(summ, colWidths=[95 * mm, 87 * mm])
-            st.setStyle(TableStyle([
-                ('BOX', (0, 0), (-1, -1), 0.7, _BLACK),
-                ('INNERGRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#cccccc')),
-                ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ]))
-            e.append(st)
+            if show_summary:
+                core = ', '.join(s.get('missing_core') or []) or 'None'
+                summ = [
+                    [Paragraph(f"<b>Subjects:</b> {s['subjects']}", _S['cell']),
+                     Paragraph(f"<b>Credits (C6+):</b> {s['credits']}", _S['cell'])],
+                    [Paragraph(f"<b>Distinctions (A1–B3):</b> {s['distinctions']}", _S['cell']),
+                     Paragraph(f"<b>Average:</b> {s['average_score'] if s['average_score'] is not None else '—'}%", _S['cell'])],
+                    [Paragraph(f"<b>5 credits incl. English &amp; Maths:</b> {'YES' if s['has_5_incl_core'] else 'NO'}", _S['cell']),
+                     Paragraph(f"<b>Missing core:</b> {core}", _S['cell'])],
+                ]
+                stbl = Table(summ, colWidths=[95 * mm, 87 * mm])
+                stbl.setStyle(TableStyle([
+                    ('BOX', (0, 0), (-1, -1), 0.7, _BLACK),
+                    ('INNERGRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#cccccc')),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ]))
+                e.append(stbl)
         else:
             e.append(Paragraph('No results recorded for this student.', _S['cell']))
 
-        e.append(Spacer(1, 22))
-        sign = Table([[Paragraph('_______________________<br/>Class Teacher', _S['cell']),
-                       Paragraph('_______________________<br/>Principal', _S['cell'])]],
-                     colWidths=[91 * mm, 91 * mm])
-        sign.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
-        e.append(sign)
+        if show_sign:
+            e.append(Spacer(1, 22))
+            sign = Table([[Paragraph('_______________________<br/>Class Teacher', _S['cell']),
+                           Paragraph('_______________________<br/>Principal', _S['cell'])]],
+                         colWidths=[91 * mm, 91 * mm])
+            sign.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+            e.append(sign)
         if idx != len(slips) - 1:
             e.append(PageBreak())
     if not slips:

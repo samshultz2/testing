@@ -10,6 +10,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ url_for('mock_waec.broadsheet', exam_id=exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-table-list"></i> Broadsheet</a>
+        <a href="{{ url_for('mock_waec.broadsheet_blank', exam_id=exam.id) }}" class="btn btn-secondary btn-sm" title="Blank recording sheet"><i class="fas fa-table-list"></i> Blank sheet</a>
         <a href="{{ url_for('mock_waec.result_slips_all', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-print"></i> Print results</a>
         <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
         <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-cells"></i> Grid entry</a>

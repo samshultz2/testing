@@ -225,3 +225,28 @@ def test_result_slip_and_print_views(app):
     # Download variant attaches the file.
     dl = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?download=1')
     assert 'attachment' in dl.headers.get('Content-Disposition', '')
+
+
+def test_blank_recording_sheet_and_pdf_options(app):
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=22)
+    sid = _student(app, 'BK' + uuid.uuid4().hex[:5].upper(), 'Ola', 'Blank')
+    enroll_sss3(app, sid)
+    with app.app_context():
+        st = db.session.get(Student, sid)
+        st.waec_subjects = 'Mathematics,English Language,Biology'
+        db.session.commit()
+    c = _admin(app)
+
+    # Blank recording sheet: a PDF even with no results recorded yet.
+    bp = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank')
+    assert bp.status_code == 200 and 'Include in the PDF' in bp.get_data(as_text=True)
+    r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf')
+    assert r.status_code == 200 and r.headers['Content-Type'] == 'application/pdf'
+    assert r.get_data()[:5] == b'%PDF-'
+
+    # Detail flags are accepted on every results PDF and still render.
+    _seed_results(app, exam_id, sid, {'Mathematics': 70})
+    for q in ('address=0&contact=0&motto=0&summary=0&title=0',):
+        assert c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?{q}').status_code == 200
+        assert c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip.pdf?{q}&signatures=0').status_code == 200
