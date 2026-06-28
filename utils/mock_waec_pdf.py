@@ -70,8 +70,6 @@ def _styles():
                                 alignment=TA_CENTER, spaceAfter=6, fontName='Helvetica-Bold')
     _S['colhead'] = ParagraphStyle('ch', parent=base['Normal'], fontSize=7.5, leading=8.5,
                                    alignment=TA_CENTER, fontName='Helvetica-Bold')
-    _S['subhead'] = ParagraphStyle('sh', parent=base['Normal'], fontSize=6.5, leading=7,
-                                   alignment=TA_CENTER, fontName='Helvetica-Bold')
     _S['name'] = ParagraphStyle('nm', parent=base['Normal'], fontSize=8.5, leading=9.5,
                                 fontName='Helvetica-Bold')
     _S['cell'] = ParagraphStyle('c', parent=base['Normal'], fontSize=10)
@@ -80,6 +78,14 @@ def _styles():
 
 def _opt(opts, key, default=True):
     return default if opts is None else opts.get(key, default)
+
+
+def _short_name(st):
+    """Surname + first name only for the broadsheet name column — the middle name
+    is dropped so the column can stay narrow and leave more room for the score /
+    grade boxes."""
+    parts = [st.surname or '', st.first_name or '']
+    return ' '.join(p for p in parts if p).strip() or st.full_name
 
 
 def _school_header(e, school, opts, subtitle):
@@ -177,7 +183,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
             header += [_VHead('Credits'), _VHead('Average %')]
         data = [header]
         for i, row in enumerate(bs['rows'], 1):
-            line = [str(i), Paragraph(row['student'].full_name, _S['name'])]
+            line = [str(i), Paragraph(_short_name(row['student']), _S['name'])]
             for s in group:
                 r = row['cells'].get(s)
                 line.append(f'{r.score} {r.grade}' if (r and r.score is not None) else '')
@@ -252,10 +258,12 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f'Blank broadsheet — {exam.display_name}')
     usable = page[0] - 16 * mm
-    sn_w, name_w = 8 * mm, 46 * mm
+    # Surname + first name only, so the name column can be narrow and hand more
+    # width to the Score/Grade boxes.
+    sn_w, name_w = 8 * mm, 34 * mm
     # Two writable columns (Score + Grade) per subject. Reserve only ~13mm per
     # subject so the full WAEC set fits one landscape sheet; columns narrow before
-    # the sheet splits. (~6.5mm per Score/Grade column at the full load.)
+    # the sheet splits.
     per = _fit_per(usable, sn_w, name_w, 0, 13 * mm, per, len(subjects))
     groups = _groups(subjects, per)
     nstud = len(students)
@@ -275,11 +283,11 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
         h2 = ['', '']
         for s in group:
             h1 += [_VHead(s), '']
-            h2 += [Paragraph('Sc', _S['subhead']), Paragraph('Gr', _S['subhead'])]
+            h2 += [_VHead('Score', size=7), _VHead('Grade', size=7)]   # vertical sub-labels
         data = [h1, h2]
         shaded = []
         for i, st in enumerate(students, 1):
-            line = [str(i), Paragraph(st.full_name, _S['name'])]
+            line = [str(i), Paragraph(_short_name(st), _S['name'])]
             take = offered.get(st.id) or set()
             for ci, s in enumerate(group):
                 line += ['', '']
@@ -300,7 +308,10 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
         widths = [sn_w, name_w] + [cell_w] * (2 * len(group))
         heights = ([None, None] + [8.5 * mm] * nstud + [8.5 * mm] * _EXTRA_ROWS
                    + ([8.5 * mm] * len(_BLANK_SUMMARY) if show_summary else []))
-        t = Table(data, colWidths=widths, repeatRows=2, rowHeights=heights)
+        # repeatRows=0: the column labels (subjects, Score/Grade, S/N, Name) appear
+        # only on the first page — when the roster overflows onto further pages the
+        # students continue without the header band repeating.
+        t = Table(data, colWidths=widths, repeatRows=0, rowHeights=heights)
         style = [
             ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
