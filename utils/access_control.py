@@ -341,12 +341,23 @@ def page_can_write():
     return module_level(module) == 'edit'
 
 
+# Graduate / current-SSS3-comparison endpoints. These live under the promotion
+# blueprint but must also be reachable by SSS3 form teachers, who do not normally
+# hold the 'promotion' module — so the module gate defers to can_access_graduates().
+_GRADUATE_ENDPOINTS = {
+    'promotion.graduates_list', 'promotion.graduate_profile',
+    'promotion.graduate_compare',
+}
+
+
 def enforce_module_access():
     """before_request gate: block non-admins from modules they lack."""
     if not session.get('logged_in') or is_admin():
         return None
     endpoint = request.endpoint
     if not endpoint or endpoint in _ALWAYS_ALLOWED_ENDPOINTS:
+        return None
+    if endpoint in _GRADUATE_ENDPOINTS and can_access_graduates():
         return None
     blueprint = endpoint.split('.')[0]
     module = BLUEPRINT_MODULE.get(blueprint)
@@ -659,6 +670,17 @@ def assert_student_access(student):
         abort(403)
 
 
+def assert_graduate_access(student):
+    """Abort 403 unless the current user may view THIS graduate. Graduates are no
+    longer form-enrolled, so the normal form-teacher student filter would wrongly
+    exclude them; instead require the graduate gate (admin / SSS3 form teacher)
+    plus branch scope."""
+    from utils.branch_scope import require_branch_access
+    if not can_access_graduates():
+        abort(403)
+    require_branch_access(student.branch_id)
+
+
 def can_view_student_details():
     """Check if current user can view student details"""
     if is_admin():
@@ -682,6 +704,30 @@ def is_sss3_form_teacher():
         if caa and caa.school_class and caa.school_class.name == 'SSS3':
             return True
     return False
+
+
+def can_access_graduates():
+    """Who may see graduates and the current-SSS3 comparison: a branch admin, a
+    central admin, or a teacher who is form teacher of an SSS3 class. Graduate
+    data and the cross-cohort analysis are sensitive and SSS3-specific, so plain
+    teachers / other staff are excluded even though they can log in."""
+    return is_admin() or is_sss3_form_teacher()
+
+
+def graduates_access_required(f):
+    """Gate a route to branch/central admins and SSS3 form teachers only."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('logged_in'):
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('auth.login'))
+        if not can_access_graduates():
+            if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+                abort(403)
+            flash('Graduate records are restricted to admins and SSS3 form teachers.', 'error')
+            return redirect(url_for('main.dashboard'))
+        return f(*args, **kwargs)
+    return wrapper
 
 
 def auto_select_assignment(assignments):

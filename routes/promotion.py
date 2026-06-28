@@ -9,7 +9,9 @@ from models import (
     SchoolSettings, ClassArm
 )
 from utils.helpers import login_required, get_sss3_enrolled_students, safe_redirect
-from utils.access_control import admin_required
+from utils.access_control import (
+    admin_required, graduates_access_required, assert_graduate_access,
+)
 from utils.branch_scope import scope_query, scope_by_student
 from utils.db_tx import safe_transaction
 from utils.audit import log_action
@@ -55,11 +57,11 @@ def _sessions_json():
 # ============================================================================
 
 @promotion_bp.route('/graduates')
-@login_required
+@graduates_access_required
 def graduates_list():
     """List all graduated students"""
     session_id = request.args.get('session_id', type=int)
-    
+
     sessions = AcademicSession.query.order_by(AcademicSession.id.desc()).all()
 
     from utils.branch_scope import scope_query
@@ -67,12 +69,13 @@ def graduates_list():
 
     if session_id:
         query = query.filter_by(graduation_session_id=session_id)
-    
+
     graduates = query.order_by(Student.surname, Student.first_name).all()
 
     return _render({
         'page': 'graduates', 'session_id': session_id or '', 'sessions': _sessions_json(),
         'preview_url': url_for('promotion.graduate_sss3_preview'),
+        'compare_url': url_for('promotion.graduate_compare'),
         'graduates': [{
             'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id, 'gender': s.gender,
             'graduation_date': s.graduation_date.strftime('%d %b %Y') if s.graduation_date else None,
@@ -167,14 +170,13 @@ def graduate_sss3():
 
 
 @promotion_bp.route('/graduates/<int:student_id>')
-@login_required
+@graduates_access_required
 def graduate_profile(student_id):
     """View graduate profile with all external results"""
     from models import WAECResult, JAMBResult
-    from utils.access_control import assert_student_access
 
     student = db.get_or_404(Student, student_id)
-    assert_student_access(student)   # branch + form-teacher scope
+    assert_graduate_access(student)   # admin / SSS3 form teacher, branch-scoped
 
     # Get WAEC results
     waec_results = WAECResult.query.filter_by(student_id=student_id).order_by(
@@ -224,6 +226,38 @@ def graduate_profile(student_id):
                  'full_profile': url_for('main.view_student', student_id=student.id),
                  'add_waec': url_for('results.add_waec') + f'?student_id={student.id}',
                  'add_jamb': url_for('results.add_jamb') + f'?student_id={student.id}'},
+    })
+
+
+@promotion_bp.route('/graduates/compare')
+@graduates_access_required
+def graduate_compare():
+    """Compare a graduate cohort's mock & real WAEC/JAMB with the current SSS3
+    class — credit patterns, pass rates, grade spreads and a data-grounded
+    projection of where the current class is tracking. Restricted to branch /
+    central admins and SSS3 form teachers, branch-scoped throughout."""
+    from models.graduate_compare import compare_cohorts
+    from utils.branch_scope import scope_query
+
+    session_id = request.args.get('session_id', type=int)
+
+    grad_q = scope_query(Student.query.filter_by(is_active=True, is_graduated=True), Student)
+    if session_id:
+        grad_q = grad_q.filter_by(graduation_session_id=session_id)
+    grad_ids = [s.id for s in grad_q.all()]
+
+    # Current SSS3 (already branch/section/term scoped, graduates excluded).
+    sss3 = [s for s in get_sss3_enrolled_students() if not s.is_graduated]
+    sss3_ids = [s.id for s in sss3]
+
+    data = compare_cohorts(grad_ids, sss3_ids)
+
+    return _render({
+        'page': 'graduate_compare', 'session_id': session_id or '',
+        'sessions': _sessions_json(),
+        'urls': {'graduates': url_for('promotion.graduates_list'),
+                 'self': url_for('promotion.graduate_compare')},
+        'comparison': data,
     })
 
 

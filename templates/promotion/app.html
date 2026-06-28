@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set _t = {'index':'Promotion','rules':'Rules','add_rule':'Add Rule','process':'Process','graduates':'Graduates','graduate_preview':'Graduate SSS3','graduate_profile':'Graduate Profile','history':'History'} %}
+{% set _t = {'index':'Promotion','rules':'Rules','add_rule':'Add Rule','process':'Process','graduates':'Graduates','graduate_preview':'Graduate SSS3','graduate_profile':'Graduate Profile','graduate_compare':'Compare with SSS3','history':'History'} %}
 {% block title %}{{ _t.get(promo_json.page,'Promotion') }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}
 {% if promo_json.page == 'index' %}<span>Promotion</span>

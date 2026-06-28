@@ -276,6 +276,13 @@ def create_app(config_class=None):
             except Exception:
                 return False
 
+        def can_access_graduates():
+            try:
+                from utils.access_control import can_access_graduates as _f
+                return _f()
+            except Exception:
+                return False
+
         def branch_context():
             """Header branch switcher state."""
             try:
@@ -324,6 +331,7 @@ def create_app(config_class=None):
             'page_can_write': page_can_write(),
             'can_generate_timetable': can_generate_timetable(),
             'can_generate_result_cards': can_generate_result_cards(),
+            'can_access_graduates': can_access_graduates(),
             'branch_ctx': branch_context(),
             'current_theme': current_theme(),
             'themes': THEMES,

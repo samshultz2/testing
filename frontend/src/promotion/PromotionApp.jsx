@@ -282,7 +282,10 @@ function Graduates({ d }) {
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
   return (
     <>
-      <PageHeader title="Graduates" actions={<a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>} />
+      <PageHeader title="Graduates" actions={<>
+        {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
+        <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>
+      </>} />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">Graduation Session</label>
           <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value })}>
@@ -441,8 +444,163 @@ function History({ d }) {
   );
 }
 
+// ---- Graduate vs SSS3 comparison -------------------------------------------
+// One metric row: a labelled value for each cohort, with the better side hinted.
+function CompareRow({ label, g, s, suffix = '', better = 'high', sNote }) {
+  const fmt = (v) => (v == null ? '—' : v + suffix);
+  let gHi = false, sHi = false;
+  if (g != null && s != null && g !== s) {
+    const gWins = better === 'high' ? g > s : g < s;
+    gHi = gWins; sHi = !gWins;
+  }
+  const cell = (v, hi) => <td style={{ textAlign: 'right', fontWeight: hi ? 700 : 400, color: hi ? 'var(--success, #2e7d32)' : 'inherit' }}>{fmt(v)}</td>;
+  return (
+    <tr>
+      <td>{label}</td>
+      {cell(g, gHi)}
+      {s == null && sNote ? <td style={{ textAlign: 'right' }} className="text-muted">{sNote}</td> : cell(s, sHi)}
+    </tr>
+  );
+}
+
+function WaecCompareTable({ g, s }) {
+  const sNull = s == null;
+  return (
+    <table className="data-table">
+      <thead><tr><th>Metric</th><th style={{ textAlign: 'right' }}>Graduates</th><th style={{ textAlign: 'right' }}>Current SSS3</th></tr></thead>
+      <tbody>
+        <CompareRow label="Students with results" g={g ? g.n : 0} s={sNull ? null : s.n} sNote={sNull ? 'no real WAEC yet' : ''} />
+        <CompareRow label="Avg credits (C6+)" g={g ? g.avg_credits : null} s={sNull ? null : s.avg_credits} sNote={sNull ? '—' : ''} />
+        <CompareRow label="Avg distinctions (B3+)" g={g ? g.avg_distinctions : null} s={sNull ? null : s.avg_distinctions} sNote={sNull ? '—' : ''} />
+        <CompareRow label="% with 5+ credits" g={g ? g.pct_5_credits : null} s={sNull ? null : s.pct_5_credits} suffix="%" sNote={sNull ? '—' : ''} />
+        <CompareRow label="% with 5 incl. Eng & Maths" g={g ? g.pct_5_incl_core : null} s={sNull ? null : s.pct_5_incl_core} suffix="%" sNote={sNull ? '—' : ''} />
+      </tbody>
+    </table>
+  );
+}
+
+function JambCompareTable({ g, s }) {
+  const sNull = s == null;
+  return (
+    <table className="data-table">
+      <thead><tr><th>Metric</th><th style={{ textAlign: 'right' }}>Graduates</th><th style={{ textAlign: 'right' }}>Current SSS3</th></tr></thead>
+      <tbody>
+        <CompareRow label="Students with results" g={g ? g.n : 0} s={sNull ? null : s.n} sNote={sNull ? 'no real JAMB yet' : ''} />
+        <CompareRow label="Average score" g={g ? g.avg_score : null} s={sNull ? null : s.avg_score} sNote={sNull ? '—' : ''} />
+        <CompareRow label="Highest score" g={g ? g.max_score : null} s={sNull ? null : s.max_score} sNote={sNull ? '—' : ''} />
+        <CompareRow label="% scoring 180+" g={g ? g.pct_above_floor : null} s={sNull ? null : s.pct_above_floor} suffix="%" sNote={sNull ? '—' : ''} />
+      </tbody>
+    </table>
+  );
+}
+
+function GradeDistRow({ name, g, s, order }) {
+  const cells = (dist) => order.map((gr) => <td key={gr} style={{ textAlign: 'center' }}>{dist && dist[gr] ? dist[gr] : '·'}</td>);
+  return (<>
+    <tr><td colSpan={order.length + 1} style={{ background: 'var(--bg-tertiary)', fontWeight: 600 }}>{name}</td></tr>
+    <tr><td className="text-muted">Graduates</td>{cells(g)}</tr>
+    {s && <tr><td className="text-muted">Current SSS3</td>{cells(s)}</tr>}
+  </>);
+}
+
+function GraduateCompare({ d }) {
+  const nav = useNav();
+  const c = d.comparison;
+  const cohorts = c.cohorts;
+  const noData = cohorts.graduates.total === 0;
+  const dirBadge = (p) => {
+    if (!p) return null;
+    const cls = p.direction === 'improved' ? 'badge-success' : p.direction === 'declined' ? 'badge-danger' : 'badge-secondary';
+    const sign = p.avg_delta > 0 ? '+' : '';
+    return <span className={'badge ' + cls}>{p.direction} ({sign}{p.avg_delta})</span>;
+  };
+  return (
+    <>
+      <PageHeader title="Graduates vs Current SSS3"
+        actions={<a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
+      <div className="card mb-3"><div className="card-body"><div className="filter-form">
+        <div className="form-group"><label className="form-label">Graduate cohort (session)</label>
+          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
+            <option value="">All graduates</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+      </div></div></div>
+
+      <div className="stats-grid mb-3">
+        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-graduation-cap" /></div>
+          <div className="stat-content"><h3>{cohorts.graduates.total}</h3><p>{cohorts.graduates.label}</p></div></div>
+        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-users" /></div>
+          <div className="stat-content"><h3>{cohorts.sss3.total}</h3><p>{cohorts.sss3.label}</p></div></div>
+      </div>
+
+      {noData ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="No graduates to compare">
+          <p>Once a cohort has been graduated (with mock/real results recorded), this page compares them against the current SSS3 class.</p></Empty></div></div>
+      ) : (<>
+        <div className="card mb-3"><div className="card-body">
+          <p className="text-muted" style={{ margin: 0 }}><i aria-hidden="true" className="fas fa-circle-info" /> Real WAEC/JAMB exists only for graduates. The <strong>mock</strong> rows compare both cohorts on the same exams; the graduates' mock→real pattern below projects where the current class may land.</p>
+        </div></div>
+
+        {/* WAEC */}
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC — Real</h3></div>
+          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><WaecCompareTable g={c.real_waec.graduates} s={c.real_waec.sss3} /></div></div></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC — Mock (latest sitting)</h3></div>
+          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><WaecCompareTable g={c.mock_waec.graduates} s={c.mock_waec.sss3} /></div></div></div>
+
+        {/* Grade spread */}
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> WAEC grade spread</h3></div>
+          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table">
+            <thead><tr><th>Cohort</th>{c.grade_order.map((g) => <th key={g} style={{ textAlign: 'center' }}>{g}</th>)}</tr></thead>
+            <tbody>
+              <GradeDistRow name="Real WAEC" order={c.grade_order} g={c.real_waec.graduates && c.real_waec.graduates.grade_distribution} s={null} />
+              <GradeDistRow name="Mock WAEC" order={c.grade_order} g={c.mock_waec.graduates && c.mock_waec.graduates.grade_distribution} s={c.mock_waec.sss3 && c.mock_waec.sss3.grade_distribution} />
+            </tbody>
+          </table></div></div></div>
+
+        {/* JAMB */}
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB — Real</h3></div>
+          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><JambCompareTable g={c.real_jamb.graduates} s={c.real_jamb.sss3} /></div></div></div>
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB — Mock (best)</h3></div>
+          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><JambCompareTable g={c.mock_jamb.graduates} s={c.mock_jamb.sss3} /></div></div></div>
+
+        {/* Pattern + projection */}
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-arrow-trend-up" /> Mock → Real pattern (graduates) &amp; projection</h3></div>
+          <div className="card-body">
+            <div className="info-grid">
+              <div className="info-row"><span className="text-muted">WAEC credits: real vs mock</span><strong>{c.pattern.waec_credits ? dirBadge(c.pattern.waec_credits) : <span className="text-muted">not enough paired data</span>}</strong></div>
+              {c.pattern.waec_credits && <div className="info-row"><span className="text-muted">Graduates who beat their mock (WAEC)</span><strong>{c.pattern.waec_credits.pct_improved}% of {c.pattern.waec_credits.n}</strong></div>}
+              <div className="info-row"><span className="text-muted">JAMB score: real vs mock</span><strong>{c.pattern.jamb_score ? dirBadge(c.pattern.jamb_score) : <span className="text-muted">not enough paired data</span>}</strong></div>
+              {c.pattern.jamb_score && <div className="info-row"><span className="text-muted">Graduates who beat their mock (JAMB)</span><strong>{c.pattern.jamb_score.pct_improved}% of {c.pattern.jamb_score.n}</strong></div>}
+            </div>
+            {(c.projection.waec || c.projection.jamb) && (
+              <div className="card mt-3" style={{ background: 'var(--bg-tertiary)' }}><div className="card-body">
+                <h4 style={{ marginTop: 0 }}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Projection for current SSS3</h4>
+                <p className="text-muted text-sm">Applying the graduates' mock→real shift to the current class's mock averages.</p>
+                {c.projection.waec && <p>WAEC credits: mock avg <strong>{c.projection.waec.mock_avg_credits}</strong> → projected real <strong>{c.projection.waec.projected_avg_credits}</strong> <span className="text-muted">(shift {c.projection.waec.shift > 0 ? '+' : ''}{c.projection.waec.shift}, from {c.projection.waec.basis_n} graduates)</span></p>}
+                {c.projection.jamb && <p>JAMB score: mock avg <strong>{c.projection.jamb.mock_avg_score}</strong> → projected real <strong>{c.projection.jamb.projected_avg_score}</strong> <span className="text-muted">(shift {c.projection.jamb.shift > 0 ? '+' : ''}{c.projection.jamb.shift}, from {c.projection.jamb.basis_n} graduates)</span></p>}
+              </div></div>
+            )}
+          </div></div>
+
+        {/* Subject pass rates side by side */}
+        {(c.mock_waec.graduates.subject_pass_rates.length > 0 || (c.mock_waec.sss3 && c.mock_waec.sss3.subject_pass_rates.length > 0)) && (
+          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-list-check" /> Mock WAEC subject pass rates</h3></div>
+            <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table">
+              <thead><tr><th>Subject</th><th style={{ textAlign: 'right' }}>Graduates</th><th style={{ textAlign: 'right' }}>Current SSS3</th></tr></thead>
+              <tbody>{(() => {
+                const gMap = {}; c.mock_waec.graduates.subject_pass_rates.forEach((r) => { gMap[r.subject] = r.pass_rate; });
+                const sMap = {}; (c.mock_waec.sss3 ? c.mock_waec.sss3.subject_pass_rates : []).forEach((r) => { sMap[r.subject] = r.pass_rate; });
+                const subjects = Array.from(new Set([...Object.keys(gMap), ...Object.keys(sMap)])).sort();
+                return subjects.map((sub) => <CompareRow key={sub} label={sub} g={gMap[sub] != null ? gMap[sub] : null} s={sMap[sub] != null ? sMap[sub] : null} suffix="%" />);
+              })()}</tbody>
+            </table></div></div></div>
+        )}
+      </>)}
+    </>
+  );
+}
+
 const SCREENS = { index: Index, rules: Rules, add_rule: AddRule, process: Process,
-  graduates: Graduates, graduate_preview: GraduatePreview, graduate_profile: GraduateProfile, history: History };
+  graduates: Graduates, graduate_preview: GraduatePreview, graduate_profile: GraduateProfile,
+  graduate_compare: GraduateCompare, history: History };
 
 export default function PromotionApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
