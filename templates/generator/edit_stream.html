@@ -58,7 +58,7 @@
                         <td style="text-align: center;">
                             <input type="checkbox" name="subject_ids[]" value="{{ subject.id }}" 
                                    {% if stream_subj %}checked{% endif %}
-                                   onchange="toggleRow({{ subject.id }}, this.checked)">
+                                   data-call="toggleRow" data-args="{{ subject.id }}|this.checked" data-on="change">
                         </td>
                         <td>
                             {{ subject.name }}
@@ -110,7 +110,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function toggleRow(subjectId, enabled) {
     var inputs = document.querySelectorAll('.stream-input-' + subjectId);
     inputs.forEach(function(input) {

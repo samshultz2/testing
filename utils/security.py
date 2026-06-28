@@ -357,6 +357,21 @@ def csrf_protect(f):
 # SECURITY HEADERS
 # =============================================================================
 
+def get_csp_nonce():
+    """Per-request CSP nonce, created lazily and memoised on ``g``. The template
+    context processor and the response-header builder both call this, so the
+    `<script nonce>` value in the HTML matches the `script-src 'nonce-…'` header."""
+    from flask import g, has_request_context
+    import secrets
+    if not has_request_context():
+        return ''
+    n = getattr(g, '_csp_nonce', None)
+    if n is None:
+        n = secrets.token_urlsafe(16)
+        g._csp_nonce = n
+    return n
+
+
 def add_security_headers(response):
     """Add security headers to response"""
     # Prevent clickjacking
@@ -368,15 +383,16 @@ def add_security_headers(response):
     # Referrer policy
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     # Content Security Policy.
-    # NOTE: script-src still allows 'unsafe-inline'/'unsafe-eval' because the app
-    # has many inline <script> blocks; removing them safely requires a per-request
-    # nonce on every inline script (tracked as audit H5 — deferred to avoid
-    # breaking the UI). The directives below add the *non-breaking* hardening:
-    # block plugins/objects, lock <base>, and forbid being framed or posting forms
-    # cross-origin.
+    # script-src is nonce-based: inline <script> blocks carry nonce="{{ csp_nonce }}"
+    # and all former inline on* handlers were moved to event listeners
+    # (static/js/csp-behaviors.js), so 'unsafe-inline' and 'unsafe-eval' are gone —
+    # an injected <script> or inline handler no longer executes. style-src keeps
+    # 'unsafe-inline' (many inline style="" attributes; nonces don't cover those and
+    # the XSS value is far lower for styles).
+    nonce = get_csp_nonce()
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
         "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
         "img-src 'self' data: blob:; "

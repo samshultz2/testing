@@ -78,6 +78,27 @@ def test_contributions_student_detail_is_branch_scoped(app):
     assert cc.get(f'/contributions/api/student/{sB}/info').status_code == 200
 
 
+def test_csp_is_nonce_based_no_unsafe_inline(app):
+    """script-src must be nonce-based with no 'unsafe-inline'/'unsafe-eval', and the
+    nonce in the header must match the nonce on the page's inline <script> tags."""
+    import re
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['logged_in'] = True
+        s['role'] = 'super_admin'
+    r = c.get('/students')
+    csp = r.headers.get('Content-Security-Policy', '')
+    script_src = next((d for d in csp.split(';') if 'script-src' in d), '')
+    assert "'unsafe-inline'" not in script_src
+    assert "'unsafe-eval'" not in script_src
+    m = re.search(r"'nonce-([A-Za-z0-9_-]+)'", script_src)
+    assert m, f'no nonce in script-src: {script_src!r}'
+    body = r.get_data(as_text=True)
+    body_nonces = set(re.findall(r'<script[^>]*nonce="([^"]+)"', body))
+    # every inline <script> on the page carries exactly the header's nonce
+    assert body_nonces == {m.group(1)}
+
+
 def test_export_endpoint_is_rate_limited(app):
     from utils.security import login_limiter
     cc, _ = _central_admin(app)

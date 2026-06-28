@@ -57,7 +57,7 @@
         {% block content %}{% endblock %}
     </div>
     {% block scripts %}{% endblock %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function(){
         var b=document.getElementById('pmenuBtn'), p=document.getElementById('pmenuPanel');
         if(!b||!p) return;
@@ -68,7 +68,7 @@
     })();
     </script>
     {% if session.get('cbt_student_id') %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Best-effort device fingerprint for exam-integrity investigations.
     (function(){
         var token=document.querySelector('meta[name=csrf-token]').content;

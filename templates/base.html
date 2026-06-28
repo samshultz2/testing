@@ -625,7 +625,7 @@
                     {% else %}
                     <span class="text-muted"><i class="fas fa-clock-rotate-left"></i> View a past session:</span>
                     {% endif %}
-                    <select name="session_id" class="form-control" style="width:auto;" onchange="this.form.submit()">
+                    <select name="session_id" class="form-control" style="width:auto;" data-autosubmit>
                         {% for s in tt.sessions %}
                         <option value="{{ s.id }}" {% if (tt.viewing and tt.viewing.id == s.id) or (not tt.viewing and tt.live and tt.live.id == s.id) %}selected{% endif %}>{{ s.name }}{% if tt.live and tt.live.id == s.id %} (current){% endif %}</option>
                         {% endfor %}
@@ -642,7 +642,7 @@
                 <div class="flash-message flash-{{ category }}">
                     <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'error' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %}"></i>
                     <span>{{ message }}</span>
-                    <button class="flash-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                    <button class="flash-close" data-remove-parent><i class="fas fa-times"></i></button>
                 </div>
                 {% endfor %}
             </div>
@@ -659,13 +659,13 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Confirm</h3>
-                <button class="modal-close" onclick="closeModal('confirmModal')"><i class="fas fa-times"></i></button>
+                <button class="modal-close" data-call="closeModal" data-args="'confirmModal'"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
                 <p id="confirmMessage">Are you sure?</p>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+                <button class="btn btn-secondary" data-call="closeModal" data-args="'confirmModal'">Cancel</button>
                 <button class="btn btn-danger" id="confirmBtn">Confirm</button>
             </div>
         </div>
@@ -762,7 +762,7 @@
     }
     </style>
     
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // CSRF: attach the session token to every form submit and same-origin fetch.
     (function () {
         var meta = document.querySelector('meta[name="csrf-token"]');
@@ -809,7 +809,7 @@
         });
     })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Register the PWA service worker (installable + offline page caching).
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
@@ -929,7 +929,7 @@
         .page-content{padding-bottom:4.6rem !important;}
     }
     </style>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Lightweight navigation progress bar — better perceived speed on slow networks.
     (function(){
         var bar=document.getElementById('navProgress'); if(!bar) return;
@@ -951,6 +951,10 @@
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script src="{{ url_for('static', filename='js/offline-queue.js') }}"></script>
     <script src="{{ url_for('static', filename='js/spa-nav.js') }}"></script>
+    <!-- CSP-safe declarative behaviours: replaces inline on* handlers so the
+         Content-Security-Policy can drop 'unsafe-inline'. Data-attribute driven,
+         event-delegated, so it also covers dynamically-inserted elements. -->
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/csp-behaviors.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

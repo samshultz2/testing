@@ -101,7 +101,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     <i class="fas fa-user-shield"></i> Supervisor pause active — <span id="pauseLeft"></span>s remaining. <button id="resumeBtn" style="background:#fff;color:#0b3a2b;border:none;border-radius:6px;padding:.2rem .7rem;font-weight:700;cursor:pointer;margin-left:.5rem;">Resume exam</button>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
     var remaining={{ remaining }}, el=document.getElementById('timer'), box=document.getElementById('timerBox');
     var form=document.getElementById('examForm'), submitted=false;

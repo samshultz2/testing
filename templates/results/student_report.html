@@ -34,7 +34,7 @@
 <div class="page-header no-print">
     <div><h1>Exam Report</h1><p class="text-muted text-sm">Consolidated WAEC, JAMB and Mock JAMB record</p></div>
     <div class="page-header-actions">
-        <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Print / Save PDF</button>
+        <button data-print class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Print / Save PDF</button>
         <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>

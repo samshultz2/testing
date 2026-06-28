@@ -53,7 +53,7 @@
 </div></div>
 {% endblock %}
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
     var URL="{{ url_for('cbt.monitor_data', exam_id=e.id) }}";
     var prev={};

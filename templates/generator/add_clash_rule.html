@@ -107,7 +107,7 @@
 @media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById('sourceClass').addEventListener('change', function() {
     const arms = this.options[this.selectedIndex].dataset.arms;
     const armSelect = document.getElementById('sourceArm');

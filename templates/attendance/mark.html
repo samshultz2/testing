@@ -63,7 +63,7 @@
         <form method="GET" action="{{ url_for('attendance.mark_attendance_page') }}" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     <option value="">Select Term</option>
                     {% for term in terms %}
                     <option value="{{ term.id }}" {% if selected_term and term.id == selected_term.id %}selected{% endif %}>{{ term.full_name }}</option>
@@ -72,7 +72,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <select name="assignment_id" class="form-control" data-autosubmit>
                     <option value="">Select Class</option>
                     {% for assignment in assignments %}
                     <option value="{{ assignment.id }}" {% if selected_assignment and assignment.id == selected_assignment.id %}selected{% endif %}>{{ assignment.display_name }}</option>
@@ -81,7 +81,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Date</label>
-                <input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.submit()">
+                <input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" data-autosubmit>
             </div>
         </form>
     </div>
@@ -118,10 +118,10 @@
                     <input type="hidden" name="date" value="{{ target_date.strftime('%Y-%m-%d') }}">
                     <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-copy"></i> Copy Previous</button>
                 </form>
-                <button type="button" class="btn btn-success btn-sm" onclick="markAll('all', true)"><i class="fas fa-check-double"></i> All Present</button>
-                <button type="button" class="btn btn-danger btn-sm" onclick="markAll('all', false)"><i class="fas fa-times"></i> All Absent</button>
-                <button type="button" class="btn btn-outline btn-sm" onclick="markAll('am', true)">All AM</button>
-                <button type="button" class="btn btn-outline btn-sm" onclick="markAll('pm', true)">All PM</button>
+                <button type="button" class="btn btn-success btn-sm" data-call="markAll" data-args="'all'|true"><i class="fas fa-check-double"></i> All Present</button>
+                <button type="button" class="btn btn-danger btn-sm" data-call="markAll" data-args="'all'|false"><i class="fas fa-times"></i> All Absent</button>
+                <button type="button" class="btn btn-outline btn-sm" data-call="markAll" data-args="'am'|true">All AM</button>
+                <button type="button" class="btn btn-outline btn-sm" data-call="markAll" data-args="'pm'|true">All PM</button>
             </div>
 
             <div class="attendance-summary">
@@ -188,7 +188,7 @@
 </div></div>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function markAll(which, val) {
     if (which === 'all' || which === 'am') document.querySelectorAll('.am-box').forEach(cb => cb.checked = val);
     if (which === 'all' || which === 'pm') document.querySelectorAll('.pm-box').forEach(cb => cb.checked = val);

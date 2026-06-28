@@ -58,7 +58,7 @@
                                 <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
-                        <form method="POST" action="{{ url_for('generator.delete_clash_rule', rule_id=rule.id) }}" style="display: inline;" onsubmit="return confirm('Delete this rule?');">
+                        <form method="POST" action="{{ url_for('generator.delete_clash_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                 <i class="fas fa-trash"></i>
@@ -128,7 +128,7 @@
                                 <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
-                        <form method="POST" action="{{ url_for('generator.delete_combined_rule', rule_id=rule.id) }}" style="display: inline;" onsubmit="return confirm('Delete this rule?');">
+                        <form method="POST" action="{{ url_for('generator.delete_combined_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                 <i class="fas fa-trash"></i>

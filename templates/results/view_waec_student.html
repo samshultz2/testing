@@ -472,7 +472,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 {% if waec_summary %}
 {% set years_list = waec_summary.keys()|list|sort(reverse=true) %}
 {% set latest_year = years_list[0] %}

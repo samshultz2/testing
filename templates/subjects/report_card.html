@@ -25,7 +25,7 @@
 <div class="page-header">
     <h1>Report Card</h1>
     <div class="page-header-actions no-print">
-        <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+        <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
         {% if report_data %}<a href="{{ url_for('subjects.report_card_pdf', student_id=student.id, term_id=term_id) }}" class="btn btn-success"><i class="fas fa-file-pdf"></i> Download PDF</a>{% endif %}
         <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary">Back to Student</a>
     </div>
@@ -36,7 +36,7 @@
         <form method="GET" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     <option value="">Select Term</option>
                     {% for term in terms %}
                     <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>

@@ -214,6 +214,10 @@ def create_app(config_class=None):
             if '_csrf_token' not in session:
                 session['_csrf_token'] = secrets.token_hex(32)
             return session['_csrf_token']
+
+        def _csp_nonce_value():
+            from utils.security import get_csp_nonce
+            return get_csp_nonce()
         
         # User access context
         def get_user_permissions():
@@ -324,6 +328,7 @@ def create_app(config_class=None):
             'today': date.today(),
             'app_name': Config.APP_NAME,
             'csrf_token': csrf_token,
+            'csp_nonce': _csp_nonce_value(),
             'user_permissions': get_user_permissions(),
             'can_access_module': can_access_module,
             'can_write_module': can_write_module,

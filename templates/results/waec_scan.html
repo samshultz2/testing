@@ -66,7 +66,7 @@
 </div>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     const input = document.getElementById('resultImage');
     const dz = document.getElementById('dropzone');

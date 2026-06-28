@@ -47,6 +47,22 @@ Critical/High items before any internet-facing deployment.
 
 ## Remediation log
 
+**Pass 3 (2026-06-28) — H5 (full): nonce-based CSP, inline scripts/handlers removed:**
+- `script-src` is now **nonce-based with no `'unsafe-inline'` and no `'unsafe-eval'`**
+  (`utils/security.py`): a per-request nonce (`get_csp_nonce`, memoised on `g`, exposed
+  to templates as `csp_nonce`) is set on every inline `<script>`, and **all 174 inline
+  `on*` handlers were moved to event listeners** — most via a small dependency-free,
+  event-delegated shim (`static/js/csp-behaviors.js`) driven by `data-*` attributes
+  (`data-call`/`data-args`/`data-on`, `data-autosubmit`, `data-confirm`, `data-print`,
+  `data-copy`, `data-remove-*`). An injected `<script>` or inline handler no longer runs.
+- `style-src` intentionally keeps `'unsafe-inline'` (pervasive inline `style=""`; nonces
+  don't cover style attributes and the XSS value is far lower for CSS).
+- Verified with headless Chromium (Playwright) across ~25 pages incl. the React SPAs and
+  the dynamic-row timetable designer: **zero CSP violations**, the `data-call` dispatcher
+  binds args/`this` correctly, and the React bundles + MathJax 3 (`tex-mml-chtml`) load
+  without `'unsafe-eval'`. Regression test in `tests/test_security_hardening.py`.
+  (If a future component genuinely needs eval, re-adding `'unsafe-eval'` is a one-line change.)
+
 **Pass 2 (2026-06-28) — audit of recently-added code + follow-ups:**
 - Re-verified the whole-project posture (CSRF, before_request gates, headers/HSTS,
   login rate-limiting, session flags, branch scoping) — all still in force. A full

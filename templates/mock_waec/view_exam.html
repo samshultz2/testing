@@ -20,7 +20,7 @@
         <a href="{{ url_for('mock_waec.edit_exam', exam_id=exam.id) }}" class="btn btn-warning btn-sm" title="Edit exam"><i class="fas fa-pen"></i> Edit</a>
         {% if user_permissions.is_admin %}
         <form method="post" action="{{ url_for('mock_waec.delete_exam', exam_id=exam.id) }}" style="display:inline;"
-              onsubmit="return confirm('Delete {{ exam.display_name }} and ALL its results? This cannot be undone.');">
+              data-confirm="Delete {{ exam.display_name }} and ALL its results? This cannot be undone.">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger btn-sm" title="Delete exam"><i class="fas fa-trash"></i> Delete</button>
         </form>

@@ -111,7 +111,7 @@
 </div>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById('classSelect').addEventListener('change', function() {
     const classId = this.value;
     const armSelect = document.getElementById('armSelect');

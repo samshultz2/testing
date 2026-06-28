@@ -22,7 +22,7 @@
                     max-width:440px; margin:1rem auto 0;">
             <input id="shareUrl" type="text" readonly value="{{ share_url }}"
                    class="form-control" style="text-align:center; font-weight:600;"
-                   onclick="this.select()">
+                   data-select>
             <button type="button" class="btn btn-primary" id="copyBtn">
                 <i class="fas fa-copy"></i> Copy
             </button>
@@ -43,7 +43,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     var btn = document.getElementById('copyBtn');
     if (!btn) return;

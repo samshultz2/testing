@@ -96,7 +96,7 @@
     </div>
 </form>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   function gradeFromScore(s) {
     if (s === '' || s === null || isNaN(s)) return ['', ''];

@@ -95,7 +95,7 @@
 </style>
 
 <div class="action-buttons no-print">
-    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
     <a href="{{ url_for('generator.export_teacher_image', batch_id=batch_id, teacher_id=teacher.id) }}" class="btn btn-success"><i class="fas fa-image"></i> Download Image</a>
     <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
 </div>

@@ -411,7 +411,7 @@
     <h4><i class="fas fa-trash-alt"></i> Delete Result</h4>
     <p>Permanently delete JAMB result for {{ latest.exam_year }}. This cannot be undone.</p>
     <form method="POST" action="{{ url_for('results.delete_jamb', student_id=student.id, year=latest.exam_year) }}" 
-          onsubmit="return confirm('Delete JAMB result for {{ student.full_name }} ({{ latest.exam_year }})?');">
+          data-confirm="Delete JAMB result for {{ student.full_name }} ({{ latest.exam_year }})?">
         <button type="submit" class="btn btn-danger btn-sm">
             <i class="fas fa-trash"></i> Delete {{ latest.exam_year }} Result
         </button>
@@ -437,7 +437,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 {% if jamb_summary %}
 {% set latest = jamb_summary[0] %}
 document.addEventListener('DOMContentLoaded', function() {

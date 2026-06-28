@@ -211,7 +211,7 @@
                 <input id="subtitle" class="form-control" placeholder="e.g. First Term 2025/2026 — SSS 3">
             </div>
             <div class="form-group" style="align-self:end">
-                <button class="btn btn-primary" onclick="openExport()"><i class="fas fa-download"></i> Download (PDF / image)</button>
+                <button class="btn btn-primary" data-call="openExport"><i class="fas fa-download"></i> Download (PDF / image)</button>
             </div>
         </div>
 
@@ -228,20 +228,20 @@
                     Put a teacher in brackets, e.g. <code>Maths (Mr A)</code>. Leave a cell blank for a free period or a break.
                 </p>
                 <textarea id="gridPasteText" rows="6" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday, Maths (Mr A), English, Physics&#10;Tuesday, English, Physics, Maths&#10;Wednesday, Physics, Maths, English"></textarea>
-                <button class="btn btn-primary btn-sm" onclick="gridPaste()"><i class="fas fa-bolt"></i> Build timetable from grid</button>
+                <button class="btn btn-primary btn-sm" data-call="gridPaste"><i class="fas fa-bolt"></i> Build timetable from grid</button>
             </details>
 
             <details class="bulk-box">
                 <summary><i class="fas fa-list"></i> Quick add (one session per line)</summary>
                 <p class="sess-hint" id="bulkHint" style="margin-top:.5rem"></p>
                 <textarea id="bulkText" rows="6" placeholder=""></textarea>
-                <button class="btn btn-primary btn-sm" onclick="bulkAdd()"><i class="fas fa-plus"></i> Add these</button>
+                <button class="btn btn-primary btn-sm" data-call="bulkAdd"><i class="fas fa-plus"></i> Add these</button>
             </details>
 
             <div id="rowBody"></div>
             <div class="sess-actions">
-                <button class="btn btn-secondary" onclick="addRow()"><i class="fas fa-plus"></i> Add session</button>
-                <button class="btn btn-light btn-sm" type="button" onclick="clearRows()"><i class="fas fa-eraser"></i> Clear all</button>
+                <button class="btn btn-secondary" data-call="addRow"><i class="fas fa-plus"></i> Add session</button>
+                <button class="btn btn-light btn-sm" type="button" data-call="clearRows"><i class="fas fa-eraser"></i> Clear all</button>
             </div>
         </div>
 
@@ -291,16 +291,16 @@ Break
         <div id="exportSpinner" class="export-spinner"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
         <img id="exportImg" alt="Timetable preview" style="display:none">
         <div class="export-actions">
-            <button class="btn btn-primary" onclick="downloadPDF()"><i class="fas fa-file-pdf"></i> Download PDF</button>
-            <button class="btn btn-success" onclick="downloadImage()"><i class="fas fa-image"></i> Download image (Full HD)</button>
-            <button class="btn btn-secondary" onclick="closeExport()">Close</button>
+            <button class="btn btn-primary" data-call="downloadPDF"><i class="fas fa-file-pdf"></i> Download PDF</button>
+            <button class="btn btn-success" data-call="downloadImage"><i class="fas fa-image"></i> Download image (Full HD)</button>
+            <button class="btn btn-secondary" data-call="closeExport">Close</button>
         </div>
     </div>
 </div>
 
 <script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 var LAYOUTS = {
     saturday: {title:'Saturday Class Timetable', mode:'grid',
                fields:['date','day','group','time','dur','subject','teacher'],
@@ -392,8 +392,8 @@ function sessCard(r,i){
     return '<div class="sess-card" data-i="'+i+'">'
          + '<div class="sess-top"><strong>Session '+(i+1)+'</strong>'
          + '<span class="sess-actions">'
-         + '<button type="button" class="sess-dup" onclick="dupRow('+i+')"><i class="fas fa-copy"></i> Duplicate</button>'
-         + '<button type="button" class="sess-del" onclick="delRow('+i+')"><i class="fas fa-trash"></i> Remove</button>'
+         + '<button type="button" class="sess-dup" data-call="dupRow" data-args="'+i+'"><i class="fas fa-copy"></i> Duplicate</button>'
+         + '<button type="button" class="sess-del" data-call="delRow" data-args="'+i+'"><i class="fas fa-trash"></i> Remove</button>'
          + '</span></div>'
          + '<div class="sess-grid">'+inner+'</div></div>';
 }

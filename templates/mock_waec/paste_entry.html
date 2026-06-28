@@ -22,7 +22,7 @@ student, subject, score
 Example:
 STU001, Mathematics, 72
 STU001, English Language, 65</pre>
-        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('ai-prompt').innerText).then(()=>{this.innerHTML='<i class=\'fas fa-check\'></i> Copied';})"><i class="fas fa-copy"></i> Copy prompt</button>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" data-copy="ai-prompt"><i class="fas fa-copy"></i> Copy prompt</button>
     </div>
 </div>
 
@@ -76,7 +76,7 @@ STU001, English Language, 65</pre>
     </table></div>
     <div class="card-body">
         {% if preview.ok %}
-        <form method="POST" onsubmit="return confirm('Import {{ preview.ok }} result(s)? Existing scores for the same student & subject will be overwritten.');">
+        <form method="POST" data-confirm="Import {{ preview.ok }} result(s)? Existing scores for the same student & subject will be overwritten.">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <textarea name="data" style="display:none;">{{ text }}</textarea>
             <button type="submit" name="action" value="confirm" class="btn btn-success"><i class="fas fa-check"></i> Confirm &amp; import {{ preview.ok }} result(s)</button>

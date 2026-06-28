@@ -425,7 +425,7 @@
         <a href="{{ url_for('results.paste_waec') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
         {% if selected_year %}
         <a href="{{ url_for('results.export_waec', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
-        <button type="button" onclick="openExportModal()" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
+        <button type="button" data-call="openExportModal" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
         {% endif %}
     </div>
 </div>
@@ -476,7 +476,7 @@
         <div class="filters-grid">
             <div class="filter-group">
                 <label>Year</label>
-                <select name="year" onchange="this.form.submit()">
+                <select name="year" data-autosubmit>
                     {% for year in years %}
                     <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
                     {% endfor %}
@@ -526,7 +526,7 @@
         <!-- Grade Tabs -->
         <div class="tabs" style="margin-bottom: 1rem;">
             {% for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6'] %}
-            <a href="#grade-{{ g }}" class="tab" onclick="showGradeTab('{{ g }}')">{{ g }} ({{ grade_distribution.get(g, 0) }})</a>
+            <a href="#grade-{{ g }}" class="tab" data-call="showGradeTab" data-args="'{{ g }}'">{{ g }} ({{ grade_distribution.get(g, 0) }})</a>
             {% endfor %}
         </div>
         
@@ -724,7 +724,7 @@
             <div class="student-actions">
                 <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
                 <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete all WAEC results for {{ s.name }}?');">
+                <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete all WAEC results for {{ s.name }}?">
                     <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                 </form>
             </div>
@@ -763,7 +763,7 @@
                         <div style="display: flex; gap: 0.25rem;">
                             <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
                             <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                            <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete?');">
+                            <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete?">
                                 <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                             </form>
                         </div>
@@ -802,7 +802,7 @@
     <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
         <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1;">
             <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-image"></i> Export WAEC as Image</h3>
-            <button onclick="closeExportModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+            <button data-call="closeExportModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
         </div>
         <div style="padding: 1rem;">
             <!-- Export Type -->
@@ -810,11 +810,11 @@
                 <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Export Type:</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                     <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportType" value="students" checked onchange="toggleExportOptions()">
+                        <input type="radio" name="exportType" value="students" checked data-call="toggleExportOptions" data-on="change">
                         <span style="font-size: 0.85rem; font-weight: 500;">Students List</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportType" value="subjects" onchange="toggleExportOptions()">
+                        <input type="radio" name="exportType" value="subjects" data-call="toggleExportOptions" data-on="change">
                         <span style="font-size: 0.85rem; font-weight: 500;">Subjects Analysis</span>
                     </label>
                 </div>
@@ -874,8 +874,8 @@
             
             <!-- Buttons -->
             <div style="display: flex; gap: 0.5rem;">
-                <button onclick="closeExportModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                <button onclick="generateWAECExport()" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
+                <button data-call="closeExportModal" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+                <button data-call="generateWAECExport" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
             </div>
         </div>
     </div>
@@ -899,7 +899,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 // Data for export
 var studentsData = [];
 var subjectsByGrade = [];
@@ -1036,7 +1036,7 @@ function generateWAECExport() {
             saveModal.innerHTML = 
                 '<div style="text-align:center;margin-bottom:10px;">' +
                 '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
-                '<button onclick="document.getElementById(\'saveImageModal\').remove()" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
+                '<button data-remove-target="saveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
                 '</div>' +
                 '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="WAEC Results Export">';
             document.body.appendChild(saveModal);

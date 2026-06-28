@@ -111,7 +111,7 @@
 @media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function setupClassArmSync(classId, armId) {
     document.getElementById(classId).addEventListener('change', function() {
         const arms = this.options[this.selectedIndex].dataset.arms;

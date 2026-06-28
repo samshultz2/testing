@@ -18,7 +18,7 @@
     <div class="card-body">
         <p class="text-muted">Upload the JAMB result screenshot to a chatbot with this prompt, then copy its answer into Step&nbsp;2.</p>
         <pre id="ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.75rem;font-size:.85rem;">Read this JAMB (UTME) result. Output the candidate's full name on the first line, then "Total: NNN" (the aggregate out of 400), then one line per subject as "Subject, Score" (score out of 100). No extra text.</pre>
-        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('ai-prompt').innerText).then(()=>{this.innerHTML='<i class=\'fas fa-check\'></i> Copied';})"><i class="fas fa-copy"></i> Copy prompt</button>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" data-copy="ai-prompt"><i class="fas fa-copy"></i> Copy prompt</button>
     </div>
 </div>
 

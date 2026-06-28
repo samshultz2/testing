@@ -42,7 +42,7 @@
                                 {% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
                             </select>
                         </td>
-                        <td><button type="submit" name="delete_id" value="{{ r.id }}" class="btn btn-danger btn-sm" title="Remove subject" onclick="return confirm('Remove {{ r.subject }}?')"><i class="fas fa-trash"></i></button></td>
+                        <td><button type="submit" name="delete_id" value="{{ r.id }}" class="btn btn-danger btn-sm" title="Remove subject" data-confirm="Remove {{ r.subject }}?"><i class="fas fa-trash"></i></button></td>
                     </tr>
                     {% endfor %}
                 </tbody>

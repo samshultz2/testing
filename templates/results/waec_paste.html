@@ -18,7 +18,7 @@
     <div class="card-body">
         <p class="text-muted">Upload the WAEC result screenshot to a chatbot with this prompt, then copy its answer into Step&nbsp;2.</p>
         <pre id="ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.75rem;font-size:.85rem;">Read this WAEC result. Output the candidate's full name on the first line, then one line per subject as "Subject, Grade" (e.g. English Language, B3). Use the grades exactly (A1–F9). No extra text, no totals.</pre>
-        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('ai-prompt').innerText).then(()=>{this.innerHTML='<i class=\'fas fa-check\'></i> Copied';})"><i class="fas fa-copy"></i> Copy prompt</button>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" data-copy="ai-prompt"><i class="fas fa-copy"></i> Copy prompt</button>
     </div>
 </div>
 

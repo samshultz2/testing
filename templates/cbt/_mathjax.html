@@ -1,7 +1,7 @@
 {# Shared MathJax loader: renders LaTeX in questions/options.
    Teachers can write inline math as \( ... \) or $ ... $ and display
    math as \[ ... \] — e.g. \( \sqrt{b^2-4ac} \) or $x^2+y^2=r^2$. #}
-<script>
+<script nonce="{{ csp_nonce }}">
 window.MathJax = {
   tex: { inlineMath: [['\\(', '\\)'], ['$', '$']], displayMath: [['\\[', '\\]'], ['$$', '$$']] },
   options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }

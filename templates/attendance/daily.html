@@ -7,8 +7,8 @@
 <div class="card mb-3">
     <div class="card-body">
         <form method="GET" class="filter-form">
-            <div class="form-group"><label class="form-label">Class</label><select name="assignment_id" class="form-control" onchange="this.form.submit()"><option value="">Select</option>{% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id == selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}</select></div>
-            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.submit()"></div>
+            <div class="form-group"><label class="form-label">Class</label><select name="assignment_id" class="form-control" data-autosubmit><option value="">Select</option>{% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id == selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" data-autosubmit></div>
         </form>
     </div>
 </div>

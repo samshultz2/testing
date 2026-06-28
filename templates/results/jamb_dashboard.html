@@ -429,7 +429,7 @@
         <a href="{{ url_for('results.paste_jamb') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
         {% if selected_year %}
         <a href="{{ url_for('results.export_jamb', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
-        <button onclick="exportAsImage()" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
+        <button data-call="exportAsImage" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
         {% endif %}
     </div>
 </div>
@@ -499,7 +499,7 @@
         <div class="filters-grid">
             <div class="filter-group">
                 <label>Year</label>
-                <select name="year" onchange="this.form.submit()">
+                <select name="year" data-autosubmit>
                     {% for year in years %}
                     <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
                     {% endfor %}
@@ -713,7 +713,7 @@
             <div class="student-actions">
                 <a href="{{ url_for('results.view_jamb_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
                 <a href="{{ url_for('results.edit_jamb', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete JAMB result for {{ s.name }}?');">
+                <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete JAMB result for {{ s.name }}?">
                     <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                 </form>
             </div>
@@ -754,7 +754,7 @@
                         <div style="display: flex; gap: 0.25rem;">
                             <a href="{{ url_for('results.view_jamb_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
                             <a href="{{ url_for('results.edit_jamb', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                            <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete?');">
+                            <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete?">
                                 <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                             </form>
                         </div>
@@ -792,7 +792,7 @@
     <div style="background: white; border-radius: 12px; max-width: 400px; margin: 2rem auto; max-height: 90vh; overflow-y: auto;">
         <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 1.1rem;"><i class="fas fa-image"></i> Export as Image</h3>
-            <button onclick="closeExportModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+            <button data-call="closeExportModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
         </div>
         <div style="padding: 1rem;">
             <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">Select what to include in the exported image:</p>
@@ -846,8 +846,8 @@
             </div>
             
             <div style="display: flex; gap: 0.5rem;">
-                <button onclick="closeExportModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                <button onclick="generateExport()" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
+                <button data-call="closeExportModal" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+                <button data-call="generateExport" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
             </div>
         </div>
     </div>
@@ -857,7 +857,7 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 // Student data for export
 var studentsData = {{ students|tojson }};
 var selectedYear = {{ selected_year|tojson }};
@@ -987,7 +987,7 @@ function generateExport() {
             saveModal.innerHTML = 
                 '<div style="text-align:center;margin-bottom:10px;">' +
                 '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
-                '<button onclick="document.getElementById(\'saveImageModal\').remove()" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
+                '<button data-remove-target="saveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
                 '</div>' +
                 '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="JAMB Results Export">';
             document.body.appendChild(saveModal);

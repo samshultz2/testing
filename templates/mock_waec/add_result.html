@@ -58,7 +58,7 @@
 {% endif %}
 </div></div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     var SUBJECT_MAP = {{ subject_map | tojson }};
     var DEFAULTS = {{ default_subjects | tojson }};

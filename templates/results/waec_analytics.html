@@ -50,7 +50,7 @@
         <p class="text-muted">Comprehensive analysis of WAEC performance</p>
     </div>
     <form method="GET" class="d-flex gap-2">
-        <select name="year" class="form-control" onchange="this.form.submit()" style="width:auto">
+        <select name="year" class="form-control" data-autosubmit style="width:auto">
             {% for y in years %}
             <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
@@ -189,7 +189,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 {% if year_comparison and year_comparison|length > 1 %}
 var yoyCtx = document.getElementById('yoyChart').getContext('2d');
 new Chart(yoyCtx, {

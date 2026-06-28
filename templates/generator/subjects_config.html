@@ -23,7 +23,7 @@
     <h1><i class="fas fa-book"></i> {{ level|upper }} Subjects</h1>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
         <form method="POST" action="{{ url_for('generator.sync_gen_subjects') }}" style="display:inline"
-              onsubmit="return confirm('Import academic subjects not already listed here into {{ level|upper }}? This only adds subjects; it never changes or removes existing ones, their periods, or teachers.');">
+              data-confirm="Import academic subjects not already listed here into {{ level|upper }}? This only adds subjects; it never changes or removes existing ones, their periods, or teachers.">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-secondary" title="Add academic subjects that aren't here yet (one-way, non-destructive)">
                 <i class="fas fa-sync"></i> Sync from Academic Subjects
@@ -83,7 +83,7 @@
                             </a>
                             <form method="POST" action="{{ url_for('generator.delete_gen_subject', subject_id=item.subject.id) }}" 
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                                  style="display:inline" onsubmit="return confirm('Delete {{ item.subject.name }}?')">
+                                  style="display:inline" data-confirm="Delete {{ item.subject.name }}?">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -135,7 +135,7 @@
                             <td style="text-align:center">
                                 <input type="checkbox" name="double_{{ item.subject.id }}" 
                                        {% if item.config and item.config.needs_double_period %}checked{% endif %}
-                                       onchange="toggleDouble({{ item.subject.id }}, this.checked)">
+                                       data-call="toggleDouble" data-args="{{ item.subject.id }}|this.checked" data-on="change">
                             </td>
                             <td>
                                 <input type="number" name="double_count_{{ item.subject.id }}" 
@@ -174,7 +174,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function toggleDouble(id, enabled) {
     var el = document.getElementById('dc_' + id);
     el.disabled = !enabled;

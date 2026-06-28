@@ -28,26 +28,26 @@
         <form method="GET" action="{{ url_for('attendance.week_grid') }}" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     {% for t in terms %}<option value="{{ t.id }}" {% if selected_term and t.id==selected_term.id %}selected{% endif %}>{{ t.full_name }}</option>{% endfor %}
                 </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <select name="assignment_id" class="form-control" data-autosubmit>
                     <option value="">— Select class —</option>
                     {% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id==selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
                 </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Week</label>
-                <select name="week_id" class="form-control" onchange="this.form.submit()">
+                <select name="week_id" class="form-control" data-autosubmit>
                     {% for w in weeks %}<option value="{{ w.id }}" {% if selected_week and w.id==selected_week.id %}selected{% endif %}>Week {{ w.week_number }} ({{ w.start_date.strftime('%d %b') }} – {{ w.end_date.strftime('%d %b') }})</option>{% endfor %}
                 </select>
             </div>
             <div class="form-group">
                 <label class="form-label" style="display:flex; align-items:center; gap:.4rem;">
-                    <input type="checkbox" name="sessions" value="split" {% if split %}checked{% endif %} onchange="this.form.submit()">
+                    <input type="checkbox" name="sessions" value="split" {% if split %}checked{% endif %} data-autosubmit>
                     Morning &amp; afternoon separately
                 </label>
             </div>
@@ -121,7 +121,7 @@
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-hand-pointer"></i><p>Choose a class and week above to start marking.</p></div></div></div>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
     function boxes(){ return Array.prototype.slice.call(document.querySelectorAll('table.wk-grid input[type=checkbox]')); }
     document.querySelectorAll('[data-all]').forEach(function(btn){

@@ -33,7 +33,7 @@
                             <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
                             <input type="checkbox" name="enabled_{{ item.subject.id }}" 
                                    {% if item.is_enabled %}checked{% endif %}
-                                   onchange="toggleRow(this, {{ item.subject.id }})">
+                                   data-call="toggleRow" data-args="this|{{ item.subject.id }}" data-on="change">
                         </td>
                         <td>
                             <strong>{{ item.subject.name }}</strong>

@@ -30,7 +30,7 @@
                     </a>
                     {% if can_publish and not is_active %}
                     <form method="POST" action="{{ url_for('generator.set_in_use', batch_id=batch.batch_id) }}" style="display:inline;"
-                          onsubmit="return confirm('Publish this timetable live and set it as the one in use? It replaces the currently published timetable (a backup is saved first).');">
+                          data-confirm="Publish this timetable live and set it as the one in use? It replaces the currently published timetable (a backup is saved first).">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-circle-check"></i> Set as in use</button>
                     </form>

@@ -100,7 +100,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('weeklyForm');
     document.getElementById('assignmentSelect').addEventListener('change', function() { if (this.value && document.getElementById('weekSelect').value) form.submit(); });

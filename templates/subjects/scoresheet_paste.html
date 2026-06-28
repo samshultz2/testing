@@ -16,7 +16,7 @@
         <form method="GET" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     <option value="">Select Term</option>
                     {% for term in terms %}
                     <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
@@ -25,7 +25,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <select name="assignment_id" class="form-control" data-autosubmit>
                     <option value="">Select Class</option>
                     {% for a in assignments %}
                     <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
@@ -34,7 +34,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Subject</label>
-                <select name="class_subject_id" class="form-control" onchange="this.form.submit()">
+                <select name="class_subject_id" class="form-control" data-autosubmit>
                     <option value="">Select Subject</option>
                     {% for cs in class_subjects %}
                     <option value="{{ cs.id }}" {% if class_subject_id == cs.id %}selected{% endif %}>{{ cs.subject.name }}</option>
@@ -55,7 +55,7 @@
         <pre id="ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.75rem;font-size:.85rem;">Read this score sheet. Output one line per student as comma-separated values in EXACTLY this column order:
 AdmissionNumber, {{ col_labels | join(', ') }}
 Rules: use the student's admission number as the first value (or full name if there's no number). Use a dash (-) for any blank or absent cell. Do not include a header row, totals, or any extra text — just the rows.</pre>
-        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('ai-prompt').innerText).then(()=>{this.innerHTML='<i class=\'fas fa-check\'></i> Copied';})"><i class="fas fa-copy"></i> Copy prompt</button>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" data-copy="ai-prompt"><i class="fas fa-copy"></i> Copy prompt</button>
     </div>
 </div>
 

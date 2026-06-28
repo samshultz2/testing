@@ -38,7 +38,7 @@
 {% block content %}
 <div class="page-header no-print">
     <h1>Print Attendance Register</h1>
-    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
 </div>
 
 <div class="card mb-3 no-print">
@@ -46,7 +46,7 @@
         <form method="GET" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     <option value="">Select Term</option>
                     {% for term in terms %}
                     <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
@@ -55,7 +55,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <select name="assignment_id" class="form-control" data-autosubmit>
                     <option value="">Select Class</option>
                     {% for a in assignments %}
                     <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
@@ -64,7 +64,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Week</label>
-                <select name="week_id" class="form-control" onchange="this.form.submit()">
+                <select name="week_id" class="form-control" data-autosubmit>
                     <option value="">Select Week</option>
                     {% for week in weeks %}
                     <option value="{{ week.id }}" {% if week_id == week.id %}selected{% endif %}>Week {{ week.week_number }}</option>
