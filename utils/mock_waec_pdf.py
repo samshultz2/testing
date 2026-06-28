@@ -211,7 +211,10 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
         widths = [sn_w, name_w] + [sub_w] * (len(group) + tail)
         heights = ([None] + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
                    + ([None] * len(_BLANK_SUMMARY) if show_summary else []))
-        t = Table(data, colWidths=widths, repeatRows=1, rowHeights=heights)
+        # repeatRows=0: the header (subject names, S/N, Name, Credits, Average)
+        # appears on the first page only; an overflowing roster continues without
+        # the header band repeating.
+        t = Table(data, colWidths=widths, repeatRows=0, rowHeights=heights)
         style = [
             ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
