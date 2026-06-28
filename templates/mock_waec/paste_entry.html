@@ -5,7 +5,30 @@
 {% block content %}
 <div class="page-header"><div><h1>Paste import &mdash; {{ exam.display_name }}</h1></div></div>
 
-<div class="card mb-3"><div class="card-body">
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 1: Turn a score sheet into rows with an AI</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm">Take a photo of the marked score sheet (or recording sheet), upload it to any chatbot (Claude, Gemini, ChatGPT…) with this prompt, then paste its answer into Step&nbsp;2. No OCR, no API key.</p>
+        <pre id="ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.75rem;font-size:.85rem;">Read this Mock WAEC score sheet. Output one line per student-and-subject that has a score, as comma-separated values in EXACTLY this order:
+
+student, subject, score
+
+- "student" is the admission number if shown, otherwise the student's full name.
+- "subject" is the subject name exactly as written.
+- "score" is the number out of 100.
+- One line per subject per student. Skip blank/un-scored cells.
+- Output only the rows. No headings, no totals, no extra text, no code block.
+
+Example:
+STU001, Mathematics, 72
+STU001, English Language, 65</pre>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('ai-prompt').innerText).then(()=>{this.innerHTML='<i class=\'fas fa-check\'></i> Copied';})"><i class="fas fa-copy"></i> Copy prompt</button>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 2: Paste the rows</h3></div>
+    <div class="card-body">
     <div class="entry-hint" style="background:var(--primary-light);color:var(--primary);border-radius:8px;padding:.75rem 1rem;font-size:.85rem;margin-bottom:1rem;">
         <i class="fas fa-circle-info"></i>
         Paste <strong>one result per line</strong>: <code>student, subject, score</code> &mdash; optionally a 4th <code>grade</code> column.

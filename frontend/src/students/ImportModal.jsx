@@ -14,6 +14,20 @@ const FIELD_LABELS = {
 
 const SAMPLE = 'Surname, First Name, Gender\nOkafor, Chidi, Male\nBello, Aisha, Female';
 
+// A ready-made prompt the user can hand to any chatbot, together with a photo of
+// a class list / admission register, to get rows in exactly the format this field
+// parses — then they paste the answer straight into the box below.
+const AI_PROMPT = `Read this class list / admission register. Output the students as comma-separated values (CSV):
+- First line = the column headings, then one line per student.
+- Use ONLY these headings, and only for columns that actually appear in the source: Surname, First Name, Middle Name, Gender, Date of Birth, Religion, Home Address, Hobbies, Stream, JAMB Target, Student ID, WAEC Subjects, JAMB Subjects, Parent Phone, Parent Name, Relationship.
+- Dates as YYYY-MM-DD. Gender as Male or Female. WAEC/JAMB subjects separated by semicolons.
+- One student per line. No numbering, no totals, no extra text, no code block.
+
+Example:
+Surname, First Name, Gender, Date of Birth
+Okafor, Chidi, Male, 2008-05-12
+Bello, Aisha, Female, 2009-01-30`;
+
 // Paste-to-import: paste a heading row + students, preview what was parsed,
 // then commit. Only some columns need be present; extra columns are ignored.
 export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
@@ -23,6 +37,14 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const copyPrompt = () => {
+    navigator.clipboard.writeText(AI_PROMPT).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   const doPreview = async () => {
     setErr(null); setBusy(true);
@@ -84,6 +106,19 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
                 {' '}<code>Surname, First Name, Gender</code>). Only include the columns you have — anything else is
                 optional, and unknown columns are ignored. Comma- or tab-separated both work.
               </p>
+              <details style={{ marginBottom: '0.6rem' }}>
+                <summary className="text-sm" style={{ cursor: 'pointer', fontWeight: 500 }}>
+                  <i aria-hidden="true" className="fas fa-robot" /> No spreadsheet? Get the rows from a photo with an AI
+                </summary>
+                <p className="text-xs text-muted" style={{ margin: '0.4rem 0' }}>
+                  Upload a photo of a class list / register to any chatbot (Claude, Gemini, ChatGPT…) with this prompt,
+                  then paste its answer below.
+                </p>
+                <pre style={{ whiteSpace: 'pre-wrap', background: 'var(--bg-muted, var(--gray-50))', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.6rem', fontSize: '0.78rem', margin: 0 }}>{AI_PROMPT}</pre>
+                <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '0.4rem' }} onClick={copyPrompt}>
+                  <i aria-hidden="true" className={copied ? 'fas fa-check' : 'fas fa-copy'} /> {copied ? 'Copied' : 'Copy prompt'}
+                </button>
+              </details>
               <textarea className="form-control" rows={10} value={text} spellCheck={false}
                         placeholder={SAMPLE} onChange={(e) => setText(e.target.value)}
                         style={{ fontFamily: 'monospace', fontSize: '0.85rem' }} />
