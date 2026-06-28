@@ -129,7 +129,6 @@ def _grade_key_table(usable):
         ('GRID', (0, 0), (-1, -1), 0.7, _BLACK),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('BACKGROUND', (0, 0), (0, -1), _HEAD),
         ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     return t
@@ -228,7 +227,6 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
         ]
         if show_summary:
             style.append(('FONTSIZE', (0, sum0), (-1, -1), 8.5))
-            style.append(('BACKGROUND', (0, sum0), (-1, -1), _FOOT))
             style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
         t.setStyle(TableStyle(style))
         e.append(t)
@@ -328,7 +326,6 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
         if show_summary:                       # one writing box per subject per row
             style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
-            style.append(('BACKGROUND', (0, sum0), (1, sum0 + len(_BLANK_SUMMARY) - 1), _FOOT))
             for k in range(len(_BLANK_SUMMARY)):
                 for j in range(len(group)):
                     c0 = 2 + j * 2
