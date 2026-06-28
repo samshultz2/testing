@@ -206,6 +206,27 @@ def _ser_student_brief(s):
             'gender': s.gender, 'url': url_for('main.view_student', student_id=s.id)}
 
 
+@main_bp.route('/view-session', methods=['POST'])
+@admin_required
+def set_view_session():
+    """Admin 'time-travel': view a past session's data without changing the live
+    session for anyone else. Stored per-user in the cookie session; choosing the
+    live session (or none) clears it."""
+    from models import AcademicSession
+    sid = request.form.get('session_id', type=int)
+    live = AcademicSession.query.filter_by(is_active=True).first()
+    if not sid or (live and sid == live.id):
+        session.pop('view_session_id', None)
+        flash('Viewing the current session.', 'success')
+    else:
+        s = db.session.get(AcademicSession, sid)
+        if s:
+            session['view_session_id'] = sid
+            flash(f'Now viewing {s.name} (read-only time-travel). Your view only — '
+                  'others are unaffected.', 'info')
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+
 def _dashboard_urls():
     """Server-resolved link targets so the React dashboard never hardcodes paths."""
     return {

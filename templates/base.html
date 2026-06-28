@@ -605,7 +605,27 @@
                     </div>
                 </div>
             </header>
-            
+
+            {% set tt = time_travel() %}
+            {% if tt.sessions and tt.sessions|length > 1 %}
+            <div class="time-travel-bar{% if tt.viewing %} active{% endif %}">
+                <form method="post" action="{{ url_for('main.set_view_session') }}" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:0;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    {% if tt.viewing %}
+                    <span><i class="fas fa-clock-rotate-left"></i> Viewing <strong>{{ tt.viewing.name }}</strong> (read-only) — not the current session.</span>
+                    {% else %}
+                    <span class="text-muted"><i class="fas fa-clock-rotate-left"></i> View a past session:</span>
+                    {% endif %}
+                    <select name="session_id" class="form-control" style="width:auto;" onchange="this.form.submit()">
+                        {% for s in tt.sessions %}
+                        <option value="{{ s.id }}" {% if (tt.viewing and tt.viewing.id == s.id) or (not tt.viewing and tt.live and tt.live.id == s.id) %}selected{% endif %}>{{ s.name }}{% if tt.live and tt.live.id == s.id %} (current){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    {% if tt.viewing %}<button type="submit" name="session_id" value="{{ tt.live.id if tt.live else 0 }}" class="btn btn-sm btn-light">Return to current</button>{% endif %}
+                </form>
+            </div>
+            {% endif %}
+
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="flash-messages">
@@ -894,6 +914,9 @@
         .bottom-nav .bn-item i{font-size:1.25rem;}
         .bottom-nav .bn-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
         .bottom-nav .bn-item.active{color:var(--primary);}
+        .time-travel-bar{padding:.5rem .9rem;font-size:.85rem;border-bottom:1px solid var(--border-color);background:var(--bg-card);}
+        .time-travel-bar.active{background:#fff6e5;color:#92400e;border-bottom:2px solid #f59e0b;}
+        [data-theme="dark"] .time-travel-bar.active{background:#3a2e12;color:#fcd34d;}
         .page-content{padding-bottom:4.6rem !important;}
     }
     </style>

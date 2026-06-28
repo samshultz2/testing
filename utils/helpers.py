@@ -391,9 +391,38 @@ RELIGIONS = [
 ]
 
 
+def view_session_override():
+    """The AcademicSession an *admin* has chosen to view instead of the live one
+    (a personal, cookie-stored 'time-travel'), or None. Only honoured for admins,
+    so it never changes anything for other users or the database itself."""
+    from flask import session as flask_session, g, has_request_context
+    if not has_request_context():
+        return None
+    if '_view_override' in g.__dict__:
+        return g._view_override
+    val = None
+    sid = flask_session.get('view_session_id')
+    if sid:
+        try:
+            from utils.access_control import is_admin
+            if is_admin():
+                from models import AcademicSession
+                val = db_get_session(int(sid))
+        except Exception:
+            val = None
+    g._view_override = val
+    return val
+
+
+def db_get_session(sid):
+    from models import db, AcademicSession
+    return db.session.get(AcademicSession, sid)
+
+
 def get_active_term():
     """The currently active Term (or None). Single source of truth for the
-    common active-term lookup.
+    common active-term lookup. When an admin is viewing a past session, returns
+    that session's latest term instead.
 
     Memoised for the lifetime of a request (the context processor and templates
     call this repeatedly per render): within one request the active term is
@@ -404,21 +433,27 @@ def get_active_term():
         if '_active_term' in g.__dict__:
             return g._active_term
     from models import Term
-    val = Term.query.filter_by(is_active=True).first()
+    ov = view_session_override()
+    if ov is not None:
+        val = (Term.query.filter_by(session_id=ov.id)
+               .order_by(Term.term_number.desc()).first())
+    else:
+        val = Term.query.filter_by(is_active=True).first()
     if has_request_context():
         g._active_term = val
     return val
 
 
 def get_active_session():
-    """The currently active AcademicSession (or None). Request-memoised; see
-    :func:`get_active_term`."""
+    """The currently active AcademicSession (or None) — or the past session an
+    admin is viewing. Request-memoised; see :func:`get_active_term`."""
     from flask import g, has_request_context
     if has_request_context():
         if '_active_session' in g.__dict__:
             return g._active_session
     from models import AcademicSession
-    val = AcademicSession.query.filter_by(is_active=True).first()
+    ov = view_session_override()
+    val = ov if ov is not None else AcademicSession.query.filter_by(is_active=True).first()
     if has_request_context():
         g._active_session = val
     return val

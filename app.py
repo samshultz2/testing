@@ -295,9 +295,25 @@ def create_app(config_class=None):
             except Exception:
                 return {'is_central': False, 'branches': [], 'current': None}
 
+        def time_travel():
+            """For the admin session-view banner: the past session being viewed
+            (or None), the live session, and the list to switch between."""
+            try:
+                from utils.access_control import is_admin
+                if not is_admin():
+                    return {'viewing': None, 'live': None, 'sessions': []}
+                from utils.helpers import view_session_override
+                live = AcademicSession.query.filter_by(is_active=True).first()
+                return {'viewing': view_session_override(), 'live': live,
+                        'sessions': AcademicSession.query.order_by(
+                            AcademicSession.name.desc()).all()}
+            except Exception:
+                return {'viewing': None, 'live': None, 'sessions': []}
+
         return {
             'get_active_session': get_active_session,
             'get_active_term': get_active_term,
+            'time_travel': time_travel,
             'today': date.today(),
             'app_name': Config.APP_NAME,
             'csrf_token': csrf_token,
