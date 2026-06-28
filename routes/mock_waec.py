@@ -20,6 +20,7 @@ from utils.helpers import (login_required, get_active_session, get_sss3_students
                            WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS,
                            STREAM_WAEC_SUBJECTS, student_subject_map)
 from utils.access_control import admin_required
+from utils.security import rate_limited
 from utils.branch_scope import require_branch_access, branch_for_new, scope_query
 from utils.csrf import csrf_protect
 from utils.web_exports import xlsx_response
@@ -202,6 +203,7 @@ def broadsheet_print(exam_id):
 
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet.pdf')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def broadsheet_pdf_view(exam_id):
     """Server-side broadsheet PDF — school header, optional COMPETENCE RESULT
     banner, no admission numbers. Previews inline; ?download=1 to save."""
@@ -234,6 +236,7 @@ def broadsheet_blank(exam_id):
 
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/blank.pdf')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def broadsheet_blank_pdf(exam_id):
     """Empty broadsheet to fill in by hand: every SSS3 student already listed,
     with the subjects they offer as columns (others shaded out)."""
@@ -256,6 +259,7 @@ def broadsheet_blank_pdf(exam_id):
 
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/export')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def broadsheet_export(exam_id):
     """Wide broadsheet workbook: a column per subject (score + grade), with the
     per-subject offered/passed/failed/average rows beneath, just like the sheet."""
@@ -753,6 +757,7 @@ def result_slips_all(exam_id):
 
 @mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip.pdf')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def result_slip_pdf(exam_id, student_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
@@ -767,6 +772,7 @@ def result_slip_pdf(exam_id, student_id):
 
 @mock_waec_bp.route('/exam/<int:exam_id>/slips.pdf')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def result_slips_pdf_view(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)

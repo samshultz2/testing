@@ -47,6 +47,25 @@ Critical/High items before any internet-facing deployment.
 
 ## Remediation log
 
+**Pass 2 (2026-06-28) — audit of recently-added code + follow-ups:**
+- Re-verified the whole-project posture (CSRF, before_request gates, headers/HSTS,
+  login rate-limiting, session flags, branch scoping) — all still in force. A full
+  route sweep found **zero accidentally-unauthenticated routes**.
+- **New finding (this period)** — the WAEC grade-forecast engine setting is global
+  (cohort-wide), so changing it now requires a **central admin**, not just any admin
+  (`routes/results.py::waec_model_config`, `action=save_method`).
+- **M7 (closed)** — contributions object routes that load by URL id now branch-check:
+  `student_detail`, `delete_payment`, `api_student_info` call `require_branch_access`
+  (central users unaffected; single-branch is a no-op). `delete_expense` is left as-is
+  — `ContributionExpense` has no student/branch link (session-level data).
+- **M3 (extended)** — applied the existing `@rate_limited('export', …)` decorator to the
+  heaviest exports/PDFs: Mock-WAEC broadsheet/blank/slip PDFs + Excel export
+  (`routes/mock_waec.py`), and the WAEC/JAMB and weekly/termly attendance Excel exports.
+- **Tidy** — `routes/main.py::set_theme` now `@login_required` (was anonymously callable).
+- Regression tests in `tests/test_security_hardening.py`.
+- Still intentionally deferred (product/cost): full nonce-based CSP (H5), bounding the
+  OR-Tools solver (M3 solver), moving off recoverable portal passwords (H3).
+
 **Pass 1 (2026-06-20) — fixed:**
 - **C1** — removed the hardcoded `ADMIN_PASSWORD` fallback; legacy login now
   requires both `ENABLE_LEGACY_LOGIN=1` **and** a configured `ADMIN_PASSWORD`,

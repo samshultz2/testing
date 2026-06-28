@@ -14,6 +14,7 @@ from utils.access_control import (
     filter_classes_for_user, can_access_module, auto_select_assignment
 )
 from utils.branch_scope import require_branch_access
+from utils.security import rate_limited
 from utils.helpers import is_school_day, pick_current_week
 from utils.calculations import (
     get_daily_attendance_summary, get_weekly_attendance_summary,
@@ -663,6 +664,7 @@ def weekly_summary():
 
 @attendance_bp.route('/weekly/export')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def export_weekly():
     """Export weekly attendance to Excel"""
     assignment_id = request.args.get('assignment_id', type=int)
@@ -743,6 +745,7 @@ def termly_summary():
 
 @attendance_bp.route('/termly/export')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def export_termly():
     """Export termly attendance to Excel"""
     assignment_id = request.args.get('assignment_id', type=int)

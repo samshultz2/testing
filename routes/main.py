@@ -1896,6 +1896,7 @@ def global_search():
 
 
 @main_bp.route('/set-theme', methods=['POST'])
+@login_required
 def set_theme():
     """Persist the current user's chosen UI theme (per-account + session)."""
     from utils.themes import normalize_theme

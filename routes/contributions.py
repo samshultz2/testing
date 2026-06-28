@@ -378,7 +378,9 @@ def payments_list():
 @contributions_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
 @contributions_access_required
 def delete_payment(payment_id):
+    from utils.branch_scope import require_branch_access
     payment = db.get_or_404(ContributionPayment, payment_id)
+    require_branch_access(payment.student.branch_id)   # no cross-branch deletes by guessed id
     student_name = payment.student.full_name
     amount = payment.amount
     db.session.delete(payment)
@@ -390,7 +392,9 @@ def delete_payment(payment_id):
 @contributions_bp.route('/student/<int:student_id>')
 @contributions_access_required
 def student_detail(student_id):
+    from utils.branch_scope import require_branch_access
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)   # no cross-branch reads by guessed id
     active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     payments = ContributionPayment.query.filter_by(student_id=student_id, session_id=active_session.id if active_session else None).order_by(ContributionPayment.payment_date.desc()).all()
@@ -638,7 +642,9 @@ def export_excel():
 @contributions_bp.route('/api/student/<int:student_id>/info')
 @contributions_access_required
 def api_student_info(student_id):
+    from utils.branch_scope import require_branch_access
     student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)   # no cross-branch lookups by guessed id
     active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(

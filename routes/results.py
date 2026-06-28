@@ -1964,6 +1964,7 @@ def api_top_performers(year):
 
 @results_bp.route('/waec/export')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def export_waec():
     """Export WAEC results to Excel"""
     from openpyxl import Workbook
@@ -2042,6 +2043,7 @@ def export_waec():
 
 @results_bp.route('/jamb/export')
 @login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
 def export_jamb():
     """Export JAMB results to Excel"""
     from openpyxl import Workbook
@@ -2264,6 +2266,13 @@ def waec_model_config():
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'save_method':
+            # The engine setting is global (cohort-wide, all branches), so only a
+            # central admin may change it — a branch admin must not flip it for
+            # everyone. Retraining below stays branch-scoped and admin-only.
+            from utils.branch_scope import is_central
+            if not is_central():
+                flash('Only a central administrator can change the forecast engine.', 'error')
+                return redirect(url_for('results.waec_model_config'))
             method = request.form.get('method', 'auto')
             if method in VALID_METHODS:
                 SchoolSettings.set(SETTING_KEY, method, 'string',
