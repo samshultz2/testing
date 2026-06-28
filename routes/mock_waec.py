@@ -710,16 +710,22 @@ def _pdf_opts():
     return {f: request.args.get(f, '1') != '0' for f in _PDF_FLAGS}
 
 
+def _signers():
+    """Which signature line(s) the result slip should carry."""
+    v = request.args.get('signers', 'both')
+    return v if v in ('both', 'principal', 'teacher', 'none') else 'both'
+
+
 # Detail checkboxes shown on each preview page (param, label) — all on by default.
 _OPTS_BROADSHEET = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
                     ('contact', 'Phone / email'), ('motto', 'School motto'),
-                    ('summary', 'Subject summary rows')]
+                    ('summary', 'Subject summary rows'), ('grades', 'Grade key')]
 _OPTS_BLANK = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
                ('contact', 'Phone / email'), ('motto', 'School motto'),
                ('summary', 'Blank summary rows'), ('grades', 'Grade key')]
 _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
               ('contact', 'Phone / email'), ('motto', 'School motto'),
-              ('summary', 'Summary box'), ('signatures', 'Signature lines')]
+              ('summary', 'Summary box')]
 
 
 @mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip')
@@ -729,7 +735,7 @@ def result_slip(exam_id, student_id):
     require_branch_access(exam.branch_id)
     student = db.get_or_404(Student, student_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
-        title=f'Result — {student.full_name}', options=_OPTS_SLIP,
+        show_signers=True, title=f'Result — {student.full_name}', options=_OPTS_SLIP,
         pdf_url=url_for('mock_waec.result_slip_pdf', exam_id=exam_id, student_id=student_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
@@ -740,7 +746,7 @@ def result_slips_all(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
-        title='Results (PDF)', options=_OPTS_SLIP,
+        show_signers=True, title='Results (PDF)', options=_OPTS_SLIP,
         pdf_url=url_for('mock_waec.result_slips_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
@@ -752,7 +758,7 @@ def result_slip_pdf(exam_id, student_id):
     require_branch_access(exam.branch_id)
     from utils.mock_waec_pdf import result_slips_pdf
     buf = result_slips_pdf(_slips_for(exam_id, student_id), exam,
-                           _school_profile(), opts=_pdf_opts())
+                           _school_profile(), opts=_pdf_opts(), signers=_signers())
     student = db.session.get(Student, student_id)
     name = f"result_{(student.full_name if student else student_id)}.pdf".replace(' ', '_')
     return send_file(buf, mimetype='application/pdf',
@@ -766,7 +772,7 @@ def result_slips_pdf_view(exam_id):
     require_branch_access(exam.branch_id)
     from utils.mock_waec_pdf import result_slips_pdf
     buf = result_slips_pdf(_slips_for(exam_id), exam, _school_profile(),
-                           opts=_pdf_opts())
+                           opts=_pdf_opts(), signers=_signers())
     name = f"results_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)

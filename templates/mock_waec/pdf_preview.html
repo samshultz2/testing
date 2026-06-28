@@ -21,6 +21,16 @@
             <input type="checkbox" class="pdf-opt" data-param="{{ param }}" checked> {{ label }}
         </label>
         {% endfor %}
+        {% if show_signers %}
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Signature:
+            <select id="signersSel" class="form-control" style="width:auto;">
+                <option value="both">Class teacher &amp; Principal</option>
+                <option value="principal">Principal only</option>
+                <option value="teacher">Class teacher only</option>
+                <option value="none">None</option>
+            </select>
+        </label>
+        {% endif %}
         {% if show_orient %}
         <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Orientation:
             <select id="orientSel" class="form-control" style="width:auto;">
@@ -57,6 +67,7 @@
   var fallback = document.getElementById('pdfFallback');
   var colsSel = document.getElementById('colsSel');
   var orientSel = document.getElementById('orientSel');
+  var signersSel = document.getElementById('signersSel');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
   var lastBlob = null;
 
@@ -64,6 +75,7 @@
     var p = [];
     opts.forEach(function (o) { if (!o.checked) p.push(o.dataset.param + '=0'); });
     if (orientSel) p.push('orient=' + orientSel.value);
+    if (signersSel) p.push('signers=' + signersSel.value);
     if (colsSel && colsSel.value !== '') p.push('cols=' + colsSel.value);
     if (extra) p.push(extra);
     return base + (p.length ? ('?' + p.join('&')) : '');
@@ -88,6 +100,7 @@
   opts.forEach(function (o) { o.addEventListener('change', refresh); });
   if (colsSel) colsSel.addEventListener('change', refresh);
   if (orientSel) orientSel.addEventListener('change', refresh);
+  if (signersSel) signersSel.addEventListener('change', refresh);
   refresh();
 })();
 </script>
