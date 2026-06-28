@@ -189,15 +189,45 @@ def save_attendance():
             is_active=True
         ).all()
         all_enrollment_ids = [e.id for e in enrollments]
-        
+        marked_by = _actor_name()
+
+        # Dual mode: separate Morning + Afternoon ticks on one save, so a student
+        # can be present in the morning and absent in the afternoon (or vice versa).
+        if request.form.get('mode') == 'dual':
+            am_ids = {int(x) for x in request.form.getlist('am[]')}
+            pm_ids = {int(x) for x in request.form.getlist('pm[]')}
+            for en in enrollments:
+                att = Attendance.query.filter_by(enrollment_id=en.id, date=target_date).first()
+                if att is None:
+                    att = Attendance(enrollment_id=en.id, date=target_date, week_id=week_id)
+                    db.session.add(att)
+                att.week_id = week_id
+                att.morning_present = en.id in am_ids
+                att.afternoon_present = en.id in pm_ids
+                att.marked_by = marked_by
+            db.session.commit()
+            flash(f'Attendance saved for {len(enrollments)} students (Morning & Afternoon).', 'success')
+            assignment = db.session.get(ClassArmAssignment, assignment_id)
+            if assignment:
+                from utils.notify import notify_attendance_marked
+                notify_attendance_marked(
+                    class_label=assignment.display_name,
+                    date_label=target_date.strftime('%d %b %Y'), session_label='Full day',
+                    present=len(am_ids & set(all_enrollment_ids)), total=len(all_enrollment_ids),
+                    marked_by=marked_by,
+                    url=url_for('attendance.daily_summary', assignment_id=assignment_id,
+                                date=target_date.isoformat()))
+            return redirect(url_for('attendance.mark_attendance_page',
+                term_id=request.form.get('term_id'), assignment_id=assignment_id,
+                date=request.form.get('date')))
+
         # Get IDs of students marked present (checked checkboxes)
         present_ids = [int(x) for x in request.form.getlist('present[]')]
         
         # Mark attendance
         # Check if auto-copy to afternoon is enabled (default True for morning)
         auto_copy = request.form.get('auto_copy_afternoon', 'on') == 'on'
-        
-        marked_by = _actor_name()
+
         count = mark_attendance_bulk(
             all_enrollment_ids,
             target_date,

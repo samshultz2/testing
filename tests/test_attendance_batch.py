@@ -150,3 +150,24 @@ def test_week_batch_save(app):
         assert recs[(eids[0], '2026-05-18')].morning_present is True
         assert recs[(eids[0], '2026-05-20')].morning_present is False   # not ticked
         assert recs[(eids[1], '2026-05-18')].afternoon_present is False  # absent all week
+
+
+def test_daily_dual_am_pm(app):
+    """The daily page marks Morning and Afternoon separately in one save, so a
+    student can be present AM and absent PM."""
+    from models import Attendance
+    tid, aid, wid, eids = _class_week(app)
+    c = _admin(app)
+    tok = _ptoken(c, f'/attendance/mark?term_id={tid}&assignment_id={aid}&date=2026-05-18')
+    page = c.get(f'/attendance/mark?term_id={tid}&assignment_id={aid}&date=2026-05-18').get_data(as_text=True)
+    assert 'name="am[]"' in page and 'name="pm[]"' in page and 'value="dual"' in page
+    # student 0 present AM only; student 1 present both.
+    c.post('/attendance/mark/save', data={'_csrf_token': tok, 'mode': 'dual', 'term_id': tid,
+        'assignment_id': aid, 'date': '2026-05-18', 'week_id': wid,
+        'am[]': [str(eids[0]), str(eids[1])], 'pm[]': str(eids[1])}, follow_redirects=True)
+    with app.app_context():
+        from datetime import date
+        a0 = Attendance.query.filter_by(enrollment_id=eids[0], date=date(2026, 5, 18)).first()
+        a1 = Attendance.query.filter_by(enrollment_id=eids[1], date=date(2026, 5, 18)).first()
+        assert a0.morning_present is True and a0.afternoon_present is False
+        assert a1.morning_present is True and a1.afternoon_present is True

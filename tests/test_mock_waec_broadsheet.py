@@ -341,3 +341,21 @@ def test_blank_sheet_summary_and_grade_key(app):
     for q in ('', '?summary=0&grades=0'):
         r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf{q}')
         assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
+
+
+def test_subject_outlook_from_mock_waec(app):
+    """WAEC subject outlook is projected from the student's Mock WAEC sittings."""
+    ssid = _session(app)
+    sid = _student(app, 'OL' + uuid.uuid4().hex[:5].upper(), 'Ola', 'Outlook')
+    for n, scores in ((1, {'Mathematics': 58, 'English Language': 52, 'Biology': 40}),
+                      (2, {'Mathematics': 66, 'English Language': 60, 'Biology': 48})):
+        eid = _exam(app, ssid, n=70 + n)
+        _seed_results(app, eid, sid, scores)
+    with app.app_context():
+        ol = MockWAECAnalytics.subject_outlook(sid)
+        assert ol['total_subjects'] == 3
+        subs = {p['subject']: p for p in ol['subject_predictions']}
+        # Maths improved 58 -> 66, so the projection should land in the credit range.
+        assert subs['Mathematics']['trend'] == 'improving'
+        assert subs['Mathematics']['predicted_grade'] in ('C4', 'C5', 'C6', 'B3', 'B2')
+        assert ol['summary']['overall_outlook'] in ('Excellent', 'Good', 'Fair', 'Needs Improvement')

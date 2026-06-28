@@ -460,6 +460,88 @@ class MockWAECAnalytics:
             MockWAECAnalytics.get_student_progress(student_id, session_id))
 
     @staticmethod
+    def subject_outlook(student_id, session_id=None):
+        """Per-subject WAEC projection from the student's own Mock WAEC sittings
+        (the most direct WAEC signal). Returns the structure the predictions page
+        renders, or None when the student has no Mock WAEC results."""
+        q = MockWAECResult.query.filter_by(student_id=student_id).join(MockWAECExam)
+        if session_id:
+            q = q.filter(MockWAECExam.session_id == session_id)
+        rows = q.order_by(MockWAECExam.exam_number).all()
+        if not rows:
+            return None
+
+        by_subject = {}
+        for r in rows:
+            if r.score is not None:
+                by_subject.setdefault(r.subject, []).append(r.score)
+
+        preds = []
+        for subject, scores in by_subject.items():
+            if not scores:
+                continue
+            weighted = [(i + 1, s) for i, s in enumerate(scores)]   # recent weighted more
+            tw = sum(w for w, _ in weighted)
+            pscore = round(sum(w * s for w, s in weighted) / tw)
+            trend = 'stable'
+            if len(scores) >= 2:
+                d = scores[-1] - scores[0]
+                trend = 'improving' if d >= 4 else 'declining' if d <= -4 else 'stable'
+            pscore = min(100, pscore + 3) if trend == 'improving' else \
+                max(0, pscore - 3) if trend == 'declining' else pscore
+            conf = min(90, 55 + len(scores) * 10)
+            preds.append({
+                'subject': subject,
+                'mock_average': round(sum(scores) / len(scores), 1),
+                'predicted_score': pscore,
+                'predicted_grade': waec_grade_from_score(pscore),
+                'grade_range': {'best_case': waec_grade_from_score(max(scores)),
+                                'worst_case': waec_grade_from_score(min(scores))},
+                'confidence': conf,
+                'confidence_level': 'High' if conf >= 75 else 'Medium' if conf >= 60 else 'Low',
+                'trend': trend,
+                'sittings': len(scores),
+            })
+        if not preds:
+            return None
+        preds.sort(key=lambda p: GRADE_POINTS.get(p['predicted_grade'], 9))
+
+        grades = [p['predicted_grade'] for p in preds]
+        credits = sum(1 for g in grades if g in PASS_GRADES)
+        distinctions = sum(1 for g in grades if g in DISTINCTION_GRADES)
+        fails = sum(1 for g in grades if g in ('E8', 'F9'))
+        credited = {p['subject'] for p in preds if p['predicted_grade'] in PASS_GRADES}
+        missing_core = [s for s in CORE_SUBJECTS if s not in credited]
+        outlook = ('Excellent' if credits >= 8 else 'Good' if credits >= 6
+                   else 'Fair' if credits >= 5 else 'Needs Improvement')
+
+        recs = []
+        weak = [p['subject'] for p in preds if p['predicted_grade'] in ('D7', 'E8', 'F9')]
+        if missing_core:
+            recs.append({'priority': 'Critical', 'area': 'Core subjects',
+                         'message': 'Projected below a credit in ' + ', '.join(missing_core)
+                         + ' — both are required for admission.'})
+        if weak:
+            recs.append({'priority': 'High', 'area': 'At-risk subjects',
+                         'message': 'Concentrate revision on ' + ', '.join(weak[:5]) + '.'})
+        if not recs:
+            recs.append({'priority': 'Maintain', 'area': 'On track',
+                         'message': 'Keep up the current performance across subjects.'})
+
+        return {
+            'subject_predictions': preds,
+            'total_subjects': len(preds),
+            'summary': {
+                'predicted_distinctions': distinctions,
+                'predicted_credits': credits,
+                'predicted_fails': fails,
+                'overall_outlook': outlook,
+                'likely_meets_university_requirement': credits >= 5 and not missing_core,
+            },
+            'recommendations': recs,
+        }
+
+    @staticmethod
     def _predict_from_progress(progress):
         """Pure prediction from a progress dict (reusable by a batched caller)."""
         if not progress:

@@ -2187,7 +2187,7 @@ def student_predictions(student_id):
     """Comprehensive predictions for a specific student"""
     from utils.exam_analytics import WAECJAMBCorrelation, MockJAMBAnalytics
     from models.mock_jamb import MockJAMBResult
-    from models.mock_waec import MockWAECResult
+    from models.mock_waec import MockWAECResult, MockWAECAnalytics
     from utils import exam_insights
 
     student = db.get_or_404(Student, student_id)
@@ -2201,13 +2201,16 @@ def student_predictions(student_id):
     # have neither real result yet (JAMB is sat in 2nd term, WAEC in 3rd).
     readiness = exam_insights.admission_readiness(student)
 
-    waec_from_mock = None      # subject-grade cross-check derived from Mock JAMB
+    # The WAEC subject outlook is projected directly from the Mock WAEC sittings —
+    # the most direct WAEC signal — not from Mock JAMB.
+    waec_from_mock = None
+    try:
+        waec_from_mock = MockWAECAnalytics.subject_outlook(student_id)
+    except Exception:
+        pass
+
     jamb_prediction = None
     if mock_results:
-        try:
-            waec_from_mock = WAECJAMBCorrelation.predict_waec_from_mock_jamb(student_id)
-        except Exception:
-            pass
         try:
             jamb_prediction = MockJAMBAnalytics.predict_real_jamb(student_id)
         except Exception:
