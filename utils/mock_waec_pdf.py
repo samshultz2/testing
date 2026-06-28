@@ -70,6 +70,8 @@ def _styles():
                                 alignment=TA_CENTER, spaceAfter=6, fontName='Helvetica-Bold')
     _S['colhead'] = ParagraphStyle('ch', parent=base['Normal'], fontSize=7.5, leading=8.5,
                                    alignment=TA_CENTER, fontName='Helvetica-Bold')
+    _S['subhead'] = ParagraphStyle('sh', parent=base['Normal'], fontSize=6.5, leading=7,
+                                   alignment=TA_CENTER, fontName='Helvetica-Bold')
     _S['name'] = ParagraphStyle('nm', parent=base['Normal'], fontSize=8.5, leading=9.5,
                                 fontName='Helvetica-Bold')
     _S['cell'] = ParagraphStyle('c', parent=base['Normal'], fontSize=10)
@@ -139,37 +141,29 @@ def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
     return per
 
 
-def _broadsheet(exam, school, opts, subjects, rows, subject_summary, per, orient,
-                *, blank, offered=None, min_w=13 * mm, row_h=None, title_word='Broadsheet'):
-    """Shared broadsheet renderer. The filled sheet and the blank recording sheet
-    are the **same** table — identical columns (S/N, Name, one column per subject
-    with a vertical header, then Credits and Average %), the same extra rows and
-    the same summary rows — the only difference is whether the score/grade and
-    summary cells carry values (filled) or are left empty to write into (blank).
-
-    ``rows`` is a list of {student, cells, credits, average_score}; for the blank
-    sheet ``cells`` is ignored and ``offered`` (student.id -> set of subjects)
-    shades the columns a student does not sit. ``subject_summary`` carries the
-    per-subject tallies for the filled sheet (None/empty cells when blank)."""
+def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
+    """Full score+grade matrix. Wide subject sets split across pages (``per``
+    columns each); no admission numbers. ``opts['summary']`` toggles the
+    per-subject offered/passed/failed/average rows. ``orient`` is landscape or
+    portrait A4, filling the page with an 8mm margin."""
     _styles()
     page = _pagesize(orient)
     buf = io.BytesIO()
-    label = 'Blank broadsheet' if blank else 'Broadsheet'
     doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
-                            title=f'{label} — {exam.display_name}')
+                            title=f'Broadsheet — {exam.display_name}')
     usable = page[0] - 16 * mm
     sn_w, name_w = 9 * mm, 52 * mm
-    # Vertical headers don't constrain width; reserve room for the two tail
-    # columns (Credits, Average %) and keep each subject column writable.
-    per = _fit_per(usable, sn_w, name_w, 24 * mm, min_w, per, len(subjects))
-    groups = _groups(subjects, per)
-    nrows = len(rows)
+    # Vertical headers don't constrain width, so columns only need to fit a score.
+    per = _fit_per(usable, sn_w, name_w, 24 * mm, 13 * mm, per, len(bs['subjects']))
+    groups = _groups(bs['subjects'], per)
+    ss = bs['subject_summary']
+    nrows = len(bs['rows'])
     show_summary = _opt(opts, 'summary')
     e = []
     for gi, group in enumerate(groups):
         last = gi == len(groups) - 1
-        sub = f'{exam.display_name} — {title_word}'
+        sub = f'{exam.display_name} — Broadsheet'
         if len(groups) > 1:
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)
@@ -182,24 +176,14 @@ def _broadsheet(exam, school, opts, subjects, rows, subject_summary, per, orient
         if last:
             header += [_VHead('Credits'), _VHead('Average %')]
         data = [header]
-        shaded = []
-        for i, row in enumerate(rows, 1):
+        for i, row in enumerate(bs['rows'], 1):
             line = [str(i), Paragraph(row['student'].full_name, _S['name'])]
-            take = (offered.get(row['student'].id) if offered else None) or set()
-            for ci, s in enumerate(group):
-                if blank:
-                    line.append('')
-                    if take and s not in take:
-                        shaded.append((2 + ci, i))           # data row i (header is row 0)
-                else:
-                    r = row['cells'].get(s)
-                    line.append(f'{r.score} {r.grade}' if (r and r.score is not None) else '')
+            for s in group:
+                r = row['cells'].get(s)
+                line.append(f'{r.score} {r.grade}' if (r and r.score is not None) else '')
             if last:
-                if blank:
-                    line += ['', '']
-                else:
-                    line += [str(row['credits']),
-                             (str(row['average_score']) if row['average_score'] is not None else '')]
+                line += [str(row['credits']),
+                         (str(row['average_score']) if row['average_score'] is not None else '')]
             data.append(line)
 
         ncols = 2 + len(group) + tail
@@ -208,28 +192,19 @@ def _broadsheet(exam, school, opts, subjects, rows, subject_summary, per, orient
 
         sum0 = nrows + 1 + _EXTRA_ROWS                        # first summary row index
         if show_summary:
-            if blank:
-                for label_txt in _BLANK_SUMMARY:
-                    rr = ['', Paragraph(label_txt, _S['name'])] + [''] * len(group)
-                    if last:
-                        rr += ['', '']
-                    data.append(rr)
-            else:
-                ss = subject_summary
-                for label_txt, fn in (('No. offered', lambda d: d['offered']),
-                                      ('No. passed (C6+)', lambda d: d['passed']),
-                                      ('No. failed', lambda d: d['failed']),
-                                      ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
-                                      ('Average grade', lambda d: d['avg_grade'])):
-                    rr = ['', label_txt] + [str(fn(ss[s])) for s in group]
-                    if last:
-                        rr += ['', '']
-                    data.append(rr)
+            for label, fn in (('No. offered', lambda d: d['offered']),
+                              ('No. passed (C6+)', lambda d: d['passed']),
+                              ('No. failed', lambda d: d['failed']),
+                              ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
+                              ('Average grade', lambda d: d['avg_grade'])):
+                rr = ['', label] + [str(fn(ss[s])) for s in group]
+                if last:
+                    rr += ['', '']
+                data.append(rr)
 
         widths = [sn_w, name_w] + [sub_w] * (len(group) + tail)
-        data_h = row_h if row_h is not None else None
-        heights = ([None] + [data_h] * nrows + [7.5 * mm] * _EXTRA_ROWS
-                   + ([data_h] * len(_BLANK_SUMMARY) if show_summary else []))
+        heights = ([None] + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
+                   + ([None] * len(_BLANK_SUMMARY) if show_summary else []))
         t = Table(data, colWidths=widths, repeatRows=1, rowHeights=heights)
         style = [
             ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
@@ -243,8 +218,6 @@ def _broadsheet(exam, school, opts, subjects, rows, subject_summary, per, orient
             ('TOPPADDING', (0, 0), (-1, -1), 2.5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
         ]
-        for col, rw in shaded:                                # shade non-offered subjects
-            style.append(('BACKGROUND', (col, rw), (col, rw), _SHADE))
         if show_summary:
             style.append(('FONTSIZE', (0, sum0), (-1, -1), 8.5))
             style.append(('BACKGROUND', (0, sum0), (-1, -1), _FOOT))
@@ -261,27 +234,110 @@ def _broadsheet(exam, school, opts, subjects, rows, subject_summary, per, orient
     return buf
 
 
-def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
-    """Full score+grade matrix. Wide subject sets split across pages (``per``
-    columns each); no admission numbers. ``opts['summary']`` toggles the
-    per-subject offered/passed/failed/average rows. ``orient`` is landscape or
-    portrait A4, filling the page with an 8mm margin."""
-    return _broadsheet(exam, school, opts, bs['subjects'], bs['rows'],
-                       bs['subject_summary'], per, orient, blank=False,
-                       min_w=13 * mm, title_word='Broadsheet')
-
-
 def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
-                         per=8, orient='landscape'):
-    """A blank recording sheet — identical in layout to the filled broadsheet
-    (same S/N, Name, one vertical-headed column per subject, then Credits and
-    Average %, plus the same summary rows), only with the cells left empty to
-    write into. Subjects a student does not offer are shaded out."""
-    rows = [{'student': st, 'cells': {}, 'credits': '', 'average_score': None}
-            for st in students]
-    return _broadsheet(exam, school, opts, subjects, rows, None, per, orient,
-                       blank=True, offered=offered, min_w=15 * mm, row_h=8.5 * mm,
-                       title_word='Recording Sheet')
+                         per=0, orient='landscape'):
+    """A blank recording sheet: student names down the side, every offered subject
+    across the top with its own **Score** and **Grade** columns to write into.
+    Subjects a student does not offer are shaded out. Landscape or portrait A4.
+
+    Columns are sized to fit the whole subject set on one sheet by default
+    (``per=0``): with the full WAEC load (~16 subjects) all of them stay on one
+    landscape page instead of spilling a few onto a second sheet. The score/grade
+    columns are deliberately narrow (hand-writing a 2-digit score or a grade), so
+    cell padding and the Score/Grade sub-labels are kept compact."""
+    _styles()
+    page = _pagesize(orient)
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
+                            bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
+                            title=f'Blank broadsheet — {exam.display_name}')
+    usable = page[0] - 16 * mm
+    sn_w, name_w = 8 * mm, 46 * mm
+    # Two writable columns (Score + Grade) per subject. Reserve only ~13mm per
+    # subject so the full WAEC set fits one landscape sheet; columns narrow before
+    # the sheet splits. (~6.5mm per Score/Grade column at the full load.)
+    per = _fit_per(usable, sn_w, name_w, 0, 13 * mm, per, len(subjects))
+    groups = _groups(subjects, per)
+    nstud = len(students)
+    e = []
+    for gi, group in enumerate(groups):
+        sub = f'{exam.display_name} — Recording Sheet'
+        if len(groups) > 1:
+            sub += f' (Sheet {gi + 1} of {len(groups)})'
+        _school_header(e, school, opts, sub)
+
+        pair_w = (usable - sn_w - name_w) / len(group)      # width per subject
+        cell_w = pair_w / 2                                  # Score | Grade
+
+        # Two-row header: the vertical subject name spanning its Score+Grade
+        # columns, then the Score / Grade sub-labels (compact for narrow columns).
+        h1 = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
+        h2 = ['', '']
+        for s in group:
+            h1 += [_VHead(s), '']
+            h2 += [Paragraph('Sc', _S['subhead']), Paragraph('Gr', _S['subhead'])]
+        data = [h1, h2]
+        shaded = []
+        for i, st in enumerate(students, 1):
+            line = [str(i), Paragraph(st.full_name, _S['name'])]
+            take = offered.get(st.id) or set()
+            for ci, s in enumerate(group):
+                line += ['', '']
+                if take and s not in take:
+                    shaded.append((2 + ci * 2, 1 + i))      # row index incl. 2 header rows
+            data.append(line)
+
+        for _ in range(_EXTRA_ROWS):                        # blank rows for additions
+            data.append(['', ''] + [''] * (2 * len(group)))
+
+        # Blank summary rows for filling the per-subject tallies by hand.
+        show_summary = _opt(opts, 'summary')
+        sum0 = len(data)                        # table row of the first summary row
+        if show_summary:
+            for label in _BLANK_SUMMARY:
+                data.append(['', Paragraph(label, _S['name'])] + [''] * (2 * len(group)))
+
+        widths = [sn_w, name_w] + [cell_w] * (2 * len(group))
+        heights = ([None, None] + [8.5 * mm] * nstud + [8.5 * mm] * _EXTRA_ROWS
+                   + ([8.5 * mm] * len(_BLANK_SUMMARY) if show_summary else []))
+        t = Table(data, colWidths=widths, repeatRows=2, rowHeights=heights)
+        style = [
+            ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (0, 0), (-1, 1), _HEAD),
+            ('SPAN', (0, 0), (0, 1)),          # S/N spans both header rows
+            ('SPAN', (1, 0), (1, 1)),          # Name spans both header rows
+            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+            ('LEFTPADDING', (2, 0), (-1, -1), 1),    # narrow score/grade columns
+            ('RIGHTPADDING', (2, 0), (-1, -1), 1),
+        ]
+        for j in range(len(group)):           # subject name spans its 2 columns
+            c0 = 2 + j * 2
+            style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
+        for col, rw in shaded:                 # shade Score+Grade of non-offered
+            style.append(('BACKGROUND', (col, rw), (col + 1, rw), _SHADE))
+        if show_summary:                       # one writing box per subject per row
+            style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
+            style.append(('BACKGROUND', (0, sum0), (1, sum0 + len(_BLANK_SUMMARY) - 1), _FOOT))
+            for k in range(len(_BLANK_SUMMARY)):
+                for j in range(len(group)):
+                    c0 = 2 + j * 2
+                    style.append(('SPAN', (c0, sum0 + k), (c0 + 1, sum0 + k)))
+        t.setStyle(TableStyle(style))
+        e.append(t)
+
+        if _opt(opts, 'grades'):              # WASSCE grade-band reference
+            e.append(Spacer(1, 6))
+            e.append(_grade_key_table(usable))
+        if gi != len(groups) - 1:
+            e.append(PageBreak())
+    doc.build(e)
+    buf.seek(0)
+    return buf
 
 
 def _signature_row(signers):

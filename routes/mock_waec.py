@@ -245,7 +245,7 @@ def broadsheet_blank_pdf(exam_id):
     union = set().union(*offered.values()) if offered else set()
     subjects = MockWAECAnalytics._ordered_subjects(union or set(WAEC_DEFAULT_SUBJECTS))
     from utils.mock_waec_pdf import blank_broadsheet_pdf
-    per = request.args.get('cols', default=8, type=int)
+    per = request.args.get('cols', default=0, type=int)
     buf = blank_broadsheet_pdf(students, offered, subjects, exam, _school_profile(),
                                opts=_pdf_opts(), per=(per if per and per > 0 else 0),
                                orient=request.args.get('orient', 'landscape'))
