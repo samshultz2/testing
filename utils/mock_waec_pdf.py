@@ -223,7 +223,6 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('VALIGN', (0, 0), (-1, 0), 'BOTTOM'),
-            ('BACKGROUND', (0, 0), (-1, 0), _HEAD),
             ('TOPPADDING', (0, 0), (-1, -1), 2.5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
         ]
@@ -245,9 +244,10 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
 
 def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
                          per=0, orient='landscape'):
-    """A blank recording sheet: student names down the side, every offered subject
-    across the top with its own **Score** and **Grade** columns to write into.
-    Subjects a student does not offer are shaded out. Landscape or portrait A4.
+    """A blank recording sheet: student names down the side, every subject across
+    the top with its own **Score** and **Grade** columns to write into. Landscape
+    or portrait A4. (``offered`` is accepted for call compatibility but no longer
+    used — cells are left plain rather than shading out non-offered subjects.)
 
     Columns are sized to fit the whole subject set on one sheet by default
     (``per=0``): with the full WAEC load (~16 subjects) all of them stay on one
@@ -288,14 +288,9 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             h1 += [_VHead(s), '']
             h2 += [_VHead('Score', size=7), _VHead('Grade', size=7)]   # vertical sub-labels
         data = [h1, h2]
-        shaded = []
         for i, st in enumerate(students, 1):
             line = [str(i), Paragraph(_short_name(st), _S['name'])]
-            take = offered.get(st.id) or set()
-            for ci, s in enumerate(group):
-                line += ['', '']
-                if take and s not in take:
-                    shaded.append((2 + ci * 2, 1 + i))      # row index incl. 2 header rows
+            line += ['', ''] * len(group)
             data.append(line)
 
         for _ in range(_EXTRA_ROWS):                        # blank rows for additions
@@ -321,7 +316,6 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BACKGROUND', (0, 0), (-1, 1), _HEAD),
             ('SPAN', (0, 0), (0, 1)),          # S/N spans both header rows
             ('SPAN', (1, 0), (1, 1)),          # Name spans both header rows
             ('TOPPADDING', (0, 0), (-1, -1), 2.5),
@@ -332,8 +326,6 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
         for j in range(len(group)):           # subject name spans its 2 columns
             c0 = 2 + j * 2
             style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
-        for col, rw in shaded:                 # shade Score+Grade of non-offered
-            style.append(('BACKGROUND', (col, rw), (col + 1, rw), _SHADE))
         if show_summary:                       # one writing box per subject per row
             style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
             style.append(('BACKGROUND', (0, sum0), (1, sum0 + len(_BLANK_SUMMARY) - 1), _FOOT))
