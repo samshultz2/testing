@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Teaching focus areas - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.predictions_dashboard') }}">Predictions</a> / <span>Focus areas</span>{% endblock %}
+{% block extra_css %}
+<style>
+.fa-meta{font-size:.8rem;color:var(--text-muted)}
+.focus-card{border:1px solid var(--border-color);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden}
+.focus-head{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:var(--bg-tertiary)}
+.focus-rank{font-size:1.4rem;font-weight:800;color:var(--text-muted);min-width:2ch;text-align:center}
+.focus-title{flex:1}
+.focus-title h3{margin:0;font-size:1.05rem}
+.focus-score{font-size:1.5rem;font-weight:800}
+.fs-hi{color:#dc3545}.fs-mid{color:#fd7e14}.fs-lo{color:#28a745}
+.badge-src{font-size:.65rem;padding:.12rem .45rem;border-radius:8px;background:rgba(23,162,184,.15);color:#17a2b8;text-transform:uppercase;letter-spacing:.04em}
+.badge-core{font-size:.65rem;padding:.12rem .45rem;border-radius:8px;background:rgba(220,53,69,.12);color:#dc3545}
+.focus-body{padding:.75rem 1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem 1.25rem}
+.fa-stat .v{font-weight:700;font-size:1rem}.fa-stat .l{font-size:.72rem;color:var(--text-muted);text-transform:uppercase}
+.trend-improving{color:#28a745}.trend-declining{color:#dc3545}.trend-flat{color:#6c757d}.trend-volatile{color:#fd7e14}.trend-insufficient{color:#6c757d}
+.spark{font-family:monospace;font-size:.85rem}
+.fix-label{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:8px;background:rgba(253,126,20,.12);color:#c2410c;margin-top:.25rem}
+.intervention{font-size:.85rem;margin-top:.5rem;padding:.4rem .6rem;background:var(--bg-tertiary);border-radius:6px}
+.pc-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:.5rem}
+.pc-table th,.pc-table td{padding:.25rem .5rem;border-bottom:1px solid var(--border-color);text-align:left}
+.delta-neg{color:#dc3545}.delta-pos{color:#28a745}
+.caveat{font-size:.72rem;color:#fd7e14}
+.reality{margin-top:.5rem;font-size:.82rem;padding:.4rem .6rem;border-radius:6px;background:rgba(220,53,69,.08)}
+.atrisk-row td{padding:.35rem .5rem;border-bottom:1px solid var(--border-color);font-size:.83rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-bullseye"></i> Teaching focus areas</h1>
+        <p class="text-muted text-sm">
+            What to teach harder before the real exams — ranked from {{ report.session or 'the active session' }}’s mocks
+            {% if report.has_real_jamb %}and real JAMB{% endif %}.
+            {% if is_admin_view %}Whole cohort ({{ report.cohort_size }} students, classes: {{ report.classes|join(', ') or '—' }}).{% else %}Your classes: {{ teacher_classes|join(', ') if teacher_classes else '—' }}.{% endif %}
+        </p>
+    </div>
+</div>
+
+{% if not report.session %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-calendar-xmark"></i><h3>No active session</h3><p>{{ report.meta.reason or 'Set an active session to generate focus areas.' }}</p></div></div></div>
+{% elif not report.focus %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-clipboard-question"></i><h3>No mock data yet</h3><p>Once this cohort sits mock JAMB / mock WAEC for {{ report.session }}, the ranked focus list appears here.</p></div></div></div>
+{% else %}
+
+<div class="card mb-3"><div class="card-body" style="padding:.6rem 1rem">
+    <span class="caveat"><i class="fas fa-triangle-exclamation"></i> {{ report.meta.caveat }}</span>
+</div></div>
+
+{% for e in report.focus %}
+<div class="focus-card">
+    <div class="focus-head">
+        <div class="focus-rank">{{ loop.index }}</div>
+        <div class="focus-title">
+            <h3>{{ e.subject }}
+                <span class="badge-src">{{ 'WAEC' if e.source == 'mock_waec' else 'JAMB' }}</span>
+                {% if e.is_core %}<span class="badge-core">core · gates admission</span>{% endif %}
+                {% if e.low_confidence %}<span class="caveat" title="Few students measured">· low n</span>{% endif %}
+            </h3>
+            <div class="fa-meta">{{ e.intervention }}</div>
+        </div>
+        <div class="focus-score {{ 'fs-hi' if e.focus_score >= 50 else 'fs-mid' if e.focus_score >= 25 else 'fs-lo' }}">{{ e.focus_score }}</div>
+    </div>
+    <div class="focus-body">
+        <div class="fa-stat">
+            <div class="v trend-{{ e.trend.label }}">{{ e.trend.label|capitalize }}</div>
+            <div class="l">Trend</div>
+            {% if e.trend.series|length > 1 %}<div class="spark">{{ e.trend.series|join(' → ') }}</div>{% endif %}
+        </div>
+        <div class="fa-stat">
+            <div class="v">{{ (e.severity*100)|round|int }}%</div>
+            <div class="l">{{ 'P(miss credit)' if e.source == 'mock_waec' else 'Below pass' }}</div>
+        </div>
+        <div class="fa-stat"><div class="v">{{ e.mean }} <span class="fa-meta">± {{ e.dispersion }}</span></div><div class="l">Mean score</div></div>
+        <div class="fa-stat"><div class="v">{{ e.nudge_group }}</div><div class="l">Nudge group (just below line)</div></div>
+        <div class="fa-stat"><div class="v">{{ e.n }}</div><div class="l">Students measured</div></div>
+    </div>
+    <div style="padding:0 1rem 0.75rem">
+        {% if e.fix_type %}<span class="fix-label"><i class="fas fa-wrench"></i>
+            {% if e.fix_type == 'content gap' %}Weak in both tests — content gap (reteach the material){% else %}Weak in one test only — {{ e.fix_type }} (drill exam technique){% endif %}</span>{% endif %}
+        {% if e.reality %}
+        <div class="reality"><i class="fas fa-flag-checkered"></i>
+            Real JAMB mean <strong>{{ e.reality.real_mean }}</strong> vs mock <strong>{{ e.reality.mock_mean }}</strong>
+            ({{ '+' if e.reality.delta >= 0 else '' }}{{ e.reality.delta }}){% if e.reality.blind_spot %} — <strong>blind spot:</strong> reality below the mocks, raise priority{% endif %}.
+        </div>
+        {% endif %}
+        {% if e.per_class %}
+        <table class="pc-table">
+            <thead><tr><th>Class</th><th>Mean</th><th>vs cohort</th><th>n</th></tr></thead>
+            <tbody>
+            {% for c in e.per_class %}
+                <tr><td>{{ c.class }}</td><td>{{ c.mean }}</td>
+                    <td class="{{ 'delta-neg' if c.delta_vs_cohort < 0 else 'delta-pos' }}">{{ '+' if c.delta_vs_cohort >= 0 else '' }}{{ c.delta_vs_cohort }}</td>
+                    <td>{{ c.n }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if e.movers %}<div class="fa-meta" style="margin-top:.4rem"><i class="fas fa-arrow-trend-down"></i> Biggest decliners: {% for m in e.movers %}{{ m.name }} ({{ m.delta }}){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+    </div>
+</div>
+{% endfor %}
+
+{% if report.at_risk %}
+<div class="card mt-3">
+    <div class="card-header"><h3><i class="fas fa-user-shield"></i> At-risk students ({{ report.at_risk|length }})</h3></div>
+    <div class="card-body" style="padding:0">
+        <table class="data-table" style="width:100%">
+            <thead><tr><th>Student</th><th>Class</th><th>Subject</th><th>Source</th><th>Trajectory</th><th>Why</th></tr></thead>
+            <tbody>
+            {% for f in report.at_risk %}
+                <tr class="atrisk-row">
+                    <td>{{ f.student }}</td><td>{{ f.class }}</td><td>{{ f.subject }}</td><td>{{ f.source }}</td>
+                    <td class="spark">{{ f.trajectory|join(' → ') }}</td>
+                    <td>{{ f.reason }}{% if f.p_credit is not none %} · P(credit) {{ (f.p_credit*100)|round|int }}%{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -2179,7 +2179,68 @@ def predictions_dashboard():
         calibration=calibration,
         cohort=cohort,
         waec_model_url=url_for('results.waec_model_config'),
+        focus_url=url_for('results.focus_areas'),
     )
+
+
+@results_bp.route('/predictions/focus')
+@login_required
+def focus_areas():
+    """Teaching focus-areas diagnostics for the current SSS3 cohort: a ranked list
+    of subjects (with the evidence behind each) that need attention before the real
+    exams, drawn from the active session's mock JAMB / mock WAEC / real JAMB.
+
+    Admins see the whole cohort across classes; a teacher sees only the classes they
+    are form teacher of."""
+    from utils.focus_areas import build_focus_report
+    from utils.access_control import is_admin, is_teacher, get_teacher_profile
+    from utils.branch_scope import viewing_branch_id
+
+    branch_id = viewing_branch_id()
+    if branch_id == -1:
+        branch_id = None        # central / all-branches view
+
+    report = build_focus_report(branch_id=branch_id)
+
+    # Teacher scope: limit the per-class views and at-risk list to their own classes.
+    teacher_classes = None
+    if is_teacher() and not is_admin():
+        from models import ClassArmAssignment, ClassArm
+        labels = set()
+        teacher = get_teacher_profile()
+        for caa_id in (teacher.form_class_ids if teacher else set()):
+            caa = db.session.get(ClassArmAssignment, caa_id)
+            if caa and caa.school_class and caa.school_class.name == 'SSS3':
+                arm = db.session.get(ClassArm, caa.arm_id)
+                if arm:
+                    labels.add(arm.name)
+        teacher_classes = labels
+        report = _scope_focus_to_classes(report, labels)
+
+    return render_template('results/focus_areas.html',
+        report=report, is_admin_view=is_admin(), teacher_classes=teacher_classes)
+
+
+def _scope_focus_to_classes(report, labels):
+    """Trim a focus report to a teacher's own SSS3 classes: keep only those
+    per-class rows, drop subjects with no presence in those classes, and limit
+    at-risk flags to the teacher's classes."""
+    if not labels:
+        report['focus'] = []
+        report['at_risk'] = []
+        report['classes'] = []
+        return report
+    kept = []
+    for e in report['focus']:
+        pc = [c for c in e['per_class'] if c['class'] in labels]
+        if not pc:
+            continue
+        e = dict(e); e['per_class'] = pc
+        kept.append(e)
+    report['focus'] = kept
+    report['at_risk'] = [f for f in report['at_risk'] if f.get('class') in labels]
+    report['classes'] = sorted(labels)
+    return report
 
 
 @results_bp.route('/predictions/waec-model', methods=['GET', 'POST'])
