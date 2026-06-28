@@ -32,9 +32,9 @@ export default function MarkDaily() {
   const [assignmentId, setAssignmentId] = useState(
     seeded ? String(initial.assignmentId) : (default_class ? String(default_class) : ''));
   const [date, setDate] = useState((seeded && initial.date) || today || '');
-  const [session, setSession] = useState('morning');    // morning | afternoon
-  const [autoCopyPm, setAutoCopyPm] = useState(true);   // morning also seeds afternoon
   const [state, setState] = useState({ idle: true });   // idle | loading | data | error
+  // Per enrollment: { am: bool, pm: bool }. Morning and afternoon are marked
+  // independently and saved together — no "which session?" picker.
   const [present, setPresent] = useState({});
   const [msg, setMsg] = useState(null);
   const [toast, setToast] = useState(null);   // floating save confirmation (no scroll)
@@ -79,37 +79,44 @@ export default function MarkDaily() {
   useEffect(() => {
     const d = state.data;
     if (!d) return;
-    const field = session === 'afternoon' ? 'afternoon_present' : 'morning_present';
     const init = {};
-    d.students.forEach((s) => { init[s.enrollment_id] = !!s[field]; });
+    // Default everyone present for both sessions (roster returns true when there
+    // is no existing record for the day).
+    d.students.forEach((s) => { init[s.enrollment_id] = { am: !!s.morning_present, pm: !!s.afternoon_present }; });
     setPresent(init);
-  }, [state.data, session]);
+  }, [state.data]);
 
-  const toggle = (id) => setPresent((p) => ({ ...p, [id]: !p[id] }));
-  const setAll = (val) => {
-    const all = {}; state.data.students.forEach((s) => { all[s.enrollment_id] = val; });
-    setPresent(all);
+  const toggle = (id, sess) => setPresent((p) => ({ ...p, [id]: { ...p[id], [sess]: !p[id][sess] } }));
+  // val for one session ('am'/'pm') across everyone, or both at once ('all').
+  const setAll = (sess, val) => {
+    setPresent((p) => {
+      const out = {};
+      state.data.students.forEach((s) => {
+        const cur = p[s.enrollment_id] || { am: true, pm: true };
+        out[s.enrollment_id] = {
+          am: (sess === 'all' || sess === 'am') ? val : cur.am,
+          pm: (sess === 'all' || sess === 'pm') ? val : cur.pm,
+        };
+      });
+      return out;
+    });
   };
 
   const save = async () => {
     const d = state.data;
-    const presentIds = d.students.filter((s) => present[s.enrollment_id]).map((s) => s.enrollment_id);
-    // Marking the morning can also seed the afternoon (opt-out via the
-    // checkbox); the afternoon session updates the afternoon only.
-    const autoCopy = session === 'morning' && autoCopyPm;
-    const payload = { assignment_id: Number(assignmentId), date, session_type: session, present: presentIds, auto_copy: autoCopy };
+    const am = d.students.filter((s) => present[s.enrollment_id] && present[s.enrollment_id].am).map((s) => s.enrollment_id);
+    const pm = d.students.filter((s) => present[s.enrollment_id] && present[s.enrollment_id].pm).map((s) => s.enrollment_id);
+    const payload = { assignment_id: Number(assignmentId), date, mode: 'dual', am, pm };
     // optimistic cache so reopening (even offline) reflects it
     const updated = { ...d, students: d.students.map((s) => {
-      const val = !!present[s.enrollment_id];
-      if (session === 'afternoon') return { ...s, afternoon_present: val };
-      if (autoCopy) return { ...s, morning_present: val, afternoon_present: val };  // morning seeds afternoon
-      return { ...s, morning_present: val };
+      const v = present[s.enrollment_id] || { am: true, pm: true };
+      return { ...s, morning_present: !!v.am, afternoon_present: !!v.pm };
     }) };
     await cachePut(key(assignmentId, date), updated);
     setBusy(true);
     try {
       const r = await apiPost('/attendance/api/mark', payload);
-      setToast({ tone: 'success', text: `Saved ${r.count} student(s) — ${session}.` });
+      setToast({ tone: 'success', text: `Saved ${r.count} student(s) — morning & afternoon.` });
     } catch (e) {
       if (isPermanent(e)) { setToast({ tone: 'error', text: `Couldn’t save: ${e.message}` }); }
       else { await enqueue('/attendance/api/mark', payload); await sync.refresh(); setToast({ tone: 'warn', text: 'Offline — queued, will sync when you reconnect.' }); }
@@ -128,7 +135,8 @@ export default function MarkDaily() {
   };
 
   const d = state.data;
-  const presentCount = d ? d.students.filter((s) => present[s.enrollment_id]).length : 0;
+  const amCount = d ? d.students.filter((s) => present[s.enrollment_id] && present[s.enrollment_id].am).length : 0;
+  const pmCount = d ? d.students.filter((s) => present[s.enrollment_id] && present[s.enrollment_id].pm).length : 0;
   // A holiday/weekend is not a school day: the server rejects marks, so the
   // register is read-only here (parity with the classic page's block).
   const notSchoolDay = d && d.school_day === false;
@@ -136,6 +144,9 @@ export default function MarkDaily() {
     ? `${d.date} was marked as ${d.holiday.type ? d.holiday.type.toLowerCase() : 'a holiday'}: ${d.holiday.reason}.`
     : d.weekend ? `${d.date} is a weekend.` : `${d.date} is not a school day.`);
   const canSave = d && d.week_id && d.students.length && !notSchoolDay && !busy;
+
+  const boxStyle = { width: 22, height: 22, accentColor: 'var(--success, #16a34a)', cursor: 'pointer' };
+  const colStyle = { width: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 };
 
   return (
     <div>
@@ -147,10 +158,6 @@ export default function MarkDaily() {
         </Field>
         <Field label="Date" htmlFor="md-date">
           <input id="md-date" type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
-        <Field label="Session" htmlFor="md-session">
-          <Select id="md-session" value={session} onChange={setSession}
-                  options={[{ value: 'morning', label: 'Morning' }, { value: 'afternoon', label: 'Afternoon' }]} />
         </Field>
       </Toolbar>
 
@@ -168,7 +175,7 @@ export default function MarkDaily() {
             <span style={{ color: '#6b7280' }}>{d.date}</span>
             {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
             {weekCached && online && <Pill tone="green"><i className="fas fa-download" aria-hidden="true" /> week saved offline</Pill>}
-            <span style={{ marginLeft: 'auto', fontSize: 13 }}>Present: <b>{presentCount}</b>/{d.students.length}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 13 }}>AM <b>{amCount}</b>/{d.students.length} · PM <b>{pmCount}</b>/{d.students.length}</span>
           </div>
 
           {!d.week_id && <Banner tone="warn">This date isn’t in a school week — you can review, but saving is disabled.</Banner>}
@@ -179,24 +186,27 @@ export default function MarkDaily() {
             <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
           ) : (
             <>
-              {session === 'morning' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', fontSize: 14, fontWeight: 500 }}>
-                  <input type="checkbox" checked={autoCopyPm} onChange={(e) => setAutoCopyPm(e.target.checked)} />
-                  <span><i className="fas fa-copy" aria-hidden="true" /> Also mark afternoon (same as morning)</span>
-                </label>
-              )}
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 8px' }}>
+                Everyone starts present. Untick a box to mark a student absent for just the morning or just the afternoon.
+              </p>
               <ul className="att-list" aria-label={'Register for ' + d.class_name}>
+                <li style={{ display: 'flex', alignItems: 'center', fontWeight: 700, borderBottom: '2px solid var(--border-color, #e5e7eb)', padding: '6px 8px' }}>
+                  <span style={{ flex: 1 }}>Student</span>
+                  <span style={colStyle}>AM</span>
+                  <span style={colStyle}>PM</span>
+                </li>
                 {d.students.map((s) => {
-                  const on = !!present[s.enrollment_id];
+                  const v = present[s.enrollment_id] || { am: true, pm: true };
                   return (
-                    <li key={s.enrollment_id} className={on ? 'is-present' : 'is-absent'}>
-                      <label>
-                        <input type="checkbox" checked={on} onChange={() => toggle(s.enrollment_id)} />
-                        <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
-                        <span className="att-name">{s.name}<span className="att-sub">{s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
-                        <span className="att-flag">
-                          <i className={'fas ' + (on ? 'fa-check' : 'fa-xmark')} aria-hidden="true" /> {on ? 'Present' : 'Absent'}
-                        </span>
+                    <li key={s.enrollment_id} className={(v.am || v.pm) ? 'is-present' : 'is-absent'}
+                        style={{ display: 'flex', alignItems: 'center', padding: '8px' }}>
+                      <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
+                      <span className="att-name" style={{ flex: 1 }}>{s.name}<span className="att-sub">{s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
+                      <label style={colStyle}>
+                        <input type="checkbox" style={boxStyle} checked={v.am} onChange={() => toggle(s.enrollment_id, 'am')} aria-label={`${s.name} present morning`} />
+                      </label>
+                      <label style={colStyle}>
+                        <input type="checkbox" style={boxStyle} checked={v.pm} onChange={() => toggle(s.enrollment_id, 'pm')} aria-label={`${s.name} present afternoon`} />
                       </label>
                     </li>
                   );
@@ -206,8 +216,10 @@ export default function MarkDaily() {
           )}
 
           <div className="att-actions">
-            <Button variant="secondary" size="sm" onClick={() => setAll(true)} disabled={!d.students.length || notSchoolDay}>Mark all present</Button>
-            <Button variant="light" size="sm" onClick={() => setAll(false)} disabled={!d.students.length || notSchoolDay}>Mark all absent</Button>
+            <Button variant="secondary" size="sm" onClick={() => setAll('all', true)} disabled={!d.students.length || notSchoolDay}>All present</Button>
+            <Button variant="light" size="sm" onClick={() => setAll('all', false)} disabled={!d.students.length || notSchoolDay}>All absent</Button>
+            <Button variant="light" size="sm" onClick={() => setAll('am', false)} disabled={!d.students.length || notSchoolDay}>Clear AM</Button>
+            <Button variant="light" size="sm" onClick={() => setAll('pm', false)} disabled={!d.students.length || notSchoolDay}>Clear PM</Button>
             <Button onClick={save} disabled={!canSave}>Save register</Button>
             <Button variant="light" size="sm" onClick={copyPrevious}
                     disabled={!online || !d.week_id || notSchoolDay || busy}

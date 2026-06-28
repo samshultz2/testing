@@ -1090,11 +1090,36 @@ def api_mark():
         reason = hol.reason if hol else 'weekend'
         return jsonify({'error': f'not a school day ({reason})'}), 400
 
+    enrollments = StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=assignment_id, is_active=True).all()
+    enroll_ids = [e.id for e in enrollments]
+    valid = set(enroll_ids)
+
+    # Dual mode: morning + afternoon marked together (independent ticks), so a
+    # student can be present in the morning and absent in the afternoon. The
+    # React register sends `am`/`pm` present-lists in one save.
+    if data.get('mode') == 'dual':
+        am_ids = {int(x) for x in data.get('am', []) if int(x) in valid}
+        pm_ids = {int(x) for x in data.get('pm', []) if int(x) in valid}
+        try:
+            for en in enrollments:
+                att = Attendance.query.filter_by(enrollment_id=en.id, date=target).first()
+                if att is None:
+                    att = Attendance(enrollment_id=en.id, date=target, week_id=week.id)
+                    db.session.add(att)
+                att.week_id = week.id
+                att.morning_present = en.id in am_ids
+                att.afternoon_present = en.id in pm_ids
+                att.marked_by = 'React'
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+        return jsonify({'ok': True, 'count': len(enrollments), 'date': target.isoformat(),
+                        'session_type': 'dual'})
+
     session_type = 'afternoon' if data.get('session_type') == 'afternoon' else 'morning'
     auto_copy = bool(data.get('auto_copy', session_type == 'morning'))
-    enroll_ids = [e.id for e in StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=assignment_id, is_active=True).all()]
-    valid = set(enroll_ids)
     present = [int(x) for x in data.get('present', []) if int(x) in valid]
     try:
         count = mark_attendance_bulk(

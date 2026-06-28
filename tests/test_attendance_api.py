@@ -109,6 +109,24 @@ def test_mark_is_idempotent_upsert(app):
         assert absent.morning_present is False
 
 
+def test_mark_dual_sets_am_pm_independently(app):
+    """The daily register marks morning and afternoon together (no session
+    picker): a student can be present AM and absent PM in one save."""
+    ids = _setup(app)
+    c, tok = _admin(app)
+    body = {'assignment_id': ids['caa'], 'date': ids['date'], 'mode': 'dual',
+            'am': [ids['eids'][0]],            # Ann present in the morning only
+            'pm': [ids['eids'][1]]}            # Bob present in the afternoon only
+    m = c.post('/attendance/api/mark', json=body, headers={'X-CSRFToken': tok})
+    assert m.status_code == 200 and m.get_json()['ok'] is True
+    with app.app_context():
+        d = date.fromisoformat(ids['date'])
+        ann = Attendance.query.filter_by(enrollment_id=ids['eids'][0], date=d).first()
+        bob = Attendance.query.filter_by(enrollment_id=ids['eids'][1], date=d).first()
+        assert ann.morning_present is True and ann.afternoon_present is False
+        assert bob.morning_present is False and bob.afternoon_present is True
+
+
 def test_mark_rejects_date_with_no_week(app):
     ids = _setup(app)
     c, tok = _admin(app)
