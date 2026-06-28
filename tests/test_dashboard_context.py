@@ -80,13 +80,14 @@ def test_dashboard_context_values(app):
     _seed(app)
     ctx = _capture(app)
 
-    # Branch-scoped: exactly our three DSH students.
-    assert ctx['total_students'] == 3
-    assert ctx['male_students'] == 2 and ctx['female_students'] == 1
+    # Branch-scoped, graduates excluded from the analytics: 2 current students
+    # (the graduate is counted only under graduates_count).
+    assert ctx['total_students'] == 2
+    assert ctx['male_students'] == 1 and ctx['female_students'] == 1
     assert ctx['graduates_count'] == 1
 
-    assert ctx['age_distribution'] == {'0-10': 0, '11-13': 1, '14-16': 1, '17-19': 0, '20+': 1}
-    assert ctx['religion_stats'] == {'Christianity': 2, 'Islam': 1}
+    assert ctx['age_distribution'] == {'0-10': 0, '11-13': 1, '14-16': 1, '17-19': 0, '20+': 0}
+    assert ctx['religion_stats'] == {'Christianity': 1, 'Islam': 1}
     assert ctx['stream_dist'].get('Science') == 1 and ctx['stream_dist'].get('Arts') == 1
 
     js = ctx['jamb_snapshot']

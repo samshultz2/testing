@@ -449,10 +449,13 @@ def _dash_student_counts(tscope=None):
             # restrict to the teacher's own students ([-1] => match nothing)
             return query.filter(Student.id.in_(tscope[1] or [-1]))
         return scope_query(query, Student)
+    # Current (non-graduate) students only; graduates are counted separately.
+    current = Student.query.filter_by(is_active=True).filter(
+        db.or_(Student.is_graduated.is_(False), Student.is_graduated.is_(None)))
     return {
-        'total_students': sq(Student.query.filter_by(is_active=True)).count(),
-        'male_students': sq(Student.query.filter_by(is_active=True, gender='Male')).count(),
-        'female_students': sq(Student.query.filter_by(is_active=True, gender='Female')).count(),
+        'total_students': sq(current).count(),
+        'male_students': sq(current.filter(Student.gender == 'Male')).count(),
+        'female_students': sq(current.filter(Student.gender == 'Female')).count(),
         'graduates_count': sq(Student.query.filter_by(is_active=True, is_graduated=True)).count(),
     }
 
@@ -548,8 +551,11 @@ def _dash_attendance_stats(active_term, tscope=None):
 def _student_scope(query, tscope):
     """Restrict a Student-based query to the teacher's own students; otherwise
     apply the normal branch scope. Used by every student-centric dashboard
-    widget so a form teacher only sees their classes' students."""
+    widget so a form teacher only sees their classes' students. Graduated
+    students are excluded so the dashboard analytics are about current students."""
     from utils.branch_scope import scope_query
+    query = query.filter(db.or_(Student.is_graduated.is_(False),
+                                Student.is_graduated.is_(None)))
     if tscope is not None:
         return query.filter(Student.id.in_(tscope[1] or [-1]))
     return scope_query(query, Student)
@@ -785,8 +791,11 @@ def _students_query():
     sort_by = request.args.get('sort', 'surname')
     order = request.args.get('order', 'asc')
 
-    # Branch + section/stream scope first.
+    # Branch + section/stream scope first. Graduated students are kept out of the
+    # main list and its analytics — they live in the Graduates section instead.
     query = scope_query(Student.query.filter_by(is_active=True), Student)
+    query = query.filter(db.or_(Student.is_graduated.is_(False),
+                                Student.is_graduated.is_(None)))
     query = scope_students(query)
     active_term = get_active_term()
 
