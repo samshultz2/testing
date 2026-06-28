@@ -47,6 +47,36 @@ def waec_grade_from_score(score):
     return 'F9'
 
 
+def _stddev(values):
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    import math
+    return round(math.sqrt(sum((x - mean) ** 2 for x in values) / len(values)), 1)
+
+
+def _quartiles(values):
+    """Q1 / median / Q3 (linear interpolation), plus min/max/mean."""
+    if not values:
+        return {'q1': 0, 'median': 0, 'q3': 0, 'min': 0, 'max': 0, 'mean': 0}
+    import math
+    s = sorted(values)
+
+    def pct(p):
+        k = (len(s) - 1) * p / 100
+        f, c = math.floor(k), math.ceil(k)
+        return s[int(k)] if f == c else s[f] * (c - k) + s[c] * (k - f)
+    return {'q1': round(pct(25), 1), 'median': round(pct(50), 1), 'q3': round(pct(75), 1),
+            'min': min(s), 'max': max(s), 'mean': round(sum(s) / len(s), 1)}
+
+
+def _score_stats(values):
+    q = _quartiles(values)
+    q['n'] = len(values)
+    q['std_dev'] = _stddev(values)
+    return q
+
+
 class MockWAECExam(db.Model):
     """A single Mock WAEC examination event (e.g. 'First Mock WAEC 2025/2026')."""
     __tablename__ = 'mock_waec_exams'
@@ -411,6 +441,30 @@ class MockWAECAnalytics:
                 return None
             return round(d['passed'] / d['offered'] * 100, 1)
 
+        # Statistical depth (mirrors the real-WAEC analytics): spread of scores
+        # overall, per student, and per subject — mean, std-dev and quartiles.
+        all_scores, subject_scores = [], {s: [] for s in subjects}
+        per_student_avg = []
+        for row in bs['rows']:
+            sv = []
+            for s in subjects:
+                r = row['cells'].get(s)
+                if r and r.score is not None:
+                    all_scores.append(r.score)
+                    subject_scores[s].append(r.score)
+                    sv.append(r.score)
+            if sv:
+                per_student_avg.append(round(sum(sv) / len(sv), 1))
+        score_stats = {'overall': _score_stats(all_scores),
+                       'per_student': _score_stats(per_student_avg)}
+        subject_stats = {s: _score_stats(subject_scores[s]) for s in subjects}
+
+        # Top & bottom performers by average score.
+        ranked = sorted(
+            ({'student': r['student'], 'average_score': r['average_score'],
+              'credits': r['credits']} for r in bs['rows'] if r['average_score'] is not None),
+            key=lambda r: r['average_score'], reverse=True)
+
         return {
             'exam': bs['exam'],
             'empty': False,
@@ -423,6 +477,10 @@ class MockWAECAnalytics:
             'difficulty': difficulty,
             'easiest': list(reversed(difficulty))[:5],
             'hardest': difficulty[:5],
+            'score_stats': score_stats,
+            'subject_stats': subject_stats,
+            'top_performers': ranked[:5],
+            'bottom_performers': list(reversed(ranked))[:5],
             'most_failed': sorted(
                 ({'subject': s, **ss[s]} for s in subjects),
                 key=lambda d: d['failed'], reverse=True)[:5],

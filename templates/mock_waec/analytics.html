@@ -110,17 +110,50 @@
     </div>
 </div>
 
+<div class="an-grid mt-3">
+    <div class="card">
+        <div class="card-header"><h3>Score statistics</h3></div>
+        <div class="card-body">
+            <table class="data-table">
+                <thead><tr><th></th><th>n</th><th>Mean</th><th>Std dev</th><th>Min</th><th>Q1</th><th>Median</th><th>Q3</th><th>Max</th></tr></thead>
+                <tbody>
+                    {% set o = a.score_stats.overall %}
+                    <tr><td><strong>All scores</strong></td><td>{{ o.n }}</td><td>{{ o.mean }}</td><td>{{ o.std_dev }}</td><td>{{ o.min }}</td><td>{{ o.q1 }}</td><td>{{ o.median }}</td><td>{{ o.q3 }}</td><td>{{ o.max }}</td></tr>
+                    {% set p = a.score_stats.per_student %}
+                    <tr><td><strong>Student averages</strong></td><td>{{ p.n }}</td><td>{{ p.mean }}</td><td>{{ p.std_dev }}</td><td>{{ p.min }}</td><td>{{ p.q1 }}</td><td>{{ p.median }}</td><td>{{ p.q3 }}</td><td>{{ p.max }}</td></tr>
+                </tbody>
+            </table>
+            <p class="text-muted text-sm" style="margin-top:.5rem;">Std dev shows how spread the scores are; the quartiles (Q1–Q3) show the middle 50%.</p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>Top &amp; bottom performers</h3></div>
+        <div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+                <div class="text-muted text-sm" style="margin-bottom:.3rem;">Top 5 (avg %)</div>
+                {% for r in a.top_performers %}<div style="display:flex;justify-content:space-between;"><span>{{ r.student.full_name }}</span><strong>{{ r.average_score }} · {{ r.credits }}cr</strong></div>{% endfor %}
+            </div>
+            <div style="flex:1;min-width:200px;">
+                <div class="text-muted text-sm" style="margin-bottom:.3rem;">Need support</div>
+                {% for r in a.bottom_performers %}<div style="display:flex;justify-content:space-between;"><span>{{ r.student.full_name }}</span><strong>{{ r.average_score }} · {{ r.credits }}cr</strong></div>{% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card mt-3">
-    <div class="card-header"><h3>Per-subject grade spread</h3></div>
+    <div class="card-header"><h3>Per-subject grade spread &amp; statistics</h3></div>
     <div class="table-responsive"><table class="data-table">
-        <thead><tr><th>Subject</th><th>Offered</th><th>Avg %</th><th>Avg grade</th><th>Pass %</th>{% for g in a.grade_order %}<th>{{ g }}</th>{% endfor %}</tr></thead>
+        <thead><tr><th>Subject</th><th>Offered</th><th>Avg %</th><th>Std dev</th><th>Q1</th><th>Med</th><th>Q3</th><th>Avg grade</th><th>Pass %</th>{% for g in a.grade_order %}<th>{{ g }}</th>{% endfor %}</tr></thead>
         <tbody>
             {% for subj in a.subjects %}
             {% set d = a.subject_summary[subj] %}
+            {% set st = a.subject_stats[subj] %}
             <tr>
                 <td><strong>{{ subj }}</strong></td>
                 <td>{{ d.offered }}</td>
                 <td>{{ d.avg_score if d.avg_score is not none else '—' }}</td>
+                <td>{{ st.std_dev }}</td><td>{{ st.q1 }}</td><td>{{ st.median }}</td><td>{{ st.q3 }}</td>
                 <td><span class="g-{{ grade_classes.get(d.avg_grade, '') }}">{{ d.avg_grade }}</span></td>
                 <td>{{ d.pass_rate }}%</td>
                 {% for g in a.grade_order %}<td>{{ d.distribution[g] or '' }}</td>{% endfor %}

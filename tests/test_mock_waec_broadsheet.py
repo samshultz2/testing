@@ -359,3 +359,25 @@ def test_subject_outlook_from_mock_waec(app):
         assert subs['Mathematics']['trend'] == 'improving'
         assert subs['Mathematics']['predicted_grade'] in ('C4', 'C5', 'C6', 'B3', 'B2')
         assert ol['summary']['overall_outlook'] in ('Excellent', 'Good', 'Fair', 'Needs Improvement')
+
+
+def test_analytics_statistics_depth(app):
+    """Mock WAEC analytics carries the deeper stats ported from real WAEC:
+    std-dev, quartiles (overall, per-student, per-subject) and top/bottom lists."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=81)
+    for i, (m, e) in enumerate([(80, 70), (40, 55), (60, 62), (75, 48)]):
+        sid = _student(app, f'ST{i}' + uuid.uuid4().hex[:4], f'S{i}', 'Stat')
+        _seed_results(app, exam_id, sid, {'Mathematics': m, 'English Language': e})
+    with app.app_context():
+        a = MockWAECAnalytics.get_analytics(exam_id)
+        o = a['score_stats']['overall']
+        assert {'n', 'mean', 'std_dev', 'q1', 'median', 'q3', 'min', 'max'} <= set(o)
+        assert o['std_dev'] > 0 and o['n'] == 8
+        assert 'std_dev' in a['subject_stats']['Mathematics']
+        assert len(a['top_performers']) == 4 and len(a['bottom_performers']) == 4
+        # Top performer's average is >= bottom performer's.
+        assert a['top_performers'][0]['average_score'] >= a['bottom_performers'][0]['average_score']
+    c = _admin(app)
+    html = c.get(f'/mock-waec/exam/{exam_id}/analytics').get_data(as_text=True)
+    assert 'Score statistics' in html and 'Std dev' in html
