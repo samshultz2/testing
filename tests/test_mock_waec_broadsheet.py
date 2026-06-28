@@ -323,3 +323,21 @@ def test_blank_sheet_portrait_one_wide_many_subjects(app):
     assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
     r2 = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf?orient=landscape&cols=0')
     assert r2.status_code == 200 and r2.get_data()[:5] == b'%PDF-'
+
+
+def test_blank_sheet_summary_and_grade_key(app):
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=43)
+    sid = _student(app, 'BG' + uuid.uuid4().hex[:5].upper(), ' Keys', 'Grade')
+    enroll_sss3(app, sid)
+    with app.app_context():
+        db.session.get(Student, sid).waec_subjects = 'Mathematics,English Language,Biology'
+        db.session.commit()
+    c = _admin(app)
+    # Preview offers the summary-rows and grade-key toggles.
+    prev = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank').get_data(as_text=True)
+    assert 'Blank summary rows' in prev and 'Grade key' in prev
+    # Renders with them on (default) and off.
+    for q in ('', '?summary=0&grades=0'):
+        r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf{q}')
+        assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'

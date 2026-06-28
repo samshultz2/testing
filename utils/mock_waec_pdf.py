@@ -19,6 +19,13 @@ _HEAD = colors.HexColor('#d9d9d9')
 _FOOT = colors.HexColor('#eeeeee')
 _SHADE = colors.HexColor('#cfcfcf')
 
+# WASSCE grade bands (mirror models.mock_waec.waec_grade_from_score). Credit = C6+.
+_GRADE_KEY = [('A1', '75–100'), ('B2', '70–74'), ('B3', '65–69'), ('C4', '60–64'),
+              ('C5', '55–59'), ('C6', '50–54'), ('D7', '45–49'), ('E8', '40–44'),
+              ('F9', '0–39')]
+_BLANK_SUMMARY = ['No. offered', 'No. passed (C6+)', 'No. failed',
+                  'Average score %', 'Average grade']
+
 _S = {}
 
 
@@ -74,6 +81,24 @@ def _groups(subjects, per):
 def _pagesize(orient):
     """A4, landscape by default. ``orient='portrait'`` for tall paper."""
     return A4 if orient == 'portrait' else landscape(A4)
+
+
+def _grade_key_table(usable):
+    """Compact WASSCE grade-band reference strip."""
+    _styles()
+    head = [Paragraph('Grade', _S['colhead'])] + [Paragraph(g, _S['colhead']) for g, _ in _GRADE_KEY]
+    rng = [Paragraph('Score', _S['colhead'])] + [Paragraph(r, _S['colhead']) for _, r in _GRADE_KEY]
+    label_w = 16 * mm
+    cell_w = min(18 * mm, (usable - label_w) / len(_GRADE_KEY))
+    t = Table([head, rng], colWidths=[label_w] + [cell_w] * len(_GRADE_KEY))
+    t.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.7, _BLACK),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BACKGROUND', (0, 0), (0, -1), _HEAD),
+        ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    return t
 
 
 def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
@@ -211,13 +236,19 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
                 line += ['', '']
                 if take and s not in take:
                     shaded.append((2 + ci * 2, 1 + i))      # row index incl. 2 header rows
-
-        # row index helper: data row for student i is at table row (i + 1) [0,1 are headers]
             data.append(line)
 
+        # Blank summary rows for filling the per-subject tallies by hand.
+        show_summary = _opt(opts, 'summary')
+        sum0 = len(data)                        # table row of the first summary row
+        if show_summary:
+            for label in _BLANK_SUMMARY:
+                data.append(['', Paragraph(label, _S['name'])] + [''] * (2 * len(group)))
+
         widths = [sn_w, name_w] + [cell_w] * (2 * len(group))
-        t = Table(data, colWidths=widths, repeatRows=2,
-                  rowHeights=[None, None] + [8.5 * mm] * nstud)
+        heights = ([None, None] + [8.5 * mm] * nstud
+                   + ([8.5 * mm] * len(_BLANK_SUMMARY) if show_summary else []))
+        t = Table(data, colWidths=widths, repeatRows=2, rowHeights=heights)
         style = [
             ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
@@ -235,8 +266,19 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
         for col, rw in shaded:                 # shade Score+Grade of non-offered
             style.append(('BACKGROUND', (col, rw), (col + 1, rw), _SHADE))
+        if show_summary:                       # one writing box per subject per row
+            style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
+            style.append(('BACKGROUND', (0, sum0), (1, sum0 + len(_BLANK_SUMMARY) - 1), _FOOT))
+            for k in range(len(_BLANK_SUMMARY)):
+                for j in range(len(group)):
+                    c0 = 2 + j * 2
+                    style.append(('SPAN', (c0, sum0 + k), (c0 + 1, sum0 + k)))
         t.setStyle(TableStyle(style))
         e.append(t)
+
+        if _opt(opts, 'grades'):              # WASSCE grade-band reference
+            e.append(Spacer(1, 6))
+            e.append(_grade_key_table(usable))
         if gi != len(groups) - 1:
             e.append(PageBreak())
     doc.build(e)

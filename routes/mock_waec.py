@@ -703,7 +703,7 @@ def _slips_for(exam_id, student_id=None):
 
 
 # Optional blocks for the printed PDFs — each included unless ?<flag>=0.
-_PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures')
+_PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', 'grades')
 
 
 def _pdf_opts():
@@ -715,7 +715,8 @@ _OPTS_BROADSHEET = [('title', '“COMPETENCE RESULT” heading'), ('address', 'S
                     ('contact', 'Phone / email'), ('motto', 'School motto'),
                     ('summary', 'Subject summary rows')]
 _OPTS_BLANK = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
-               ('contact', 'Phone / email'), ('motto', 'School motto')]
+               ('contact', 'Phone / email'), ('motto', 'School motto'),
+               ('summary', 'Blank summary rows'), ('grades', 'Grade key')]
 _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
               ('contact', 'Phone / email'), ('motto', 'School motto'),
               ('summary', 'Summary box'), ('signatures', 'Signature lines')]
