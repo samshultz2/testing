@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}WAEC forecast engine - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.predictions_dashboard') }}">Predictions</a> / <span>WAEC forecast engine</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-sliders"></i> WAEC grade-band forecast engine</h1>
+        <p class="text-muted text-sm">How real WAEC grades (A1–F9) are predicted from mock scores. Three engines, auto-selected per subject as graduated cohorts accumulate.</p>
+    </div>
+</div>
+
+<div class="card mb-3" style="max-width:780px">
+    <div class="card-header"><h3>Engine</h3></div>
+    <div class="card-body">
+        <form method="POST" class="mb-0">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_method">
+            <div class="d-flex flex-column gap-2" style="gap:.75rem">
+                {% set descs = {'auto':'Recommended — pick the best engine per subject by data volume and cross-validated accuracy.','prior':'Always use the standard WASSCE boundaries with uncertainty (ignores history).','bins':'Always use the historical grade distribution of similar-scoring students.','model':'Always use the trained ordinal model (only meaningful once trained).'} %}
+                {% for m in methods %}
+                <label class="d-flex" style="gap:.5rem;align-items:flex-start;cursor:pointer">
+                    <input type="radio" name="method" value="{{ m }}" {% if setting == m %}checked{% endif %} style="margin-top:.25rem">
+                    <span><strong style="text-transform:capitalize">{{ m }}</strong><br><span class="text-muted text-sm">{{ descs[m] }}</span></span>
+                </label>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn btn-primary mt-3"><i class="fas fa-save"></i> Save engine</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="max-width:780px">
+    <div class="card-header d-flex justify-between align-center">
+        <h3>Per-subject data (this branch)</h3>
+        <form method="POST" style="margin:0">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="retrain">
+            <button type="submit" class="btn btn-secondary btn-sm" title="Re-fit the ordinal models from current results"><i class="fas fa-rotate"></i> Retrain models</button>
+        </form>
+    </div>
+    <div class="card-body">
+        <p class="text-muted text-sm">Each subject needs <strong>≥{{ min_bins }}</strong> graduated mock→real pairs before the bins engine activates and <strong>≥{{ min_model }}</strong> before the trained model is even considered (and it must beat the bins on cross-validation to be used). Until then the honest cold-start <em>prior</em> is shown.</p>
+        {% if rows %}
+        <div class="table-responsive"><table class="data-table">
+            <thead><tr><th>Subject</th><th>Pairs (n)</th><th>Auto picks</th><th>CV RPS bins</th><th>CV RPS model</th></tr></thead>
+            <tbody>
+            {% for r in rows %}
+                <tr>
+                    <td>{{ r.subject }}</td>
+                    <td>{{ r.n }}</td>
+                    <td><span class="badge {% if r.auto_engine == 'model' %}badge-success{% elif r.auto_engine == 'bins' %}badge-info{% else %}badge-secondary{% endif %}">{{ r.auto_engine }}</span></td>
+                    <td>{{ r.rps_bins if r.rps_bins is not none else '—' }}</td>
+                    <td>{{ r.rps_model if r.rps_model is not none else '—' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+        <p class="text-muted" style="font-size:.78rem;margin-top:.6rem">Lower Ranked Probability Score (RPS) is better. It is ordinal-aware: predicting C5 when the truth is C6 costs far less than predicting A1.</p>
+        {% else %}
+        <div class="empty-state"><i class="fas fa-hourglass-start"></i><h3>No graduated cohort yet</h3>
+            <p>Once this branch's first cohort sits real WAEC and the results are entered, mock→real pairs appear here and the forecaster starts calibrating. Until then every prediction uses the cold-start prior.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

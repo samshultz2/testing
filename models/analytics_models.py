@@ -165,3 +165,30 @@ class AnalyticsCache(db.Model):
             )
             db.session.add(cache)
         db.session.commit()
+
+
+class WaecGradeModel(db.Model):
+    """A trained per-(branch, subject) ordinal model for predicting real WAEC
+    grade bands from mock-WAEC scores. Stores the fitted parameters (JSON) plus
+    the metadata the auto-selector and UI need: pair count and cross-validated
+    Ranked Probability Score for the model vs the calibration bins. Re-fit (one
+    row per branch+subject, overwritten) whenever a new cohort's results land."""
+    __tablename__ = 'waec_grade_models'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # branch_id NULL = a pooled/global model (not used by default — models are
+    # per-branch — but kept so pooling can be switched on without a schema change).
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
+    subject = db.Column(db.String(50), nullable=False)
+    params = db.Column(db.Text, nullable=False)        # JSON: mean/std/base/deltas/beta
+    n = db.Column(db.Integer)                           # training pairs
+    cv_rps = db.Column(db.Float)                        # model CV Ranked Probability Score
+    cv_rps_bins = db.Column(db.Float)                  # bins CV RPS (for comparison)
+    trained_at = db.Column(db.DateTime, default=local_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('branch_id', 'subject', name='unique_waec_model_branch_subject'),
+    )
+
+    def __repr__(self):
+        return f'<WaecGradeModel {self.subject} branch={self.branch_id} n={self.n}>'

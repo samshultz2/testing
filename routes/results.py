@@ -2178,7 +2178,59 @@ def predictions_dashboard():
         correlation_data=correlation_data,
         calibration=calibration,
         cohort=cohort,
+        waec_model_url=url_for('results.waec_model_config'),
     )
+
+
+@results_bp.route('/predictions/waec-model', methods=['GET', 'POST'])
+@admin_required
+def waec_model_config():
+    """Admin control for the WAEC grade-band forecaster: choose the engine
+    (auto / prior / bins / model) and retrain the per-branch ordinal models once
+    a new cohort's real results have been entered."""
+    from models.models import SchoolSettings
+    from models.waec_grade_predict import (
+        SETTING_KEY, VALID_METHODS, active_setting, training_pairs,
+        evaluate_subject, choose_method, train_models,
+        MIN_PAIRS_BINS, MIN_PAIRS_MODEL,
+    )
+    from utils.branch_scope import viewing_branch_id
+
+    branch_id = viewing_branch_id()
+    if branch_id == -1:
+        branch_id = None        # "all branches" view → pooled stats
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'save_method':
+            method = request.form.get('method', 'auto')
+            if method in VALID_METHODS:
+                SchoolSettings.set(SETTING_KEY, method, 'string',
+                                   'WAEC grade-band prediction engine')
+                flash(f'WAEC forecast engine set to “{method}”.', 'success')
+        elif action == 'retrain':
+            summary = train_models(branch_id)
+            trained = sum(1 for r in summary if r['trained'])
+            flash(f'Retrained {trained} subject model(s); '
+                  f'{len(summary) - trained} still below the data threshold.', 'info')
+        return redirect(url_for('results.waec_model_config'))
+
+    setting = active_setting()
+    pairs_by_subject = training_pairs(branch_id)
+    rows = []
+    for subject, pairs in sorted(pairs_by_subject.items()):
+        n = len(pairs)
+        ev = evaluate_subject(pairs) if n >= MIN_PAIRS_MODEL else None
+        rows.append({
+            'subject': subject, 'n': n,
+            'auto_engine': choose_method(n, ev, 'auto'),
+            'rps_bins': (round(ev['rps_bins'], 4) if ev and ev.get('rps_bins') is not None else None),
+            'rps_model': (round(ev['rps_model'], 4) if ev and ev.get('rps_model') is not None else None),
+        })
+    return render_template('results/waec_model_config.html',
+        setting=setting, methods=VALID_METHODS, rows=rows,
+        min_bins=MIN_PAIRS_BINS, min_model=MIN_PAIRS_MODEL,
+        total_pairs=sum(r['n'] for r in rows))
 
 
 @results_bp.route('/predictions/student/<int:student_id>')
@@ -2209,6 +2261,17 @@ def student_predictions(student_id):
     except Exception:
         pass
 
+    # Calibrated grade-band forecast: a full probability distribution over A1–F9
+    # per subject (prior → bins → trained model, auto-selected per subject as the
+    # branch accumulates graduated cohorts).
+    grade_forecast = None
+    if mock_waec_count:
+        try:
+            from models.waec_grade_predict import predict_student
+            grade_forecast = predict_student(student_id)
+        except Exception:
+            pass
+
     jamb_prediction = None
     if mock_results:
         try:
@@ -2229,6 +2292,7 @@ def student_predictions(student_id):
         student=student,
         readiness=readiness,
         waec_from_mock=waec_from_mock,
+        grade_forecast=grade_forecast,
         jamb_prediction=jamb_prediction,
         jamb_from_waec=jamb_from_waec,
         waec_years=waec_years,

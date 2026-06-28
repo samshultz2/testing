@@ -72,7 +72,7 @@ __all__ = [
 # Analytics models
 from models.analytics_models import (
     WAECJAMBCorrelation, UniversityCutoff,
-    StudentRiskAssessment, AcademicPrediction, AnalyticsCache
+    StudentRiskAssessment, AcademicPrediction, AnalyticsCache, WaecGradeModel
 )
 
 # Mock JAMB Models

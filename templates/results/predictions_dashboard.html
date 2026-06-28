@@ -38,7 +38,10 @@
         <h1><i class="fas fa-crystal-ball"></i> Predictions Dashboard</h1>
         <p class="text-muted">WAEC-JAMB correlation analysis and student predictions</p>
     </div>
-    <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm"><i class="fas fa-graduation-cap"></i> Admission readiness</a>
+    <div class="page-header-actions">
+        {% if is_admin and waec_model_url %}<a href="{{ waec_model_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-sliders"></i> WAEC forecast engine</a>{% endif %}
+        <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm"><i class="fas fa-graduation-cap"></i> Admission readiness</a>
+    </div>
 </div>
 
 {# Cohort forecast straight from the mocks — the predictions that matter before #}

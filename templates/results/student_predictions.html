@@ -29,6 +29,17 @@
 .grade-b2,.grade-b3{background:rgba(23,162,184,.15);color:#17a2b8}
 .grade-c4,.grade-c5,.grade-c6{background:rgba(255,193,7,.15);color:#d39e00}
 .grade-d7,.grade-e8,.grade-f9{background:rgba(220,53,69,.15);color:#dc3545}
+/* Grade-band forecast table */
+.gbf-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.gbf-table th{text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);padding:.35rem .5rem;border-bottom:1px solid var(--border-color)}
+.gbf-table td{padding:.4rem .5rem;border-bottom:1px solid var(--border-color);vertical-align:middle}
+.gbf-subj{font-weight:600}
+.gbf-bar{display:flex;height:18px;border-radius:4px;overflow:hidden;min-width:160px;background:var(--gray-100)}
+.gbf-seg{display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#333;overflow:hidden;white-space:nowrap}
+.gbf-eng{font-size:.68rem;padding:.1rem .4rem;border-radius:8px;white-space:nowrap}
+.eng-prior{background:rgba(108,117,125,.15);color:#6c757d}
+.eng-bins{background:rgba(23,162,184,.15);color:#17a2b8}
+.eng-model{background:rgba(40,167,69,.15);color:#28a745}
 .confidence-badge{font-size:.7rem;padding:.15rem .5rem;border-radius:10px;background:var(--gray-100);color:var(--text-muted)}
 .confidence-high{background:rgba(40,167,69,.1);color:#28a745}
 .confidence-medium{background:rgba(255,193,7,.1);color:#d39e00}
@@ -131,6 +142,65 @@
         <div class="mt-2 text-sm"><strong>Projected to qualify for:</strong> {{ readiness.eligible_categories|join(', ') }}</div>
         {% endif %}
         <div class="mt-2"><a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-sm btn-outline">Whole-class readiness</a></div>
+    </div>
+</div>
+{% endif %}
+
+{% if grade_forecast and grade_forecast.subjects %}
+<div class="prediction-card mb-3">
+    <div class="prediction-header" style="background:linear-gradient(135deg,#2c3e50 0%,#4ca1af 100%)">
+        <h3><i class="fas fa-chart-column"></i> WAEC grade-band forecast</h3>
+        <div class="subtitle">Full A1–F9 probability per subject from the latest mock —
+            {% set eng = grade_forecast.subjects[0].engine %}
+            {% if eng == 'model' %}trained model{% elif eng == 'bins' %}calibrated on past cohorts{% else %}cold-start prior (no graduated cohort yet){% endif %}
+            (setting: {{ grade_forecast.engine_setting }})</div>
+    </div>
+    <div class="prediction-body">
+        <div class="summary-grid mb-3">
+            <div class="summary-item">
+                <div class="summary-value" style="color:#17a2b8">{{ grade_forecast.expected_credits }}</div>
+                <div class="summary-label">Expected credits</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value">{{ (grade_forecast.p_both_core_credit * 100)|round|int }}%</div>
+                <div class="summary-label">P(Eng &amp; Maths both credit)</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value">{{ grade_forecast.n_subjects }}</div>
+                <div class="summary-label">Subjects</div>
+            </div>
+        </div>
+
+        <table class="gbf-table">
+            <thead><tr><th>Subject</th><th>Mock</th><th>Distribution (A1→F9)</th><th>Likely</th><th>P(credit)</th><th>Basis</th></tr></thead>
+            <tbody>
+            {% for s in grade_forecast.subjects %}
+                <tr>
+                    <td class="gbf-subj">{{ s.subject }}</td>
+                    <td>{{ s.mock_score }}</td>
+                    <td>
+                        <div class="gbf-bar" title="{% for g, p in s.distribution.items() %}{{ g }} {{ (p*100)|round|int }}%  {% endfor %}">
+                            {% for g, p in s.distribution.items() %}{% if p > 0.003 %}<span class="gbf-seg grade-{{ g|lower }}" style="width:{{ (p*100)|round(1) }}%">{% if p > 0.12 %}{{ g }}{% endif %}</span>{% endif %}{% endfor %}
+                        </div>
+                    </td>
+                    <td><span class="predicted-grade grade-{{ s.likely_grade|lower }}">{{ s.likely_grade }}</span></td>
+                    <td>{{ (s.p_credit * 100)|round|int }}%</td>
+                    <td>
+                        {% if s.engine == 'model' %}<span class="gbf-eng eng-model">model</span>
+                        {% elif s.engine == 'bins' %}<span class="gbf-eng eng-bins">bins · n={{ s.n }}</span>
+                        {% else %}<span class="gbf-eng eng-prior">prior</span>{% endif %}
+                        {% if s.low_confidence %}<i class="fas fa-triangle-exclamation" title="Low sample size — leaning on the prior" style="color:#fd7e14;margin-left:.25rem"></i>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p class="text-muted" style="font-size:.78rem;margin-top:.6rem">
+            <i class="fas fa-circle-info"></i> Bars show the probability of each band, not a single guess. “Basis” is the engine behind each row:
+            <strong>prior</strong> = standard WASSCE boundaries (used until this branch has graduated cohorts),
+            <strong>bins</strong> = actual grades of past students who scored similarly (n shown),
+            <strong>model</strong> = trained ordinal model. The aggregate assumes subjects are independent.
+        </p>
     </div>
 </div>
 {% endif %}
