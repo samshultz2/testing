@@ -383,7 +383,9 @@ function initSidebarNav() {
         if (!g.header) return;                 // items before the first header stay visible
         var key = (g.header.textContent || '').trim();
         g.header.classList.add('nav-section-toggle');
-        g.header.setAttribute('role', 'button');
+        // Keep the <li> a valid list item (role=button on an <li> breaks list
+        // semantics / WCAG); it's still keyboard-operable via tabindex + the
+        // keydown handler below, and announces state via aria-expanded.
         g.header.setAttribute('tabindex', '0');
         if (!g.header.querySelector('.nav-sec-chev')) {
             var chev = document.createElement('i');

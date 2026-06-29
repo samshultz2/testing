@@ -20,7 +20,7 @@
     /* Status */
     --success: #198754;
     --success-light: #d1e7dd;
-    --info: #0891b2;
+    --info: #0e7490;   /* darker cyan so white text on .btn-info clears AA (>=4.5:1) */
     --info-light: #cffafe;
     --warning: #e67e22;
     --warning-light: #fef3cd;
@@ -48,7 +48,7 @@
     /* Text — cool slate */
     --text-primary: #0f172a;
     --text-secondary: #475569;
-    --text-muted: #64748b;
+    --text-muted: #5b6675;   /* clears AA (>=4.5:1) on the body + tinted backgrounds */
     --text-inverse: #ffffff;
 
     /* Borders — hairline */
@@ -1526,12 +1526,19 @@ input[type="radio"] {
     white-space: nowrap;
 }
 
-.badge-primary { background: var(--primary-light); color: var(--primary); }
-.badge-success { background: var(--success-light); color: var(--success); }
-.badge-info { background: var(--info-light); color: var(--info); }
-.badge-warning { background: var(--warning-light); color: var(--warning); }
-.badge-danger { background: var(--danger-light); color: var(--danger); }
+/* Soft badges use darker text on the light tint so they clear WCAG AA (>=4.5:1);
+   the brand/status base colours were ~3.3-3.5:1 on their light backgrounds. */
+.badge-primary { background: var(--primary-light); color: var(--primary-hover); }
+.badge-success { background: var(--success-light); color: #0f5132; }
+.badge-info { background: var(--info-light); color: #155e75; }
+.badge-warning { background: var(--warning-light); color: #92400e; }
+.badge-danger { background: var(--danger-light); color: #991b1b; }
 .badge-secondary { background: var(--gray-200); color: var(--text-secondary); }
+[data-theme="dark"] .badge-success { color: #6ee7b7; }
+[data-theme="dark"] .badge-info { color: #7dd3fc; }
+[data-theme="dark"] .badge-warning { color: #fcd34d; }
+[data-theme="dark"] .badge-danger { color: #fca5a5; }
+[data-theme="dark"] .badge-primary { color: var(--primary); }
 
 /* ===========================================
    FLASH MESSAGES

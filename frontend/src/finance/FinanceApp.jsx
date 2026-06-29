@@ -27,7 +27,7 @@ const balColor = (n) => (n > 0 ? 'var(--danger)' : 'var(--success)');
 function TermSelect({ value, terms, onChange, label = 'Term', allLabel }) {
   return (
     <div className="form-group"><label className="form-label">{label}</label>
-      <select className="form-control" value={value} onChange={(e) => onChange(e.target.value)}>
+      <select className="form-control" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
         {allLabel && <option value="">{allLabel}</option>}
         {terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
       </select></div>
@@ -268,7 +268,7 @@ function Structure({ d, notify }) {
         <form className="filter-form">
           <TermSelect value={d.term_id} terms={d.terms} onChange={(v) => go({ term_id: v })} />
           <div className="form-group"><label className="form-label">Class</label>
-            <select className="form-control" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
+            <select className="form-control" aria-label="Class" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
               <option value="">Select Class</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Arm <span className="text-muted text-sm">(optional)</span></label>
             <select className="form-control" value={d.arm_id} onChange={(e) => go({ arm_id: e.target.value })}>
@@ -336,7 +336,7 @@ function Payments({ d, notify }) {
         <form className="filter-form" onSubmit={(e) => { e.preventDefault(); go(); }}>
           <TermSelect value={d.term_id} terms={d.terms} onChange={(v) => go({ term_id: v })} />
           <div className="form-group"><label className="form-label">Class</label>
-            <select className="form-control" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
+            <select className="form-control" aria-label="Class" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
               <option value="">All Classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Search</label><input type="text" className="form-control" value={q} placeholder="Name, ID or receipt" onChange={(e) => setQ(e.target.value)} /></div>
           <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="submit" className="btn btn-secondary" aria-label="Search"><i aria-hidden="true" className="fas fa-search" /></button></div>
@@ -639,7 +639,7 @@ function Defaulters({ d }) {
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
         <TermSelect value={d.term_id} terms={d.terms} onChange={(v) => go({ term_id: v })} />
         <div className="form-group"><label className="form-label">Class</label>
-          <select className="form-control" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
+          <select className="form-control" aria-label="Class" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
             <option value="">All Classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
       </form></div></div>
       <div className="kpi-summary card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
