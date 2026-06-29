@@ -207,6 +207,7 @@ function UserForm({ d, notify }) {
   const groups = d.groups || [];
   const groupPerms = (groups.find((g) => String(g.id) === String(f.permission_group_id)) || {}).permissions || null;
   const [preset, setPreset] = useState('');
+  const [errors, setErrors] = useState({});
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const chk = (k) => (e) => setF({ ...f, [k]: e.target.checked });
@@ -251,6 +252,16 @@ function UserForm({ d, notify }) {
 
   const submit = (e) => {
     e.preventDefault();
+    // Client-side checks HTML5 can't express (password confirmation match).
+    const errs = {};
+    if (!edit) {
+      if ((f.password || '').length < 6) errs.password = 'Use at least 6 characters.';
+      if (f.confirm_password !== f.password) errs.confirm_password = 'Passwords do not match.';
+    } else if (f.new_password && f.new_password.length < 6) {
+      errs.new_password = 'Use at least 6 characters.';
+    }
+    setErrors(errs);
+    if (Object.keys(errs).length) { notify('error', 'Please fix the highlighted fields.'); return; }
     const fields = {
       email: f.email, full_name: f.full_name, phone: f.phone,
       role: f.role, scope: f.scope, branch_id: f.branch_id,
@@ -312,9 +323,11 @@ function UserForm({ d, notify }) {
               <>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Password <span className="text-danger">*</span></label>
-                    <input type="password" className="form-control" value={f.password} onChange={set('password')} required minLength="6" placeholder="Min 6 characters" /></div>
+                    <input type="password" className={'form-control' + (errors.password ? ' is-invalid' : '')} value={f.password} onChange={set('password')} required minLength="6" placeholder="Min 6 characters" aria-invalid={!!errors.password} />
+                    {errors.password && <div className="field-error">{errors.password}</div>}</div>
                   <div className="form-group"><label className="form-label">Confirm Password <span className="text-danger">*</span></label>
-                    <input type="password" className="form-control" value={f.confirm_password} onChange={set('confirm_password')} required placeholder="Repeat password" /></div>
+                    <input type="password" className={'form-control' + (errors.confirm_password ? ' is-invalid' : '')} value={f.confirm_password} onChange={set('confirm_password')} required placeholder="Repeat password" aria-invalid={!!errors.confirm_password} />
+                    {errors.confirm_password && <div className="field-error">{errors.confirm_password}</div>}</div>
                 </div>
                 <label className="permission-item" style={{ display: 'inline-flex' }}>
                   <input type="checkbox" checked={f.require_pw_change} onChange={chk('require_pw_change')} /> <span>Require the user to change this password at first login</span></label>
@@ -328,7 +341,8 @@ function UserForm({ d, notify }) {
             </div>
             {edit && (
               <div className="form-group"><label className="form-label">New Password</label>
-                <input type="password" className="form-control" value={f.new_password} onChange={set('new_password')} placeholder="Leave blank to keep current" minLength="6" /></div>
+                <input type="password" className={'form-control' + (errors.new_password ? ' is-invalid' : '')} value={f.new_password} onChange={set('new_password')} placeholder="Leave blank to keep current" minLength="6" aria-invalid={!!errors.new_password} />
+                {errors.new_password && <div className="field-error">{errors.new_password}</div>}</div>
             )}
             <div className="form-group"><label className="form-label">Quick preset</label>
               <select className="form-control" value={preset} onChange={(e) => applyPreset(e.target.value)}>

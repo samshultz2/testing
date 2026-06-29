@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { submitJson } from '../lib/forms';
+import { submitJson, useForm } from '../lib/forms';
 import { naira, nairaShort } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
@@ -446,13 +446,17 @@ function RecordPayment({ d, notify }) {
 
 function PayForm({ d, bill, student, notify }) {
   const nav = useNav();
-  const [f, setF] = useState({ amount: bill.balance > 0 ? String(bill.balance) : '', payment_date: d.today, method: d.methods[0], reference: '', received_by: '', notes: '' });
+  const { values: f, setField, errors, validate } = useForm({
+    amount: bill.balance > 0 ? String(bill.balance) : '', payment_date: d.today,
+    method: d.methods[0], reference: '', received_by: '', notes: '',
+  });
   const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k, v) => setField(k, v);
   const submit = async (e) => {
     e.preventDefault();
-    const amt = parseFloat(f.amount);
-    if (!amt || amt <= 0) { notify('error', 'Enter a positive amount.'); return; }
+    if (!validate({ amount: (v) => (!parseFloat(v) || parseFloat(v) <= 0) ? 'Enter a positive amount.' : '' })) {
+      notify('error', 'Enter a positive amount.'); return;
+    }
     setBusy(true);
     const r = await submitJson(d.submit_url, { ...f, student_id: student.id, term_id: d.term_id });
     setBusy(false);
@@ -462,7 +466,8 @@ function PayForm({ d, bill, student, notify }) {
     <div className="card"><div className="card-header"><h3>Payment Details</h3></div><div className="card-body">
       <form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Amount (₦) <span className="required">*</span></label>
-          <input type="number" className="form-control" inputMode="decimal" min="0" step="50" required value={f.amount} onChange={(e) => set('amount', e.target.value)} /></div>
+          <input type="number" className={'form-control' + (errors.amount ? ' is-invalid' : '')} inputMode="decimal" min="0" step="50" required value={f.amount} onChange={(e) => set('amount', e.target.value)} aria-invalid={!!errors.amount} />
+          {errors.amount && <div className="field-error">{errors.amount}</div>}</div>
         <div className="pay-fields two">
           <div className="form-group mb-0"><label className="form-label">Date</label><input type="date" className="form-control" value={f.payment_date} onChange={(e) => set('payment_date', e.target.value)} /></div>
           <div className="form-group mb-0"><label className="form-label">Method</label><select className="form-control" value={f.method} onChange={(e) => set('method', e.target.value)}>{d.methods.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
@@ -472,7 +477,7 @@ function PayForm({ d, bill, student, notify }) {
           <div className="form-group mb-0"><label className="form-label">Received by</label><input type="text" className="form-control" placeholder="Bursar name" value={f.received_by} onChange={(e) => set('received_by', e.target.value)} /></div>
         </div>
         <div className="form-group mt-3"><label className="form-label">Notes</label><textarea className="form-control" rows="2" placeholder="Optional" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
-        <button type="submit" className="btn btn-primary w-100" disabled={busy}><i aria-hidden="true" className="fas fa-check" /> Save &amp; Print Receipt</button>
+        <button type="submit" className={'btn btn-primary w-100' + (busy ? ' is-loading' : '')} disabled={busy} aria-busy={busy || undefined}><i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} /> {busy ? 'Saving…' : 'Save & Print Receipt'}</button>
       </form>
     </div></div>
   );
