@@ -28,8 +28,48 @@ from routes.welfare import welfare_bp
 _scheduler_started = False
 
 
+# Arbitrary, fixed key for the cross-worker PostgreSQL advisory lock that makes
+# scheduled dispatch run on exactly ONE worker per tick (with automatic failover
+# if that worker dies). Without it, every gunicorn worker would send each due
+# campaign — duplicate SMS/fee reminders to parents.
+_SCHED_LOCK_KEY = 0x5C8ED01
+
+
+def _tick_dispatch(app):
+    """Run one scheduling tick, guarded so only one worker dispatches at a time."""
+    from models import db
+    from sqlalchemy import text
+    is_pg = db.engine.dialect.name == 'postgresql'
+    if is_pg:
+        got = db.session.execute(
+            text('SELECT pg_try_advisory_lock(:k)'), {'k': _SCHED_LOCK_KEY}).scalar()
+        if not got:
+            return                                  # another worker owns this tick
+    try:
+        from utils.comms import dispatch_due_scheduled
+        dispatch_due_scheduled()
+        # Daily fee reminders: a DB-shared marker so they fire once per day across
+        # ALL workers (a per-process flag would fire once per worker).
+        import time as _t
+        from models.models import SchoolSettings
+        today = _t.strftime('%Y-%m-%d')
+        if SchoolSettings.get('last_fee_reminder_date') != today:
+            from utils.reminders import run_fee_reminders
+            run_fee_reminders(app)                  # opt-in; no-op unless enabled
+            SchoolSettings.set('last_fee_reminder_date', today, 'string',
+                               'Last date the daily fee-reminder job ran')
+    finally:
+        if is_pg:
+            db.session.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': _SCHED_LOCK_KEY})
+            db.session.commit()
+
+
 def _start_scheduled_messages_worker(app):
-    """Daemon thread that every minute sends any due scheduled SMS campaigns."""
+    """Daemon thread that every minute dispatches due scheduled SMS / fee reminders.
+
+    Safe under multi-worker gunicorn: a PostgreSQL advisory lock ensures only one
+    worker actually dispatches per tick. (On non-Postgres dev/test there is a single
+    process, so no lock is needed.)"""
     global _scheduler_started
     if _scheduler_started:
         return
@@ -38,20 +78,13 @@ def _start_scheduled_messages_worker(app):
     import time
 
     def _loop():
-        last_daily = None
         while True:
             time.sleep(60)
             try:
                 with app.app_context():
-                    from utils.comms import dispatch_due_scheduled
-                    dispatch_due_scheduled()
-                    today = time.strftime('%Y%m%d')
-                    if today != last_daily:
-                        from utils.reminders import run_fee_reminders
-                        run_fee_reminders(app)   # opt-in; no-op unless enabled
-                        last_daily = today
+                    _tick_dispatch(app)
             except Exception:
-                pass
+                app.logger.exception('scheduled-jobs tick failed')
 
     threading.Thread(target=_loop, daemon=True).start()
 

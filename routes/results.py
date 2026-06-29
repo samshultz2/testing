@@ -2,7 +2,7 @@
 Results management routes - WAEC, JAMB, and Analytics Dashboard
 Comprehensive academic performance tracking and analysis
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort, current_app
 from utils.helpers import get_active_term, get_active_session
 from collections import defaultdict
 from models import (db, Student, WAECResult, JAMBResult, UniversityCutoff, SchoolSettings, StudentEnrollment,
@@ -921,6 +921,7 @@ def scan_batch():
             try:
                 text = _read_uploaded_text(f)
             except Exception:
+                current_app.logger.exception('OCR read failed for upload %s', f.filename)
                 text = None
             if text is None:
                 items.append({'filename': f.filename, 'error': 'Unreadable / engine missing', 'data': {}})
@@ -2334,20 +2335,22 @@ def student_predictions(student_id):
     # Calibrated grade-band forecast: a full probability distribution over A1–F9
     # per subject (prior → bins → trained model, auto-selected per subject as the
     # branch accumulates graduated cohorts).
+    # These are optional display blocks — degrading to None keeps the page usable,
+    # but log the failure so a real bug isn't invisible (was a silent `pass`).
     grade_forecast = None
     if mock_waec_count:
         try:
             from models.waec_grade_predict import predict_student
             grade_forecast = predict_student(student_id)
         except Exception:
-            pass
+            current_app.logger.exception('grade_forecast failed for student %s', student_id)
 
     jamb_prediction = None
     if mock_results:
         try:
             jamb_prediction = MockJAMBAnalytics.predict_real_jamb(student_id)
         except Exception:
-            pass
+            current_app.logger.exception('mock-JAMB prediction failed for student %s', student_id)
 
     waec_years = [y[0] for y in db.session.query(WAECResult.exam_year)
                   .filter_by(student_id=student_id).distinct().all()]
@@ -2356,7 +2359,7 @@ def student_predictions(student_id):
         try:
             jamb_from_waec = WAECJAMBCorrelation.predict_jamb_from_waec(student_id, waec_years[0])
         except Exception:
-            pass
+            current_app.logger.exception('JAMB-from-WAEC prediction failed for student %s', student_id)
 
     return render_template('results/student_predictions.html',
         student=student,
