@@ -388,6 +388,8 @@ export function Modal({ title, icon, onClose, children, footer, size = 'md',
 function ConfirmDialog({ title = 'Please confirm', message, confirmText = 'Confirm',
                         cancelText = 'Cancel', tone = 'primary', icon, onResolve }) {
   const okRef = useRef(null);
+  // Destructive confirms get a clear warning icon by default.
+  if (!icon) icon = tone === 'danger' ? 'fa-triangle-exclamation' : 'fa-circle-question';
   return (
     <Modal title={title} icon={icon} size="sm" onClose={() => onResolve(false)} initialFocusRef={okRef}
            footer={<>
@@ -473,9 +475,18 @@ export function TableWrap({ label = 'Table', children, maxHeight }) {
   );
 }
 
-export const Button = React.forwardRef(function Button({ variant = 'primary', size, children, ...rest }, ref) {
-  const cls = ['btn', 'btn-' + variant, size === 'sm' ? 'btn-sm' : ''].filter(Boolean).join(' ');
-  return <button ref={ref} type="button" className={cls} {...rest}>{children}</button>;
+export const Button = React.forwardRef(function Button(
+  { variant = 'primary', size, loading, disabled, icon, children, ...rest }, ref) {
+  const cls = ['btn', 'btn-' + variant, size === 'sm' ? 'btn-sm' : '', loading ? 'is-loading' : '']
+    .filter(Boolean).join(' ');
+  return (
+    <button ref={ref} type="button" className={cls} disabled={disabled || loading}
+            aria-busy={loading || undefined} {...rest}>
+      {loading && <i className="fas fa-spinner fa-spin" aria-hidden="true" />}
+      {!loading && icon && <i className={'fas ' + icon} aria-hidden="true" />}
+      {children}
+    </button>
+  );
 });
 
 // Headline stat cards (e.g. attendance rate / students / school days).

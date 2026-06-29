@@ -51,7 +51,13 @@ function School({ d, notify }) {
     next_term_begins: s.next_term_begins || '', timezone: d.current_tz || '',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => nav.refresh()); };
+  const [saving, setSaving] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await save(d.submit_url, f, () => nav.refresh());
+    setSaving(false);
+  };
 
   const [logoUrl, setLogoUrl] = useState(d.logo_url || '');
   const [busy, setBusy] = useState(false);
@@ -105,7 +111,9 @@ function School({ d, notify }) {
             </select>
             <span className="form-hint d-block">Used for all dates, times, exam windows and timestamps across the site. Default: Africa/Lagos (UTC+1).</span></div>
           <Actions>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
+            <button type="submit" className={'btn btn-primary' + (saving ? ' is-loading' : '')} disabled={saving} aria-busy={saving || undefined}>
+              <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : 'Save'}
+            </button>
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>

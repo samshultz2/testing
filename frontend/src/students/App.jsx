@@ -164,9 +164,16 @@ export default function App({ initial }) {
 
       {msg && (
         <div className={'alert alert-' + ({ success: 'success', error: 'danger', warn: 'warning' }[msg.tone] || 'info')}
-             role="status" style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+             role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span>{msg.text}</span>
-          <button type="button" className="att-x" onClick={() => setMsg(null)} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {msg.tone === 'error' && (
+              <button type="button" className="btn btn-light btn-sm" onClick={() => { setMsg(null); load(query); }}>
+                <i aria-hidden="true" className="fas fa-rotate-right" /> Retry
+              </button>
+            )}
+            <button type="button" className="att-x" onClick={() => setMsg(null)} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+          </span>
         </div>
       )}
 

@@ -2384,6 +2384,11 @@ summary:focus-visible {
 .btn:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 .btn:focus-visible { outline: none; box-shadow: var(--ring); }
 
+/* Loading buttons: keep size, show a spinner, block interaction */
+.btn.is-loading { cursor: wait; opacity: 0.85; }
+.btn .fa-spin { animation: btn-spin 0.7s linear infinite; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
 .btn-outline {
     background: transparent;
     border: 1px solid var(--border-color);
