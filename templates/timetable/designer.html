@@ -39,6 +39,10 @@
 .tt-sheet .sig-col{min-width:160px}
 /* day grid cells: subject + teacher together, centred */
 .tt-sheet table.grid-tt th,.tt-sheet table.grid-tt td{text-align:center}
+/* fillable roster cells: type the class/group on duty straight into the grid */
+.tt-sheet table.grid-tt td.roster-cell{min-width:5.5em;min-height:1.9em;padding:.45em .4em;cursor:text;font-weight:600}
+.tt-sheet table.grid-tt td.roster-cell:focus{outline:2px solid var(--primary,#0d6a4e);outline-offset:-2px}
+@media print{.tt-sheet table.grid-tt td.roster-cell:focus{outline:none}}
 .tt-sheet table.grid-tt th{font-size:1em}
 .tt-sheet table.grid-tt th.day-cell{vertical-align:middle;font-weight:800;font-size:1.05em}
 .tt-sheet table.grid-tt td.grp-cell{font-weight:700;white-space:nowrap}
@@ -171,6 +175,8 @@
                     <option value="holiday">Holiday lesson timetable</option>
                     <option value="exam">Examination timetable</option>
                     <option value="grid">Blank custom grid</option>
+                    <option value="roster_week">Sweeping / duty roster — by week (Week 1, 2…)</option>
+                    <option value="roster_day">Sweeping / duty roster — by day (Mon, Tue…)</option>
                 </select>
             </div>
             <div class="form-group">
@@ -229,6 +235,14 @@
                 </p>
                 <textarea id="gridPasteText" rows="6" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday, Maths (Mr A), English, Physics&#10;Tuesday, English, Physics, Maths&#10;Wednesday, Physics, Maths, English"></textarea>
                 <button class="btn btn-primary btn-sm" data-call="gridPaste"><i class="fas fa-bolt"></i> Build timetable from grid</button>
+                <div style="margin-top:.6rem">
+                    <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo of the timetable, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
+                    <pre id="tt-ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0">Read this class timetable and output it as a comma-separated grid, one row per line:
+- First line: the word "Day", then each period's time range — e.g. Day, 8:00-9:00, 9:00-10:00, 10:00-11:00
+- Each next line: the day name, then the subject in each period in order. Put the teacher in brackets, e.g. Maths (Mr A). Leave a cell empty for a free period or break.
+Output only the rows — no headings, totals or extra text, no code block.</pre>
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-ai-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
+                </div>
             </details>
 
             <details class="bulk-box">
@@ -253,7 +267,7 @@
                     <input id="gridCols" class="form-control" value="Monday, Tuesday, Wednesday, Thursday, Friday, Saturday">
                 </div>
                 <div class="form-group" style="grid-column:span 2">
-                    <label class="form-label">Row labels — one per line (e.g. period times)</label>
+                    <label class="form-label" id="gridRowsLabel">Row labels — one per line (e.g. period times)</label>
                     <textarea id="gridRows" class="form-control" rows="4">8:00 - 9:00
 9:00 - 10:00
 10:00 - 11:00
@@ -325,9 +339,27 @@ var FIELD = {
 var DAY_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 var rows = [];   // each: {date,day,group,time,dur,subject,teacher,venue}
 
+// Sweeping / duty rosters reuse the blank-grid renderer, but with roster presets and
+// editable cells. The primary axis (rows) is weeks or days; columns are days/areas.
+var ROSTER_PRESETS = {
+    roster_week: {title:'Weekly Sweeping / Duty Roster',
+                  cols:'Monday, Tuesday, Wednesday, Thursday, Friday',
+                  rows:'Week 1\nWeek 2\nWeek 3\nWeek 4\nWeek 5\nWeek 6'},
+    roster_day:  {title:'Daily Sweeping / Duty Roster',
+                  cols:'Class / Group on Duty, Area / Section, Supervisor',
+                  rows:'Monday\nTuesday\nWednesday\nThursday\nFriday'},
+};
+var rosterCells = {};   // "rowIndex:colIndex" -> typed text (persists across re-renders)
+
 function el(id){ return document.getElementById(id); }
 function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
-function layout(){ return LAYOUTS[el('layout').value] || LAYOUTS.saturday; }
+function isRoster(){ return !!ROSTER_PRESETS[el('layout').value]; }
+function isBlankGrid(){ return el('layout').value==='grid' || isRoster(); }
+function layout(){
+    var v=el('layout').value;
+    if(ROSTER_PRESETS[v]) return {title:ROSTER_PRESETS[v].title, mode:'grid', fields:[]};
+    return LAYOUTS[v] || LAYOUTS.saturday;
+}
 
 function addMinutes(hhmm, mins){
     if(!hhmm) return '';
@@ -747,11 +779,19 @@ function renderListSheet(){
 }
 
 function renderBlankGridSheet(){
+    var roster=isRoster();
     var cols=(el('gridCols').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
     var rws=(el('gridRows').value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
     var thead='<tr><th></th>'+cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr>';
-    var body=rws.map(function(rl){
-        return '<tr><th>'+esc(rl)+'</th>'+cols.map(function(){return '<td class="empty"></td>';}).join('')+'</tr>';
+    var body=rws.map(function(rl,ri){
+        return '<tr><th>'+esc(rl)+'</th>'+cols.map(function(c,ci){
+            // Roster cells are fillable (type the class/group on duty); they persist
+            // in rosterCells and are captured by the PDF/image export. A blank grid
+            // stays empty (printed and filled by hand) as before.
+            if(roster){ var k=ri+':'+ci;
+                return '<td class="roster-cell" contenteditable="true" data-rc="'+k+'">'+esc(rosterCells[k]||'')+'</td>'; }
+            return '<td class="empty"></td>';
+        }).join('')+'</tr>';
     }).join('');
     el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
@@ -759,24 +799,39 @@ function renderBlankGridSheet(){
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
-    var l=el('layout').value;
-    if(l==='grid') renderBlankGridSheet();
+    if(isBlankGrid()) renderBlankGridSheet();
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
 
 function onLayoutChange(){
-    var blank = el('layout').value==='grid';
+    var v=el('layout').value;
+    var blank = isBlankGrid();
     var isGridMode = !blank && layout().mode==='grid';
+    // A roster drops in its matching template (weeks×days or days×duty) and starts a
+    // fresh set of cells, since switching axis changes what each cell means.
+    if(ROSTER_PRESETS[v]){
+        el('gridCols').value=ROSTER_PRESETS[v].cols;
+        el('gridRows').value=ROSTER_PRESETS[v].rows;
+        rosterCells={};
+    }
     el('gridEditor').style.display = blank?'block':'none';
     el('rowEditor').style.display = blank?'none':'block';
     // grid paste & the orientation choice only apply to the day×period layouts
     el('gridPasteBox').style.display = isGridMode ? 'block':'none';
     el('orientWrap').style.display = isGridMode ? 'block':'none';
+    el('gridRowsLabel').textContent = isRoster()
+        ? 'Row labels — one per line (e.g. Week 1, Week 2 … or Monday, Tuesday …)'
+        : 'Row labels — one per line (e.g. period times)';
     if(!el('title').dataset.touched){ el('title').value=''; }
     if(!blank) renderEditor();
     renderSheet();
 }
+// Save typed roster-cell text so it survives re-renders and the PDF/image export.
+el('pBody').addEventListener('input', function(e){
+    var td = e.target.closest && e.target.closest('[data-rc]');
+    if(td){ rosterCells[td.getAttribute('data-rc')] = td.textContent; }
+});
 el('layout').addEventListener('change', onLayoutChange);
 el('theme').addEventListener('change', renderSheet);
 el('orient').addEventListener('change', renderSheet);
