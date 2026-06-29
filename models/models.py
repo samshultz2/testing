@@ -1645,25 +1645,52 @@ _INDEXES = [
     ('ix_audit_created', 'audit_logs', 'created_at'),
     ('ix_audit_action', 'audit_logs', 'action'),
     ('ix_mockresult_exam', 'mock_jamb_results', 'mock_exam_id'),
+    # Perf pass 2 — only indexes NOT already covered by a leftmost unique-constraint
+    # column (student_id on term_results/term_summaries/mock_waec_results is already
+    # covered by their unique constraints, so not repeated here):
+    ('ix_term_result_term', 'term_results', 'term_id'),          # all results in a term
+    ('ix_term_summary_term', 'term_summaries', 'term_id'),       # term reports / dashboards
+    ('ix_feepayment_student', 'fee_payments', 'student_id'),     # student fee history/statement
+    ('ix_mockwaec_result_exam', 'mock_waec_results', 'mock_exam_id'),  # broadsheet/exam loads
 ]
 
 
 def _ensure_indexes():
-    """Create the performance indexes if they don't exist (best-effort)."""
+    """Create the performance indexes if they don't exist (best-effort).
+
+    On PostgreSQL, build CONCURRENTLY (and outside any transaction) so a deploy
+    against a populated production table never takes a write-blocking lock — index
+    creation is additive and can't lose data, but a plain CREATE INDEX would briefly
+    block writes. SQLite (dev/test) doesn't support CONCURRENTLY, so it uses a plain
+    transactional CREATE INDEX IF NOT EXISTS.
+    """
     from sqlalchemy import inspect, text
     try:
         inspector = inspect(db.engine)
         tables = set(inspector.get_table_names())
     except Exception:
         return
+    is_pg = db.engine.dialect.name == 'postgresql'
     for name, table, column in _INDEXES:
         if table not in tables:
             continue
         try:
-            with db.engine.begin() as conn:
-                conn.execute(text(
-                    f'CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})'))
+            if is_pg:
+                # CONCURRENTLY cannot run inside a transaction block.
+                conn = db.engine.connect()
+                try:
+                    conn = conn.execution_options(isolation_level='AUTOCOMMIT')
+                    conn.execute(text(
+                        f'CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} ON {table} ({column})'))
+                finally:
+                    conn.close()
+            else:
+                with db.engine.begin() as conn:
+                    conn.execute(text(
+                        f'CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})'))
         except Exception:
+            # Best-effort: a failed/interrupted CONCURRENTLY build leaves an INVALID
+            # index that a later run (or the Alembic migration) can drop+rebuild.
             pass
 
 

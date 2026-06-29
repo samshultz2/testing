@@ -136,18 +136,18 @@ def mark_attendance_page():
     holiday_for_date = next((h for h in holidays if h.date == target_date), None)
     is_weekend = target_date.weekday() >= 5
 
-    # Get existing attendance for this date
+    # Get existing attendance for this date — one batched query (was one per
+    # enrollment: an N+1 that scaled with class size).
     if enrollments and target_date:
-        for enrollment in enrollments:
-            att = Attendance.query.filter_by(
-                enrollment_id=enrollment.id,
-                date=target_date
-            ).first()
-            if att:
-                existing_attendance[enrollment.id] = {
-                    'morning': att.morning_present,
-                    'afternoon': att.afternoon_present
-                }
+        rows = Attendance.query.filter(
+            Attendance.enrollment_id.in_([e.id for e in enrollments]),
+            Attendance.date == target_date,
+        ).all()
+        for att in rows:
+            existing_attendance[att.enrollment_id] = {
+                'morning': att.morning_present,
+                'afternoon': att.afternoon_present,
+            }
     
     return render_template('attendance/mark.html',
         terms=terms,

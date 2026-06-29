@@ -79,7 +79,9 @@ def _collections_query(from_date, to_date, term_id=None):
         FeePayment)
     if term_id:
         q = q.filter(FeePayment.term_id == term_id)
-    return q.order_by(FeePayment.payment_date.desc(), FeePayment.id.desc())
+    # Eager-load the student — every caller renders p.student.* in a loop (was N+1).
+    return q.options(joinedload(FeePayment.student)).order_by(
+        FeePayment.payment_date.desc(), FeePayment.id.desc())
 
 
 @finance_bp.route('/collections')
@@ -213,14 +215,18 @@ def _term_fee_summary(term_id):
     by_class = summary['by_class']
     method_breakdown = summary['method_breakdown']
 
-    # Map each enrolled student to their class/arm for this term.
+    # Map each enrolled student to their class/arm for this term. Eager-load the
+    # assignment + its class so the loop below doesn't lazy-load per enrollment (N+1).
+    from sqlalchemy.orm import joinedload as _joinedload
     enrollments = scope_query(
         StudentEnrollment.query
         .join(ClassArmAssignment,
               StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
         .filter(StudentEnrollment.is_active == True,
                 ClassArmAssignment.term_id == term_id),
-        ClassArmAssignment).all()
+        ClassArmAssignment).options(
+            _joinedload(StudentEnrollment.class_arm_assignment)
+            .joinedload(ClassArmAssignment.school_class)).all()
 
     placement = {}        # student_id -> (class_id, arm_id, class_name)
     total_cache = {}      # (class_id, arm_id) -> per-student fee total
@@ -491,8 +497,11 @@ def payments_list():
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
 
     from utils.branch_scope import scope_query
+    from sqlalchemy.orm import contains_eager
     query = FeePayment.query.filter_by(term_id=term_id) if term_id else FeePayment.query
-    query = scope_query(query, FeePayment).join(Student, FeePayment.student_id == Student.id)
+    # Eager-load the already-joined Student so the render loop doesn't re-query it (N+1).
+    query = (scope_query(query, FeePayment).join(Student, FeePayment.student_id == Student.id)
+             .options(contains_eager(FeePayment.student)))
     if q:
         like = f'%{q}%'
         query = query.filter(db.or_(Student.surname.ilike(like),
