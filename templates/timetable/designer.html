@@ -40,9 +40,12 @@
 /* day grid cells: subject + teacher together, centred */
 .tt-sheet table.grid-tt th,.tt-sheet table.grid-tt td{text-align:center}
 /* fillable roster cells: type the class/group on duty straight into the grid */
-.tt-sheet table.grid-tt td.roster-cell{min-width:5.5em;min-height:1.9em;padding:.45em .4em;cursor:text;font-weight:600}
+.tt-sheet table.grid-tt td.roster-cell{min-width:8em;min-height:1.9em;padding:.45em .5em;cursor:text;font-weight:600}
 .tt-sheet table.grid-tt td.roster-cell:focus{outline:2px solid var(--primary,#0d6a4e);outline-offset:-2px}
-@media print{.tt-sheet table.grid-tt td.roster-cell:focus{outline:none}}
+/* Placeholder shown only while a roster cell is empty (and never on the printout). */
+.tt-sheet table.grid-tt td.roster-cell:empty::before{content:attr(data-ph);color:#b3b3b3;font-weight:400;font-style:italic}
+@media print{.tt-sheet table.grid-tt td.roster-cell:focus{outline:none}
+             .tt-sheet table.grid-tt td.roster-cell:empty::before{content:''}}
 .tt-sheet table.grid-tt th{font-size:1em}
 .tt-sheet table.grid-tt th.day-cell{vertical-align:middle;font-weight:800;font-size:1.05em}
 .tt-sheet table.grid-tt td.grp-cell{font-weight:700;white-space:nowrap}
@@ -281,6 +284,9 @@ Break
 </div>
 
 <!-- The printable sheet -->
+<p id="rosterTip" class="text-muted no-print" style="display:none;margin:.25rem 0 .5rem">
+    <i class="fas fa-hand-pointer"></i> Click any cell under <b>Students on Duty</b> below and type the students' names (separate several names with commas). What you type prints and exports.
+</p>
 <div id="sheet" class="tt-sheet" data-theme="modern">
     <div class="tt-head">
         <div class="tt-school" id="pSchool"></div>
@@ -792,7 +798,7 @@ function renderBlankGridSheet(){
             // in rosterCells and are captured by the PDF/image export. A blank grid
             // stays empty (printed and filled by hand) as before.
             if(roster){ var k=ri+':'+ci;
-                return '<td class="roster-cell" contenteditable="true" data-rc="'+k+'">'+esc(rosterCells[k]||'')+'</td>'; }
+                return '<td class="roster-cell" contenteditable="true" data-rc="'+k+'" data-ph="Click and type names">'+esc(rosterCells[k]||'')+'</td>'; }
             return '<td class="empty"></td>';
         }).join('')+'</tr>';
     }).join('');
@@ -826,6 +832,7 @@ function onLayoutChange(){
     el('gridRowsLabel').textContent = isRoster()
         ? 'Row labels — one per line (e.g. Week 1, Week 2 … or Monday, Tuesday …)'
         : 'Row labels — one per line (e.g. period times)';
+    el('rosterTip').style.display = isRoster() ? 'block' : 'none';
     if(!el('title').dataset.touched){ el('title').value=''; }
     if(!blank) renderEditor();
     renderSheet();
