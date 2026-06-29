@@ -31,7 +31,7 @@ function Hint({ hintId, hint, errId, error }) {
   return (
     <>
       {hint && <span className="form-hint" id={hintId}
-                     style={{ display: 'block', fontSize: '.78rem', color: 'var(--text-muted, #6b7280)', marginTop: 3 }}>{hint}</span>}
+                     style={{ display: 'block', fontSize: '.78rem', color: 'var(--text-muted, var(--text-muted))', marginTop: 3 }}>{hint}</span>}
       {error && (
         <span className="form-error" id={errId} role="alert"
               style={{ color: 'var(--danger, #dc2626)', fontSize: 12, display: 'block', marginTop: 3 }}>

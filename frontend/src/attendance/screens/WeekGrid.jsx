@@ -126,7 +126,7 @@ export default function WeekGrid() {
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
             <strong>{d.class_name}</strong>
-            <span style={{ color: '#6b7280' }}>Week {d.week_number}</span>
+            <span style={{ color: 'var(--text-muted)' }}>Week {d.week_number}</span>
             {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
           </div>
 

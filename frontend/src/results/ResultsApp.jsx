@@ -1,7 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { submitJson } from '../lib/forms';
+import { useChart } from '../lib/hooks';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+
+// Horizontal bar config for the subject-enrolment charts (shared by WAEC/JAMB).
+const enrolBarCfg = (rows, color) => ({
+  type: 'bar',
+  data: {
+    labels: rows.slice(0, 12).map((r) => (r.subject.length > 14 ? r.subject.slice(0, 14) + '…' : r.subject)),
+    datasets: [{ data: rows.slice(0, 12).map((r) => r.count), backgroundColor: color, borderRadius: 5 }],
+  },
+  options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } },
+});
 
 // ---- Results index ---------------------------------------------------------
 function Index({ d }) {
@@ -37,9 +50,9 @@ function Index({ d }) {
       <div className="card"><div className="card-header"><h3>Analytics Features</h3></div>
         <div className="card-body"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
           {[['fa-chart-line', '#007bff', 'Performance Trends', 'Track year-over-year performance, pass rates, and grade distributions.'],
-            ['fa-user-graduate', '#28a745', 'Student Profiles', 'Individual student analytics with strengths, weaknesses, and predictions.'],
+            ['fa-user-graduate', 'var(--success)', 'Student Profiles', 'Individual student analytics with strengths, weaknesses, and predictions.'],
             ['fa-calculator', '#ffc107', 'JAMB Predictions', 'ML-based JAMB score predictions from WAEC performance.'],
-            ['fa-exclamation-triangle', '#dc3545', 'Risk Assessment', 'Identify at-risk students with actionable recommendations.']].map(([ic, col, t, p]) => (
+            ['fa-exclamation-triangle', 'var(--danger)', 'Risk Assessment', 'Identify at-risk students with actionable recommendations.']].map(([ic, col, t, p]) => (
             <div key={t} style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 8 }}>
               <h4 style={{ marginBottom: '.5rem' }}><i aria-hidden="true" className={'fas ' + ic} style={{ color: col }} /> {t}</h4>
               <p style={{ fontSize: '.85rem', color: 'var(--text-muted)', margin: 0 }}>{p}</p></div>))}
@@ -57,7 +70,7 @@ function Readiness({ d }) {
         <div className="kpi good"><div className="v">{d.ready}</div><div className="l">Fully ready</div></div>
         <div className="kpi"><div className="v">{d.total}</div><div className="l">SSS3 candidates</div></div>
         {d.groups.slice(0, 2).map((g) => (
-          <div className="kpi" key={g.key}><div className="v" style={{ color: g.students.length ? '#dc3545' : '#28a745' }}>{g.students.length}</div><div className="l">{g.title}</div></div>))}
+          <div className="kpi" key={g.key}><div className="v" style={{ color: g.students.length ? 'var(--danger)' : 'var(--success)' }}>{g.students.length}</div><div className="l">{g.title}</div></div>))}
       </div>
       {d.groups.map((g) => (
         <details className={'rgroup' + (g.students.length ? '' : ' clear')} open={g.students.length > 0} key={g.key}>
@@ -74,23 +87,8 @@ function Readiness({ d }) {
 
 // ---- Subject enrolment -----------------------------------------------------
 function SubjectEnrolment({ d }) {
-  const waecRef = useRef();
-  const jambRef = useRef();
-  useEffect(() => {
-    if (!window.Chart) return;
-    const charts = [];
-    window.Chart.defaults.color = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
-    const bar = (ref, rows, color) => {
-      if (!ref.current || !rows.length) return;
-      charts.push(new window.Chart(ref.current, { type: 'bar',
-        data: { labels: rows.map((r) => (r.subject.length > 14 ? r.subject.slice(0, 14) + '…' : r.subject)),
-          datasets: [{ data: rows.map((r) => r.count), backgroundColor: color, borderRadius: 5 }] },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } } }));
-    };
-    bar(waecRef, d.waec_rows.slice(0, 12), '#11998e');
-    bar(jambRef, d.jamb_rows.slice(0, 12), '#667eea');
-    return () => charts.forEach((c) => c.destroy());
-  }, [d]);
+  const waecRef = useChart(() => (d.waec_rows.length ? enrolBarCfg(d.waec_rows, '#11998e') : null), [d]);
+  const jambRef = useChart(() => (d.jamb_rows.length ? enrolBarCfg(d.jamb_rows, '#667eea') : null), [d]);
 
   const Table = ({ rows, enrolled, jamb }) => (
     rows.length ? (

@@ -189,7 +189,7 @@ export function Autocomplete({ label, required, url, initialText, onPick, placeh
 
 export function Spinner({ label = 'Loading…' }) {
   return (
-    <div role="status" aria-live="polite" style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted, #6b7280)', padding: '1.25rem' }}>
+    <div role="status" aria-live="polite" style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted, var(--text-muted))', padding: '1.25rem' }}>
       <span className="att-spinner" aria-hidden="true" />
       <span>{label}</span>
     </div>
@@ -218,7 +218,7 @@ export function SkeletonCards({ count = 5 }) {
 
 export function EmptyState({ icon = 'fa-inbox', title, hint, action }) {
   return (
-    <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted, #6b7280)' }}>
+    <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted, var(--text-muted))' }}>
       <i className={'fas ' + icon} style={{ fontSize: 30, opacity: 0.45 }} aria-hidden="true" />
       <p style={{ marginTop: 10, fontWeight: 600, color: 'var(--text-secondary, #374151)' }}>{title}</p>
       {hint && <p style={{ fontSize: 13, maxWidth: 420, margin: '4px auto 0' }}>{hint}</p>}
@@ -232,7 +232,7 @@ export function ErrorState({ title = 'Something went wrong', detail, onRetry }) 
     <div role="alert" style={{ textAlign: 'center', padding: '1.5rem', color: '#991b1b' }}>
       <i className="fas fa-triangle-exclamation" style={{ fontSize: 26 }} aria-hidden="true" />
       <p style={{ marginTop: 8, fontWeight: 600 }}>{title}</p>
-      {detail && <p style={{ fontSize: 13, color: 'var(--text-muted, #6b7280)' }}>{String(detail)}</p>}
+      {detail && <p style={{ fontSize: 13, color: 'var(--text-muted, var(--text-muted))' }}>{String(detail)}</p>}
       {onRetry && <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={onRetry}>Try again</button>}
     </div>
   );

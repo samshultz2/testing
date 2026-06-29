@@ -193,7 +193,7 @@ function App({ assignmentId, date, className }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
         <strong>{className || roster.class_name}</strong>
-        <span style={{ color: '#6b7280' }}>{roster.date}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{roster.date}</span>
         <StatusPill online={online} pending={pending} />
         {source === 'cache' && <span style={{ fontSize: 12, color: '#b45309' }}>(showing cached copy)</span>}
         <span style={{ marginLeft: 'auto', fontSize: 13 }}>Present: <b>{presentCount}</b>/{roster.students.length}</span>
@@ -214,7 +214,7 @@ function App({ assignmentId, date, className }) {
             <input type="checkbox" checked={!!present[s.enrollment_id]} onChange={() => toggle(s.enrollment_id)}
                    style={{ width: 18, height: 18 }} />
             <span style={{ flex: 1 }}>{s.name}</span>
-            <span style={{ fontSize: 12, color: present[s.enrollment_id] ? '#16a34a' : '#dc2626' }}>
+            <span style={{ fontSize: 12, color: present[s.enrollment_id] ? 'var(--success)' : '#dc2626' }}>
               {present[s.enrollment_id] ? 'Present' : 'Absent'}
             </span>
           </label>
@@ -243,7 +243,7 @@ function App({ assignmentId, date, className }) {
         </div>
       )}
 
-      <p style={{ marginTop: 10, fontSize: 12, color: '#16a34a' }}>
+      <p style={{ marginTop: 10, fontSize: 12, color: 'var(--success)' }}>
         ✓ React + IndexedDB (Dexie), persistent storage. Marks queue offline and sync on reconnect; permanent errors are quarantined, not retried forever.
       </p>
     </div>

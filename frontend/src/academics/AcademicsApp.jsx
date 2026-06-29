@@ -200,7 +200,7 @@ function Setup({ d }) {
         <div className="data-cards">{d.steps.map((s, i) => {
           const ok = s.done && !s.optional;
           return (
-            <div className="data-card" key={i} style={{ borderLeft: `4px solid ${s.done ? '#10b981' : s.optional ? '#94a3b8' : '#f59e0b'}` }}>
+            <div className="data-card" key={i} style={{ borderLeft: `4px solid ${s.done ? '#10b981' : s.optional ? 'var(--text-muted)' : '#f59e0b'}` }}>
               <div className="data-card-header"><div className="data-card-title">
                 <i aria-hidden="true" className={'fas ' + (ok ? 'fa-circle-check text-success' : s.optional ? 'fa-circle-dot text-muted' : 'fa-circle-exclamation text-warning')} /> {s.title}{s.optional && <span className="text-muted text-sm"> (optional)</span>}
               </div></div>

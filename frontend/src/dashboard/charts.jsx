@@ -5,7 +5,7 @@ export const chartTheme = () => {
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
   return {
     grid: dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)',
-    tick: dark ? '#9ca3af' : '#6b7280',
+    tick: dark ? 'var(--text-muted)' : 'var(--text-muted)',
   };
 };
 

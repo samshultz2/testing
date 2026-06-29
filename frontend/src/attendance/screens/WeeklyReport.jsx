@@ -55,7 +55,7 @@ export default function WeeklyReport() {
           <>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
               <strong>{d.class_name}</strong>
-              <span style={{ color: '#6b7280' }}>Week {d.week_info.week_number} · {d.week_info.start_date} → {d.week_info.end_date}</span>
+              <span style={{ color: 'var(--text-muted)' }}>Week {d.week_info.week_number} · {d.week_info.start_date} → {d.week_info.end_date}</span>
               <a className="btn btn-success btn-sm" style={{ marginLeft: 'auto' }}
                  href={`/attendance/weekly/export?assignment_id=${assignmentId}&week_id=${weekId}`}>
                 <i className="fas fa-download" aria-hidden="true" /> Export to Excel
@@ -125,7 +125,7 @@ export default function WeeklyReport() {
                   </table>
                 </div>
                 <p className="att-legend">
-                  <b>Legend:</b> <span style={{ color: '#16a34a' }}>✓</span> present, <span style={{ color: '#dc2626' }}>✗</span> absent ·
+                  <b>Legend:</b> <span style={{ color: 'var(--success)' }}>✓</span> present, <span style={{ color: '#dc2626' }}>✗</span> absent ·
                   {' '}each cell shows AM then PM · <b>AM</b> = morning, <b>PM</b> = afternoon.
                 </p>
               </>

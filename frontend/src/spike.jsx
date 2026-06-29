@@ -62,7 +62,7 @@ function StatsWidget() {
       <p style={{ marginTop: 8, fontSize: 13, textAlign: 'center' }}>
         Total active students: <b>{total}</b>
       </p>
-      <p style={{ marginTop: 6, fontSize: 12, color: '#16a34a', textAlign: 'center' }}>
+      <p style={{ marginTop: 6, fontSize: 12, color: 'var(--success)', textAlign: 'center' }}>
         ✓ React + Chart.js, via <code>/api/dashboard/stats</code> (cookie + CSRF, offline-cached)
       </p>
     </div>

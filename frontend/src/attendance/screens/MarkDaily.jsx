@@ -145,7 +145,7 @@ export default function MarkDaily() {
     : d.weekend ? `${d.date} is a weekend.` : `${d.date} is not a school day.`);
   const canSave = d && d.week_id && d.students.length && !notSchoolDay && !busy;
 
-  const boxStyle = { width: 22, height: 22, accentColor: 'var(--success, #16a34a)', cursor: 'pointer' };
+  const boxStyle = { width: 22, height: 22, accentColor: 'var(--success, var(--success))', cursor: 'pointer' };
   const colStyle = { width: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 };
 
   return (
@@ -172,7 +172,7 @@ export default function MarkDaily() {
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
             <strong>{d.class_name}</strong>
-            <span style={{ color: '#6b7280' }}>{d.date}</span>
+            <span style={{ color: 'var(--text-muted)' }}>{d.date}</span>
             {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
             {weekCached && online && <Pill tone="green"><i className="fas fa-download" aria-hidden="true" /> week saved offline</Pill>}
             <span style={{ marginLeft: 'auto', fontSize: 13 }}>AM <b>{amCount}</b>/{d.students.length} · PM <b>{pmCount}</b>/{d.students.length}</span>
@@ -186,7 +186,7 @@ export default function MarkDaily() {
             <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
           ) : (
             <>
-              <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 8px' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 8px' }}>
                 Everyone starts present. Untick a box to mark a student absent for just the morning or just the afternoon.
               </p>
               <ul className="att-list" aria-label={'Register for ' + d.class_name}>

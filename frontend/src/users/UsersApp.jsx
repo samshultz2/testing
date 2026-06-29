@@ -116,7 +116,7 @@ function Matrix({ d, notify }) {
               {d.users.map((u) => (u.is_admin ? (
                 <tr key={u.id} className="admin-row">
                   <td className="user">{u.name} <span className="badge badge-warning">Admin</span></td>
-                  {d.modules.map((m) => <td key={m.key}><i aria-hidden="true" className="fas fa-check" style={{ color: '#28a745' }} /></td>)}
+                  {d.modules.map((m) => <td key={m.key}><i aria-hidden="true" className="fas fa-check" style={{ color: 'var(--success)' }} /></td>)}
                   <td>—</td>
                 </tr>
               ) : (
