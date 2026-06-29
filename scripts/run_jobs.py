@@ -22,10 +22,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # This process owns the jobs, so don't also start the in-process thread.
 os.environ['RUN_INPROCESS_JOBS'] = '0'
 
-from app import create_app  # noqa: E402
+from app import create_app, _tick_dispatch  # noqa: E402
 from utils.backup import auto_backup  # noqa: E402
-from utils.comms import dispatch_due_scheduled  # noqa: E402
-from utils.reminders import run_fee_reminders  # noqa: E402
 
 POLL_SECONDS = int(os.environ.get('JOBS_POLL_SECONDS', '60'))
 
@@ -33,16 +31,19 @@ POLL_SECONDS = int(os.environ.get('JOBS_POLL_SECONDS', '60'))
 def main():
     app = create_app()
     app.logger.info('Background jobs worker started (poll=%ss).', POLL_SECONDS)
-    last_daily = None
+    last_backup = None
     while True:
         try:
             with app.app_context():
-                dispatch_due_scheduled()
+                # Shared with the in-process worker: dispatch due campaigns + the
+                # daily fee reminder (idempotent via the DB-shared marker, guarded
+                # by the advisory lock — a no-op for this single process).
+                _tick_dispatch(app)
+                # Daily DB backup is owned by this out-of-process runner.
                 today = time.strftime('%Y%m%d')
-                if today != last_daily:
+                if today != last_backup:
                     auto_backup(app)
-                    run_fee_reminders(app)   # opt-in; no-op unless enabled
-                    last_daily = today
+                    last_backup = today
         except Exception as exc:
             app.logger.error('jobs worker error: %s', exc)
         time.sleep(POLL_SECONDS)
