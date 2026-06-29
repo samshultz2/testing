@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson, useForm } from '../lib/forms';
 import { naira, nairaShort } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, SectionTabs, Empty, Table } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['record_payment', 'fa-cash-register', 'Record Payment'],
@@ -344,25 +344,22 @@ function Payments({ d, notify }) {
       </div></div>
       <div className="card"><div className="card-header"><h3>{d.payments.length} payment(s)</h3><span className="badge badge-success">Total: {naira(d.total)}</span></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.payments.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Date</th><th>Receipt</th><th>Student</th><th>Method</th><th>By</th><th className="text-right">Amount</th><th /></tr></thead>
-              <tbody>{d.payments.map((p) => (
-                <tr key={p.id}>
-                  <td data-label="Date">{p.date}</td>
-                  <td data-label="Receipt"><a href={p.receipt_url} data-native>{p.receipt_no}</a></td>
-                  <td data-label="Student"><a href={p.statement_url}>{p.student}</a> <span className="text-muted text-sm">({p.student_id})</span></td>
-                  <td data-label="Method"><span className="badge badge-info">{p.method}</span></td>
-                  <td data-label="By" className="text-muted text-sm">{p.received_by}</td>
-                  <td data-label="Amount" className="text-right"><strong>{naira(p.amount)}</strong></td>
-                  <td className="actions"><div className="d-flex gap-1">
-                    <a href={p.receipt_url} className="btn btn-secondary btn-sm" title="Receipt" data-native><i aria-hidden="true" className="fas fa-receipt" /></a>
-                    <a href={p.edit_url} className="btn btn-secondary btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
-                    {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => del(p.delete_url, p.receipt_no, p.amount)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                  </div></td>
-                </tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-receipt" title="No payments found"><p>Record a payment or adjust the filters.</p></Empty>}
+          <Table rowKey={(p) => p.id} rows={d.payments}
+            empty={<Empty icon="fa-receipt" title="No payments found"><p>Record a payment or adjust the filters.</p></Empty>}
+            columns={[
+              { key: 'date', label: 'Date', render: (p) => p.date },
+              { key: 'receipt', label: 'Receipt', render: (p) => <a href={p.receipt_url} data-native>{p.receipt_no}</a> },
+              { key: 'student', label: 'Student', render: (p) => <><a href={p.statement_url}>{p.student}</a> <span className="text-muted text-sm">({p.student_id})</span></> },
+              { key: 'method', label: 'Method', render: (p) => <span className="badge badge-info">{p.method}</span> },
+              { key: 'by', label: 'By', render: (p) => <span className="text-muted text-sm">{p.received_by}</span> },
+              { key: 'amount', label: 'Amount', align: 'right', render: (p) => <strong>{naira(p.amount)}</strong> },
+              { key: 'act', label: '', render: (p) => (
+                <div className="d-flex gap-1">
+                  <a href={p.receipt_url} className="btn btn-secondary btn-sm" title="Receipt" data-native><i aria-hidden="true" className="fas fa-receipt" /></a>
+                  <a href={p.edit_url} className="btn btn-secondary btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
+                  {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => del(p.delete_url, p.receipt_no, p.amount)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                </div>) },
+            ]} />
         </div></div>
     </>
   );
@@ -653,23 +650,20 @@ function Defaulters({ d }) {
       </div></div>
       <div className="card"><div className="card-header"><h3>Defaulters</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.rows.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Student</th><th>Class</th><th className="text-right">Payable</th><th className="text-right">Paid</th><th className="text-right">Balance</th><th /></tr></thead>
-              <tbody>{d.rows.map((r, i) => (
-                <tr key={i}>
-                  <td data-label="Student">{r.student} <span className="text-muted text-sm">({r.student_id})</span></td>
-                  <td data-label="Class">{r.class_name}{r.arm_name && ` ${r.arm_name}`}</td>
-                  <td data-label="Payable" className="text-right">{naira(r.billed)}</td>
-                  <td data-label="Paid" className="text-right">{naira(r.paid)}</td>
-                  <td data-label="Balance" className="text-right"><strong style={{ color: 'var(--danger)' }}>{naira(r.balance)}</strong></td>
-                  <td className="actions text-right"><div className="d-flex gap-1 justify-end">
-                    <a href={r.statement_url} className="btn btn-secondary btn-sm" title="Statement"><i aria-hidden="true" className="fas fa-file-lines" /></a>
-                    <a href={r.record_url} className="btn btn-primary btn-sm" title="Record payment"><i aria-hidden="true" className="fas fa-cash-register" /></a>
-                  </div></td>
-                </tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-circle-check" title="No outstanding fees"><p>Every enrolled student has cleared their bill for this selection.</p></Empty>}
+          <Table rowKey={(r, i) => i} rows={d.rows}
+            empty={<Empty icon="fa-circle-check" title="No outstanding fees"><p>Every enrolled student has cleared their bill for this selection.</p></Empty>}
+            columns={[
+              { key: 'student', label: 'Student', render: (r) => <>{r.student} <span className="text-muted text-sm">({r.student_id})</span></> },
+              { key: 'class', label: 'Class', render: (r) => `${r.class_name}${r.arm_name ? ' ' + r.arm_name : ''}` },
+              { key: 'billed', label: 'Payable', align: 'right', render: (r) => naira(r.billed) },
+              { key: 'paid', label: 'Paid', align: 'right', render: (r) => naira(r.paid) },
+              { key: 'balance', label: 'Balance', align: 'right', render: (r) => <strong style={{ color: 'var(--danger)' }}>{naira(r.balance)}</strong> },
+              { key: 'act', label: '', align: 'right', render: (r) => (
+                <div className="d-flex gap-1 justify-end">
+                  <a href={r.statement_url} className="btn btn-secondary btn-sm" title="Statement"><i aria-hidden="true" className="fas fa-file-lines" /></a>
+                  <a href={r.record_url} className="btn btn-primary btn-sm" title="Record payment"><i aria-hidden="true" className="fas fa-cash-register" /></a>
+                </div>) },
+            ]} />
         </div></div>
     </>
   );
@@ -711,22 +705,24 @@ function Collections({ d }) {
         <div className="card-body"><div className="chart-box">{d.day_chart.length ? <canvas ref={ref} /> : <Empty icon="fa-chart-column" title=""><p>No payments in this range</p></Empty>}</div></div></div>
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-wallet" /> By method</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.method_rows.length ? (
-            <table className="data-table table-stack no-mobile-scroll"><thead><tr><th>Method</th><th className="text-right">Amount</th></tr></thead>
-              <tbody>{d.method_rows.map((m, i) => <tr key={i}><td data-label="Method"><span className="badge badge-info">{m.method}</span></td><td data-label="Amount" className="text-right">{naira(m.amount)}</td></tr>)}</tbody></table>
-          ) : <Empty icon="fa-wallet" title="" style={{ padding: '1.2rem' }}><p>No data</p></Empty>}
+          <Table rowKey={(m, i) => i} rows={d.method_rows}
+            empty={<Empty icon="fa-wallet" title=""><p>No data</p></Empty>}
+            columns={[
+              { key: 'method', label: 'Method', render: (m) => <span className="badge badge-info">{m.method}</span> },
+              { key: 'amount', label: 'Amount', align: 'right', render: (m) => naira(m.amount) },
+            ]} />
         </div></div>
       <div className="card"><div className="card-header"><h3>Payments ({d.count})</h3><span className="badge badge-success">{naira(d.total)}</span></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.payments.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Date</th><th>Receipt</th><th>Student</th><th>Method</th><th className="text-right">Amount</th></tr></thead>
-              <tbody>{d.payments.map((p) => (
-                <tr key={p.id}><td data-label="Date">{p.date}</td><td data-label="Receipt"><a href={p.receipt_url} data-native>{p.receipt_no}</a></td>
-                  <td data-label="Student">{p.student}</td><td data-label="Method"><span className="badge badge-info">{p.method}</span></td>
-                  <td data-label="Amount" className="text-right"><strong>{naira(p.amount)}</strong></td></tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-receipt" title="No payments"><p>No collections in the selected range.</p></Empty>}
+          <Table rowKey={(p) => p.id} rows={d.payments}
+            empty={<Empty icon="fa-receipt" title="No payments"><p>No collections in the selected range.</p></Empty>}
+            columns={[
+              { key: 'date', label: 'Date', render: (p) => p.date },
+              { key: 'receipt', label: 'Receipt', render: (p) => <a href={p.receipt_url} data-native>{p.receipt_no}</a> },
+              { key: 'student', label: 'Student', render: (p) => p.student },
+              { key: 'method', label: 'Method', render: (p) => <span className="badge badge-info">{p.method}</span> },
+              { key: 'amount', label: 'Amount', align: 'right', render: (p) => <strong>{naira(p.amount)}</strong> },
+            ]} />
         </div></div>
     </>
   );
