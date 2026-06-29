@@ -243,13 +243,13 @@ function Results({ d }) {
       </div></div>
       <div className="card"><div className="card-header"><h3>{d.attempts.length} attempt(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(a) => a.id} rows={d.attempts}
+          <Table rowKey={(a) => a.id} rows={d.attempts} pageSize={25} sticky maxHeight="65vh"
             empty={<Empty icon="fa-chart-bar" title="No attempts yet"><p>Results appear here once students take the test.</p></Empty>}
             columns={[
-              { key: 'student', label: 'Student', render: (a) => <>{a.student}<div className="text-muted text-sm">{a.student_id}</div></> },
+              { key: 'student', label: 'Student', sortable: true, sortValue: (a) => a.student, render: (a) => <>{a.student}<div className="text-muted text-sm">{a.student_id}</div></> },
               { key: 'raw', label: 'Raw', align: 'right', render: (a) => a.raw_total ? `${Math.round(a.raw_score)}/${Math.round(a.raw_total)}` : '—' },
               { key: 'score', label: 'Score', align: 'right', render: (a) => `${a.score} / ${a.total}` },
-              { key: 'pct', label: '%', align: 'right', render: (a) => <span className={'badge ' + (a.percentage >= 50 ? 'badge-success' : 'badge-danger')}>{a.percentage}%</span> },
+              { key: 'pct', label: '%', align: 'right', sortable: true, sortValue: (a) => Number(a.percentage) || 0, render: (a) => <span className={'badge ' + (a.percentage >= 50 ? 'badge-success' : 'badge-danger')}>{a.percentage}%</span> },
               { key: 'flags', label: 'Flags', render: (a) => a.violations ? <span className="badge badge-danger" title={`Left the exam page ${a.violations} time(s)`}><i aria-hidden="true" className="fas fa-flag" /> {a.violations}</span> : <span className="text-muted">—</span> },
               { key: 'status', label: 'Status', render: (a) => <span className={'badge ' + (a.status === 'Submitted' ? 'badge-success' : 'badge-warning')}>{a.status}</span> },
               { key: 'act', label: '', render: (a) => a.status === 'Submitted' && <a href={a.review_url} className="btn btn-secondary btn-sm" title="Review answers" data-native><i aria-hidden="true" className="fas fa-list-check" /></a> },

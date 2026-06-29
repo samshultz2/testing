@@ -555,39 +555,95 @@ export function AmPm({ am, pm }) {
   );
 }
 
-// Shared data table. `columns` = [{ key, label, align, width, render(row), th }].
-// Renders a responsive .data-table that stacks into labelled cards on mobile
-// (via .table-stack + data-label) and supports an optional sticky header.
-// Replaces the many hand-rolled <table> blocks across screens.
-export function Table({ columns, rows, rowKey, empty, sticky, stack = true, className = '' }) {
+// Shared data table. `columns` = [{ key, label, align, width, render(row),
+//   sortable, sortValue(row) }].
+// Renders a responsive .data-table that stacks into labelled cards on mobile.
+// Opt-in scaling features so big lists stay usable:
+//   - pageSize: paginate client-side (caps the DOM at pageSize rows — the fix for
+//     1000+ record screens that aren't server-paginated).
+//   - sticky + maxHeight: sticky header inside a capped scroll region.
+//   - sortable columns: click the header to sort (sortValue(row) or row[key]).
+export function Table({ columns, rows, rowKey, empty, sticky, stack = true, className = '',
+                       pageSize, maxHeight, initialSort }) {
+  const [sort, setSort] = useState(initialSort || null);  // {key, dir:'asc'|'desc'}
+  const [page, setPage] = useState(1);
+  const anySortable = columns.some((c) => c.sortable);
+
   if (!rows || !rows.length) {
     return empty !== undefined ? empty : <Empty title="Nothing to show" />;
   }
-  const cls = ['data-table', stack ? 'table-stack' : '', sticky ? 'table-sticky' : '', className]
-    .filter(Boolean).join(' ');
+
+  // Sort (client-side) when a sortable header is active.
+  let view = rows;
+  if (sort) {
+    const col = columns.find((c) => c.key === sort.key);
+    if (col) {
+      const val = col.sortValue || ((r) => r[col.key]);
+      const dir = sort.dir === 'desc' ? -1 : 1;
+      view = rows.slice().sort((a, b) => {
+        const x = val(a), y = val(b);
+        if (x == null && y == null) return 0;
+        if (x == null) return 1; if (y == null) return -1;
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir;
+        return String(x).localeCompare(String(y), undefined, { numeric: true }) * dir;
+      });
+    }
+  }
+
+  const pages = pageSize ? Math.max(1, Math.ceil(view.length / pageSize)) : 1;
+  const cur = Math.min(page, pages);
+  const pageRows = pageSize ? view.slice((cur - 1) * pageSize, cur * pageSize) : view;
+
+  const cls = ['data-table', stack ? 'table-stack' : '',
+    (sticky || maxHeight) ? 'table-sticky' : '', className].filter(Boolean).join(' ');
   const key = rowKey || ((r, i) => r.id ?? i);
+  const toggleSort = (c) => {
+    if (!c.sortable) return;
+    setPage(1);
+    setSort((s) => (s && s.key === c.key
+      ? { key: c.key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+      : { key: c.key, dir: 'asc' }));
+  };
+
   return (
-    <TableWrap label="Data table">
-      <table className={cls}>
-        <thead>
-          <tr>{columns.map((c) => (
-            <th key={c.key} style={{ textAlign: c.align || 'left', width: c.width }}>{c.label}</th>
-          ))}</tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={key(row, i)}>
-              {columns.map((c) => (
-                <td key={c.key} data-label={typeof c.label === 'string' ? c.label : undefined}
-                    style={{ textAlign: c.align || 'left' }}>
-                  {c.render ? c.render(row, i) : row[c.key]}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableWrap>
+    <>
+      <TableWrap label="Data table" maxHeight={maxHeight}>
+        <table className={cls}>
+          <thead>
+            <tr>{columns.map((c) => {
+              const active = sort && sort.key === c.key;
+              return (
+                <th key={c.key} style={{ textAlign: c.align || 'left', width: c.width,
+                  cursor: c.sortable ? 'pointer' : undefined, userSelect: c.sortable ? 'none' : undefined }}
+                    onClick={c.sortable ? () => toggleSort(c) : undefined}
+                    aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                  {c.label}
+                  {c.sortable && <i aria-hidden="true" className={'fas ' + (active ? (sort.dir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort')} style={{ marginLeft: 6, opacity: active ? 0.9 : 0.35, fontSize: '.8em' }} />}
+                </th>
+              );
+            })}</tr>
+          </thead>
+          <tbody>
+            {pageRows.map((row, i) => (
+              <tr key={key(row, i)}>
+                {columns.map((c) => (
+                  <td key={c.key} data-label={typeof c.label === 'string' ? c.label : undefined}
+                      style={{ textAlign: c.align || 'left' }}>
+                    {c.render ? c.render(row, i) : row[c.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+      {pageSize && pages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sp-2)', padding: 'var(--sp-2) var(--sp-1) 0' }}>
+          <span className="text-muted text-sm">{view.length} record{view.length === 1 ? '' : 's'}{anySortable ? '' : ''}</span>
+          <Pagination page={cur} pages={pages} onPage={setPage} />
+        </div>
+      )}
+    </>
   );
 }
 

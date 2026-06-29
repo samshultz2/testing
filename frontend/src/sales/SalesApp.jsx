@@ -52,16 +52,17 @@ function Dashboard({ d }) {
   );
 }
 
-function SalesTable({ rows, withItems }) {
+function SalesTable({ rows, withItems, paged }) {
   const cols = [
     { key: 'receipt', label: 'Receipt', render: (s) => <a href={s.receipt_url}>{s.receipt_no}</a> },
-    { key: 'buyer', label: 'Buyer', render: (s) => s.buyer },
+    { key: 'buyer', label: 'Buyer', sortable: paged, sortValue: (s) => s.buyer, render: (s) => s.buyer },
     withItems && { key: 'items', label: 'Items', render: (s) => s.item_count },
     { key: 'method', label: 'Method', render: (s) => <span className="badge badge-info">{s.payment_method}</span> },
-    { key: 'total', label: 'Total', align: 'right', render: (s) => <strong>{naira(s.total)}</strong> },
-    { key: 'when', label: 'When', render: (s) => s.when },
+    { key: 'total', label: 'Total', align: 'right', sortable: paged, sortValue: (s) => Number(s.total) || 0, render: (s) => <strong>{naira(s.total)}</strong> },
+    { key: 'when', label: 'When', sortable: paged, sortValue: (s) => s.when, render: (s) => s.when },
   ].filter(Boolean);
-  return <Table rowKey={(s) => s.id} rows={rows} columns={cols} />;
+  return <Table rowKey={(s) => s.id} rows={rows} columns={cols}
+                pageSize={paged ? 25 : undefined} sticky={paged} maxHeight={paged ? '65vh' : undefined} />;
 }
 
 // ---- Products --------------------------------------------------------------
@@ -239,7 +240,7 @@ function History({ d }) {
         <span className="badge badge-success">{naira(d.total)}</span>
       </div>
       <div className="card"><div className="card-body" style={{ padding: 0 }}>
-        {d.sales.length ? <SalesTable rows={d.sales} withItems /> : <EmptyState icon="fa-receipt" title="No sales yet" />}
+        {d.sales.length ? <SalesTable rows={d.sales} withItems paged /> : <EmptyState icon="fa-receipt" title="No sales yet" />}
       </div></div>
     </>
   );

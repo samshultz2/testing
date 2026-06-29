@@ -477,7 +477,11 @@ function Broadsheet({ d, notify }) {
     const r = await submitJson(d.urls.compute, { term_id: d.term_id, assignment_id: d.assignment_id });
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not compute.');
   };
-  const sticky = (left) => ({ position: 'sticky', left, background: 'var(--bg-primary)', whiteSpace: 'nowrap' });
+  // Frozen first columns (Pos + Student). bg must be opaque so scrolled cells
+  // don't bleed through — use real theme tokens (the old var(--bg-primary) didn't exist).
+  const sticky = (left) => ({ position: 'sticky', left, background: 'var(--bg-card)', whiteSpace: 'nowrap', zIndex: 1 });
+  const headCell = { position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2 };
+  const headCorner = (left) => ({ ...headCell, left, zIndex: 3 });
   return (
     <>
       <div className="page-header"><h1>Broadsheet</h1></div>
@@ -502,13 +506,13 @@ function Broadsheet({ d, notify }) {
               <span className="badge badge-info">{d.rows.length} Students</span>
             </div>
           </div>
-          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <div className="card-body" style={{ padding: 0, overflow: 'auto', maxHeight: '70vh' }}>
             <table className="data-table" style={{ minWidth: '100%' }}>
               <thead><tr>
-                <th style={{ position: 'sticky', left: 0, background: 'var(--bg-secondary)', zIndex: 2 }}>Pos</th>
-                <th style={{ position: 'sticky', left: 40, background: 'var(--bg-secondary)', zIndex: 2 }}>Student</th>
-                {d.class_subjects.map((cs) => <th key={cs.id} style={{ textAlign: 'center', fontSize: '0.75rem' }}>{cs.short}</th>)}
-                <th style={{ textAlign: 'center' }}>Total</th><th style={{ textAlign: 'center' }}>Avg</th><th style={{ textAlign: 'center' }}>P/F</th>
+                <th style={{ ...headCorner(0) }}>Pos</th>
+                <th style={{ ...headCorner(40) }}>Student</th>
+                {d.class_subjects.map((cs) => <th key={cs.id} style={{ ...headCell, textAlign: 'center', fontSize: '0.75rem' }}>{cs.short}</th>)}
+                <th style={{ ...headCell, textAlign: 'center' }}>Total</th><th style={{ ...headCell, textAlign: 'center' }}>Avg</th><th style={{ ...headCell, textAlign: 'center' }}>P/F</th>
               </tr></thead>
               <tbody>{d.rows.map((r, i) => (
                 <tr key={i}>

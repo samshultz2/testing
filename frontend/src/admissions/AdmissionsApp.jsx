@@ -106,11 +106,11 @@ function Applicants({ d }) {
       <div className="card">
         <div className="card-header"><h3>{d.rows.length} applicant(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(a) => a.id} rows={d.rows}
+          <Table rowKey={(a) => a.id} rows={d.rows} pageSize={25} sticky maxHeight="65vh"
             empty={<Empty icon="fa-user-plus" title="No applicants"><p>Create an application or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Application</a></Empty>}
             columns={[
-              { key: 'app_no', label: 'App No', render: (a) => a.application_no },
-              { key: 'name', label: 'Name', render: (a) => <><a href={a.detail_url}><strong>{a.full_name}</strong></a>{a.gender && <div className="text-muted text-sm">{a.gender}</div>}</> },
+              { key: 'app_no', label: 'App No', sortable: true, sortValue: (a) => a.application_no, render: (a) => a.application_no },
+              { key: 'name', label: 'Name', sortable: true, sortValue: (a) => a.full_name, render: (a) => <><a href={a.detail_url}><strong>{a.full_name}</strong></a>{a.gender && <div className="text-muted text-sm">{a.gender}</div>}</> },
               { key: 'class', label: 'Class', render: (a) => a.intended_class },
               { key: 'parent', label: 'Parent', render: (a) => <>{a.parent_name || '—'}{a.parent_phone && <div className="text-muted text-sm">{a.parent_phone}</div>}</> },
               { key: 'score', label: 'Score', render: (a) => a.entrance_score },

@@ -344,15 +344,15 @@ function Payments({ d, notify }) {
       </div></div>
       <div className="card"><div className="card-header"><h3>{d.payments.length} payment(s)</h3><span className="badge badge-success">Total: {naira(d.total)}</span></div>
         <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(p) => p.id} rows={d.payments}
+          <Table rowKey={(p) => p.id} rows={d.payments} pageSize={25} sticky maxHeight="65vh"
             empty={<Empty icon="fa-receipt" title="No payments found"><p>Record a payment or adjust the filters.</p></Empty>}
             columns={[
-              { key: 'date', label: 'Date', render: (p) => p.date },
+              { key: 'date', label: 'Date', sortable: true, sortValue: (p) => p.date, render: (p) => p.date },
               { key: 'receipt', label: 'Receipt', render: (p) => <a href={p.receipt_url} data-native>{p.receipt_no}</a> },
-              { key: 'student', label: 'Student', render: (p) => <><a href={p.statement_url}>{p.student}</a> <span className="text-muted text-sm">({p.student_id})</span></> },
+              { key: 'student', label: 'Student', sortable: true, sortValue: (p) => p.student, render: (p) => <><a href={p.statement_url}>{p.student}</a> <span className="text-muted text-sm">({p.student_id})</span></> },
               { key: 'method', label: 'Method', render: (p) => <span className="badge badge-info">{p.method}</span> },
               { key: 'by', label: 'By', render: (p) => <span className="text-muted text-sm">{p.received_by}</span> },
-              { key: 'amount', label: 'Amount', align: 'right', render: (p) => <strong>{naira(p.amount)}</strong> },
+              { key: 'amount', label: 'Amount', align: 'right', sortable: true, sortValue: (p) => Number(p.amount) || 0, render: (p) => <strong>{naira(p.amount)}</strong> },
               { key: 'act', label: '', render: (p) => (
                 <div className="d-flex gap-1">
                   <a href={p.receipt_url} className="btn btn-secondary btn-sm" title="Receipt" data-native><i aria-hidden="true" className="fas fa-receipt" /></a>
@@ -650,14 +650,14 @@ function Defaulters({ d }) {
       </div></div>
       <div className="card"><div className="card-header"><h3>Defaulters</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(r, i) => i} rows={d.rows}
+          <Table rowKey={(r, i) => i} rows={d.rows} pageSize={25} sticky maxHeight="65vh"
             empty={<Empty icon="fa-circle-check" title="No outstanding fees"><p>Every enrolled student has cleared their bill for this selection.</p></Empty>}
             columns={[
-              { key: 'student', label: 'Student', render: (r) => <>{r.student} <span className="text-muted text-sm">({r.student_id})</span></> },
-              { key: 'class', label: 'Class', render: (r) => `${r.class_name}${r.arm_name ? ' ' + r.arm_name : ''}` },
+              { key: 'student', label: 'Student', sortable: true, sortValue: (r) => r.student, render: (r) => <>{r.student} <span className="text-muted text-sm">({r.student_id})</span></> },
+              { key: 'class', label: 'Class', sortable: true, sortValue: (r) => `${r.class_name}${r.arm_name || ''}`, render: (r) => `${r.class_name}${r.arm_name ? ' ' + r.arm_name : ''}` },
               { key: 'billed', label: 'Payable', align: 'right', render: (r) => naira(r.billed) },
               { key: 'paid', label: 'Paid', align: 'right', render: (r) => naira(r.paid) },
-              { key: 'balance', label: 'Balance', align: 'right', render: (r) => <strong style={{ color: 'var(--danger)' }}>{naira(r.balance)}</strong> },
+              { key: 'balance', label: 'Balance', align: 'right', sortable: true, sortValue: (r) => Number(r.balance) || 0, render: (r) => <strong style={{ color: 'var(--danger)' }}>{naira(r.balance)}</strong> },
               { key: 'act', label: '', align: 'right', render: (r) => (
                 <div className="d-flex gap-1 justify-end">
                   <a href={r.statement_url} className="btn btn-secondary btn-sm" title="Statement"><i aria-hidden="true" className="fas fa-file-lines" /></a>
@@ -714,10 +714,10 @@ function Collections({ d }) {
         </div></div>
       <div className="card"><div className="card-header"><h3>Payments ({d.count})</h3><span className="badge badge-success">{naira(d.total)}</span></div>
         <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(p) => p.id} rows={d.payments}
+          <Table rowKey={(p) => p.id} rows={d.payments} pageSize={25} sticky maxHeight="65vh"
             empty={<Empty icon="fa-receipt" title="No payments"><p>No collections in the selected range.</p></Empty>}
             columns={[
-              { key: 'date', label: 'Date', render: (p) => p.date },
+              { key: 'date', label: 'Date', sortable: true, sortValue: (p) => p.date, render: (p) => p.date },
               { key: 'receipt', label: 'Receipt', render: (p) => <a href={p.receipt_url} data-native>{p.receipt_no}</a> },
               { key: 'student', label: 'Student', render: (p) => p.student },
               { key: 'method', label: 'Method', render: (p) => <span className="badge badge-info">{p.method}</span> },

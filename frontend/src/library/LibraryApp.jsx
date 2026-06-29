@@ -124,11 +124,11 @@ function Books({ d, notify }) {
       <div className="card">
         <div className="card-header"><h3>{shown.length} title(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(b) => b.id} rows={shown}
+          <Table rowKey={(b) => b.id} rows={shown} pageSize={25} sticky maxHeight="65vh"
             empty={<Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p><a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a></Empty>}
             columns={[
-              { key: 'title', label: 'Title', render: (b) => <><strong>{b.title}</strong>{b.isbn && <div className="text-muted text-sm">{b.isbn}</div>}</> },
-              { key: 'author', label: 'Author', render: (b) => b.author || '—' },
+              { key: 'title', label: 'Title', sortable: true, sortValue: (b) => b.title, render: (b) => <><strong>{b.title}</strong>{b.isbn && <div className="text-muted text-sm">{b.isbn}</div>}</> },
+              { key: 'author', label: 'Author', sortable: true, sortValue: (b) => b.author || '', render: (b) => b.author || '—' },
               { key: 'category', label: 'Category', render: (b) => b.category ? <span className="badge badge-secondary">{b.category}</span> : '—' },
               { key: 'shelf', label: 'Shelf', render: (b) => b.shelf || '—' },
               { key: 'avail', label: 'Avail/Total', align: 'right', render: (b) => <><span className={'badge ' + (b.copies_available ? 'badge-success' : 'badge-danger')}>{b.copies_available}</span> / {b.copies_total}</> },
@@ -271,11 +271,11 @@ function Loans({ d, notify }) {
       <div className="card">
         <div className="card-header"><h3>{d.loans.length} loan(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(l) => l.id} rows={d.loans}
+          <Table rowKey={(l) => l.id} rows={d.loans} pageSize={25} sticky maxHeight="65vh"
             empty={<Empty icon="fa-rotate-left" title="No loans"><p>Nothing matches this filter.</p></Empty>}
             columns={[
-              { key: 'book', label: 'Book', render: (l) => l.book },
-              { key: 'student', label: 'Student', render: (l) => l.student },
+              { key: 'book', label: 'Book', sortable: true, sortValue: (l) => l.book, render: (l) => l.book },
+              { key: 'student', label: 'Student', sortable: true, sortValue: (l) => l.student, render: (l) => l.student },
               { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
               { key: 'due', label: 'Due', render: (l) => <>{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d late)</span>}</> },
               { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
