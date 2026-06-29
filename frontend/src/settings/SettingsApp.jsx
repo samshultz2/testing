@@ -574,8 +574,8 @@ function Users({ d, notify }) {
                 <div className="data-card-row"><span className="data-card-label">Email</span><span>{u.email || '-'}</span></div>
                 <div className="data-card-row"><span className="data-card-label">Status</span><span className={`badge ${u.is_active ? 'badge-success' : 'badge-secondary'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></div>
                 <div className="data-card-actions">
-                  <a href={u.edit_url} onClick={(e) => { e.preventDefault(); nav.go(u.edit_url); }} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
-                  <button type="button" className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={() => del(u)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                  <a href={u.edit_url} onClick={(e) => { e.preventDefault(); nav.go(u.edit_url); }} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
+                  <button type="button" className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={() => del(u)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>
                 </div>
               </div>
             ))}
