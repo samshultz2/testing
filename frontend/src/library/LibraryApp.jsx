@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'],
@@ -64,15 +64,15 @@ function Dashboard({ d }) {
       <div className="widget">
         <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent loans</h3><a href={d.urls.loans} className="text-sm">View all</a></div>
         <div className="wb" style={{ padding: 0 }}>
-          {d.recent.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Book</th><th>Student</th><th>Borrowed</th><th>Due</th><th>Status</th></tr></thead>
-              <tbody>{d.recent.map((l) => (
-                <tr key={l.id}><td data-label="Book">{l.book}</td><td data-label="Student">{l.student}</td>
-                  <td data-label="Borrowed">{l.borrowed}</td><td data-label="Due">{l.due}</td>
-                  <td data-label="Status">{statusBadge(l)}</td></tr>
-              ))}</tbody></table></div>
-          ) : <Empty icon="fa-hand-holding" title="No loans yet" />}
+          <Table rowKey={(l) => l.id} rows={d.recent}
+            empty={<Empty icon="fa-hand-holding" title="No loans yet" />}
+            columns={[
+              { key: 'book', label: 'Book', render: (l) => l.book },
+              { key: 'student', label: 'Student', render: (l) => l.student },
+              { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
+              { key: 'due', label: 'Due', render: (l) => l.due },
+              { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
+            ]} />
         </div>
       </div>
     </>
@@ -124,25 +124,21 @@ function Books({ d, notify }) {
       <div className="card">
         <div className="card-header"><h3>{shown.length} title(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {shown.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Title</th><th>Author</th><th>Category</th><th>Shelf</th><th className="text-right">Avail/Total</th><th /></tr></thead>
-              <tbody>{shown.map((b) => (
-                <tr key={b.id}>
-                  <td data-label="Title"><strong>{b.title}</strong>{b.isbn && <div className="text-muted text-sm">{b.isbn}</div>}</td>
-                  <td data-label="Author">{b.author || '—'}</td>
-                  <td data-label="Category">{b.category ? <span className="badge badge-secondary">{b.category}</span> : '—'}</td>
-                  <td data-label="Shelf">{b.shelf || '—'}</td>
-                  <td data-label="Avail/Total" className="text-right">
-                    <span className={'badge ' + (b.copies_available ? 'badge-success' : 'badge-danger')}>{b.copies_available}</span> / {b.copies_total}</td>
-                  <td className="actions"><div className="d-flex gap-1 justify-end">
-                    {b.copies_available > 0 && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i aria-hidden="true" className="fas fa-hand-holding" /></a>}
-                    <a href={b.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
-                    {d.is_admin && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                  </div></td>
-                </tr>
-              ))}</tbody></table></div>
-          ) : <Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p><a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a></Empty>}
+          <Table rowKey={(b) => b.id} rows={shown}
+            empty={<Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p><a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a></Empty>}
+            columns={[
+              { key: 'title', label: 'Title', render: (b) => <><strong>{b.title}</strong>{b.isbn && <div className="text-muted text-sm">{b.isbn}</div>}</> },
+              { key: 'author', label: 'Author', render: (b) => b.author || '—' },
+              { key: 'category', label: 'Category', render: (b) => b.category ? <span className="badge badge-secondary">{b.category}</span> : '—' },
+              { key: 'shelf', label: 'Shelf', render: (b) => b.shelf || '—' },
+              { key: 'avail', label: 'Avail/Total', align: 'right', render: (b) => <><span className={'badge ' + (b.copies_available ? 'badge-success' : 'badge-danger')}>{b.copies_available}</span> / {b.copies_total}</> },
+              { key: 'act', label: '', render: (b) => (
+                <div className="d-flex gap-1 justify-end">
+                  {b.copies_available > 0 && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i aria-hidden="true" className="fas fa-hand-holding" /></a>}
+                  <a href={b.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
+                  {d.is_admin && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                </div>) },
+            ]} />
         </div>
       </div>
     </>
@@ -275,22 +271,19 @@ function Loans({ d, notify }) {
       <div className="card">
         <div className="card-header"><h3>{d.loans.length} loan(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.loans.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Book</th><th>Student</th><th>Borrowed</th><th>Due</th><th>Status</th><th>Fine</th><th /></tr></thead>
-              <tbody>{d.loans.map((l) => (
-                <tr key={l.id}>
-                  <td data-label="Book">{l.book}</td><td data-label="Student">{l.student}</td>
-                  <td data-label="Borrowed">{l.borrowed}</td>
-                  <td data-label="Due">{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d late)</span>}</td>
-                  <td data-label="Status">{statusBadge(l)}</td>
-                  <td data-label="Fine">{l.fine ? naira(l.fine) : '—'}</td>
-                  <td className="actions">{l.status === 'Borrowed'
-                    ? <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => ret(l)}><i aria-hidden="true" className="fas fa-rotate-left" /> Return</button>
-                    : <span className="text-muted text-sm">{l.returned}</span>}</td>
-                </tr>
-              ))}</tbody></table></div>
-          ) : <Empty icon="fa-rotate-left" title="No loans"><p>Nothing matches this filter.</p></Empty>}
+          <Table rowKey={(l) => l.id} rows={d.loans}
+            empty={<Empty icon="fa-rotate-left" title="No loans"><p>Nothing matches this filter.</p></Empty>}
+            columns={[
+              { key: 'book', label: 'Book', render: (l) => l.book },
+              { key: 'student', label: 'Student', render: (l) => l.student },
+              { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
+              { key: 'due', label: 'Due', render: (l) => <>{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d late)</span>}</> },
+              { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
+              { key: 'fine', label: 'Fine', render: (l) => l.fine ? naira(l.fine) : '—' },
+              { key: 'act', label: '', render: (l) => l.status === 'Borrowed'
+                ? <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => ret(l)}><i aria-hidden="true" className="fas fa-rotate-left" /> Return</button>
+                : <span className="text-muted text-sm">{l.returned}</span> },
+            ]} />
         </div>
       </div>
     </>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
+import { Banner, SectionShell, SectionTabs, Empty, Table } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['add_exam', 'fa-circle-plus', 'Exams'],
@@ -52,22 +52,21 @@ function Dashboard({ d }) {
       </div>
       <div className="card"><div className="card-header"><h3>All Exams</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.exams.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Title</th><th>Subject</th><th>Class</th><th>Date</th><th>Qs</th><th>Status</th><th /></tr></thead>
-              <tbody>{d.exams.map((e) => (
-                <tr key={e.id}>
-                  <td data-label="Title"><a href={e.detail_url}><strong>{e.title}</strong></a></td>
-                  <td data-label="Subject">{e.subject}</td><td data-label="Class">{e.class_name}</td>
-                  <td data-label="Date">{e.exam_date}</td><td data-label="Qs">{e.question_count}</td>
-                  <td data-label="Status"><span className={'badge ' + (e.is_published ? 'badge-success' : 'badge-secondary')}>{e.is_published ? 'Published' : 'Draft'}</span></td>
-                  <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <a href={e.detail_url} className="btn btn-secondary btn-sm" title="Manage"><i aria-hidden="true" className="fas fa-pen" /></a>
-                    <a href={e.results_url} className="btn btn-secondary btn-sm" title="Results"><i aria-hidden="true" className="fas fa-chart-bar" /></a>
-                  </div></td>
-                </tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-file-pen" title="No exams yet"><p>Create an online test, add questions, set the access password and publish.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Exam</a></Empty>}
+          <Table rowKey={(e) => e.id} rows={d.exams}
+            empty={<Empty icon="fa-file-pen" title="No exams yet"><p>Create an online test, add questions, set the access password and publish.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Exam</a></Empty>}
+            columns={[
+              { key: 'title', label: 'Title', render: (e) => <a href={e.detail_url}><strong>{e.title}</strong></a> },
+              { key: 'subject', label: 'Subject', render: (e) => e.subject },
+              { key: 'class', label: 'Class', render: (e) => e.class_name },
+              { key: 'date', label: 'Date', render: (e) => e.exam_date },
+              { key: 'qs', label: 'Qs', render: (e) => e.question_count },
+              { key: 'status', label: 'Status', render: (e) => <span className={'badge ' + (e.is_published ? 'badge-success' : 'badge-secondary')}>{e.is_published ? 'Published' : 'Draft'}</span> },
+              { key: 'act', label: '', render: (e) => (
+                <div className="d-flex gap-1 justify-end">
+                  <a href={e.detail_url} className="btn btn-secondary btn-sm" title="Manage"><i aria-hidden="true" className="fas fa-pen" /></a>
+                  <a href={e.results_url} className="btn btn-secondary btn-sm" title="Results"><i aria-hidden="true" className="fas fa-chart-bar" /></a>
+                </div>) },
+            ]} />
         </div></div>
     </>
   );
@@ -244,21 +243,17 @@ function Results({ d }) {
       </div></div>
       <div className="card"><div className="card-header"><h3>{d.attempts.length} attempt(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.attempts.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Student</th><th className="text-right">Raw</th><th className="text-right">Score</th><th className="text-right">%</th><th>Flags</th><th>Status</th><th /></tr></thead>
-              <tbody>{d.attempts.map((a) => (
-                <tr key={a.id}>
-                  <td data-label="Student">{a.student}<div className="text-muted text-sm">{a.student_id}</div></td>
-                  <td data-label="Raw" className="text-right">{a.raw_total ? `${Math.round(a.raw_score)}/${Math.round(a.raw_total)}` : '—'}</td>
-                  <td data-label="Score" className="text-right">{a.score} / {a.total}</td>
-                  <td data-label="%" className="text-right"><span className={'badge ' + (a.percentage >= 50 ? 'badge-success' : 'badge-danger')}>{a.percentage}%</span></td>
-                  <td data-label="Flags">{a.violations ? <span className="badge badge-danger" title={`Left the exam page ${a.violations} time(s)`}><i aria-hidden="true" className="fas fa-flag" /> {a.violations}</span> : <span className="text-muted">—</span>}</td>
-                  <td data-label="Status"><span className={'badge ' + (a.status === 'Submitted' ? 'badge-success' : 'badge-warning')}>{a.status}</span></td>
-                  <td className="actions">{a.status === 'Submitted' && <a href={a.review_url} className="btn btn-secondary btn-sm" title="Review answers" data-native><i aria-hidden="true" className="fas fa-list-check" /></a>}</td>
-                </tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-chart-bar" title="No attempts yet"><p>Results appear here once students take the test.</p></Empty>}
+          <Table rowKey={(a) => a.id} rows={d.attempts}
+            empty={<Empty icon="fa-chart-bar" title="No attempts yet"><p>Results appear here once students take the test.</p></Empty>}
+            columns={[
+              { key: 'student', label: 'Student', render: (a) => <>{a.student}<div className="text-muted text-sm">{a.student_id}</div></> },
+              { key: 'raw', label: 'Raw', align: 'right', render: (a) => a.raw_total ? `${Math.round(a.raw_score)}/${Math.round(a.raw_total)}` : '—' },
+              { key: 'score', label: 'Score', align: 'right', render: (a) => `${a.score} / ${a.total}` },
+              { key: 'pct', label: '%', align: 'right', render: (a) => <span className={'badge ' + (a.percentage >= 50 ? 'badge-success' : 'badge-danger')}>{a.percentage}%</span> },
+              { key: 'flags', label: 'Flags', render: (a) => a.violations ? <span className="badge badge-danger" title={`Left the exam page ${a.violations} time(s)`}><i aria-hidden="true" className="fas fa-flag" /> {a.violations}</span> : <span className="text-muted">—</span> },
+              { key: 'status', label: 'Status', render: (a) => <span className={'badge ' + (a.status === 'Submitted' ? 'badge-success' : 'badge-warning')}>{a.status}</span> },
+              { key: 'act', label: '', render: (a) => a.status === 'Submitted' && <a href={a.review_url} className="btn btn-secondary btn-sm" title="Review answers" data-native><i aria-hidden="true" className="fas fa-list-check" /></a> },
+            ]} />
         </div></div>
       {d.analysis.length > 0 && submittedCount > 0 && (
         <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-simple" /> Question analysis</h3><span className="text-muted text-sm">% of {submittedCount} submission(s) correct</span></div>

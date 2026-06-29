@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionShell, Table } from '../components/ui';
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
 
@@ -32,14 +32,12 @@ function Dashboard({ d }) {
         <div className="card mb-3" style={{ borderColor: '#f6c23e' }}>
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Low stock</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
-            <table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Product</th><th>Category</th><th className="text-right">In stock</th><th className="text-right">Reorder at</th></tr></thead>
-              <tbody>{d.low_stock.map((p, i) => (
-                <tr key={i}><td data-label="Product">{p.name}</td><td data-label="Category">{p.category}</td>
-                  <td data-label="In stock" className="text-right"><strong style={{ color: '#e74a3b' }}>{p.stock_qty}</strong></td>
-                  <td data-label="Reorder at" className="text-right">{p.reorder_level}</td></tr>
-              ))}</tbody>
-            </table>
+            <Table rowKey={(p, i) => i} rows={d.low_stock} columns={[
+              { key: 'name', label: 'Product', render: (p) => p.name },
+              { key: 'category', label: 'Category', render: (p) => p.category },
+              { key: 'stock', label: 'In stock', align: 'right', render: (p) => <strong style={{ color: 'var(--danger)' }}>{p.stock_qty}</strong> },
+              { key: 'reorder', label: 'Reorder at', align: 'right', render: (p) => p.reorder_level },
+            ]} />
           </div>
         </div>
       )}
@@ -55,21 +53,15 @@ function Dashboard({ d }) {
 }
 
 function SalesTable({ rows, withItems }) {
-  return (
-    <table className="data-table table-stack no-mobile-scroll">
-      <thead><tr><th>Receipt</th><th>Buyer</th>{withItems && <th>Items</th>}<th>Method</th><th className="text-right">Total</th><th>When</th></tr></thead>
-      <tbody>{rows.map((s) => (
-        <tr key={s.id}>
-          <td data-label="Receipt"><a href={s.receipt_url}>{s.receipt_no}</a></td>
-          <td data-label="Buyer">{s.buyer}</td>
-          {withItems && <td data-label="Items">{s.item_count}</td>}
-          <td data-label="Method"><span className="badge badge-info">{s.payment_method}</span></td>
-          <td data-label="Total" className="text-right"><strong>{naira(s.total)}</strong></td>
-          <td data-label="When">{s.when}</td>
-        </tr>
-      ))}</tbody>
-    </table>
-  );
+  const cols = [
+    { key: 'receipt', label: 'Receipt', render: (s) => <a href={s.receipt_url}>{s.receipt_no}</a> },
+    { key: 'buyer', label: 'Buyer', render: (s) => s.buyer },
+    withItems && { key: 'items', label: 'Items', render: (s) => s.item_count },
+    { key: 'method', label: 'Method', render: (s) => <span className="badge badge-info">{s.payment_method}</span> },
+    { key: 'total', label: 'Total', align: 'right', render: (s) => <strong>{naira(s.total)}</strong> },
+    { key: 'when', label: 'When', render: (s) => s.when },
+  ].filter(Boolean);
+  return <Table rowKey={(s) => s.id} rows={rows} columns={cols} />;
 }
 
 // ---- Products --------------------------------------------------------------

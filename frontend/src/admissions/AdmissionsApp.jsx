@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell, Table } from '../components/ui';
 
 const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
 
@@ -60,17 +60,15 @@ function Dashboard({ d }) {
       <div className="widget">
         <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent applications</h3><a href={d.urls.applicants} className="text-sm">View all</a></div>
         <div className="wb" style={{ padding: 0 }}>
-          {d.recent.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>App No</th><th>Name</th><th>Class</th><th>Status</th><th>Applied</th></tr></thead>
-              <tbody>{d.recent.map((a) => (
-                <tr key={a.id}><td data-label="App No">{a.application_no}</td>
-                  <td data-label="Name"><a href={a.detail_url}>{a.full_name}</a></td>
-                  <td data-label="Class">{a.intended_class}</td>
-                  <td data-label="Status"><span className={'badge ' + a.status_badge}>{a.status}</span></td>
-                  <td data-label="Applied" className="text-muted text-sm">{a.applied}</td></tr>
-              ))}</tbody></table></div>
-          ) : <Empty icon="fa-user-plus" title="No applications yet" style={{ padding: '1.5rem' }}><a href={d.urls.add} className="btn btn-primary btn-sm mt-2">New application</a></Empty>}
+          <Table rowKey={(a) => a.id} rows={d.recent}
+            empty={<Empty icon="fa-user-plus" title="No applications yet"><a href={d.urls.add} className="btn btn-primary btn-sm mt-2">New application</a></Empty>}
+            columns={[
+              { key: 'app_no', label: 'App No', render: (a) => a.application_no },
+              { key: 'name', label: 'Name', render: (a) => <a href={a.detail_url}>{a.full_name}</a> },
+              { key: 'class', label: 'Class', render: (a) => a.intended_class },
+              { key: 'status', label: 'Status', render: (a) => <span className={'badge ' + a.status_badge}>{a.status}</span> },
+              { key: 'applied', label: 'Applied', render: (a) => <span className="text-muted text-sm">{a.applied}</span> },
+            ]} />
         </div>
       </div>
     </>
@@ -108,21 +106,17 @@ function Applicants({ d }) {
       <div className="card">
         <div className="card-header"><h3>{d.rows.length} applicant(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
-          {d.rows.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>App No</th><th>Name</th><th>Class</th><th>Parent</th><th>Score</th><th>Status</th><th /></tr></thead>
-              <tbody>{d.rows.map((a) => (
-                <tr key={a.id}>
-                  <td data-label="App No">{a.application_no}</td>
-                  <td data-label="Name"><a href={a.detail_url}><strong>{a.full_name}</strong></a>{a.gender && <div className="text-muted text-sm">{a.gender}</div>}</td>
-                  <td data-label="Class">{a.intended_class}</td>
-                  <td data-label="Parent">{a.parent_name || '—'}{a.parent_phone && <div className="text-muted text-sm">{a.parent_phone}</div>}</td>
-                  <td data-label="Score">{a.entrance_score}</td>
-                  <td data-label="Status"><span className={'badge ' + a.status_badge}>{a.status}</span>{a.linked && <i aria-hidden="true" className="fas fa-link text-muted" title="Linked to student" style={{ marginLeft: 4 }} />}</td>
-                  <td className="actions"><a href={a.detail_url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
-                </tr>
-              ))}</tbody></table></div>
-          ) : <Empty icon="fa-user-plus" title="No applicants"><p>Create an application or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Application</a></Empty>}
+          <Table rowKey={(a) => a.id} rows={d.rows}
+            empty={<Empty icon="fa-user-plus" title="No applicants"><p>Create an application or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Application</a></Empty>}
+            columns={[
+              { key: 'app_no', label: 'App No', render: (a) => a.application_no },
+              { key: 'name', label: 'Name', render: (a) => <><a href={a.detail_url}><strong>{a.full_name}</strong></a>{a.gender && <div className="text-muted text-sm">{a.gender}</div>}</> },
+              { key: 'class', label: 'Class', render: (a) => a.intended_class },
+              { key: 'parent', label: 'Parent', render: (a) => <>{a.parent_name || '—'}{a.parent_phone && <div className="text-muted text-sm">{a.parent_phone}</div>}</> },
+              { key: 'score', label: 'Score', render: (a) => a.entrance_score },
+              { key: 'status', label: 'Status', render: (a) => <><span className={'badge ' + a.status_badge}>{a.status}</span>{a.linked && <i aria-hidden="true" className="fas fa-link text-muted" title="Linked to student" style={{ marginLeft: 4 }} />}</> },
+              { key: 'act', label: '', render: (a) => <a href={a.detail_url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a> },
+            ]} />
         </div>
       </div>
     </>
