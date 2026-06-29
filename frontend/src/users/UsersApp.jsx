@@ -1,17 +1,8 @@
 import React, { useState } from 'react';
-import { submitJson } from '../lib/forms';
+import { submitJson, useSave } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
-
-function useSave(notify) {
-  return async (url, fields, after, okMsg) => {
-    const r = await submitJson(url, fields);
-    if (r.ok) { notify('success', okMsg || r.message); after && after(r); }
-    else notify('error', r.error || 'Something went wrong.');
-    return r;
-  };
-}
 
 const A = ({ to, className, children, title }) => {
   const nav = useNav();

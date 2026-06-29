@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { submitJson } from '../lib/forms';
+import { submitJson, useSave } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav } from '../lib/section';
@@ -7,15 +7,6 @@ import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
 const money = (n) => '₦' + Math.round(Number(n) || 0).toLocaleString();
 const armColor = (arm) => (arm === 'Iris' ? 'primary' : arm === 'Rose' ? 'danger' : arm === 'Lily' ? 'warning' : 'info');
-
-function useSave(notify) {
-  return async (url, fields, after, okMsg) => {
-    const r = await submitJson(url, fields);
-    if (r.ok) { notify('success', okMsg || r.message); after && after(r); }
-    else notify('error', r.error || 'Something went wrong.');
-    return r;
-  };
-}
 
 const A = ({ to, className, children, title, style }) => {
   const nav = useNav();
