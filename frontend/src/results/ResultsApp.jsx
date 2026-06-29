@@ -51,7 +51,7 @@ function Index({ d }) {
         <div className="card-body"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
           {[['fa-chart-line', '#007bff', 'Performance Trends', 'Track year-over-year performance, pass rates, and grade distributions.'],
             ['fa-user-graduate', 'var(--success)', 'Student Profiles', 'Individual student analytics with strengths, weaknesses, and predictions.'],
-            ['fa-calculator', '#ffc107', 'JAMB Predictions', 'ML-based JAMB score predictions from WAEC performance.'],
+            ['fa-calculator', 'var(--warning)', 'JAMB Predictions', 'ML-based JAMB score predictions from WAEC performance.'],
             ['fa-exclamation-triangle', 'var(--danger)', 'Risk Assessment', 'Identify at-risk students with actionable recommendations.']].map(([ic, col, t, p]) => (
             <div key={t} style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 8 }}>
               <h4 style={{ marginBottom: '.5rem' }}><i aria-hidden="true" className={'fas ' + ic} style={{ color: col }} /> {t}</h4>

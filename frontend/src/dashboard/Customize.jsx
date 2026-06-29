@@ -45,13 +45,13 @@ export default function Customize({ catalog, onSaved, onClose }) {
       <p className="text-muted text-sm" style={{ marginTop: 0 }}>Choose which widgets appear on your dashboard.</p>
       {groups.map((g) => (
         <div key={g.name} style={{ marginBottom: '1rem' }}>
-          <h4 style={{ margin: '0 0 .5rem', fontSize: '.85rem', color: 'var(--text-secondary, #475569)' }}>{g.name}</h4>
+          <h4 style={{ margin: '0 0 .5rem', fontSize: '.85rem', color: 'var(--text-secondary, var(--text-secondary))' }}>{g.name}</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '.4rem' }}>
             {g.items.map((w) => (
               <label key={w.key}
                      title={w.permitted ? '' : 'You don’t have access to this module'}
                      style={{ display: 'flex', gap: '.6rem', alignItems: 'center', padding: '.5rem',
-                              border: '1px solid var(--border-color, #e5e7eb)', borderRadius: 8,
+                              border: '1px solid var(--border-color, var(--border-color))', borderRadius: 8,
                               opacity: w.permitted ? 1 : .5, cursor: w.permitted ? 'pointer' : 'not-allowed' }}>
                 <input type="checkbox" disabled={!w.permitted}
                        checked={!!checked[w.key]} onChange={() => toggle(w.key)} />

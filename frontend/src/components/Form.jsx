@@ -22,7 +22,7 @@ function Label({ id, label, required }) {
   if (!label) return null;
   return (
     <label className="form-label" htmlFor={id}>
-      {label}{required && <span className="required" aria-hidden="true" style={{ color: 'var(--danger, #dc2626)' }}> *</span>}
+      {label}{required && <span className="required" aria-hidden="true" style={{ color: 'var(--danger, var(--danger))' }}> *</span>}
     </label>
   );
 }
@@ -34,7 +34,7 @@ function Hint({ hintId, hint, errId, error }) {
                      style={{ display: 'block', fontSize: '.78rem', color: 'var(--text-muted, var(--text-muted))', marginTop: 3 }}>{hint}</span>}
       {error && (
         <span className="form-error" id={errId} role="alert"
-              style={{ color: 'var(--danger, #dc2626)', fontSize: 12, display: 'block', marginTop: 3 }}>
+              style={{ color: 'var(--danger, var(--danger))', fontSize: 12, display: 'block', marginTop: 3 }}>
           {error}
         </span>
       )}

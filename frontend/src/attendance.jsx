@@ -205,7 +205,7 @@ function App({ assignmentId, date, className }) {
         </div>
       )}
 
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden' }}>
         {roster.students.map((s, i) => (
           <label key={s.enrollment_id}
                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
@@ -214,7 +214,7 @@ function App({ assignmentId, date, className }) {
             <input type="checkbox" checked={!!present[s.enrollment_id]} onChange={() => toggle(s.enrollment_id)}
                    style={{ width: 18, height: 18 }} />
             <span style={{ flex: 1 }}>{s.name}</span>
-            <span style={{ fontSize: 12, color: present[s.enrollment_id] ? 'var(--success)' : '#dc2626' }}>
+            <span style={{ fontSize: 12, color: present[s.enrollment_id] ? 'var(--success)' : 'var(--danger)' }}>
               {present[s.enrollment_id] ? 'Present' : 'Absent'}
             </span>
           </label>
@@ -225,7 +225,7 @@ function App({ assignmentId, date, className }) {
         <button className="btn btn-secondary btn-sm" type="button" onClick={allPresent}>Mark all present</button>
         <button className="btn btn-primary" type="button" onClick={save} disabled={!roster.week_id}>Save register</button>
         {pending > 0 && <button className="btn btn-light btn-sm" type="button" onClick={flush}>Sync now ({pending})</button>}
-        {msg && <span style={{ fontSize: 13, color: '#374151' }}>{msg}</span>}
+        {msg && <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{msg}</span>}
       </div>
 
       {failed.length > 0 && (

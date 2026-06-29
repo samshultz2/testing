@@ -125,7 +125,7 @@ export default function WeeklyReport() {
                   </table>
                 </div>
                 <p className="att-legend">
-                  <b>Legend:</b> <span style={{ color: 'var(--success)' }}>✓</span> present, <span style={{ color: '#dc2626' }}>✗</span> absent ·
+                  <b>Legend:</b> <span style={{ color: 'var(--success)' }}>✓</span> present, <span style={{ color: 'var(--danger)' }}>✗</span> absent ·
                   {' '}each cell shows AM then PM · <b>AM</b> = morning, <b>PM</b> = afternoon.
                 </p>
               </>

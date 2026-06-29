@@ -32,7 +32,7 @@ const Stat = ({ icon, tone, value, label }) => (
 
 function Bar({ pct, color = 'var(--success)', height = 8 }) {
   return (
-    <div style={{ background: '#e9ecef', borderRadius: 4, height, overflow: 'hidden' }}>
+    <div style={{ background: 'var(--border-color)', borderRadius: 4, height, overflow: 'hidden' }}>
       <div style={{ background: color, height: '100%', width: `${Math.min(100, pct)}%` }} />
     </div>
   );
@@ -83,7 +83,7 @@ function Dashboard({ d }) {
           <span><strong>Collection Progress</strong></span>
           <strong>{money(s.total_received)} / {money(s.total_expected)}</strong>
         </div>
-        <div style={{ background: '#e9ecef', borderRadius: 10, height: 24, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ background: 'var(--border-color)', borderRadius: 10, height: 24, overflow: 'hidden', position: 'relative' }}>
           <div style={{ background: 'linear-gradient(90deg, #1a5f4a, var(--success))', height: '100%', width: `${s.collection_rate}%` }} />
           <span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', fontWeight: 'bold', color: s.collection_rate > 50 ? 'white' : '#333' }}>{s.collection_rate.toFixed(1)}%</span>
         </div>
@@ -130,7 +130,7 @@ function Dashboard({ d }) {
                 <span className="arm-stats">{a.paid}/{a.total} paid</span>
               </div>
               <div className="arm-bar-container">
-                <div className="arm-bar" style={{ width: `${a.percentage}%`, background: a.percentage >= 75 ? 'var(--success)' : a.percentage >= 50 ? '#ffc107' : 'var(--danger)' }} />
+                <div className="arm-bar" style={{ width: `${a.percentage}%`, background: a.percentage >= 75 ? 'var(--success)' : a.percentage >= 50 ? 'var(--warning)' : 'var(--danger)' }} />
               </div>
               <div className="arm-amount">{money(a.collected)}</div>
             </div>
@@ -192,7 +192,7 @@ function Dashboard({ d }) {
                   <td><strong>{money(st.total_paid)}</strong></td>
                   <td>{st.remaining > 0 ? <span className="text-danger">{money(st.remaining)}</span> : <span className="text-success">-</span>}</td>
                   <td style={{ width: 100 }}>
-                    <Bar pct={st.percentage} color={st.percentage >= 100 ? 'var(--success)' : st.percentage >= 50 ? '#ffc107' : 'var(--danger)'} />
+                    <Bar pct={st.percentage} color={st.percentage >= 100 ? 'var(--success)' : st.percentage >= 50 ? 'var(--warning)' : 'var(--danger)'} />
                     <small className="text-muted">{st.percentage.toFixed(0)}%</small>
                   </td>
                   <td>{st.status === 'Paid' ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Paid</span> : <span className="badge badge-warning">Owing</span>}</td>
@@ -417,7 +417,7 @@ function Expenses({ d, notify }) {
           <span><strong>Fund Utilization</strong></span>
           <span><span className="text-danger">Spent: {money(d.total_expenses)}</span> | <span className="text-success">Available: {money(d.available_balance)}</span></span>
         </div>
-        <div style={{ background: '#e9ecef', borderRadius: 10, height: 24, overflow: 'hidden', display: 'flex' }}>
+        <div style={{ background: 'var(--border-color)', borderRadius: 10, height: 24, overflow: 'hidden', display: 'flex' }}>
           <div style={{ background: 'var(--danger)', height: '100%', width: `${d.expense_rate}%` }} />
           <div style={{ background: 'var(--success)', height: '100%', width: `${100 - d.expense_rate}%` }} />
         </div>
@@ -534,7 +534,7 @@ function Report({ d }) {
                 <div className="info-row"><span>Received:</span><strong style={{ color: 'var(--success)' }}>{money(a.total_paid)}</strong></div>
                 <div className="info-row"><span>Progress:</span><strong>{pct.toFixed(1)}%</strong></div>
               </div>
-              <div style={{ background: '#e9ecef', borderRadius: 8, height: 16, overflow: 'hidden', marginBottom: '1rem' }}>
+              <div style={{ background: 'var(--border-color)', borderRadius: 8, height: 16, overflow: 'hidden', marginBottom: '1rem' }}>
                 <div style={{ background: 'linear-gradient(90deg, #1a5f4a, var(--success))', height: '100%', width: `${pct}%` }} />
               </div>
               <table className="data-table">
@@ -604,7 +604,7 @@ function Defaulters({ d }) {
                   <td>{s.arm ? <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span> : <span className="text-muted">—</span>}</td>
                   <td>{money(s.total_paid)}</td>
                   <td><strong className="text-danger">{money(s.remaining)}</strong></td>
-                  <td style={{ width: 100 }}><Bar pct={s.percentage} color={s.percentage >= 50 ? '#ffc107' : 'var(--danger)'} /><small>{s.percentage.toFixed(0)}%</small></td>
+                  <td style={{ width: 100 }}><Bar pct={s.percentage} color={s.percentage >= 50 ? 'var(--warning)' : 'var(--danger)'} /><small>{s.percentage.toFixed(0)}%</small></td>
                   <td><small>{s.last_payment}</small></td>
                   <td><A to={s.detail_url} title="View" className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
                     <A to={s.add_payment_url} title="Add payment" className="btn btn-sm btn-success"><i aria-hidden="true" className="fas fa-plus" /></A></td>
@@ -741,8 +741,8 @@ function StudentDetail({ d }) {
       </div>
       <div className="card mb-3"><div className="card-body">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Payment Progress</span><strong>{pct.toFixed(1)}%</strong></div>
-        <div style={{ background: '#e9ecef', borderRadius: 10, height: 24, overflow: 'hidden' }}>
-          <div style={{ background: pct >= 100 ? 'var(--success)' : pct >= 50 ? '#ffc107' : 'var(--danger)', height: '100%', width: `${Math.min(100, pct)}%` }} />
+        <div style={{ background: 'var(--border-color)', borderRadius: 10, height: 24, overflow: 'hidden' }}>
+          <div style={{ background: pct >= 100 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)', height: '100%', width: `${Math.min(100, pct)}%` }} />
         </div>
       </div></div>
       <div className="row">

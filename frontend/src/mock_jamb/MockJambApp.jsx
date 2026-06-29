@@ -361,7 +361,7 @@ function AddResult({ d, notify }) {
 
 // ---- View exam -------------------------------------------------------------
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
-const scoreColor = (s) => (s >= 300 ? 'var(--success)' : s >= 250 ? '#17a2b8' : s >= 200 ? '#ffc107' : 'var(--danger)');
+const scoreColor = (s) => (s >= 300 ? 'var(--success)' : s >= 250 ? 'var(--info)' : s >= 200 ? 'var(--warning)' : 'var(--danger)');
 const rankClass = (r) => (r === 1 ? ' gold' : r === 2 ? ' silver' : r === 3 ? ' bronze' : '');
 
 function ViewExam({ d, notify }) {
@@ -379,7 +379,7 @@ function ViewExam({ d, notify }) {
       type: 'doughnut',
       data: { labels: ['300-400', '250-299', '200-249', '180-199', '0-179'],
         datasets: [{ data: [dist['300-400'], dist['250-299'], dist['200-249'], dist['180-199'], dist['0-179']],
-          backgroundColor: ['var(--success)', '#17a2b8', '#ffc107', '#fd7e14', 'var(--danger)'] }] },
+          backgroundColor: ['var(--success)', 'var(--info)', 'var(--warning)', '#fd7e14', 'var(--danger)'] }] },
       options: { responsive: true, maintainAspectRatio: false,
         plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } } },
     });
@@ -393,7 +393,7 @@ function ViewExam({ d, notify }) {
       type: 'bar',
       data: { labels: subjects.map((s) => s.subject.substring(0, 10)),
         datasets: [{ label: 'Average', data: subjects.map((s) => s.average),
-          backgroundColor: subjects.map((s) => (s.average >= 70 ? 'var(--success)' : s.average >= 50 ? '#ffc107' : 'var(--danger)')) }] },
+          backgroundColor: subjects.map((s) => (s.average >= 70 ? 'var(--success)' : s.average >= 50 ? 'var(--warning)' : 'var(--danger)')) }] },
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, max: 100 } } },
     });
@@ -461,7 +461,7 @@ function ViewExam({ d, notify }) {
         <div className="stats-grid">
           <div className="mj-stat-card"><div className="stat-value" style={{ color: '#6f42c1' }}>{st.statistics.above_300}</div><div className="stat-label">Above 300</div></div>
           <div className="mj-stat-card"><div className="stat-value" style={{ color: '#007bff' }}>{st.statistics.above_250}</div><div className="stat-label">Above 250</div></div>
-          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#17a2b8' }}>{st.statistics.above_200}</div><div className="stat-label">Above 200</div></div>
+          <div className="mj-stat-card"><div className="stat-value" style={{ color: 'var(--info)' }}>{st.statistics.above_200}</div><div className="stat-label">Above 200</div></div>
           <div className="mj-stat-card"><div className="stat-value">{st.statistics.median}</div><div className="stat-label">Median</div></div>
         </div>
         <div className="charts-row">
@@ -475,7 +475,7 @@ function ViewExam({ d, notify }) {
                 <thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>Count</th><th>Avg</th><th>Max</th><th>Min</th><th>≥70</th><th>≥50</th></tr></thead>
                 <tbody>{st.subject_analysis.map((s) => (
                   <tr key={s.subject}><td>{s.subject}</td><td>{s.count}</td>
-                    <td style={{ color: s.average >= 70 ? 'var(--success)' : s.average >= 50 ? '#ffc107' : 'var(--danger)' }}><strong>{r1(s.average)}</strong></td>
+                    <td style={{ color: s.average >= 70 ? 'var(--success)' : s.average >= 50 ? 'var(--warning)' : 'var(--danger)' }}><strong>{r1(s.average)}</strong></td>
                     <td style={{ color: 'var(--success)' }}>{s.max}</td><td style={{ color: 'var(--danger)' }}>{s.min}</td><td>{s.above_70}</td><td>{s.above_50}</td></tr>))}
                 </tbody>
               </table>
@@ -649,7 +649,7 @@ function buildExportNode(d, st, o) {
     ? `Students: ${st ? st.student_count : 0} | Avg: ${r1(stats.average)} | High: ${stats.max || 0} | Low: ${stats.min || 0}` : '';
   const below = (dist['180-199'] || 0) + (dist['0-179'] || 0);
   const distHtml = o.distribution
-    ? `<div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Distribution:</div><div style="font-size:9px;display:flex;gap:8px;flex-wrap:wrap;"><span style="color:var(--success);">300+: ${dist['300-400'] || 0}</span><span style="color:#17a2b8;">250-299: ${dist['250-299'] || 0}</span><span style="color:#ffc107;">200-249: ${dist['200-249'] || 0}</span><span style="color:var(--danger);">&lt;200: ${below}</span></div>` : '';
+    ? `<div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Distribution:</div><div style="font-size:9px;display:flex;gap:8px;flex-wrap:wrap;"><span style="color:var(--success);">300+: ${dist['300-400'] || 0}</span><span style="color:var(--info);">250-299: ${dist['250-299'] || 0}</span><span style="color:var(--warning);">200-249: ${dist['200-249'] || 0}</span><span style="color:var(--danger);">&lt;200: ${below}</span></div>` : '';
   const footer = o.timestamp ? `Generated: ${new Date().toLocaleString()}` : '';
 
   wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
@@ -768,7 +768,7 @@ function StudentProgress({ d }) {
             <div className="card-body"><div className="subject-breakdown">
               {latest.subjects.map((sub, i) => (
                 <div className="subject-card" key={i}><div className="name">{sub.name}</div>
-                  <div className="score" style={{ color: sub.score >= 70 ? 'var(--success)' : sub.score >= 50 ? '#ffc107' : 'var(--danger)' }}>{sub.score}</div></div>))}
+                  <div className="score" style={{ color: sub.score >= 70 ? 'var(--success)' : sub.score >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{sub.score}</div></div>))}
             </div></div></div>
         )}
 

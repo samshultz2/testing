@@ -30,7 +30,7 @@ export class ErrorBoundary extends React.Component {
     return (
       <div className="card" style={{ margin: '1rem 0' }}>
         <div className="card-body" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-          <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ fontSize: 32, color: '#dc2626' }} />
+          <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ fontSize: 32, color: 'var(--danger)' }} />
           <h3 style={{ marginTop: 12 }}>This section hit an error</h3>
           <p className="text-muted">It’s been logged. Your other work is safe — try reloading this page.</p>
           <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -220,7 +220,7 @@ export function EmptyState({ icon = 'fa-inbox', title, hint, action }) {
   return (
     <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted, var(--text-muted))' }}>
       <i className={'fas ' + icon} style={{ fontSize: 30, opacity: 0.45 }} aria-hidden="true" />
-      <p style={{ marginTop: 10, fontWeight: 600, color: 'var(--text-secondary, #374151)' }}>{title}</p>
+      <p style={{ marginTop: 10, fontWeight: 600, color: 'var(--text-secondary, var(--text-primary))' }}>{title}</p>
       {hint && <p style={{ fontSize: 13, maxWidth: 420, margin: '4px auto 0' }}>{hint}</p>}
       {action && <div style={{ marginTop: 12 }}>{action}</div>}
     </div>
@@ -362,7 +362,7 @@ export function Modal({ title, icon, onClose, children, footer, size = 'md',
                     overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
         {title && (
           <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                           gap: 12, padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color, #e5e7eb)' }}>
+                           gap: 12, padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color, var(--border-color))' }}>
             <h3 id={titleId} style={{ margin: 0, fontSize: '1.05rem' }}>
               {icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}
             </h3>
@@ -374,7 +374,7 @@ export function Modal({ title, icon, onClose, children, footer, size = 'md',
         <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto' }}>{children}</div>
         {footer && (
           <footer style={{ display: 'flex', gap: '.6rem', justifyContent: 'flex-end',
-                           padding: '.85rem 1.25rem', borderTop: '1px solid var(--border-color, #e5e7eb)' }}>
+                           padding: '.85rem 1.25rem', borderTop: '1px solid var(--border-color, var(--border-color))' }}>
             {footer}
           </footer>
         )}
@@ -431,15 +431,15 @@ export function Badge({ tone = 'secondary', icon, children, title }) {
 export function Pill({ tone = 'gray', children }) {
   const t = {
     green: ['#dcfce7', '#166534'], red: ['#fee2e2', '#991b1b'],
-    amber: ['#fef3c7', '#92400e'], gray: ['#f1f5f9', '#475569'],
-  }[tone] || ['#f1f5f9', '#475569'];
+    amber: ['#fef3c7', '#92400e'], gray: ['#f1f5f9', 'var(--text-secondary)'],
+  }[tone] || ['#f1f5f9', 'var(--text-secondary)'];
   return <span style={{ background: t[0], color: t[1], borderRadius: 999, padding: '2px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{children}</span>;
 }
 
 export function Field({ label, htmlFor, children, grow }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: grow ? 1 : undefined, minWidth: 180 }}>
-      <label htmlFor={htmlFor} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary, #374151)' }}>{label}</label>
+      <label htmlFor={htmlFor} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary, var(--text-primary))' }}>{label}</label>
       {children}
     </div>
   );
@@ -515,7 +515,7 @@ export function PerfBands({ bands }) {
   const tones = {
     excellent: ['rgba(76,175,80,.1)', '#4caf50'],
     good: ['rgba(33,150,243,.1)', '#2196f3'],
-    fair: ['rgba(255,193,7,.1)', '#ffc107'],
+    fair: ['rgba(255,193,7,.1)', 'var(--warning)'],
     poor: ['rgba(244,67,54,.1)', '#f44336'],
   };
   return (

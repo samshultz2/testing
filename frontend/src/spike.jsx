@@ -50,7 +50,7 @@ function StatsWidget() {
 
   if (state.loading) return <p style={{ color: '#888' }}>Loading…</p>;
   if (state.error)
-    return <p style={{ color: '#dc2626' }}>Couldn’t load: {state.error}</p>;
+    return <p style={{ color: 'var(--danger)' }}>Couldn’t load: {state.error}</p>;
 
   const s = state.data || {};
   const male = s.male_students || 0;

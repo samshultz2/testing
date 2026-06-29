@@ -190,7 +190,7 @@ export default function MarkDaily() {
                 Everyone starts present. Untick a box to mark a student absent for just the morning or just the afternoon.
               </p>
               <ul className="att-list" aria-label={'Register for ' + d.class_name}>
-                <li style={{ display: 'flex', alignItems: 'center', fontWeight: 700, borderBottom: '2px solid var(--border-color, #e5e7eb)', padding: '6px 8px' }}>
+                <li style={{ display: 'flex', alignItems: 'center', fontWeight: 700, borderBottom: '2px solid var(--border-color, var(--border-color))', padding: '6px 8px' }}>
                   <span style={{ flex: 1 }}>Student</span>
                   <span style={colStyle}>AM</span>
                   <span style={colStyle}>PM</span>
