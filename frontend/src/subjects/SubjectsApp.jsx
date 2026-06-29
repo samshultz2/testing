@@ -306,6 +306,16 @@ function Scores({ d, notify }) {
   const [busy, setBusy] = useState(false);
   React.useEffect(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); setScores(m); }, [d.students_data]);
   const set = (params) => navParams(nav.go, d.self_url, { term_id: d.term_id, assignment_id: d.assignment_id, class_subject_id: d.class_subject_id, assessment_type_id: d.assessment_type_id, ...params });
+  // Keyboard flow: Enter/Down -> next student's score, Up -> previous, so a whole
+  // class is entered from the number pad without touching the mouse.
+  const onScoreKey = (e) => {
+    if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const inputs = Array.prototype.slice.call(e.currentTarget.closest('tbody').querySelectorAll('input.score-input'));
+    const idx = inputs.indexOf(e.currentTarget);
+    const next = e.key === 'ArrowUp' ? inputs[idx - 1] : inputs[idx + 1];
+    if (next) { next.focus(); next.select(); }
+  };
   const save = async (e) => {
     e.preventDefault(); setBusy(true);
     const fields = { term_id: d.term_id, assignment_id: d.assignment_id, class_subject_id: d.class_subject_id, assessment_type_id: d.assessment_type_id,
@@ -341,12 +351,15 @@ function Scores({ d, notify }) {
         <div className="card">
           <div className="card-header"><h3>{d.selected_subject} - {d.selected_assessment}</h3><span className="badge badge-primary">Max: {d.max_score}</span></div>
           <div className="card-body"><form onSubmit={save}>
+            <p className="text-muted text-sm mb-2"><i aria-hidden="true" className="fas fa-keyboard" /> Type a score and press <kbd>Enter</kbd> (or <kbd>↓</kbd>/<kbd>↑</kbd>) to jump to the next student — no mouse needed.</p>
             <div className="table-container"><table className="data-table">
               <thead><tr><th>S/N</th><th>Student</th><th>Gender</th><th>Score (Max: {d.max_score})</th></tr></thead>
               <tbody>{d.students_data.map((s, i) => (
                 <tr key={s.id}><td>{i + 1}</td><td>{s.full_name}</td>
                   <td><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></td>
-                  <td><input type="number" className="form-control" style={{ width: 100 }} min="0" max={d.max_score} step="0.5" value={scores[s.id] ?? ''} onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td></tr>))}</tbody>
+                  <td><input type="number" className="form-control score-input" style={{ width: 100 }} min="0" max={d.max_score} step="0.5"
+                             value={scores[s.id] ?? ''} onKeyDown={onScoreKey}
+                             onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td></tr>))}</tbody>
             </table></div>
             <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Scores</button></div>
           </form></div>
