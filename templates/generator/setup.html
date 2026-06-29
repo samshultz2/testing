@@ -21,7 +21,7 @@
 
         <div class="data-cards">
             {% for s in steps %}
-            <div class="data-card" style="border-left:4px solid {% if s.done %}#10b981{% elif s.optional %}#94a3b8{% else %}#f59e0b{% endif %};">
+            <div class="data-card" style="border-left:4px solid {% if s.done %}#10b981{% elif s.optional %}var(--text-muted){% else %}#f59e0b{% endif %};">
                 <div class="data-card-header">
                     <div class="data-card-title">
                         <i class="fas {% if s.done and not s.optional %}fa-circle-check text-success{% elif s.optional %}fa-circle-dot text-muted{% else %}fa-circle-exclamation text-warning{% endif %}"></i>

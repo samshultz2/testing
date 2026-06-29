@@ -16,7 +16,7 @@
 .stu-field-wrap { display:flex; flex-direction:column; gap:4px; margin:0; min-width:0; }
 .stu-field-wrap .form-control { width:100%; max-width:100%; }
 .stu-field-wrap.full { grid-column:1/-1; }
-.stu-field-label { font-size:12px; font-weight:600; color:var(--text-secondary,#475569); }
+.stu-field-label { font-size:12px; font-weight:600; color:var(--text-secondary,var(--text-secondary)); }
 .stu-count { color:var(--text-muted); font-size:.85rem; }
 .stu-bulkbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.5rem .7rem;
   background:var(--gray-50,#f8fafc); border:1px solid var(--border-color); border-radius:8px; margin-bottom:.75rem; }
@@ -45,7 +45,7 @@
 .stu-fmt { display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; }
 .stu-fmt button { padding:.6rem; border:2px solid var(--border-color); border-radius:8px; background:var(--bg-card); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:.25rem; font-size:.75rem; }
 .stu-fmt button.sel { border-color:var(--primary); }
-.stu-spinner { width:18px; height:18px; border:3px solid var(--gray-200,#e5e7eb); border-top-color:var(--primary,#2563eb); border-radius:50%; animation:stu-spin .7s linear infinite; display:inline-block; }
+.stu-spinner { width:18px; height:18px; border:3px solid var(--gray-200,var(--border-color)); border-top-color:var(--primary,#2563eb); border-radius:50%; animation:stu-spin .7s linear infinite; display:inline-block; }
 @keyframes stu-spin { to { transform:rotate(360deg); } }
 </style>
 {% endblock %}

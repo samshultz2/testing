@@ -100,7 +100,7 @@
 
 {% if readiness and readiness.status != 'NO_DATA' %}
 {% set st = readiness.status %}
-{% set tone = {'READY':'#16a34a','CONDITIONAL':'#ca8a04','AT_RISK':'#ea580c','NOT_READY':'#dc2626'}.get(st, '#6b7280') %}
+{% set tone = {'READY':'#16a34a','CONDITIONAL':'#ca8a04','AT_RISK':'#ea580c','NOT_READY':'#dc2626'}.get(st, 'var(--text-muted)') %}
 <div class="card mb-3" style="border-left:5px solid {{ tone }}">
     <div class="card-body">
         <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;">

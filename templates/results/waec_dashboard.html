@@ -36,7 +36,7 @@
     background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     text-align: center;
 }
 
@@ -64,7 +64,7 @@
 .tab {
     padding: 0.5rem 0.75rem;
     background: var(--bg-card);
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
@@ -83,7 +83,7 @@
 .card {
     background: var(--bg-card);
     border-radius: 8px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     margin-bottom: 1rem;
     overflow: hidden;
 }
@@ -111,7 +111,7 @@
     background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     margin-bottom: 1rem;
 }
 
@@ -205,7 +205,7 @@
 }
 
 .top-rank.gold { background: linear-gradient(135deg, #f5af19, #f12711); }
-.top-rank.silver { background: linear-gradient(135deg, #bdc3c7, #606060); }
+.top-rank.silver { background: linear-gradient(135deg, #e0e0e0, #606060); }
 .top-rank.bronze { background: linear-gradient(135deg, #cd7f32, #8b4513); }
 
 .top-name {
@@ -252,7 +252,7 @@
 }
 
 .subject-table .sortable:hover {
-    background: #e9ecef;
+    background: var(--border-color);
 }
 
 /* Student Cards (Mobile) */
@@ -264,7 +264,7 @@
 
 .student-card {
     background: var(--bg-card);
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0.75rem;
 }
@@ -892,7 +892,7 @@
     cursor: pointer;
     font-size: 0.8rem;
 }
-.exp-check:hover { background: #e9ecef; }
+.exp-check:hover { background: var(--border-color); }
 .exp-check input { margin: 0; }
 </style>
 {% endblock %}
