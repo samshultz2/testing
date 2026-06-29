@@ -240,8 +240,47 @@ function updateSelectionCount() {
 // =============================================================================
 // CONFIRM DELETE
 // =============================================================================
+// Themed, promise-based confirm driven by the shell's #confirmModal — the vanilla
+// counterpart to React's confirm(). Resolves true/false; falls back to the native
+// dialog only when the modal markup isn't on the page (e.g. standalone/print views).
+var _confirmResolve = null;
+function themedConfirm(message) {
+    return new Promise(function (resolve) {
+        var modal = document.getElementById('confirmModal');
+        var msg = document.getElementById('confirmMessage');
+        if (!modal || !msg) { resolve(window.confirm(message)); return; }
+        msg.textContent = message || 'Are you sure?';
+        _confirmResolve = resolve;
+        openModal('confirmModal');
+        var ok = document.getElementById('confirmBtn');
+        if (ok) { try { ok.focus(); } catch (e) {} }
+    });
+}
+function _settleConfirm(val) {
+    if (!_confirmResolve) return;
+    var r = _confirmResolve; _confirmResolve = null;
+    closeModal('confirmModal');
+    r(val);
+}
+function initConfirmModal() {
+    var modal = document.getElementById('confirmModal');
+    if (!modal) return;
+    var ok = document.getElementById('confirmBtn');
+    if (ok) ok.addEventListener('click', function () { _settleConfirm(true); });
+    // Cancel / ✕ (data-call=closeModal) and backdrop click resolve to false.
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal || (e.target.closest && e.target.closest('[data-call="closeModal"]'))) {
+            _settleConfirm(false);
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && _confirmResolve) _settleConfirm(false);
+    });
+}
+window.themedConfirm = themedConfirm;
+
 function confirmDelete(message) {
-    return confirm(message || 'Are you sure you want to delete this? This action cannot be undone.');
+    return themedConfirm(message || 'Are you sure you want to delete this? This action cannot be undone.');
 }
 
 // =============================================================================
@@ -492,6 +531,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Profile dropdown + mobile search
     initProfileMenu();
     initMobileSearch();
+
+    // Themed confirm modal (vanilla data-confirm flows)
+    initConfirmModal();
 
     // Close sidebar on nav link click (mobile)
     document.querySelectorAll('.sidebar .nav-link').forEach(link => {

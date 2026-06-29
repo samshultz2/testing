@@ -47,15 +47,38 @@
     if (c) runCall(c);
   });
 
-  // submit: a form with [data-confirm] asks before submitting (was onsubmit="return confirm(...)")
+  // ask before an action using the themed modal, falling back to native confirm
+  // only when the modal helper isn't present (e.g. standalone/print pages).
+  function askConfirm(message) {
+    return window.themedConfirm ? window.themedConfirm(message)
+                                : Promise.resolve(window.confirm(message));
+  }
+
+  // submit: a form with [data-confirm] asks before submitting (was onsubmit="return confirm(...)").
+  // The themed modal is async, so block this submit, ask, then re-submit on yes —
+  // via requestSubmit() so the page's CSRF-token submit handler still runs.
   document.addEventListener('submit', function (e) {
     var f = e.target;
-    if (f && f.matches && f.matches('form[data-confirm]')) {
-      if (!window.confirm(f.getAttribute('data-confirm'))) {
-        e.preventDefault();
-        e.stopPropagation();
+    if (!(f && f.matches && f.matches('form[data-confirm]'))) return;
+    if (f.dataset.confirmed) { delete f.dataset.confirmed; return; }  // confirmed → allow
+    e.preventDefault();
+    e.stopPropagation();
+    askConfirm(f.getAttribute('data-confirm')).then(function (ok) {
+      if (!ok) return;
+      f.dataset.confirmed = '1';
+      if (f.requestSubmit) { f.requestSubmit(); }
+      else {
+        if (!f.querySelector('input[name="_csrf_token"]')) {
+          var meta = document.querySelector('meta[name="csrf-token"]');
+          if (meta) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = '_csrf_token'; i.value = meta.getAttribute('content');
+            f.appendChild(i);
+          }
+        }
+        f.submit();
       }
-    }
+    });
   }, true);
 
   // click: a small set of declarative actions.
@@ -85,11 +108,19 @@
       return;
     }
 
-    // confirm before following a link / running the default (non-form elements)
+    // confirm before following a link / running the default (non-form elements).
+    // Themed modal is async: block, ask, then re-trigger the element on yes.
     if (el.hasAttribute('data-confirm')) {
-      if (!window.confirm(el.getAttribute('data-confirm'))) {
+      if (el.dataset.confirmed) {
+        delete el.dataset.confirmed;   // confirmed → let this click proceed
+      } else {
         e.preventDefault();
         e.stopPropagation();
+        askConfirm(el.getAttribute('data-confirm')).then(function (ok) {
+          if (!ok) return;
+          el.dataset.confirmed = '1';
+          el.click();                  // re-fire; the flag lets it through (submits the form)
+        });
         return;
       }
     }

@@ -667,7 +667,12 @@ function Groups({ d, notify }) {
     Object.entries(editing.permissions).forEach(([k, v]) => { if (v) fields[`perm_${k}`] = v; });
     save(editing.id ? editing.edit_url : d.add_url, fields, (r) => { setEditing(null); nav.go(r.redirect || d.back_url); });
   };
-  const del = (g) => { if (window.confirm(`Delete group "${g.name}"? Members keep their own permissions but lose this group's.`)) save(g.delete_url, {}, () => nav.refresh()); };
+  const del = async (g) => {
+    if (await confirm({ title: 'Delete group', tone: 'danger', confirmText: 'Delete',
+      message: `Delete group "${g.name}"? Members keep their own permissions but lose this group's.` })) {
+      save(g.delete_url, {}, () => nav.refresh());
+    }
+  };
   const summary = (perms) => {
     const keys = Object.keys(perms);
     if (!keys.length) return <span className="text-muted">No modules</span>;
