@@ -28,6 +28,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <a href="#mainContent" class="skip-link">Skip to content</a>
     <div id="navProgress" aria-hidden="true"></div>
     {% if session.get('logged_in') %}<nav class="bottom-nav" id="bottomNav" aria-label="Quick navigation"></nav>{% endif %}
     <div class="app-container">
@@ -550,10 +551,14 @@
         <main class="main-content">
             <header class="top-header">
                 <div class="header-left">
-                    <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <div class="breadcrumb">{% block breadcrumb %}Dashboard{% endblock %}</div>
+                    <nav class="breadcrumb" aria-label="Breadcrumb">
+                        <a href="{{ url_for('main.dashboard') }}" class="crumb-home" aria-label="Home"><i class="fas fa-house"></i></a>
+                        <span class="crumb-sep" aria-hidden="true">/</span>
+                        {% block breadcrumb %}<span>Dashboard</span>{% endblock %}
+                    </nav>
                 </div>
                 <form class="header-search" method="GET" action="{{ url_for('main.global_search') }}" role="search">
                     <i class="fas fa-search"></i>
@@ -583,6 +588,9 @@
                         <span>{{ get_active_term().name }}</span>
                     </div>
                     {% endif %}
+                    <button type="button" class="header-icon-btn header-search-btn" id="mobileSearchBtn" title="Search" aria-label="Search">
+                        <i class="fas fa-search"></i>
+                    </button>
                     <div class="notif-wrap">
                         <button type="button" class="header-icon-btn" id="notifBtn" title="Notifications" aria-haspopup="true" aria-expanded="false">
                             <i class="fas fa-bell"></i>
@@ -610,18 +618,29 @@
                             </div>
                         </div>
                     </div>
-                    <button class="header-icon-btn header-install-btn" id="installBtn" title="Install app" style="display:none;">
-                        <i class="fas fa-circle-down"></i>
-                    </button>
-                    <button class="header-icon-btn" id="clearCacheBtn" title="Clear cache & reload (use if changes aren't showing)">
-                        <i class="fas fa-rotate"></i>
-                    </button>
-                    <a href="{{ url_for('auth.logout') }}" class="header-logout-btn" title="Logout">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </a>
-                    <div class="user-info">
-                        <i class="fas fa-user-circle"></i>
-                        <span>{{ session.get('user', 'Admin') }}</span>
+                    <div class="profile-wrap">
+                        <button type="button" class="header-icon-btn profile-btn" id="profileBtn" title="Account" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-user-circle"></i>
+                            <span class="profile-name">{{ session.get('user', 'Admin') }}</span>
+                            <i class="fas fa-chevron-down profile-caret" aria-hidden="true"></i>
+                        </button>
+                        <div class="profile-menu" id="profileMenu" role="menu" aria-label="Account">
+                            <div class="profile-head">
+                                <div class="profile-head-name">{{ session.get('user', 'Admin') }}</div>
+                                {% if school_brand.logged_in and (school_brand.role_label or school_brand.branch) %}
+                                <div class="profile-head-sub">{{ school_brand.role_label }}{% if school_brand.branch %} · {{ school_brand.branch }}{% endif %}</div>
+                                {% endif %}
+                            </div>
+                            <button type="button" class="profile-item header-install-btn" id="installBtn" role="menuitem" style="display:none;">
+                                <i class="fas fa-circle-down"></i> Install app
+                            </button>
+                            <button type="button" class="profile-item" id="clearCacheBtn" role="menuitem">
+                                <i class="fas fa-rotate"></i> Clear cache &amp; reload
+                            </button>
+                            <a href="{{ url_for('auth.logout') }}" class="profile-item profile-logout" role="menuitem">
+                                <i class="fas fa-sign-out-alt"></i> Log out
+                            </a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -660,7 +679,7 @@
             {% endif %}
             {% endwith %}
             
-            <div class="page-content"{% if not page_can_write %} data-readonly="1"{% endif %}>
+            <div class="page-content" id="mainContent" tabindex="-1"{% if not page_can_write %} data-readonly="1"{% endif %}>
                 {% block content %}{% endblock %}
             </div>
         </main>
@@ -693,8 +712,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 36px;
-        height: 36px;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
         border: none;
         cursor: pointer;
@@ -703,6 +722,7 @@
         transition: all 0.2s ease;
     }
     .header-icon-btn:hover { background: var(--primary); color: #fff; }
+    .header-icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
     .header-install-btn { background: var(--primary); color: #fff; }
     .header-install-btn:hover { filter: brightness(1.08); background: var(--primary); color: #fff; }
     .header-icon-btn.spinning i { animation: hib-spin 0.8s linear infinite; }
@@ -771,6 +791,58 @@
         }
         .mobile-menu-btn { position: relative; z-index: 2; }
     }
+
+    /* Breadcrumb as a real trail with a clickable home crumb */
+    .breadcrumb { display: flex; align-items: center; gap: .4rem; }
+    .breadcrumb a { color: var(--text-muted); font-weight: 600; text-decoration: none; }
+    .breadcrumb a:hover { color: var(--primary); }
+    .breadcrumb .crumb-home { display: inline-flex; align-items: center; }
+    .breadcrumb .crumb-sep { color: var(--text-muted); font-weight: 400; opacity: .6; }
+    .breadcrumb > span:last-child { color: var(--text-primary); }
+
+    /* Mobile search: an icon that expands the search bar into a full-width row */
+    .header-search-btn { display: none; }
+    @media (max-width: 768px) {
+        .header-search-btn { display: flex; }
+        .top-header.search-open { flex-wrap: wrap; }
+        .top-header.search-open .header-search {
+            display: flex; order: 9; flex-basis: 100%; max-width: none; margin: .4rem 0 .15rem;
+        }
+    }
+
+    /* Account dropdown — consolidates install / clear-cache / logout / identity */
+    .profile-wrap { position: relative; }
+    .profile-btn {
+        width: auto; min-width: 40px; height: 40px; gap: .45rem;
+        padding: 0 .6rem; border-radius: var(--radius-full);
+    }
+    .profile-btn .profile-name {
+        font-size: var(--text-sm); font-weight: 600; max-width: 9rem;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .profile-btn .profile-caret { font-size: .6rem; opacity: .7; }
+    @media (max-width: 575px) { .profile-btn .profile-name { display: none; } }
+    .profile-menu {
+        position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px;
+        background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+        padding: .35rem; display: none; z-index: var(--z-dropdown);
+    }
+    .profile-menu.open { display: block; }
+    .profile-head { padding: .55rem .65rem; border-bottom: 1px solid var(--border-light); margin-bottom: .25rem; }
+    .profile-head-name { font-weight: 700; font-size: var(--text-sm); color: var(--text-primary); }
+    .profile-head-sub { font-size: var(--text-xs); color: var(--text-muted); margin-top: 1px; }
+    .profile-item {
+        display: flex; align-items: center; gap: .6rem; width: 100%;
+        padding: .6rem .65rem; border: none; background: transparent;
+        color: var(--text-primary); font-size: var(--text-sm); font-family: inherit;
+        text-align: left; border-radius: var(--radius-md); cursor: pointer; text-decoration: none;
+    }
+    .profile-item:hover { background: var(--gray-50); }
+    .profile-item i { width: 18px; text-align: center; color: var(--text-muted); }
+    .profile-logout { color: var(--danger); }
+    .profile-logout:hover { background: var(--danger-light); }
+    .profile-logout i { color: var(--danger); }
     </style>
     
     <script nonce="{{ csp_nonce }}">
@@ -833,7 +905,7 @@
         });
         // Clear cached pages on logout so they aren't left on the device.
         document.addEventListener('click', function (e) {
-            var link = e.target.closest && e.target.closest('a.header-logout-btn');
+            var link = e.target.closest && e.target.closest('a.profile-logout, a.header-logout-btn');
             if (link && navigator.serviceWorker.controller) {
                 navigator.serviceWorker.controller.postMessage('clear-runtime');
             }

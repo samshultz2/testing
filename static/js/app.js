@@ -57,6 +57,41 @@ function markActiveTheme(key) {
     });
 }
 
+// Account dropdown (consolidates install / clear-cache / logout / identity).
+function initProfileMenu() {
+    var btn = document.getElementById('profileBtn');
+    var menu = document.getElementById('profileMenu');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = menu.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (e) {
+        if (!menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+            menu.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { menu.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+    });
+}
+
+// On small screens the inline search bar is hidden; this toggles it open as a
+// full-width row under the header (focusing the field) instead of losing search.
+function initMobileSearch() {
+    var btn = document.getElementById('mobileSearchBtn');
+    var header = document.querySelector('.top-header');
+    var form = document.querySelector('.header-search');
+    if (!btn || !header || !form) return;
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = header.classList.toggle('search-open');
+        if (open) { var inp = form.querySelector('input'); if (inp) inp.focus(); }
+    });
+}
+
 function initThemePicker() {
     var btn = document.getElementById('themeBtn');
     var menu = document.getElementById('themeMenu');
@@ -300,26 +335,76 @@ function initSidebarNav() {
     groups.forEach(function (g) { if (activeLi && g.items.indexOf(activeLi) >= 0) activeGroup = g; });
 
     var mobile = window.innerWidth < 1024;
+    var STORE = 'navSections';
+    function readState() { try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { return {}; } }
+    function writeState(s) { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) {} }
+    var saved = readState();
+
     groups.forEach(function (g) {
         if (!g.header) return;                 // items before the first header stay visible
+        var key = (g.header.textContent || '').trim();
         g.header.classList.add('nav-section-toggle');
+        g.header.setAttribute('role', 'button');
+        g.header.setAttribute('tabindex', '0');
         if (!g.header.querySelector('.nav-sec-chev')) {
             var chev = document.createElement('i');
             chev.className = 'fas fa-chevron-down nav-sec-chev';
+            chev.setAttribute('aria-hidden', 'true');
             g.header.appendChild(chev);
         }
-        var setOpen = function (open) {
+        var setOpen = function (open, persist) {
             g.header.classList.toggle('open', open);
+            g.header.setAttribute('aria-expanded', open ? 'true' : 'false');
             g.items.forEach(function (i) { i.style.display = open ? '' : 'none'; });
+            if (persist && !mobile) { var s = readState(); s[key] = open; writeState(s); }
         };
-        setOpen(mobile ? (g === activeGroup) : true);
-        g.header.addEventListener('click', function () {
-            setOpen(!g.header.classList.contains('open'));
+        // Mobile: only the active section open. Desktop: active section always open,
+        // otherwise honour the user's saved choice (default expanded).
+        var initOpen = mobile ? (g === activeGroup)
+                     : (g === activeGroup ? true : (key in saved ? saved[key] !== false : true));
+        setOpen(initOpen, false);
+        var toggle = function () { setOpen(!g.header.classList.contains('open'), true); };
+        g.header.addEventListener('click', toggle);
+        g.header.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
         });
     });
     if (bestLink) { try { bestLink.scrollIntoView({ block: 'center' }); } catch (e) {} }
 
+    buildSidebarFilter(groups);
     buildBottomNav(activeGroup ? activeGroup.items : []);
+}
+
+// A client-side quick-filter at the top of the sidebar — narrows the 70+ nav
+// items by label as you type, revealing matches even inside collapsed sections.
+function buildSidebarFilter(groups) {
+    var nav = document.querySelector('.sidebar-nav');
+    if (!nav || document.getElementById('navFilter')) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'nav-filter';
+    wrap.innerHTML = '<i class="fas fa-magnifying-glass" aria-hidden="true"></i>'
+        + '<input type="search" id="navFilter" placeholder="Filter menu…" aria-label="Filter navigation">';
+    nav.insertBefore(wrap, nav.firstChild);
+    var input = wrap.querySelector('input');
+    input.addEventListener('input', function () {
+        var q = input.value.trim().toLowerCase();
+        groups.forEach(function (g) {
+            var anyVisible = false;
+            g.items.forEach(function (li) {
+                var a = li.querySelector('a.nav-link');
+                var label = a ? (a.textContent || '').toLowerCase() : '';
+                if (!q) {
+                    var open = !g.header || g.header.classList.contains('open');
+                    li.style.display = open ? '' : 'none';
+                } else {
+                    var show = label.indexOf(q) >= 0;
+                    li.style.display = show ? '' : 'none';
+                    if (show) anyVisible = true;
+                }
+            });
+            if (g.header) g.header.style.display = (!q || anyVisible) ? '' : 'none';
+        });
+    });
 }
 
 function buildBottomNav(items) {
@@ -403,7 +488,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Theme picker
     initThemePicker();
-    
+
+    // Profile dropdown + mobile search
+    initProfileMenu();
+    initMobileSearch();
+
     // Close sidebar on nav link click (mobile)
     document.querySelectorAll('.sidebar .nav-link').forEach(link => {
         link.addEventListener('click', function() {
