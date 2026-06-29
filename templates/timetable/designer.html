@@ -265,9 +265,13 @@ Output only the rows — no headings, totals or extra text, no code block.</pre>
         <!-- Blank grid editor -->
         <div id="gridEditor" style="display:none">
             <div class="row3">
-                <div class="form-group">
+                <div class="form-group" id="gridColsWrap">
                     <label class="form-label">Column headers (comma separated)</label>
                     <input id="gridCols" class="form-control" value="Monday, Tuesday, Wednesday, Thursday, Friday, Saturday">
+                </div>
+                <div class="form-group" id="rosterCountWrap" style="display:none">
+                    <label class="form-label">Students per week / day (one name per box)</label>
+                    <input id="rosterCount" type="number" min="1" max="10" value="5" class="form-control">
                 </div>
                 <div class="form-group" style="grid-column:span 2">
                     <label class="form-label" id="gridRowsLabel">Row labels — one per line (e.g. period times)</label>
@@ -285,7 +289,7 @@ Break
 
 <!-- The printable sheet -->
 <p id="rosterTip" class="text-muted no-print" style="display:none;margin:.25rem 0 .5rem">
-    <i class="fas fa-hand-pointer"></i> Click any cell under <b>Students on Duty</b> below and type the students' names (separate several names with commas). What you type prints and exports.
+    <i class="fas fa-hand-pointer"></i> Click any box in the grid below and type <b>one student's name per box</b>. Set how many students per week/day with “Students per week / day” above. What you type prints and exports.
 </p>
 <div id="sheet" class="tt-sheet" data-theme="modern">
     <div class="tt-head">
@@ -352,12 +356,16 @@ var rows = [];   // each: {date,day,group,time,dur,subject,teacher,venue}
 // single "Students on Duty" column, one fillable cell per week/day.
 var ROSTER_PRESETS = {
     roster_week: {title:'Weekly Sweeping Roster',
-                  cols:'Students on Duty',
                   rows:'Week 1\nWeek 2\nWeek 3\nWeek 4\nWeek 5\nWeek 6'},
     roster_day:  {title:'Daily Sweeping Roster',
-                  cols:'Students on Duty',
                   rows:'Monday\nTuesday\nWednesday\nThursday\nFriday'},
 };
+// Roster columns are numbered name-boxes (one student per box), 1..N (max 10).
+function rosterCols(){
+    var n=Math.max(1, Math.min(10, parseInt(el('rosterCount').value,10)||5));
+    var a=[]; for(var i=1;i<=n;i++) a.push(String(i));
+    return a.join(', ');
+}
 var rosterCells = {};   // "rowIndex:colIndex" -> typed text (persists across re-renders)
 
 function el(id){ return document.getElementById(id); }
@@ -791,14 +799,15 @@ function renderBlankGridSheet(){
     var roster=isRoster();
     var cols=(el('gridCols').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
     var rws=(el('gridRows').value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
-    var thead='<tr><th></th>'+cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr>';
+    var corner = roster ? (el('layout').value==='roster_week' ? 'Week' : 'Day') : '';
+    var thead='<tr><th>'+esc(corner)+'</th>'+cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr>';
     var body=rws.map(function(rl,ri){
         return '<tr><th>'+esc(rl)+'</th>'+cols.map(function(c,ci){
-            // Roster cells are fillable (type the class/group on duty); they persist
-            // in rosterCells and are captured by the PDF/image export. A blank grid
-            // stays empty (printed and filled by hand) as before.
+            // Roster cells are fillable — ONE student's name per box. They persist in
+            // rosterCells and are captured by the PDF/image export. A blank grid stays
+            // empty (printed and filled by hand) as before.
             if(roster){ var k=ri+':'+ci;
-                return '<td class="roster-cell" contenteditable="true" data-rc="'+k+'" data-ph="Click and type names">'+esc(rosterCells[k]||'')+'</td>'; }
+                return '<td class="roster-cell" contenteditable="true" data-rc="'+k+'" data-ph="Name">'+esc(rosterCells[k]||'')+'</td>'; }
             return '<td class="empty"></td>';
         }).join('')+'</tr>';
     }).join('');
@@ -820,12 +829,16 @@ function onLayoutChange(){
     // A roster drops in its matching template (weeks×days or days×duty) and starts a
     // fresh set of cells, since switching axis changes what each cell means.
     if(ROSTER_PRESETS[v]){
-        el('gridCols').value=ROSTER_PRESETS[v].cols;
         el('gridRows').value=ROSTER_PRESETS[v].rows;
+        el('gridCols').value=rosterCols();
         rosterCells={};
     }
     el('gridEditor').style.display = blank?'block':'none';
     el('rowEditor').style.display = blank?'none':'block';
+    // For rosters, swap the free-text "Column headers" box for a "students per row"
+    // count (the columns are numbered name-boxes, one student each).
+    el('gridColsWrap').style.display = isRoster() ? 'none' : '';
+    el('rosterCountWrap').style.display = isRoster() ? '' : 'none';
     // grid paste & the orientation choice only apply to the day×period layouts
     el('gridPasteBox').style.display = isGridMode ? 'block':'none';
     el('orientWrap').style.display = isGridMode ? 'block':'none';
@@ -843,6 +856,9 @@ el('pBody').addEventListener('input', function(e){
     if(td){ rosterCells[td.getAttribute('data-rc')] = td.textContent; }
 });
 el('layout').addEventListener('change', onLayoutChange);
+el('rosterCount').addEventListener('input', function(){
+    if(isRoster()){ el('gridCols').value=rosterCols(); renderSheet(); }
+});
 el('theme').addEventListener('change', renderSheet);
 el('orient').addEventListener('change', renderSheet);
 el('title').addEventListener('input', function(){ this.dataset.touched='1'; });
