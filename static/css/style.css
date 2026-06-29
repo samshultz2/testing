@@ -2280,25 +2280,6 @@ input[type="radio"] {
 .bg-card { background: var(--bg-card) !important; }
 .bg-muted { background: var(--gray-50) !important; }
 
-/* Skip-to-content link (keyboard / screen-reader users) */
-.skip-link {
-    position: absolute;
-    left: 0; top: 0;
-    transform: translateY(-120%);
-    z-index: var(--z-progress);
-    margin: var(--sp-2);
-    padding: var(--sp-2) var(--sp-4);
-    background: var(--primary);
-    color: var(--text-inverse);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-    transition: transform var(--transition);
-}
-.skip-link:focus {
-    transform: translateY(0);
-    color: var(--text-inverse);
-}
-
 /* Global keyboard focus ring for any interactive element */
 a:focus-visible,
 button:focus-visible,
