@@ -544,6 +544,85 @@ export function AmPm({ am, pm }) {
   );
 }
 
+// Shared data table. `columns` = [{ key, label, align, width, render(row), th }].
+// Renders a responsive .data-table that stacks into labelled cards on mobile
+// (via .table-stack + data-label) and supports an optional sticky header.
+// Replaces the many hand-rolled <table> blocks across screens.
+export function Table({ columns, rows, rowKey, empty, sticky, stack = true, className = '' }) {
+  if (!rows || !rows.length) {
+    return empty !== undefined ? empty : <Empty title="Nothing to show" />;
+  }
+  const cls = ['data-table', stack ? 'table-stack' : '', sticky ? 'table-sticky' : '', className]
+    .filter(Boolean).join(' ');
+  const key = rowKey || ((r, i) => r.id ?? i);
+  return (
+    <TableWrap label="Data table">
+      <table className={cls}>
+        <thead>
+          <tr>{columns.map((c) => (
+            <th key={c.key} style={{ textAlign: c.align || 'left', width: c.width }}>{c.label}</th>
+          ))}</tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={key(row, i)}>
+              {columns.map((c) => (
+                <td key={c.key} data-label={typeof c.label === 'string' ? c.label : undefined}
+                    style={{ textAlign: c.align || 'left' }}>
+                  {c.render ? c.render(row, i) : row[c.key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableWrap>
+  );
+}
+
+// Shared pager — was hand-rolled in 3+ screens. `onPage(n)` is called with the
+// target page; prev/next are disabled at the ends.
+export function Pagination({ page, pages, onPage }) {
+  if (!pages || pages <= 1) return null;
+  return (
+    <div className="pagination" role="navigation" aria-label="Pagination">
+      <button type="button" className="btn btn-light btn-sm" disabled={page <= 1}
+              onClick={() => onPage(page - 1)} aria-label="Previous page">
+        <i className="fas fa-chevron-left" aria-hidden="true" /> Prev
+      </button>
+      <span className="pagination-status">Page {page} of {pages}</span>
+      <button type="button" className="btn btn-light btn-sm" disabled={page >= pages}
+              onClick={() => onPage(page + 1)} aria-label="Next page">
+        Next <i className="fas fa-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+// File picker with a button + current-file preview/clear, wrapping postFile-style
+// uploads. `onPick(file)` receives the chosen File; `busy` disables it.
+export function FileUpload({ label = 'Upload file', accept, onPick, busy, hint, currentUrl, onClear }) {
+  const id = useId();
+  return (
+    <div className="form-group">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+        <label className="btn btn-secondary" htmlFor={id} style={{ marginBottom: 0, cursor: busy ? 'wait' : 'pointer' }}>
+          <i className="fas fa-upload" aria-hidden="true" /> {label}
+        </label>
+        <input id={id} type="file" accept={accept} disabled={busy} style={{ display: 'none' }}
+               onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) onPick(f); }} />
+        {currentUrl && <img src={currentUrl} alt="" style={{ height: 40, borderRadius: 6, objectFit: 'contain' }} />}
+        {currentUrl && onClear && (
+          <button type="button" className="btn btn-light btn-sm" disabled={busy} onClick={onClear}>
+            <i className="fas fa-trash" aria-hidden="true" /> Remove
+          </button>
+        )}
+      </div>
+      {hint && <div className="form-hint">{hint}</div>}
+    </div>
+  );
+}
+
 // Global panel for marks that were permanently rejected by the server.
 export function FailedMarks({ items, onRetry, onDiscard }) {
   if (!items || !items.length) return null;

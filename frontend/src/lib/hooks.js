@@ -1,5 +1,43 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { flushOutbox, counts } from './offline';
+
+// Debounce a fast-changing value (e.g. a search box) so effects fire after the
+// user pauses. Screens previously re-implemented this inline with setTimeout.
+export function useDebounce(value, ms = 250) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
+
+// Render a Chart.js chart into a <canvas> ref, destroying/recreating it when the
+// config changes and on unmount. Replaces the copy-pasted new window.Chart(...)
+// + cleanup blocks across Dashboard/Finance/Results. `make` returns a Chart
+// config object (or null to skip). Returns the canvas ref to spread onto <canvas>.
+export function useChart(make, deps) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current || !window.Chart) return undefined;
+    let cfg;
+    try { cfg = make(); } catch (e) { cfg = null; }
+    if (!cfg) return undefined;
+    const chart = new window.Chart(ref.current, cfg);
+    return () => { try { chart.destroy(); } catch (e) { /* noop */ } };
+  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+  return ref;
+}
+
+// The grid/axis colour Chart.js should use, read from the live theme so charts
+// follow light/dark. Call inside a chart config.
+export function chartInk() {
+  const cs = getComputedStyle(document.documentElement);
+  return {
+    text: (cs.getPropertyValue('--text-secondary') || '#475569').trim(),
+    grid: 'rgba(128,128,128,.15)',
+  };
+}
 
 // Track connectivity.
 export function useOnline() {
