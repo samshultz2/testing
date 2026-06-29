@@ -3,7 +3,7 @@ import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
-import { confirm, Empty } from '../components/ui';
+import { confirm, Empty, Pagination } from '../components/ui';
 
 const SORTS = [
   ['surname|asc', 'Name A–Z'], ['surname|desc', 'Name Z–A'],
@@ -299,13 +299,7 @@ export default function App({ initial }) {
         </div>
       )}
 
-      {(d.pages || 1) > 1 && (
-        <div className="pagination" style={{ marginTop: '1rem' }}>
-          <button type="button" disabled={!d.has_prev} onClick={() => goPage(d.page - 1)} aria-label="Previous"><i aria-hidden="true" className="fas fa-chevron-left" /></button>
-          <span style={{ padding: '0 .6rem' }}>Page {d.page} of {d.pages}</span>
-          <button type="button" disabled={!d.has_next} onClick={() => goPage(d.page + 1)} aria-label="Next"><i aria-hidden="true" className="fas fa-chevron-right" /></button>
-        </div>
-      )}
+      <Pagination page={d.page || 1} pages={d.pages || 1} onPage={goPage} />
 
       {showExport && (
         <ExportModal total={d.total || 0} selectedIds={selectedIds} exportUrl={d.export_url}

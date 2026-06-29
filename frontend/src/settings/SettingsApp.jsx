@@ -1,22 +1,12 @@
 import React, { useState } from 'react';
-import { submitJson, postFile } from '../lib/forms';
+import { submitJson, postFile, useSave } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
-}
-
-function useSave(notify) {
-  // POST a form-encoded action; on success run `after`, else surface the error.
-  return async (url, fields, after, okMsg) => {
-    const r = await submitJson(url, fields);
-    if (r.ok) { notify('success', okMsg || r.message); after && after(r); }
-    else notify('error', r.error || 'Something went wrong.');
-    return r;
-  };
 }
 
 // ---- Settings home ----------------------------------------------------------
@@ -65,10 +55,7 @@ function School({ d, notify }) {
 
   const [logoUrl, setLogoUrl] = useState(d.logo_url || '');
   const [busy, setBusy] = useState(false);
-  const pickLogo = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
+  const pickLogo = async (file) => {
     setBusy(true);
     const r = await postFile(d.logo_upload_url, file);
     setBusy(false);
@@ -88,24 +75,11 @@ function School({ d, notify }) {
     <>
       <div className="page-header"><h1>School Information</h1></div>
       <div className="card"><div className="card-body">
-        <div className="form-group">
-          <label className="form-label">School Logo</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ width: 96, height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, background: '#fff', overflow: 'hidden' }}>
-              {logoUrl
-                ? <img src={logoUrl} alt="School logo" style={{ maxWidth: '100%', maxHeight: '100%' }} />
-                : <i aria-hidden="true" className="fas fa-school" style={{ fontSize: 32, color: 'var(--text-secondary, #94a3b8)' }} />}
-            </div>
-            <div>
-              <label className="btn btn-secondary" style={{ marginBottom: 0, cursor: 'pointer' }}>
-                <i aria-hidden="true" className="fas fa-upload" /> {logoUrl ? 'Replace logo' : 'Upload logo'}
-                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={pickLogo} disabled={busy} style={{ display: 'none' }} />
-              </label>
-              {logoUrl && <button type="button" className="btn btn-secondary" onClick={removeLogo} disabled={busy} style={{ marginLeft: '.5rem' }}><i aria-hidden="true" className="fas fa-trash" /> Remove</button>}
-              <div className="form-hint">PNG, JPG or WEBP. Shown in place of the app name/logo when signed in, and on report cards, Mock-WAEC results, broadsheets and timetables.</div>
-            </div>
-          </div>
-        </div>
+        <FileUpload
+          label={logoUrl ? 'Replace logo' : 'Upload logo'}
+          accept="image/png,image/jpeg,image/webp"
+          onPick={pickLogo} busy={busy} currentUrl={logoUrl} onClear={removeLogo}
+          hint="PNG, JPG or WEBP. Shown in place of the app name/logo when signed in, and on report cards, Mock-WAEC results, broadsheets and timetables." />
         <form onSubmit={submit}>
           <div className="form-group"><label className="form-label">School Name</label>
             <input type="text" className="form-control" value={f.school_name} onChange={set('school_name')} placeholder="Enter school name" /></div>

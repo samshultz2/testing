@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
-import { naira } from '../lib/format';
+import { naira, nairaShort } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
 
@@ -18,14 +18,6 @@ function Tabs({ d }) {
   return <SectionTabs tabs={TABS} urls={d.nav} active={TAB_FOR[d.page] || d.page} go={nav.go} />;
 }
 
-const nairaShort = (n) => {
-  n = Number(n) || 0;
-  const s = n < 0 ? '-' : '';
-  n = Math.abs(n);
-  if (n >= 1e6) return s + '₦' + (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return s + '₦' + (n / 1e3).toFixed(1) + 'k';
-  return s + naira(n);
-};
 const PALETTE = ['#4e73df', '#1cc88a', '#f6c23e', '#e74a3b', '#7e6cf0', '#11998e', '#fd7e14', '#20c997', '#6610f2', '#e83e8c'];
 const chartDefaults = () => {
   if (window.Chart) window.Chart.defaults.color = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
