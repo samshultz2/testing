@@ -28,6 +28,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% if session.get('logged_in') %}<a href="#mainContent" class="skip-link">Skip to content</a>{% endif %}
     <div id="navProgress" aria-hidden="true"></div>
     {% if session.get('logged_in') %}<nav class="bottom-nav" id="bottomNav" aria-label="Quick navigation"></nav>{% endif %}
     <div class="app-container">
@@ -995,8 +996,10 @@
       .notif-menu{position:fixed;top:calc(var(--header-height,60px) + 6px);left:8px;right:8px;width:auto;max-width:none;}
       .notif-list{max-height:calc(100vh - var(--header-height,60px) - 64px);}
     }
-    #navProgress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--primary);
-        z-index:9999;opacity:0;transition:width .25s ease,opacity .25s ease;box-shadow:0 0 8px var(--primary);}
+    #navProgress{position:fixed;top:0;left:0;height:3px;width:0;
+        background:linear-gradient(90deg,var(--primary),var(--accent));
+        z-index:9999;opacity:0;transition:width .25s ease,opacity .25s ease;
+        box-shadow:0 0 10px var(--primary);border-top-right-radius:3px;border-bottom-right-radius:3px;}
     .nav-section-toggle{cursor:pointer;display:flex !important;align-items:center;justify-content:space-between;}
     .nav-sec-chev{font-size:.65rem;opacity:.55;transition:transform .2s ease;}
     .nav-section-toggle:not(.open) .nav-sec-chev{transform:rotate(-90deg);}

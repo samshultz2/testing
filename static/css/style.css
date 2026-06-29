@@ -2640,3 +2640,107 @@ input:focus, select:focus, textarea:focus {
 .page-content[data-readonly] button:not(.keep-on-readonly):has(.fa-pen-to-square) {
     display: none !important;
 }
+
+/* ============================================================================
+   MICRO-POLISH LAYER — small, high-impact refinements applied app-wide.
+   All animations sit under the existing prefers-reduced-motion guard.
+   ============================================================================ */
+
+/* 1. Brand text selection */
+::selection { background: var(--primary-alpha); color: var(--text-primary); }
+
+/* 2-3. Thin, themed scrollbars (less visual weight) */
+* { scrollbar-width: thin; scrollbar-color: var(--gray-300) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* 4. Smooth global focus-ring + inline-link affordance */
+a:not(.btn):not(.nav-link):not(.fin-tab) { text-decoration-color: transparent; text-underline-offset: 2px; transition: color var(--transition), text-decoration-color var(--transition); }
+.page-content a:not(.btn):not(.nav-link):not(.fin-tab):not(.data-card):not(.quick-action-card):hover { text-decoration: underline; text-decoration-color: currentColor; }
+
+/* 5. Cards: crisper header, accent title icon */
+.card-header h3 { letter-spacing: -0.01em; }
+.card-header h3 i { color: var(--primary); }
+.card { transition: box-shadow var(--transition), border-color var(--transition); }
+
+/* 6-8. Empty state: icon in a soft circle, calmer copy, more room */
+.empty-state { padding: 2.75rem 1.25rem; }
+.empty-state i {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 64px; height: 64px; margin-bottom: 0.9rem;
+    font-size: 1.6rem; opacity: 1; color: var(--text-muted);
+    background: var(--gray-100); border-radius: var(--radius-full);
+}
+.empty-state h3 { font-weight: var(--fw-semibold); }
+.empty-state p { color: var(--text-muted); }
+
+/* 9. Badges: hairline definition + tidy icon gap */
+.badge { border: 1px solid rgba(15,23,42,0.06); }
+[data-theme="dark"] .badge { border-color: rgba(255,255,255,0.08); }
+.badge i { font-size: 0.85em; }
+
+/* 10. Inputs: hover feedback + softer placeholder */
+.form-control:hover:not(:focus):not(:disabled) { border-color: var(--gray-300); }
+.form-control::placeholder { color: var(--text-muted); opacity: 0.7; }
+
+/* 11. Nav links: smooth hover, subtle slide */
+.sidebar-nav .nav-link { transition: background var(--transition), color var(--transition), border-color var(--transition), padding-left var(--transition); }
+.sidebar-nav .nav-link:hover { padding-left: 1.15rem; }
+
+/* 12. Dropdown / menu items: consistent hover */
+.branch-switch-menu a, .profile-item, .theme-swatch, .notif-item { transition: background var(--transition), color var(--transition); }
+
+/* 13. Table rows: smooth hover + zebra-free clean separators */
+.data-table tbody tr, .table tbody tr { transition: background var(--transition); }
+.data-table td, .table td { border-bottom-color: var(--border-light); }
+
+/* 14. Modal: fade + scale entrance, refined backdrop */
+.modal { transition: opacity var(--transition); }
+.modal-content { animation: modal-in var(--transition-slow, 220ms) cubic-bezier(0.16,1,0.3,1); }
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+/* 15. Flash messages / toasts: accent edge + slide-in */
+.flash-message { border-left: 3px solid currentColor; animation: toast-in var(--transition-slow, 220ms) cubic-bezier(0.16,1,0.3,1); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* 16. Page content gently fades in on load/soft-nav */
+.page-content { animation: page-in 220ms ease both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* 17. Sticky header gains a hairline shadow so it detaches when scrolling */
+.top-header { transition: box-shadow var(--transition); }
+.top-header { box-shadow: 0 1px 0 var(--border-color); }
+
+/* 18. kbd / inline code */
+kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8em; padding: 0.1em 0.4em; background: var(--gray-100); border: 1px solid var(--border-color); border-bottom-width: 2px; border-radius: var(--radius-sm); color: var(--text-secondary); }
+
+/* 19. Refined divider */
+hr { border-top-color: var(--border-color); }
+
+/* 20. Consistent disabled affordance */
+.btn:disabled, .form-control:disabled, button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* 21. Spinner refinement (shared .att-spinner used by React Spinner) */
+.att-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--gray-300); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 22. Skeleton shimmer (shared .sk-bar) */
+.sk-bar { height: 14px; border-radius: 6px; margin: 10px 0; background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 37%, var(--gray-100) 63%); background-size: 600px 100%; animation: sksh 1.2s infinite linear; }
+.sk-bar.sk-title { height: 24px; width: 42%; }
+.sk-bar.short { width: 55%; }
+@keyframes sksh { 0% { background-position: -468px 0; } 100% { background-position: 468px 0; } }
+
+/* 23. Pagination buttons: tidy, consistent height */
+.pagination .btn-sm { min-height: 34px; }
+
+/* 24. Quick-action / data cards: clearer hover lift via shadow only */
+.data-card, .quick-action-card { transition: box-shadow var(--transition), border-color var(--transition); }
+.data-card:hover, .quick-action-card:hover { box-shadow: var(--shadow-sm); border-color: var(--gray-300); }
+
+/* 25. Section titles a touch tighter */
+.page-header h1 { letter-spacing: -0.02em; }
+
+/* Compact empty states keep a smaller icon medallion */
+.empty-state.small i { width: 44px; height: 44px; font-size: 1.15rem; margin-bottom: 0.6rem; }

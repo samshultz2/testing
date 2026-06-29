@@ -57,6 +57,35 @@ function markActiveTheme(key) {
     });
 }
 
+// A11y: many filter/form <select>s have a visible .form-label that isn't
+// programmatically associated, so screen readers announce them with no name
+// (axe "select-name"). Copy the nearest label text into aria-label. Runs on load,
+// after each SPA swap, and via a MutationObserver so React re-renders stay covered.
+function labelSelects(root) {
+    var scope = root || document;
+    scope.querySelectorAll('select.form-control:not([aria-label]):not([aria-labelledby])').forEach(function (sel) {
+        if (sel.id && document.querySelector('label[for="' + sel.id + '"]')) return;
+        var group = sel.closest('.form-group');
+        var lbl = group ? group.querySelector('.form-label, label') : null;
+        if (!lbl) {
+            var prev = sel.previousElementSibling;
+            if (prev && prev.matches && prev.matches('label, .form-label')) lbl = prev;
+        }
+        var txt = lbl ? lbl.textContent.replace(/[*]/g, '').trim() : '';
+        if (txt) sel.setAttribute('aria-label', txt);
+    });
+}
+function initSelectLabels() {
+    labelSelects(document);
+    window.addEventListener('spa:loaded', function () { try { labelSelects(document); } catch (e) {} });
+    var host = document.querySelector('.page-content');
+    if (host && window.MutationObserver) {
+        var t;
+        new MutationObserver(function () { clearTimeout(t); t = setTimeout(function () { labelSelects(host); }, 150); })
+            .observe(host, { childList: true, subtree: true });
+    }
+}
+
 // Account dropdown (consolidates install / clear-cache / logout / identity).
 function initProfileMenu() {
     var btn = document.getElementById('profileBtn');
@@ -536,6 +565,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Themed confirm modal (vanilla data-confirm flows)
     initConfirmModal();
+
+    // A11y: give unlabeled <select>s an accessible name from their visible label
+    initSelectLabels();
 
     // Close sidebar on nav link click (mobile)
     document.querySelectorAll('.sidebar .nav-link').forEach(link => {
