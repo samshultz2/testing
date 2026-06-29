@@ -986,6 +986,32 @@ class WAECJAMBCorrelation(ExamAnalytics):
     
     @staticmethod
     def get_correlation_analysis(year=None):
+        """Branch-scoped Mock-JAMB↔WAEC correlation, cached ~10 min.
+
+        This is a full-scan analytics insight (a trend, not a live operational
+        number), so short staleness is harmless and avoids recomputing on every
+        predictions-dashboard hit. Keyed by viewing branch + year so branches and
+        the all-branches view don't share results."""
+        from models.analytics_models import AnalyticsCache
+        try:
+            from utils.branch_scope import viewing_branch_id
+            key = f'waec_jamb_corr:{viewing_branch_id()}:{year or "all"}'
+        except Exception:
+            key = None
+        if key:
+            cached = AnalyticsCache.get(key)
+            if cached is not None:
+                return cached
+        result = WAECJAMBCorrelation._correlation_analysis_uncached(year)
+        if key and result is not None:
+            try:
+                AnalyticsCache.set(key, result, ttl_seconds=600)
+            except Exception:
+                pass
+        return result
+
+    @staticmethod
+    def _correlation_analysis_uncached(year=None):
         """
         Analyze correlation between Mock JAMB and actual WAEC results for students who have both.
         This helps validate and improve predictions.
