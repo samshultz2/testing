@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { postForm } from '../lib/forms';
+import { useDraft } from '../lib/draft';
 import { Banner } from '../components/ui';
 import { TextField, TextAreaField, SelectField, FormCard } from '../components/Form';
+
+const REL_SEQUENCE = ['Father', 'Mother', 'Guardian'];
 
 const RELATIONSHIP_FALLBACK = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other'];
 
@@ -35,12 +38,19 @@ export default function StudentForm({ data }) {
   const stu = data.student || {};
   const enrolment = opt.enrolment || null;
 
-  const [f, setF] = useState({
+  // Draft recovery: a half-typed registration survives an accidental nav / reload /
+  // crash. Tied to the server baseline (on edit) so a stale draft never blanks
+  // authoritative data; cleared on a successful submit.
+  const draftKey = 'student-' + (isEdit ? 'edit-' + (stu.id || stu.student_id || '') : 'add');
+  const draftSig = isEdit ? JSON.stringify([stu.surname, stu.first_name, stu.middle_name, stu.gender,
+    stu.date_of_birth, stu.religion, stu.stream, stu.jamb_target, stu.home_address, stu.hobbies]) : undefined;
+  const [f, setF, clearFDraft] = useDraft(draftKey, {
     surname: stu.surname || '', first_name: stu.first_name || '', middle_name: stu.middle_name || '',
     gender: stu.gender || '', date_of_birth: stu.date_of_birth || '', religion: stu.religion || '',
     stream: stu.stream || '', jamb_target: stu.jamb_target === 0 ? '0' : (stu.jamb_target || ''),
     home_address: stu.home_address || '', hobbies: stu.hobbies || '',
-  });
+  }, { signature: draftSig });
+  // Contacts stay on plain state (useDraft serialises objects, not arrays).
   const [contacts, setContacts] = useState(() =>
     (data.contacts && data.contacts.length ? data.contacts : [{ name: '', phone_number: '', relationship: 'Father' }])
       .map((c) => ({ name: c.name || '', phone_number: c.phone_number || '', relationship: c.relationship || 'Father' })));
@@ -53,6 +63,10 @@ export default function StudentForm({ data }) {
   const [saving, setSaving] = useState(false);
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  // Inline on-blur validation for required fields — surfaces the error as the user
+  // leaves the field (and clears it once fixed), instead of only on submit.
+  const blurRequired = (key, label) => () =>
+    setErrors((e) => ({ ...e, [key]: String(f[key] || '').trim() ? undefined : `${label} is required.` }));
   const relationships = opt.relationships || RELATIONSHIP_FALLBACK;
   const allSubjects = opt.waec_subjects || [];
 
@@ -68,7 +82,9 @@ export default function StudentForm({ data }) {
   });
 
   const setContact = (i, k, v) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
-  const addContact = () => setContacts((cs) => [...cs, { name: '', phone_number: '', relationship: 'Father' }]);
+  // Smarter default: 1st contact = Father, 2nd = Mother, then Guardian.
+  const addContact = () => setContacts((cs) =>
+    [...cs, { name: '', phone_number: '', relationship: REL_SEQUENCE[cs.length] || 'Guardian' }]);
   const removeContact = (i) => setContacts((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
 
   const validate = () => {
@@ -114,7 +130,7 @@ export default function StudentForm({ data }) {
       const res = await postForm(data.urls.submit, fields);
       let body = {};
       try { body = await res.json(); } catch (_) { /* non-JSON */ }
-      if (res.ok && body.ok) { window.location = body.redirect; return; }
+      if (res.ok && body.ok) { clearFDraft(); window.location = body.redirect; return; }
       setBanner({ tone: 'error', text: body.error || `Could not save (HTTP ${res.status}).` });
     } catch (err) {
       setBanner({ tone: 'error', text: err.message || 'Network error — please try again.' });
@@ -145,14 +161,17 @@ export default function StudentForm({ data }) {
       <FormCard icon="fa-user" title="Personal Information">
         <div className="sf-row">
           <TextField label="Surname" required value={f.surname} onChange={(v) => set('surname', v)}
+                     onBlur={blurRequired('surname', 'Surname')}
                      error={errors.surname} placeholder="Surname" autoComplete="off" />
           <TextField label="First Name" required value={f.first_name} onChange={(v) => set('first_name', v)}
+                     onBlur={blurRequired('first_name', 'First name')}
                      error={errors.first_name} placeholder="First name" autoComplete="off" />
         </div>
         <TextField label="Middle Name" value={f.middle_name} onChange={(v) => set('middle_name', v)}
                    placeholder="Middle name (optional)" autoComplete="off" />
         <div className="sf-row">
           <SelectField label="Gender" required value={f.gender} onChange={(v) => set('gender', v)}
+                       onBlur={blurRequired('gender', 'Gender')}
                        placeholder="Select Gender" options={opt.genders || ['Male', 'Female']} error={errors.gender} />
           <TextField label="Date of Birth" type="date" value={f.date_of_birth} onChange={(v) => set('date_of_birth', v)} />
         </div>

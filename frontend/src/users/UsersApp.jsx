@@ -326,7 +326,9 @@ function UserForm({ d, notify }) {
                     <input type="password" className={'form-control' + (errors.password ? ' is-invalid' : '')} value={f.password} onChange={set('password')} required minLength="6" placeholder="Min 6 characters" aria-invalid={!!errors.password} />
                     {errors.password && <div className="field-error">{errors.password}</div>}</div>
                   <div className="form-group"><label className="form-label">Confirm Password <span className="text-danger">*</span></label>
-                    <input type="password" className={'form-control' + (errors.confirm_password ? ' is-invalid' : '')} value={f.confirm_password} onChange={set('confirm_password')} required placeholder="Repeat password" aria-invalid={!!errors.confirm_password} />
+                    <input type="password" className={'form-control' + (errors.confirm_password ? ' is-invalid' : '')} value={f.confirm_password} onChange={set('confirm_password')}
+                      onBlur={() => setErrors((er) => ({ ...er, confirm_password: (f.confirm_password && f.confirm_password !== f.password) ? 'Passwords do not match.' : undefined }))}
+                      required placeholder="Repeat password" aria-invalid={!!errors.confirm_password} />
                     {errors.confirm_password && <div className="field-error">{errors.confirm_password}</div>}</div>
                 </div>
                 <label className="permission-item" style={{ display: 'inline-flex' }}>
