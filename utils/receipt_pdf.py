@@ -42,27 +42,22 @@ def receipt_pdf(payment, bill, school):
                          textColor=_PRIMARY)
 
     el = []
-    head_block = [Paragraph(school.get('name') or 'School', title)]
+    nm = school.get('name') or 'School'
+    items = [(Paragraph(nm, title), nm, 'Helvetica', 15)]
     br = getattr(payment.student, 'branch', None) if payment.student else None
     if br:
-        head_block.append(Paragraph(f'{br.name} Branch', muted))
+        items.append((Paragraph(f'{br.name} Branch', muted), f'{br.name} Branch', 'Helvetica', 8))
     if school.get('address'):
-        head_block.append(Paragraph(school['address'], muted))
+        items.append((Paragraph(school['address'], muted), school['address'], 'Helvetica', 8))
     if school.get('phone'):
-        head_block.append(Paragraph(school['phone'], muted))
-    from utils.school import logo_flowable
+        items.append((Paragraph(school['phone'], muted), school['phone'], 'Helvetica', 8))
+    from utils.school import logo_flowable, logo_header_flowable
     logo = logo_flowable(max_h_mm=14, max_w_mm=22)
-    if logo is not None:
-        col = 24 * mm
-        ht = Table([[logo, head_block, '']], colWidths=[col, None, col])
-        ht.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        el.append(ht)
+    header = logo_header_flowable(logo, items) if logo is not None else None
+    if header is not None:
+        el.append(header)
     else:
-        el.extend(head_block)
+        el.extend(it[0] for it in items)
     el.append(Spacer(1, 4))
     el.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#cbd5e1'),
                          dash=(2, 2)))

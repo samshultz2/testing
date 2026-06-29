@@ -94,33 +94,28 @@ def _school_header(e, school, opts, subtitle):
     When a logo is uploaded it sits to the left of the centred name/address block
     (letterhead style); otherwise the text block is centred on its own."""
     _styles()
-    block = []
+    # (paragraph, plain text, font, size) — text+font size the column so the logo
+    # hugs the name block rather than sitting at the far-left margin.
+    items = []
     if school.get('name'):
-        block.append(Paragraph((school['name'] or '').upper(), _S['school']))
+        nm = (school['name'] or '').upper()
+        items.append((Paragraph(nm, _S['school']), nm, 'Helvetica-Bold', 18))
     if _opt(opts, 'address') and school.get('address'):
-        block.append(Paragraph(school['address'], _S['addr']))
+        items.append((Paragraph(school['address'], _S['addr']), school['address'], 'Helvetica', 9))
     if _opt(opts, 'contact'):
         contact = ' · '.join(x for x in (school.get('phone'), school.get('email')) if x)
         if contact:
-            block.append(Paragraph(contact, _S['addr']))
+            items.append((Paragraph(contact, _S['addr']), contact, 'Helvetica', 9))
     if _opt(opts, 'motto') and school.get('motto'):
-        block.append(Paragraph('<i>%s</i>' % school['motto'], _S['addr']))
+        items.append((Paragraph('<i>%s</i>' % school['motto'], _S['addr']), school['motto'], 'Helvetica-Oblique', 9))
+    block = [it[0] for it in items]
     logo = None
     if school.get('logo_path'):
         from utils.school import logo_flowable
         logo = logo_flowable(max_h_mm=18, max_w_mm=30, path=school.get('logo_path'))
     if logo is not None and block:
-        # logo | centred text | matching empty column → text stays page-centred.
-        col = 32 * mm
-        t = Table([[logo, block, '']], colWidths=[col, None, col])
-        t.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        e.append(t)
+        from utils.school import logo_header_flowable
+        e.append(logo_header_flowable(logo, items))
     else:
         e.extend(block)
     if _opt(opts, 'title'):

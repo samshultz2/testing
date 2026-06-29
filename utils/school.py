@@ -62,6 +62,39 @@ def school_profile():
     }
 
 
+def logo_header_flowable(logo, items, gap_mm=4):
+    """A centred letterhead row: the ``logo`` immediately to the left of a text
+    block, with the whole logo+text unit centred on the page.
+
+    ``items`` is a list of ``(paragraph, plain_text, font_name, font_size)`` — the
+    paragraphs render in the block, while their plain text + font is used to size
+    the text column (so the centred lines sit snug against the logo instead of
+    being page-centred away from it). Returns a reportlab flowable, or None when
+    there is no logo (callers then lay the plain block out themselves)."""
+    block = [it[0] for it in items]
+    if logo is None or not block:
+        return None
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Table, TableStyle
+    text_w = 0
+    for _para, text, font_name, font_size in items:
+        if text:
+            text_w = max(text_w, stringWidth(text, font_name, font_size))
+    text_w += 8                                  # a little slack so nothing wraps
+    logo_col = getattr(logo, 'drawWidth', 0) + gap_mm * mm
+    t = Table([[logo, block]], colWidths=[logo_col, text_w])
+    t.hAlign = 'CENTER'
+    t.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return t
+
+
 def logo_flowable(max_h_mm=18, max_w_mm=34, path=None):
     """A reportlab ``Image`` flowable for the school logo (aspect preserved), or
     None when no logo is available. ``path`` overrides the uploaded logo (used by

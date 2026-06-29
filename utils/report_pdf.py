@@ -55,21 +55,16 @@ def report_card_pdf(student, report_data, term, school_name,
                             leftMargin=12 * mm, rightMargin=12 * mm,
                             title=f'Report — {student.full_name}')
     e = []
-    from utils.school import logo_flowable
+    from utils.school import logo_flowable, logo_header_flowable
     logo = logo_flowable(max_h_mm=16, max_w_mm=28)
-    head_block = [Paragraph(school_name or 'School', _S['title']),
-                  Paragraph(f'{term.full_name} — Report Sheet', _S['sub'])]
-    if logo is not None:
-        col = 30 * mm
-        ht = Table([[logo, head_block, '']], colWidths=[col, None, col])
-        ht.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        e.append(ht)
+    sub_text = f'{term.full_name} — Report Sheet'
+    items = [(Paragraph(school_name or 'School', _S['title']), school_name or 'School', 'Helvetica-Bold', 16),
+             (Paragraph(sub_text, _S['sub']), sub_text, 'Helvetica', 10)]
+    header = logo_header_flowable(logo, items) if logo is not None else None
+    if header is not None:
+        e.append(header)
     else:
-        e.extend(head_block)
+        e.extend(it[0] for it in items)
 
     ts = report_data.get('term_summary')
     pos = ts.position_in_class if (ts and ts.position_in_class) else '—'

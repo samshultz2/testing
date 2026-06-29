@@ -530,27 +530,22 @@ def print_timetable(assignment_id):
                                textColor=colors.HexColor('#475569'))
     school = SchoolSettings.get('school_name', '') or ''
     term = assignment.term.full_name if assignment.term else ''
-    from utils.school import logo_flowable
+    from utils.school import logo_flowable, logo_header_flowable
     logo = logo_flowable(max_h_mm=15, max_w_mm=26)
     elems = []
     sub = f'{assignment.display_name} — Class Timetable'
+    sub_plain = f'{assignment.display_name} — Class Timetable' + (f'  •  {term}' if term else '')
     if term:
         sub += f' &nbsp;•&nbsp; {term}'
-    head_block = []
+    items = []
     if school:
-        head_block.append(Paragraph(school, title_style))
-    head_block.append(Paragraph(sub, sub_style))
-    if logo is not None:
-        col = 28 * mm
-        ht = Table([[logo, head_block, '']], colWidths=[col, None, col])
-        ht.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        elems.append(ht)
+        items.append((Paragraph(school, title_style), school, 'Helvetica-Bold', 14))
+    items.append((Paragraph(sub, sub_style), sub_plain, 'Helvetica', 9))
+    header = logo_header_flowable(logo, items) if logo is not None else None
+    if header is not None:
+        elems.append(header)
     else:
-        elems.extend(head_block)
+        elems.extend(it[0] for it in items)
     elems.append(Spacer(1, 4))
     t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
     t.setStyle(TableStyle(style))
