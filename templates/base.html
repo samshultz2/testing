@@ -702,7 +702,7 @@
     
     <style>
     /* Global header search */
-    .header-search{display:flex;align-items:center;gap:.45rem;background:var(--gray-100);border-radius:999px;padding:.35rem .8rem;max-width:240px;flex:1;margin:0 .5rem}
+    .header-search{display:flex;align-items:center;gap:.45rem;background:var(--gray-100);border-radius:999px;padding:.5rem .85rem;min-height:40px;max-width:240px;flex:1;margin:0 .5rem}
     .header-search i{color:var(--text-muted);font-size:.85rem}
     .header-search input{border:none;background:transparent;outline:none;width:100%;font-size:.85rem;color:var(--text-primary)}
     @media(max-width:768px){.header-search{display:none}}
@@ -713,6 +713,7 @@
         justify-content: center;
         width: 40px;
         height: 40px;
+        flex-shrink: 0;
         border-radius: 50%;
         border: none;
         cursor: pointer;
@@ -759,7 +760,7 @@
     .branch-switch { position: relative; }
     .branch-switch-btn {
         display: inline-flex; align-items: center; gap: .4rem;
-        padding: .4rem .7rem; border: 1px solid var(--border-color);
+        padding: .4rem .7rem; min-height: 40px; border: 1px solid var(--border-color);
         background: var(--bg-card); color: var(--text-primary);
         border-radius: 8px; cursor: pointer; font-size: .85rem; font-weight: 600;
     }
