@@ -23,8 +23,19 @@ def _student(app, surname, first):
 
 
 def _pin_cohort(monkeypatch, sid):
-    """Pin get_sss3_students() to our student, independent of the active session."""
-    monkeypatch.setattr(RR, 'get_sss3_students', lambda: Student.query.filter_by(id=sid).all())
+    """Pin get_sss3_students() to our student, independent of the active session.
+
+    routes.results is now a package whose route submodules each hold their own
+    `from routes.results import *` binding of get_sss3_students, so patch the name on
+    every submodule that has it (and the package itself) — patch where it is looked up.
+    """
+    import types
+    fn = lambda: Student.query.filter_by(id=sid).all()
+    targets = [RR] + [getattr(RR, n) for n in dir(RR)
+                      if isinstance(getattr(RR, n), types.ModuleType)]
+    for mod in targets:
+        if hasattr(mod, 'get_sss3_students'):
+            monkeypatch.setattr(mod, 'get_sss3_students', fn, raising=False)
 
 
 def test_paste_waec_preview_matches_and_renders_grid(app, monkeypatch):
