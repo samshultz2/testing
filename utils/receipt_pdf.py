@@ -42,14 +42,27 @@ def receipt_pdf(payment, bill, school):
                          textColor=_PRIMARY)
 
     el = []
-    el.append(Paragraph(school.get('name') or 'School', title))
+    head_block = [Paragraph(school.get('name') or 'School', title)]
     br = getattr(payment.student, 'branch', None) if payment.student else None
     if br:
-        el.append(Paragraph(f'{br.name} Branch', muted))
+        head_block.append(Paragraph(f'{br.name} Branch', muted))
     if school.get('address'):
-        el.append(Paragraph(school['address'], muted))
+        head_block.append(Paragraph(school['address'], muted))
     if school.get('phone'):
-        el.append(Paragraph(school['phone'], muted))
+        head_block.append(Paragraph(school['phone'], muted))
+    from utils.school import logo_flowable
+    logo = logo_flowable(max_h_mm=14, max_w_mm=22)
+    if logo is not None:
+        col = 24 * mm
+        ht = Table([[logo, head_block, '']], colWidths=[col, None, col])
+        ht.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        el.append(ht)
+    else:
+        el.extend(head_block)
     el.append(Spacer(1, 4))
     el.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#cbd5e1'),
                          dash=(2, 2)))

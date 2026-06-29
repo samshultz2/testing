@@ -348,6 +348,40 @@ img {
     border-radius: 8px;
     flex-shrink: 0;
     display: block;
+    object-fit: contain;
+    background: #fff;
+}
+
+.logo .brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+}
+
+.logo .brand-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 11rem;
+}
+
+.logo .brand-sub,
+.logo .brand-branch {
+    font-family: var(--font-base, inherit);
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 12rem;
+}
+
+.logo .brand-branch {
+    color: var(--accent);
 }
 
 .sidebar-toggle {

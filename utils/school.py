@@ -1,0 +1,87 @@
+"""Shared school identity (name, contacts and the one school-wide logo).
+
+A school uploads a single logo under Settings → School Info; it is resized once
+and reused everywhere — the app shell header and every printout (term report
+cards, Mock-WAEC slips & broadsheets, timetables, receipts). This module is the
+single source of truth so each of those builders pulls the same profile.
+"""
+import os
+
+from flask import current_app, url_for
+
+from models import SchoolSettings
+
+# Path (relative to static/) where the uploaded, resized logo is stored.
+LOGO_REL = 'uploads/branding/logo.png'
+
+
+def logo_path():
+    """Absolute filesystem path of the uploaded logo, or None if not present.
+
+    Authoritative check for reportlab / PIL builders — they need a real file."""
+    try:
+        p = os.path.join(current_app.root_path, 'static', LOGO_REL)
+    except Exception:
+        return None
+    return p if os.path.exists(p) else None
+
+
+def logo_url():
+    """Cache-busted static URL of the uploaded logo, or '' if there isn't one.
+
+    Prefers the stored ``school_logo_url`` setting (already cache-busted at upload
+    time) but only when the file actually exists, so a stale setting never points
+    at a missing image."""
+    p = logo_path()
+    if not p:
+        return ''
+    stored = SchoolSettings.get('school_logo_url', '') or ''
+    if stored:
+        return stored
+    try:
+        return url_for('static', filename=LOGO_REL) + ('?v=%d' % int(os.path.getmtime(p)))
+    except Exception:
+        return ''
+
+
+def school_profile():
+    """School identity reused by the shell header and every printout.
+
+    Returns ``{name, address, phone, email, motto, logo_url, logo_path}`` where
+    ``logo_path`` is an absolute fs path (for reportlab/PIL) or None, and
+    ``logo_url`` is a static URL (for templates) or ''."""
+    g = SchoolSettings.get
+    return {
+        'name': g('school_name', '') or '',
+        'address': g('school_address', '') or '',
+        'phone': g('school_phone', '') or '',
+        'email': g('school_email', '') or '',
+        'motto': g('school_motto', '') or '',
+        'logo_url': logo_url(),
+        'logo_path': logo_path(),
+    }
+
+
+def logo_flowable(max_h_mm=18, max_w_mm=34, path=None):
+    """A reportlab ``Image`` flowable for the school logo (aspect preserved), or
+    None when no logo is available. ``path`` overrides the uploaded logo (used by
+    builders that already resolved it via ``school_profile``); sized to fit within
+    max_h × max_w (mm)."""
+    p = path or logo_path()
+    if not p or not os.path.exists(p):
+        return None
+    try:
+        from reportlab.platypus import Image as RLImage
+        from reportlab.lib.units import mm
+        from PIL import Image as PILImage
+        with PILImage.open(p) as im:
+            iw, ih = im.size
+        ratio = (iw / ih) if ih else 1.0
+        h = max_h_mm * mm
+        w = h * ratio
+        if w > max_w_mm * mm:
+            w = max_w_mm * mm
+            h = w / ratio if ratio else h
+        return RLImage(p, width=w, height=h)
+    except Exception:
+        return None

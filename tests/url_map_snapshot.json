@@ -3748,6 +3748,13 @@
 ]
 ],
 [
+"settings.remove_school_logo",
+"/settings/school/logo/remove",
+[
+"POST"
+]
+],
+[
 "settings.restore_backup",
 "/settings/backup/restore",
 [
@@ -3802,6 +3809,13 @@
 "/settings/traits",
 [
 "GET"
+]
+],
+[
+"settings.upload_school_logo",
+"/settings/school/logo",
+[
+"POST"
 ]
 ],
 [

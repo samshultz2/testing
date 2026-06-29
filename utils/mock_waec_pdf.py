@@ -89,18 +89,40 @@ def _short_name(st):
 
 
 def _school_header(e, school, opts, subtitle):
-    """School identity block + optional COMPETENCE RESULT banner + a subtitle."""
+    """School identity block + optional COMPETENCE RESULT banner + a subtitle.
+
+    When a logo is uploaded it sits to the left of the centred name/address block
+    (letterhead style); otherwise the text block is centred on its own."""
     _styles()
+    block = []
     if school.get('name'):
-        e.append(Paragraph((school['name'] or '').upper(), _S['school']))
+        block.append(Paragraph((school['name'] or '').upper(), _S['school']))
     if _opt(opts, 'address') and school.get('address'):
-        e.append(Paragraph(school['address'], _S['addr']))
+        block.append(Paragraph(school['address'], _S['addr']))
     if _opt(opts, 'contact'):
         contact = ' · '.join(x for x in (school.get('phone'), school.get('email')) if x)
         if contact:
-            e.append(Paragraph(contact, _S['addr']))
+            block.append(Paragraph(contact, _S['addr']))
     if _opt(opts, 'motto') and school.get('motto'):
-        e.append(Paragraph('<i>%s</i>' % school['motto'], _S['addr']))
+        block.append(Paragraph('<i>%s</i>' % school['motto'], _S['addr']))
+    logo = None
+    if school.get('logo_path'):
+        from utils.school import logo_flowable
+        logo = logo_flowable(max_h_mm=18, max_w_mm=30, path=school.get('logo_path'))
+    if logo is not None and block:
+        # logo | centred text | matching empty column → text stays page-centred.
+        col = 32 * mm
+        t = Table([[logo, block, '']], colWidths=[col, None, col])
+        t.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        e.append(t)
+    else:
+        e.extend(block)
     if _opt(opts, 'title'):
         e.append(Paragraph('COMPETENCE RESULT', _S['comp']))
     if subtitle:

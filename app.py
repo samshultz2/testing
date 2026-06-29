@@ -345,6 +345,42 @@ def create_app(config_class=None):
             except Exception:
                 return {'is_central': False, 'branches': [], 'current': None}
 
+        def school_brand():
+            """When signed in, the school's own identity replaces the app brand in
+            the shell: its name + uploaded logo (falling back to the app brand),
+            plus the signed-in person's name, role/position and branch."""
+            base = {'logged_in': False, 'name': Config.APP_NAME, 'logo_url': '',
+                    'user': '', 'role_label': '', 'branch': ''}
+            try:
+                if not session.get('logged_in'):
+                    return base
+                from utils.school import logo_url
+                from models import User, Branch, SchoolSettings
+                from utils.branch_scope import is_central, viewing_branch_id
+                name = (SchoolSettings.get('school_name', '') or '').strip() or Config.APP_NAME
+                role = session.get('role', '') or ''
+                role_label = {'super_admin': 'Super Admin', 'admin': 'Administrator',
+                              'teacher': 'Teacher', 'staff': 'Staff',
+                              'readonly': 'View Only'}.get(role, role.replace('_', ' ').title())
+                uid = session.get('user_id')
+                if uid:
+                    u = db.session.get(User, uid)
+                    if u:
+                        role_label = u.get_display_role() or role_label
+                if is_central():
+                    branch = 'All branches'
+                else:
+                    bid = viewing_branch_id()
+                    b = db.session.get(Branch, bid) if (bid and bid not in (None, -1)) else None
+                    branch = b.name if b else ''
+                return {'logged_in': True, 'name': name, 'logo_url': logo_url(),
+                        'user': session.get('user', 'Admin'), 'role_label': role_label,
+                        'branch': branch}
+            except Exception:
+                base['logged_in'] = bool(session.get('logged_in'))
+                base['user'] = session.get('user', '')
+                return base
+
         def time_travel():
             """For the admin session-view banner: the past session being viewed
             (or None), the live session, and the list to switch between."""
@@ -377,6 +413,7 @@ def create_app(config_class=None):
             'can_generate_result_cards': can_generate_result_cards(),
             'can_access_graduates': can_access_graduates(),
             'branch_ctx': branch_context(),
+            'school_brand': school_brand(),
             'current_theme': current_theme(),
             'themes': THEMES,
         }

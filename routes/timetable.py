@@ -53,11 +53,13 @@ def designer():
     holiday lessons, exams, or a blank custom grid). Everything is entered and
     rendered in the browser and printed/saved as PDF — nothing is stored."""
     from models import SchoolSettings
+    from utils.school import logo_url
     school_name = SchoolSettings.get('school_name', '') or ''
     subjects = [s.name for s in
                 Subject.query.filter_by(is_active=True).order_by(Subject.name).all()]
     return render_template('timetable/designer.html',
-                           school_name=school_name, subjects=subjects)
+                           school_name=school_name, school_logo_url=logo_url(),
+                           subjects=subjects)
 
 
 @timetable_bp.route('/backups')
@@ -528,13 +530,27 @@ def print_timetable(assignment_id):
                                textColor=colors.HexColor('#475569'))
     school = SchoolSettings.get('school_name', '') or ''
     term = assignment.term.full_name if assignment.term else ''
+    from utils.school import logo_flowable
+    logo = logo_flowable(max_h_mm=15, max_w_mm=26)
     elems = []
-    if school:
-        elems.append(Paragraph(school, title_style))
     sub = f'{assignment.display_name} — Class Timetable'
     if term:
         sub += f' &nbsp;•&nbsp; {term}'
-    elems.append(Paragraph(sub, sub_style))
+    head_block = []
+    if school:
+        head_block.append(Paragraph(school, title_style))
+    head_block.append(Paragraph(sub, sub_style))
+    if logo is not None:
+        col = 28 * mm
+        ht = Table([[logo, head_block, '']], colWidths=[col, None, col])
+        ht.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        elems.append(ht)
+    else:
+        elems.extend(head_block)
     elems.append(Spacer(1, 4))
     t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
     t.setStyle(TableStyle(style))

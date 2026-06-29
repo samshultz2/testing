@@ -680,11 +680,9 @@ def edit_student_results(exam_id, student_id):
 # =============================================================================
 
 def _school_profile():
-    """School identity for printed results, straight from Settings → School."""
-    g = SchoolSettings.get
-    return {'name': g('school_name', '') or '', 'address': g('school_address', '') or '',
-            'phone': g('school_phone', '') or '', 'email': g('school_email', '') or '',
-            'motto': g('school_motto', '') or ''}
+    """School identity for printed results (incl. logo), from Settings → School."""
+    from utils.school import school_profile
+    return school_profile()
 
 
 def _slips_for(exam_id, student_id=None):

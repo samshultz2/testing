@@ -2,7 +2,8 @@
 Settings, Backup, and Configuration routes
 """
 from flask import (Blueprint, render_template, request, redirect, url_for, flash,
-                   Response, send_file, session, jsonify)
+                   Response, send_file, session, jsonify, current_app)
+from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
 import shutil
@@ -202,14 +203,83 @@ def school_settings():
         return _ok('School settings updated!', url_for('settings.school_settings'))
 
     from utils.timeutil import all_timezones, get_timezone
+    from utils.school import logo_url
     return _render({
         'page': 'school',
         'settings': _settings_dict(),
         'timezones': all_timezones(),
         'current_tz': get_timezone(),
+        'logo_url': logo_url(),
         'submit_url': url_for('settings.school_settings'),
+        'logo_upload_url': url_for('settings.upload_school_logo'),
+        'logo_remove_url': url_for('settings.remove_school_logo'),
         'back_url': url_for('settings.index'),
     })
+
+
+# --- School logo: one school-wide image, resized once, reused everywhere ------
+_LOGO_EXTS = {'.png', '.jpg', '.jpeg', '.webp'}
+_LOGO_MAX_H = 240          # px — plenty for letterhead-size printing, small on disk
+
+
+def _logo_fs_path():
+    return os.path.join(current_app.root_path, 'static', 'uploads', 'branding', 'logo.png')
+
+
+@settings_bp.route('/school/logo', methods=['POST'])
+@login_required
+def upload_school_logo():
+    """Accept a PNG/JPG/WEBP, flatten + resize it, and store it as the school logo."""
+    file = request.files.get('school_logo') or request.files.get('file')
+    if not file or not file.filename:
+        return _err('Choose an image file to upload.', url_for('settings.school_settings'))
+    ext = os.path.splitext(secure_filename(file.filename))[1].lower()
+    if ext not in _LOGO_EXTS:
+        return _err('Logo must be a PNG, JPG or WEBP image.', url_for('settings.school_settings'))
+    try:
+        from PIL import Image
+        im = Image.open(file.stream)
+        im.load()
+        # Flatten any transparency onto white so the logo prints cleanly on paper.
+        if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
+            im = im.convert('RGBA')
+            bg = Image.new('RGBA', im.size, (255, 255, 255, 255))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg.convert('RGB')
+        else:
+            im = im.convert('RGB')
+        if im.height > _LOGO_MAX_H:
+            w = max(1, int(im.width * (_LOGO_MAX_H / im.height)))
+            im = im.resize((w, _LOGO_MAX_H), Image.LANCZOS)
+        path = _logo_fs_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        im.save(path, 'PNG')
+    except Exception as e:
+        return _err(f'Could not process that image: {e}', url_for('settings.school_settings'))
+    url = url_for('static', filename='uploads/branding/logo.png') + ('?v=%d' % int(os.path.getmtime(path)))
+    SchoolSettings.set('school_logo_url', url, 'string', 'Uploaded school logo (shell + printouts)')
+    from utils.audit import log_action
+    log_action('settings.logo.upload')
+    return _ok('School logo updated.', url_for('settings.school_settings'))
+
+
+@settings_bp.route('/school/logo/remove', methods=['POST'])
+@login_required
+def remove_school_logo():
+    """Remove the uploaded logo; shell and printouts fall back to the app brand."""
+    try:
+        path = _logo_fs_path()
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+    s = SchoolSettings.query.filter_by(key='school_logo_url').first()
+    if s:
+        db.session.delete(s)
+        db.session.commit()
+    from utils.audit import log_action
+    log_action('settings.logo.remove')
+    return _ok('School logo removed.', url_for('settings.school_settings'))
 
 
 @settings_bp.route('/academic', methods=['GET', 'POST'])
