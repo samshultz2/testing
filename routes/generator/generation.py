@@ -116,6 +116,12 @@ def generate_page():
 @timetable_generate_required
 def run_generation():
     """Generate timetable using global scheduling approach"""
+    # The chosen engine must come from the submitted form field, not from which URL
+    # the client JS happened to post to. If JS didn't swap the form action (stale
+    # service-worker cache, a JS error, CSP) the form posts here with method=ortools
+    # selected — honour it server-side instead of silently running the fast method.
+    if request.form.get('method') == 'ortools':
+        return run_ortools_generation()
     level = get_current_level()
     try:
         class_ids = [int(x) for x in request.form.getlist('class_ids[]') if x]
