@@ -175,8 +175,8 @@
                     <option value="holiday">Holiday lesson timetable</option>
                     <option value="exam">Examination timetable</option>
                     <option value="grid">Blank custom grid</option>
-                    <option value="roster_week">Sweeping / duty roster — by week (Week 1, 2…)</option>
-                    <option value="roster_day">Sweeping / duty roster — by day (Mon, Tue…)</option>
+                    <option value="roster_week">Sweeping roster — weekly (one group sweeps all week)</option>
+                    <option value="roster_day">Sweeping roster — daily (one group sweeps that day)</option>
                 </select>
             </div>
             <div class="form-group">
@@ -341,12 +341,15 @@ var rows = [];   // each: {date,day,group,time,dur,subject,teacher,venue}
 
 // Sweeping / duty rosters reuse the blank-grid renderer, but with roster presets and
 // editable cells. The primary axis (rows) is weeks or days; columns are days/areas.
+// A class's own sweeping roster: each time-unit (a whole week, or a single day) is
+// assigned ONE group of students who sweep together for that whole period — so a
+// single "Students on Duty" column, one fillable cell per week/day.
 var ROSTER_PRESETS = {
-    roster_week: {title:'Weekly Sweeping / Duty Roster',
-                  cols:'Monday, Tuesday, Wednesday, Thursday, Friday',
+    roster_week: {title:'Weekly Sweeping Roster',
+                  cols:'Students on Duty',
                   rows:'Week 1\nWeek 2\nWeek 3\nWeek 4\nWeek 5\nWeek 6'},
-    roster_day:  {title:'Daily Sweeping / Duty Roster',
-                  cols:'Class / Group on Duty, Area / Section, Supervisor',
+    roster_day:  {title:'Daily Sweeping Roster',
+                  cols:'Students on Duty',
                   rows:'Monday\nTuesday\nWednesday\nThursday\nFriday'},
 };
 var rosterCells = {};   // "rowIndex:colIndex" -> typed text (persists across re-renders)
