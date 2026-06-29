@@ -35,7 +35,7 @@
             <span style="font-weight:700;">{{ loop.index }}.</span>
             <div style="flex:1;">
                 <strong>{{ r.q.question_text }}</strong>
-                {% if r.q.image_url %}<div><img src="{{ r.q.image_url }}" alt="figure" style="max-width:240px;max-height:160px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
+                {% if r.q.image_url %}<div><img src="{{ r.q.image_url }}" alt="Question figure" style="max-width:240px;max-height:160px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
                 <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:.3rem;">
                     {% for letter, text in r.q.options %}{% if text %}
                     {% set is_ans = (r.q.correct_option == letter) %}

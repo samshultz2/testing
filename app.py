@@ -4,7 +4,7 @@ Main Flask application entry point
 """
 import os
 import secrets
-from flask import Flask, session
+from flask import Flask, session, Response
 from config import Config, get_config
 from models import db, init_db
 from routes import auth_bp, main_bp, academics_bp, attendance_bp, results_bp, reports_bp, settings_bp, subjects_bp, timetable_bp, promotion_bp, users_bp
@@ -216,6 +216,12 @@ def create_app(config_class=None):
         resp.headers['Service-Worker-Allowed'] = '/'
         resp.headers['Cache-Control'] = 'no-cache'
         return resp
+
+    @app.route('/robots.txt')
+    def _robots():
+        # Internal app — keep everything (incl. the public login / parent / result
+        # portals) out of search indexes.
+        return Response('User-agent: *\nDisallow: /\n', mimetype='text/plain')
     
     # Template context processors
     @app.context_processor

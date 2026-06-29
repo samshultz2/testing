@@ -61,7 +61,7 @@
             <div class="qb">
                 <div class="d-flex justify-between gap-2">
                     <strong>{{ q.question_text }}</strong>
-                    {% if q.image_url %}<div><img src="{{ q.image_url }}" alt="figure" style="max-width:200px;max-height:130px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
+                    {% if q.image_url %}<div><img src="{{ q.image_url }}" alt="Question figure" style="max-width:200px;max-height:130px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
                     <form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove from bank?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
                 </div>
                 {% for letter, text in q.options %}{% if text %}<div class="o {% if q.correct_option==letter %}c{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
