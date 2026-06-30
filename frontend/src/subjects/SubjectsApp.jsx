@@ -550,7 +550,7 @@ function Broadsheet({ d, notify }) {
               <thead><tr>
                 <th style={{ ...headCorner(0) }}>Pos</th>
                 <th style={{ ...headCorner(40) }}>Student</th>
-                {d.class_subjects.map((cs) => <th key={cs.id} style={{ ...headCell, textAlign: 'center', fontSize: '0.75rem' }}>{cs.short}</th>)}
+                {d.class_subjects.map((cs) => <th key={cs.id} style={{ ...headCell, textAlign: 'center', fontSize: 'var(--text-xs)' }}>{cs.short}</th>)}
                 <th style={{ ...headCell, textAlign: 'center' }}>Total</th><th style={{ ...headCell, textAlign: 'center' }}>Avg</th><th style={{ ...headCell, textAlign: 'center' }}>P/F</th>
               </tr></thead>
               <tbody>{d.rows.map((r, i) => (
@@ -602,7 +602,7 @@ function Affective({ d, notify }) {
         <form onSubmit={save}>
           <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
             <table className="data-table">
-              <thead><tr><th>Student</th>{d.traits.map((t) => <th key={t.key} style={{ fontSize: '.7rem', writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap' }}>{t.label}</th>)}</tr></thead>
+              <thead><tr><th>Student</th>{d.traits.map((t) => <th key={t.key} style={{ fontSize: 'var(--text-xs)', writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap' }}>{t.label}</th>)}</tr></thead>
               <tbody>{d.students.map((s) => (
                 <tr key={s.id}><td style={{ whiteSpace: 'nowrap' }}>{s.full_name}</td>
                   {d.traits.map((t) => (

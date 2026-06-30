@@ -698,10 +698,10 @@ function Ocr({ d, notify }) {
           ? <p style={{ margin: 0, color: '#137333', fontWeight: 600 }}><i aria-hidden="true" className="fas fa-circle-check" /> Active — WAEC/JAMB scans will use Claude vision (with Tesseract as fallback).</p>
           : <p style={{ margin: 0, color: '#b06000', fontWeight: 600 }}><i aria-hidden="true" className="fas fa-circle-info" /> Not active — scans use the free Tesseract engine.</p>}
         {!d.anthropic_installed && (
-          <p className="text-muted" style={{ marginTop: '.4rem', fontSize: '.85rem' }}>
+          <p className="text-muted" style={{ marginTop: '.4rem', fontSize: 'var(--text-sm)' }}>
             The <code>anthropic</code> library isn't installed on the server. Run <code>pip install anthropic</code> and restart, then it can be turned on here.
           </p>)}
-        <p className="text-muted" style={{ marginTop: '.4rem', fontSize: '.82rem' }}>
+        <p className="text-muted" style={{ marginTop: '.4rem', fontSize: 'var(--text-sm)' }}>
           Reads result images with Claude (more accurate than Tesseract, handles handwriting). It bills your Anthropic account — about $0.003 per image on Haiku. Sign up at <strong>platform.claude.com</strong> → Billing → API Keys.
         </p>
       </div></div>

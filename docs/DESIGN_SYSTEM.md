@@ -18,15 +18,16 @@ Measured across the app:
   shadow/colour scales are fully tokenised and consumed by `.btn/.card/.form-control/
   .badge/.data-table/.modal`.
 - **React**: ~724 inline `style={{…}}` (mostly layout: flex/gap/width — acceptable),
-  **~77 hardcoded `fontSize` literals** (should move to `--text-*` / utility classes),
-  and chart-palette hexes (intended — see exceptions).
+  inline `fontSize` literals **now migrated to `--text-*` tokens** (the lone exception is
+  one relative `'.8em'` sort-icon glyph, intentionally size-relative to its row), and
+  chart-palette hexes (intended — see exceptions).
 - **Jinja**: ~979 inline `style=` — most are layout or live in print/export sheets that
   must keep fixed colours; the themeable greys/borders were already swept to tokens.
 
 **Verdict:** the system is consistent at the token + base-component layer. Residual
-drift is (a) chart palette colours, (b) React inline `fontSize` literals, (c) fixed
-colours in print/export templates. (a) and (c) are sanctioned; (b) is the only debt to
-chip away (replace with `--text-*` or `.text-sm/.text-xs/.text-lg`).
+drift is limited to (a) chart palette colours and (b) fixed colours in print/export
+templates — both sanctioned (see exceptions). The React `fontSize` literals have been
+migrated to the `--text-*` scale, so typography is now fully tokenised end to end.
 
 ---
 
@@ -140,4 +141,4 @@ Motion: `--transition 140ms` / `--transition-slow 220ms` (`cubic-bezier(0.4,0,0.
 - **Print / export / PDF-mirror templates** (report cards, broadsheets, timetable sheet, receipts, scratchcards, the JAMB image export) — must use **fixed** colours so the printed artefact looks the same regardless of app theme.
 - **Auth / portal standalone pages** keep their own fixed gradients.
 
-**Outstanding debt to chip away (not blocking):** the ~77 React inline `fontSize` literals → migrate to `--text-*` / `.text-*`.
+**Resolved:** the React inline `fontSize` literals have been migrated to the `--text-*` scale (snapped to the nearest token), so typography is fully tokenised across CSS, Jinja, and React. The only remaining size literal is one relative `'.8em'` sort-icon glyph in the shared `<Table>`, kept relative on purpose.

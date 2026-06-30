@@ -84,7 +84,7 @@ function Dashboard({ d }) {
       </div>
 
       <div className="card"><div className="card-body d-flex gap-2 flex-wrap align-center">
-        <i aria-hidden="true" className="fas fa-lightbulb" style={{ color: 'var(--warning)', fontSize: '1.3rem' }} />
+        <i aria-hidden="true" className="fas fa-lightbulb" style={{ color: 'var(--warning)', fontSize: 'var(--text-lg)' }} />
         <div style={{ flex: 1, minWidth: 200 }}><strong>{d.template_count} message template(s)</strong>
           <div className="text-muted text-sm">Reusable messages with placeholders like {'{first_name}'}, {'{class}'} and {'{balance}'}.</div></div>
         <a href={d.nav.templates} className="btn btn-secondary btn-sm">Manage templates</a>
@@ -623,7 +623,7 @@ function Compose({ d, notify }) {
           <div>
             <div className="card mb-3" style={{ position: 'sticky', top: '1rem' }}><div className="card-header"><h3>3 · Preview &amp; send</h3></div>
               <div className="card-body">
-                <div className="d-flex gap-2 align-center mb-2" style={{ fontSize: '.85rem' }}>
+                <div className="d-flex gap-2 align-center mb-2" style={{ fontSize: 'var(--text-sm)' }}>
                   <span className="badge badge-info">{preview.reachable} recipient{preview.reachable === 1 ? '' : 's'}</span>
                   <span className="text-muted">{preview.no_phone ? `${preview.no_phone} have no phone` : ''}</span>
                 </div>

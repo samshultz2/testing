@@ -100,7 +100,7 @@ function Dashboard({ d }) {
       </div>
       {!d.has_structure && (
         <div className="card mb-3" style={{ borderColor: 'var(--warning)' }}><div className="card-body d-flex align-center gap-2 flex-wrap">
-          <i aria-hidden="true" className="fas fa-circle-info" style={{ color: 'var(--warning)', fontSize: '1.4rem' }} />
+          <i aria-hidden="true" className="fas fa-circle-info" style={{ color: 'var(--warning)', fontSize: 'var(--text-xl)' }} />
           <div style={{ flex: 1, minWidth: 200 }}><strong>No fee structure for {d.selected_term || 'this term'} yet.</strong>
             <div className="text-muted text-sm">Finish steps 1 &amp; 2 above to start tracking collections for this term.</div></div>
           <a href={d.urls.structure} className="btn btn-primary btn-sm">Set Fee Structure</a>
@@ -643,10 +643,10 @@ function Defaulters({ d }) {
             <option value="">All Classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
       </form></div></div>
       <div className="kpi-summary card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
-        <div><div className="text-muted text-sm">Students owing</div><strong style={{ fontSize: '1.3rem' }}>{d.rows.length}</strong></div>
-        <div><div className="text-muted text-sm">Total billed (owing)</div><strong style={{ fontSize: '1.3rem' }}>{naira(d.totals.billed)}</strong></div>
-        <div><div className="text-muted text-sm">Paid so far</div><strong style={{ fontSize: '1.3rem' }}>{naira(d.totals.paid)}</strong></div>
-        <div><div className="text-muted text-sm">Outstanding</div><strong style={{ fontSize: '1.3rem', color: 'var(--danger)' }}>{naira(d.totals.balance)}</strong></div>
+        <div><div className="text-muted text-sm">Students owing</div><strong style={{ fontSize: 'var(--text-lg)' }}>{d.rows.length}</strong></div>
+        <div><div className="text-muted text-sm">Total billed (owing)</div><strong style={{ fontSize: 'var(--text-lg)' }}>{naira(d.totals.billed)}</strong></div>
+        <div><div className="text-muted text-sm">Paid so far</div><strong style={{ fontSize: 'var(--text-lg)' }}>{naira(d.totals.paid)}</strong></div>
+        <div><div className="text-muted text-sm">Outstanding</div><strong style={{ fontSize: 'var(--text-lg)', color: 'var(--danger)' }}>{naira(d.totals.balance)}</strong></div>
       </div></div>
       <div className="card"><div className="card-header"><h3>Defaulters</h3></div>
         <div className="card-body" style={{ padding: 0 }}>

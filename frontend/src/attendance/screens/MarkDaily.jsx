@@ -188,7 +188,7 @@ export default function MarkDaily() {
             <span style={{ color: 'var(--text-muted)' }}>{d.date}</span>
             {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
             {weekCached && online && <Pill tone="green"><i className="fas fa-download" aria-hidden="true" /> week saved offline</Pill>}
-            <span style={{ marginLeft: 'auto', fontSize: 13 }}>AM <b>{amCount}</b>/{d.students.length} · PM <b>{pmCount}</b>/{d.students.length}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)' }}>AM <b>{amCount}</b>/{d.students.length} · PM <b>{pmCount}</b>/{d.students.length}</span>
           </div>
 
           {!d.week_id && <Banner tone="warn">This date isn’t in a school week — you can review, but saving is disabled.</Banner>}
@@ -199,7 +199,7 @@ export default function MarkDaily() {
             <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
           ) : (
             <>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 8px' }}>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '4px 0 8px' }}>
                 Everyone starts present. Untick a box to mark a student absent for just the morning or just the afternoon.
               </p>
               <ul className="att-list" aria-label={'Register for ' + d.class_name}>
@@ -239,7 +239,7 @@ export default function MarkDaily() {
                     title={online ? 'Copy the previous school day’s marks' : 'Copy previous needs an internet connection'}>
               Copy previous day
             </Button>
-            {!online && <span style={{ fontSize: 12, color: '#92400e' }}>“Copy previous” needs you to be online.</span>}
+            {!online && <span style={{ fontSize: 'var(--text-xs)', color: '#92400e' }}>“Copy previous” needs you to be online.</span>}
           </div>
         </>
       )}

@@ -679,8 +679,8 @@ function ViewSession({ d }) {
     <>
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-calendar-alt" /> {s.name}</h1>
         <div className="header-actions">
-          {s.is_active ? <span className="badge badge-success" style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}><i aria-hidden="true" className="fas fa-check" /> Active Session</span>
-            : <span className="badge badge-secondary" style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}>Closed Session</span>}
+          {s.is_active ? <span className="badge badge-success" style={{ fontSize: 'var(--text-md)', padding: '0.5rem 1rem' }}><i aria-hidden="true" className="fas fa-check" /> Active Session</span>
+            : <span className="badge badge-secondary" style={{ fontSize: 'var(--text-md)', padding: '0.5rem 1rem' }}>Closed Session</span>}
           <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
         </div></div>
       <div className="stats-grid mb-3">

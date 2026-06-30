@@ -394,7 +394,7 @@ function GraduateProfile({ d }) {
         <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
         <div className="card-body">{d.jamb_results.length ? d.jamb_results.map((j, i) => (
           <div className="card" style={{ marginBottom: '1rem' }} key={i}>
-            <div className="card-header"><span><strong>{j.exam_year}</strong></span><span className="badge badge-primary" style={{ fontSize: '1rem' }}>{j.total_score}</span></div>
+            <div className="card-header"><span><strong>{j.exam_year}</strong></span><span className="badge badge-primary" style={{ fontSize: 'var(--text-md)' }}>{j.total_score}</span></div>
             <div className="card-body">{j.registration_number && <p className="text-muted mb-2">Reg No: {j.registration_number}</p>}
               <div className="jamb-subjects">{j.subjects.map((sub, k) => (
                 <div className="subject-item" key={k}><span>{sub.name}</span><strong>{sub.score}</strong></div>))}</div></div>

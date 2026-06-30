@@ -256,7 +256,7 @@ export default function App({ data: initialData }) {
               {d.recent_activity.map((a, i) => (
                 <div className="act-item" key={i}>
                   <span className="badge badge-primary">{a.action}</span>
-                  <div><div>{a.detail || ''}</div><div className="text-muted" style={{ fontSize: '.7rem' }}>{a.user} · {a.created_at}</div></div>
+                  <div><div>{a.detail || ''}</div><div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{a.user} · {a.created_at}</div></div>
                 </div>
               ))}
             </Widget>

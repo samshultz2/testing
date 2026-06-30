@@ -51,7 +51,7 @@ function StatusPill({ online, pending }) {
   const bg = online ? '#dcfce7' : '#fee2e2';
   const fg = online ? '#166534' : '#991b1b';
   return (
-    <span style={{ background: bg, color: fg, borderRadius: 999, padding: '2px 10px', fontSize: 12, fontWeight: 600 }}>
+    <span style={{ background: bg, color: fg, borderRadius: 999, padding: '2px 10px', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
       {online ? 'Online' : 'Offline'}{pending ? ` · ${pending} pending` : ''}
     </span>
   );
@@ -195,8 +195,8 @@ function App({ assignmentId, date, className }) {
         <strong>{className || roster.class_name}</strong>
         <span style={{ color: 'var(--text-muted)' }}>{roster.date}</span>
         <StatusPill online={online} pending={pending} />
-        {source === 'cache' && <span style={{ fontSize: 12, color: '#b45309' }}>(showing cached copy)</span>}
-        <span style={{ marginLeft: 'auto', fontSize: 13 }}>Present: <b>{presentCount}</b>/{roster.students.length}</span>
+        {source === 'cache' && <span style={{ fontSize: 'var(--text-xs)', color: '#b45309' }}>(showing cached copy)</span>}
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)' }}>Present: <b>{presentCount}</b>/{roster.students.length}</span>
       </div>
 
       {!roster.week_id && (
@@ -214,7 +214,7 @@ function App({ assignmentId, date, className }) {
             <input type="checkbox" checked={!!present[s.enrollment_id]} onChange={() => toggle(s.enrollment_id)}
                    style={{ width: 18, height: 18 }} />
             <span style={{ flex: 1 }}>{s.name}</span>
-            <span style={{ fontSize: 12, color: present[s.enrollment_id] ? 'var(--success)' : 'var(--danger)' }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: present[s.enrollment_id] ? 'var(--success)' : 'var(--danger)' }}>
               {present[s.enrollment_id] ? 'Present' : 'Absent'}
             </span>
           </label>
@@ -225,7 +225,7 @@ function App({ assignmentId, date, className }) {
         <button className="btn btn-secondary btn-sm" type="button" onClick={allPresent}>Mark all present</button>
         <button className="btn btn-primary" type="button" onClick={save} disabled={!roster.week_id}>Save register</button>
         {pending > 0 && <button className="btn btn-light btn-sm" type="button" onClick={flush}>Sync now ({pending})</button>}
-        {msg && <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{msg}</span>}
+        {msg && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{msg}</span>}
       </div>
 
       {failed.length > 0 && (
@@ -233,7 +233,7 @@ function App({ assignmentId, date, className }) {
           <b>{failed.length} mark(s) couldn’t sync</b> (a server rejected them):
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {failed.map((f) => (
-              <li key={f.id} style={{ fontSize: 13, margin: '4px 0' }}>
+              <li key={f.id} style={{ fontSize: 'var(--text-sm)', margin: '4px 0' }}>
                 {f.payload.date} — {f.reason}
                 <button className="btn btn-light btn-sm" style={{ marginLeft: 8 }} type="button" onClick={() => retryFailed(f)}>Retry</button>
                 <button className="btn btn-light btn-sm" style={{ marginLeft: 4 }} type="button" onClick={() => discardFailed(f)}>Discard</button>
@@ -243,7 +243,7 @@ function App({ assignmentId, date, className }) {
         </div>
       )}
 
-      <p style={{ marginTop: 10, fontSize: 12, color: 'var(--success)' }}>
+      <p style={{ marginTop: 10, fontSize: 'var(--text-xs)', color: 'var(--success)' }}>
         ✓ React + IndexedDB (Dexie), persistent storage. Marks queue offline and sync on reconnect; permanent errors are quarantined, not retried forever.
       </p>
     </div>

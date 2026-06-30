@@ -114,14 +114,14 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
                   Upload a photo of a class list / register to any chatbot (Claude, Gemini, ChatGPT…) with this prompt,
                   then paste its answer below.
                 </p>
-                <pre style={{ whiteSpace: 'pre-wrap', background: 'var(--bg-muted, var(--gray-50))', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.6rem', fontSize: '0.78rem', margin: 0 }}>{AI_PROMPT}</pre>
+                <pre style={{ whiteSpace: 'pre-wrap', background: 'var(--bg-muted, var(--gray-50))', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.6rem', fontSize: 'var(--text-xs)', margin: 0 }}>{AI_PROMPT}</pre>
                 <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '0.4rem' }} onClick={copyPrompt}>
                   <i aria-hidden="true" className={copied ? 'fas fa-check' : 'fas fa-copy'} /> {copied ? 'Copied' : 'Copy prompt'}
                 </button>
               </details>
               <textarea className="form-control" rows={10} value={text} spellCheck={false}
                         placeholder={SAMPLE} onChange={(e) => setText(e.target.value)}
-                        style={{ fontFamily: 'monospace', fontSize: '0.85rem' }} />
+                        style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)' }} />
               <details style={{ marginTop: '0.5rem' }}>
                 <summary className="text-sm text-muted" style={{ cursor: 'pointer' }}>Recognised headings</summary>
                 <p className="text-xs text-muted" style={{ marginTop: '0.4rem' }}>
@@ -158,7 +158,7 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
               </p>
 
               <div className="table-responsive" style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
-                <table className="table" style={{ fontSize: '0.8rem', margin: 0 }}>
+                <table className="table" style={{ fontSize: 'var(--text-sm)', margin: 0 }}>
                   <thead><tr><th>#</th><th>Name</th><th>Details</th></tr></thead>
                   <tbody>
                     {preview.rows.map((r) => (

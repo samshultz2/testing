@@ -16,7 +16,7 @@ function Calendar({ d }) {
       </>} />
       <div className="card"><div className="card-body">
         <div className="cal-head">
-          <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{d.month_name} {d.year}</h2>
+          <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>{d.month_name} {d.year}</h2>
           <div className="cal-nav">
             <a href={d.nav.prev_url} className="btn btn-secondary btn-sm" aria-label="Previous"><i aria-hidden="true" className="fas fa-chevron-left" /></a>
             <a href={d.nav.today_url} className="btn btn-secondary btn-sm">Today</a>

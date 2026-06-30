@@ -349,7 +349,7 @@ function AddResult({ d, notify }) {
         })}
         <div className="total-box"><div><div className="total-label">Total Score</div>
           <div><span className="total-value">{total}</span> <span className="total-max">/ {d.max_total}</span></div></div>
-          <i aria-hidden="true" className="fas fa-calculator" style={{ fontSize: '1.75rem', opacity: 0.6 }} /></div>
+          <i aria-hidden="true" className="fas fa-calculator" style={{ fontSize: 'var(--text-2xl)', opacity: 0.6 }} /></div>
         <div className="form-check mb-4"><input type="checkbox" className="form-check-input" id="aa" checked={addAnother} onChange={(e) => setAddAnother(e.target.checked)} />
           <label htmlFor="aa" className="form-check-label"> Add another result after saving</label></div>
         <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Result</button>
@@ -532,10 +532,10 @@ function ViewExam({ d, notify }) {
               <thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>Level</th><th>Actions</th></tr></thead>
               <tbody>{d.results.map((it) => (
                 <tr key={it.rank}>
-                  <td><span className={'student-rank' + rankClass(it.rank)} style={{ width: 24, height: 24, fontSize: '0.7rem' }}>{it.rank}</span></td>
+                  <td><span className={'student-rank' + rankClass(it.rank)} style={{ width: 24, height: 24, fontSize: 'var(--text-xs)' }}>{it.rank}</span></td>
                   <td><strong>{it.student.full_name}</strong><br /><small style={{ color: 'var(--text-muted)' }}>{it.student.student_id}</small><br />
                     <a href={it.student.progress_url} className="progress-link"><i aria-hidden="true" className="fas fa-chart-line" /> Progress</a></td>
-                  <td><strong style={{ fontSize: '1.1rem', color: scoreColor(it.total_score) }}>{it.total_score}</strong></td>
+                  <td><strong style={{ fontSize: 'var(--text-lg)', color: scoreColor(it.total_score) }}>{it.total_score}</strong></td>
                   {it.subjects.map((s, i) => (
                     <td key={i}>{s ? <><small>{s.name.substring(0, 8)}</small><br /><strong>{s.score}</strong></> : '-'}</td>))}
                   <td><span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span></td>
@@ -573,23 +573,23 @@ function ExportModal({ onClose, onGenerate }) {
   const set = (k, v) => setOpts((o) => ({ ...o, [k]: v }));
   const Check = ({ k, label }) => (
     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'var(--gray-50)', borderRadius: 6, marginBottom: '0.5rem', cursor: 'pointer' }}>
-      <input type="checkbox" checked={opts[k]} onChange={(e) => set(k, e.target.checked)} /><span style={{ fontSize: '0.9rem' }}>{label}</span></label>
+      <input type="checkbox" checked={opts[k]} onChange={(e) => set(k, e.target.checked)} /><span style={{ fontSize: 'var(--text-sm)' }}>{label}</span></label>
   );
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 12, maxWidth: 400, margin: '2rem auto', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}><i aria-hidden="true" className="fas fa-image" /> Export HD Image</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
+          <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}><i aria-hidden="true" className="fas fa-image" /> Export HD Image</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 'var(--text-2xl)', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
         </div>
         <div style={{ padding: '1rem' }}>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Select columns:</p>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '1rem' }}>Select columns:</p>
           <div style={{ marginBottom: '1rem' }}>
             <Check k="rank" label="Rank" /><Check k="studentId" label="Student ID" /><Check k="subjects" label="Subject Scores" /><Check k="level" label="Performance Level" /></div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Stats to include:</p>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Stats to include:</p>
           <div style={{ marginBottom: '1rem' }}>
             <Check k="summary" label="Summary Stats" /><Check k="distribution" label="Score Distribution" /><Check k="timestamp" label="Timestamp" /></div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Quality:</p>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Quality:</p>
           <select value={opts.quality} onChange={(e) => set('quality', parseInt(e.target.value, 10))}
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: '1rem' }}>
             <option value="2">Standard (2x)</option><option value="3">HD (3x)</option><option value="4">Ultra HD (4x)</option>
@@ -714,17 +714,17 @@ function StudentProgress({ d }) {
         {s.jamb_target != null && (
           <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
             <div><strong><i aria-hidden="true" className="fas fa-bullseye" /> JAMB Target: {s.jamb_target}</strong>
-              <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>Latest mock: {p.latest_score}</p></div>
+              <p className="text-muted mb-0" style={{ fontSize: 'var(--text-sm)' }}>Latest mock: {p.latest_score}</p></div>
             <div style={{ textAlign: 'right' }}>
-              {gap <= 0 ? <span className="badge badge-success" style={{ fontSize: '0.95rem' }}><i aria-hidden="true" className="fas fa-check" /> Target met (+{-gap})</span>
-                : <span className="badge badge-warning" style={{ fontSize: '0.95rem' }}>{gap} to go</span>}
+              {gap <= 0 ? <span className="badge badge-success" style={{ fontSize: 'var(--text-base)' }}><i aria-hidden="true" className="fas fa-check" /> Target met (+{-gap})</span>
+                : <span className="badge badge-warning" style={{ fontSize: 'var(--text-base)' }}>{gap} to go</span>}
             </div>
           </div></div>
         )}
 
         {pred && (<>
           <div className="prediction-card">
-            <h3 style={{ textAlign: 'center', margin: '0 0 0.5rem', fontSize: '1rem', opacity: 0.9 }}><i aria-hidden="true" className="fas fa-crystal-ball" /> Predicted Real JAMB Score</h3>
+            <h3 style={{ textAlign: 'center', margin: '0 0 0.5rem', fontSize: 'var(--text-md)', opacity: 0.9 }}><i aria-hidden="true" className="fas fa-crystal-ball" /> Predicted Real JAMB Score</h3>
             <div className="prediction-score">{pred.predicted_score}</div>
             <div className="prediction-range">Expected Range: {pred.predicted_range.low} - {pred.predicted_range.high}</div>
             <div className="prediction-details">
@@ -737,12 +737,12 @@ function StudentProgress({ d }) {
               <div className="prediction-detail"><div className="val">{pred.confidence_level}%</div><div className="lbl">Confidence</div></div>
               <div className="prediction-detail"><div className="val">{pred.mock_count}</div><div className="lbl">Based on Exams</div></div>
             </div>
-            <div style={{ textAlign: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85rem', opacity: 0.9 }}>
+            <div style={{ textAlign: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: 'var(--text-sm)', opacity: 0.9 }}>
               {pred.recommendation}</div>
           </div>
           <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center">
             <div><strong><i aria-hidden="true" className="fas fa-file-alt" /> Want to see predicted WAEC grades?</strong>
-              <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>Based on your Mock JAMB subject scores</p></div>
+              <p className="text-muted mb-0" style={{ fontSize: 'var(--text-sm)' }}>Based on your Mock JAMB subject scores</p></div>
             <a href={d.urls.predictions} className="btn btn-primary"><i aria-hidden="true" className="fas fa-chart-line" /> View All Predictions</a>
           </div></div>
         </>)}

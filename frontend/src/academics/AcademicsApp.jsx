@@ -451,7 +451,7 @@ function ViewAssignment({ d, notify }) {
   return (
     <>
       <div className="page-header">
-        <div><h1>{a.display_name}</h1><p className="text-muted" style={{ fontSize: '0.875rem' }}>{a.term}</p></div>
+        <div><h1>{a.display_name}</h1><p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>{a.term}</p></div>
         <div className="page-header-actions"><a href={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a></div>
       </div>
       <div className="card mb-3"><div className="card-header"><h3>Enrolled ({d.enrollments.length})</h3></div>
@@ -467,7 +467,7 @@ function ViewAssignment({ d, notify }) {
         </div></div>
 
       <div className="card">
-        <div className="card-header"><h3>Add Students</h3><span className="text-muted" style={{ fontSize: '0.8rem' }}>Only students not currently in a class for this term are shown.</span></div>
+        <div className="card-header"><h3>Add Students</h3><span className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Only students not currently in a class for this term are shown.</span></div>
         <div className="card-body">
           {d.available_students.length ? (
             <form onSubmit={enroll}>

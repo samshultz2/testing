@@ -55,7 +55,7 @@ function Index({ d }) {
             ['fa-exclamation-triangle', 'var(--danger)', 'Risk Assessment', 'Identify at-risk students with actionable recommendations.']].map(([ic, col, t, p]) => (
             <div key={t} style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 8 }}>
               <h4 style={{ marginBottom: '.5rem' }}><i aria-hidden="true" className={'fas ' + ic} style={{ color: col }} /> {t}</h4>
-              <p style={{ fontSize: '.85rem', color: 'var(--text-muted)', margin: 0 }}>{p}</p></div>))}
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>{p}</p></div>))}
         </div></div></div>
     </>
   );
@@ -79,7 +79,7 @@ function Readiness({ d }) {
             <div className="slist">{g.students.map((s) => (
               <div className="srow" key={s.id}><span>{s.full_name} <span className="text-muted">{s.student_id}</span></span>
                 <span><a href={s.action.url}>{s.action.label}</a></span></div>))}</div>
-          ) : <div style={{ padding: '.75rem 1rem', color: 'var(--success)', fontSize: '.85rem' }}><i aria-hidden="true" className="fas fa-check-circle" /> All good here.</div>}
+          ) : <div style={{ padding: '.75rem 1rem', color: 'var(--success)', fontSize: 'var(--text-sm)' }}><i aria-hidden="true" className="fas fa-check-circle" /> All good here.</div>}
         </details>))}
     </>
   );
@@ -246,7 +246,7 @@ function Cutoffs({ d, notify }) {
                   <tr key={r.id}>
                     <td>{r.course_name}</td><td className="text-muted">{r.faculty}</td>
                     <td>{r.jamb_cutoff || '—'}</td><td>{r.min_credits}</td>
-                    <td style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{r.required_subjects.join(', ')}</td>
+                    <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{r.required_subjects.join(', ')}</td>
                     {d.is_admin && <td style={{ whiteSpace: 'nowrap' }}>
                       <a href={r.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>{' '}
                       <button className="btn btn-danger btn-sm" type="button" onClick={() => del(r.delete_url, r.course_name)}><i aria-hidden="true" className="fas fa-trash" /></button>

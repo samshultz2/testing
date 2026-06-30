@@ -84,7 +84,7 @@ function Home({ d, go }) {
           </h2>
           {r ? (
             <>
-              <p className="muted" style={{ fontSize: '.78rem', marginTop: '-.4rem' }}><i aria-hidden="true" className="fas fa-wifi" /> Tip: once opened, this page works offline — and the PDF can be saved to your phone.</p>
+              <p className="muted" style={{ fontSize: 'var(--text-xs)', marginTop: '-.4rem' }}><i aria-hidden="true" className="fas fa-wifi" /> Tip: once opened, this page works offline — and the PDF can be saved to your phone.</p>
               <table>
                 <thead><tr><th>Subject</th>{r.assessment_types.map((at) => <th key={at.id}>{at.label}</th>)}<th>Total</th><th>Grade</th><th>Remark</th></tr></thead>
                 <tbody>

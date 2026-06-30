@@ -35,9 +35,9 @@ function Index({ d, notify }) {
       </div>
 
       <div className="sum-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '.75rem', marginBottom: '1rem' }}>
-        <div className="card"><div className="card-body"><div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{d.stats.total}</div><div className="text-muted text-sm">Cards</div></div></div>
-        <div className="card"><div className="card-body"><div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{d.stats.active}</div><div className="text-muted text-sm">Active</div></div></div>
-        <div className="card"><div className="card-body"><div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{d.stats.used}</div><div className="text-muted text-sm">Checks used</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{d.stats.total}</div><div className="text-muted text-sm">Cards</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{d.stats.active}</div><div className="text-muted text-sm">Active</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{d.stats.used}</div><div className="text-muted text-sm">Checks used</div></div></div>
       </div>
 
       <div className="card mb-3">

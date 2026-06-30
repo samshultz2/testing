@@ -45,7 +45,7 @@ export default function Customize({ catalog, onSaved, onClose }) {
       <p className="text-muted text-sm" style={{ marginTop: 0 }}>Choose which widgets appear on your dashboard.</p>
       {groups.map((g) => (
         <div key={g.name} style={{ marginBottom: '1rem' }}>
-          <h4 style={{ margin: '0 0 .5rem', fontSize: '.85rem', color: 'var(--text-secondary, var(--text-secondary))' }}>{g.name}</h4>
+          <h4 style={{ margin: '0 0 .5rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary, var(--text-secondary))' }}>{g.name}</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '.4rem' }}>
             {g.items.map((w) => (
               <label key={w.key}
@@ -56,7 +56,7 @@ export default function Customize({ catalog, onSaved, onClose }) {
                 <input type="checkbox" disabled={!w.permitted}
                        checked={!!checked[w.key]} onChange={() => toggle(w.key)} />
                 <span>{w.label}</span>
-                {!w.permitted && <i className="fas fa-lock text-muted" style={{ marginLeft: 'auto', fontSize: 12 }} aria-hidden="true" />}
+                {!w.permitted && <i className="fas fa-lock text-muted" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)' }} aria-hidden="true" />}
               </label>
             ))}
           </div>

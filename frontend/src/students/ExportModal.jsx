@@ -58,7 +58,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
         {FORMATS.map(([k, label, icon]) => (
           <button key={k} type="button" className={format === k ? 'sel' : ''} onClick={() => setFormat(k)}
                   aria-pressed={format === k}>
-            <i className={'fas ' + icon} style={{ fontSize: 20 }} aria-hidden="true" /><span>{label}</span>
+            <i className={'fas ' + icon} style={{ fontSize: 'var(--text-lg)' }} aria-hidden="true" /><span>{label}</span>
           </button>
         ))}
       </div>

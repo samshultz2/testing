@@ -31,10 +31,10 @@ function Hint({ hintId, hint, errId, error }) {
   return (
     <>
       {hint && <span className="form-hint" id={hintId}
-                     style={{ display: 'block', fontSize: '.78rem', color: 'var(--text-muted, var(--text-muted))', marginTop: 3 }}>{hint}</span>}
+                     style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted, var(--text-muted))', marginTop: 3 }}>{hint}</span>}
       {error && (
         <span className="form-error" id={errId} role="alert"
-              style={{ color: 'var(--danger, var(--danger))', fontSize: 12, display: 'block', marginTop: 3 }}>
+              style={{ color: 'var(--danger, var(--danger))', fontSize: 'var(--text-xs)', display: 'block', marginTop: 3 }}>
           {error}
         </span>
       )}
@@ -99,9 +99,9 @@ export function FormCard({ icon, title, note, children, collapsible, defaultOpen
   const head = (
     <h3 style={{ display: 'flex', alignItems: 'center', gap: '.5rem', width: '100%' }}>
       {icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}
-      {note && <span className="text-muted" style={{ fontWeight: 400, fontSize: '.8rem' }}> {note}</span>}
+      {note && <span className="text-muted" style={{ fontWeight: 400, fontSize: 'var(--text-sm)' }}> {note}</span>}
       {collapsible && <i className={'fas fa-chevron-down'} aria-hidden="true"
-        style={{ marginLeft: 'auto', fontSize: '.75rem', opacity: 0.6, transition: 'transform .15s',
+        style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', opacity: 0.6, transition: 'transform .15s',
                  transform: open ? 'none' : 'rotate(-90deg)' }} />}
     </h3>
   );

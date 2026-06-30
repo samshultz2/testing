@@ -59,10 +59,10 @@ function StatsWidget() {
   return (
     <div style={{ maxWidth: 320 }}>
       <Doughnut labels={['Male', 'Female']} data={[male, female]} colors={['#4CAF50', '#E91E63']} />
-      <p style={{ marginTop: 8, fontSize: 13, textAlign: 'center' }}>
+      <p style={{ marginTop: 8, fontSize: 'var(--text-sm)', textAlign: 'center' }}>
         Total active students: <b>{total}</b>
       </p>
-      <p style={{ marginTop: 6, fontSize: 12, color: 'var(--success)', textAlign: 'center' }}>
+      <p style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--success)', textAlign: 'center' }}>
         ✓ React + Chart.js, via <code>/api/dashboard/stats</code> (cookie + CSRF, offline-cached)
       </p>
     </div>

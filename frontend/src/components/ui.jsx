@@ -30,7 +30,7 @@ export class ErrorBoundary extends React.Component {
     return (
       <div className="card" style={{ margin: '1rem 0' }}>
         <div className="card-body" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-          <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ fontSize: 32, color: 'var(--danger)' }} />
+          <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ fontSize: 'var(--text-2xl)', color: 'var(--danger)' }} />
           <h3 style={{ marginTop: 12 }}>This section hit an error</h3>
           <p className="text-muted">It’s been logged. Your other work is safe — try reloading this page.</p>
           <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -219,9 +219,9 @@ export function SkeletonCards({ count = 5 }) {
 export function EmptyState({ icon = 'fa-inbox', title, hint, action }) {
   return (
     <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted, var(--text-muted))' }}>
-      <i className={'fas ' + icon} style={{ fontSize: 30, opacity: 0.45 }} aria-hidden="true" />
+      <i className={'fas ' + icon} style={{ fontSize: 'var(--text-2xl)', opacity: 0.45 }} aria-hidden="true" />
       <p style={{ marginTop: 10, fontWeight: 600, color: 'var(--text-secondary, var(--text-primary))' }}>{title}</p>
-      {hint && <p style={{ fontSize: 13, maxWidth: 420, margin: '4px auto 0' }}>{hint}</p>}
+      {hint && <p style={{ fontSize: 'var(--text-sm)', maxWidth: 420, margin: '4px auto 0' }}>{hint}</p>}
       {action && <div style={{ marginTop: 12 }}>{action}</div>}
     </div>
   );
@@ -230,9 +230,9 @@ export function EmptyState({ icon = 'fa-inbox', title, hint, action }) {
 export function ErrorState({ title = 'Something went wrong', detail, onRetry }) {
   return (
     <div role="alert" style={{ textAlign: 'center', padding: '1.5rem', color: '#991b1b' }}>
-      <i className="fas fa-triangle-exclamation" style={{ fontSize: 26 }} aria-hidden="true" />
+      <i className="fas fa-triangle-exclamation" style={{ fontSize: 'var(--text-2xl)' }} aria-hidden="true" />
       <p style={{ marginTop: 8, fontWeight: 600 }}>{title}</p>
-      {detail && <p style={{ fontSize: 13, color: 'var(--text-muted, var(--text-muted))' }}>{String(detail)}</p>}
+      {detail && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted, var(--text-muted))' }}>{String(detail)}</p>}
       {onRetry && <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={onRetry}>Try again</button>}
     </div>
   );
@@ -242,9 +242,9 @@ export function ErrorState({ title = 'Something went wrong', detail, onRetry }) 
 export function OfflineRequired({ what = 'this' }) {
   return (
     <div role="status" style={{ textAlign: 'center', padding: '2rem 1rem', color: '#92400e' }}>
-      <i className="fas fa-wifi" style={{ fontSize: 26, opacity: 0.6 }} aria-hidden="true" />
+      <i className="fas fa-wifi" style={{ fontSize: 'var(--text-2xl)', opacity: 0.6 }} aria-hidden="true" />
       <p style={{ marginTop: 10, fontWeight: 600 }}>You’re offline</p>
-      <p style={{ fontSize: 13, maxWidth: 420, margin: '4px auto 0' }}>
+      <p style={{ fontSize: 'var(--text-sm)', maxWidth: 420, margin: '4px auto 0' }}>
         {what} needs an internet connection. Reconnect and try again — your saved marks
         will sync automatically in the meantime.
       </p>
@@ -261,7 +261,7 @@ export function Banner({ tone = 'info', children, onClose }) {
   };
   const [bg, fg, bd] = tones[tone] || tones.info;
   return (
-    <div role="status" style={{ background: bg, color: fg, border: '1px solid ' + bd, borderRadius: 8, padding: '.55rem .8rem', display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, margin: '6px 0' }}>
+    <div role="status" style={{ background: bg, color: fg, border: '1px solid ' + bd, borderRadius: 8, padding: '.55rem .8rem', display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', margin: '6px 0' }}>
       <span style={{ flex: 1 }}>{children}</span>
       {onClose && <button type="button" aria-label="Dismiss" className="att-x" onClick={onClose}>×</button>}
     </div>
@@ -289,11 +289,11 @@ export function Toast({ tone = 'success', children, onClose, duration = 4000 }) 
       transform: 'translateX(-50%)', zIndex: 3000, background: bg, color: fg,
       border: '1px solid ' + fg + '33', borderRadius: 10, padding: '.7rem 1rem',
       boxShadow: '0 8px 28px rgba(0,0,0,.18)', display: 'flex', gap: 10, alignItems: 'center',
-      fontSize: 14, fontWeight: 600, maxWidth: '92vw' }}>
+      fontSize: 'var(--text-sm)', fontWeight: 600, maxWidth: '92vw' }}>
       <i className={'fas ' + icon} aria-hidden="true" />
       <span>{children}</span>
       {onClose && <button type="button" aria-label="Dismiss" onClick={onClose}
-        style={{ background: 'none', border: 'none', color: fg, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>}
+        style={{ background: 'none', border: 'none', color: fg, cursor: 'pointer', fontSize: 'var(--text-lg)', lineHeight: 1 }}>×</button>}
     </div>
   );
 }
@@ -363,11 +363,11 @@ export function Modal({ title, icon, onClose, children, footer, size = 'md',
         {title && (
           <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                            gap: 12, padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color, var(--border-color))' }}>
-            <h3 id={titleId} style={{ margin: 0, fontSize: '1.05rem' }}>
+            <h3 id={titleId} style={{ margin: 0, fontSize: 'var(--text-lg)' }}>
               {icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}
             </h3>
             <button type="button" aria-label="Close" onClick={() => closeRef.current && closeRef.current()}
-                    style={{ background: 'none', border: 'none', fontSize: 22, lineHeight: 1,
+                    style={{ background: 'none', border: 'none', fontSize: 'var(--text-xl)', lineHeight: 1,
                              cursor: 'pointer', color: 'inherit', opacity: .6 }}>×</button>
           </header>
         )}
@@ -435,13 +435,13 @@ export function Pill({ tone = 'gray', children }) {
     green: ['#dcfce7', '#166534'], red: ['#fee2e2', '#991b1b'],
     amber: ['#fef3c7', '#92400e'], gray: ['#f1f5f9', 'var(--text-secondary)'],
   }[tone] || ['#f1f5f9', 'var(--text-secondary)'];
-  return <span style={{ background: t[0], color: t[1], borderRadius: 999, padding: '2px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{children}</span>;
+  return <span style={{ background: t[0], color: t[1], borderRadius: 999, padding: '2px 10px', fontSize: 'var(--text-xs)', fontWeight: 600, whiteSpace: 'nowrap' }}>{children}</span>;
 }
 
 export function Field({ label, htmlFor, children, grow }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: grow ? 1 : undefined, minWidth: 180 }}>
-      <label htmlFor={htmlFor} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary, var(--text-primary))' }}>{label}</label>
+      <label htmlFor={htmlFor} style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary, var(--text-primary))' }}>{label}</label>
       {children}
     </div>
   );
@@ -698,7 +698,7 @@ export function FailedMarks({ items, onRetry, onDiscard }) {
       <b>{items.length} saved mark(s) couldn’t sync</b> (the server rejected them):
       <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
         {items.map((f) => (
-          <li key={f.id} style={{ fontSize: 13, margin: '4px 0' }}>
+          <li key={f.id} style={{ fontSize: 'var(--text-sm)', margin: '4px 0' }}>
             {(f.payload && f.payload.date) || '—'} — {f.reason}
             <button type="button" className="btn btn-light btn-sm" style={{ marginLeft: 8 }} onClick={() => onRetry(f)}>Retry</button>
             <button type="button" className="btn btn-light btn-sm" style={{ marginLeft: 4 }} onClick={() => onDiscard(f)}>Discard</button>

@@ -155,7 +155,7 @@ function Import({ d, notify }) {
               <select className="form-control" value={armId} onChange={(e) => setArmId(e.target.value)}>
                 <option value="">— Don't assign —</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
           </div>
-          <p className="text-muted" style={{ margin: '-0.25rem 0 1rem', fontSize: '0.85rem' }}>
+          <p className="text-muted" style={{ margin: '-0.25rem 0 1rem', fontSize: 'var(--text-sm)' }}>
             Pick both a class and an arm to enrol every imported student into that class for the current term. Leave blank to import without a class.</p>
           <div className="form-group"><label className="form-label">Select File</label>
             <input type="file" className="form-control" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files[0] || null)} required /></div>

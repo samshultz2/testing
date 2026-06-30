@@ -237,9 +237,9 @@ function Results({ d }) {
         <div className="page-header-actions"><a href={d.urls.export} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Download Excel</a></div>
       </div>
       <div className="card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
-        <div><div className="text-muted text-sm">Submissions</div><strong style={{ fontSize: '1.2rem' }}>{submittedCount}</strong></div>
-        <div><div className="text-muted text-sm">Average score</div><strong style={{ fontSize: '1.2rem' }}>{d.avg} / {e.total_marks}</strong></div>
-        <div><div className="text-muted text-sm">Questions</div><strong style={{ fontSize: '1.2rem' }}>{e.question_count}</strong></div>
+        <div><div className="text-muted text-sm">Submissions</div><strong style={{ fontSize: 'var(--text-lg)' }}>{submittedCount}</strong></div>
+        <div><div className="text-muted text-sm">Average score</div><strong style={{ fontSize: 'var(--text-lg)' }}>{d.avg} / {e.total_marks}</strong></div>
+        <div><div className="text-muted text-sm">Questions</div><strong style={{ fontSize: 'var(--text-lg)' }}>{e.question_count}</strong></div>
       </div></div>
       <div className="card"><div className="card-header"><h3>{d.attempts.length} attempt(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>

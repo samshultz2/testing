@@ -20,11 +20,11 @@ function Dashboard({ d }) {
         {[[naira(d.today_total), 'Sold today'], [d.today_count, 'Sales today'],
           [d.product_count, 'Products']].map(([v, l]) => (
           <div className="card" key={l}><div className="card-body">
-            <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{v}</div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{v}</div>
             <div className="text-muted text-sm">{l}</div></div></div>
         ))}
         <div className="card"><div className="card-body">
-          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: d.low_stock.length ? '#e74a3b' : 'inherit' }}>{d.low_stock.length}</div>
+          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: d.low_stock.length ? '#e74a3b' : 'inherit' }}>{d.low_stock.length}</div>
           <div className="text-muted text-sm">Low stock</div></div></div>
       </div>
 

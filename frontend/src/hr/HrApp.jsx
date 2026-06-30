@@ -539,8 +539,8 @@ function PayrollDetail({ d, notify }) {
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
-        <div><div className="text-muted text-sm">Staff</div><strong style={{ fontSize: '1.2rem' }}>{d.slips.length}</strong></div>
-        <div><div className="text-muted text-sm">Total net pay</div><strong style={{ fontSize: '1.2rem' }}>{naira(d.total)}</strong></div>
+        <div><div className="text-muted text-sm">Staff</div><strong style={{ fontSize: 'var(--text-lg)' }}>{d.slips.length}</strong></div>
+        <div><div className="text-muted text-sm">Total net pay</div><strong style={{ fontSize: 'var(--text-lg)' }}>{naira(d.total)}</strong></div>
         {run.posted_expense_id && <div><div className="text-muted text-sm">Finance</div><span className="badge badge-success">Posted to expenses</span></div>}
       </div></div>
       <div className="card"><div className="card-header"><h3>Payslips</h3></div>

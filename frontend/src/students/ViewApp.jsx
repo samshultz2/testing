@@ -140,7 +140,7 @@ export default function ViewApp({ initial }) {
           {(d.jamb || {}).latest ? (
             <div className="info-grid">
               <Info label="Year">{d.jamb.latest.year}</Info>
-              <Info label="Score"><span style={{ fontSize: '1.25rem' }}>{d.jamb.latest.score}/400</span></Info>
+              <Info label="Score"><span style={{ fontSize: 'var(--text-lg)' }}>{d.jamb.latest.score}/400</span></Info>
             </div>
           ) : <p className="text-muted">No JAMB results</p>}
         </div>

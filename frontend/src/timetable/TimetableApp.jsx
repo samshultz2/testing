@@ -64,7 +64,7 @@ function Index({ d }) {
                 <tbody>
                   {d.slots.map((s) => (
                     <tr key={s.id} className={s.is_break ? 'table-info' : ''}>
-                      <td style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}><strong>{s.name}</strong><br />{s.start} - {s.end}</td>
+                      <td style={{ fontSize: 'var(--text-xs)', whiteSpace: 'nowrap' }}><strong>{s.name}</strong><br />{s.start} - {s.end}</td>
                       {d.days.map(([n]) => {
                         if (s.is_break) return <td key={n} style={{ textAlign: 'center' }}><em className="text-muted">Break</em></td>;
                         const e = d.grid[`${n}_${s.id}`];
@@ -135,20 +135,20 @@ function Edit({ d, notify }) {
             <tbody>
               {d.slots.map((s) => (
                 <tr key={s.id} className={s.is_break ? 'table-info' : ''}>
-                  <td style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}><strong>{s.name}</strong><br />{s.start} - {s.end}</td>
+                  <td style={{ fontSize: 'var(--text-xs)', whiteSpace: 'nowrap' }}><strong>{s.name}</strong><br />{s.start} - {s.end}</td>
                   {d.days.map(([day]) => {
                     if (s.is_break) return <td key={day} style={{ textAlign: 'center', padding: '0.5rem' }}><em className="text-muted">Break</em></td>;
                     const k = `${day}_${s.id}`;
                     const c = get(k);
                     return (
                       <td key={day} style={{ textAlign: 'center', padding: '0.5rem' }}>
-                        <select className="form-control" style={{ fontSize: '0.8rem', padding: '0.25rem' }}
+                        <select className="form-control" style={{ fontSize: 'var(--text-sm)', padding: '0.25rem' }}
                           value={c.subject_id} onChange={(e) => set(k, 'subject_id', e.target.value)}>
                           <option value="">-</option>
                           {d.subjects.map((su) => <option key={su.subject_id} value={su.subject_id}>{su.label}</option>)}
                         </select>
                         <input type="text" className="form-control mt-1" placeholder="Teacher"
-                          style={{ fontSize: '0.75rem', padding: '0.25rem' }}
+                          style={{ fontSize: 'var(--text-xs)', padding: '0.25rem' }}
                           value={c.teacher} onChange={(e) => set(k, 'teacher', e.target.value)} />
                       </td>
                     );
