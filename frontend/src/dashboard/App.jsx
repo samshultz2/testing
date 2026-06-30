@@ -68,6 +68,19 @@ export default function App({ data: initialData }) {
       {/* First-run: fresh school gets a guided checklist, not a wall of zeros */}
       {emptySchool && <SetupChecklist steps={setupSteps} />}
 
+      {/* Role-aware landing: a finance-only staffer (bursar) gets a finance-first
+          home with a direct shortcut into their workspace. */}
+      {d.home_focus === 'finance' && (
+        <a className="focus-hero keep-on-readonly" href={urls.finance_overview}>
+          <span className="fh-ic" aria-hidden="true"><i className="fas fa-coins" /></span>
+          <span className="fh-body">
+            <strong>Open the Finance workspace</strong>
+            <span>Record payments, track collections, expenses and defaulters</span>
+          </span>
+          <i aria-hidden="true" className="fas fa-arrow-right fh-go" />
+        </a>
+      )}
+
       {/* Teacher: My Classes */}
       {tc !== null && tc !== undefined && (
         <div className="card">
@@ -277,17 +290,22 @@ export default function App({ data: initialData }) {
         </div>
       )}
 
-      {/* Quick actions */}
-      <Widget icon="fa-bolt" title="Quick actions">
-        <div className="quick-actions">
-          <a href={urls.add_student} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Student</a>
-          <a href={urls.mark_attendance} className="btn btn-success"><i aria-hidden="true" className="fas fa-clipboard-check" /> Mark Attendance</a>
-          <a href={urls.scores_entry} className="btn btn-info"><i aria-hidden="true" className="fas fa-edit" /> Enter Scores</a>
-          <a href={urls.scan_waec} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-camera" /> Scan Result</a>
-          <a href={urls.analytics_hub} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>
-          <a href={urls.readiness} className="btn btn-outline"><i aria-hidden="true" className="fas fa-clipboard-check" /> Readiness</a>
-        </div>
-      </Widget>
+      {/* Quick actions — permission-aware (server filters to actions this role
+          can actually perform), so no role sees a button that 403s on click. */}
+      {(d.quick_actions || []).length > 0 && (
+        <Widget icon="fa-bolt" title="Quick actions">
+          <div className="quick-actions">
+            {d.quick_actions.map((a, i) => (
+              // keep-on-readonly: these are already permission-filtered server-side,
+              // so the blunt client read-only sweep must not strip them (the dashboard
+              // landing is itself a non-writable page, which marks it data-readonly).
+              <a key={i} href={a.url} className={'btn keep-on-readonly ' + (a.tone || 'btn-secondary')}>
+                <i aria-hidden="true" className={'fas ' + a.icon} /> {a.label}
+              </a>
+            ))}
+          </div>
+        </Widget>
+      )}
     </>
   );
 }

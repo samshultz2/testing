@@ -120,7 +120,66 @@ def _dashboard_urls():
         'classes_list': url_for('academics.classes_list'),
         'weekly_summary': url_for('attendance.weekly_summary'),
         'mark_attendance': url_for('attendance.attendance_app', tab='mark'),
+        'record_payment': url_for('finance.record_payment'),
+        'defaulters': url_for('finance.defaulters'),
+        'finance_overview': url_for('finance.dashboard'),
+        'new_sale': url_for('sales.new_sale'),
+        'send_message': url_for('comms.compose'),
     }
+
+
+def _quick_actions():
+    """Permission-aware dashboard shortcuts. Each role only sees actions it can
+    actually perform — a bursar gets Record Payment / Defaulters, a teacher gets
+    Mark Attendance / Enter Scores — so nobody is shown a button that 403s on
+    click. Write actions are suppressed for view-only users."""
+    from utils.access_control import can_access_module, module_level, is_read_only
+    u = _dashboard_urls()
+    read_only = is_read_only()
+
+    def can_edit(mod):
+        return module_level(mod) == 'edit' and not read_only
+
+    acts = []
+    if can_edit('students'):
+        acts.append(('Add Student', 'fa-user-plus', u['add_student'], 'btn-primary'))
+    if can_edit('attendance'):
+        acts.append(('Mark Attendance', 'fa-clipboard-check', u['mark_attendance'], 'btn-success'))
+    if can_edit('results'):
+        acts.append(('Enter Scores', 'fa-edit', u['scores_entry'], 'btn-info'))
+    if can_edit('finance'):
+        acts.append(('Record Payment', 'fa-cash-register', u['record_payment'], 'btn-primary'))
+    if can_access_module('finance'):
+        acts.append(('Defaulters', 'fa-user-clock', u['defaulters'], 'btn-outline'))
+    if can_edit('sales'):
+        acts.append(('New Sale', 'fa-cart-plus', u['new_sale'], 'btn-secondary'))
+    if can_edit('communication'):
+        acts.append(('Send Message', 'fa-paper-plane', u['send_message'], 'btn-secondary'))
+    if can_access_module('external_exams'):
+        acts.append(('Scan Result', 'fa-camera', u['scan_waec'], 'btn-secondary'))
+    if can_access_module('results') or can_access_module('external_exams'):
+        acts.append(('Analytics', 'fa-chart-pie', u['analytics_hub'], 'btn-outline'))
+    if can_access_module('external_exams'):
+        acts.append(('Readiness', 'fa-clipboard-check', u['readiness'], 'btn-outline'))
+    return [{'label': l, 'icon': i, 'url': url, 'tone': t} for (l, i, url, t) in acts]
+
+
+# Modules whose presence means the academic dashboard has something to show.
+_ACADEMIC_MODULES = ('students', 'attendance', 'results', 'external_exams',
+                     'academics', 'admissions', 'cbt', 'timetable', 'promotion', 'events')
+
+
+def _home_focus():
+    """Role-aware landing hint for the React dashboard. A finance-only staffer
+    (e.g. a bursar with no academic modules) gets a finance-first home with a
+    prominent shortcut into the Finance workspace, instead of an empty academic
+    grid. `/` itself still renders for everyone (it's the common home)."""
+    from utils.access_control import is_admin, can_access_module
+    if is_admin():
+        return None
+    if can_access_module('finance') and not any(can_access_module(m) for m in _ACADEMIC_MODULES):
+        return 'finance'
+    return None
 
 
 def _floats(d):
@@ -201,6 +260,8 @@ def dashboard_payload():
         library_stat=_dash_library() if 'library' in enabled else None,
         teacher_classes=teacher_classes,
         can_results=can_access_module('results'),
+        quick_actions=_quick_actions(),
+        home_focus=_home_focus(),
         urls=_dashboard_urls(),
         **_dash_student_counts(tscope)
     )

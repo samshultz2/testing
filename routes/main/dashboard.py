@@ -7,7 +7,12 @@ from routes.main import *  # noqa: F401,F403  (blueprint, models, helpers)
 def dashboard():
     """Main dashboard. The React app (dashboard-app.js) renders the widgets;
     the data is hydrated inline (no extra round-trip) and also available at
-    /api/dashboard/data for refresh."""
+    /api/dashboard/data for refresh.
+
+    `/` stays a universally-rendering home for every role (it doubles as the
+    common landing + CSRF host); role-aware landing is handled inside the
+    payload via `home_focus`, which makes the dashboard finance-first for a
+    finance-only staffer instead of showing them an empty academic grid."""
     payload = dashboard_payload()
     return render_template('dashboard.html', dash_json=payload, **payload)
 

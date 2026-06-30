@@ -78,6 +78,28 @@ function Home({ d, go }) {
           )}
         </div>
 
+        {(d.urls.cbt_portal || d.urls.result_checker) && (
+          <div className="sec">
+            <h2>More for {(d.student.full_name || '').split(' ')[0] || 'this student'}</h2>
+            <div className="hub-links">
+              {d.urls.cbt_portal && (
+                <a className="hub-link" href={d.urls.cbt_portal} data-native>
+                  <span className="hub-ic"><i aria-hidden="true" className="fas fa-laptop-code" /></span>
+                  <span className="hub-body"><strong>Take a CBT exam</strong><span>Sign in to any online test scheduled for today</span></span>
+                  <i aria-hidden="true" className="fas fa-arrow-right hub-go" />
+                </a>
+              )}
+              {d.urls.result_checker && (
+                <a className="hub-link" href={d.urls.result_checker} data-native>
+                  <span className="hub-ic"><i aria-hidden="true" className="fas fa-ticket" /></span>
+                  <span className="hub-body"><strong>Check a result with a scratch card</strong><span>Enter a card PIN to view a released exam result</span></span>
+                  <i aria-hidden="true" className="fas fa-arrow-right hub-go" />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="sec">
           <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.5rem', flexWrap: 'wrap' }}>Results
             {r && <a href={d.urls.report_pdf} className="pdf-link"><i aria-hidden="true" className="fas fa-file-pdf" /> Download PDF</a>}

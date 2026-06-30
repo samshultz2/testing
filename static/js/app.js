@@ -538,6 +538,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // since the page body is replaced without a full reload).
     hideWriteControls();
     window.addEventListener('spa:loaded', function () { try { hideWriteControls(); } catch (e) {} });
+    // React screens mount/re-render asynchronously after load, so a one-shot pass
+    // misses their buttons. Watch the read-only page body and re-hide (debounced).
+    (function () {
+        var ro = document.querySelector('.page-content[data-readonly]');
+        if (!ro || !window.MutationObserver) return;
+        var t;
+        new MutationObserver(function () {
+            clearTimeout(t);
+            t = setTimeout(function () { try { hideWriteControls(); } catch (e) {} }, 120);
+        }).observe(ro, { childList: true, subtree: true });
+    })();
     // Rebuild the mobile bottom nav so its active item tracks the soft-navigated page.
     window.addEventListener('spa:loaded', function () { try { refreshBottomNav(); } catch (e) {} });
 

@@ -209,6 +209,10 @@ def home():
             'pay': url_for('parent.pay'),
             'report_pdf': url_for('parent.report_pdf', term_id=term_id),
             'staff_login': url_for('auth.login'),
+            # Unified student hub: the other tools that use the same student
+            # credentials / live elsewhere, surfaced as links so this is one home.
+            'cbt_portal': url_for('cbt_portal.login'),
+            'result_checker': url_for('result_portal.check'),
         },
     })
 

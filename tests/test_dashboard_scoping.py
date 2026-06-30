@@ -155,3 +155,49 @@ def test_teacher_counts_only_own_class(app):
             if t:
                 t.is_active = False
                 db.session.commit()
+
+
+def _staff_with(app, username, perms):
+    with app.app_context():
+        if not User.query.filter_by(username=username).first():
+            u = User(username=username, role='staff', scope='branch',
+                     branch_id=Branch.get_default().id, full_name=username)
+            u.set_password('secret123')
+            u.set_permissions(perms)
+            db.session.add(u); db.session.commit()
+        return User.query.filter_by(username=username).first().id
+
+
+def test_quick_actions_are_permission_aware(app):
+    """Dashboard quick actions only offer what the role can actually do, so no
+    user is shown a shortcut that 403s on click."""
+    from routes.main import dashboard_payload
+    fin_id = _staff_with(app, 'qa_bursar', {'finance': 'edit'})
+    stu_id = _staff_with(app, 'qa_teacher', {'students': 'edit'})
+
+    with app.test_request_context('/'):
+        session['logged_in'] = True; session['user_id'] = fin_id; session['role'] = 'staff'
+        p = dashboard_payload()
+        labels = {a['label'] for a in p['quick_actions']}
+        assert 'Record Payment' in labels and 'Defaulters' in labels
+        assert 'Add Student' not in labels and 'Enter Scores' not in labels
+        # finance-only staff land finance-first
+        assert p['home_focus'] == 'finance'
+
+    with app.test_request_context('/'):
+        session['logged_in'] = True; session['user_id'] = stu_id; session['role'] = 'staff'
+        p = dashboard_payload()
+        labels = {a['label'] for a in p['quick_actions']}
+        assert 'Add Student' in labels
+        assert 'Record Payment' not in labels
+        assert p['home_focus'] is None      # has an academic module → normal dashboard
+
+
+def test_quick_actions_suppressed_for_view_only(app):
+    """A view-only user gets no write shortcuts (e.g. no Add Student)."""
+    from routes.main import dashboard_payload
+    vid = _staff_with(app, 'qa_viewer', {'students': 'view'})
+    with app.test_request_context('/'):
+        session['logged_in'] = True; session['user_id'] = vid; session['role'] = 'staff'
+        labels = {a['label'] for a in dashboard_payload()['quick_actions']}
+        assert 'Add Student' not in labels   # view level → no write action
