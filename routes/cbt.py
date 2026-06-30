@@ -828,16 +828,40 @@ def passwords():
                     s.set_portal_password(pw)
                 db.session.commit()
                 flash(f'Set the same password for {len(students)} student(s).', 'success')
-        elif action == 'generate' and students:
-            generated = []
-            for s in students:
-                pw = _gen_portal_pin()      # ~40-bit readable PIN
-                s.set_portal_password(pw)
-                generated.append((s, pw))
-            db.session.commit()
-            return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
-                class_id=class_id, arm_id=arm_id,
-                students=_password_roster(class_id, arm_id, term), generated=generated)
+        elif action in ('generate', 'generate_all', 'generate_one'):
+            # Hash-only: generate fresh PINs, set the hashes, and show/print or
+            # download the raw PINs in THIS response — nothing recoverable is
+            # ever stored (no DB plaintext, no session — Flask sessions are
+            # signed cookies, so a PIN there would leak to the client).
+            if action == 'generate_all':
+                targets = _password_roster(class_id, arm_id, term)
+            elif action == 'generate_one':
+                one = db.session.get(Student, request.form.get('one_student_id', type=int))
+                targets = [one] if one else []
+            else:
+                targets = students
+            if targets:
+                generated = []
+                for s in targets:
+                    pw = _gen_portal_pin()      # ~40-bit readable PIN
+                    s.set_portal_password(pw)
+                    generated.append((s, pw))
+                db.session.commit()
+                output = (request.form.get('output') or 'html').lower()
+                if output in ('xlsx', 'docx', 'pdf'):
+                    label = _roster_label(class_id, arm_id, classes, arms)
+                    school = SchoolSettings.get('school_name', 'School')
+                    safe = ''.join(c for c in label if c.isalnum() or c in ' -_').strip().replace(' ', '_') or 'students'
+                    rows = [(i + 1, s.student_id, s.full_name, pw)
+                            for i, (s, pw) in enumerate(generated)]
+                    if output == 'docx':
+                        return _passwords_docx(school, label, rows, safe)
+                    if output == 'pdf':
+                        return _passwords_pdf(school, label, rows, safe)
+                    return _passwords_xlsx(school, label, rows, safe)
+                return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
+                    class_id=class_id, arm_id=arm_id,
+                    students=_password_roster(class_id, arm_id, term), generated=generated)
         return redirect(url_for('cbt.passwords', class_id=class_id or '', arm_id=arm_id or ''))
 
     return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
@@ -868,32 +892,10 @@ def _roster_label(class_id, arm_id, classes, arms):
                                  arm.name if arm and not arm.is_default else ''] if p)
 
 
-@cbt_bp.route('/passwords/export')
-@login_required
-def passwords_export():
-    """Export portal passwords for a class arm as Excel / Word / PDF."""
-    from utils.access_control import is_admin
-    from utils.branch_scope import is_central
-    if not (is_central() or is_admin()):
-        abort(403)
-    term = _active_term()
-    class_id = request.args.get('class_id', type=int)
-    arm_id = request.args.get('arm_id', type=int)
-    fmt = (request.args.get('format') or 'xlsx').lower()
-    classes = SchoolClass.query.all()
-    arms = ClassArm.query.all()
-    label = _roster_label(class_id, arm_id, classes, arms)
-    students = _password_roster(class_id, arm_id, term)
-    rows = [(i + 1, s.student_id, s.full_name, s.portal_password_plain or '—')
-            for i, s in enumerate(students)]
-    school = SchoolSettings.get('school_name', 'School')
-    safe = ''.join(c for c in label if c.isalnum() or c in ' -_').strip().replace(' ', '_') or 'students'
-
-    if fmt == 'docx':
-        return _passwords_docx(school, label, rows, safe)
-    if fmt == 'pdf':
-        return _passwords_pdf(school, label, rows, safe)
-    return _passwords_xlsx(school, label, rows, safe)
+# NOTE: there is deliberately no "export existing passwords" route — portal
+# passwords are stored hash-only and cannot be recovered. The credential sheet
+# (Excel/Word/PDF) is produced from freshly-generated PINs inside `passwords()`
+# at generation time; the `_passwords_*` builders below are reused for that.
 
 
 def _passwords_xlsx(school, label, rows, safe):

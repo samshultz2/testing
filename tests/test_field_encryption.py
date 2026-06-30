@@ -1,12 +1,11 @@
-"""AES-256-GCM field encryption: round-trip, plaintext pass-through, and
-transparent encryption of Student.portal_password_plain at rest."""
+"""AES-256-GCM field encryption: round-trip + plaintext pass-through. Portal
+passwords are now HASH-ONLY (no recoverable copy at rest) — see the final test."""
 import base64
 import os
 
 import pytest
 
 from models import db, Branch, Student
-from sqlalchemy import text
 
 KEY = base64.b64encode(b'0123456789abcdef0123456789abcdef').decode()  # 32 bytes
 
@@ -43,24 +42,20 @@ def test_disabled_passthrough():
     assert crypto.encrypt('abc') == 'abc'   # stored as-is when disabled
 
 
-def test_portal_password_encrypted_at_rest(app, with_key):
+def test_portal_password_is_hash_only(app):
+    """Setting a portal password stores ONLY the one-way hash — there is no
+    recoverable plaintext copy anywhere (the old portal_password_plain column is
+    gone from the model), yet login verification still works."""
     with app.app_context():
         bid = Branch.get_default().id
-        s = Student(student_id='ENC_PW', first_name='Enc', surname='Pw',
+        s = Student(student_id='HASH_PW', first_name='Hash', surname='Only',
                     gender='Male', is_active=True, branch_id=bid)
         s.set_portal_password('Hunter2!')
         db.session.add(s); db.session.commit()
-        sid = s.id
 
-        # Raw column value is ciphertext...
-        raw = db.session.execute(
-            text('SELECT portal_password_plain FROM students WHERE id = :id'),
-            {'id': sid}).scalar()
-        assert raw is not None and raw.startswith('enc:gcm1:')
-        assert 'Hunter2!' not in raw
-
-        # ...but the ORM transparently decrypts it.
-        db.session.expire_all()
-        again = db.session.get(Student, sid)
-        assert again.portal_password_plain == 'Hunter2!'
-        assert again.check_portal_password('Hunter2!')
+        # No recoverable copy is mapped on the model at all.
+        assert not hasattr(s, 'portal_password_plain')
+        # The stored hash is one-way (does not contain the raw PIN) and verifies.
+        assert s.portal_password_hash and 'Hunter2!' not in s.portal_password_hash
+        assert s.check_portal_password('Hunter2!')
+        assert not s.check_portal_password('wrong')

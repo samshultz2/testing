@@ -47,6 +47,20 @@ Critical/High items before any internet-facing deployment.
 
 ## Remediation log
 
+**Pass 6 (2026-06-30) — H3 RESOLVED: hash-only portal passwords:**
+Portal passwords are now stored **hash-only** — the recoverable
+`Student.portal_password_plain` column is removed from the model and
+`set_portal_password` keeps only the one-way hash. Raw PINs are shown/printed
+**once at generation** and cannot be recovered; to re-issue, an admin regenerates
+(per-student, per-selection, or all-listed) via CBT → Student Passwords. The
+credential sheet (print view + Excel/Word/PDF) is built from the freshly-generated
+PINs **in the same request** — never stored in the DB or the (signed-cookie)
+session. The old plaintext-reading `cbt.passwords_export` route is removed; the
+roster shows only Set/Not-set. `scripts/clear_portal_passwords.py` NULLs any
+legacy ciphertext post-deploy. Verified: shown PIN logs into both portals; 503
+tests pass incl. new `tests/test_portal_passwords.py`. (`FIELD_ENCRYPTION_KEY` now
+matters only for backup-at-rest, not passwords.)
+
 **Pass 5 (2026-06-30) — data-at-rest + DoS + config hardening (re-audit):**
 A fresh full-stack re-audit (3 parallel reviews, every high-stakes claim verified in
 code) confirmed the posture above and found the prior Critical/High items still fixed.
@@ -166,8 +180,8 @@ this pass:
   retained (removing needs a per-script nonce migration) — flagged, not done.
 
 **Still open (deferred / by design):**
-- **H3 (deeper)** — production already *requires* field encryption; switching to
-  hash-only storage was declined because it breaks credential-sheet reprinting.
+- **H3 — RESOLVED in Pass 6** (hash-only with show-once-at-generation + regenerate;
+  see above). No recoverable portal password is stored anywhere.
 - **H5 (full)** — nonce-based CSP migration across all inline scripts.
 - **M3 (solver)** — bounding the OR-Tools solver time, intentionally skipped.
 

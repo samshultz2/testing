@@ -702,13 +702,6 @@
 ]
 ],
 [
-"cbt.passwords_export",
-"/cbt/passwords/export",
-[
-"GET"
-]
-],
-[
 "cbt.results",
 "/cbt/exams/<int:exam_id>/results",
 [

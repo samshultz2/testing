@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 """
+OBSOLETE as of the hash-only portal-password change — portal passwords are no
+longer stored recoverably, so there is nothing to encrypt. Use
+`scripts/clear_portal_passwords.py` to wipe any legacy `portal_password_plain`
+values. Kept only for historical reference / older deployments mid-migration.
+
 One-time: encrypt existing student portal passwords at rest (AES-256-GCM).
 
 Run this AFTER setting FIELD_ENCRYPTION_KEY (see .env.example). It:

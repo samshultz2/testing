@@ -225,8 +225,9 @@ class Config:
             w.append('Legacy shared-password login is ENABLED. Disable it '
                      '(ENABLE_LEGACY_LOGIN=0) once real user accounts exist.')
         if not cls.FIELD_ENCRYPTION_KEY:
-            w.append('FIELD_ENCRYPTION_KEY is not set — portal passwords are '
-                     'stored without encryption at rest. Set it in .env.')
+            w.append('FIELD_ENCRYPTION_KEY is not set — database backups will be '
+                     'written UNENCRYPTED at rest. Set it in .env to encrypt them. '
+                     '(Portal passwords are hash-only and unaffected.)')
         if not cls._IS_POSTGRES:
             w.append('Running on SQLite — PostgreSQL is recommended for '
                      'production (set DATABASE_URL).')

@@ -37,11 +37,13 @@ class Student(db.Model):
     graduation_date = db.Column(db.Date)
     graduation_session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
 
-    # CBT / student portal login password. The hash is for verification; the
-    # recoverable copy (so staff can re-print/export class passwords) is stored
-    # AES-256-GCM-encrypted at rest when FIELD_ENCRYPTION_KEY is configured.
+    # CBT / student portal login password — stored HASH-ONLY (one-way scrypt).
+    # The raw PIN is shown/printed once at generation and is NOT recoverable:
+    # there is deliberately no plaintext/encrypted copy kept. To re-issue a lost
+    # PIN, an admin regenerates it (Student Passwords UI). The legacy
+    # `portal_password_plain` column is no longer mapped here and is nulled by
+    # scripts/clear_portal_passwords.py.
     portal_password_hash = db.Column(db.String(256))
-    portal_password_plain = db.Column(EncryptedString())
 
     # Relationships
     parent_contacts = db.relationship('ParentContact', backref='student', lazy='dynamic', cascade='all, delete-orphan')
@@ -78,8 +80,9 @@ class Student(db.Model):
         return None
     
     def set_portal_password(self, password):
+        # Hash-only: keep the one-way hash for login verification, never a
+        # recoverable copy. The caller shows/prints the raw PIN once.
         self.portal_password_hash = generate_password_hash(password)
-        self.portal_password_plain = password
 
     def check_portal_password(self, password):
         return bool(self.portal_password_hash) and check_password_hash(self.portal_password_hash, password)
