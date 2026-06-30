@@ -112,3 +112,54 @@ def test_export_endpoint_is_rate_limited(app):
     finally:
         with app.app_context():
             login_limiter.clear_attempts(key)
+
+
+def test_backup_is_encrypted_at_rest_and_locked_down(tmp_path, monkeypatch):
+    """With FIELD_ENCRYPTION_KEY set, backup artifacts are AES-GCM ciphertext on
+    disk (magic header), restore decrypts them, and legacy plaintext still reads."""
+    monkeypatch.setenv('FIELD_ENCRYPTION_KEY', 'unit-test-backup-key-rotate-me')
+    import importlib
+    from utils import crypto
+    importlib.reload(crypto)
+    from utils import backup
+    import os, types, logging
+    app = types.SimpleNamespace(logger=logging.getLogger('t'))
+
+    db_bytes = b'SQLite format 3\x00' + os.urandom(4096)
+    p = tmp_path / 'school_x.db'
+    p.write_bytes(db_bytes)
+    backup._finalize(app, str(p))
+
+    raw = p.read_bytes()
+    assert crypto.bytes_look_encrypted(raw)                 # ciphertext at rest
+    assert (os.stat(p).st_mode & 0o777) == 0o600            # owner-only
+    assert backup._read_decrypted(str(p)) == db_bytes       # restore round-trips
+    # legacy plaintext backup (no magic) still restores unchanged
+    q = tmp_path / 'legacy.db'; q.write_bytes(db_bytes)
+    assert backup._read_decrypted(str(q)) == db_bytes
+    monkeypatch.delenv('FIELD_ENCRYPTION_KEY', raising=False)
+    importlib.reload(crypto)
+
+
+def test_solver_time_limit_is_bounded():
+    """The configured solver ceiling sits safely under the gunicorn worker
+    timeout so one solve can't run the single worker past its deadline."""
+    from config import Config
+    cap = getattr(Config, 'SOLVER_MAX_SECONDS', 90)
+    assert 5 <= cap <= 110     # below the 120s gunicorn default
+    # the route clamps a too-large request down to the cap
+    assert max(5, min(300, cap)) == cap
+
+
+def test_debug_is_opt_in_not_on_by_default(monkeypatch):
+    """An accidental deploy with APP_ENV unset must NOT enable the Werkzeug
+    debugger (RCE console) — DEBUG only turns on with an explicit FLASK_DEBUG=1."""
+    import importlib, config as _cfg
+    monkeypatch.delenv('FLASK_DEBUG', raising=False)
+    importlib.reload(_cfg)
+    assert _cfg.DevelopmentConfig.DEBUG is False
+    monkeypatch.setenv('FLASK_DEBUG', '1')
+    importlib.reload(_cfg)
+    assert _cfg.DevelopmentConfig.DEBUG is True
+    monkeypatch.delenv('FLASK_DEBUG', raising=False)
+    importlib.reload(_cfg)

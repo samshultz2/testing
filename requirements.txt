@@ -1,7 +1,7 @@
-Flask==3.0.0
+Flask==3.0.3
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
-Werkzeug==3.0.1
+Werkzeug==3.0.6
 SQLAlchemy==2.0.23
 # PostgreSQL driver (psycopg 3). Needed when DATABASE_URL points at Postgres
 # (postgresql+psycopg://...). Not required for the default SQLite backend.
@@ -45,7 +45,7 @@ Flask-Compress>=1.14
 
 # AES-256-GCM field encryption at rest (utils/crypto.py). Only used when
 # FIELD_ENCRYPTION_KEY is configured.
-cryptography>=41.0.7
+cryptography>=43.0.1
 
 # Dev/test
 pytest==8.3.3

@@ -109,6 +109,52 @@ def looks_encrypted(value):
     return isinstance(value, str) and value.startswith(_PREFIX)
 
 
+# --- Binary helpers for at-rest backup encryption -------------------------
+# Backups are whole files (SQLite .db / Postgres .sql dumps), so they need raw
+# AES-256-GCM over bytes rather than the base64/string path above. A magic
+# header lets restore tell an encrypted backup from a legacy plaintext one, so
+# old backups keep restoring after this lands.
+_FILE_MAGIC = b'ENCBAK1\x00'
+
+
+def bytes_look_encrypted(data):
+    return isinstance(data, (bytes, bytearray)) and bytes(data[:len(_FILE_MAGIC)]) == _FILE_MAGIC
+
+
+def encrypt_bytes(data):
+    """Encrypt raw bytes for backup storage. Returns magic-headed ciphertext, or
+    the input unchanged when encryption is disabled (unless strict mode)."""
+    if data is None:
+        return None
+    key = _key()
+    if key is None:
+        if _strict():
+            raise RuntimeError('FIELD_ENCRYPTION_KEY is required '
+                               '(REQUIRE_FIELD_ENCRYPTION) but is not configured.')
+        return data
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    nonce = os.urandom(12)
+    ct = AESGCM(key).encrypt(nonce, bytes(data), None)
+    return _FILE_MAGIC + nonce + ct
+
+
+def decrypt_bytes(data):
+    """Decrypt backup bytes. Legacy (non-magic) input is returned unchanged so
+    plaintext backups taken before encryption was enabled still restore."""
+    if data is None:
+        return None
+    if not bytes_look_encrypted(data):
+        return data
+    key = _key()
+    if key is None:
+        raise RuntimeError('This backup is encrypted but FIELD_ENCRYPTION_KEY '
+                           'is not configured — cannot restore.')
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    blob = bytes(data)[len(_FILE_MAGIC):]
+    nonce, ct = blob[:12], blob[12:]
+    return AESGCM(key).decrypt(nonce, ct, None)
+
+
 def key_fingerprint():
     """Short, non-secret fingerprint of the active key, for ops to confirm the
     same key is configured across deployments. Returns '' when disabled."""

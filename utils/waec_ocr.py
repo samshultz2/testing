@@ -632,7 +632,15 @@ def vision_extract_scoresheet(image_bytes, column_labels, media_type='image/png'
         client = anthropic.Anthropic(api_key=cfg['key'])
         data = base64.standard_b64encode(image_bytes).decode('utf-8')
         ncol = len(column_labels)
-        cols = ', '.join(column_labels)
+        # Column labels come from admin-defined assessment names. Sanitise before
+        # interpolating into the LLM prompt so a crafted name (newlines / fake
+        # instructions) can't steer the model: strip control chars, cap length,
+        # and quote each label so it reads as data, not a directive.
+        import re as _re
+        def _clean_label(s):
+            s = _re.sub(r'[^\x20-\x7e]', ' ', str(s))   # printable ASCII, no newlines
+            return s.strip()[:40]
+        cols = ', '.join('"' + _clean_label(c) + '"' for c in column_labels)
         instruction = (
             "This is a Nigerian school class broadsheet (score sheet). Every row is "
             "one student — read ALL rows top to bottom. For each student give their "

@@ -47,6 +47,37 @@ Critical/High items before any internet-facing deployment.
 
 ## Remediation log
 
+**Pass 5 (2026-06-30) — data-at-rest + DoS + config hardening (re-audit):**
+A fresh full-stack re-audit (3 parallel reviews, every high-stakes claim verified in
+code) confirmed the posture above and found the prior Critical/High items still fixed.
+It also confirmed several agent claims were **false positives** (parent-portal "session
+fixation"/IDOR — `parent_portal.py:118-122` does `session.clear()`+`rotate_csrf_token()`
+and `switch_child` is gated on the sibling set; "QR SVG XSS" — the URL is encoded into QR
+*geometry*, not echoed as markup, on a `@login_required` page). Genuinely-open items fixed
+this pass:
+- **Backups encrypted at rest** — `utils/backup.py` now encrypts every `.db`/`.sql`
+  artifact with AES-256-GCM (new `crypto.encrypt_bytes`/`decrypt_bytes`, magic-headed)
+  when `FIELD_ENCRYPTION_KEY` is set; restore decrypts transparently and **legacy plaintext
+  backups still restore**. Strict mode refuses to keep a plaintext backup.
+- **`instance/` + backup permissions** locked to owner-only (`0700` dirs, `0600` files) on
+  every backup/restore, so the DB, dumps and persisted dev key aren't world-readable.
+- **Solver DoS bounded** — `Config.SOLVER_MAX_SECONDS` (default 90s, env-overridable) caps
+  the OR-Tools `time_limit` safely below the 120s gunicorn worker timeout
+  (`routes/generator/generation.py`), so one solve can't stall the single worker.
+- **Debugger no longer on-by-default** — `DevelopmentConfig.DEBUG` is now opt-in via
+  `FLASK_DEBUG=1`, so an APP_ENV-unset deploy doesn't expose the Werkzeug RCE console.
+- **OCR prompt injection** — admin assessment-type labels are sanitised (printable ASCII,
+  length-capped, quoted) before interpolation into the Claude Vision prompt (`utils/waec_ocr.py`).
+- **Dependency floors bumped** — Flask 3.0.0→3.0.3, Werkzeug 3.0.1→3.0.6, cryptography
+  floor →43.0.1 (install+validate on deploy). Regression tests in `tests/test_security_hardening.py`.
+- **Deliberately deferred (risk > value):** a *global* rate limiter — the existing
+  `RateLimiter` is DB-row-per-hit, so a global per-request cap would add a DB write to every
+  page load (worse than the Medium DoS it mitigates); this needs Redis/flask-limiter. And the
+  dead duplicate CSRF helpers in `utils/security.py` are re-exported via `utils/__init__.py`,
+  so deleting them risks a boot-time ImportError for a cosmetic gain — left as a tracked cleanup.
+- **H3 (recoverable portal passwords)** remains a flagged **product decision** (hash-only
+  breaks credential-sheet reprinting) — owner's call, not changed silently.
+
 **Pass 3 (2026-06-28) — H5 (full): nonce-based CSP, inline scripts/handlers removed:**
 - `script-src` is now **nonce-based with no `'unsafe-inline'` and no `'unsafe-eval'`**
   (`utils/security.py`): a per-request nonce (`get_csp_nonce`, memoised on `g`, exposed

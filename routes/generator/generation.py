@@ -204,8 +204,11 @@ def run_ortools_generation():
         rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
         periods_per_day = int(rules.get('periods_per_day', 8))
         
-        # Get time limit from form or default to 300 seconds
-        time_limit = int(request.form.get('time_limit', 300))
+        # Get time limit from form, but clamp to the configured ceiling so a
+        # solve can't outrun the gunicorn worker timeout and stall the app.
+        from config import Config
+        _cap = getattr(Config, 'SOLVER_MAX_SECONDS', 90)
+        time_limit = max(5, min(int(request.form.get('time_limit', _cap)), _cap))
         
         # Run OR-Tools solver
         # Get break_after from rules

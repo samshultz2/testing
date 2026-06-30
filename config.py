@@ -177,6 +177,10 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_SECURE = _as_bool(os.environ.get('SESSION_COOKIE_SECURE'), default=False)
+    # Hard ceiling for the OR-Tools timetable solver, kept safely below the
+    # gunicorn worker timeout (default 120s) so one solve can't run the worker
+    # past its deadline and stall the whole single-worker app.
+    SOLVER_MAX_SECONDS = int(os.environ.get('SOLVER_MAX_SECONDS', '90'))
 
     # Pagination
     STUDENTS_PER_PAGE = 20
@@ -231,7 +235,11 @@ class Config:
 
 class DevelopmentConfig(Config):
     """Development configuration"""
-    DEBUG = True
+    # Opt-in only: the Werkzeug interactive debugger is a remote-code-execution
+    # console. APP_ENV being unset falls back to this config, which might be an
+    # actual deployment — so don't turn the debugger on unless FLASK_DEBUG=1 is
+    # set explicitly. (Dev autoreload/debugger is one env var away.)
+    DEBUG = _as_bool(os.environ.get('FLASK_DEBUG'), default=False)
 
 
 class ProductionConfig(Config):
