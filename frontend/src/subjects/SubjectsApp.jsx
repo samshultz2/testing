@@ -306,6 +306,20 @@ function Scores({ d, notify }) {
   const [busy, setBusy] = useState(false);
   React.useEffect(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); setScores(m); }, [d.students_data]);
   const set = (params) => navParams(nav.go, d.self_url, { term_id: d.term_id, assignment_id: d.assignment_id, class_subject_id: d.class_subject_id, assessment_type_id: d.assessment_type_id, ...params });
+  // Remember the last term+class so returning to score entry doesn't re-ask for
+  // them; restore once on a fresh visit when nothing is selected yet.
+  React.useEffect(() => {
+    try {
+      if (d.assignment_id) {
+        localStorage.setItem('scores:last', JSON.stringify({ term_id: d.term_id, assignment_id: String(d.assignment_id) }));
+        return;
+      }
+      const last = JSON.parse(localStorage.getItem('scores:last') || 'null');
+      if (last && last.assignment_id && (d.assignments || []).some((a) => String(a.id) === String(last.assignment_id))) {
+        set({ term_id: last.term_id || d.term_id, assignment_id: last.assignment_id });
+      }
+    } catch (e) { /* storage unavailable */ }
+  }, [d.assignment_id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Keyboard flow: Enter/Down -> next student's score, Up -> previous, so a whole
   // class is entered from the number pad without touching the mouse.
   const onScoreKey = (e) => {
@@ -316,13 +330,22 @@ function Scores({ d, notify }) {
     const next = e.key === 'ArrowUp' ? inputs[idx - 1] : inputs[idx + 1];
     if (next) { next.focus(); next.select(); }
   };
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true);
+  // Subject order + the next one, so a teacher can save and roll straight on to
+  // the next subject without re-picking term/class/assessment each time.
+  const subjList = d.class_subjects || [];
+  const curIdx = subjList.findIndex((cs) => String(cs.id) === String(d.class_subject_id));
+  const nextSubject = (curIdx >= 0 && curIdx < subjList.length - 1) ? subjList[curIdx + 1] : null;
+  const save = async (e, advance) => {
+    if (e) e.preventDefault();
+    setBusy(true);
     const fields = { term_id: d.term_id, assignment_id: d.assignment_id, class_subject_id: d.class_subject_id, assessment_type_id: d.assessment_type_id,
       'student_id[]': d.students_data.map((s) => s.id), 'score[]': d.students_data.map((s) => scores[s.id] ?? '') };
     const r = await submitJson(d.save_url, fields);
     setBusy(false);
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not save.');
+    if (r.ok) {
+      notify('success', r.message);
+      if (advance && nextSubject) set({ class_subject_id: nextSubject.id }); else nav.refresh();
+    } else notify('error', r.error || 'Could not save.');
   };
   return (
     <>
@@ -361,7 +384,10 @@ function Scores({ d, notify }) {
                              value={scores[s.id] ?? ''} onKeyDown={onScoreKey}
                              onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td></tr>))}</tbody>
             </table></div>
-            <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Scores</button></div>
+            <div className="page-header-actions mt-3">
+              <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Scores</button>
+              {nextSubject && <button type="button" className="btn btn-success" disabled={busy} onClick={() => save(null, true)} title={`Save and continue to ${nextSubject.subject_name}`}><i aria-hidden="true" className="fas fa-forward" /> Save &amp; next subject</button>}
+            </div>
           </form></div>
         </div>
       ) : d.has_selection ? (

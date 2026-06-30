@@ -28,10 +28,23 @@ export default function MarkDaily() {
   const { classes = [], today, online, sync, initial, default_class } = useCtx();
   // Seed from a deep link only when that class belongs to the loaded term.
   const seeded = initial && classes.some((c) => String(c.id) === String(initial.assignmentId));
+  // Otherwise fall back to the last class this user marked (if still in the list),
+  // so admins don't re-pick it every visit.
+  const remembered = (() => {
+    try {
+      const v = localStorage.getItem('attendance:lastClass');
+      return v && classes.some((c) => String(c.id) === v) ? v : '';
+    } catch (e) { return ''; }
+  })();
   // A form teacher lands on their own class without picking it.
   const [assignmentId, setAssignmentId] = useState(
-    seeded ? String(initial.assignmentId) : (default_class ? String(default_class) : ''));
+    seeded ? String(initial.assignmentId)
+           : (default_class ? String(default_class) : remembered));
   const [date, setDate] = useState((seeded && initial.date) || today || '');
+  // Remember the chosen class for next time.
+  useEffect(() => {
+    if (assignmentId) { try { localStorage.setItem('attendance:lastClass', String(assignmentId)); } catch (e) { /* ignore */ } }
+  }, [assignmentId]);
   const [state, setState] = useState({ idle: true });   // idle | loading | data | error
   // Per enrollment: { am: bool, pm: bool }. Morning and afternoon are marked
   // independently and saved together — no "which session?" picker.

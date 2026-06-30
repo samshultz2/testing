@@ -210,7 +210,17 @@ function Process({ d, notify }) {
       {d.students.length ? (<>
         <div className="card mb-3"><div className="card-body">
           <p><strong>Promotion Threshold:</strong> {d.threshold}%</p>
-          <p className="text-muted">Students are evaluated based on their Third Term average scores. Tick students and use the bar below to promote many at once.</p>
+          <p className="text-muted">Rows are pre-filled with the recommended action — just review and <strong>Save Promotions</strong>, or adjust exceptions below.</p>
+          {(() => {
+            const sum = rows.reduce((a, r) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {});
+            const chip = (n, label, cls) => n ? <span className={'badge ' + cls} style={{ marginRight: '.4rem' }}>{n} {label}</span> : null;
+            return <div style={{ marginTop: '.5rem' }}>
+              {chip(sum.promoted, 'to promote', 'badge-success')}
+              {chip(sum.repeated, 'to repeat', 'badge-warning')}
+              {chip(sum.graduated, 'graduating', 'badge-info')}
+              {chip(sum.skip, 'skipped', 'badge-secondary')}
+            </div>;
+          })()}
         </div></div>
 
         {/* Bulk action bar — apply one action/class/stream to all ticked students. */}

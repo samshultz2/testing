@@ -7,7 +7,7 @@ from datetime import date, datetime
 from utils.helpers import get_active_term
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, jsonify, Response)
+                   flash, jsonify, Response, session)
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from utils.web_exports import xlsx_response
@@ -605,6 +605,7 @@ def record_payment():
         'term_id': term_id or '', 'assignment_id': assignment_id or '',
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'methods': PAYMENT_METHODS, 'today': date.today().isoformat(),
+        'current_user': session.get('user', ''),
         'student': ({'id': student.id, 'full_name': student.full_name,
                      'student_id': student.student_id} if student else None),
         'bill': _bill_json(bill),

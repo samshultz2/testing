@@ -92,14 +92,31 @@ export function SelectField({ label, value, onChange, options, placeholder, requ
 }
 
 // A card with an icon header — matches the Jinja .card/.card-header pattern.
-export function FormCard({ icon, title, note, children }) {
+// `collapsible` makes the header toggle the body (default state via `defaultOpen`),
+// so optional sections can be tucked away to keep a form's core fields up front.
+export function FormCard({ icon, title, note, children, collapsible, defaultOpen = true }) {
+  const [open, setOpen] = React.useState(collapsible ? defaultOpen : true);
+  const head = (
+    <h3 style={{ display: 'flex', alignItems: 'center', gap: '.5rem', width: '100%' }}>
+      {icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}
+      {note && <span className="text-muted" style={{ fontWeight: 400, fontSize: '.8rem' }}> {note}</span>}
+      {collapsible && <i className={'fas fa-chevron-down'} aria-hidden="true"
+        style={{ marginLeft: 'auto', fontSize: '.75rem', opacity: 0.6, transition: 'transform .15s',
+                 transform: open ? 'none' : 'rotate(-90deg)' }} />}
+    </h3>
+  );
   return (
     <div className="card mb-3">
-      <div className="card-header">
-        <h3>{icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}
-          {note && <span className="text-muted" style={{ fontWeight: 400, fontSize: '.8rem' }}> {note}</span>}</h3>
-      </div>
-      <div className="card-body">{children}</div>
+      {collapsible ? (
+        <button type="button" className="card-header" aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          style={{ width: '100%', border: 'none', background: 'var(--gray-50)', cursor: 'pointer', textAlign: 'left' }}>
+          {head}
+        </button>
+      ) : (
+        <div className="card-header">{head}</div>
+      )}
+      {open && <div className="card-body">{children}</div>}
     </div>
   );
 }

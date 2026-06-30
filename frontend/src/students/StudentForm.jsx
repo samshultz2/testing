@@ -190,7 +190,7 @@ export default function StudentForm({ data }) {
                    placeholder="e.g., Football, Reading" hint="Separate with commas" />
       </FormCard>
 
-      <FormCard icon="fa-phone" title="Parent/Guardian Contacts">
+      <FormCard icon="fa-phone" title="Parent/Guardian Contacts" collapsible defaultOpen={isEdit}>
         {contacts.map((c, i) => (
           <div className="sf-contact" key={i}>
             <TextField label="Name" value={c.name} onChange={(v) => setContact(i, 'name', v)} placeholder="e.g., Mr. John" autoComplete="off" />
@@ -209,7 +209,7 @@ export default function StudentForm({ data }) {
       </FormCard>
 
       {!isEdit && enrolment && (
-        <FormCard icon="fa-chalkboard" title="Class Enrolment" note={`(${enrolment.term_label})`}>
+        <FormCard icon="fa-chalkboard" title="Class Enrolment" note={`(${enrolment.term_label})`} collapsible defaultOpen={!!(enrolment && enrolment.default_id)}>
           {enrolment.has_classes ? (
             <SelectField label="Enrol into class & arm" value={enrolId} onChange={setEnrolId}
                          placeholder="— Don't enrol yet —"
@@ -223,7 +223,7 @@ export default function StudentForm({ data }) {
         </FormCard>
       )}
 
-      <FormCard icon="fa-file-signature" title="External Exam Subjects" note="(optional)">
+      <FormCard icon="fa-file-signature" title="External Exam Subjects" note="(optional)" collapsible defaultOpen={isEdit && (waec.size > 0 || jamb.size > 0)}>
         <p className="text-muted text-sm mb-3">
           Select the subjects this student is registered for. These pre-fill the WAEC and JAMB
           result-entry pages. You can skip this and set it later.

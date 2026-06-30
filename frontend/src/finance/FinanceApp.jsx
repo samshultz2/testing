@@ -445,7 +445,7 @@ function PayForm({ d, bill, student, notify }) {
   const nav = useNav();
   const { values: f, setField, errors, validate } = useForm({
     amount: bill.balance > 0 ? String(bill.balance) : '', payment_date: d.today,
-    method: d.methods[0], reference: '', received_by: '', notes: '',
+    method: d.methods[0], reference: '', received_by: d.current_user || '', notes: '',
   });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setField(k, v);
