@@ -85,6 +85,10 @@ class Student(db.Model):
         self.portal_password_hash = generate_password_hash(password)
 
     def check_portal_password(self, password):
+        # Cap length before hashing — scrypt on an unbounded value is a worker DoS.
+        from utils.security import MAX_PASSWORD_LEN
+        if not password or len(password) > MAX_PASSWORD_LEN:
+            return False
         return bool(self.portal_password_hash) and check_password_hash(self.portal_password_hash, password)
 
     @staticmethod

@@ -47,6 +47,27 @@ Critical/High items before any internet-facing deployment.
 
 ## Remediation log
 
+**Pass 7 (2026-06-30) — auth/session hardening (focused re-audit):**
+A focused auth/session audit confirmed the strong baseline (scrypt, fixation closed
+on all 4 login paths, single-use hashed reset tokens, 60-min sliding + 8-hr absolute
+session, HttpOnly + Secure-in-prod). Fixed the short open list:
+- **Per-account staff-login throttle** — `routes/auth.py` now throttles on the
+  username (`staff_login_acct:*`, `LOGIN_ACCT_MAX_ATTEMPTS=6`) in addition to IP
+  (`LOGIN_MAX_ATTEMPTS=8`), so a distributed/IP-rotating brute force against a known
+  account still trips a lockout (the portals already did this; staff login did not).
+- **Password-length DoS guard** — `utils/security.MAX_PASSWORD_LEN=128`; `is_password_strong`
+  enforces it and `User.check_password` / `Student.check_portal_password` reject longer
+  values before scrypt, so a multi-MB password can't pin the single worker.
+- **Stronger policy** — min length 8→12 and a required symbol (upper/lower/digit already
+  enforced) at all four call sites.
+- **SameSite=Strict in production** (base/dev stays Lax) — `config.py` ProductionConfig.
+- **App-level HTTPS redirect** when behind a trusted proxy (`utils/production.py`,
+  308→https for plain-HTTP requests; skips localhost/healthz), closing the gap where HSTS
+  only emits on `is_secure`.
+- **Still open: MFA/2FA** — deliberately deferred (feature-sized; opt-in per-user TOTP planned).
+Tests: 506 pass incl. new `tests/test_auth_session_hardening.py` (per-account lockout,
+over-long-password rejection, policy); weak test passwords updated for the new policy.
+
 **Pass 6 (2026-06-30) — H3 RESOLVED: hash-only portal passwords:**
 Portal passwords are now stored **hash-only** — the recoverable
 `Student.portal_password_plain` column is removed from the model and

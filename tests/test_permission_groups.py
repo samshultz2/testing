@@ -65,7 +65,7 @@ def test_group_crud_and_assignment_http(app):
     # Create a user in that group, with a per-user revoke of 'students'.
     c.post('/users/add', data={
         '_csrf_token': tok, 'username': 'lib1', 'full_name': 'Lib One',
-        'password': 'StrongPass1', 'confirm_password': 'StrongPass1',
+        'password': 'StrongPass1!x', 'confirm_password': 'StrongPass1!x',
         'role': 'staff', 'permission_group_id': str(gid),
         'perm_students': 'none',
     }, follow_redirects=True)

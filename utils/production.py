@@ -27,6 +27,27 @@ def apply_proxy_fix(app):
     app.logger.info('ProxyFix enabled (trusting X-Forwarded-* headers).')
 
 
+def register_https_redirect(app):
+    """Behind a trusted proxy, force HTTPS: redirect any plain-HTTP request to
+    its https URL (308 preserves method + body). No-op without TRUST_PROXY, so a
+    direct LAN/dev deployment is unaffected. With ProxyFix in place,
+    ``request.is_secure`` reflects the proxy's X-Forwarded-Proto, so an insecure
+    request here is genuinely plain HTTP that should be upgraded.
+    """
+    if not app.config.get('TRUST_PROXY'):
+        return
+
+    @app.before_request
+    def _force_https():
+        if request.is_secure:
+            return None
+        host = (request.host or '').split(':')[0]
+        if request.path == '/healthz' or host in ('localhost', '127.0.0.1'):
+            return None  # internal probes / local access stay reachable
+        from flask import redirect
+        return redirect(request.url.replace('http://', 'https://', 1), code=308)
+
+
 def register_security_headers(app):
     """Send security headers on every response.
 
@@ -124,6 +145,7 @@ def harden(app, config_class=None):
     """Apply all production hardening. Safe to call in every environment."""
     configure_logging(app)
     apply_proxy_fix(app)
+    register_https_redirect(app)
     enable_compression(app)
     register_security_headers(app)
     register_healthcheck(app)

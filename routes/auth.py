@@ -18,17 +18,33 @@ def _client_key():
     return 'staff_login:' + (request.remote_addr or 'unknown')
 
 
-def _login_locked():
-    return login_limiter.is_rate_limited(_client_key(), Config.LOGIN_MAX_ATTEMPTS,
-                                         Config.LOGIN_LOCKOUT_MINUTES)
+def _account_key(ident):
+    # Per-account throttle keyed by the submitted username, so a distributed
+    # (IP-rotating) brute force against ONE known account still trips a lockout —
+    # the IP key alone can't see it. Mirrors the parent/CBT portal pattern.
+    return 'staff_login_acct:' + (ident or '').strip().lower()
 
 
-def _record_login_failure():
+def _login_locked(ident=None):
+    if login_limiter.is_rate_limited(_client_key(), Config.LOGIN_MAX_ATTEMPTS,
+                                     Config.LOGIN_LOCKOUT_MINUTES):
+        return True
+    if ident and login_limiter.is_rate_limited(
+            _account_key(ident), Config.LOGIN_ACCT_MAX_ATTEMPTS, Config.LOGIN_LOCKOUT_MINUTES):
+        return True
+    return False
+
+
+def _record_login_failure(ident=None):
     login_limiter.record_attempt(_client_key())
+    if ident:
+        login_limiter.record_attempt(_account_key(ident))
 
 
-def _clear_login_failures():
+def _clear_login_failures(ident=None):
     login_limiter.clear_attempts(_client_key())
+    if ident:
+        login_limiter.clear_attempts(_account_key(ident))
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -38,12 +54,20 @@ def login():
         return redirect(url_for('main.dashboard'))
     
     if request.method == 'POST':
-        if _login_locked():
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if _login_locked(username):
             flash(f'Too many failed attempts. Try again in {Config.LOGIN_LOCKOUT_MINUTES} minutes.', 'error')
             return redirect(url_for('auth.login'))
 
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
+        # DoS guard: never feed an unbounded password to scrypt (a multi-MB
+        # value would pin the single worker). Treat as a normal failed attempt.
+        from utils.security import MAX_PASSWORD_LEN
+        if len(password) > MAX_PASSWORD_LEN:
+            _record_login_failure(username or None)
+            flash('Invalid credentials. Please try again.', 'error')
+            return redirect(url_for('auth.login'))
 
         # Try user-based login first
         if username:
@@ -54,7 +78,7 @@ def login():
                     # Don't clear the throttle for a deactivated account.
                     flash('Your account has been deactivated. Contact administrator.', 'error')
                     return redirect(url_for('auth.login'))
-                _clear_login_failures()
+                _clear_login_failures(username)
 
                 # Successful user login. Drop any pre-login session and mint a
                 # fresh CSRF token so a fixed session/token can't be reused.
@@ -82,7 +106,7 @@ def login():
                 return redirect(url_for('main.dashboard'))
             
             elif user:
-                _record_login_failure()
+                _record_login_failure(username)
                 # Generic message — don't reveal that the username exists.
                 flash('Invalid credentials. Please try again.', 'error')
                 return redirect(url_for('auth.login'))
@@ -107,7 +131,7 @@ def login():
             flash('Welcome back, Admin!', 'success')
             return redirect(url_for('main.dashboard'))
 
-        _record_login_failure()
+        _record_login_failure(username or None)
         flash('Invalid credentials. Please try again.', 'error')
 
     return render_template('auth/login.html')

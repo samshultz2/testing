@@ -145,8 +145,11 @@ class Config:
     SMTP_FROM = os.environ.get('SMTP_FROM', '')
     SMTP_USE_TLS = _as_bool(os.environ.get('SMTP_USE_TLS'), default=True)
 
-    # Login throttling
+    # Login throttling. The per-IP cap stops one host hammering the form; the
+    # lower per-account cap stops a distributed (IP-rotating) brute force against
+    # a single known username.
     LOGIN_MAX_ATTEMPTS = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '8'))
+    LOGIN_ACCT_MAX_ATTEMPTS = int(os.environ.get('LOGIN_ACCT_MAX_ATTEMPTS', '6'))
     LOGIN_LOCKOUT_MINUTES = int(os.environ.get('LOGIN_LOCKOUT_MINUTES', '15'))
 
     # Backups
@@ -252,6 +255,11 @@ class ProductionConfig(Config):
     # otherwise not sent over HTTP and login would appear to "not work").
     SESSION_COOKIE_SECURE = _as_bool(os.environ.get('SESSION_COOKIE_SECURE'), default=True)
     ENABLE_HSTS = _as_bool(os.environ.get('ENABLE_HSTS'), default=True)
+    # Strict in production (base/dev stays 'Lax'): the session cookie is not sent
+    # on cross-site top-level navigations, removing the residual CSRF surface.
+    # The password-reset link carries its own token (not the session), so it is
+    # unaffected; an inbound deep link just shows the login page on first hit.
+    SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Strict')
 
 
 class TestingConfig(Config):

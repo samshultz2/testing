@@ -166,19 +166,29 @@ def verify_password(password: str, password_hash: str) -> bool:
     return check_password_hash(password_hash, password)
 
 
+# Upper bound on any password we will hash/verify. scrypt is intentionally
+# CPU-heavy, so an unbounded password is a cheap DoS on the single worker —
+# login views reject longer values before hashing.
+MAX_PASSWORD_LEN = 128
+
+
 def is_password_strong(password: str) -> tuple[bool, str]:
     """
     Check password strength
     Returns (is_valid, error_message)
     """
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters long"
+    if len(password) < 12:
+        return False, "Password must be at least 12 characters long"
+    if len(password) > MAX_PASSWORD_LEN:
+        return False, f"Password must be at most {MAX_PASSWORD_LEN} characters long"
     if not re.search(r'[A-Z]', password):
         return False, "Password must contain at least one uppercase letter"
     if not re.search(r'[a-z]', password):
         return False, "Password must contain at least one lowercase letter"
     if not re.search(r'\d', password):
         return False, "Password must contain at least one number"
+    if not re.search(r'[^A-Za-z0-9]', password):
+        return False, "Password must contain at least one symbol"
     return True, ""
 
 

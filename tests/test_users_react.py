@@ -48,8 +48,8 @@ def test_view_and_edit_shells_render(app):
 def test_add_user_json(app):
     client = _admin(app)
     r = client.post('/users/add', headers={'X-Requested-With': 'fetch'},
-                    data={'username': 'ujsonteacher', 'password': 'Secret123!',
-                          'confirm_password': 'Secret123!', 'role': 'teacher',
+                    data={'username': 'ujsonteacher', 'password': 'Secret123!ab',
+                          'confirm_password': 'Secret123!ab', 'role': 'teacher',
                           'scope': 'branch', '_csrf_token': _ptoken(client)}).get_json()
     assert r['ok'] and r['redirect'].endswith('/users/')
     with app.app_context():
@@ -60,7 +60,7 @@ def test_add_user_json(app):
 def test_add_user_password_mismatch_json(app):
     client = _admin(app)
     r = client.post('/users/add', headers={'X-Requested-With': 'fetch'},
-                    data={'username': 'umismatch', 'password': 'Secret123!',
+                    data={'username': 'umismatch', 'password': 'Secret123!ab',
                           'confirm_password': 'nope', 'role': 'teacher',
                           '_csrf_token': _ptoken(client)})
     assert r.status_code == 400 and 'match' in r.get_json()['error'].lower()

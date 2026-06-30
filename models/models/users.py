@@ -92,6 +92,10 @@ class User(db.Model):
     
     def check_password(self, password):
         """Verify password"""
+        # Cap length before hashing — scrypt on an unbounded value is a worker DoS.
+        from utils.security import MAX_PASSWORD_LEN
+        if not password or len(password) > MAX_PASSWORD_LEN:
+            return False
         return check_password_hash(self.password_hash, password)
 
     def set_reset_token(self, ttl_minutes=60):

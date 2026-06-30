@@ -36,11 +36,11 @@ def test_forgot_password_resets_and_emails(app, monkeypatch):
     body = sent[0][2]
     assert '/reset-password/' in body               # a link, not a password
     path = re.search(r'/reset-password/\S+', body).group(0).rstrip('.')
-    c.post(path, data={'password': 'NewPass123', 'confirm': 'NewPass123',
+    c.post(path, data={'password': 'NewPass123!x', 'confirm': 'NewPass123!x',
                        '_csrf_token': _tok(c)}, follow_redirects=True)
     with app.app_context():
         u = User.query.filter_by(username='mailuser').first()
-        assert u.check_password('NewPass123')        # now changed
+        assert u.check_password('NewPass123!x')        # now changed
         assert not u.check_password('secret123')
         assert u.reset_token_hash is None            # token consumed (single use)
 
