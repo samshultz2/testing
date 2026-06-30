@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { postForm } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { Banner } from '../components/ui';
@@ -61,6 +61,16 @@ export default function StudentForm({ data }) {
   const [contactErrors, setContactErrors] = useState({});
   const [banner, setBanner] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Autosave affirmation: useDraft already persists every change to
+  // sessionStorage — surface a quiet "Draft saved" once the user has typed, so
+  // they trust they can leave without losing the half-filled registration.
+  const [draftSaved, setDraftSaved] = useState(false);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return undefined; }
+    const t = setTimeout(() => setDraftSaved(true), 700);
+    return () => clearTimeout(t);
+  }, [f, contacts]);
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   // Inline on-blur validation for required fields — surfaces the error as the user
@@ -240,6 +250,11 @@ export default function StudentForm({ data }) {
         </button>
         <a href={urls.cancel} className={'btn btn-secondary btn-lg' + (saving ? ' disabled' : '')}
            onClick={(e) => saving && e.preventDefault()}>Cancel</a>
+        {draftSaved && !saving && (
+          <span className="draft-saved" role="status">
+            <i aria-hidden="true" className="fas fa-circle-check" /> Draft saved — we’ll keep your progress
+          </span>
+        )}
       </div>
     </form>
   );

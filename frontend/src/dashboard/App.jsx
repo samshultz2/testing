@@ -3,7 +3,7 @@ import Chart, { chartTheme } from './charts';
 import { Kpi, Widget, Empty, ChartBox, naira, nairaShort } from './components';
 import Customize from './Customize';
 import { apiGet } from '../lib/api';
-import { Toast } from '../components/ui';
+import { Toast, SetupChecklist } from '../components/ui';
 
 const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboard-list' };
 
@@ -33,10 +33,20 @@ export default function App({ data: initialData }) {
     scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: t.grid } }, x: { grid: { display: false } } },
   };
 
+  const tc = d.teacher_classes;
+  // Fresh school: no students yet on a management dashboard → show a friendly
+  // "get started" checklist instead of a wall of zero KPIs and empty charts.
+  const emptySchool = has('kpi') && (d.total_students || 0) === 0 && (tc === null || tc === undefined);
+  const setupSteps = [
+    { label: 'Create your classes', hint: 'Set up the classes and arms students will belong to', href: urls.classes_list },
+    { label: 'Add your first student', hint: 'Register a student to start building your roll', href: urls.add_student },
+    { label: 'Record attendance', hint: 'Mark a class present for the day', href: urls.mark_attendance },
+    { label: 'Enter scores', hint: 'Capture assessment results for a subject', href: urls.scores_entry },
+  ].filter((s) => s.href);
+
   const crossModule = d.finance_stat || d.sales_stat || d.hr_stat || d.cbt_stat || d.library_stat;
   const dateLabel = d.today ? new Date(d.today).toLocaleDateString(undefined,
     { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : '';
-  const tc = d.teacher_classes;
 
   return (
     <>
@@ -54,6 +64,9 @@ export default function App({ data: initialData }) {
       </div>
 
       {customizing && <Customize catalog={d.widget_catalog} onSaved={refresh} onClose={() => setCustomizing(false)} />}
+
+      {/* First-run: fresh school gets a guided checklist, not a wall of zeros */}
+      {emptySchool && <SetupChecklist steps={setupSteps} />}
 
       {/* Teacher: My Classes */}
       {tc !== null && tc !== undefined && (
@@ -104,7 +117,7 @@ export default function App({ data: initialData }) {
       )}
 
       {/* Student KPIs */}
-      {has('kpi') && (
+      {has('kpi') && !emptySchool && (
         <div className="kpi-row">
           <Kpi tone="blue" icon="fa-users" value={d.total_students} label="Students" />
           <Kpi tone="green" icon="fa-user-check" value={d.active_enrollments} label="Enrolled" />
@@ -128,7 +141,7 @@ export default function App({ data: initialData }) {
       )}
 
       {/* Exam snapshots */}
-      {has('exams') && (
+      {has('exams') && !emptySchool && (
         <div className="dash-grid c3">
           <ExamCard kind="jamb" snap={d.jamb_snapshot} url={urls.jamb_list} />
           <ExamCard kind="waec" snap={d.waec_snapshot} url={urls.waec_list} />
@@ -137,7 +150,7 @@ export default function App({ data: initialData }) {
       )}
 
       {/* Charts */}
-      {has('charts') && (
+      {has('charts') && !emptySchool && (
         <div className="dash-grid c3">
           <Widget icon="fa-venus-mars" title="Gender">
             <ChartBox>
@@ -161,7 +174,7 @@ export default function App({ data: initialData }) {
       )}
 
       {/* Attendance trend + Top JAMB */}
-      {has('attendance_trend') && (
+      {has('attendance_trend') && !emptySchool && (
         <div className="dash-grid split">
           <Widget icon="fa-chart-line" title="Attendance trend"
                   action={<a href={urls.weekly_summary} className="btn btn-secondary btn-sm">Details</a>}>
@@ -191,7 +204,7 @@ export default function App({ data: initialData }) {
       )}
 
       {/* Class enrollment + Religion */}
-      {has('class_religion') && (
+      {has('class_religion') && !emptySchool && (
         <div className="dash-grid split">
           <Widget icon="fa-school" title="Class enrollment"
                   action={<a href={urls.classes_list} className="btn btn-secondary btn-sm">Manage</a>}>
@@ -215,13 +228,13 @@ export default function App({ data: initialData }) {
                   <span className="num">{count}</span>
                 </div>
               ))
-            ) : <Empty icon="fa-chart-bar">No data</Empty>}
+            ) : <Empty icon="fa-pray">No religion recorded yet — it’ll appear here as you add students</Empty>}
           </Widget>
         </div>
       )}
 
       {/* People: Birthdays + Recent students + Activity */}
-      {has('people') && (
+      {has('people') && !emptySchool && (
         <div className={'dash-grid ' + ((d.recent_activity || []).length ? 'c3' : 'c2')}>
           <Widget icon="fa-gift" title="Birthdays">
             {(d.birthdays_today || []).map((s, i) => (

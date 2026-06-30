@@ -5,6 +5,7 @@ import React, { useState, useRef, useEffect, useId, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { useNav } from '../lib/section';
+import { useCountUp } from '../lib/hooks';
 
 // Elements that can hold keyboard focus — used by the modal focus trap.
 const FOCUSABLE =
@@ -252,16 +253,26 @@ export function OfflineRequired({ what = 'this' }) {
   );
 }
 
-export function Banner({ tone = 'info', children, onClose }) {
+export function Banner({ tone = 'info', children, onClose, autoDismiss }) {
   const tones = {
-    info: ['#eff6ff', '#1e40af', '#bfdbfe'],
-    success: ['#f0fdf4', '#166534', '#bbf7d0'],
-    warn: ['#fffbeb', '#92400e', '#fde68a'],
-    error: ['#fef2f2', '#991b1b', '#fecaca'],
+    info: ['#eff6ff', '#1e40af', '#bfdbfe', 'fa-circle-info'],
+    success: ['#f0fdf4', '#166534', '#bbf7d0', 'fa-circle-check'],
+    warn: ['#fffbeb', '#92400e', '#fde68a', 'fa-triangle-exclamation'],
+    error: ['#fef2f2', '#991b1b', '#fecaca', 'fa-circle-xmark'],
   };
-  const [bg, fg, bd] = tones[tone] || tones.info;
+  const [bg, fg, bd, icon] = tones[tone] || tones.info;
+  // Success reads as "done" — let it clear itself so it doesn't linger; errors
+  // and warnings stay until the user acknowledges them. Opt in elsewhere via
+  // `autoDismiss`.
+  const dismissMs = autoDismiss != null ? autoDismiss : (tone === 'success' ? 4500 : 0);
+  useEffect(() => {
+    if (!onClose || !dismissMs) return undefined;
+    const t = setTimeout(onClose, dismissMs);
+    return () => clearTimeout(t);
+  }, [onClose, dismissMs]);
   return (
-    <div role="status" style={{ background: bg, color: fg, border: '1px solid ' + bd, borderRadius: 8, padding: '.55rem .8rem', display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', margin: '6px 0' }}>
+    <div role="status" aria-live="polite" style={{ background: bg, color: fg, border: '1px solid ' + bd, borderRadius: 8, padding: '.55rem .8rem', display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', margin: '6px 0', animation: 'banner-in 280ms cubic-bezier(0.16,1,0.3,1) both' }}>
+      <i className={'fas ' + icon} aria-hidden="true" style={{ color: fg }} />
       <span style={{ flex: 1 }}>{children}</span>
       {onClose && <button type="button" aria-label="Dismiss" className="att-x" onClick={onClose}>×</button>}
     </div>
@@ -271,7 +282,11 @@ export function Banner({ tone = 'info', children, onClose }) {
 // Floating, auto-dismissing confirmation pinned to the bottom of the viewport —
 // so feedback for an action (e.g. Save) is visible right where the button is,
 // no scrolling up to find it. Auto-closes after a few seconds.
-export function Toast({ tone = 'success', children, onClose, duration = 4000 }) {
+// A single toast. When `stacked` it drops the fixed positioning and lets the
+// parent <ToastStack> place it; otherwise it positions itself bottom-centre
+// (back-compat for the many screens that render a lone <Toast>). A thin
+// progress bar drains over `duration` so the auto-dismiss feels intentional.
+export function Toast({ tone = 'success', children, onClose, duration = 4000, stacked = false }) {
   useEffect(() => {
     if (!onClose) return undefined;
     const t = setTimeout(onClose, duration);
@@ -283,17 +298,120 @@ export function Toast({ tone = 'success', children, onClose, duration = 4000 }) 
   };
   const [fg, bg] = tones[tone] || tones.success;
   const icon = { success: 'fa-circle-check', warn: 'fa-triangle-exclamation', error: 'fa-circle-xmark', info: 'fa-circle-info' }[tone] || 'fa-circle-check';
+  const pos = stacked ? {} : {
+    position: 'fixed', left: '50%', bottom: 'max(20px, env(safe-area-inset-bottom))',
+    transform: 'translateX(-50%)', zIndex: 3000,
+  };
   return (
-    <div role="status" aria-live="polite" style={{
-      position: 'fixed', left: '50%', bottom: 'max(20px, env(safe-area-inset-bottom))',
-      transform: 'translateX(-50%)', zIndex: 3000, background: bg, color: fg,
+    <div className="toast-pop" role="status" aria-live="polite" style={{
+      ...pos, position: stacked ? 'relative' : pos.position, background: bg, color: fg,
       border: '1px solid ' + fg + '33', borderRadius: 10, padding: '.7rem 1rem',
       boxShadow: '0 8px 28px rgba(0,0,0,.18)', display: 'flex', gap: 10, alignItems: 'center',
-      fontSize: 'var(--text-sm)', fontWeight: 600, maxWidth: '92vw' }}>
+      fontSize: 'var(--text-sm)', fontWeight: 600, maxWidth: '92vw', overflow: 'hidden' }}>
       <i className={'fas ' + icon} aria-hidden="true" />
       <span>{children}</span>
       {onClose && <button type="button" aria-label="Dismiss" onClick={onClose}
         style={{ background: 'none', border: 'none', color: fg, cursor: 'pointer', fontSize: 'var(--text-lg)', lineHeight: 1 }}>×</button>}
+      {onClose && <span className="toast-progress" aria-hidden="true" style={{ animationDuration: duration + 'ms' }} />}
+    </div>
+  );
+}
+
+// Bottom-centre host that stacks multiple toasts. `items` = [{id, tone, text,
+// duration}, …]; `onDismiss(id)` removes one. Screens that only ever show one
+// message can keep using a bare <Toast>.
+export function ToastStack({ items, onDismiss }) {
+  if (!items || !items.length) return null;
+  return (
+    <div className="toast-stack">
+      {items.map((t) => (
+        <Toast key={t.id} stacked tone={t.tone} duration={t.duration || 4000}
+               onClose={() => onDismiss(t.id)}>{t.text}</Toast>
+      ))}
+    </div>
+  );
+}
+
+// Submit/action button that resolves an async handler into a spinner and then a
+// brief green ✓ before resetting — gives every save a visible "it worked".
+// Drop-in for <button className="btn …">; pass the async work as `onAction`.
+export function SubmitButton({ onAction, children, className = 'btn btn-primary',
+                              doneLabel = 'Saved', successMs = 950, disabled, type = 'button', ...rest }) {
+  const [phase, setPhase] = useState('idle'); // idle | loading | success
+  const click = useCallback(async (e) => {
+    if (phase !== 'idle') return;
+    setPhase('loading');
+    try {
+      const ok = await onAction(e);
+      if (ok === false) { setPhase('idle'); return; }
+      setPhase('success');
+      setTimeout(() => setPhase('idle'), successMs);
+    } catch (_) { setPhase('idle'); }
+  }, [onAction, phase, successMs]);
+  const cls = className + (phase === 'loading' ? ' is-loading' : '') + (phase === 'success' ? ' is-success' : '');
+  return (
+    <button type={type} className={cls} onClick={click}
+            disabled={disabled || phase !== 'idle'} aria-busy={phase === 'loading'} {...rest}>
+      {phase === 'loading' && <><i className="fas fa-circle-notch fa-spin" aria-hidden="true" /> </>}
+      {phase === 'success'
+        ? <span className="btn-success-check"><i className="fas fa-check" aria-hidden="true" /> {doneLabel}</span>
+        : children}
+    </button>
+  );
+}
+
+// Milestone celebration banner — a calm, professional "you did the big thing"
+// summary (no confetti). `title` is the headline, `summary` the one-line recap,
+// `onDismiss` (optional) shows a × .
+export function SuccessBanner({ title = 'Done!', summary, onDismiss, icon = 'fa-check' }) {
+  return (
+    <div className="success-banner" role="status" aria-live="polite">
+      <span className="sb-icon" aria-hidden="true"><i className={'fas ' + icon} /></span>
+      <div className="sb-body">
+        <p className="sb-title">{title}</p>
+        {summary && <p className="sb-summary">{summary}</p>}
+      </div>
+      {onDismiss && <button type="button" className="sb-dismiss" aria-label="Dismiss" onClick={onDismiss}>×</button>}
+    </div>
+  );
+}
+
+// Animated count-up for dashboard stats. `value` may be a number or a
+// pre-formatted string with digits (e.g. "₦1,200"); non-digit prefixes/suffixes
+// are preserved. Honours prefers-reduced-motion (jumps straight to the value).
+export function Counter({ value, ms = 900, className, style }) {
+  const text = String(value == null ? '' : value);
+  const m = text.match(/-?[\d,]*\.?\d+/);
+  const target = m ? parseFloat(m[0].replace(/,/g, '')) : null;
+  const animated = useCountUp(target, { ms });
+  if (target == null) return <span className={className} style={style}>{text}</span>;
+  const decimals = (m[0].split('.')[1] || '').length;
+  const grouped = animated.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return <span className={className} style={style}>{text.replace(m[0], grouped)}</span>;
+}
+
+// First-run guidance — a friendly "get started" card shown when a school has no
+// data yet, so the first screen offers a path instead of a wall of zeros.
+// `steps` = [{label, hint, href, done}, …]; done steps render checked.
+export function SetupChecklist({ title = 'Welcome — let’s set up your school', subtitle, steps }) {
+  return (
+    <div className="card setup-checklist">
+      <div className="sc-head">
+        <h2>{title}</h2>
+        <p>{subtitle || 'A few quick steps and you’re ready to go.'}</p>
+      </div>
+      <div className="setup-steps">
+        {steps.map((s, i) => {
+          const Tag = s.done || !s.href ? 'div' : 'a';
+          return (
+            <Tag key={i} className={'setup-step' + (s.done ? ' done' : '')} href={s.done ? undefined : s.href}>
+              <span className="sc-num" aria-hidden="true">{s.done ? <i className="fas fa-check" /> : i + 1}</span>
+              <span className="sc-label"><strong>{s.label}</strong>{s.hint && <span>{s.hint}</span>}</span>
+              {!s.done && s.href && <span className="sc-go" aria-hidden="true"><i className="fas fa-arrow-right" /></span>}
+            </Tag>
+          );
+        })}
+      </div>
     </div>
   );
 }

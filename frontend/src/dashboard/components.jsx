@@ -1,4 +1,5 @@
 import React from 'react';
+import { Counter } from '../components/ui';
 
 // ── currency formatting (mirrors the server's naira / naira_short filters) ──
 export function naira(v) {
@@ -19,7 +20,7 @@ export function Kpi({ tone = 'blue', icon, value, label, title }) {
     <div className="kpi">
       <div className={'ic ' + tone}><i className={'fas ' + icon} aria-hidden="true" /></div>
       <div>
-        <div className="v" title={title}>{value}</div>
+        <div className="v" title={title}><Counter value={value} /></div>
         <div className="l">{label}</div>
       </div>
     </div>

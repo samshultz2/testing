@@ -2778,3 +2778,131 @@ hr { border-top-color: var(--border-color); }
 }
 .cap-list.expanded { max-height: none; }
 .cap-toggle { display: inline-flex; margin: var(--sp-2) 0 var(--sp-1); }
+
+/* ============================================================================
+   DELIGHT LAYER — rewarding feedback, gentle celebration, friendlier states.
+   Subtle & professional (no confetti). All motion respects the existing
+   prefers-reduced-motion guard above; the explicit overrides at the bottom of
+   this block make the static fallbacks exact.
+   ============================================================================ */
+
+/* --- Toasts: stack host + spring entrance + auto-dismiss progress bar ------ */
+.toast-stack {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(20px, env(safe-area-inset-bottom));
+    z-index: 3000; display: flex; flex-direction: column-reverse;
+    gap: var(--sp-2); width: max-content; max-width: 92vw; pointer-events: none;
+}
+.toast-stack > * { pointer-events: auto; }
+.toast-pop { animation: toast-pop 320ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes toast-pop {
+    from { opacity: 0; transform: translateY(10px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* thin progress bar that drains over the toast's lifetime */
+.toast-progress {
+    position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    background: currentColor; opacity: 0.32; transform-origin: left center;
+    animation: toast-drain linear forwards;
+}
+@keyframes toast-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* --- Button success morph: spinner → ✓ ------------------------------------ */
+.btn.is-success {
+    background: var(--success) !important;
+    border-color: var(--success) !important;
+    color: #fff !important; filter: none !important;
+}
+.btn.is-success > :not(.btn-success-check) { display: none; }
+.btn-success-check { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.btn-success-check i { animation: check-pop 360ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes check-pop {
+    0% { transform: scale(0.2); opacity: 0; }
+    60% { transform: scale(1.18); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* --- Row save-flash: highlight a just-created/edited row or card ----------- */
+.row-flash { animation: row-flash 1.4s ease-out 1; }
+@keyframes row-flash {
+    0% { background: var(--success-light); box-shadow: inset 3px 0 0 var(--success); }
+    100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+
+/* --- List enter: gentle fade/slide for newly added rows ------------------- */
+.list-enter { animation: list-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes list-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* --- Checkbox tick pop ----------------------------------------------------- */
+input[type="checkbox"], input[type="radio"] { transition: transform var(--transition); }
+input[type="checkbox"]:active, input[type="radio"]:active { transform: scale(0.86); }
+input[type="checkbox"]:checked { animation: chk-pop 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes chk-pop { 0% { transform: scale(0.8); } 55% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+/* --- Success banner: milestone summary ------------------------------------ */
+.success-banner {
+    display: flex; align-items: flex-start; gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);
+    background: var(--success-light); border: 1px solid var(--success);
+    border-radius: var(--radius-md); color: var(--text-primary);
+    animation: banner-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.success-banner .sb-icon {
+    flex: none; width: 34px; height: 34px; display: inline-flex;
+    align-items: center; justify-content: center; border-radius: var(--radius-full);
+    background: var(--success); color: #fff; font-size: var(--text-base);
+}
+.success-banner .sb-icon i { animation: check-pop 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.success-banner .sb-body { flex: 1; min-width: 0; }
+.success-banner .sb-title { font-weight: var(--fw-semibold); margin: 0 0 2px; }
+.success-banner .sb-summary { color: var(--text-secondary); font-size: var(--text-sm); margin: 0; }
+.success-banner .sb-dismiss {
+    flex: none; background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: var(--text-lg); line-height: 1; padding: 0 var(--sp-1);
+}
+@keyframes banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* --- First-run setup checklist -------------------------------------------- */
+.setup-checklist { padding: var(--sp-5) var(--sp-5) var(--sp-4); }
+.setup-checklist .sc-head { margin-bottom: var(--sp-4); }
+.setup-checklist .sc-head h2 { margin: 0 0 var(--sp-1); font-size: var(--text-xl); }
+.setup-checklist .sc-head p { margin: 0; color: var(--text-muted); }
+.setup-steps { display: flex; flex-direction: column; gap: var(--sp-2); }
+.setup-step {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); background: var(--bg-card);
+    color: var(--text-primary); text-decoration: none;
+    transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+a.setup-step:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.setup-step .sc-num {
+    flex: none; width: 30px; height: 30px; display: inline-flex;
+    align-items: center; justify-content: center; border-radius: var(--radius-full);
+    background: var(--primary-alpha); color: var(--primary); font-weight: var(--fw-semibold);
+    font-size: var(--text-sm);
+}
+.setup-step.done .sc-num { background: var(--success); color: #fff; }
+.setup-step .sc-label { flex: 1; min-width: 0; }
+.setup-step .sc-label strong { display: block; font-weight: var(--fw-semibold); }
+.setup-step .sc-label span { color: var(--text-muted); font-size: var(--text-sm); }
+.setup-step .sc-go { color: var(--text-muted); }
+.setup-step.done { opacity: 0.7; }
+.setup-step.done .sc-label strong { text-decoration: line-through; text-decoration-color: var(--text-muted); }
+
+/* --- Autosave affirmation -------------------------------------------------- */
+.draft-saved {
+    display: inline-flex; align-items: center; gap: var(--sp-1);
+    color: var(--text-muted); font-size: var(--text-xs); font-weight: var(--fw-medium, 500);
+    animation: draft-fade 360ms ease both;
+}
+.draft-saved i { color: var(--success); }
+@keyframes draft-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* --- Reduced-motion: make the celebratory bits land instantly & static ---- */
+@media (prefers-reduced-motion: reduce) {
+    .toast-pop, .btn-success-check i, .row-flash, .list-enter, .success-banner,
+    .success-banner .sb-icon i, .draft-saved, input[type="checkbox"]:checked { animation: none !important; }
+    .toast-progress { display: none; }
+}

@@ -39,6 +39,31 @@ export function chartInk() {
   };
 }
 
+// Animate a number from 0 up to `target` over `ms`, easing out. Returns the
+// current value; updates via requestAnimationFrame. Honours
+// prefers-reduced-motion (and SSR/no-rAF) by jumping straight to the target.
+export function useCountUp(target, { ms = 900 } = {}) {
+  const [val, setVal] = useState(target || 0);
+  useEffect(() => {
+    if (target == null) return undefined;
+    const reduce = typeof window !== 'undefined' && window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || typeof requestAnimationFrame === 'undefined' || ms <= 0) { setVal(target); return undefined; }
+    let raf, start;
+    const tick = (t) => {
+      if (start == null) start = t;
+      const p = Math.min(1, (t - start) / ms);
+      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+      setVal(target * eased);
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else setVal(target);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return val;
+}
+
 // Track connectivity.
 export function useOnline() {
   const [online, setOnline] = useState(navigator.onLine);

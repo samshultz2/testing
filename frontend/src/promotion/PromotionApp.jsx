@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionShell, SuccessBanner } from '../components/ui';
 
 
 // ---- Index -----------------------------------------------------------------
@@ -160,6 +160,7 @@ function Process({ d, notify }) {
     isGrad: s.recommendation.status === 'graduated',
   })));
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(null);               // milestone summary, shown briefly before the log
   const [sel, setSel] = useState(() => new Set());      // selected student ids
   const [bulk, setBulk] = useState({ action: 'promoted', to_class_id: defaultClass, stream: '' });
   const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
@@ -186,14 +187,25 @@ function Process({ d, notify }) {
       'action[]': rows.map((r) => r.action), 'to_class_id[]': rows.map((r) => r.to_class_id || ''),
       'stream[]': rows.map((r) => r.stream) };
     const res = await submitJson(d.execute_url, fields);
-    setBusy(false);
-    if (res.ok) nav.go(res.redirect); else notify('error', res.error || 'Could not save promotions.');
+    if (res.ok) {
+      // Celebrate the milestone with a summary of what just happened, then
+      // continue to the promotion log. Keep `busy` so the button stays locked.
+      const c = rows.reduce((a, r) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {});
+      const parts = [];
+      if (c.promoted) parts.push(`${c.promoted} promoted`);
+      if (c.repeated) parts.push(`${c.repeated} repeating`);
+      if (c.graduated) parts.push(`${c.graduated} graduating`);
+      if (c.skip) parts.push(`${c.skip} skipped`);
+      setDone(parts.join(' · ') || `${rows.length} students processed`);
+      setTimeout(() => nav.go(res.redirect), 1700);
+    } else { setBusy(false); notify('error', res.error || 'Could not save promotions.'); }
   };
 
   const bulkStreams = streamsForClass(d, bulk.to_class_id);
 
   return (
     <>
+      {done && <SuccessBanner title="Promotions saved" summary={`${done} — opening the promotion log…`} />}
       <PageHeader title="Process Promotions" />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">From Session</label>
