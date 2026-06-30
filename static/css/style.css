@@ -397,7 +397,7 @@ img {
 .logo .logo-mark {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     flex-shrink: 0;
     display: block;
     object-fit: contain;
@@ -2652,7 +2652,7 @@ input:focus, select:focus, textarea:focus {
 /* 2-3. Thin, themed scrollbars (less visual weight) */
 * { scrollbar-width: thin; scrollbar-color: var(--gray-300) transparent; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
-*::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: var(--radius-full); border: 3px solid transparent; background-clip: content-box; }
 *::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
 *::-webkit-scrollbar-track { background: transparent; }
 
@@ -2727,7 +2727,7 @@ hr { border-top-color: var(--border-color); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 22. Skeleton shimmer (shared .sk-bar) */
-.sk-bar { height: 14px; border-radius: 6px; margin: 10px 0; background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 37%, var(--gray-100) 63%); background-size: 600px 100%; animation: sksh 1.2s infinite linear; }
+.sk-bar { height: 14px; border-radius: var(--radius-sm); margin: 10px 0; background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 37%, var(--gray-100) 63%); background-size: 600px 100%; animation: sksh 1.2s infinite linear; }
 .sk-bar.sk-title { height: 24px; width: 42%; }
 .sk-bar.short { width: 55%; }
 @keyframes sksh { 0% { background-position: -468px 0; } 100% { background-position: 468px 0; } }
