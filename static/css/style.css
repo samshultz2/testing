@@ -2744,3 +2744,37 @@ hr { border-top-color: var(--border-color); }
 
 /* Compact empty states keep a smaller icon medallion */
 .empty-state.small i { width: 44px; height: 44px; font-size: 1.15rem; margin-bottom: 0.6rem; }
+
+/* ============================================================================
+   COGNITIVE-LOAD HELPERS — row overflow menu + "cap height / show all" lists
+   ============================================================================ */
+
+/* Per-row overflow (⋯) menu — moves secondary/destructive actions off the card
+   so list rows show only the primary actions (less colour, fewer buttons). */
+.row-menu {
+    position: absolute; right: 0; top: calc(100% + 4px); z-index: var(--z-dropdown);
+    min-width: 180px; padding: var(--sp-1);
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+}
+.row-menu button {
+    display: flex; align-items: center; gap: var(--sp-2); width: 100%;
+    padding: var(--sp-2) var(--sp-3); border: none; background: transparent;
+    color: var(--text-primary); font-size: var(--text-sm); font-family: inherit;
+    text-align: left; border-radius: var(--radius-sm); cursor: pointer;
+}
+.row-menu button:hover { background: var(--gray-50); }
+.row-menu button i { width: 18px; text-align: center; color: var(--text-muted); }
+.row-menu button.danger { color: var(--danger); }
+.row-menu button.danger:hover { background: var(--danger-light); }
+.row-menu button.danger i { color: var(--danger); }
+
+/* Progressive disclosure for long lists/tables: cap the height and reveal the
+   rest on demand, so a 50-row results table doesn't dump everything at once. */
+.cap-list { max-height: 38rem; overflow: hidden; position: relative; }
+.cap-list:not(.expanded)::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3.5rem;
+    background: linear-gradient(to bottom, transparent, var(--bg-card)); pointer-events: none;
+}
+.cap-list.expanded { max-height: none; }
+.cap-toggle { display: inline-flex; margin: var(--sp-2) 0 var(--sp-1); }

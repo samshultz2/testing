@@ -68,6 +68,15 @@ export default function App({ initial }) {
   const [bulkStream, setBulkStream] = useState('');
   const [bulkGender, setBulkGender] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
+  const [menuFor, setMenuFor] = useState(null);   // which student card's ⋯ menu is open
+  // Close the open row menu on any outside click (deferred so the opening click
+  // doesn't immediately close it).
+  useEffect(() => {
+    if (menuFor == null) return undefined;
+    const close = () => setMenuFor(null);
+    const t = setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
+    return () => { clearTimeout(t); document.removeEventListener('click', close); };
+  }, [menuFor]);
   // When filters were restored, the server-rendered page doesn't match them, so
   // let the first effect run fetch fresh (filtered) data instead of skipping it.
   const skip = useRef(!start.restored);
@@ -240,8 +249,8 @@ export default function App({ initial }) {
         </label>
         <span className="stu-count">{selectedIds.length ? `${selectedIds.length} selected · ` : ''}{d.total || 0} student(s){loading ? ' · loading…' : ''}</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-download" /> Export</button>
-          {canBulk && <>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-download" /> Export</button>
+          {canBulk && selectedIds.length > 0 && <>
             <select className="form-control" style={{ width: 'auto' }} value={bulkGender} onChange={(e) => setBulkGender(e.target.value)} aria-label="Bulk gender">
               <option value="">Set gender…</option>
               <option value="Male">Male</option>
@@ -292,13 +301,21 @@ export default function App({ initial }) {
                 <div className="stu-actions">
                   <a href={s.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
                   {canManage && <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
-                  {canManage && <button type="button" className={'btn btn-sm ' + (s.is_graduated ? 'btn-warning' : 'btn-success')}
-                                        title={s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}
-                                        onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`))
-                                          runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
-                    <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /></button>}
-                  {canManage && <button type="button" className="btn btn-danger btn-sm" title="Delete"
-                                        onClick={async () => { if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                  {canManage && (
+                    <div className="stu-menu-wrap" style={{ position: 'relative' }}>
+                      <button type="button" className="btn btn-secondary btn-sm" aria-haspopup="true" aria-expanded={menuFor === s.id}
+                              aria-label="More actions" onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
+                        <i aria-hidden="true" className="fas fa-ellipsis-vertical" /></button>
+                      {menuFor === s.id && (
+                        <div className="row-menu" role="menu">
+                          <button type="button" role="menuitem" onClick={async () => { setMenuFor(null); if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
+                            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}</button>
+                          <button type="button" role="menuitem" className="danger" onClick={async () => { setMenuFor(null); if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}>
+                            <i aria-hidden="true" className="fas fa-trash" /> Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

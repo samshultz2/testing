@@ -685,6 +685,7 @@
     </div>
     
     {% if students %}
+    <div class="cap-list">
     <!-- Mobile: Card View -->
     <div class="students-list">
         {% for s in students %}
@@ -764,6 +765,13 @@
             </tbody>
         </table>
     </div>
+    </div>{# /.cap-list #}
+    {% if students|length > 12 %}
+    <button type="button" class="btn btn-secondary btn-sm cap-toggle" data-cap-toggle aria-label="Show all results"
+            data-more="Show all {{ students|length }} students" data-less="Show fewer">
+        <i class="fas fa-chevron-down" aria-hidden="true"></i> <span class="cap-label">Show all {{ students|length }} students</span>
+    </button>
+    {% endif %}
     {% else %}
     <div style="text-align: center; padding: 2rem; color: #666;">
         <i class="fas fa-file-alt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>

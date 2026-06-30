@@ -569,6 +569,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // A11y: give unlabeled <select>s an accessible name from their visible label
     initSelectLabels();
 
+    // Progressive disclosure: [data-cap-toggle] buttons reveal a capped list.
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('[data-cap-toggle]');
+        if (!btn) return;
+        var sel = btn.getAttribute('data-cap-toggle');
+        var list = sel ? document.querySelector(sel) : btn.previousElementSibling;
+        if (!list || !list.classList.contains('cap-list')) return;
+        var expanded = list.classList.toggle('expanded');
+        var lbl = btn.querySelector('.cap-label');
+        if (lbl) lbl.textContent = expanded ? (btn.getAttribute('data-less') || 'Show less')
+                                            : (btn.getAttribute('data-more') || 'Show all');
+    });
+
     // Close sidebar on nav link click (mobile)
     document.querySelectorAll('.sidebar .nav-link').forEach(link => {
         link.addEventListener('click', function() {
