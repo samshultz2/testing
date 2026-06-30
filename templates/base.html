@@ -563,6 +563,7 @@
                 <form class="header-search" method="GET" action="{{ url_for('main.global_search') }}" role="search">
                     <i class="fas fa-search"></i>
                     <input type="text" name="q" placeholder="Search…" aria-label="Search" autocomplete="off">
+                    <button type="button" class="cmdk-hint" title="Open command palette" aria-label="Open command palette (Ctrl/Cmd K)">⌘K</button>
                 </form>
                 <div class="header-right">
                     {% if branch_ctx.is_central %}
@@ -1038,8 +1039,13 @@
             setTimeout(function(){bar.style.opacity='0';bar.style.width='0';},200); });
     })();
     </script>
+    <!-- Shared React runtime: loaded once here (cached across the whole app) so
+         the per-page React bundles no longer each embed their own copy of React. -->
+    <script src="{{ url_for('static', filename='vendor/react.production.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/react-dom.production.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/command-palette.js') }}"></script>
     <script src="{{ url_for('static', filename='js/offline-queue.js') }}"></script>
     <script src="{{ url_for('static', filename='js/spa-nav.js') }}"></script>
     <!-- CSP-safe declarative behaviours: replaces inline on* handlers so the
