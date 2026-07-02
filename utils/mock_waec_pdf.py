@@ -14,6 +14,7 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
                                 Spacer, PageBreak, Flowable)
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from utils.web_exports import pdf_escape
 
 _BLACK = colors.black
 _HEAD = colors.HexColor('#d9d9d9')
@@ -99,15 +100,15 @@ def _school_header(e, school, opts, subtitle):
     items = []
     if school.get('name'):
         nm = (school['name'] or '').upper()
-        items.append((Paragraph(nm, _S['school']), nm, 'Helvetica-Bold', 18))
+        items.append((Paragraph(pdf_escape(nm), _S['school']), nm, 'Helvetica-Bold', 18))
     if _opt(opts, 'address') and school.get('address'):
-        items.append((Paragraph(school['address'], _S['addr']), school['address'], 'Helvetica', 9))
+        items.append((Paragraph(pdf_escape(school['address']), _S['addr']), school['address'], 'Helvetica', 9))
     if _opt(opts, 'contact'):
         contact = ' · '.join(x for x in (school.get('phone'), school.get('email')) if x)
         if contact:
-            items.append((Paragraph(contact, _S['addr']), contact, 'Helvetica', 9))
+            items.append((Paragraph(pdf_escape(contact), _S['addr']), contact, 'Helvetica', 9))
     if _opt(opts, 'motto') and school.get('motto'):
-        items.append((Paragraph('<i>%s</i>' % school['motto'], _S['addr']), school['motto'], 'Helvetica-Oblique', 9))
+        items.append((Paragraph('<i>%s</i>' % pdf_escape(school['motto']), _S['addr']), school['motto'], 'Helvetica-Oblique', 9))
     block = [it[0] for it in items]
     logo = None
     if school.get('logo_path'):
@@ -121,7 +122,7 @@ def _school_header(e, school, opts, subtitle):
     if _opt(opts, 'title'):
         e.append(Paragraph('COMPETENCE RESULT', _S['comp']))
     if subtitle:
-        e.append(Paragraph(subtitle, _S['exam']))
+        e.append(Paragraph(pdf_escape(subtitle), _S['exam']))
 
 
 def _groups(subjects, per):
@@ -199,7 +200,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
             header += [_VHead('Credits'), _VHead('Average %')]
         data = [header]
         for i, row in enumerate(bs['rows'], 1):
-            line = [str(i), Paragraph(_short_name(row['student']), _S['name'])]
+            line = [str(i), Paragraph(pdf_escape(_short_name(row['student'])), _S['name'])]
             for s in group:
                 r = row['cells'].get(s)
                 line.append(f'{r.score} {r.grade}' if (r and r.score is not None) else '')
@@ -304,7 +305,7 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             h2 += [_VHead('Score', size=7), _VHead('Grade', size=7)]   # vertical sub-labels
         data = [h1, h2]
         for i, st in enumerate(students, 1):
-            line = [str(i), Paragraph(_short_name(st), _S['name'])]
+            line = [str(i), Paragraph(pdf_escape(_short_name(st)), _S['name'])]
             line += ['', ''] * len(group)
             data.append(line)
 
@@ -316,7 +317,7 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
         sum0 = len(data)                        # table row of the first summary row
         if show_summary:
             for label in _BLANK_SUMMARY:
-                data.append(['', Paragraph(label, _S['name'])] + [''] * (2 * len(group)))
+                data.append(['', Paragraph(pdf_escape(label), _S['name'])] + [''] * (2 * len(group)))
 
         widths = [sn_w, name_w] + [cell_w] * (2 * len(group))
         heights = ([None, None] + [8.5 * mm] * nstud + [8.5 * mm] * _EXTRA_ROWS
@@ -395,9 +396,9 @@ def result_slips_pdf(slips, exam, school, opts=None, signers='both'):
         _school_header(e, school, opts, sub)
 
         meta = [
-            [Paragraph(f'<b>Name:</b> {student.full_name}', _S['cell']),
-             Paragraph(f"<b>Stream:</b> {student.stream or '—'}", _S['cell'])],
-            [Paragraph(f'<b>Gender:</b> {student.gender or "—"}', _S['cell']),
+            [Paragraph(f'<b>Name:</b> {pdf_escape(student.full_name)}', _S['cell']),
+             Paragraph(f"<b>Stream:</b> {pdf_escape(student.stream or '—')}", _S['cell'])],
+            [Paragraph(f'<b>Gender:</b> {pdf_escape(student.gender or "—")}', _S['cell']),
              Paragraph('', _S['cell'])],
         ]
         mt = Table(meta, colWidths=[95 * mm, 87 * mm])
@@ -437,7 +438,7 @@ def result_slips_pdf(slips, exam, school, opts=None, signers='both'):
                     [Paragraph(f"<b>Distinctions (A1–B3):</b> {s['distinctions']}", _S['cell']),
                      Paragraph(f"<b>Average:</b> {s['average_score'] if s['average_score'] is not None else '—'}%", _S['cell'])],
                     [Paragraph(f"<b>5 credits incl. English &amp; Maths:</b> {'YES' if s['has_5_incl_core'] else 'NO'}", _S['cell']),
-                     Paragraph(f"<b>Missing core:</b> {core}", _S['cell'])],
+                     Paragraph(f"<b>Missing core:</b> {pdf_escape(core)}", _S['cell'])],
                 ]
                 stbl = Table(summ, colWidths=[95 * mm, 87 * mm])
                 stbl.setStyle(TableStyle([

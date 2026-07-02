@@ -11,6 +11,7 @@ Example:
     return xlsx_response(wb, f'students_{term}.xlsx')
 """
 from io import BytesIO
+from xml.sax.saxutils import escape as _xml_escape
 
 from flask import Response
 
@@ -29,6 +30,14 @@ def formula_guard(value):
     if isinstance(value, str) and value[:1] in _FORMULA_PREFIXES:
         return "'" + value
     return value
+
+
+def pdf_escape(value):
+    """Escape a value before it is interpolated into reportlab ``Paragraph``
+    mini-XML markup. A name/comment containing ``<``/``&``/``>`` would otherwise
+    corrupt the layout or inject reportlab tags (reportlab runs no JS, so this is
+    markup-injection hardening, not XSS). ``None`` becomes ''."""
+    return _xml_escape('' if value is None else str(value))
 
 
 def _disposition(filename, inline):

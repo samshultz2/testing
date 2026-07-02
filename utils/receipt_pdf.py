@@ -10,6 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
+from utils.web_exports import pdf_escape
 from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
                                 Spacer, HRFlowable)
 
@@ -43,14 +44,14 @@ def receipt_pdf(payment, bill, school):
 
     el = []
     nm = school.get('name') or 'School'
-    items = [(Paragraph(nm, title), nm, 'Helvetica', 15)]
+    items = [(Paragraph(pdf_escape(nm), title), nm, 'Helvetica', 15)]
     br = getattr(payment.student, 'branch', None) if payment.student else None
     if br:
-        items.append((Paragraph(f'{br.name} Branch', muted), f'{br.name} Branch', 'Helvetica', 8))
+        items.append((Paragraph(pdf_escape(f'{br.name} Branch'), muted), f'{br.name} Branch', 'Helvetica', 8))
     if school.get('address'):
-        items.append((Paragraph(school['address'], muted), school['address'], 'Helvetica', 8))
+        items.append((Paragraph(pdf_escape(school['address']), muted), school['address'], 'Helvetica', 8))
     if school.get('phone'):
-        items.append((Paragraph(school['phone'], muted), school['phone'], 'Helvetica', 8))
+        items.append((Paragraph(pdf_escape(school['phone']), muted), school['phone'], 'Helvetica', 8))
     from utils.school import logo_flowable, logo_header_flowable
     logo = logo_flowable(max_h_mm=14, max_w_mm=22)
     header = logo_header_flowable(logo, items) if logo is not None else None
@@ -66,7 +67,7 @@ def receipt_pdf(payment, bill, school):
     el.append(Spacer(1, 6))
 
     def row(k, v, strong=False):
-        vv = f'<b>{v}</b>' if strong else v
+        vv = f'<b>{pdf_escape(v)}</b>' if strong else pdf_escape(v)
         return [Paragraph(k, label), Paragraph(vv, ParagraphStyle(
             'r', parent=ss['Normal'], fontSize=9, alignment=2))]
 
@@ -111,7 +112,7 @@ def receipt_pdf(payment, bill, school):
     ]))
     el.append(st)
     el.append(Spacer(1, 12))
-    el.append(Paragraph(f'Received by: {payment.received_by or "__________"}', muted))
+    el.append(Paragraph(f'Received by: {pdf_escape(payment.received_by) or "__________"}', muted))
 
     doc.build(el)
     buf.seek(0)

@@ -955,11 +955,12 @@ def _passwords_pdf(school, label, rows, safe):
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet
+    from utils.web_exports import pdf_escape
     out = io.BytesIO()
     doc = SimpleDocTemplate(out, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm)
     styles = getSampleStyleSheet()
-    elems = [Paragraph(f'<b>{school}</b>', styles['Title']),
-             Paragraph(f'Test Portal Passwords — {label}', styles['Heading2']),
+    elems = [Paragraph(f'<b>{pdf_escape(school)}</b>', styles['Title']),
+             Paragraph(f'Test Portal Passwords — {pdf_escape(label)}', styles['Heading2']),
              Spacer(1, 6 * mm)]
     data = [['S/N', 'Student ID', 'Name', 'Password']] + [[str(c) for c in row] for row in rows]
     t = Table(data, colWidths=[14 * mm, 32 * mm, 78 * mm, 36 * mm], repeatRows=1)

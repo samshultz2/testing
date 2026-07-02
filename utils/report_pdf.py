@@ -4,6 +4,7 @@ Mirrors templates/subjects/report_card.html from the same build_report_card data
 so the downloaded PDF matches the on-screen / printed sheet.
 """
 import io
+from xml.sax.saxutils import escape as _xml_escape
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -17,8 +18,15 @@ _PRIMARY = colors.HexColor('#0d6a4e')
 _LIGHT = colors.HexColor('#e8f5f1')
 
 
+def _esc(v):
+    """Escape a value before it is placed into reportlab Paragraph mini-XML markup,
+    so a name/comment containing '<', '&' or '>' can't corrupt or inject the PDF
+    layout (reportlab runs no JS — this is markup-injection hardening)."""
+    return _xml_escape('' if v is None else str(v))
+
+
 def _info_table(pairs, col_widths):
-    rows = [[Paragraph(f'<b>{k}:</b> {v}', _S['cell']) for k, v in chunk]
+    rows = [[Paragraph(f'<b>{_esc(k)}:</b> {_esc(v)}', _S['cell']) for k, v in chunk]
             for chunk in pairs]
     t = Table(rows, colWidths=col_widths)
     t.setStyle(TableStyle([
@@ -58,8 +66,8 @@ def report_card_pdf(student, report_data, term, school_name,
     from utils.school import logo_flowable, logo_header_flowable
     logo = logo_flowable(max_h_mm=16, max_w_mm=28)
     sub_text = f'{term.full_name} — Report Sheet'
-    items = [(Paragraph(school_name or 'School', _S['title']), school_name or 'School', 'Helvetica-Bold', 16),
-             (Paragraph(sub_text, _S['sub']), sub_text, 'Helvetica', 10)]
+    items = [(Paragraph(_esc(school_name or 'School'), _S['title']), school_name or 'School', 'Helvetica-Bold', 16),
+             (Paragraph(_esc(sub_text), _S['sub']), sub_text, 'Helvetica', 10)]
     header = logo_header_flowable(logo, items) if logo is not None else None
     if header is not None:
         e.append(header)
@@ -116,7 +124,7 @@ def report_card_pdf(student, report_data, term, school_name,
 
     # Grade key
     if report_data.get('grade_scale'):
-        key = ' · '.join(f"{b.grade} ({b.min_score}-{b.max_score})" for b in report_data['grade_scale'])
+        key = ' · '.join(f"{_esc(b.grade)} ({b.min_score}-{b.max_score})" for b in report_data['grade_scale'])
         e.append(Paragraph('Grade Key', _S['h']))
         e.append(Paragraph(key, _S['small']))
 
@@ -140,9 +148,9 @@ def report_card_pdf(student, report_data, term, school_name,
     if ts and (ts.teacher_comment or ts.principal_comment):
         e.append(Paragraph('Comments', _S['h']))
         if ts.teacher_comment:
-            e.append(Paragraph(f"<b>Form teacher:</b> {ts.teacher_comment}", _S['cell']))
+            e.append(Paragraph(f"<b>Form teacher:</b> {_esc(ts.teacher_comment)}", _S['cell']))
         if ts.principal_comment:
-            e.append(Paragraph(f"<b>Principal:</b> {ts.principal_comment}", _S['cell']))
+            e.append(Paragraph(f"<b>Principal:</b> {_esc(ts.principal_comment)}", _S['cell']))
 
     doc.build(e)
     buf.seek(0)
