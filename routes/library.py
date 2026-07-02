@@ -15,6 +15,7 @@ from models import db, Book, BookLoan, Student, SchoolSettings
 from utils.access_control import login_required, admin_required, is_admin
 from utils.branch_scope import (scope_query, scope_by_student, require_branch_access,
                                 can_access_branch)
+from utils.search import like_term
 
 library_bp = Blueprint('library', __name__, url_prefix='/library')
 
@@ -116,9 +117,9 @@ def books():
     from utils.branch_scope import scope_query
     query = scope_query(Book.query.filter_by(is_active=True), Book)
     if q:
-        like = f'%{q}%'
-        query = query.filter(db.or_(Book.title.ilike(like), Book.author.ilike(like),
-                                    Book.isbn.ilike(like)))
+        like = like_term(q)
+        query = query.filter(db.or_(Book.title.ilike(like, escape='\\'), Book.author.ilike(like, escape='\\'),
+                                    Book.isbn.ilike(like, escape='\\')))
     if category:
         query = query.filter_by(category=category)
     if avail == '1':
@@ -287,10 +288,10 @@ def book_search():
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
         return jsonify([])
-    like = f'%{q}%'
+    like = like_term(q)
     rows = (scope_query(Book.query.filter(Book.is_active == True, Book.copies_available > 0), Book)
-            .filter(db.or_(Book.title.ilike(like), Book.author.ilike(like),
-                           Book.isbn.ilike(like)))
+            .filter(db.or_(Book.title.ilike(like, escape='\\'), Book.author.ilike(like, escape='\\'),
+                           Book.isbn.ilike(like, escape='\\')))
             .order_by(Book.title).limit(15).all())
     return jsonify([{'id': b.id, 'label': f'{b.title}'
                      + (f' — {b.author}' if b.author else '')
@@ -303,10 +304,10 @@ def student_search():
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
         return jsonify([])
-    like = f'%{q}%'
+    like = like_term(q)
     rows = (scope_query(Student.query.filter_by(is_active=True), Student)
-            .filter(db.or_(Student.surname.ilike(like), Student.first_name.ilike(like),
-                           Student.student_id.ilike(like)))
+            .filter(db.or_(Student.surname.ilike(like, escape='\\'), Student.first_name.ilike(like, escape='\\'),
+                           Student.student_id.ilike(like, escape='\\')))
             .order_by(Student.surname).limit(15).all())
     return jsonify([{'id': s.id, 'label': f'{s.full_name} ({s.student_id})'} for s in rows])
 

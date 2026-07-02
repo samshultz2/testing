@@ -16,6 +16,7 @@ from utils.access_control import (
 )
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
+from utils.search import like_term, escape_like
 from sqlalchemy import extract, func, nullslast
 from sqlalchemy.orm import joinedload
 from urllib.parse import urlparse
@@ -745,10 +746,10 @@ def _students_query():
             query = query.filter(Student.id == -1)   # not a form teacher of anyone
 
     if search:
-        search_term = f"%{search}%"
+        search_term = like_term(search)
         query = query.filter(db.or_(
-            Student.first_name.ilike(search_term), Student.surname.ilike(search_term),
-            Student.middle_name.ilike(search_term), Student.student_id.ilike(search_term)))
+            Student.first_name.ilike(search_term, escape='\\'), Student.surname.ilike(search_term, escape='\\'),
+            Student.middle_name.ilike(search_term, escape='\\'), Student.student_id.ilike(search_term, escape='\\')))
     if gender:
         query = query.filter(Student.gender == gender)
     if religion:
@@ -765,12 +766,16 @@ def _students_query():
                   .filter(StudentEnrollment.is_active == True, SchoolClass.name == 'SSS3'))
         if active_term:
             sss3_q = sss3_q.filter(ClassArmAssignment.term_id == active_term.id)
+        # Match the subject as a whole CSV token. Escape any LIKE wildcards in the
+        # user-supplied subject so `%`/`_` can't turn these into match-everything
+        # patterns; the surrounding `, ` / `%` separators stay real wildcards.
+        _subj = escape_like(subject)
         query = query.filter(
             Student.id.in_(sss3_q),
             db.or_(Student.waec_subjects == subject,
-                   Student.waec_subjects.ilike(f'{subject}, %'),
-                   Student.waec_subjects.ilike(f'%, {subject}, %'),
-                   Student.waec_subjects.ilike(f'%, {subject}')))
+                   Student.waec_subjects.ilike(f'{_subj}, %', escape='\\'),
+                   Student.waec_subjects.ilike(f'%, {_subj}, %', escape='\\'),
+                   Student.waec_subjects.ilike(f'%, {_subj}', escape='\\')))
 
     # Class/arm filter (any user), via a subquery so it composes cleanly.
     if class_id or arm_id:

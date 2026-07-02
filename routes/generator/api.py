@@ -281,9 +281,16 @@ def copy_subject_config():
     try:
         source_level = request.form.get('source_level')  # 'SSS' or 'JSS'
         target_level = request.form.get('target_level')  # 'JSS' or 'SSS'
-        
+
         if not source_level or not target_level:
             flash('Select source and target levels.', 'error')
+            return redirect(url_for('generator.classes_config'))
+
+        # Whitelist the level prefixes — they are interpolated into a LIKE pattern,
+        # so only known values may be used (no wildcard/free-text injection).
+        _LEVELS = {'SSS', 'JSS', 'Primary', 'Nursery', 'KG', 'Basic'}
+        if source_level not in _LEVELS or target_level not in _LEVELS:
+            flash('Invalid class level.', 'error')
             return redirect(url_for('generator.classes_config'))
         
         # Get source classes

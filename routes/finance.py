@@ -25,6 +25,7 @@ from utils.finance import (
     student_bill, class_fee_total, next_receipt_no, collection_trend,
     fee_item_breakdown,
 )
+from utils.search import like_term
 
 finance_bp = Blueprint('finance', __name__, url_prefix='/finance')
 
@@ -503,11 +504,11 @@ def payments_list():
     query = (scope_query(query, FeePayment).join(Student, FeePayment.student_id == Student.id)
              .options(contains_eager(FeePayment.student)))
     if q:
-        like = f'%{q}%'
-        query = query.filter(db.or_(Student.surname.ilike(like),
-                                    Student.first_name.ilike(like),
-                                    Student.student_id.ilike(like),
-                                    FeePayment.receipt_no.ilike(like)))
+        like = like_term(q)
+        query = query.filter(db.or_(Student.surname.ilike(like, escape='\\'),
+                                    Student.first_name.ilike(like, escape='\\'),
+                                    Student.student_id.ilike(like, escape='\\'),
+                                    FeePayment.receipt_no.ilike(like, escape='\\')))
     if class_id and term_id:
         sids = [sid for (sid,) in (StudentEnrollment.query
                 .join(ClassArmAssignment,
@@ -631,11 +632,11 @@ def search_students():
     if len(q) < 2:
         return jsonify([])
     term_id = request.args.get('term_id', type=int) or _active_term_id()
-    like = f'%{q}%'
+    like = like_term(q)
     students = (Student.query.filter_by(is_active=True)
-                .filter(db.or_(Student.surname.ilike(like),
-                               Student.first_name.ilike(like),
-                               Student.student_id.ilike(like)))
+                .filter(db.or_(Student.surname.ilike(like, escape='\\'),
+                               Student.first_name.ilike(like, escape='\\'),
+                               Student.student_id.ilike(like, escape='\\')))
                 .order_by(Student.surname).limit(15).all())
     out = []
     for s in students:

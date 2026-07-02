@@ -33,6 +33,7 @@ def _current_user():
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
 from utils.spa import section_responders
+from utils.search import like_term
 _wants_json, _render, _ok, _err = section_responders(
     'hr/app.html', 'hr_json', 'hr.dashboard')
 
@@ -97,12 +98,12 @@ def staff_list():
     if status:
         query = query.filter_by(status=status)
     if q:
-        like = f'%{q}%'
-        query = query.filter(db.or_(StaffMember.first_name.ilike(like),
-                                    StaffMember.surname.ilike(like),
-                                    StaffMember.staff_id.ilike(like),
-                                    StaffMember.designation.ilike(like),
-                                    StaffMember.phone.ilike(like)))
+        like = like_term(q)
+        query = query.filter(db.or_(StaffMember.first_name.ilike(like, escape='\\'),
+                                    StaffMember.surname.ilike(like, escape='\\'),
+                                    StaffMember.staff_id.ilike(like, escape='\\'),
+                                    StaffMember.designation.ilike(like, escape='\\'),
+                                    StaffMember.phone.ilike(like, escape='\\')))
     staff = query.order_by(StaffMember.surname, StaffMember.first_name).all()
     departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
     return _render({
@@ -307,11 +308,12 @@ def export_staff():
     w.writerow(['Staff ID', 'Name', 'Gender', 'Department', 'Designation', 'Type',
                 'Employment', 'Status', 'Phone', 'Email', 'Date Employed', 'Salary'])
     from utils.branch_scope import scope_query
+    from utils.web_exports import formula_guard as _fg
     for s in scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(StaffMember.surname).all():
-        w.writerow([s.staff_id, s.full_name, s.gender or '',
-                    s.department.name if s.department else '', s.designation or '',
-                    s.staff_type, s.employment_type, s.status, s.phone or '',
-                    s.email or '', s.date_employed or '', s.salary or 0])
+        w.writerow([_fg(s.staff_id), _fg(s.full_name), s.gender or '',
+                    _fg(s.department.name if s.department else ''), _fg(s.designation or ''),
+                    s.staff_type, s.employment_type, s.status, _fg(s.phone or ''),
+                    _fg(s.email or ''), s.date_employed or '', s.salary or 0])
     return Response(out.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': 'attachment; filename=staff_directory.csv'})
 

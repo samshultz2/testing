@@ -28,6 +28,7 @@ CHANNELS = ['WhatsApp', 'SMS']
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
 from utils.spa import section_responders
+from utils.search import like_term
 _wants_json, _render, _ok, _err = section_responders(
     'communication/app.html', 'comm_json', 'comms.dashboard')
 
@@ -193,10 +194,10 @@ def contacts():
     if form_ids is not None:
         base = base.filter(Student.id.in_(form_ids or [-1]))
     if q:
-        like = f'%{q}%'
-        base = base.filter(db.or_(Student.surname.ilike(like),
-                                  Student.first_name.ilike(like),
-                                  Student.student_id.ilike(like)))
+        like = like_term(q)
+        base = base.filter(db.or_(Student.surname.ilike(like, escape='\\'),
+                                  Student.first_name.ilike(like, escape='\\'),
+                                  Student.student_id.ilike(like, escape='\\')))
     students = base.order_by(Student.surname, Student.first_name).limit(400).all()
 
     rows = []
@@ -435,11 +436,11 @@ def students_search():
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
         return jsonify([])
-    like = f'%{q}%'
+    like = like_term(q)
     from utils.branch_scope import scope_query
     rows = (scope_query(Student.query.filter_by(is_active=True), Student)
-            .filter(db.or_(Student.surname.ilike(like), Student.first_name.ilike(like),
-                           Student.student_id.ilike(like)))
+            .filter(db.or_(Student.surname.ilike(like, escape='\\'), Student.first_name.ilike(like, escape='\\'),
+                           Student.student_id.ilike(like, escape='\\')))
             .order_by(Student.surname).limit(15).all())
     return jsonify([{'id': s.id, 'name': s.full_name, 'sid': s.student_id,
                      'label': f'{s.full_name} ({s.student_id})'} for s in rows])
@@ -565,9 +566,10 @@ def export_recipients(message_id):
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['Parent', 'Phone', 'Phone (intl)', 'Student', 'Message', 'Status'])
+    from utils.web_exports import formula_guard as _fg
     for r in msg.recipients.all():
-        w.writerow([r.parent_name, r.phone, comms.normalise_phone(r.phone),
-                    r.student.full_name if r.student else '', r.body, r.status])
+        w.writerow([_fg(r.parent_name), _fg(r.phone), comms.normalise_phone(r.phone),
+                    _fg(r.student.full_name if r.student else ''), _fg(r.body), r.status])
     fname = f'campaign_{msg.id}_recipients.csv'
     return Response(out.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': f'attachment; filename={fname}'})

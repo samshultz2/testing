@@ -129,3 +129,42 @@ def test_class_export_blocks_cross_branch(app, two_branches):
 def test_class_export_allows_central(auth_client, two_branches):
     r = auth_client.get(f"/reports/export/class-students?assignment_id={two_branches['caa_b2']}")
     assert r.status_code == 200
+
+
+# --- Tier 2: input hardening ------------------------------------------------
+
+def test_like_term_escapes_wildcards():
+    from utils.search import like_term, escape_like
+    assert like_term('50%_x') == r'%50\%\_x%'      # % and _ escaped, wrapped in %…%
+    assert escape_like('a\\b') == 'a\\\\b'          # backslash escaped first
+
+
+def test_formula_guard_neutralises_formula_cells():
+    from utils.web_exports import formula_guard as fg
+    for bad in ('=cmd()', '+1', '-1', '@SUM(A1)'):
+        assert fg(bad).startswith("'")             # rendered as text, not a formula
+    assert fg('Bello') == 'Bello'                   # ordinary text untouched
+    assert fg(1234) == 1234                         # non-strings pass through
+
+
+def test_global_search_wildcard_does_not_match_everything(app, two_branches):
+    # A '%'-only term must not behave as "match all" for a central admin.
+    c = app.test_client()
+    from config import Config
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    html = c.get('/search?q=%25%25').get_data(as_text=True)   # q = '%%'
+    assert 'Zorbstaff' not in html and 'Zorbstu' not in html
+
+
+def test_copy_subject_config_rejects_bad_level(auth_client):
+    r = auth_client.post('/generator/setup/copy-subjects',
+                         data={'source_level': 'SSS%', 'target_level': 'JSS',
+                               '_csrf_token': _tok_for(auth_client)},
+                         follow_redirects=False)
+    # invalid level -> bounced back to config (never runs the LIKE), not a 500
+    assert r.status_code in (302, 303)
+
+
+def _tok_for(c):
+    with c.session_transaction() as s:
+        return s.get('_csrf_token')

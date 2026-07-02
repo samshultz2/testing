@@ -1,5 +1,6 @@
 """results blueprint — waec routes (split from the former routes/results.py)."""
 from routes.results import *  # noqa: F401,F403
+from utils.search import like_term
 
 
 @results_bp.route('/waec')
@@ -81,13 +82,13 @@ def waec_list():
             Student)
 
         if search:
-            term = f"%{search}%"
+            term = like_term(search)
             base_query = base_query.filter(
                 db.or_(
-                    Student.first_name.ilike(term),
-                    Student.surname.ilike(term),
-                    Student.middle_name.ilike(term),
-                    Student.student_id.ilike(term),
+                    Student.first_name.ilike(term, escape='\\'),
+                    Student.surname.ilike(term, escape='\\'),
+                    Student.middle_name.ilike(term, escape='\\'),
+                    Student.student_id.ilike(term, escape='\\'),
                 )
             )
 

@@ -13,6 +13,7 @@ from models.models_sales import PRODUCT_CATEGORIES, SALE_METHODS
 from utils.access_control import login_required
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
+from utils.search import like_term
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
 
@@ -91,7 +92,7 @@ def products():
     q = (request.args.get('q') or '').strip()
     query = scope_query(Product.query.filter_by(is_active=True), Product)
     if q:
-        query = query.filter(Product.name.ilike(f'%{q}%'))
+        query = query.filter(Product.name.ilike(like_term(q), escape='\\'))
     rows = query.order_by(Product.category, Product.name).all()
     return _render({
         'page': 'products', 'q': q, 'categories': PRODUCT_CATEGORIES,

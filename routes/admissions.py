@@ -15,6 +15,7 @@ from models import (db, Applicant, AcademicSession, SchoolClass, ClassArmAssignm
 from utils.access_control import login_required, admin_required, is_admin
 from utils.branch_scope import scope_query, branch_for_new, require_branch_access, viewing_branch_id
 from utils import admissions
+from utils.search import like_term
 
 adm_bp = Blueprint('admissions', __name__, url_prefix='/admissions')
 
@@ -121,11 +122,11 @@ def applicants():
     if class_id:
         query = query.filter_by(intended_class_id=class_id)
     if q:
-        like = f'%{q}%'
-        query = query.filter(db.or_(Applicant.first_name.ilike(like),
-                                    Applicant.surname.ilike(like),
-                                    Applicant.application_no.ilike(like),
-                                    Applicant.parent_phone.ilike(like)))
+        like = like_term(q)
+        query = query.filter(db.or_(Applicant.first_name.ilike(like, escape='\\'),
+                                    Applicant.surname.ilike(like, escape='\\'),
+                                    Applicant.application_no.ilike(like, escape='\\'),
+                                    Applicant.parent_phone.ilike(like, escape='\\')))
     rows = query.order_by(Applicant.created_at.desc()).all()
     badge = admissions.STATUS_BADGE
     return _render({

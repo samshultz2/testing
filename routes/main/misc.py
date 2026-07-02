@@ -1,5 +1,6 @@
 """main blueprint — misc routes (split from the former routes/main.py)."""
 from routes.main import *  # noqa: F401,F403  (blueprint, models, helpers)
+from utils.search import like_term, ilike_contains
 
 
 @main_bp.route('/share')
@@ -36,15 +37,15 @@ def global_search():
     from utils.branch_scope import scope_query
     groups = []
     if len(q) >= 2:
-        like = f'%{q}%'
+        like = like_term(q)
 
         def add(title, icon, items):
             if items:
                 groups.append({'title': title, 'icon': icon, 'rows': items})
 
         students = (_viewer_student_scope(Student.query.filter_by(is_active=True))
-                    .filter(db.or_(Student.first_name.ilike(like), Student.surname.ilike(like),
-                                   Student.student_id.ilike(like)))
+                    .filter(db.or_(Student.first_name.ilike(like, escape='\\'), Student.surname.ilike(like, escape='\\'),
+                                   Student.student_id.ilike(like, escape='\\')))
                     .order_by(Student.surname).limit(12).all())
         add('Students', 'fa-user-graduate', [
             {'label': s.full_name, 'sub': s.student_id,
@@ -53,8 +54,8 @@ def global_search():
         try:
             from models import StaffMember
             staff = (scope_query(StaffMember.query.filter_by(is_active=True), StaffMember)
-                     .filter(db.or_(StaffMember.first_name.ilike(like), StaffMember.surname.ilike(like),
-                                    StaffMember.staff_id.ilike(like), StaffMember.phone.ilike(like)))
+                     .filter(db.or_(StaffMember.first_name.ilike(like, escape='\\'), StaffMember.surname.ilike(like, escape='\\'),
+                                    StaffMember.staff_id.ilike(like, escape='\\'), StaffMember.phone.ilike(like, escape='\\')))
                      .limit(10).all())
             add('Staff', 'fa-id-badge', [
                 {'label': s.full_name, 'sub': s.designation or s.staff_id,
@@ -65,8 +66,8 @@ def global_search():
         try:
             from models import Applicant
             apps = (scope_query(Applicant.query, Applicant)
-                    .filter(db.or_(Applicant.first_name.ilike(like),
-                    Applicant.surname.ilike(like), Applicant.application_no.ilike(like)))
+                    .filter(db.or_(Applicant.first_name.ilike(like, escape='\\'),
+                    Applicant.surname.ilike(like, escape='\\'), Applicant.application_no.ilike(like, escape='\\')))
                     .limit(10).all())
             add('Applicants', 'fa-clipboard-user', [
                 {'label': a.full_name, 'sub': f'{a.application_no} · {a.status}',
@@ -77,7 +78,7 @@ def global_search():
         try:
             from models import Book
             books = (scope_query(Book.query.filter_by(is_active=True), Book)
-                     .filter(db.or_(Book.title.ilike(like), Book.author.ilike(like), Book.isbn.ilike(like)))
+                     .filter(db.or_(Book.title.ilike(like, escape='\\'), Book.author.ilike(like, escape='\\'), Book.isbn.ilike(like, escape='\\')))
                      .limit(10).all())
             add('Library books', 'fa-book', [
                 {'label': b.title, 'sub': b.author or '', 'url': url_for('library.books', q=b.title)}
@@ -87,7 +88,7 @@ def global_search():
 
         try:
             from models import FeePayment
-            pays = (scope_query(FeePayment.query.filter(FeePayment.receipt_no.ilike(like)), FeePayment)
+            pays = (scope_query(FeePayment.query.filter(FeePayment.receipt_no.ilike(like, escape='\\')), FeePayment)
                     .options(joinedload(FeePayment.student)).limit(8).all())
             add('Fee receipts', 'fa-receipt', [
                 {'label': p.receipt_no, 'sub': (p.student.full_name if p.student else ''),
@@ -97,7 +98,7 @@ def global_search():
 
         try:
             from models import CBTExam
-            exams = scope_query(CBTExam.query.filter(CBTExam.title.ilike(like)), CBTExam).limit(8).all()
+            exams = scope_query(CBTExam.query.filter(CBTExam.title.ilike(like, escape='\\')), CBTExam).limit(8).all()
             add('CBT exams', 'fa-laptop-code', [
                 {'label': e.title, 'sub': (e.subject.name if e.subject else ''),
                  'url': url_for('cbt.exam_detail', exam_id=e.id)} for e in exams])
@@ -141,15 +142,15 @@ def audit_log():
 
     query = AuditLog.query
     if q:
-        like = f'%{q}%'
-        query = query.filter(db.or_(AuditLog.action.ilike(like),
-                                    AuditLog.detail.ilike(like),
-                                    AuditLog.user.ilike(like),
-                                    AuditLog.target_label.ilike(like)))
+        like = like_term(q)
+        query = query.filter(db.or_(AuditLog.action.ilike(like, escape='\\'),
+                                    AuditLog.detail.ilike(like, escape='\\'),
+                                    AuditLog.user.ilike(like, escape='\\'),
+                                    AuditLog.target_label.ilike(like, escape='\\')))
     if action:
         query = query.filter(AuditLog.action == action)
     if user:
-        query = query.filter(AuditLog.user.ilike(f'%{user}%'))
+        query = query.filter(ilike_contains(AuditLog.user, user))
     try:
         if from_s:
             query = query.filter(AuditLog.created_at >= _dt.strptime(from_s, '%Y-%m-%d'))

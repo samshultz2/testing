@@ -17,6 +17,7 @@ from utils.jamb_config import (
     convert_correct_to_100, question_count_map, COMPULSORY_SUBJECT,
     MAX_TOTAL_SCORE,
 )
+from utils.search import like_term
 
 mock_jamb_bp = Blueprint('mock_jamb', __name__, url_prefix='/mock-jamb')
 
@@ -200,13 +201,13 @@ def view_exam(exam_id):
     
     # Apply search filter
     if search:
-        search_term = f"%{search}%"
+        search_term = like_term(search)
         query = query.filter(
             db.or_(
-                Student.first_name.ilike(search_term),
-                Student.surname.ilike(search_term),
-                Student.middle_name.ilike(search_term),
-                Student.student_id.ilike(search_term)
+                Student.first_name.ilike(search_term, escape='\\'),
+                Student.surname.ilike(search_term, escape='\\'),
+                Student.middle_name.ilike(search_term, escape='\\'),
+                Student.student_id.ilike(search_term, escape='\\')
             )
         )
     

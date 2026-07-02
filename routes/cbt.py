@@ -31,6 +31,7 @@ from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolatio
 from utils.access_control import login_required, admin_required, is_admin
 from utils import timeutil
 from utils.useragent import parse_user_agent
+from utils.search import like_term
 
 cbt_bp = Blueprint('cbt', __name__, url_prefix='/cbt')
 cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
@@ -385,7 +386,7 @@ def import_from_bank(exam_id):
         q = q.filter_by(subject_id=subject_id)
     topic = (request.args.get('topic') or '').strip()
     if topic:
-        q = q.filter(QuestionBank.topic.ilike(f'%{topic}%'))
+        q = q.filter(QuestionBank.topic.ilike(like_term(topic), escape='\\'))
     questions = q.order_by(QuestionBank.topic, QuestionBank.id.desc()).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
     return render_template('cbt/import_bank.html', e=e, questions=questions,
@@ -417,9 +418,9 @@ def bank():
     if subject_id:
         q = q.filter_by(subject_id=subject_id)
     if topic:
-        q = q.filter(QuestionBank.topic.ilike(f'%{topic}%'))
+        q = q.filter(QuestionBank.topic.ilike(like_term(topic), escape='\\'))
     if search:
-        q = q.filter(QuestionBank.question_text.ilike(f'%{search}%'))
+        q = q.filter(QuestionBank.question_text.ilike(like_term(search), escape='\\'))
     questions = q.order_by(QuestionBank.id.desc()).limit(500).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
     total = QuestionBank.query.filter_by(is_active=True).count()

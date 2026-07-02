@@ -1,5 +1,6 @@
 """main blueprint — students routes (split from the former routes/main.py)."""
 from routes.main import *  # noqa: F401,F403  (blueprint, models, helpers)
+from utils.search import like_term
 
 
 @main_bp.route('/students')
@@ -625,9 +626,9 @@ def api_search_students():
 
     students = _viewer_student_scope(Student.query.filter(Student.is_active == True)).filter(
         db.or_(
-            Student.first_name.ilike(f'%{query}%'),
-            Student.surname.ilike(f'%{query}%'),
-            Student.student_id.ilike(f'%{query}%')
+            Student.first_name.ilike(like_term(query), escape='\\'),
+            Student.surname.ilike(like_term(query), escape='\\'),
+            Student.student_id.ilike(like_term(query), escape='\\')
         )
     ).limit(10).all()
 
@@ -676,13 +677,13 @@ def export_students_data():
         arm_id = request.args.get('arm_id', type=int)
         
         if search:
-            search_term = f"%{search}%"
+            search_term = like_term(search)
             query = query.filter(
                 db.or_(
-                    Student.first_name.ilike(search_term),
-                    Student.surname.ilike(search_term),
-                    Student.middle_name.ilike(search_term),
-                    Student.student_id.ilike(search_term)
+                    Student.first_name.ilike(search_term, escape='\\'),
+                    Student.surname.ilike(search_term, escape='\\'),
+                    Student.middle_name.ilike(search_term, escape='\\'),
+                    Student.student_id.ilike(search_term, escape='\\')
                 )
             )
         if gender:
