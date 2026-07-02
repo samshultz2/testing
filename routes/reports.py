@@ -10,7 +10,7 @@ from utils.excel_utils import (
     import_students_from_excel
 )
 from utils.web_exports import xlsx_response
-from utils.branch_scope import scope_query, scope_by_student, viewing_branch_id
+from utils.branch_scope import scope_query, scope_by_student, viewing_branch_id, require_branch_access
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -89,7 +89,8 @@ def export_class_students():
     
     # Export the class
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
-    
+    require_branch_access(assignment.branch_id)   # no cross-branch roster export (IDOR guard)
+
     enrollments = StudentEnrollment.query.filter_by(
         class_arm_assignment_id=assignment_id,
         is_active=True

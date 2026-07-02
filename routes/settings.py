@@ -605,9 +605,11 @@ def save_timetable_slots():
 # ============================================================================
 
 @settings_bp.route('/backup')
-@login_required
+@central_admin_required
 def backup_page():
-    """Backup and restore page"""
+    """Backup and restore page. Central-admin only: the backup subsystem operates
+    on the entire multi-branch database, and this page lists backup filenames and
+    whole-DB record counts."""
     # Get database info
     db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'school.db')
     db_size = 0
@@ -644,7 +646,7 @@ def backup_page():
 
 
 @settings_bp.route('/backup/create', methods=['POST'])
-@admin_required
+@central_admin_required
 def create_backup():
     from flask import current_app
     from utils.backup import make_backup
@@ -655,7 +657,8 @@ def create_backup():
 
 
 @settings_bp.route('/backup/file/<path:name>')
-@admin_required
+@central_admin_required
+@rate_limited('db_export', max_requests=12, window_minutes=10)
 def download_backup_file(name):
     import os as _os
     from flask import current_app

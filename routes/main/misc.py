@@ -33,6 +33,7 @@ def share_app():
 def global_search():
     """Search across the main entities and group the results."""
     q = (request.args.get('q') or '').strip()
+    from utils.branch_scope import scope_query
     groups = []
     if len(q) >= 2:
         like = f'%{q}%'
@@ -51,7 +52,7 @@ def global_search():
 
         try:
             from models import StaffMember
-            staff = (StaffMember.query.filter_by(is_active=True)
+            staff = (scope_query(StaffMember.query.filter_by(is_active=True), StaffMember)
                      .filter(db.or_(StaffMember.first_name.ilike(like), StaffMember.surname.ilike(like),
                                     StaffMember.staff_id.ilike(like), StaffMember.phone.ilike(like)))
                      .limit(10).all())
@@ -63,7 +64,8 @@ def global_search():
 
         try:
             from models import Applicant
-            apps = (Applicant.query.filter(db.or_(Applicant.first_name.ilike(like),
+            apps = (scope_query(Applicant.query, Applicant)
+                    .filter(db.or_(Applicant.first_name.ilike(like),
                     Applicant.surname.ilike(like), Applicant.application_no.ilike(like)))
                     .limit(10).all())
             add('Applicants', 'fa-clipboard-user', [
@@ -74,7 +76,7 @@ def global_search():
 
         try:
             from models import Book
-            books = (Book.query.filter_by(is_active=True)
+            books = (scope_query(Book.query.filter_by(is_active=True), Book)
                      .filter(db.or_(Book.title.ilike(like), Book.author.ilike(like), Book.isbn.ilike(like)))
                      .limit(10).all())
             add('Library books', 'fa-book', [
@@ -85,7 +87,7 @@ def global_search():
 
         try:
             from models import FeePayment
-            pays = (FeePayment.query.filter(FeePayment.receipt_no.ilike(like))
+            pays = (scope_query(FeePayment.query.filter(FeePayment.receipt_no.ilike(like)), FeePayment)
                     .options(joinedload(FeePayment.student)).limit(8).all())
             add('Fee receipts', 'fa-receipt', [
                 {'label': p.receipt_no, 'sub': (p.student.full_name if p.student else ''),
@@ -95,7 +97,7 @@ def global_search():
 
         try:
             from models import CBTExam
-            exams = CBTExam.query.filter(CBTExam.title.ilike(like)).limit(8).all()
+            exams = scope_query(CBTExam.query.filter(CBTExam.title.ilike(like)), CBTExam).limit(8).all()
             add('CBT exams', 'fa-laptop-code', [
                 {'label': e.title, 'sub': (e.subject.name if e.subject else ''),
                  'url': url_for('cbt.exam_detail', exam_id=e.id)} for e in exams])

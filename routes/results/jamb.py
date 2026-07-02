@@ -74,7 +74,9 @@ def jamb_list():
         else:
             subject_performance.sort(key=lambda x: x['avg_score'], reverse=True)
         
-        query = (JAMBResult.query.filter_by(exam_year=exam_year)
+        # Branch-scope the list exactly like the analytics query above (and the
+        # WAEC list) so a branch user never sees other branches' JAMB results.
+        query = (scope_by_student(JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult)
                  .options(joinedload(JAMBResult.student)).join(Student))
 
         if search:
