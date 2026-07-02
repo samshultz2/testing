@@ -564,6 +564,9 @@ def mark_all_sent(message_id):
 def export_recipients(message_id):
     msg = db.get_or_404(Message, message_id)
     require_branch_access(msg.branch_id)
+    from utils.audit import log_action
+    log_action('data.export_recipients', target=msg,
+               detail='campaign recipients (parent names/phones)')
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['Parent', 'Phone', 'Phone (intl)', 'Student', 'Message', 'Status'])

@@ -15,6 +15,7 @@ from models import (
 from utils.helpers import login_required
 from utils.access_control import admin_required, central_admin_required, is_admin
 from utils.security import rate_limited
+from utils.audit import log_action
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 
@@ -671,6 +672,7 @@ def download_backup_file(name):
         flash('Backup not found.', 'error')
         return redirect(url_for('settings.backup_page'))
     mimetype = 'application/sql' if safe.endswith('.sql') else 'application/x-sqlite3'
+    log_action('data.backup_download', detail=safe)
     return send_file(path, as_attachment=True, download_name=safe, mimetype=mimetype)
 
 
@@ -690,6 +692,7 @@ def download_backup():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_filename = f'school_backup_{timestamp}.db'
 
+        log_action('data.backup_download', detail=backup_filename)
         return send_file(
             db_path,
             as_attachment=True,
@@ -706,6 +709,7 @@ def download_backup():
 @rate_limited('db_export', max_requests=12, window_minutes=10)
 def export_json():
     """Export all data to JSON"""
+    log_action('data.export_json', detail='full data export')   # log the authorized attempt
     try:
         from models import (
             Student, ParentContact, AcademicSession, SchoolSettings, GradeScale, AssessmentType

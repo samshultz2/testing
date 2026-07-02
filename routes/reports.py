@@ -45,7 +45,9 @@ def index():
 def export_students():
     """Export all students to Excel"""
     students = scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
-    
+    from utils.audit import log_action
+    log_action('data.export_students', detail=f'{len(students)} students')
+
     excel_file = export_students_to_excel(students)
 
     return xlsx_response(excel_file, 'students_export.xlsx')
@@ -90,6 +92,9 @@ def export_class_students():
     # Export the class
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     require_branch_access(assignment.branch_id)   # no cross-branch roster export (IDOR guard)
+    from utils.audit import log_action
+    log_action('data.export_students', target=assignment,
+               detail=f'class roster: {assignment.display_name}')
 
     enrollments = StudentEnrollment.query.filter_by(
         class_arm_assignment_id=assignment_id,

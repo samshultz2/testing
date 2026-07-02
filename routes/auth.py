@@ -9,6 +9,7 @@ from config import Config
 from models import db, User
 from werkzeug.security import generate_password_hash
 from utils.security import login_limiter, is_password_strong
+from utils.audit import log_action
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -40,6 +41,10 @@ def _record_login_failure(ident=None):
     login_limiter.record_attempt(_client_key())
     if ident:
         login_limiter.record_attempt(_account_key(ident))
+    # Audit every failed attempt (the attempted username goes in detail; the
+    # actor is 'unknown' since no session identity exists yet). Central to all
+    # failure paths, so it covers over-long-password, wrong-password and no-match.
+    log_action('auth.login_failed', detail=ident or '(no username)')
 
 
 def _clear_login_failures(ident=None):
@@ -69,6 +74,7 @@ def _complete_login(user):
     session.permanent = True
     user.last_login = datetime.now()
     db.session.commit()
+    log_action('auth.login', detail=user.username)   # session identity now set
     flash(f'Welcome back, {user.full_name or user.username}!', 'success')
     return redirect(url_for('main.dashboard'))
 
@@ -84,6 +90,7 @@ def login():
         password = request.form.get('password', '')
 
         if _login_locked(username):
+            log_action('auth.login_locked', detail=username or '(no username)')
             flash(f'Too many failed attempts. Try again in {Config.LOGIN_LOCKOUT_MINUTES} minutes.', 'error')
             return redirect(url_for('auth.login'))
 
@@ -144,6 +151,7 @@ def login():
             from utils.csrf import rotate_csrf_token
             rotate_csrf_token()
             session.permanent = True
+            log_action('auth.login', detail='legacy-admin')
             flash('Welcome back, Admin!', 'success')
             return redirect(url_for('main.dashboard'))
 
@@ -265,6 +273,7 @@ def reset_password(uid, token):
 @auth_bp.route('/logout')
 def logout():
     """Handle user logout"""
+    log_action('auth.logout')        # log before clearing so the actor is recorded
     session.clear()
     flash('You have been logged out successfully.', 'info')
     return redirect(url_for('auth.login'))

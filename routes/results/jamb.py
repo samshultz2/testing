@@ -510,7 +510,8 @@ def export_jamb():
     if not year:
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.jamb_list'))
-    
+    log_action('data.export_results', detail=f'JAMB {year}')
+
     results = (scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
                .options(joinedload(JAMBResult.student)).join(Student)
                .order_by(JAMBResult.total_score.desc()).all())

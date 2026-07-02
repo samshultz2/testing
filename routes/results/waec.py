@@ -500,7 +500,8 @@ def export_waec():
     if not year:
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.waec_list'))
-    
+    log_action('data.export_results', detail=f'WAEC {year}')
+
     from utils.branch_scope import scope_query
     students_with_results = scope_query(
         db.session.query(Student).join(WAECResult).filter(WAECResult.exam_year == year),

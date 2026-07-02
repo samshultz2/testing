@@ -303,6 +303,8 @@ def delete_staff(staff_id):
 @login_required
 def export_staff():
     import csv, io
+    from utils.audit import log_action
+    log_action('data.export_staff', detail='staff directory (incl. salary/bank fields)')
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['Staff ID', 'Name', 'Gender', 'Department', 'Designation', 'Type',
