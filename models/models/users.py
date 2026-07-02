@@ -48,6 +48,11 @@ class User(db.Model):
     # actually sets a new one. See routes/auth.py.
     reset_token_hash = db.Column(db.String(256))
     reset_token_expires = db.Column(db.DateTime)
+    # Opt-in TOTP 2FA. The base32 secret is encrypted at rest (EncryptedString);
+    # backup codes are stored as a JSON list of one-way hashes, shown once.
+    mfa_enabled = db.Column(db.Boolean, default=False)
+    mfa_secret = db.Column(EncryptedString())
+    mfa_backup_codes = db.Column(db.Text)
     # JSON list of dashboard widget keys this user has enabled (None => defaults).
     dashboard_prefs = db.Column(db.Text)
 
@@ -97,6 +102,44 @@ class User(db.Model):
         if not password or len(password) > MAX_PASSWORD_LEN:
             return False
         return check_password_hash(self.password_hash, password)
+
+    # --- TOTP 2FA -----------------------------------------------------------
+    @property
+    def mfa_backup_code_hashes(self):
+        import json
+        if not self.mfa_backup_codes:
+            return []
+        try:
+            v = json.loads(self.mfa_backup_codes)
+            return v if isinstance(v, list) else []
+        except (ValueError, TypeError):
+            return []
+
+    def set_mfa_backup_codes(self, hashes):
+        import json
+        self.mfa_backup_codes = json.dumps(list(hashes)) if hashes else None
+
+    def consume_backup_code(self, code):
+        """If `code` matches an unused backup code, remove that hash (one-time
+        use) and return True. Caller commits."""
+        if not code:
+            return False
+        import json
+        norm = ''.join(ch for ch in str(code).upper() if ch.isalnum())  # drop dashes/spaces
+        if not norm:
+            return False
+        remaining = self.mfa_backup_code_hashes
+        for h in remaining:
+            if check_password_hash(h, norm):
+                remaining = [x for x in remaining if x != h]
+                self.mfa_backup_codes = json.dumps(remaining) if remaining else None
+                return True
+        return False
+
+    def disable_mfa(self):
+        self.mfa_enabled = False
+        self.mfa_secret = None
+        self.mfa_backup_codes = None
 
     def set_reset_token(self, ttl_minutes=60):
         """Issue a single-use reset token: store its hash + expiry, return the

@@ -474,6 +474,10 @@ function View({ d, notify }) {
     if (!await confirm("Reset this user's password to a temporary one? They will have to set a new password at next login.")) return;
     save(u.reset_password_url, {});
   };
+  const resetMfa = async () => {
+    if (!await confirm("Turn off two-factor authentication for this user? Use this only to help a user who has lost their authenticator device.")) return;
+    save(u.reset_mfa_url, {}, () => nav.refresh());
+  };
   const removeAssign = (url, type) => save(url, { type, user_id: u.id }, () => nav.refresh());
   const perm = (active, label, icon) => (
     <div className={`perm ${active ? 'active' : ''}`}><i aria-hidden="true" className={`fas fa-${active ? icon : 'times'}`} /> {label}</div>
@@ -489,6 +493,7 @@ function View({ d, notify }) {
         <div className="page-header-actions">
           <A to={u.edit_url} className="btn btn-warning"><i aria-hidden="true" className="fas fa-edit" /> Edit</A>
           <button type="button" className="btn btn-secondary" onClick={reset}><i aria-hidden="true" className="fas fa-key" /> Reset Password</button>
+          {u.mfa_enabled && <button type="button" className="btn btn-secondary" onClick={resetMfa}><i aria-hidden="true" className="fas fa-shield-xmark" /> Reset 2FA</button>}
           <A to={u.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
         </div>
       </div>

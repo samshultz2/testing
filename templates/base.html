@@ -632,6 +632,11 @@
                                 <div class="profile-head-sub">{{ school_brand.role_label }}{% if school_brand.branch %} · {{ school_brand.branch }}{% endif %}</div>
                                 {% endif %}
                             </div>
+                            {% if session.get('user_id') %}
+                            <a href="{{ url_for('auth.security_settings') }}" class="profile-item" role="menuitem">
+                                <i class="fas fa-shield-halved"></i> Security &amp; 2FA
+                            </a>
+                            {% endif %}
                             <button type="button" class="profile-item header-install-btn" id="installBtn" role="menuitem" style="display:none;">
                                 <i class="fas fa-circle-down"></i> Install app
                             </button>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify — EduSyncra</title>
+    <meta name="theme-color" content="#0e8a64">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; min-height:100vh;
+               display:flex; align-items:center; justify-content:center;
+               background:linear-gradient(135deg,#0d6a4e 0%,#1a1f26 100%); padding:1rem; }
+        .card { background:#fff; border-radius:16px; padding:2rem; max-width:400px; width:100%;
+                box-shadow:0 20px 40px rgba(0,0,0,.3); }
+        .head { text-align:center; margin-bottom:1.5rem; }
+        .head .ic { width:60px; height:60px; margin:0 auto 1rem; border-radius:16px; display:flex;
+                    align-items:center; justify-content:center; background:#f0fbf6; color:#0d6a4e; font-size:1.6rem; }
+        .head h1 { font-size:1.3rem; color:#333; margin-bottom:.25rem; }
+        .head p { color:#666; font-size:.875rem; }
+        .form-label { display:block; font-weight:500; margin-bottom:.5rem; color:#333; font-size:.875rem; }
+        .form-control { width:100%; padding:.75rem 1rem; border:2px solid #e0e0e0; border-radius:8px;
+                        font-size:1.25rem; letter-spacing:.3em; text-align:center; }
+        .form-control:focus { outline:none; border-color:#0d6a4e; }
+        .btn { width:100%; padding:.875rem; background:linear-gradient(135deg,#0d6a4e,#11998e); color:#fff;
+               border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer; margin-top:1rem; }
+        .flash-message { padding:.75rem 1rem; border-radius:8px; margin-bottom:1rem; font-size:.875rem; }
+        .flash-error { background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; }
+        .flash-info { background:#dbeafe; color:#2563eb; border:1px solid #93c5fd; }
+        .flash-warning { background:#fef9c3; color:#a16207; border:1px solid #fde68a; }
+        .alt { text-align:center; margin-top:1.2rem; font-size:.8rem; color:#64748b; }
+        .alt a { color:#0d6a4e; text-decoration:none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="head">
+            <div class="ic"><i class="fas fa-shield-halved"></i></div>
+            <h1>Two-step verification</h1>
+            <p>Enter the 6-digit code from your authenticator app for <strong>{{ user_name }}</strong>.</p>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('auth.verify_mfa') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label" for="code">Authentication code</label>
+            <input type="text" name="code" id="code" class="form-control" inputmode="numeric"
+                   autocomplete="one-time-code" autofocus placeholder="••••••" maxlength="14">
+            <button type="submit" class="btn"><i class="fas fa-unlock"></i> Verify</button>
+        </form>
+        <p class="alt">Lost your device? Enter a <strong>backup code</strong> above, or
+            <a href="{{ url_for('auth.login') }}">start over</a>.</p>
+    </div>
+</body>
+</html>

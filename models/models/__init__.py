@@ -289,6 +289,12 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE users ADD COLUMN reset_token_expires DATETIME')
         if 'permission_group_id' not in u_cols:
             statements.append('ALTER TABLE users ADD COLUMN permission_group_id INTEGER')
+        if 'mfa_enabled' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN mfa_enabled BOOLEAN DEFAULT 0')
+        if 'mfa_secret' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN mfa_secret TEXT')
+        if 'mfa_backup_codes' not in u_cols:
+            statements.append('ALTER TABLE users ADD COLUMN mfa_backup_codes TEXT')
     except Exception:
         pass
 

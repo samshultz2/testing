@@ -154,6 +154,8 @@ def _user_view(u):
         d['assign_subject_url'] = url_for('users.assign_subject', user_id=u.id)
     d['edit_url'] = url_for('users.edit_user', user_id=u.id)
     d['reset_password_url'] = url_for('users.reset_password', user_id=u.id)
+    d['mfa_enabled'] = bool(getattr(u, 'mfa_enabled', False))
+    d['reset_mfa_url'] = url_for('users.reset_mfa', user_id=u.id)
     d['back_url'] = url_for('users.index')
     return d
 
@@ -765,6 +767,25 @@ def reset_password(user_id):
     log_action('user.password_reset', target=user)
     return _ok(f'Temporary password for {user.username}: {temp} — '
                f'they will be required to change it at next login.',
+               url_for('users.view_user', user_id=user.id))
+
+
+@users_bp.route('/<int:user_id>/reset-mfa', methods=['POST'])
+@admin_required
+def reset_mfa(user_id):
+    """Turn off a locked-out user's 2FA so they can sign in again (recovery for a
+    lost authenticator). They can re-enable it afterwards from Security."""
+    user = db.get_or_404(User, user_id)
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+    if not user.mfa_enabled:
+        return _ok(f'{user.username} does not have 2FA enabled.',
+                   url_for('users.view_user', user_id=user.id))
+    user.disable_mfa()
+    db.session.commit()
+    log_action('user.mfa_reset', target=user)
+    return _ok(f'Two-factor authentication turned off for {user.username}.',
                url_for('users.view_user', user_id=user.id))
 
 

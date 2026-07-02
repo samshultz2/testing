@@ -7,6 +7,7 @@ import hmac
 from datetime import datetime, timedelta
 from config import Config
 from models import db, User
+from werkzeug.security import generate_password_hash
 from utils.security import login_limiter, is_password_strong
 
 auth_bp = Blueprint('auth', __name__)
@@ -47,6 +48,31 @@ def _clear_login_failures(ident=None):
         login_limiter.clear_attempts(_account_key(ident))
 
 
+def _complete_login(user):
+    """Finish a fully-authenticated login (password, and 2FA if enabled): drop
+    any pre-login session, set identity, rotate the CSRF token, and land on the
+    dashboard. Shared by the password path and the 2FA verify path."""
+    from utils.branch_scope import set_session_scope
+    from utils.org_scope import set_session_org
+    from utils.csrf import rotate_csrf_token
+    session.clear()
+    session['logged_in'] = True
+    session['user_id'] = user.id
+    session['user'] = user.full_name or user.username
+    session['role'] = user.role
+    set_session_scope(user)
+    set_session_org(user)
+    if user.theme:
+        session['theme'] = user.theme
+    session['must_change_password'] = bool(user.must_change_password)
+    rotate_csrf_token()
+    session.permanent = True
+    user.last_login = datetime.now()
+    db.session.commit()
+    flash(f'Welcome back, {user.full_name or user.username}!', 'success')
+    return redirect(url_for('main.dashboard'))
+
+
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login - supports username/password or legacy password"""
@@ -80,31 +106,21 @@ def login():
                     return redirect(url_for('auth.login'))
                 _clear_login_failures(username)
 
-                # Successful user login. Drop any pre-login session and mint a
-                # fresh CSRF token so a fixed session/token can't be reused.
-                session.clear()
-                session['logged_in'] = True
-                session['user_id'] = user.id
-                session['user'] = user.full_name or user.username
-                session['role'] = user.role
-                from utils.branch_scope import set_session_scope
-                from utils.org_scope import set_session_org
-                set_session_scope(user)
-                set_session_org(user)
-                if user.theme:
-                    session['theme'] = user.theme
-                session['must_change_password'] = bool(user.must_change_password)
-                from utils.csrf import rotate_csrf_token
-                rotate_csrf_token()
-                session.permanent = True
-                
-                # Update last login
-                user.last_login = datetime.now()
-                db.session.commit()
-                
-                flash(f'Welcome back, {user.full_name or user.username}!', 'success')
-                return redirect(url_for('main.dashboard'))
-            
+                # 2FA gate: when the user has TOTP enabled, the password is only
+                # the first factor. Hold a short-lived "pending" session (NOT
+                # logged_in, so every protected route still bounces) and require
+                # a code on the next page before completing the login.
+                if user.mfa_enabled and user.mfa_secret:
+                    session.clear()
+                    session['_pending_mfa_uid'] = user.id
+                    session['_pending_mfa_ts'] = int(datetime.now().timestamp())
+                    from utils.csrf import rotate_csrf_token
+                    rotate_csrf_token()
+                    session.permanent = True
+                    return redirect(url_for('auth.verify_mfa'))
+
+                return _complete_login(user)
+
             elif user:
                 _record_login_failure(username)
                 # Generic message — don't reveal that the username exists.
@@ -135,6 +151,53 @@ def login():
         flash('Invalid credentials. Please try again.', 'error')
 
     return render_template('auth/login.html')
+
+
+@auth_bp.route('/login/verify', methods=['GET', 'POST'])
+def verify_mfa():
+    """Second factor: the password was already verified and a short-lived
+    pending state set. Accept a TOTP code or a one-time backup code, then
+    complete the login. No `logged_in` is set until this passes."""
+    uid = session.get('_pending_mfa_uid')
+    ts = session.get('_pending_mfa_ts') or 0
+    if not uid or (datetime.now().timestamp() - ts) > 600:   # 10-minute window
+        session.pop('_pending_mfa_uid', None)
+        session.pop('_pending_mfa_ts', None)
+        flash('Your sign-in step expired. Please log in again.', 'warning')
+        return redirect(url_for('auth.login'))
+    user = db.session.get(User, uid)
+    if not user or not user.is_active or not user.mfa_enabled or not user.mfa_secret:
+        session.clear()
+        return redirect(url_for('auth.login'))
+
+    if request.method == 'POST':
+        rkey = f'mfa_verify:{uid}'
+        if login_limiter.is_rate_limited(rkey, Config.LOGIN_ACCT_MAX_ATTEMPTS,
+                                         Config.LOGIN_LOCKOUT_MINUTES):
+            flash(f'Too many attempts. Try again in {Config.LOGIN_LOCKOUT_MINUTES} minutes.', 'error')
+            return redirect(url_for('auth.verify_mfa'))
+        from utils.security import MAX_PASSWORD_LEN
+        code = (request.form.get('code') or '').strip()
+        if len(code) > MAX_PASSWORD_LEN:
+            code = ''
+        from utils import totp
+        ok = totp.verify(user.mfa_secret, code)
+        used_backup = False
+        if not ok and user.consume_backup_code(code):
+            db.session.commit()
+            ok = used_backup = True
+        if ok:
+            login_limiter.clear_attempts(rkey)
+            session.pop('_pending_mfa_uid', None)
+            session.pop('_pending_mfa_ts', None)
+            if used_backup:
+                flash('Backup code used — consider regenerating your backup codes.', 'info')
+            return _complete_login(user)
+        login_limiter.record_attempt(rkey)
+        flash('Invalid code. Please try again.', 'error')
+        return redirect(url_for('auth.verify_mfa'))
+
+    return render_template('auth/verify_mfa.html', user_name=user.full_name or user.username)
 
 
 @auth_bp.route('/forgot-password', methods=['GET', 'POST'])
@@ -249,6 +312,120 @@ def change_password():
         return redirect(url_for('main.dashboard'))
     
     return render_template('auth/change_password.html', user=user)
+
+
+# --- Self-service 2FA (TOTP) -------------------------------------------------
+def _self_user():
+    """The logged-in real user (None for legacy-admin or anonymous)."""
+    if not session.get('logged_in') or not session.get('user_id'):
+        return None
+    return db.session.get(User, session.get('user_id'))
+
+
+def _totp_qr_svg(uri):
+    """Inline, scalable SVG QR for an otpauth:// URI (reuses the share-panel
+    pattern). Returns None if the qrcode lib is unavailable."""
+    try:
+        import io as _io
+        import re as _re
+        import qrcode
+        import qrcode.image.svg as _svg
+        buf = _io.BytesIO()
+        qrcode.make(uri, image_factory=_svg.SvgPathImage, box_size=8, border=2).save(buf)
+        svg = buf.getvalue().decode('utf-8')
+        return _re.sub(r'(<svg[^>]*?)\s+width="[^"]*"\s+height="[^"]*"', r'\1', svg, count=1)
+    except Exception:
+        return None
+
+
+def _make_backup_codes(n=10):
+    """Return (display_codes, hashes). Display is dash-grouped for readability;
+    the canonical (alnum-only) form is what gets hashed and matched."""
+    import secrets
+    alpha = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+    display, hashes = [], []
+    for _ in range(n):
+        raw = ''.join(secrets.choice(alpha) for _ in range(8))
+        display.append(raw[:4] + '-' + raw[4:])
+        hashes.append(generate_password_hash(raw))
+    return display, hashes
+
+
+@auth_bp.route('/security')
+def security_settings():
+    user = _self_user()
+    if not user:
+        if session.get('logged_in'):
+            flash('Security settings aren’t available for the legacy admin login.', 'info')
+            return redirect(url_for('main.dashboard'))
+        return redirect(url_for('auth.login'))
+    return render_template('auth/security.html', user=user)
+
+
+@auth_bp.route('/security/2fa/setup')
+def mfa_setup():
+    user = _self_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+    if user.mfa_enabled:
+        flash('Two-factor authentication is already enabled.', 'info')
+        return redirect(url_for('auth.security_settings'))
+    from utils import totp
+    # Save a fresh (not-yet-active) secret on the user so it lives encrypted in
+    # the DB, never in the signed-cookie session.
+    user.mfa_secret = totp.generate_secret()
+    user.mfa_enabled = False
+    db.session.commit()
+    uri = totp.provisioning_uri(user.mfa_secret, user.username or user.full_name or 'user')
+    return render_template('auth/mfa_setup.html', user=user, secret=user.mfa_secret,
+                           qr_svg=_totp_qr_svg(uri))
+
+
+@auth_bp.route('/security/2fa/confirm', methods=['POST'])
+def mfa_confirm():
+    user = _self_user()
+    if not user or not user.mfa_secret:
+        return redirect(url_for('auth.security_settings'))
+    from utils import totp
+    code = (request.form.get('code') or '').strip()
+    if not totp.verify(user.mfa_secret, code):
+        flash('That code didn’t match. Make sure your phone’s time is correct and try again.', 'error')
+        return redirect(url_for('auth.mfa_setup'))
+    display, hashes = _make_backup_codes()
+    user.mfa_enabled = True
+    user.set_mfa_backup_codes(hashes)
+    db.session.commit()
+    flash('Two-factor authentication is now on.', 'success')
+    return render_template('auth/mfa_codes.html', codes=display, fresh=True)
+
+
+@auth_bp.route('/security/2fa/disable', methods=['POST'])
+def mfa_disable():
+    user = _self_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+    if not user.check_password(request.form.get('password') or ''):
+        flash('Password is incorrect — 2FA was not changed.', 'error')
+        return redirect(url_for('auth.security_settings'))
+    user.disable_mfa()
+    db.session.commit()
+    flash('Two-factor authentication has been turned off.', 'success')
+    return redirect(url_for('auth.security_settings'))
+
+
+@auth_bp.route('/security/2fa/backup-codes', methods=['POST'])
+def mfa_backup_codes():
+    user = _self_user()
+    if not user or not user.mfa_enabled:
+        return redirect(url_for('auth.security_settings'))
+    if not user.check_password(request.form.get('password') or ''):
+        flash('Password is incorrect — codes were not regenerated.', 'error')
+        return redirect(url_for('auth.security_settings'))
+    display, hashes = _make_backup_codes()
+    user.set_mfa_backup_codes(hashes)
+    db.session.commit()
+    flash('New backup codes generated. Your old codes no longer work.', 'success')
+    return render_template('auth/mfa_codes.html', codes=display, fresh=False)
 
 
 def get_current_user():

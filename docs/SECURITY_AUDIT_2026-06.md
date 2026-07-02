@@ -47,6 +47,22 @@ Critical/High items before any internet-facing deployment.
 
 ## Remediation log
 
+**Pass 8 (2026-07-02) — M1 RESOLVED: opt-in TOTP two-factor authentication:**
+Staff can now enable per-user TOTP 2FA (RFC-6238, stdlib `utils/totp.py` — no new
+dependency; QR via the existing `qrcode`). Flow: `/security` → enable → scan QR /
+paste key → confirm a code → **10 one-time backup codes shown once**. At login, an
+MFA user's verified password only sets a short-lived pending state (`_pending_mfa_uid`,
+10-min) and redirects to `/login/verify` — `logged_in` is NOT set until a valid TOTP
+**or** backup code is entered (rate-limited per account). Secret stored encrypted
+(`EncryptedString`); backup codes stored hashed and consumed on use. Recovery: backup
+codes + an admin **Reset 2FA** action on the user page (`users.reset_mfa`, audit-logged).
+Self-service disable / regenerate-codes require the account password. New columns
+(`mfa_enabled/mfa_secret/mfa_backup_codes`) auto-migrated on boot. Scope: opt-in per
+user (no org-wide enforcement this round). 514 tests pass incl. `tests/test_mfa.py`
+(RFC-6238 vector, enroll, login gate, wrong-code, backup one-time use, disable,
+admin reset); url_map snapshot regenerated; sw.js v96→v97. All open audit findings
+(C1, H1–H7, M1–M7) are now resolved or accepted-by-design.
+
 **Pass 7 (2026-06-30) — auth/session hardening (focused re-audit):**
 A focused auth/session audit confirmed the strong baseline (scrypt, fixation closed
 on all 4 login paths, single-use hashed reset tokens, 60-min sliding + 8-hr absolute

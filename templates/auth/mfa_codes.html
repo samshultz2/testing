@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Backup codes — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('auth.security_settings') }}">Security</a> / <span>Backup codes</span>{% endblock %}
+{% block content %}
+<style>
+@media print { .filter-card, .no-print { display:none !important; } .print-sheet { border:none !important; box-shadow:none !important; } }
+.print-head { display:none; }
+@media print { .print-head { display:block; margin-bottom:12px; } }
+.bk-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.5rem; max-width:360px; }
+.bk-grid code { font-size:1.05rem; letter-spacing:.06em; padding:.4rem .2rem; text-align:center; background:var(--gray-50); border:1px solid var(--border-color); border-radius:6px; }
+</style>
+
+<div class="page-header no-print"><div>
+    <h1>{% if fresh %}2FA is on — save your backup codes{% else %}New backup codes{% endif %}</h1>
+</div></div>
+
+<div class="card print-sheet" style="max-width:520px; border-color:var(--success);">
+    <div class="card-header"><h3><i class="fas fa-key"></i> Backup codes — shown once</h3>
+        <button type="button" class="btn btn-secondary btn-sm no-print" data-print><i class="fas fa-print"></i> Print</button>
+    </div>
+    <div class="card-body">
+        <div class="print-head"><h2 style="margin:0;">{{ app_name }} — 2FA backup codes</h2></div>
+        <p class="text-muted text-sm no-print"><i class="fas fa-triangle-exclamation" style="color:var(--warning);"></i>
+            Each code works <strong>once</strong>. Store them somewhere safe — they let you sign in if you lose your
+            authenticator device. They are shown only this once.</p>
+        <div class="bk-grid">
+            {% for c in codes %}<code>{{ c }}</code>{% endfor %}
+        </div>
+        <a href="{{ url_for('auth.security_settings') }}" class="btn btn-primary mt-3 no-print"><i class="fas fa-check"></i> Done</a>
+    </div>
+</div>
+{% endblock %}
