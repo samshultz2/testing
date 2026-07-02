@@ -270,6 +270,18 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+@auth_bp.route('/api/session/ping')
+def session_ping():
+    """Lightweight session keepalive. The global `enforce_idle_timeout`
+    before_request already refreshes `last_seen` on every request, so hitting
+    this cheap endpoint on real user activity keeps an actively-used tab from
+    idling out mid-task (e.g. while reading/printing a broadsheet). Returns 204
+    when alive, 401 when not — the client treats it as best-effort."""
+    if not session.get('logged_in'):
+        return ('', 401)
+    return ('', 204)
+
+
 @auth_bp.route('/change-password', methods=['GET', 'POST'])
 def change_password():
     """Allow logged in user to change their password"""

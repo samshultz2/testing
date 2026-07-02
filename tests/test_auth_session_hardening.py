@@ -67,3 +67,21 @@ def test_password_policy_requires_length_and_symbol():
     assert is_password_strong('Short1!')[0] is False          # too short
     assert is_password_strong('A1!' + 'a' * 200)[0] is False  # > 128 (DoS cap)
     assert is_password_strong('StrongPass123!')[0] is True
+
+
+def test_session_ping_keepalive(app):
+    """The keepalive endpoint refreshes the idle clock for an active tab, and is
+    401 for anonymous callers."""
+    import time
+    from tests.conftest import login_token
+    # anonymous -> 401
+    anon = app.test_client()
+    assert anon.get('/api/session/ping').status_code == 401
+    # logged in -> 204, and it resets last_seen so a later request isn't idle-killed
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    assert c.get('/api/session/ping').status_code == 204
+    with c.session_transaction() as s:
+        assert isinstance(s.get('last_seen'), int)
+        s['last_seen'] = int(time.time()) - 1  # fresh (as a ping would leave it)
+    assert c.get('/', follow_redirects=False).status_code == 200   # not bounced to login

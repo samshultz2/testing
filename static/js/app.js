@@ -692,6 +692,36 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e =
 })();
 
 // =============================================================================
+// SESSION KEEPALIVE — keep an ACTIVELY-USED tab from idling out mid-task
+// =============================================================================
+// The server logs users out after SESSION_IDLE_MINUTES of no requests. Reading
+// or printing a long page (e.g. a broadsheet) makes no server requests, so a
+// later click on Download / Open would hit an expired session and bounce to
+// login. Ping a tiny endpoint on real user activity (throttled, visible only)
+// so active tabs stay alive; a walked-away tab (no activity) still idles out as
+// intended, preserving the timeout's purpose. Best-effort — failures ignored.
+(function () {
+    var last = 0;
+    var MIN_GAP = 3 * 60 * 1000;   // at most one ping per 3 minutes
+    function ping() {
+        if (document.visibilityState !== 'visible') return;
+        var now = Date.now();
+        if (now - last < MIN_GAP) return;
+        last = now;
+        fetch('/api/session/ping', {
+            method: 'GET', credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'fetch' }
+        }).catch(function () {});
+    }
+    ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'].forEach(function (ev) {
+        window.addEventListener(ev, ping, { passive: true });
+    });
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') { last = 0; ping(); }
+    });
+})();
+
+// =============================================================================
 // NOTIFICATIONS — header bell (in-app notifications)
 // =============================================================================
 (function () {
