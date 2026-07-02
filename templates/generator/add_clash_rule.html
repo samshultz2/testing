@@ -114,7 +114,8 @@ document.getElementById('sourceClass').addEventListener('change', function() {
     armSelect.innerHTML = '<option value="">All Arms</option>';
     if (arms) {
         arms.split(',').forEach(arm => {
-            armSelect.innerHTML += `<option value="${arm.trim()}">${arm.trim()}</option>`;
+            // new Option() sets value/text safely (no markup injection from arm names).
+            armSelect.add(new Option(arm.trim(), arm.trim()));
         });
     }
 });
@@ -125,7 +126,8 @@ document.getElementById('targetClass').addEventListener('change', function() {
     armSelect.innerHTML = '<option value="">All Arms</option>';
     if (arms) {
         arms.split(',').forEach(arm => {
-            armSelect.innerHTML += `<option value="${arm.trim()}">${arm.trim()}</option>`;
+            // new Option() sets value/text safely (no markup injection from arm names).
+            armSelect.add(new Option(arm.trim(), arm.trim()));
         });
     }
 });

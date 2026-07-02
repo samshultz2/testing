@@ -1099,8 +1099,8 @@ function generateStudentsExport() {
         var rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
         bodyHtml += '<tr style="background:' + rowBg + '">';
         if (showRank) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + (idx + 1) + '</td>';
-        bodyHtml += '<td style="' + tdStyle + '">' + s.name + '</td>';
-        if (showStudentId) bodyHtml += '<td style="' + tdStyle + 'font-size:9px;">' + s.student_id + '</td>';
+        bodyHtml += '<td style="' + tdStyle + '">' + window.escapeHtml(s.name) + '</td>';
+        if (showStudentId) bodyHtml += '<td style="' + tdStyle + 'font-size:9px;">' + window.escapeHtml(s.student_id) + '</td>';
         if (showA1) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#28a745;font-weight:600;">' + s.a1_count + '</td>';
         if (showB2) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;font-weight:600;">' + s.b2_count + '</td>';
         if (showB3) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + s.b3_count + '</td>';
@@ -1119,7 +1119,7 @@ function generateStudentsExport() {
             var grades = '';
             for (var k = 0; k < s.results.length; k++) {
                 var r = s.results[k];
-                grades += r.subject.substring(0, 3) + ':' + r.grade + ' ';
+                grades += window.escapeHtml(String(r.subject).substring(0, 3) + ':' + r.grade) + ' ';
             }
             bodyHtml += '<td style="' + tdStyle + 'font-size:8px;">' + grades + '</td>';
         }

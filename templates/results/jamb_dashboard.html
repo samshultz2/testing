@@ -919,14 +919,14 @@ function generateExport() {
         
         bodyHtml += `<tr style="background:${rowBg}">`;
         if (showRank) bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;">${s.rank}</td>`;
-        bodyHtml += `<td style="${tdStyle}">${s.name}</td>`;
-        if (showStudentId) bodyHtml += `<td style="${tdStyle}font-size:9px;">${s.student_id}</td>`;
+        bodyHtml += `<td style="${tdStyle}">${window.escapeHtml(s.name)}</td>`;
+        if (showStudentId) bodyHtml += `<td style="${tdStyle}font-size:9px;">${window.escapeHtml(s.student_id)}</td>`;
         bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;color:${scoreColor};">${s.total_score}</td>`;
-        
+
         if (showSubjects) {
             for (let i = 0; i < 4; i++) {
                 if (s.subjects[i]) {
-                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:8px;color:#666;">${s.subjects[i].name.substring(0,6)}</span><br><strong>${s.subjects[i].score}</strong></td>`;
+                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:8px;color:#666;">${window.escapeHtml(String(s.subjects[i].name).substring(0,6))}</span><br><strong>${s.subjects[i].score}</strong></td>`;
                 } else {
                     bodyHtml += `<td style="${tdStyle}text-align:center;">-</td>`;
                 }

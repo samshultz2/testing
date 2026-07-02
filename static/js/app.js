@@ -4,6 +4,30 @@
  */
 
 // =============================================================================
+// SHARED HTML-ESCAPING HELPERS
+// One canonical escaper for any place that builds an HTML string from DB/user
+// data (names, comments, etc.) and assigns it via innerHTML. Escapes the five
+// dangerous characters INCLUDING quotes, so values are also safe inside a
+// double- or single-quoted attribute. Exposed on window so inline template
+// scripts (which load after app.js) can reuse it instead of redefining a
+// weaker local esc().
+// =============================================================================
+(function () {
+    var MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    window.escapeHtml = function (s) {
+        return (s == null ? '' : String(s)).replace(/[&<>"']/g, function (c) { return MAP[c]; });
+    };
+    // Return a URL only if it is a safe scheme (relative path, ?query, #hash, or
+    // http/https); anything else (e.g. javascript:) collapses to '#'. Use before
+    // dropping a data-supplied URL into an href/src.
+    window.safeUrl = function (u) {
+        u = (u == null ? '' : String(u)).trim();
+        if (/^(\/|\?|#|https?:\/\/)/i.test(u) && !/^\s*javascript:/i.test(u)) return u;
+        return '#';
+    };
+})();
+
+// =============================================================================
 // SIDEBAR
 // =============================================================================
 function openSidebar() {
@@ -735,7 +759,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e =
         var m = document.querySelector('meta[name="csrf-token"]');
         return m ? m.getAttribute('content') : '';
     }
-    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+    var esc = window.escapeHtml;
 
     function render(data) {
         var n = (data && data.count) || 0;
@@ -744,8 +768,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e =
         var items = (data && data.items) || [];
         if (!items.length) { list.innerHTML = '<div class="notif-empty">No notifications</div>'; return; }
         list.innerHTML = items.map(function (it) {
-            return '<a class="notif-item' + (it.is_read ? '' : ' unread') + '" data-id="' + it.id +
-                (it.url ? '" href="' + esc(it.url) : '') + '">' +
+            return '<a class="notif-item' + (it.is_read ? '' : ' unread') + '" data-id="' + esc(it.id) +
+                (it.url ? '" href="' + esc(window.safeUrl(it.url)) : '') + '">' +
                 '<div class="nt">' + esc(it.title) + '</div>' +
                 (it.body ? '<div class="nb">' + esc(it.body) + '</div>' : '') +
                 '<div class="nw">' + esc(it.when) + '</div></a>';

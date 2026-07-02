@@ -144,13 +144,14 @@ function addSubject() {
     const container = document.getElementById('subjectsContainer');
     const row = document.createElement('div');
     row.className = 'subject-row';
+    const eSubject = window.escapeHtml(subject);
     row.innerHTML = `
         <div class="subject-name">
-            <input type="hidden" name="subject[]" value="${subject}">
-            ${subject}
+            <input type="hidden" name="subject[]" value="${eSubject}">
+            ${eSubject}
         </div>
         <select name="grade[]" class="grade-select">
-            ${grades.map(g => `<option value="${g}" ${g === grade ? 'selected' : ''}>${g}</option>`).join('')}
+            ${grades.map(g => `<option value="${window.escapeHtml(g)}" ${g === grade ? 'selected' : ''}>${window.escapeHtml(g)}</option>`).join('')}
         </select>
         <button type="button" class="remove-btn" data-call="removeSubject" data-args="this">
             <i class="fas fa-times"></i>

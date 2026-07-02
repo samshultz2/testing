@@ -119,7 +119,9 @@ function setupClassArmSync(classId, armId) {
         armSelect.innerHTML = '<option value="">All Arms</option>';
         if (arms) {
             arms.split(',').forEach(arm => {
-                armSelect.innerHTML += `<option value="${arm.trim()}">${arm.trim()}</option>`;
+                // new Option() sets value/text via properties (textContent), so an
+                // arm name can never inject markup into the select.
+                armSelect.add(new Option(arm.trim(), arm.trim()));
             });
         }
     });

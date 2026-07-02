@@ -77,7 +77,7 @@
         if (file.type === 'application/pdf') {
             preview.style.display = 'none';
             fileName.style.display = 'block';
-            fileName.innerHTML = '<i class="fas fa-file-pdf"></i> ' + file.name;
+            fileName.innerHTML = '<i class="fas fa-file-pdf"></i> ' + window.escapeHtml(file.name);
         } else {
             fileName.style.display = 'none';
             preview.src = URL.createObjectURL(file);

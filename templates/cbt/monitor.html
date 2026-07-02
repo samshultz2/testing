@@ -94,7 +94,7 @@
             var concTag = r.concurrent ? '<span class="mob-tag" style="color:#a11;background:#fde2e2" title="'+esc((r.concurrent_devices||[]).join('  |  '))+'"><i class="fas fa-triangle-exclamation"></i> 2 devices</span>' : '';
             var rowCls = (flagged?'flash-row ':'')+(r.concurrent?'concurrent-row':(isMob?'mobile-row':''));
             return '<tr class="'+rowCls+'">'
-                +'<td data-label="Student">'+r.name+(isMob?'<span class="mob-tag"><i class="fas fa-mobile-screen"></i> mobile</span>':'')+concTag+'<div class="text-muted text-sm">'+r.sid+'</div></td>'
+                +'<td data-label="Student">'+esc(r.name)+(isMob?'<span class="mob-tag"><i class="fas fa-mobile-screen"></i> mobile</span>':'')+concTag+'<div class="text-muted text-sm">'+esc(r.sid)+'</div></td>'
                 +'<td data-label="Status">'+st+'</td>'
                 +'<td data-label="Progress"><div class="bar"><i style="width:'+pct+'%"></i></div><span class="text-sm">'+r.answered+'/'+r.questions+'</span></td>'
                 +'<td data-label="Time left">'+(r.status==='In progress'?fmt(r.remaining):'—')+'</td>'
