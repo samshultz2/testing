@@ -168,3 +168,22 @@ def test_copy_subject_config_rejects_bad_level(auth_client):
 def _tok_for(c):
     with c.session_transaction() as s:
         return s.get('_csrf_token')
+
+
+# --- Tier 3: security-monitoring & branch-scope indexes --------------------
+
+def test_security_scope_indexes_exist(app):
+    """branch_id (the access-control filter) and the audit/rate-limit monitoring
+    columns are indexed after boot (via models._ensure_indexes)."""
+    with app.app_context():
+        insp = db.inspect(db.engine)
+        present = set()
+        for t in insp.get_table_names():
+            for ix in insp.get_indexes(t):
+                present.add(ix['name'])
+    for name in ('ix_user_branch', 'ix_staff_branch', 'ix_cbtexam_branch',
+                 'ix_book_branch', 'ix_applicant_branch', 'ix_message_branch',
+                 'ix_permgroup_branch', 'ix_teacher_branch',
+                 'ix_mockjamb_exam_branch', 'ix_mockwaec_exam_branch',
+                 'ix_audit_created', 'ix_audit_action', 'ix_ratelimit_key_ts'):
+        assert name in present, f'missing index {name}'

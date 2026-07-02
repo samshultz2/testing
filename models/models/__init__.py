@@ -458,6 +458,19 @@ _INDEXES = [
     ('ix_term_summary_term', 'term_summaries', 'term_id'),       # term reports / dashboards
     ('ix_feepayment_student', 'fee_payments', 'student_id'),     # student fee history/statement
     ('ix_mockwaec_result_exam', 'mock_waec_results', 'mock_exam_id'),  # broadsheet/exam loads
+    # Branch-scope indexes: branch_id is the primary access-control filter applied
+    # on every list/search of a branch-owned table (scope_query). Index it on the
+    # remaining branch-scoped tables so that filter never forces a full scan.
+    ('ix_user_branch', 'users', 'branch_id'),
+    ('ix_teacher_branch', 'teachers', 'branch_id'),
+    ('ix_staff_branch', 'staff_members', 'branch_id'),
+    ('ix_cbtexam_branch', 'cbt_exams', 'branch_id'),
+    ('ix_book_branch', 'library_books', 'branch_id'),
+    ('ix_applicant_branch', 'applicants', 'branch_id'),
+    ('ix_message_branch', 'messages', 'branch_id'),
+    ('ix_permgroup_branch', 'permission_groups', 'branch_id'),
+    ('ix_mockjamb_exam_branch', 'mock_jamb_exams', 'branch_id'),
+    ('ix_mockwaec_exam_branch', 'mock_waec_exams', 'branch_id'),
 ]
 
 
