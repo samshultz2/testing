@@ -270,6 +270,30 @@ def sanitize_html(value: str) -> str:
     return html.escape(clean.strip())
 
 
+# Matches an HTML-tag-looking sequence: '<' or '</' immediately followed by a
+# letter, up to the next '>'. Requiring a letter right after '<' means ordinary
+# text such as "score < 5 > 3" or "a<b (no close)" is preserved, while any real
+# tag ("<img …>", "<script>", "</b>") — i.e. every XSS payload — is stripped.
+_TAG_RE = re.compile(r'</?[a-zA-Z][^>]*>')
+_CTRL_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+
+
+def strip_tags(value, max_length: int = None) -> str:
+    """Defense-in-depth input cleaner for free-text fields (names, comments,
+    notes, messages, announcements). Removes HTML tags and control characters but
+    — crucially — does NOT HTML-escape, so it can be stored and later rendered
+    through the normal autoescaping layer without double-encoding (a name like
+    ``O'Brien & Sons`` round-trips unchanged; ``<script>x</script>`` becomes
+    ``x``). Preserves ``&``, quotes and apostrophes as literal text."""
+    if value is None:
+        return ''
+    value = _CTRL_RE.sub('', str(value))
+    value = _TAG_RE.sub('', value).strip()
+    if max_length:
+        value = value[:max_length]
+    return value
+
+
 def sanitize_filename(filename: str) -> str:
     """Sanitize a filename for safe storage"""
     if not filename:

@@ -20,6 +20,7 @@ from models import (
 from utils.access_control import login_required, admin_required
 from utils.branch_scope import scope_query, require_branch_access
 from utils import comms
+from utils.security import strip_tags
 
 comms_bp = Blueprint('comms', __name__, url_prefix='/communication')
 
@@ -118,8 +119,8 @@ def announcements():
 
 
 def _read_announcement(a):
-    a.title = (request.form.get('title') or '').strip()
-    a.body = (request.form.get('body') or '').strip() or None
+    a.title = strip_tags(request.form.get('title'))
+    a.body = strip_tags(request.form.get('body')) or None
     a.audience = request.form.get('audience') or 'All'
     a.category = request.form.get('category') or 'Info'
     a.is_pinned = bool(request.form.get('is_pinned'))
@@ -292,9 +293,9 @@ def compose():
 
     if request.method == 'POST':
         audience = request.form.get('audience') or 'all'
-        body = (request.form.get('body') or '').strip()
+        body = strip_tags(request.form.get('body'))
         channel = request.form.get('channel') or 'WhatsApp'
-        title = (request.form.get('title') or '').strip()
+        title = strip_tags(request.form.get('title'))
         class_id = request.form.get('class_id', type=int)
         arm_id = request.form.get('arm_id', type=int)
         student_ids = request.form.getlist('student_ids', type=int)

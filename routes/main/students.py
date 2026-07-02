@@ -1,6 +1,7 @@
 """main blueprint — students routes (split from the former routes/main.py)."""
 from routes.main import *  # noqa: F401,F403  (blueprint, models, helpers)
 from utils.search import like_term
+from utils.security import strip_tags
 
 
 @main_bp.route('/students')
@@ -29,9 +30,9 @@ def add_student():
             # Create student
             student = Student(
                 student_id=Student.generate_student_id(),
-                first_name=request.form.get('first_name', '').strip(),
-                middle_name=request.form.get('middle_name', '').strip() or None,
-                surname=request.form.get('surname', '').strip(),
+                first_name=strip_tags(request.form.get('first_name')),
+                middle_name=strip_tags(request.form.get('middle_name')) or None,
+                surname=strip_tags(request.form.get('surname')),
                 gender=request.form.get('gender'),
                 date_of_birth=parse_date(request.form.get('date_of_birth')),
                 religion=request.form.get('religion'),
@@ -236,11 +237,11 @@ def edit_student(student_id):
                 return complete or key in form
 
             if has('first_name'):
-                student.first_name = form.get('first_name', '').strip()
+                student.first_name = strip_tags(form.get('first_name'))
             if has('surname'):
-                student.surname = form.get('surname', '').strip()
+                student.surname = strip_tags(form.get('surname'))
             if has('middle_name'):
-                student.middle_name = form.get('middle_name', '').strip() or None
+                student.middle_name = strip_tags(form.get('middle_name')) or None
             if has('gender'):
                 student.gender = form.get('gender')
             if has('date_of_birth'):

@@ -15,6 +15,7 @@ from models import (db, Applicant, AcademicSession, SchoolClass, ClassArmAssignm
 from utils.access_control import login_required, admin_required, is_admin
 from utils.branch_scope import scope_query, branch_for_new, require_branch_access, viewing_branch_id
 from utils import admissions
+from utils.security import strip_tags
 from utils.search import like_term
 
 adm_bp = Blueprint('admissions', __name__, url_prefix='/admissions')
@@ -144,22 +145,22 @@ def applicants():
 
 
 def _read_form(a):
-    a.first_name = (request.form.get('first_name') or '').strip()
-    a.surname = (request.form.get('surname') or '').strip()
-    a.middle_name = (request.form.get('middle_name') or '').strip() or None
+    a.first_name = strip_tags(request.form.get('first_name'))
+    a.surname = strip_tags(request.form.get('surname'))
+    a.middle_name = strip_tags(request.form.get('middle_name')) or None
     a.gender = request.form.get('gender') or None
     a.date_of_birth = _d(request.form.get('date_of_birth'))
     a.session_id = request.form.get('session_id', type=int) or None
     a.intended_class_id = request.form.get('intended_class_id', type=int) or None
-    a.previous_school = (request.form.get('previous_school') or '').strip() or None
+    a.previous_school = strip_tags(request.form.get('previous_school')) or None
     a.source = request.form.get('source') or None
     a.entrance_score = request.form.get('entrance_score', type=float)
-    a.parent_name = (request.form.get('parent_name') or '').strip() or None
+    a.parent_name = strip_tags(request.form.get('parent_name')) or None
     a.parent_phone = (request.form.get('parent_phone') or '').strip() or None
     a.parent_email = (request.form.get('parent_email') or '').strip() or None
-    a.relationship = (request.form.get('relationship') or '').strip() or None
-    a.address = (request.form.get('address') or '').strip() or None
-    a.notes = (request.form.get('notes') or '').strip() or None
+    a.relationship = strip_tags(request.form.get('relationship')) or None
+    a.address = strip_tags(request.form.get('address')) or None
+    a.notes = strip_tags(request.form.get('notes')) or None
 
 
 @adm_bp.route('/applicants/add', methods=['GET', 'POST'])

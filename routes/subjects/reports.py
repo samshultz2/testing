@@ -1,5 +1,6 @@
 """subjects blueprint — reports routes (split from the former routes/subjects.py)."""
 from routes.subjects import *  # noqa: F401,F403
+from utils.security import strip_tags
 
 
 @subjects_bp.route('/broadsheet')
@@ -237,8 +238,8 @@ def comments():
             if not ts:
                 ts = TermSummary(student_id=e.student_id, term_id=term_id, enrollment_id=e.id)
                 db.session.add(ts)
-            ts.teacher_comment = (request.form.get(f't_{e.student_id}') or '').strip() or None
-            ts.principal_comment = (request.form.get(f'p_{e.student_id}') or '').strip() or None
+            ts.teacher_comment = strip_tags(request.form.get(f't_{e.student_id}')) or None
+            ts.principal_comment = strip_tags(request.form.get(f'p_{e.student_id}')) or None
         db.session.commit()
         from utils.audit import log_action
         log_action('results.comments', detail=f'term {term_id}, {selected_assignment.display_name}')
