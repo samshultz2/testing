@@ -57,6 +57,27 @@ class ClassTimetable(db.Model):
         return f'<ClassTimetable {self.class_arm_assignment.display_name} - {self.day_name} {self.slot.name}>'
 
 
+class DesignerTimetable(db.Model):
+    """A saved, named timetable created in the client-side Timetable Designer
+    (Saturday classes, holiday lessons, exams, custom grids). The full designer
+    state — sessions, options, theme, layout, and the Saturday lesson-free plan —
+    is stored as a single JSON blob, so the schema stays layout-agnostic. Branch
+    scoped like the rest of the app (``branch_id`` NULL = central/unbranched)."""
+    __tablename__ = 'designer_timetables'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True, index=True)
+    name = db.Column(db.String(150), nullable=False)
+    layout = db.Column(db.String(30))            # saturday/holiday/exam/grid/...
+    data = db.Column(db.Text)                    # full designer-state JSON
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    def __repr__(self):
+        return f'<DesignerTimetable {self.id} {self.name!r} ({self.layout})>'
+
+
 class TimetableBackup(db.Model):
     """A point-in-time snapshot of the per-class timetables (ClassTimetable),
     taken before a destructive change (e.g. applying a generated batch) so the

@@ -1,0 +1,109 @@
+"""Saved Timetable Designer designs: create / list / load / update / delete,
+and branch isolation (one branch can't see, load or delete another's design)."""
+import json
+
+from models import db, Branch, User, DesignerTimetable
+from tests.conftest import login_token
+
+
+def _tok(c):
+    """The session CSRF token after login (logins rotate it)."""
+    with c.session_transaction() as s:
+        return s.get('_csrf_token')
+
+
+def _branch_login(app, username, branch_id):
+    with app.app_context():
+        u = User.query.filter_by(username=username).first()
+        if not u:
+            u = User(username=username, full_name=username, role='admin',
+                     scope='branch', branch_id=branch_id, is_active=True)
+            u.set_password('secret123')
+            db.session.add(u); db.session.commit()
+    c = app.test_client()
+    c.post('/login', data={'username': username, 'password': 'secret123',
+                           '_csrf_token': login_token(c)})
+    return c
+
+
+SAMPLE = {
+    'name': 'Sat First Term',
+    'layout': 'saturday',
+    'data': {'layout': 'saturday',
+             'rows': [{'week': '1', 'time': '08:00', 'dur': '60', 'subject': 'Maths'}],
+             'saturday': {'first': '2026-01-10', 'free': {}}},
+}
+
+
+def test_save_list_load_update_delete(auth_client):
+    c = auth_client
+    tok = _tok(c)
+
+    # create
+    r = c.post('/timetable/designer/save', json=SAMPLE, headers={'X-CSRFToken': tok})
+    assert r.status_code == 200
+    did = r.get_json()['id']
+
+    # list contains it
+    lst = c.get('/timetable/designer/saved').get_json()
+    assert any(d['id'] == did and d['name'] == 'Sat First Term' for d in lst)
+
+    # load returns the stored JSON (the Saturday plan round-trips)
+    loaded = c.get(f'/timetable/designer/load/{did}').get_json()
+    assert loaded['name'] == 'Sat First Term'
+    assert json.loads(loaded['data'])['saturday']['first'] == '2026-01-10'
+
+    # update by id (rename) — no new row is created
+    r = c.post('/timetable/designer/save',
+               json={'id': did, 'name': 'Renamed', 'layout': 'saturday',
+                     'data': SAMPLE['data']},
+               headers={'X-CSRFToken': tok})
+    assert r.status_code == 200 and r.get_json()['id'] == did
+    assert c.get(f'/timetable/designer/load/{did}').get_json()['name'] == 'Renamed'
+    with c.application.app_context():
+        assert DesignerTimetable.query.filter_by(id=did).count() == 1
+
+    # delete
+    r = c.post(f'/timetable/designer/delete/{did}', headers={'X-CSRFToken': tok})
+    assert r.status_code == 200
+    assert all(d['id'] != did for d in c.get('/timetable/designer/saved').get_json())
+
+
+def test_save_requires_a_name(auth_client):
+    r = auth_client.post('/timetable/designer/save',
+                         json={'layout': 'saturday', 'data': {}},
+                         headers={'X-CSRFToken': _tok(auth_client)})
+    assert r.status_code == 400
+
+
+def test_save_rejects_without_csrf(auth_client):
+    # global CSRF protection guards the write (no token -> 400)
+    r = auth_client.post('/timetable/designer/save', json=SAMPLE)
+    assert r.status_code == 400
+
+
+def test_branch_isolation(app):
+    with app.app_context():
+        b1 = Branch.query.filter_by(name='DTB1').first() or Branch(name='DTB1', is_active=True)
+        b2 = Branch.query.filter_by(name='DTB2').first() or Branch(name='DTB2', is_active=True)
+        db.session.add_all([b1, b2]); db.session.commit()
+        b1id, b2id = b1.id, b2.id
+
+    ca = _branch_login(app, 'dt_a', b1id)
+    cb = _branch_login(app, 'dt_b', b2id)
+
+    # A saves a design in branch 1
+    r = ca.post('/timetable/designer/save',
+                json={'name': 'A-only', 'layout': 'saturday', 'data': {}},
+                headers={'X-CSRFToken': _tok(ca)})
+    assert r.status_code == 200
+    did = r.get_json()['id']
+
+    # A sees it; B does not
+    assert any(d['id'] == did for d in ca.get('/timetable/designer/saved').get_json())
+    assert all(d['id'] != did for d in cb.get('/timetable/designer/saved').get_json())
+
+    # B can neither load nor delete it (cross-branch IDOR guarded)
+    assert cb.get(f'/timetable/designer/load/{did}').status_code == 403
+    assert cb.post(f'/timetable/designer/delete/{did}',
+                   headers={'X-CSRFToken': _tok(cb)}).status_code == 403

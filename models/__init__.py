@@ -10,7 +10,7 @@ from .models import (
     SchoolSettings, GradeScale, BehaviouralTrait,
     Subject, ClassSubject, AssessmentType, SubjectAssessmentOverride,
     StudentScore, TermResult, TermSummary,
-    TimetableSlot, ClassTimetable, TimetableBackup,
+    TimetableSlot, ClassTimetable, TimetableBackup, DesignerTimetable,
     PromotionRule, PromotionRecord,
     User, PermissionGroup, Teacher, TeacherClassAssignment, TeacherSubjectAssignment,
     AuditLog,

@@ -8,7 +8,9 @@ from models import (
     Term, ClassSubject
 )
 from utils.helpers import login_required
-from utils.branch_scope import require_branch_access
+from utils.branch_scope import (
+    require_branch_access, scope_query, branch_for_new,
+)
 from utils.access_control import is_admin, can_write_module, get_teacher_profile
 
 timetable_bp = Blueprint('timetable', __name__, url_prefix='/timetable')
@@ -51,7 +53,8 @@ def _slot_dict(s):
 def designer():
     """Stand-alone designer for special, one-off timetables (Saturday classes,
     holiday lessons, exams, or a blank custom grid). Everything is entered and
-    rendered in the browser and printed/saved as PDF — nothing is stored."""
+    rendered in the browser and printed/saved as PDF. Designs can also be saved
+    with a name (see the ``/designer/save`` family) and reloaded later."""
     from models import SchoolSettings
     from utils.school import logo_url
     school_name = SchoolSettings.get('school_name', '') or ''
@@ -59,7 +62,98 @@ def designer():
                 Subject.query.filter_by(is_active=True).order_by(Subject.name).all()]
     return render_template('timetable/designer.html',
                            school_name=school_name, school_logo_url=logo_url(),
-                           subjects=subjects)
+                           subjects=subjects, saved_designs=_saved_designs_list())
+
+
+# --- Saved designer timetables ---------------------------------------------
+# A saved design is the full client-side designer state (sessions, options,
+# theme, layout, and the Saturday lesson-free plan) stored as one JSON blob.
+# Branch-scoped exactly like the rest of the app.
+
+def _saved_designs_list():
+    """[{id, name, layout, updated_at}] for the branch(es) in view."""
+    from models import DesignerTimetable
+    rows = scope_query(DesignerTimetable.query, DesignerTimetable) \
+        .order_by(DesignerTimetable.updated_at.desc()).all()
+    return [{'id': r.id, 'name': r.name, 'layout': r.layout or '',
+             'updated_at': r.updated_at.strftime('%Y-%m-%d %H:%M') if r.updated_at else ''}
+            for r in rows]
+
+
+@timetable_bp.route('/designer/saved')
+@login_required
+def designer_saved():
+    """JSON list of this branch's saved designer timetables."""
+    return jsonify(_saved_designs_list())
+
+
+@timetable_bp.route('/designer/save', methods=['POST'])
+@login_required
+def designer_save():
+    """Create a new saved design, or update an existing one by ``id``.
+
+    Body (JSON or form): ``id`` (optional), ``name``, ``layout``, ``data``
+    (the designer-state JSON, sent as a string or object)."""
+    import json as _json
+    from flask import session as _session
+    from models import DesignerTimetable
+    payload = request.get_json(silent=True) or request.form
+    name = (payload.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'A name is required.'}), 400
+    if len(name) > 150:
+        name = name[:150]
+    layout = (payload.get('layout') or '')[:30]
+    data = payload.get('data')
+    if not isinstance(data, str):
+        data = _json.dumps(data or {})
+    if len(data) > 2_000_000:            # ~2MB guard against runaway payloads
+        return jsonify({'error': 'Design is too large to save.'}), 400
+
+    design_id = payload.get('id')
+    if design_id:
+        design = db.session.get(DesignerTimetable, int(design_id))
+        if not design:
+            return jsonify({'error': 'not found'}), 404
+        require_branch_access(design.branch_id)   # no cross-branch overwrite
+        design.name = name
+        design.layout = layout
+        design.data = data
+    else:
+        design = DesignerTimetable(
+            name=name, layout=layout, data=data,
+            branch_id=branch_for_new(),
+            created_by_id=_session.get('user_id'))
+        db.session.add(design)
+    db.session.commit()
+    return jsonify({'id': design.id, 'name': design.name})
+
+
+@timetable_bp.route('/designer/load/<int:design_id>')
+@login_required
+def designer_load(design_id):
+    """Return a saved design's name/layout/data (branch-checked)."""
+    from models import DesignerTimetable
+    design = db.session.get(DesignerTimetable, design_id)
+    if not design:
+        return jsonify({'error': 'not found'}), 404
+    require_branch_access(design.branch_id)
+    return jsonify({'id': design.id, 'name': design.name,
+                    'layout': design.layout or '', 'data': design.data or '{}'})
+
+
+@timetable_bp.route('/designer/delete/<int:design_id>', methods=['POST'])
+@login_required
+def designer_delete(design_id):
+    """Delete a saved design (branch-checked)."""
+    from models import DesignerTimetable
+    design = db.session.get(DesignerTimetable, design_id)
+    if not design:
+        return jsonify({'error': 'not found'}), 404
+    require_branch_access(design.branch_id)
+    db.session.delete(design)
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 @timetable_bp.route('/backups')

@@ -27,6 +27,22 @@
 .bulk-box summary{cursor:pointer;font-weight:600;color:var(--primary,#2563eb)}
 .bulk-box textarea{width:100%;margin:.5rem 0;padding:.7rem;font-size:.95rem;border:1px solid var(--border-color);border-radius:9px;font-family:inherit;background:var(--bg-card);color:var(--text-primary)}
 
+/* save / saved-list + Saturday plan */
+.tt-save,.tt-sat{border-top:1px solid var(--border-color);padding-top:1rem;margin-top:.25rem}
+.tt-save .badge{display:inline-block;min-width:1.3em;padding:.05em .45em;border-radius:999px;background:var(--gray-200);color:var(--text-secondary);font-size:.78rem;font-weight:700;text-align:center}
+.saved-panel{margin-top:.85rem;border:1px solid var(--border-color);border-radius:10px;overflow:hidden}
+.saved-item{display:flex;align-items:center;gap:.6rem;padding:.6rem .85rem;border-bottom:1px solid var(--border-color)}
+.saved-item:last-child{border-bottom:none}
+.saved-item .s-name{font-weight:600;flex:1 1 auto;min-width:0}
+.saved-item .s-name small{display:block;font-weight:400;color:var(--text-muted);font-size:.78rem}
+.saved-item .s-actions{display:flex;gap:.4rem;flex-shrink:0}
+.saved-empty{padding:1rem;text-align:center;color:var(--text-muted)}
+.sat-manage{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.85rem}
+.sat-chip{display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:9px;padding:.4rem .6rem;font-size:.85rem;background:var(--bg-card)}
+.sat-chip.free{opacity:.7;text-decoration:line-through;background:var(--gray-50)}
+.sat-chip .s-wk{font-weight:700;color:var(--primary,#0d6a4e)}
+.sat-chip.free .s-wk{color:var(--danger,#dc2626)}
+
 /* ---- the printable sheet ---- */
 .tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1100px;margin:0 auto;overflow-x:auto;font-size:17px}
 .tt-sheet .tt-head{text-align:center;margin-bottom:14px}
@@ -168,7 +184,7 @@
 
 {% block content %}
 <div class="page-header no-print"><h1><i class="fas fa-drafting-compass"></i> Timetable Designer</h1></div>
-<p class="text-muted no-print" style="margin-top:-.5rem">Design a one-off timetable (Saturday classes, holiday lessons, exams or a blank grid) and print it or save it as PDF. Nothing here is saved.</p>
+<p class="text-muted no-print" style="margin-top:-.5rem">Design a timetable (Saturday classes, holiday lessons, exams or a blank grid), print it, save it as PDF — or <b>save it with a name</b> to reload and edit later.</p>
 
 <div class="card mb-3 no-print">
     <div class="card-body tt-controls">
@@ -224,6 +240,38 @@
             <div class="form-group" style="align-self:end">
                 <button class="btn btn-primary" data-call="openExport"><i class="fas fa-download"></i> Download (PDF / image)</button>
             </div>
+        </div>
+
+        <!-- Save / load named designs -->
+        <div class="tt-save no-print">
+            <div class="row3" style="align-items:end">
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">Save this timetable as</label>
+                    <input id="saveName" class="form-control" placeholder="e.g. Saturday Classes — First Term">
+                </div>
+                <div class="form-group" style="align-self:end;margin:0">
+                    <button class="btn btn-success" data-call="saveDesign"><i class="fas fa-save"></i> <span id="saveBtnLabel">Save</span></button>
+                    <button class="btn btn-light btn-sm" type="button" data-call="newDesign" id="newBtn" style="display:none"><i class="fas fa-file"></i> New</button>
+                </div>
+                <div class="form-group" style="align-self:end;margin:0">
+                    <button class="btn btn-secondary" type="button" data-call="toggleSaved"><i class="fas fa-folder-open"></i> Saved timetables <span id="savedCount" class="badge">0</span></button>
+                </div>
+            </div>
+            <div id="savedPanel" class="saved-panel" style="display:none"></div>
+        </div>
+
+        <!-- Saturday plan: first Saturday + lesson-free cascade (Saturday layout only) -->
+        <div id="satPanel" class="tt-sat no-print" style="display:none">
+            <div class="row3" style="align-items:end">
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">First Saturday <span class="text-muted">(week 1)</span></label>
+                    <input type="date" id="satFirst" class="form-control">
+                </div>
+                <div class="form-group" style="align-self:end;margin:0;grid-column:span 2">
+                    <p class="sess-hint" style="margin:0">Enter a <b>week number</b> for each session below. Set the first Saturday’s date, then tick any Saturday as <b>lesson-free</b> — that week and every week after it shift to the next available Saturday automatically.</p>
+                </div>
+            </div>
+            <div id="satManage" class="sat-manage"></div>
         </div>
 
         <!-- Session editor (Saturday / Holiday / Exam) -->
@@ -334,8 +382,8 @@ Break
 <script nonce="{{ csp_nonce }}">
 var LAYOUTS = {
     saturday: {title:'Saturday Class Timetable', mode:'grid',
-               fields:['date','day','group','time','dur','subject','teacher'],
-               hint:'Each day becomes a row and each time slot a column, with the teacher shown under the subject. Enter a Date and the Day fills in automatically (both show together in the day column). Use “Class / Stream” to stack more than one group under the same day (e.g. SSS3 and JSS3).'},
+               fields:['week','group','time','dur','subject','teacher'],
+               hint:'Each week becomes a row and each time slot a column, with the teacher shown under the subject. Set the “First Saturday” date above; the actual date for every week is worked out for you. Tick any Saturday as lesson-free and that week (and all later weeks) shift to the next Saturday. Use “Class / Stream” to stack more than one group under the same week (e.g. SSS3 and JSS3).'},
     holiday:  {title:'Holiday Lesson Timetable', mode:'grid',
                fields:['date','day','group','time','dur','subject','teacher'],
                hint:'Each day is a row and each time slot a column. Enter a Date and the Day fills in automatically (both show together in the day column). Use “Class / Stream” when a day has different subjects per group — e.g. on Monday, Science vs Arts/Social-Science get their own rows.'},
@@ -344,6 +392,7 @@ var LAYOUTS = {
                hint:'Each exam is one row, listed by date and time. A blank “Invigilator’s Signature” column is added on the printout.'},
 };
 var FIELD = {
+    week:   {label:'Week'},
     date:   {label:'Date'},
     day:    {label:'Day'},
     group:  {label:'Class / Stream (optional)'},
@@ -430,6 +479,7 @@ function isAll(g){ return (g||'').trim().toLowerCase()==='all'; }
 function fieldInput(r,c){
     var v=esc(r[c]||'');
     switch(c){
+        case 'week':    return '<input type="number" min="1" step="1" inputmode="numeric" data-f="week" value="'+v+'" placeholder="e.g. 1">';
         case 'date':    return '<input type="date" data-f="date" value="'+v+'">';
         case 'day':     return '<input data-f="day" list="dayList" value="'+v+'" placeholder="e.g. Monday">';
         case 'time':    return '<input type="time" data-f="time" value="'+v+'">';
@@ -453,8 +503,8 @@ function sessCard(r,i){
          + '</span></div>'
          + '<div class="sess-grid">'+inner+'</div></div>';
 }
-var BULK_SHORT={date:'Date',day:'Day',group:'Class/Stream',time:'Start',dur:'Minutes',subject:'Subject',teacher:'Teacher',venue:'Venue'};
-function blankRow(){ return {date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}; }
+var BULK_SHORT={week:'Week',date:'Date',day:'Day',group:'Class/Stream',time:'Start',dur:'Minutes',subject:'Subject',teacher:'Teacher',venue:'Venue'};
+function blankRow(){ return {week:'',date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}; }
 function normTime(t){
     t=(t||'').trim(); if(!t) return '';
     var m=t.match(/^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i); if(!m) return t;
@@ -479,7 +529,7 @@ function focusCard(i){
 function addRow(){
     var last=rows[rows.length-1], r=blankRow();
     if(last){
-        r.date=last.date; r.day=last.day; r.group=last.group; r.dur=last.dur; r.venue=last.venue;
+        r.week=last.week; r.date=last.date; r.day=last.day; r.group=last.group; r.dur=last.dur; r.venue=last.venue;
         r.time=(last.time && last.dur)?addMinutes(last.time,last.dur):last.time;
     }
     rows.push(r); renderEditor(); renderSheet(); focusCard(rows.length-1);
@@ -615,7 +665,8 @@ document.addEventListener('input', function(e){
         var i=parseInt(card.dataset.i,10), f=e.target.dataset.f;
         if(f){ rows[i][f]=e.target.value;
             if(f==='date'){ var auto=dayFromDate(e.target.value); if(auto){ rows[i].day=auto;
-                var di=card.querySelector('[data-f="day"]'); if(di) di.value=auto; } } }
+                var di=card.querySelector('[data-f="day"]'); if(di) di.value=auto; } }
+            if(f==='week') renderManageSaturdays(); }
         renderSheet();
     } else if(['title','subtitle','school','gridCols','gridRows'].indexOf(e.target.id)>=0){
         renderSheet();
@@ -652,7 +703,7 @@ function renderGridModeSheet(){
         var date=r.date||'';
         var day=(date?dayFromDate(date):'') || (r.day||'').trim() || '—';
         var key=date||day;
-        if(!dmap[key]){ dmap[key]={day:day, date:date,
+        if(!dmap[key]){ dmap[key]={day:day, date:date, label:(r.daylabel||''),
             sort:(parseDateAny(date)?parseDateAny(date).iso:('zz'+('0'+dayRank(day)).slice(-2))),
             groups:[], gset:{}, cells:{}, banners:[]}; order.push(key); }
         var d=dmap[key];
@@ -679,7 +730,7 @@ function renderGridModeSheet(){
         var groups = anyGroup ? d.groups.slice() : [''];
         var totalRows = groups.length + d.banners.length;
         if(totalRows===0) totalRows=1;
-        var dlabel=esc(d.day || dayFromDate(d.date) || '—');
+        var dlabel=esc(d.label || d.day || dayFromDate(d.date) || '—');
         if(d.date){ dlabel+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>'; }
         var first=true;
         // precompute, per period, whether all groups share identical content (→ merge)
@@ -821,25 +872,208 @@ function renderBlankGridSheet(){
     el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 
+// ---------- Saturday plan: first-Saturday date + lesson-free cascade ----------
+// The Saturday timetable is ordered by WEEK; the actual date of each week is
+// computed from the first Saturday, skipping any Saturday marked lesson-free.
+// Marking a Saturday free shrinks the list of available Saturdays, so that week
+// and every later week automatically shift to the next Saturday(s).
+var saturdayPlan = { first:'', free:{} };   // free: { 'YYYY-MM-DD': true }
+function isSaturdayLayout(){ return el('layout').value==='saturday'; }
+function addDaysISO(iso, days){
+    var p=parseDateAny(iso); if(!p) return '';
+    var d=new Date(p.y, p.m-1, p.d); d.setDate(d.getDate()+days);
+    return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+function weeksInUse(){
+    var s={}; rows.forEach(function(r){ var w=parseInt(r.week,10); if(w>=1) s[w]=1; });
+    return Object.keys(s).map(Number).sort(function(a,b){ return a-b; });
+}
+// Generate consecutive Saturdays from the first date, assign each non-free one to
+// the next week, and offer a few spare upcoming Saturdays that can be freed too.
+function computeSaturdayDates(){
+    var first=saturdayPlan.first, weeks=weeksInUse();
+    var maxWeek=weeks.length?weeks[weeks.length-1]:0;
+    var out={ weekDate:{}, saturdays:[] };
+    if(!parseDateAny(first)) return out;
+    var iso=first, wk=0, extra=0, guard=0;
+    while(guard++ < 520){
+        var free=!!saturdayPlan.free[iso];
+        var e={iso:iso, free:free, week:0};
+        if(!free){ wk++; e.week=wk; out.weekDate[wk]=iso; }
+        out.saturdays.push(e);
+        if(wk>=maxWeek){ extra++; if(extra>=5) break; }   // a few spare Saturdays to offer
+        iso=addDaysISO(iso, 7);
+    }
+    return out;
+}
+// Stamp the computed date + a "Week N" label onto each Saturday session so the
+// generic grid renderer groups and sorts them by cascaded date.
+function applySaturdayDates(){
+    if(!isSaturdayLayout()) return;
+    var map=computeSaturdayDates().weekDate;
+    rows.forEach(function(r){
+        var w=parseInt(r.week,10);
+        if(w>=1){ r.daylabel='Week '+w; r.day='Week '+w; r.date=map[w]||''; }
+        else { r.daylabel=''; r.date=''; }
+    });
+}
+function renderManageSaturdays(){
+    var box=el('satManage'); if(!box) return;
+    if(!isSaturdayLayout()){ box.innerHTML=''; return; }
+    el('satFirst').value=saturdayPlan.first||'';
+    var info=computeSaturdayDates();
+    if(!info.saturdays.length){
+        box.innerHTML='<p class="sess-hint" style="margin:0">Set the first Saturday’s date above, then tick any Saturday that won’t hold lessons.</p>';
+        return;
+    }
+    box.innerHTML=info.saturdays.map(function(s){
+        var tag=s.free ? '<span class="s-wk">No lessons</span>'
+                       : '<span class="s-wk">Week '+s.week+'</span>';
+        return '<label class="sat-chip'+(s.free?' free':'')+'">'
+             + '<input type="checkbox" data-iso="'+s.iso+'"'+(s.free?' checked':'')+'> '
+             + tag+' · '+esc(fmtDate(s.iso))+'</label>';
+    }).join('');
+}
+
+// ---------- save / load / list named designs ----------
+var currentDesignId = null;
+var URL_SAVE = "{{ url_for('timetable.designer_save') }}";
+var URL_LIST = "{{ url_for('timetable.designer_saved') }}";
+var URL_LOAD = "{{ url_for('timetable.designer_load', design_id=0) }}".slice(0,-1);
+var URL_DEL  = "{{ url_for('timetable.designer_delete', design_id=0) }}".slice(0,-1);
+var INITIAL_SAVED = {{ saved_designs|tojson }};
+var LAYOUT_LABEL={saturday:'Saturday classes',holiday:'Holiday lessons',exam:'Examination',
+                  grid:'Blank grid',roster_week:'Weekly roster',roster_day:'Daily roster'};
+function labelForLayout(k){ return LAYOUT_LABEL[k]||k||''; }
+
+function collectState(){
+    return { v:1, layout:el('layout').value, theme:el('theme').value,
+        school:el('school').value, title:el('title').value,
+        titleTouched:!!el('title').dataset.touched, subtitle:el('subtitle').value,
+        orient:el('orient').value, gridCols:el('gridCols').value, gridRows:el('gridRows').value,
+        rosterCount:el('rosterCount').value, rows:rows, rosterCells:rosterCells,
+        saturday:saturdayPlan };
+}
+function applyState(s){
+    if(!s) return;
+    el('layout').value=s.layout||'saturday';
+    el('theme').value=s.theme||'modern';
+    el('school').value=s.school||'';
+    el('subtitle').value=s.subtitle||'';
+    el('orient').value=s.orient||'rows';
+    if(s.gridCols!=null) el('gridCols').value=s.gridCols;
+    if(s.gridRows!=null) el('gridRows').value=s.gridRows;
+    if(s.rosterCount!=null) el('rosterCount').value=s.rosterCount;
+    rows=Array.isArray(s.rows)?s.rows.map(function(r){ return Object.assign(blankRow(), r); }):[];
+    rosterCells=s.rosterCells||{};
+    saturdayPlan=(s.saturday && typeof s.saturday==='object')?s.saturday:{first:'',free:{}};
+    if(!saturdayPlan.free) saturdayPlan.free={};
+    el('satFirst').value=saturdayPlan.first||'';
+    syncLayoutUI();                                   // toggles panels without wiping loaded data
+    if(s.titleTouched) el('title').dataset.touched='1'; else delete el('title').dataset.touched;
+    el('title').value=s.title||'';
+    renderManageSaturdays();
+    if(!isBlankGrid()) renderEditor();
+    renderSheet();
+}
+function flashSaved(){
+    var l=el('saveBtnLabel'), fresh=currentDesignId?'Save changes':'Save';
+    l.textContent='Saved ✓';
+    setTimeout(function(){ l.textContent=fresh; }, 1400);
+}
+function _designMarkSaved(){
+    el('newBtn').style.display='';
+    el('saveBtnLabel').textContent='Save changes';
+}
+function saveDesign(){
+    var name=(el('saveName').value||'').trim();
+    if(!name){ alert('Give the timetable a name first.'); el('saveName').focus(); return; }
+    var body={ name:name, layout:el('layout').value, data:collectState() };
+    if(currentDesignId) body.id=currentDesignId;
+    fetch(URL_SAVE, { method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ alert((res.j&&res.j.error)||'Could not save the timetable.'); return; }
+        currentDesignId=res.j.id; _designMarkSaved(); flashSaved(); loadSavedList(true);
+      }).catch(function(){ alert('Network error while saving.'); });
+}
+function newDesign(){
+    currentDesignId=null; el('saveName').value='';
+    el('newBtn').style.display='none'; el('saveBtnLabel').textContent='Save';
+}
+function toggleSaved(){
+    var p=el('savedPanel');
+    if(p.style.display==='none'){ p.style.display='block'; loadSavedList(); }
+    else p.style.display='none';
+}
+function renderSavedList(list){
+    el('savedCount').textContent=list.length;
+    if(!list.length){ el('savedPanel').innerHTML='<div class="saved-empty">No saved timetables yet. Give one a name and click Save.</div>'; return; }
+    el('savedPanel').innerHTML=list.map(function(d){
+        return '<div class="saved-item">'
+             + '<div class="s-name">'+esc(d.name)+'<small>'+esc(labelForLayout(d.layout))+' · updated '+esc(d.updated_at)+'</small></div>'
+             + '<div class="s-actions">'
+             + '<button class="btn btn-sm btn-primary" data-call="loadDesign" data-args="'+d.id+'"><i class="fas fa-folder-open"></i> Load</button>'
+             + '<button class="btn btn-sm btn-secondary" title="Duplicate" data-call="dupDesign" data-args="'+d.id+'"><i class="fas fa-copy"></i></button>'
+             + '<button class="btn btn-sm btn-light" title="Delete" data-call="deleteDesign" data-args="'+d.id+'"><i class="fas fa-trash"></i></button>'
+             + '</div></div>';
+    }).join('');
+}
+function loadSavedList(silent){
+    fetch(URL_LIST, { credentials:'same-origin', headers:{'X-Requested-With':'fetch'} })
+      .then(function(r){ return r.json(); })
+      .then(renderSavedList)
+      .catch(function(){ if(!silent) el('savedPanel').innerHTML='<div class="saved-empty">Could not load saved timetables.</div>'; });
+}
+function _fetchDesign(id){
+    return fetch(URL_LOAD+id, { credentials:'same-origin', headers:{'X-Requested-With':'fetch'} })
+      .then(function(r){ return r.json(); });
+}
+function _parseData(d){ try{ return JSON.parse(d.data||'{}'); }catch(e){ return null; } }
+function loadDesign(id){
+    _fetchDesign(id).then(function(d){
+        if(d.error){ alert('Could not load that timetable.'); return; }
+        currentDesignId=d.id; el('saveName').value=d.name||''; _designMarkSaved();
+        applyState(_parseData(d));
+        el('savedPanel').style.display='none';
+        window.scrollTo({ top:0, behavior:'smooth' });
+    }).catch(function(){ alert('Network error while loading.'); });
+}
+function dupDesign(id){
+    _fetchDesign(id).then(function(d){
+        if(d.error){ alert('Could not load that timetable.'); return; }
+        newDesign(); el('saveName').value=(d.name||'Timetable')+' (copy)';
+        applyState(_parseData(d));
+        el('savedPanel').style.display='none';
+        window.scrollTo({ top:0, behavior:'smooth' });
+    }).catch(function(){ alert('Network error while loading.'); });
+}
+function deleteDesign(id){
+    if(!confirm('Delete this saved timetable? This cannot be undone.')) return;
+    fetch(URL_DEL+id, { method:'POST', credentials:'same-origin' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ alert('Could not delete that timetable.'); return; }
+        if(String(currentDesignId)===String(id)) newDesign();
+        loadSavedList();
+      }).catch(function(){ alert('Network error while deleting.'); });
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
+    applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
 
-function onLayoutChange(){
-    var v=el('layout').value;
+// Show/hide the editor panels for the current layout. Pure UI — never resets
+// entered data, so it is safe to call when loading a saved design.
+function syncLayoutUI(){
     var blank = isBlankGrid();
     var isGridMode = !blank && layout().mode==='grid';
-    // A roster drops in its matching template (weeks×days or days×duty) and starts a
-    // fresh set of cells, since switching axis changes what each cell means.
-    if(ROSTER_PRESETS[v]){
-        el('gridRows').value=ROSTER_PRESETS[v].rows;
-        el('gridCols').value=rosterCols();
-        rosterCells={};
-    }
     el('gridEditor').style.display = blank?'block':'none';
     el('rowEditor').style.display = blank?'none':'block';
     // For rosters, swap the free-text "Column headers" box for a "students per row"
@@ -849,12 +1083,27 @@ function onLayoutChange(){
     // grid paste & the orientation choice only apply to the day×period layouts
     el('gridPasteBox').style.display = isGridMode ? 'block':'none';
     el('orientWrap').style.display = isGridMode ? 'block':'none';
+    // the Saturday first-date + lesson-free planner only applies to Saturday classes
+    el('satPanel').style.display = isSaturdayLayout() ? 'block':'none';
     el('gridRowsLabel').textContent = isRoster()
         ? 'Row labels — one per line (e.g. Week 1, Week 2 … or Monday, Tuesday …)'
         : 'Row labels — one per line (e.g. period times)';
     el('rosterTip').style.display = isRoster() ? 'block' : 'none';
+}
+function onLayoutChange(){
+    var v=el('layout').value;
+    var blank = isBlankGrid();
+    // A roster drops in its matching template (weeks×days or days×duty) and starts a
+    // fresh set of cells, since switching axis changes what each cell means.
+    if(ROSTER_PRESETS[v]){
+        el('gridRows').value=ROSTER_PRESETS[v].rows;
+        el('gridCols').value=rosterCols();
+        rosterCells={};
+    }
+    syncLayoutUI();
     if(!el('title').dataset.touched){ el('title').value=''; }
     if(!blank) renderEditor();
+    renderManageSaturdays();
     renderSheet();
 }
 // Save typed roster-cell text so it survives re-renders and the PDF/image export.
@@ -869,6 +1118,17 @@ el('rosterCount').addEventListener('input', function(){
 el('theme').addEventListener('change', renderSheet);
 el('orient').addEventListener('change', renderSheet);
 el('title').addEventListener('input', function(){ this.dataset.touched='1'; });
+// Saturday planner: set the first Saturday, then tick lesson-free Saturdays.
+el('satFirst').addEventListener('change', function(){
+    saturdayPlan.first = this.value; renderManageSaturdays(); renderSheet();
+});
+el('satManage').addEventListener('change', function(e){
+    var cb = e.target.closest && e.target.closest('input[type="checkbox"][data-iso]');
+    if(!cb) return;
+    var iso = cb.getAttribute('data-iso');
+    if(cb.checked) saturdayPlan.free[iso]=true; else delete saturdayPlan.free[iso];
+    renderManageSaturdays(); renderSheet();
+});
 
 // ---------- export (Full-HD image / PDF) with preview ----------
 var _exportCanvas = null;
@@ -927,5 +1187,7 @@ document.getElementById('exportModal').addEventListener('click', function(e){
 // seed with a couple of sessions so the tool is immediately usable
 addRow(); addRow();
 onLayoutChange();
+// paint the "Saved timetables" badge/list from the server's first-paint data
+try{ renderSavedList(INITIAL_SAVED||[]); }catch(e){}
 </script>
 {% endblock %}
