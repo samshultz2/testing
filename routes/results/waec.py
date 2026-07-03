@@ -274,6 +274,10 @@ def scan_waec():
         if not file or not file.filename:
             flash('Please choose a file to upload.', 'error')
             return redirect(url_for('results.scan_waec'))
+        from utils.uploads import ext_ok, SCAN_EXTS
+        if not ext_ok(file.filename, SCAN_EXTS):
+            flash('Please upload an image or PDF.', 'error')
+            return redirect(url_for('results.scan_waec'))
 
         filename = (file.filename or '').lower()
         is_pdf = (file.mimetype == 'application/pdf') or filename.endswith('.pdf')

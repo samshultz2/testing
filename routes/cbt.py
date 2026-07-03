@@ -83,20 +83,31 @@ def _d(value, default=None):
         return default
 
 
-_IMG_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
+# Raster images only — NO '.svg' (an SVG can carry <script> and, served from our
+# own /static origin, would be stored XSS). The uploaded image is also re-encoded
+# through Pillow below, so polyglots / spoofed content never reach disk.
+_IMG_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
 
 
 def _save_question_image(file):
-    """Save an uploaded question figure under static/uploads/cbt; return its URL."""
+    """Save an uploaded question figure under static/uploads/cbt; return its URL.
+
+    The bytes are decoded and re-encoded to PNG via Pillow (with a decompression
+    -bomb cap), so only a genuine raster image is ever written, always as .png."""
     if not file or not file.filename:
         return None
-    ext = os.path.splitext(secure_filename(file.filename))[1].lower()
-    if ext not in _IMG_EXTS:
+    from utils.uploads import ext_ok, open_image
+    if not ext_ok(file.filename, _IMG_EXTS):
         return None
-    name = secrets.token_hex(8) + ext
+    try:
+        im = open_image(file)                     # raises on non-image / bomb / SVG
+        im = im.convert('RGB')
+    except Exception:
+        return None
+    name = secrets.token_hex(8) + '.png'
     folder = os.path.join(current_app.root_path, 'static', 'uploads', 'cbt')
     os.makedirs(folder, exist_ok=True)
-    file.save(os.path.join(folder, name))
+    im.save(os.path.join(folder, name), 'PNG')
     return url_for('static', filename='uploads/cbt/' + name)
 
 

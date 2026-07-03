@@ -590,6 +590,10 @@ def scoresheet_scan():
         if not upload or not upload.filename:
             flash('No file selected.', 'error')
             return render_template('subjects/scoresheet_scan.html', **ctx)
+        from utils.uploads import ext_ok, SCAN_EXTS
+        if not ext_ok(upload.filename, SCAN_EXTS):
+            flash('Please upload an image or PDF.', 'error')
+            return render_template('subjects/scoresheet_scan.html', **ctx)
 
         data = upload.read()
         is_pdf = upload.filename.lower().endswith('.pdf')

@@ -149,8 +149,12 @@ def import_teachers():
             if not file:
                 flash('No file uploaded.', 'error')
                 return redirect(url_for('generator.import_teachers'))
-            
-            content = file.read().decode('utf-8')
+            from utils.uploads import ext_ok
+            if not ext_ok(file.filename, {'.csv'}):
+                flash('Please upload a .csv file.', 'error')
+                return redirect(url_for('generator.import_teachers'))
+
+            content = file.read().decode('utf-8', errors='replace')
             reader = csv.DictReader(StringIO(content))
             count = 0
             for row in reader:

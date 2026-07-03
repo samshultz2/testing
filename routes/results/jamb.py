@@ -233,6 +233,10 @@ def scan_jamb():
         if not file or not file.filename:
             flash('Please choose a file to upload.', 'error')
             return redirect(url_for('results.scan_jamb'))
+        from utils.uploads import ext_ok, SCAN_EXTS
+        if not ext_ok(file.filename, SCAN_EXTS):
+            flash('Please upload an image or PDF.', 'error')
+            return redirect(url_for('results.scan_jamb'))
 
         filename = (file.filename or '').lower()
         is_pdf = (file.mimetype == 'application/pdf') or filename.endswith('.pdf')
@@ -367,8 +371,12 @@ def scan_batch():
     if request.method == 'POST':
         files = request.files.getlist('result_images')
         items = []
+        from utils.uploads import ext_ok, SCAN_EXTS
         for f in files:
             if not f or not f.filename:
+                continue
+            if not ext_ok(f.filename, SCAN_EXTS):
+                items.append({'filename': f.filename, 'error': 'Not an image or PDF', 'data': {}})
                 continue
             try:
                 text = _read_uploaded_text(f)

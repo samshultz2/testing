@@ -239,8 +239,8 @@ def upload_school_logo():
         return _err('Logo must be a PNG, JPG or WEBP image.', url_for('settings.school_settings'))
     try:
         from PIL import Image
-        im = Image.open(file.stream)
-        im.load()
+        from utils.uploads import open_image
+        im = open_image(file)                     # Pillow decode + decompression-bomb cap
         # Flatten any transparency onto white so the logo prints cleanly on paper.
         if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
             im = im.convert('RGBA')
