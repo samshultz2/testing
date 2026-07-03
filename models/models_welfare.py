@@ -5,7 +5,7 @@ carries the branch (for scoping) and who recorded it.
 """
 from datetime import date
 
-from models.models import db, local_now
+from models.models import db, local_now, EncryptedString
 
 
 class DisciplineRecord(db.Model):
@@ -17,8 +17,8 @@ class DisciplineRecord(db.Model):
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     date = db.Column(db.Date, nullable=False, default=date.today)
     category = db.Column(db.String(50))            # Lateness, Fighting, Uniform, etc.
-    description = db.Column(db.Text, nullable=False)
-    action_taken = db.Column(db.Text)
+    description = db.Column(EncryptedString(), nullable=False)   # encrypted at rest
+    action_taken = db.Column(EncryptedString())                 # encrypted at rest
     severity = db.Column(db.String(20))            # Minor / Major
     reported_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=local_now)
@@ -35,8 +35,8 @@ class ClinicVisit(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     date = db.Column(db.Date, nullable=False, default=date.today)
-    complaint = db.Column(db.Text, nullable=False)
-    treatment = db.Column(db.Text)
+    complaint = db.Column(EncryptedString(), nullable=False)    # medical — encrypted at rest
+    treatment = db.Column(EncryptedString())                    # medical — encrypted at rest
     parent_notified = db.Column(db.Boolean, default=False)
     attended_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=local_now)

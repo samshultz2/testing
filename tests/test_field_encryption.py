@@ -42,6 +42,66 @@ def test_disabled_passthrough():
     assert crypto.encrypt('abc') == 'abc'   # stored as-is when disabled
 
 
+def test_pii_columns_are_encrypted_text_type():
+    """The sensitive PII columns are EncryptedString stored as TEXT (so the
+    longer ciphertext fits and Postgres accepts it)."""
+    from sqlalchemy import Text
+    from models import StaffMember, Student
+    from models.models import EncryptedString
+    cols = [StaffMember.__table__.c.account_number, StaffMember.__table__.c.address,
+            StaffMember.__table__.c.nok_phone, StaffMember.__table__.c.bank_name,
+            StaffMember.__table__.c.notes, Student.__table__.c.home_address]
+    for c in cols:
+        assert isinstance(c.type, EncryptedString)
+        assert isinstance(c.type.impl, Text)          # stored as TEXT (fits ciphertext)
+
+
+def test_pii_columns_ciphertext_at_rest_and_roundtrip(with_key):
+    """With the key set, the newly-encrypted PII columns are ciphertext at rest
+    across student / staff / welfare, yet the ORM reads them back as plaintext.
+
+    Uses a throwaway app/DB so the encrypted rows can't leak into other tests
+    (once the key is restored they'd decrypt to None)."""
+    import os as _os, tempfile as _tf
+    from app import create_app
+    from config import Config
+    from models import StaffMember, DisciplineRecord
+    from utils import crypto
+
+    class _C(Config):
+        TESTING = True
+        SQLALCHEMY_DATABASE_URI = 'sqlite:///' + _os.path.join(_tf.mkdtemp(), 't.db')
+    scratch = create_app(_C)
+    with scratch.app_context():
+        assert crypto.is_enabled()
+        bid = Branch.get_default().id
+        s = StaffMember(first_name='Ada', surname='Bello', is_active=True, branch_id=bid,
+                        account_number='0123456789', bank_name='GTBank',
+                        nok_phone='08012345678', address='12 Secret Road', notes='sensitive-note')
+        stu = Student(student_id='ENC_PII_1', first_name='Kid', surname='One', gender='Male',
+                      is_active=True, branch_id=bid, home_address='9 Private Lane')
+        db.session.add_all([s, stu]); db.session.flush()
+        dr = DisciplineRecord(student_id=stu.id, branch_id=bid,
+                              description='sensitive incident', action_taken='counselled')
+        db.session.add(dr); db.session.commit()
+        sid, stid, drid = s.id, stu.id, dr.id
+
+        raw = db.session.execute(db.text(
+            'SELECT account_number, bank_name, nok_phone, address, notes '
+            'FROM staff_members WHERE id=:i'), {'i': sid}).first()
+        assert all(str(cell).startswith('enc:gcm1:') for cell in raw), raw
+        assert db.session.execute(db.text('SELECT home_address FROM students WHERE id=:i'),
+                                  {'i': stid}).first()[0].startswith('enc:gcm1:')
+        assert db.session.execute(db.text('SELECT description FROM discipline_records WHERE id=:i'),
+                                  {'i': drid}).first()[0].startswith('enc:gcm1:')
+
+        db.session.expire_all()
+        got = db.session.get(StaffMember, sid)
+        assert got.account_number == '0123456789' and got.notes == 'sensitive-note'
+        assert db.session.get(Student, stid).home_address == '9 Private Lane'
+        assert db.session.get(DisciplineRecord, drid).description == 'sensitive incident'
+
+
 def test_portal_password_is_hash_only(app):
     """Setting a portal password stores ONLY the one-way hash — there is no
     recoverable plaintext copy anywhere (the old portal_password_plain column is

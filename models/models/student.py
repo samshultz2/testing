@@ -17,7 +17,7 @@ class Student(db.Model):
     gender = db.Column(db.String(10), nullable=False)  # Male/Female
     date_of_birth = db.Column(db.Date)
     religion = db.Column(db.String(30))
-    home_address = db.Column(db.Text)
+    home_address = db.Column(EncryptedString())   # encrypted at rest (never searched)
     hobbies = db.Column(db.Text)
     photo_url = db.Column(db.String(255))
     # Optional external-exam enrolment (comma-separated subject names).

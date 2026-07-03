@@ -56,19 +56,22 @@ AES-256 applies in three distinct places — set them all for defence in depth:
    Covers the database, daily backups, and uploads in one step.
 3. **At rest, sensitive fields → app-level AES-256-GCM** (implemented):
    - Set `FIELD_ENCRYPTION_KEY` (see `.env.example`).
-   - Run `python scripts/encrypt_portal_passwords.py` once.
-   - `Student.portal_password_plain` is then encrypted in the DB; the app
-     decrypts transparently for the credentials sheet.
-   - Losing the key makes those fields unrecoverable, but portal passwords can
-     be regenerated, so the blast radius is small. Keep the key in secrets, not
-     in source control.
+   - Run `python scripts/encrypt_pii.py` once to encrypt existing rows.
+   - Encrypted columns: the MFA secret, and PII text — student home address,
+     staff address / next-of-kin / bank / account / notes, and discipline &
+     clinic narratives. The app decrypts transparently on read. Names, phones
+     and IDs stay plaintext so search / sort / payroll keep working.
+   - Date of birth and salary are **not** field-encrypted (typed Date / numeric
+     used in aggregates); rely on disk/volume encryption (item 2) for those.
+   - Losing the key makes encrypted fields unrecoverable. Keep the key in
+     secrets, not in source control.
 
 ## Pre-launch security checklist
 
 - [ ] `APP_ENV=production`, zero `PRODUCTION:` warnings in logs
 - [ ] `SECRET_KEY` set; `ADMIN_PASSWORD` strong (or `ENABLE_LEGACY_LOGIN=0`)
 - [ ] HTTPS on; `SESSION_COOKIE_SECURE=1`, `ENABLE_HSTS=1`, `TRUST_PROXY=1`
-- [ ] `FIELD_ENCRYPTION_KEY` set + portal passwords migration run
+- [ ] `FIELD_ENCRYPTION_KEY` set + `python scripts/encrypt_pii.py` run
 - [ ] Disk/volume encryption enabled on the server
 - [ ] **Rate limiting added to `/check-result` and `/parent` login (finding #1)**
 - [ ] Backups verified (restore tested) and stored off-box (encrypted)

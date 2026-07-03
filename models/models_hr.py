@@ -7,7 +7,7 @@ app login, permissions and teaching assignments): not every staff member logs in
 or teaches, and HR needs richer bio/employment/payroll data. A StaffMember may
 optionally be linked to a User account.
 """
-from models.models import db, local_now
+from models.models import db, local_now, EncryptedString
 
 
 class Department(db.Model):
@@ -40,7 +40,7 @@ class StaffMember(db.Model):
     # Contact
     phone = db.Column(db.String(20))
     email = db.Column(db.String(120))
-    address = db.Column(db.String(255))
+    address = db.Column(EncryptedString())        # encrypted at rest (never searched)
 
     # Employment
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'))
@@ -52,18 +52,18 @@ class StaffMember(db.Model):
     qualification = db.Column(db.String(200))
     salary = db.Column(db.Float, default=0)                  # monthly gross
 
-    # Next of kin
-    nok_name = db.Column(db.String(100))
-    nok_phone = db.Column(db.String(20))
-    nok_relationship = db.Column(db.String(40))
+    # Next of kin — encrypted at rest (never searched)
+    nok_name = db.Column(EncryptedString())
+    nok_phone = db.Column(EncryptedString())
+    nok_relationship = db.Column(EncryptedString())
 
-    # Payroll bank details
-    bank_name = db.Column(db.String(80))
-    account_number = db.Column(db.String(20))
-    account_name = db.Column(db.String(100))
+    # Payroll bank details — encrypted at rest (never searched)
+    bank_name = db.Column(EncryptedString())
+    account_number = db.Column(EncryptedString())
+    account_name = db.Column(EncryptedString())
 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    notes = db.Column(db.Text)
+    notes = db.Column(EncryptedString())          # encrypted at rest (never searched)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
