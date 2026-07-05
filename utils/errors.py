@@ -54,6 +54,17 @@ def register_error_handlers(app):
         return render_template('errors/error.html', code=404, title='Page Not Found',
                                message="That page doesn't exist or may have moved."), 404
 
+    @app.errorhandler(413)
+    def too_large(e):
+        from flask import current_app
+        cap = current_app.config.get('MAX_CONTENT_LENGTH')
+        limit = f'{cap // (1024 * 1024)} MB' if cap else 'the allowed size'
+        msg = f'That upload is too large. Please keep files under {limit}.'
+        if _wants_json():
+            return jsonify(error=msg), 413
+        return render_template('errors/error.html', code=413, title='Upload Too Large',
+                               message=msg), 413
+
     @app.errorhandler(429)
     def too_many(e):
         msg = getattr(e, 'description', 'Too many requests. Please slow down and try again shortly.')

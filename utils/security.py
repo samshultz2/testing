@@ -127,6 +127,14 @@ class RateLimiter:
 login_limiter = RateLimiter()
 
 
+def _rl_identity():
+    """Best-effort caller identity for per-user throttling: the logged-in user,
+    else the session's legacy user, else the client IP. Imports flask names
+    locally so callers don't need a request-context import of their own."""
+    from flask import session, request
+    return session.get('user_id') or session.get('user') or (request.remote_addr or 'anon')
+
+
 def rate_limited(bucket, max_requests=10, window_minutes=15):
     """Decorator: throttle an expensive/abusable endpoint per user+IP.
 
@@ -135,19 +143,66 @@ def rate_limited(bucket, max_requests=10, window_minutes=15):
     stall the single-worker app. Returns HTTP 429 when the cap is hit.
     """
     from functools import wraps
-    from flask import request, session, abort
+    from flask import abort
 
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            who = session.get('user_id') or session.get('user') or (request.remote_addr or 'anon')
-            key = f'rl:{bucket}:{who}'
+            key = f'rl:{bucket}:{_rl_identity()}'
             if login_limiter.is_rate_limited(key, max_requests, window_minutes):
                 abort(429, description='You are doing that too often. Please wait a moment and try again.')
             login_limiter.record_attempt(key)
             return fn(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def charge_bucket(bucket, max_requests, window_minutes, n=1):
+    """Charge ``n`` hits to a per-user throttle bucket, sharing the key scheme
+    used by :func:`rate_limited` (so e.g. per-file work and per-request work
+    draw down the *same* budget). Returns ``True`` if the bucket is already at
+    its cap (nothing is recorded in that case), else records ``n`` hits and
+    returns ``False``. Lets a loop meter real work — one OCR unit per file —
+    instead of letting a single request smuggle unbounded work past a
+    per-request limit."""
+    key = f'rl:{bucket}:{_rl_identity()}'
+    if login_limiter.is_rate_limited(key, max_requests, window_minutes):
+        return True
+    for _ in range(max(1, n)):
+        login_limiter.record_attempt(key)
+    return False
+
+
+# =============================================================================
+# GLOBAL PER-IP REQUEST THROTTLE (in-memory)
+# =============================================================================
+#
+# A coarse, always-on ceiling on requests-per-IP, wired as a before_request
+# guard. Deliberately in-memory (no DB write per request): the app runs a single
+# gunicorn worker, so one process-wide counter already spans every request, and
+# writing a rate_limit_hits row on *every* hit would itself be a load problem.
+# This is a blunt backstop against request floods / scraping / API hammering —
+# the per-endpoint DB limiters above stay the precise, cross-restart controls.
+_global_hits = defaultdict(list)
+_global_lock = threading.Lock()
+
+
+def global_rate_exceeded(key, max_requests, window_seconds):
+    """Sliding-window check+record for the global throttle. Returns True once
+    ``key`` has been seen more than ``max_requests`` times in the last
+    ``window_seconds``. Uses a monotonic clock so a clock step can't widen the
+    window, and opportunistically evicts idle keys to bound memory."""
+    import time as _t
+    now = _t.monotonic()
+    cutoff = now - window_seconds
+    with _global_lock:
+        hits = [t for t in _global_hits[key] if t > cutoff]
+        hits.append(now)
+        _global_hits[key] = hits
+        if len(_global_hits) > 4096:
+            for k in [k for k, v in _global_hits.items() if not v or v[-1] < cutoff]:
+                del _global_hits[k]
+        return len(hits) > max_requests
 
 
 # =============================================================================

@@ -177,6 +177,25 @@ def create_app(config_class=None):
     from utils.csrf import init_csrf
     init_csrf(app)
 
+    # Coarse per-IP request ceiling — the first thing every request hits, so a
+    # flood is shed before it can reach the DB or any heavier work. In-memory and
+    # process-wide (fine for the single worker); the per-endpoint DB limiters stay
+    # the precise controls. Skipped under tests and for static assets.
+    from flask import request as _request, abort as _abort
+    from utils.security import global_rate_exceeded
+
+    def _enforce_global_rate_limit():
+        cap = app.config.get('GLOBAL_RATE_PER_MIN', 0)
+        if not cap or app.config.get('TESTING'):
+            return
+        if _request.endpoint == 'static':
+            return
+        ip = _request.remote_addr or 'anon'
+        if global_rate_exceeded(f'req:{ip}', cap, 60):
+            _abort(429, description='Too many requests. Please slow down and try again shortly.')
+
+    app.before_request(_enforce_global_rate_limit)
+
     # Fine-grained module access for non-admin users.
     from utils.access_control import (enforce_module_access, enforce_read_only,
                                        enforce_write_level, enforce_subsection_access,

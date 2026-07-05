@@ -369,14 +369,27 @@ def scan_batch():
         return redirect(url_for('results.waec_list' if exam == 'waec' else 'results.jamb_list'))
 
     if request.method == 'POST':
-        files = request.files.getlist('result_images')
-        items = []
         from utils.uploads import ext_ok, SCAN_EXTS
+        from utils.security import charge_bucket
+        # Cap files per batch AND meter each OCR run against the shared 'ocr'
+        # budget. Without this a single request could carry dozens of images/PDFs
+        # and trigger dozens of CPU-heavy OCR decodes while only counting as ONE
+        # per-request rate-limit hit — stalling the single worker.
+        MAX_BATCH_FILES = 20
+        files = [f for f in request.files.getlist('result_images') if f and f.filename]
+        overflow = files[MAX_BATCH_FILES:]
+        files = files[:MAX_BATCH_FILES]
+        items = []
         for f in files:
-            if not f or not f.filename:
-                continue
             if not ext_ok(f.filename, SCAN_EXTS):
                 items.append({'filename': f.filename, 'error': 'Not an image or PDF', 'data': {}})
+                continue
+            # One OCR unit per real file; stop decoding once the budget is spent
+            # so the rest can be retried in a moment rather than blocking now.
+            if charge_bucket('ocr', 30, 10):
+                items.append({'filename': f.filename,
+                              'error': 'Scan limit reached — please submit the remaining images in a few minutes.',
+                              'data': {}})
                 continue
             try:
                 text = _read_uploaded_text(f)
@@ -396,6 +409,9 @@ def scan_batch():
                 'score': score,
                 'data_json': json.dumps(parsed),
             })
+        for f in overflow:
+            items.append({'filename': f.filename,
+                          'error': f'Skipped — at most {MAX_BATCH_FILES} images per batch.', 'data': {}})
         return render_template('results/scan_batch_review.html',
             exam=exam, items=items, students=students, current_year=_date.today().year)
 

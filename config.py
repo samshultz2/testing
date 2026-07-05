@@ -206,6 +206,11 @@ class Config:
     # past its deadline and stall the whole single-worker app.
     SOLVER_MAX_SECONDS = int(os.environ.get('SOLVER_MAX_SECONDS', '90'))
 
+    # Global per-IP request ceiling (in-memory backstop against floods/scraping/
+    # API hammering). ~5 req/sec sustained per client — far above real human use,
+    # below what a script needs to stress the single worker. 0 disables it.
+    GLOBAL_RATE_PER_MIN = int(os.environ.get('GLOBAL_RATE_PER_MIN', '300'))
+
     # Pagination
     STUDENTS_PER_PAGE = 20
 
