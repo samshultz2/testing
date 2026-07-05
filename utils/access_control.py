@@ -431,6 +431,28 @@ def enforce_write_level():
     return None
 
 
+def enforce_session_version():
+    """Server-side session revocation. The login stamps the user's token_version
+    into the session; here we re-check it every request. A mismatch (password
+    change / admin reset / forced sign-out bumped it), a deactivated account, or
+    a deleted user all end the session immediately — so a leaked cookie can be
+    revoked and password changes log out other devices. Legacy password-admin
+    sessions carry no user_id and are exempt (nothing to version)."""
+    if not session.get('logged_in') or request.endpoint == 'static':
+        return None
+    uid = session.get('user_id')
+    if not uid:
+        return None                       # legacy admin: no per-user versioning
+    user = db.session.get(User, uid)
+    if user is not None and user.is_active and session.get('tv') == user.token_version:
+        return None
+    session.clear()
+    if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+        abort(401)
+    flash('Your session has ended. Please sign in again.', 'warning')
+    return redirect(url_for('auth.login'))
+
+
 def enforce_idle_timeout():
     """Log a user out after a period of inactivity (Config.SESSION_IDLE_MINUTES)."""
     if not session.get('logged_in'):

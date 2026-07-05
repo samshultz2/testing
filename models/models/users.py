@@ -53,6 +53,11 @@ class User(db.Model):
     mfa_enabled = db.Column(db.Boolean, default=False)
     mfa_secret = db.Column(EncryptedString())
     mfa_backup_codes = db.Column(db.Text)
+    # Bumped to invalidate every existing signed-cookie session for this user
+    # (server-side revocation): the login stamps this into the session and every
+    # request re-checks it, so a password change / admin reset / forced sign-out
+    # logs out all other devices. See routes/auth.py and enforce_session_version.
+    token_version = db.Column(db.Integer, default=1, nullable=False)
     # JSON list of dashboard widget keys this user has enabled (None => defaults).
     dashboard_prefs = db.Column(db.Text)
 
@@ -92,9 +97,18 @@ class User(db.Model):
         return self.role == 'super_admin' or self.scope == 'central'
 
     def set_password(self, password):
-        """Hash and set password"""
+        """Hash and set password. Also revokes existing sessions — any password
+        change must not leave old signed-cookie sessions valid."""
         self.password_hash = generate_password_hash(password)
-    
+        self.revoke_sessions()
+
+    def revoke_sessions(self):
+        """Invalidate every currently-issued session for this user by bumping the
+        token version the login stamped into each session cookie. The caller may
+        re-stamp the *current* session afterwards to keep it alive (self-service
+        password change); an admin reset deliberately does not, forcing re-login."""
+        self.token_version = (self.token_version or 1) + 1
+
     def check_password(self, password):
         """Verify password"""
         # Cap length before hashing — scrypt on an unbounded value is a worker DoS.

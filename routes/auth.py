@@ -53,6 +53,27 @@ def _clear_login_failures(ident=None):
         login_limiter.clear_attempts(_account_key(ident))
 
 
+def _alert_lockout(ident):
+    """Notify admins the first time an account/IP trips the lockout in a window,
+    so a brute-force attempt is visible without waiting on external monitoring.
+    Throttled (one alert per key per lockout window) so it can't itself be used
+    to spam the notification feed."""
+    who = (ident or '').strip() or (request.remote_addr or 'unknown')
+    akey = f'lockout_alert:{who.lower()}'
+    if login_limiter.is_rate_limited(akey, max_attempts=1, window_minutes=Config.LOGIN_LOCKOUT_MINUTES):
+        return
+    login_limiter.record_attempt(akey)
+    try:
+        from utils.notify import notify_admins
+        notify_admins('Repeated failed logins',
+                      f'Multiple failed sign-in attempts for "{who}" from '
+                      f'{request.remote_addr or "an unknown address"}. The account/IP '
+                      f'is temporarily locked out.',
+                      url=url_for('auth.login'), category='warning')
+    except Exception:
+        pass
+
+
 def _complete_login(user):
     """Finish a fully-authenticated login (password, and 2FA if enabled): drop
     any pre-login session, set identity, rotate the CSRF token, and land on the
@@ -65,6 +86,7 @@ def _complete_login(user):
     session['user_id'] = user.id
     session['user'] = user.full_name or user.username
     session['role'] = user.role
+    session['tv'] = user.token_version        # server-side session revocation
     set_session_scope(user)
     set_session_org(user)
     if user.theme:
@@ -91,6 +113,7 @@ def login():
 
         if _login_locked(username):
             log_action('auth.login_locked', detail=username or '(no username)')
+            _alert_lockout(username)
             flash(f'Too many failed attempts. Try again in {Config.LOGIN_LOCKOUT_MINUTES} minutes.', 'error')
             return redirect(url_for('auth.login'))
 
@@ -324,12 +347,14 @@ def change_password():
             flash(msg, 'error')
             return redirect(url_for('auth.change_password'))
         
-        user.set_password(new_password)
+        user.set_password(new_password)   # bumps token_version (revokes sessions)
         user.must_change_password = False
         db.session.commit()
         session.pop('must_change_password', None)
+        # Keep THIS device signed in; only other sessions are revoked.
+        session['tv'] = user.token_version
 
-        flash('Password changed successfully!', 'success')
+        flash('Password changed successfully! Other devices have been signed out.', 'success')
         return redirect(url_for('main.dashboard'))
     
     return render_template('auth/change_password.html', user=user)

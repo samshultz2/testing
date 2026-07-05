@@ -226,6 +226,28 @@ def verify_password(password: str, password_hash: str) -> bool:
 # login views reject longer values before hashing.
 MAX_PASSWORD_LEN = 128
 
+# Very common / weak base passwords, checked offline (no HIBP network call, which
+# would be unreliable on the poor connections this app targets). We compare after
+# stripping trailing digits/symbols so "Password123!" and "Qwerty@2024" are also
+# caught — the complexity rules alone happily pass those.
+_COMMON_PASSWORDS = frozenset({
+    'password', 'passw0rd', 'welcome', 'admin', 'administrator', 'letmein',
+    'qwerty', 'qwertyuiop', 'azerty', 'iloveyou', 'monkey', 'dragon', 'football',
+    'baseball', 'sunshine', 'princess', 'superman', 'trustno1', 'master', 'login',
+    'abc123', 'abcd1234', 'password1', 'changeme', 'secret', 'default', 'test123',
+    'school', 'student', 'teacher', 'nigeria', 'access', 'money', 'god', 'jesus',
+})
+
+
+def _looks_common(password: str) -> bool:
+    """True if the password reduces to a well-known weak base."""
+    low = password.lower()
+    # Strip a trailing run of digits/symbols (the usual "make it pass" suffix)
+    # and any leading/trailing non-letters, then test the core word.
+    core = re.sub(r'[^a-z]+$', '', low)
+    core = re.sub(r'^[^a-z]+', '', core)
+    return low in _COMMON_PASSWORDS or core in _COMMON_PASSWORDS
+
 
 def is_password_strong(password: str) -> tuple[bool, str]:
     """
@@ -244,6 +266,8 @@ def is_password_strong(password: str) -> tuple[bool, str]:
         return False, "Password must contain at least one number"
     if not re.search(r'[^A-Za-z0-9]', password):
         return False, "Password must contain at least one symbol"
+    if _looks_common(password):
+        return False, "That password is too common or guessable — choose something unique."
     return True, ""
 
 
@@ -481,7 +505,10 @@ def add_security_headers(response):
     nonce = get_csp_nonce()
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        # script-src is 'self'+nonce plus jsdelivr (MathJax in the CBT module is
+        # the only external script). cdnjs is intentionally NOT allowed for
+        # scripts — it only serves stylesheets/fonts here (see style-src/font-src).
+        f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
         "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
         "img-src 'self' data: blob:; "
