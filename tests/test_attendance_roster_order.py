@@ -71,3 +71,24 @@ def test_gender_grouping_is_contiguous(app):
         genders = [e.student.gender for e in enrollments]
         assert genders.index('Female') > max(
             i for i, g in enumerate(genders) if g == 'Male')
+
+
+def test_daily_summary_follows_roster_order(app):
+    """The daily/weekly/termly reports build their student list from
+    _active_enrollments, so the same boys-then-girls ordering flows through."""
+    from datetime import date
+    from utils.calculations import get_daily_attendance_summary
+    caa_id = _roster(app)
+    with app.app_context():
+        summary = get_daily_attendance_summary(caa_id, date.today())
+        order = [(s['gender'], s['student_name'].split()[0])
+                 for s in summary['students']]
+        # full_name is "Surname First"; boys first (alpha), then girls (alpha).
+        assert order == [
+            ('Male', 'Adams'),
+            ('Male', 'Adeyemi'),
+            ('Male', 'Cole'),
+            ('Female', 'Allen'),
+            ('Female', 'Brown'),
+            ('Other', 'Zephyr'),
+        ]

@@ -51,6 +51,9 @@
     <div class="card-body" style="padding: 0;">
         <div class="data-cards" style="padding: 1rem;">
             {% for s in summary.students %}
+            {% if loop.changed(s.gender) %}
+            <div class="roster-group-head" style="grid-column:1/-1;width:100%;flex-basis:100%;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;font-size:.75rem;padding:.4rem .25rem;border-bottom:2px solid var(--border-color);{% if not loop.first %}margin-top:1rem;{% endif %}">{% if s.gender == 'Male' %}Boys{% elif s.gender == 'Female' %}Girls{% else %}{{ s.gender or 'Other' }}{% endif %}</div>
+            {% endif %}
             <div class="data-card">
                 <div class="data-card-header"><div class="data-card-title">{{ s.student_name }}</div><span class="badge {% if s.gender == 'Male' %}badge-info{% else %}badge-warning{% endif %}">{{ s.gender }}</span></div>
                 <div class="data-card-row"><span class="data-card-label">Morning</span><span>{% if s.morning_present %}<i class="fas fa-check text-success"></i>{% elif s.morning_present == False %}<i class="fas fa-times text-danger"></i>{% else %}-{% endif %}</span></div>

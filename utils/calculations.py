@@ -3,15 +3,37 @@ Attendance calculation utilities
 All attendance-related calculations are performed here
 """
 from datetime import timedelta
+from sqlalchemy import case, func
 from sqlalchemy.orm import joinedload
-from models import db, Attendance, StudentEnrollment, Week, Holiday
+from models import db, Attendance, StudentEnrollment, Week, Holiday, Student
+
+
+def roster_order():
+    """ORDER BY clauses for an attendance roster.
+
+    Many schools don't list the register as one flat alphabetical run — they
+    split it by gender, boys first then girls, each group alphabetical by
+    surname (then first name). This returns the SQL expressions for exactly
+    that, so every attendance roster and report orders the same way. The query
+    must ``.join(Student)``.
+
+    Gender is matched case-insensitively on its first letter, so ``Male``/``M``
+    and ``Female``/``F`` all rank together; anything unrecognised (or blank)
+    sorts last, so no student is ever dropped from the register.
+    """
+    g = func.lower(func.substr(func.coalesce(Student.gender, ''), 1, 1))
+    gender_rank = case((g == 'm', 0), (g == 'f', 1), else_=2)
+    return (gender_rank, Student.surname, Student.first_name)
 
 
 def _active_enrollments(class_arm_assignment_id):
-    """Active enrollments for a class arm, with each student eager-loaded."""
+    """Active enrollments for a class arm, with each student eager-loaded and
+    ordered as a register (boys first then girls, each alphabetical by surname)."""
     return (StudentEnrollment.query
             .filter_by(class_arm_assignment_id=class_arm_assignment_id, is_active=True)
+            .join(Student)
             .options(joinedload(StudentEnrollment.student))
+            .order_by(*roster_order())
             .all())
 
 

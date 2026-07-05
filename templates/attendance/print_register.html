@@ -109,8 +109,9 @@
                 <tbody>
                     {% for row in register_data %}
                     {% if loop.changed(row.student.gender) %}
+                    {% if not loop.first %}<tr class="roster-group-gap" aria-hidden="true"><td colspan="{{ school_days|length * 2 + 3 }}" style="height:0.9rem;border:none;padding:0;"></td></tr>{% endif %}
                     <tr class="roster-group-head">
-                        <td colspan="{{ school_days|length * 2 + 3 }}" style="font-weight:700;text-align:left;">{% if row.student.gender == 'Male' %}Boys{% elif row.student.gender == 'Female' %}Girls{% else %}{{ row.student.gender or 'Other' }}{% endif %}</td>
+                        <td colspan="{{ school_days|length * 2 + 3 }}" style="font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:.03em;">{% if row.student.gender == 'Male' %}Boys{% elif row.student.gender == 'Female' %}Girls{% else %}{{ row.student.gender or 'Other' }}{% endif %}</td>
                     </tr>
                     {% endif %}
                     <tr>

@@ -2,7 +2,6 @@
 Attendance management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
-from sqlalchemy import case, func
 from utils.helpers import get_active_term
 from utils.web_exports import xlsx_response
 from datetime import datetime, date, timedelta
@@ -45,22 +44,10 @@ def _actor_name(default='Admin'):
 
 
 
-def roster_order():
-    """ORDER BY clauses for an attendance roster.
-
-    Many schools don't list the register as one flat alphabetical run — they
-    split it by gender, boys first then girls, each group alphabetical by
-    surname (then first name). This returns the SQL expressions for exactly
-    that, so every attendance roster orders the same way. Requires the query to
-    ``.join(Student)``.
-
-    Gender is matched case-insensitively on its first letter, so ``Male``/``M``
-    and ``Female``/``F`` all rank together; anything unrecognised (or blank)
-    sorts last, so no student is ever dropped from the register.
-    """
-    g = func.lower(func.substr(func.coalesce(Student.gender, ''), 1, 1))
-    gender_rank = case((g == 'm', 0), (g == 'f', 1), else_=2)
-    return (gender_rank, Student.surname, Student.first_name)
+# Register ordering (boys first, then girls, each alphabetical by surname) lives
+# in utils.calculations so the summaries can share it without importing routes.
+# Re-exported here so `from routes.attendance import *` keeps exposing it.
+from utils.calculations import roster_order  # noqa: E402,F401
 
 
 def _week_school_days(week, holidays):
