@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson, postFile, useSave } from '../lib/forms';
 import { csrfToken } from '../lib/api';
-import { useSection, NavCtx, useNav } from '../lib/section';
+import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 
 // Small helpers ---------------------------------------------------------------
@@ -33,6 +33,7 @@ function Index({ d }) {
         {d.is_central && card(u.branches, 'fa-code-branch', 'Branches', 'Manage school branches')}
         {d.is_central && card(u.users, 'fa-users-cog', 'Users', 'Manage admin and teacher accounts')}
         {card(u.backup, 'fa-database', 'Backup & Restore', 'Download backup, restore data')}
+        {d.is_central && card(u.audit, 'fa-clipboard-list', 'Audit Log', 'Who changed what, and when')}
         {card(u.ocr, 'fa-robot', 'AI Vision OCR', 'Optional Claude key for reading result images')}
       </div>
     </>
@@ -746,10 +747,94 @@ function Ocr({ d, notify }) {
   );
 }
 
+// ---- Audit log --------------------------------------------------------------
+function Audit({ d }) {
+  const nav = useNav();
+  const [f, setF] = useState({ ...d.filters });
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  // Build the query params for the current filter state (+ optional overrides
+  // like page). Empty filters are dropped so the URL stays clean.
+  const params = (extra = {}) => {
+    const p = {};
+    ['q', 'action', 'user', 'from', 'to'].forEach((k) => { if (f[k]) p[k] = f[k]; });
+    return { ...p, ...extra };
+  };
+  const submit = (e) => { e.preventDefault(); navParams(nav.go, d.base_url, params()); };
+  const goPage = (page) => navParams(nav.go, d.base_url, params({ page }));
+  const reset = () => { setF({ q: '', action: '', user: '', from: '', to: '' }); nav.go(d.base_url); };
+  const pg = d.pagination || { page: 1, pages: 1, total: 0 };
+  return (
+    <>
+      <div className="page-header"><h1>Audit Log</h1>
+        <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
+      </div>
+      <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
+        <i aria-hidden="true" className="fas fa-shield-halved" /> Append-only record of sensitive actions — who did what, to what, when, and from where. Entries can never be edited or deleted.
+      </p>
+
+      <div className="card mb-3"><div className="card-body">
+        <form onSubmit={submit} className="filter-form" style={{ flexWrap: 'wrap', gap: '.75rem', alignItems: 'flex-end' }}>
+          <div className="form-group"><label className="form-label">Search</label>
+            <input type="text" className="form-control" value={f.q} onChange={set('q')} placeholder="action, detail, name…" /></div>
+          <div className="form-group"><label className="form-label">Action</label>
+            <select className="form-control" value={f.action} onChange={set('action')}>
+              <option value="">All actions</option>
+              {d.actions.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select></div>
+          <div className="form-group"><label className="form-label">User</label>
+            <input type="text" className="form-control" value={f.user} onChange={set('user')} placeholder="name" /></div>
+          <div className="form-group"><label className="form-label">From</label>
+            <input type="date" className="form-control" value={f.from} onChange={set('from')} /></div>
+          <div className="form-group"><label className="form-label">To</label>
+            <input type="date" className="form-control" value={f.to} onChange={set('to')} /></div>
+          <div className="form-group">
+            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-filter" /> Filter</button>{' '}
+            <button type="button" className="btn btn-secondary" onClick={reset}>Reset</button>
+          </div>
+        </form>
+      </div></div>
+
+      <div className="card"><div className="card-body" style={{ padding: 0 }}>
+        {d.logs.length ? (
+          <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Branch</th><th>Detail</th><th>IP</th><th>Device</th></tr></thead>
+            <tbody>
+              {d.logs.map((l) => (
+                <tr key={l.id}>
+                  <td data-label="When">{l.created_at}</td>
+                  <td data-label="Who">{l.user}{l.role && <div className="text-muted text-sm">{l.role}</div>}</td>
+                  <td data-label="Action"><span className="badge badge-info">{l.action}</span></td>
+                  <td data-label="Target">{l.target_label || '—'}{l.target_type && <div className="text-muted text-sm">{l.target_type}</div>}</td>
+                  <td data-label="Branch">{l.branch || '—'}</td>
+                  <td data-label="Detail" style={{ whiteSpace: 'pre-wrap', maxWidth: 300 }}>{l.detail || '—'}</td>
+                  <td data-label="IP">{l.ip_address || '—'}</td>
+                  <td data-label="Device"><span title={l.user_agent}
+                    style={{ display: 'inline-block', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>{l.user_agent || '—'}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        ) : (
+          <Empty icon="fa-clipboard-list" title="No audit entries">Nothing matches these filters yet.</Empty>
+        )}
+      </div></div>
+
+      {pg.pages > 1 && (
+        <div style={{ display: 'flex', gap: '.75rem', alignItems: 'center', justifyContent: 'center', marginTop: '1rem' }}>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!pg.has_prev} onClick={() => goPage(pg.prev_page)}><i aria-hidden="true" className="fas fa-chevron-left" /> Previous</button>
+          <span className="text-muted text-sm">Page {pg.page} of {pg.pages} · {pg.total} entries</span>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!pg.has_next} onClick={() => goPage(pg.next_page)}>Next <i aria-hidden="true" className="fas fa-chevron-right" /></button>
+        </div>
+      )}
+    </>
+  );
+}
+
 const SCREENS = {
   index: Index, school: School, academic: Academic, grades: Grades, traits: Traits,
   assessments: Assessments, timetable_slots: TimetableSlots, backup: Backup,
-  branches: Branches, users: Users, add_user: AddUser, edit_user: EditUser, ocr: Ocr,
+  branches: Branches, users: Users, add_user: AddUser, edit_user: EditUser,
+  audit: Audit, ocr: Ocr,
 };
 
 export default function SettingsApp({ data }) {

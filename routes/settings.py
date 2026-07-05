@@ -68,8 +68,82 @@ def index():
             'users': url_for('settings.users_list'),
             'branches': url_for('settings.branches'),
             'backup': url_for('settings.backup_page'),
+            'audit': url_for('settings.audit_log'),
             'ocr': url_for('settings.ocr_settings'),
         },
+    })
+
+
+@settings_bp.route('/audit')
+@central_admin_required
+def audit_log():
+    """Audit-trail viewer inside the settings app (central-admin only).
+
+    The audit log is append-only evidence of who did what — this surfaces it in
+    the React settings section with the same filters as the classic /audit page
+    (free-text search, action, user, date range) and page-by-page navigation."""
+    from models import AuditLog, Branch
+    from datetime import datetime as _dt
+    from utils.search import like_term, ilike_contains
+
+    page = request.args.get('page', 1, type=int)
+    q = (request.args.get('q') or '').strip()
+    action = (request.args.get('action') or '').strip()
+    user = (request.args.get('user') or '').strip()
+    from_s = (request.args.get('from') or '').strip()
+    to_s = (request.args.get('to') or '').strip()
+
+    query = AuditLog.query
+    if q:
+        like = like_term(q)
+        query = query.filter(db.or_(AuditLog.action.ilike(like, escape='\\'),
+                                    AuditLog.detail.ilike(like, escape='\\'),
+                                    AuditLog.user.ilike(like, escape='\\'),
+                                    AuditLog.target_label.ilike(like, escape='\\')))
+    if action:
+        query = query.filter(AuditLog.action == action)
+    if user:
+        query = query.filter(ilike_contains(AuditLog.user, user))
+    try:
+        if from_s:
+            query = query.filter(AuditLog.created_at >= _dt.strptime(from_s, '%Y-%m-%d'))
+        if to_s:
+            d = _dt.strptime(to_s, '%Y-%m-%d')
+            query = query.filter(AuditLog.created_at < d.replace(hour=23, minute=59, second=59))
+    except ValueError:
+        pass
+
+    logs = query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    actions = [a[0] for a in db.session.query(AuditLog.action).distinct().order_by(AuditLog.action).all()]
+    branch_names = {b.id: b.name for b in Branch.query.all()}
+
+    def _row(l):
+        return {
+            'id': l.id,
+            'created_at': l.created_at.strftime('%d %b %Y, %H:%M') if l.created_at else '',
+            'user': l.user or '—',
+            'role': l.role or '',
+            'action': l.action,
+            'target_type': l.target_type or '',
+            'target_label': l.target_label or '',
+            'branch': branch_names.get(l.branch_id) or '',
+            'detail': l.detail or '',
+            'ip_address': l.ip_address or '',
+            'user_agent': l.user_agent or '',
+        }
+
+    return _render({
+        'page': 'audit',
+        'logs': [_row(l) for l in logs.items],
+        'actions': actions,
+        'filters': {'q': q, 'action': action, 'user': user, 'from': from_s, 'to': to_s},
+        'pagination': {
+            'page': logs.page or 1, 'pages': logs.pages or 1, 'total': logs.total or 0,
+            'has_prev': logs.has_prev, 'has_next': logs.has_next,
+            'prev_page': (logs.page or 1) - 1, 'next_page': (logs.page or 1) + 1,
+        },
+        'base_url': url_for('settings.audit_log'),
+        'back_url': url_for('settings.index'),
     })
 
 

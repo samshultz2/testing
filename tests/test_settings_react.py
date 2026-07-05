@@ -30,6 +30,7 @@ def test_settings_shells_render(app):
         '/settings/assessments': 'assessments',
         '/settings/timetable-slots': 'timetable_slots',
         '/settings/backup': 'backup',
+        '/settings/audit': 'audit',
         '/settings/branches': 'branches',
         '/settings/users': 'users',
         '/settings/users/add': 'add_user',
@@ -59,6 +60,25 @@ def test_add_user_json(app):
     assert r['ok'] and r['redirect'].endswith('/settings/users')
     with app.app_context():
         assert User.query.filter_by(username='jsonuser').first() is not None
+
+
+def test_audit_json_lists_and_filters(app):
+    client = _admin(app)
+    with app.app_context():
+        from models import AuditLog
+        db.session.add(AuditLog(action='test.audit_view', user='Tester',
+                                detail='opened the audit log', target_label='X'))
+        db.session.commit()
+    # JSON payload carries the log rows, filter options and pagination.
+    r = client.get('/settings/audit', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert r['page'] == 'audit'
+    assert 'logs' in r and 'pagination' in r and 'test.audit_view' in r['actions']
+    assert any(l['action'] == 'test.audit_view' for l in r['logs'])
+    # Filtering by action narrows the result set.
+    r2 = client.get('/settings/audit?action=test.audit_view',
+                    headers={'X-Requested-With': 'fetch'}).get_json()
+    assert r2['logs'] and all(l['action'] == 'test.audit_view' for l in r2['logs'])
+    assert r2['filters']['action'] == 'test.audit_view'
 
 
 def test_save_grades_json(app):

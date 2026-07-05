@@ -3698,6 +3698,13 @@
 ]
 ],
 [
+"settings.audit_log",
+"/settings/audit",
+[
+"GET"
+]
+],
+[
 "settings.backup_page",
 "/settings/backup",
 [
