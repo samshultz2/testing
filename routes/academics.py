@@ -461,6 +461,9 @@ def delete_week(week_id):
         n = week.week_number
         db.session.delete(week)
         db.session.commit()
+        from utils.audit import log_action
+        log_action('academics.week_delete', detail=f'week={n} term={term_id}',
+                   target_type='week', target_id=week_id)
         return _ok(f'Week {n} deleted.', url_for('academics.view_term', term_id=term_id))
     except Exception as e:
         db.session.rollback()
@@ -559,8 +562,12 @@ def delete_holiday(holiday_id):
     holiday = db.get_or_404(Holiday, holiday_id)
     term_id = holiday.term_id
     try:
+        label = getattr(holiday, 'name', None) or getattr(holiday, 'title', None)
         db.session.delete(holiday)
         db.session.commit()
+        from utils.audit import log_action
+        log_action('academics.holiday_delete', detail=f'{label} term={term_id}',
+                   target_type='holiday', target_id=holiday_id)
         return _ok('Holiday deleted.', url_for('academics.view_term', term_id=term_id))
     except Exception as e:
         db.session.rollback()
@@ -889,6 +896,10 @@ def remove_enrollment(enrollment_id):
     try:
         enrollment.is_active = False
         db.session.commit()
+        from utils.audit import log_action
+        log_action('academics.enrollment_remove',
+                   detail=f'student={enrollment.student_id} assignment={assignment_id}',
+                   target_type='studentenrollment', target_id=enrollment.id)
         return _ok('Student removed from class.', url_for('academics.view_assignment', assignment_id=assignment_id))
     except Exception as e:
         db.session.rollback()

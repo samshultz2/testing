@@ -85,6 +85,7 @@ class AuditLog(db.Model):
     branch_id = db.Column(db.Integer)          # branch context at the time
     detail = db.Column(db.Text)
     ip_address = db.Column(db.String(50))
+    user_agent = db.Column(db.String(300))     # device/browser the action came from
     created_at = db.Column(db.DateTime, default=local_now)
 
     def __repr__(self):

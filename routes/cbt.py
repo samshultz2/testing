@@ -310,6 +310,8 @@ def toggle_publish(exam_id):
 @admin_required
 def delete_exam(exam_id):
     e = _exam_403(exam_id)
+    from utils.audit import log_action
+    log_action('cbt.exam_delete', detail=getattr(e, 'title', None), target=e)
     db.session.delete(e)
     db.session.commit()
     flash('Exam deleted.', 'success')
@@ -409,6 +411,9 @@ def import_from_bank(exam_id):
 def delete_question(question_id):
     q = db.get_or_404(CBTQuestion, question_id)
     exam_id = q.exam_id
+    from utils.audit import log_action
+    log_action('cbt.question_delete', detail=f'exam={exam_id} question={question_id}',
+               target_type='cbtquestion', target_id=question_id)
     db.session.delete(q)
     db.session.commit()
     flash('Question removed.', 'success')

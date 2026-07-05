@@ -547,6 +547,11 @@ def delete_user(user_id):
         return _err('Only super admins can delete other super admins.', url_for('users.index'))
 
     username = user.username
+    # Audit BEFORE the delete so the actor + who was removed is recorded even if
+    # the row (and its label) is gone afterwards.
+    log_action('user.delete',
+               detail=f'{username} (role={user.role}, scope={user.scope}, branch={user.branch_id})',
+               target_type='user', target_id=user.id, target_label=username)
     try:
         db.session.delete(user)
         db.session.commit()

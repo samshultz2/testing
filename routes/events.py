@@ -205,6 +205,8 @@ def edit_event(event_id):
 @login_required
 def delete_event(event_id):
     e = db.get_or_404(SchoolEvent, event_id)
+    from utils.audit import log_action
+    log_action('events.event_delete', detail=getattr(e, 'title', None), target=e)
     db.session.delete(e)
     db.session.commit()
     return _ok('Event deleted.', url_for('events.agenda'))

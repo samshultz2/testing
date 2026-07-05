@@ -103,6 +103,8 @@ def delete_subject(subject_id):
     try:
         subject.is_active = False
         db.session.commit()
+        from utils.audit import log_action
+        log_action('subject.delete', detail=getattr(subject, 'name', None), target=subject)
         return _ok('Subject deleted!', url_for('subjects.subjects_list'))
     except Exception as e:
         db.session.rollback()
@@ -325,10 +327,14 @@ def delete_class_subject(cs_id):
     cs = db.get_or_404(ClassSubject, cs_id)
     term_id = cs.term_id
     class_id = cs.class_id
-    
+
     try:
         cs.is_active = False
         db.session.commit()
+        from utils.audit import log_action
+        log_action('subject.class_unassign',
+                   detail=f'class_subject={cs_id} term={term_id} class={class_id}',
+                   target_type='classsubject', target_id=cs_id)
         return _ok('Subject removed from class!',
                    url_for('subjects.class_subjects_list', term_id=term_id, class_id=class_id))
     except Exception as e:

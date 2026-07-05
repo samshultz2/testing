@@ -307,6 +307,8 @@ def convert(applicant_id):
 def delete_applicant(applicant_id):
     a = db.get_or_404(Applicant, applicant_id)
     require_branch_access(a.branch_id)   # no cross-branch deletion
+    from utils.audit import log_action
+    log_action('admissions.applicant_delete', target=a)
     db.session.delete(a)
     db.session.commit()
     return _ok('Application deleted.', url_for('admissions.applicants'))

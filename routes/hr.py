@@ -274,15 +274,17 @@ def adjust_salary(staff_id):
     new_salary = request.form.get('new_salary', type=float)
     if new_salary is None or new_salary < 0:
         return _err('Enter a valid new salary.', url_for('hr.staff_detail', staff_id=staff_id))
+    old_salary = s.salary or 0          # capture before overwriting for the audit
     db.session.add(SalaryHistory(
-        staff_id=s.id, previous_salary=s.salary or 0, new_salary=new_salary,
+        staff_id=s.id, previous_salary=old_salary, new_salary=new_salary,
         effective_date=_d(request.form.get('effective_date')) or date.today(),
         reason=(request.form.get('reason') or '').strip() or None,
         created_by=_current_user()))
     s.salary = new_salary
     db.session.commit()
     from utils.audit import log_action
-    log_action('hr.salary_adjust', detail=f'-> {new_salary:,.2f}', target=s)
+    log_action('hr.salary_adjust',
+               detail=f'{old_salary:,.2f}→{new_salary:,.2f}', target=s)
     return _ok(f'Salary updated to {new_salary:,.2f}.', url_for('hr.staff_detail', staff_id=staff_id))
 
 

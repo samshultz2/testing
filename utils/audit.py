@@ -36,6 +36,12 @@ def log_action(action, detail=None, target=None, target_type=None,
             target_id = target_id or di
             target_label = target_label or dl
         branch_id = session.get('view_branch_id') or session.get('branch_id')
+        ua = None
+        if request:
+            ua_obj = getattr(request, 'user_agent', None)
+            ua = (getattr(ua_obj, 'string', None) or None)
+            if ua:
+                ua = ua[:300]
         entry = AuditLog(
             user=session.get('user') or session.get('username') or 'unknown',
             role=session.get('role'),
@@ -46,6 +52,7 @@ def log_action(action, detail=None, target=None, target_type=None,
             target_label=target_label,
             branch_id=branch_id,
             ip_address=request.remote_addr if request else None,
+            user_agent=ua,
         )
         db.session.add(entry)
         db.session.commit()

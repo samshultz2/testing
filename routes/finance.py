@@ -347,12 +347,15 @@ def edit_item(item_id):
 @admin_required
 def delete_item(item_id):
     item = db.get_or_404(FeeItem, item_id)
+    from utils.audit import log_action
     used = FeeStructure.query.filter_by(fee_item_id=item_id).count()
     if used:
         item.is_active = False
         db.session.commit()
+        log_action('finance.item_deactivate', detail=item.name, target=item)
         return _ok(f'"{item.name}" is used in {used} fee structure row(s); deactivated instead of deleted.',
                    url_for('finance.items_list'))
+    log_action('finance.item_delete', detail=item.name, target=item)
     db.session.delete(item)
     db.session.commit()
     return _ok('Fee item deleted.', url_for('finance.items_list'))
@@ -1093,10 +1096,13 @@ def add_expense_category():
 @admin_required
 def delete_expense_category(category_id):
     cat = db.get_or_404(ExpenseCategory, category_id)
+    from utils.audit import log_action
     if Expense.query.filter_by(category_id=category_id).count():
         cat.is_active = False
         db.session.commit()
+        log_action('finance.expense_category_deactivate', detail=getattr(cat, 'name', None), target=cat)
         return _ok('Category is in use; deactivated instead of deleted.', url_for('finance.expenses_list'))
+    log_action('finance.expense_category_delete', detail=getattr(cat, 'name', None), target=cat)
     db.session.delete(cat)
     db.session.commit()
     return _ok('Category deleted.', url_for('finance.expenses_list'))

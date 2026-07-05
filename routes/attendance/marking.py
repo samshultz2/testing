@@ -166,12 +166,17 @@ def save_attendance():
         ).all()
         all_enrollment_ids = [e.id for e in enrollments]
         marked_by = _actor_name()
-        # A register taken for a past date is the classic attendance-fraud vector;
-        # leave an audit trail so retroactive edits are attributable.
-        if target_date < date.today():
+        # Audit register MODIFICATIONS (not routine first-time marking): a save
+        # that overwrites already-recorded attendance, or any back-dated save —
+        # both are the attendance-fraud vectors and need attribution.
+        already_marked = bool(all_enrollment_ids) and (
+            Attendance.query.filter(Attendance.enrollment_id.in_(all_enrollment_ids),
+                                    Attendance.date == target_date).first() is not None)
+        if target_date < date.today() or already_marked:
             from utils.audit import log_action
-            log_action('attendance.backdated',
-                       detail=f'class={assignment_id} date={target_date.isoformat()} by={marked_by}')
+            kind = 'attendance.backdated' if target_date < date.today() else 'attendance.modified'
+            log_action(kind, detail=f'class={assignment_id} date={target_date.isoformat()} '
+                                    f'by={marked_by}')
 
         # Dual mode: separate Morning + Afternoon ticks on one save, so a student
         # can be present in the morning and absent in the afternoon (or vice versa).

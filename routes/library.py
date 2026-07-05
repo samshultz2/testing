@@ -206,6 +206,8 @@ def delete_book(book_id):
         return _err('Cannot delete: copies are still on loan.', url_for('library.books'))
     b.is_active = False
     db.session.commit()
+    from utils.audit import log_action
+    log_action('library.book_delete', detail=getattr(b, 'title', None), target=b)
     return _ok('Book removed.', url_for('library.books'))
 
 

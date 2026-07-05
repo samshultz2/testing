@@ -29,6 +29,7 @@
                 <th style="text-align:left;padding:.5rem;">On</th>
                 <th style="text-align:left;padding:.5rem;">Detail</th>
                 <th style="text-align:left;padding:.5rem;">IP</th>
+                <th style="text-align:left;padding:.5rem;">Device</th>
             </tr></thead>
             <tbody>
             {% for l in logs.items %}
@@ -39,6 +40,7 @@
                 <td style="padding:.5rem;">{% if l.target_label %}<strong>{{ l.target_label }}</strong>{% if l.target_type %} <span class="text-muted text-sm">({{ l.target_type }}{% if l.target_id %} #{{ l.target_id }}{% endif %})</span>{% endif %}{% else %}—{% endif %}</td>
                 <td style="padding:.5rem;">{{ l.detail or '' }}</td>
                 <td style="padding:.5rem;color:var(--text-muted);">{{ l.ip_address or '' }}</td>
+                <td style="padding:.5rem;color:var(--text-muted);font-size:.8rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ l.user_agent or '' }}">{{ l.user_agent or '—' }}</td>
             </tr>
             {% endfor %}
             </tbody>

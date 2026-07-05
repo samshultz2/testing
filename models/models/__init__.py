@@ -319,7 +319,8 @@ def _ensure_student_exam_columns():
     try:
         al_cols = {c['name'] for c in inspect(db.engine).get_columns('audit_logs')}
         for col, ddl in (('target_type', 'VARCHAR(40)'), ('target_id', 'INTEGER'),
-                         ('target_label', 'VARCHAR(150)'), ('branch_id', 'INTEGER')):
+                         ('target_label', 'VARCHAR(150)'), ('branch_id', 'INTEGER'),
+                         ('user_agent', 'VARCHAR(300)')):
             if col not in al_cols:
                 statements.append(f'ALTER TABLE audit_logs ADD COLUMN {col} {ddl}')
     except Exception:
