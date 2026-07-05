@@ -147,7 +147,18 @@ def save_attendance():
         
         # Parse date
         target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
-        
+
+        # Reject future / out-of-term / non-school-day dates. The term comes from
+        # the class assignment (authoritative), not the form.
+        asg_for_date = db.session.get(ClassArmAssignment, assignment_id)
+        date_err = _validate_attendance_date(
+            target_date, asg_for_date.term_id if asg_for_date else None)
+        if date_err:
+            flash(date_err, 'error')
+            return redirect(url_for('attendance.mark_attendance_page',
+                term_id=request.form.get('term_id'), assignment_id=assignment_id,
+                date=request.form.get('date')))
+
         # Get all enrollment IDs for this class
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id,
@@ -155,6 +166,12 @@ def save_attendance():
         ).all()
         all_enrollment_ids = [e.id for e in enrollments]
         marked_by = _actor_name()
+        # A register taken for a past date is the classic attendance-fraud vector;
+        # leave an audit trail so retroactive edits are attributable.
+        if target_date < date.today():
+            from utils.audit import log_action
+            log_action('attendance.backdated',
+                       detail=f'class={assignment_id} date={target_date.isoformat()} by={marked_by}')
 
         # Dual mode: separate Morning + Afternoon ticks on one save, so a student
         # can be present in the morning and absent in the afternoon (or vice versa).

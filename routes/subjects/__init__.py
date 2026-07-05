@@ -32,6 +32,108 @@ def _nav_urls():
             'class_subjects': url_for('subjects.class_subjects_list')}
 
 
+# ---------------------------------------------------------------------------
+# Shared score-write safety rules (publication lock, edit-permission, range
+# clamp, audit). Every score-persist path routes through persist_scores() so the
+# rules can't drift between the grid / bulk / import / scan-save entry points.
+# ---------------------------------------------------------------------------
+def results_locked(term_id):
+    """True when a term's results are published and the current user is NOT an
+    admin. Grades must not be silently rewritten after release to the parent /
+    student portal; an admin can unpublish (Result Portal) to make corrections."""
+    if is_admin():
+        return False
+    t = db.session.get(Term, term_id) if term_id else None
+    return bool(t and t.results_published)
+
+
+def can_edit_existing_results(assignment_id=None, subject_id=None):
+    """Whether the user may CHANGE or DELETE an already-entered score (vs. only
+    entering a new one). Admins and teachers holding the can_edit_results flag
+    may; an enter-only teacher can add fresh scores but not alter existing ones."""
+    if is_admin():
+        return True
+    from utils.access_control import get_teacher_profile
+    t = get_teacher_profile()
+    if not (t and t.can_edit_results):
+        return False
+    return can_enter_results(assignment_id, subject_id)
+
+
+def log_score_changes(term_id, class_subject_id, changes):
+    """Audit grade edits. ``changes`` is a list of (student_id, old, new); None
+    means the score was absent. No-ops are dropped. One compact log line per save
+    so grade tampering is attributable after the fact."""
+    real = [(sid, old, new) for sid, old, new in changes if old != new]
+    if not real:
+        return
+    from utils.audit import log_action
+
+    def _f(v):
+        return '∅' if v is None else f'{v:g}'
+    sample = '; '.join(f'stu{sid}:{_f(old)}→{_f(new)}' for sid, old, new in real[:15])
+    more = '' if len(real) <= 15 else f' (+{len(real) - 15} more)'
+    log_action('results.score_edit',
+               detail=f'term={term_id} class_subject={class_subject_id}: '
+                      f'{len(real)} change(s) — {sample}{more}')
+
+
+def persist_scores(term_id, assignment_id, class_subject_id, subject_id, items,
+                   *, allow_delete=True):
+    """Apply score cells with the shared safety rules and audit the result.
+
+    ``items`` is an iterable of (student_id, assessment_type_id, raw_value,
+    max_score). Adds/updates/deletes on the session (caller commits). Returns a
+    counts dict, or None if writes are blocked because the term is published.
+    """
+    if results_locked(term_id):
+        return None
+    may_edit = can_edit_existing_results(assignment_id, subject_id)
+    counts = {'saved': 0, 'rejected': 0, 'blocked': 0}
+    changes = []
+    for student_id, at_id, raw, max_score in items:
+        raw = '' if raw is None else str(raw).strip()
+        existing = StudentScore.query.filter_by(
+            student_id=student_id, class_subject_id=class_subject_id,
+            assessment_type_id=at_id).first()
+        old = existing.score if existing else None
+        if raw == '':
+            if existing and allow_delete:
+                if not may_edit:
+                    counts['blocked'] += 1
+                    continue
+                changes.append((student_id, old, None))
+                db.session.delete(existing)
+                counts['saved'] += 1
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            continue
+        # Reject out-of-range values (negative, or above the assessment maximum)
+        # rather than silently clamping — a stored clamp would misrepresent the mark.
+        if val < 0 or (max_score and val > max_score):
+            counts['rejected'] += 1
+            continue
+        if existing:
+            if existing.score == val:
+                continue                      # genuine no-op, don't audit
+            if not may_edit:
+                counts['blocked'] += 1
+                continue
+            changes.append((student_id, old, val))
+            existing.score = val
+            counts['saved'] += 1
+        else:
+            db.session.add(StudentScore(
+                student_id=student_id, class_subject_id=class_subject_id,
+                assessment_type_id=at_id, score=val))
+            changes.append((student_id, None, val))
+            counts['saved'] += 1
+    log_score_changes(term_id, class_subject_id, changes)
+    return counts
+
+
 # ============================================================================
 # SUBJECTS CRUD
 # ============================================================================

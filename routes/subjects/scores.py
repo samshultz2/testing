@@ -152,45 +152,17 @@ def save_scores():
 
         at = db.session.get(AssessmentType, assessment_type_id)
         max_score = at.max_score if at else None
-        saved = 0
-        rejected = 0
-        for i, student_id in enumerate(student_ids):
-            score_value = scores[i].strip() if i < len(scores) else ''
+        items = [(int(sid), assessment_type_id,
+                  scores[i].strip() if i < len(scores) else '', max_score)
+                 for i, sid in enumerate(student_ids)]
+        counts = persist_scores(term_id, assignment_id, class_subject_id,
+                                cs.subject_id if cs else None, items)
+        if counts is None:
+            return _err('Results for this term are published — ask an admin to '
+                        'unlock them before editing scores.',
+                        url_for('subjects.scores_entry', term_id=term_id,
+                                assignment_id=assignment_id))
 
-            if score_value:
-                try:
-                    score_float = float(score_value)
-                except ValueError:
-                    continue
-                if max_score and score_float > max_score:
-                    rejected += 1
-                    continue
-                # Get or create score record
-                existing = StudentScore.query.filter_by(
-                    student_id=int(student_id),
-                    class_subject_id=class_subject_id,
-                    assessment_type_id=assessment_type_id
-                ).first()
-                
-                if existing:
-                    existing.score = score_float
-                else:
-                    score = StudentScore(
-                        student_id=int(student_id),
-                        class_subject_id=class_subject_id,
-                        assessment_type_id=assessment_type_id,
-                        score=score_float
-                    )
-                    db.session.add(score)
-                saved += 1
-            else:
-                # Remove score if empty
-                StudentScore.query.filter_by(
-                    student_id=int(student_id),
-                    class_subject_id=class_subject_id,
-                    assessment_type_id=assessment_type_id
-                ).delete()
-        
         db.session.commit()
         # Keep term results/positions fresh as scores change.
         if term_id and assignment_id:
@@ -198,9 +170,12 @@ def save_scores():
             if asg:
                 from utils.report_card import compute_term_summaries
                 compute_term_summaries(term_id, asg.class_id)
-        msg = f'{saved} scores saved!'
-        if rejected:
-            msg += f' {rejected} skipped (above the {max_score:g} maximum).'
+        msg = f'{counts["saved"]} scores saved!'
+        if counts['rejected']:
+            msg += f' {counts["rejected"]} skipped (outside the 0–{max_score:g} range).'
+        if counts['blocked']:
+            msg += (f' {counts["blocked"]} left unchanged (you can enter new '
+                    f'scores but not edit existing ones).')
         return _ok(msg, url_for('subjects.scores_entry',
             term_id=term_id, assignment_id=assignment_id,
             class_subject_id=class_subject_id, assessment_type_id=assessment_type_id))
@@ -309,42 +284,28 @@ def bulk_entry():
             .join(Student).order_by(Student.surname, Student.first_name).all())
 
     if request.method == 'POST' and selected and class_subjects and enrollments:
-        sids = [e.student_id for e in enrollments]
-        cs_ids = [cs.id for cs in class_subjects]
-        existing = {(s.student_id, s.class_subject_id, s.assessment_type_id): s
-                    for s in StudentScore.query.filter(
-                        StudentScore.student_id.in_(sids),
-                        StudentScore.class_subject_id.in_(cs_ids)).all()}
-        changed = 0
-        rejected = 0
-        for e in enrollments:
-            for cs in class_subjects:
-                for at in assessment_types:
-                    raw = (request.form.get(f's_{e.student_id}_{cs.id}_{at.id}') or '').strip()
-                    obj = existing.get((e.student_id, cs.id, at.id))
-                    if raw:
-                        try:
-                            val = float(raw)
-                        except ValueError:
-                            continue
-                        if at.max_score and val > at.max_score:
-                            rejected += 1
-                            continue
-                        if obj:
-                            if obj.score != val:
-                                obj.score = val; changed += 1
-                        else:
-                            db.session.add(StudentScore(student_id=e.student_id,
-                                class_subject_id=cs.id, assessment_type_id=at.id, score=val))
-                            changed += 1
-                    elif obj:
-                        db.session.delete(obj); changed += 1
+        total = {'saved': 0, 'rejected': 0, 'blocked': 0}
+        for cs in class_subjects:
+            items = [(e.student_id, at.id,
+                      request.form.get(f's_{e.student_id}_{cs.id}_{at.id}'), at.max_score)
+                     for e in enrollments for at in assessment_types]
+            counts = persist_scores(term_id, assignment_id, cs.id, cs.subject_id, items)
+            if counts is None:
+                return _err('Results for this term are published — ask an admin to '
+                            'unlock them before editing scores.',
+                            url_for('subjects.bulk_entry', term_id=term_id,
+                                    assignment_id=assignment_id))
+            for k in total:
+                total[k] += counts[k]
         db.session.commit()
         from utils.report_card import compute_term_summaries
         compute_term_summaries(term_id, selected.class_id)
-        msg = f'Saved — {changed} change(s).'
-        if rejected:
-            msg += f' {rejected} skipped (above the subject maximum).'
+        msg = f'Saved — {total["saved"]} change(s).'
+        if total['rejected']:
+            msg += f' {total["rejected"]} skipped (outside the allowed range).'
+        if total['blocked']:
+            msg += (f' {total["blocked"]} left unchanged (edit permission '
+                    f'required to alter existing scores).')
         return _ok(msg, url_for('subjects.bulk_entry', term_id=term_id, assignment_id=assignment_id))
 
     scores = {}
@@ -423,48 +384,35 @@ def import_scores():
             assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
             
             # Expected columns: Student ID, then assessment type names
-            imported = 0
             errors = []
-            
+            items = []            # (student_id, at_id, raw, max_score)
+
             for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
                 if not row[0]:
                     continue
-                
+
                 student_id_str = str(row[0]).strip()
                 student = Student.query.filter_by(student_id=student_id_str).first()
-                
+
                 if not student:
                     errors.append(f"Row {row_num}: Student {student_id_str} not found")
                     continue
-                
+
                 # Import each assessment score
                 for col_idx, at in enumerate(assessment_types, 1):
                     if col_idx < len(row) and row[col_idx] is not None:
-                        try:
-                            score_value = float(row[col_idx])
-                            
-                            # Get or create score
-                            existing = StudentScore.query.filter_by(
-                                student_id=student.id,
-                                class_subject_id=class_subject_id,
-                                assessment_type_id=at.id
-                            ).first()
-                            
-                            if existing:
-                                existing.score = score_value
-                            else:
-                                score = StudentScore(
-                                    student_id=student.id,
-                                    class_subject_id=class_subject_id,
-                                    assessment_type_id=at.id,
-                                    score=score_value
-                                )
-                                db.session.add(score)
-                            imported += 1
-                        except ValueError:
-                            pass
-            
+                        items.append((student.id, at.id, row[col_idx], at.max_score))
+
+            counts = persist_scores(term_id, assignment_id, class_subject_id,
+                                    cs.subject_id if cs else None, items,
+                                    allow_delete=False)
+            if counts is None:
+                flash('Results for this term are published — ask an admin to '
+                      'unlock them before importing scores.', 'error')
+                return redirect(url_for('subjects.import_scores'))
+
             db.session.commit()
+            imported = counts['saved']
             flash(f'Imported {imported} scores!', 'success')
             
             if errors:
@@ -749,13 +697,18 @@ def scoresheet_save():
         flash('You can only enter scores for the subjects you teach in this class.', 'error')
         return redirect(url_for('subjects.scoresheet_scan'))
 
+    if results_locked(term_id):
+        flash('Results for this term are published — ask an admin to unlock them '
+              'before saving scanned scores.', 'error')
+        return redirect(url_for('subjects.scores_entry', term_id=term_id,
+                                assignment_id=assignment_id, class_subject_id=class_subject_id))
+
     sheet_cols = _sheet_columns(class_subject)
     auto_id_re = _re.compile(r'^STU\d{3,}$')
 
-    saved_rows = 0
-    saved_scores = 0
     adopted = 0
     warnings = []
+    items = []            # (student_id, at_id, raw, max_score)
 
     try:
         for r in range(row_count):
@@ -778,42 +731,19 @@ def scoresheet_save():
                     student.student_id = scanned
                     adopted += 1
 
-            row_has_score = False
             for at, max_score in sheet_cols:
-                raw = (request.form.get(f'cell_{r}_{at.id}') or '').strip()
-                if raw == '':
-                    continue
-                try:
-                    value = float(raw)
-                except ValueError:
-                    continue
-                if value < 0:
-                    value = 0
-                if max_score and value > max_score:
-                    value = max_score
+                items.append((student.id, at.id,
+                              request.form.get(f'cell_{r}_{at.id}'), max_score))
 
-                existing = StudentScore.query.filter_by(
-                    student_id=student.id,
-                    class_subject_id=class_subject_id,
-                    assessment_type_id=at.id,
-                ).first()
-                if existing:
-                    existing.score = value
-                else:
-                    db.session.add(StudentScore(
-                        student_id=student.id,
-                        class_subject_id=class_subject_id,
-                        assessment_type_id=at.id,
-                        score=value,
-                    ))
-                saved_scores += 1
-                row_has_score = True
-
-            if row_has_score:
-                saved_rows += 1
-
+        counts = persist_scores(term_id, assignment_id, class_subject_id,
+                                class_subject.subject_id, items, allow_delete=False)
         db.session.commit()
-        flash(f'Saved {saved_scores} scores for {saved_rows} students.', 'success')
+        msg = f'Saved {counts["saved"]} scores.'
+        if counts['rejected']:
+            msg += f' {counts["rejected"]} skipped (outside the allowed range).'
+        if counts['blocked']:
+            msg += f' {counts["blocked"]} left unchanged (edit permission required).'
+        flash(msg, 'success')
         if adopted:
             flash(f'Adopted scanned student number for {adopted} student(s).', 'info')
         for w in warnings[:5]:

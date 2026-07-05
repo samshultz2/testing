@@ -554,13 +554,22 @@ def record_payment():
         if not (student_id and term_id and amount and amount > 0):
             return _err('Select a student, term and a positive amount.',
                         url_for('finance.record_payment', term_id=term_id, student_id=student_id))
+        # Idempotency: when a transaction reference is supplied, refuse a second
+        # payment with the same reference for the same student+term (double-submit
+        # / retried POST). References are unique per real transaction.
+        reference = (request.form.get('reference') or '').strip() or None
+        if reference and FeePayment.query.filter_by(
+                student_id=student_id, term_id=term_id, reference=reference).first():
+            return _err(f'A payment with reference "{reference}" is already recorded '
+                        f'for this student and term.',
+                        url_for('finance.record_payment', term_id=term_id, student_id=student_id))
         payment = FeePayment(
             student_id=student_id,
             term_id=term_id,
             amount=amount,
             payment_date=_parse_date(request.form.get('payment_date')),
             method=request.form.get('method') or 'Cash',
-            reference=(request.form.get('reference') or '').strip() or None,
+            reference=reference,
             received_by=(request.form.get('received_by') or '').strip() or None,
             notes=(request.form.get('notes') or '').strip() or None,
             receipt_no=next_receipt_no(),
@@ -705,6 +714,7 @@ def edit_payment(payment_id):
         amount = request.form.get('amount', type=float)
         if not amount or amount <= 0:
             return _err('Enter a positive amount.', url_for('finance.edit_payment', payment_id=payment_id))
+        before_amount = payment.amount        # capture for the audit trail
         payment.amount = amount
         payment.payment_date = _parse_date(request.form.get('payment_date'), payment.payment_date)
         payment.method = request.form.get('method') or payment.method
@@ -713,7 +723,10 @@ def edit_payment(payment_id):
         payment.notes = (request.form.get('notes') or '').strip() or None
         db.session.commit()
         from utils.audit import log_action
-        log_action('finance.payment_edit', detail=f'{payment.amount:g}', target=payment)
+        # Record BOTH the old and new amount — a bare "new amount" hides a
+        # down-edit used to skim recorded cash.
+        log_action('finance.payment_edit',
+                   detail=f'{before_amount:g}→{payment.amount:g}', target=payment)
         return _ok(f'Payment {payment.receipt_no} updated.',
                    url_for('finance.receipt', payment_id=payment.id))
 
@@ -826,10 +839,17 @@ def add_discount():
     if not (student_id and term_id and amount and amount > 0):
         return _err('A student, term and positive amount are required.',
                     url_for('finance.statement', student_id=student_id, term_id=term_id))
+    # A waiver reduces what a student owes — gate it to the student's branch, just
+    # like recording a payment, so a branch admin can't waive fees org-wide.
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
     db.session.add(FeeDiscount(
         student_id=student_id, term_id=term_id, amount=amount,
         reason=(request.form.get('reason') or '').strip() or None))
     db.session.commit()
+    from utils.audit import log_action
+    log_action('finance.discount_add', detail=f'{amount:g} for {student.full_name}',
+               target_type='student', target_id=student.id, target_label=student.full_name)
     return _ok('Discount / waiver applied.',
                url_for('finance.statement', student_id=student_id, term_id=term_id))
 
@@ -838,13 +858,18 @@ def add_discount():
 @admin_required
 def edit_discount(discount_id):
     d = db.get_or_404(FeeDiscount, discount_id)
+    require_branch_access(d.student.branch_id if d.student else None)
     amount = request.form.get('amount', type=float)
     if not amount or amount <= 0:
         return _err('Enter a positive amount.',
                     url_for('finance.statement', student_id=d.student_id, term_id=d.term_id))
+    before = d.amount
     d.amount = amount
     d.reason = (request.form.get('reason') or '').strip() or None
     db.session.commit()
+    from utils.audit import log_action
+    log_action('finance.discount_edit', detail=f'{before:g}→{amount:g}',
+               target_type='student', target_id=d.student_id)
     return _ok('Discount updated.', url_for('finance.statement', student_id=d.student_id, term_id=d.term_id))
 
 
@@ -852,9 +877,13 @@ def edit_discount(discount_id):
 @admin_required
 def delete_discount(discount_id):
     d = db.get_or_404(FeeDiscount, discount_id)
-    student_id, term_id = d.student_id, d.term_id
+    require_branch_access(d.student.branch_id if d.student else None)
+    student_id, term_id, amount = d.student_id, d.term_id, d.amount
     db.session.delete(d)
     db.session.commit()
+    from utils.audit import log_action
+    log_action('finance.discount_delete', detail=f'{amount:g}',
+               target_type='student', target_id=student_id)
     return _ok('Discount removed.', url_for('finance.statement', student_id=student_id, term_id=term_id))
 
 

@@ -96,6 +96,25 @@ def _week_for_date(term_id, target_date):
     ).first()
 
 
+def _validate_attendance_date(target_date, term_id):
+    """Reject dates a register can't legitimately be taken for: in the future,
+    outside the term window, or on a non-school day (weekend / holiday). Returns
+    an error string, or None when the date is acceptable. Stops silent back- or
+    future-dating of attendance — the save endpoint previously trusted any date.
+    """
+    if target_date > date.today():
+        return 'You cannot mark attendance for a future date.'
+    term = db.session.get(Term, term_id) if term_id else None
+    if term and term.start_date and target_date < term.start_date:
+        return 'That date is before the start of the selected term.'
+    if term and term.end_date and target_date > term.end_date:
+        return 'That date is after the end of the selected term.'
+    holidays = Holiday.query.filter_by(term_id=term_id).all() if term_id else []
+    if not is_school_day(target_date, holidays):
+        return 'That date is a weekend or holiday — not a school day.'
+    return None
+
+
 
 
 

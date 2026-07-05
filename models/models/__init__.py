@@ -740,9 +740,13 @@ def init_db(app):
                 username='admin',
                 email='admin@school.com',
                 full_name='Administrator',
-                role='admin'
+                role='admin',
+                # The default password is public knowledge (it ships in source), so
+                # force a change on first login — the account can't be left sitting
+                # on the shipped credential.
+                must_change_password=True,
             )
-            admin.set_password('posyhubcomng')  # Default password
+            admin.set_password('posyhubcomng')  # Default password — must be changed on first login
             db.session.add(admin)
         
         db.session.commit()
