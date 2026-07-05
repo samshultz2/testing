@@ -155,6 +155,27 @@ class Config:
     # Backups
     BACKUP_RETENTION = int(os.environ.get('BACKUP_RETENTION', '10'))
 
+    # Include the uploads/ media folder (logos, question images, scans) in the
+    # daily backup — it is NOT part of the database dump. Cheap; on by default.
+    BACKUP_MEDIA = _as_bool(os.environ.get('BACKUP_MEDIA'), default=True)
+
+    # --- Offsite backup shipping (opt-in; nothing configured by default) -------
+    # Leave these blank and behaviour is unchanged — backups stay local. When you
+    # get offsite storage, set ONE destination below and every NEW daily DB dump
+    # + media archive is automatically copied off the server. This is the single
+    # biggest disaster-recovery win: ransomware / disk loss / a compromised host
+    # can no longer take the backups down with the primary. Configure WORM /
+    # object-lock / versioning on the remote for true immutability.
+    #   OFFSITE_DIR            — copy to a mounted volume / NFS / external disk.
+    #   OFFSITE_RCLONE_REMOTE  — `rclone copyto` to any rclone remote (S3, B2,
+    #                            Google Drive, SFTP…); run `rclone config` once.
+    #   OFFSITE_COMMAND        — escape hatch: a command with {path} / {name}
+    #                            tokens, e.g. "aws s3 cp {path} s3://bkt/{name}".
+    OFFSITE_DIR = os.environ.get('OFFSITE_DIR', '')
+    OFFSITE_RCLONE_REMOTE = os.environ.get('OFFSITE_RCLONE_REMOTE', '')
+    OFFSITE_RCLONE_FLAGS = os.environ.get('OFFSITE_RCLONE_FLAGS', '')
+    OFFSITE_COMMAND = os.environ.get('OFFSITE_COMMAND', '')
+
     # Automated fee reminders. Opt-in: when enabled, a background job prepares a
     # Draft SMS campaign to fee defaulters for the active term and bells admins to
     # review and send it. Nothing is sent automatically — the human send-gate is

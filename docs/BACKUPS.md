@@ -63,6 +63,44 @@ encrypted dump cannot be restored. Generate one with:
 python -c "import base64,os; print(base64.b64encode(os.urandom(32)).decode())"
 ```
 
+## Offsite copies (recommended once you have somewhere to ship to)
+
+By default backups are written only to `instance/backups/` — the **same disk as
+the database**. That protects against an accidental bad deploy, but **not**
+against disk loss, a compromised host, or ransomware, all of which take the
+local backups down with the primary. The fix is an offsite copy.
+
+Offsite shipping is **opt-in and dormant** until you configure a destination —
+set nothing and behaviour is unchanged. When you have storage, set **one** of
+these (in `.env`) and every new daily DB dump **and** the `uploads/` media
+archive is copied off the server automatically (see `utils/offsite.py`):
+
+```bash
+# A mounted volume / NFS / external disk:
+OFFSITE_DIR=/mnt/backup-drive
+
+# Any rclone remote — S3, Backblaze B2, Google Drive, SFTP… (run `rclone config` once):
+OFFSITE_RCLONE_REMOTE=b2:my-bucket/edusyncra
+OFFSITE_RCLONE_FLAGS=            # optional extra flags
+
+# Or an arbitrary command ({path} and {name} are substituted, no shell):
+OFFSITE_COMMAND=aws s3 cp {path} s3://my-bucket/edusyncra/{name}
+```
+
+**Make it ransomware-proof:** enable **object-lock / versioning (WORM)** on the
+bucket so a shipped backup can't be deleted or overwritten by an attacker who
+gets the credentials. Keep the encryption key **separate** from the offsite copy
+(a stolen backup file is then useless without it).
+
+Shipping is best-effort: a failed upload is logged but never blocks the backup
+run or app startup. Only newly-created backups are shipped, so restarts don't
+re-upload the same day's file.
+
+**Media (`uploads/`)** — logos, CBT question images and scans live on disk, not
+in the database dump. They are now archived into the daily backup as
+`media_YYYYMMDD.tar.gz` (set `BACKUP_MEDIA=0` to skip) and shipped offsite with
+the DB dump.
+
 ## Restoring
 
 - **From the UI:** Settings → Backup, upload the backup file. A pre-restore

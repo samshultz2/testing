@@ -135,19 +135,53 @@ def _prune(backup_dir, pattern, retention):
         _safe_remove(old)
 
 
+def _media_backup(app, stamp):
+    """Archive the uploads/ media folder (logos, question images, scans) — it is
+    NOT part of the database dump, so without this it is never backed up.
+
+    Written into the same backup dir as ``media_<stamp>.tar.gz``, encrypted and
+    hardened like the DB backup. Returns ``(path, created)``; ``created`` is True
+    only when a new archive was written this call (so callers ship it once)."""
+    try:
+        if not app.config.get('BACKUP_MEDIA', True):
+            return None, False
+        src = app.config.get('UPLOAD_FOLDER')
+        if not src or not os.path.isdir(src) or not any(os.scandir(src)):
+            return None, False        # nothing to archive yet
+        dest = os.path.join(_backup_dir(app), f'media_{stamp}.tar.gz')
+        if os.path.exists(dest):
+            return dest, False        # already taken for this stamp
+        import tarfile
+        tmp = dest + '.tmp'
+        with tarfile.open(tmp, 'w:gz') as tar:
+            tar.add(src, arcname='uploads')
+        os.replace(tmp, dest)
+        final = _finalize(app, dest)
+        return final, bool(final)
+    except Exception as exc:
+        app.logger.warning('media backup error: %s', exc)
+        return None, False
+
+
 def make_backup(app, label='manual'):
-    """Create an on-demand timestamped backup. Returns the path, or None."""
+    """Create an on-demand timestamped backup. Returns the path, or None.
+    The finished file is shipped offsite when a destination is configured."""
     try:
         stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         if _is_postgres(app):
             dest = os.path.join(_backup_dir(app), f"school_{stamp}_{label}.sql")
-            return _finalize(app, _pg_dump(app, dest))
-        db_path = _sqlite_path(app)
-        if not db_path or not os.path.exists(db_path):
-            return None
-        dest = os.path.join(_backup_dir(app), f"school_{stamp}_{label}.db")
-        shutil.copy2(db_path, dest)
-        return _finalize(app, dest)
+            final = _finalize(app, _pg_dump(app, dest))
+        else:
+            db_path = _sqlite_path(app)
+            if not db_path or not os.path.exists(db_path):
+                return None
+            dest = os.path.join(_backup_dir(app), f"school_{stamp}_{label}.db")
+            shutil.copy2(db_path, dest)
+            final = _finalize(app, dest)
+        if final:
+            from utils import offsite
+            offsite.ship(app, final)
+        return final
     except Exception as exc:
         app.logger.warning('make_backup error: %s', exc)
         return None
@@ -254,27 +288,42 @@ def restore_database(app, upload_path, original_filename):
 
 
 def auto_backup(app):
-    """Keep one backup per day, pruned to BACKUP_RETENTION. Never raises."""
+    """Keep one DB + media backup per day, pruned to BACKUP_RETENTION, and ship
+    newly-created backups offsite when a destination is configured. Never raises."""
     try:
         backup_dir = _backup_dir(app)
         retention = int(app.config.get('BACKUP_RETENTION', 10))
         today = datetime.now().strftime('%Y%m%d')
 
+        dest = None
+        created = False
         if _is_postgres(app):
             dest = os.path.join(backup_dir, f"school_{today}.sql")
             if not os.path.exists(dest):
-                _finalize(app, _pg_dump(app, dest))
+                dest = _finalize(app, _pg_dump(app, dest))
+                created = bool(dest)
             _prune(backup_dir, 'school_*.sql', retention)
-            return dest if os.path.exists(dest) else None
+        else:
+            db_path = _sqlite_path(app)
+            if db_path and os.path.exists(db_path):
+                dest = os.path.join(backup_dir, f"school_{today}.db")
+                if not os.path.exists(dest):
+                    shutil.copy2(db_path, dest)
+                    dest = _finalize(app, dest)
+                    created = bool(dest)
+                _prune(backup_dir, 'school_*.db', retention)
 
-        db_path = _sqlite_path(app)
-        if not db_path or not os.path.exists(db_path):
-            return None
-        dest = os.path.join(backup_dir, f"school_{today}.db")
-        if not os.path.exists(dest):
-            shutil.copy2(db_path, dest)
-            _finalize(app, dest)
-        _prune(backup_dir, 'school_*.db', retention)
+        # Media (uploads/) — separate archive, not covered by the DB dump.
+        media, media_created = _media_backup(app, today)
+        _prune(backup_dir, 'media_*.tar.gz', retention)
+
+        # Ship only what we created this run (no-op unless offsite is configured),
+        # so a restart doesn't re-upload the same day's backup.
+        from utils import offsite
+        if created:
+            offsite.ship(app, dest)
+        if media_created:
+            offsite.ship(app, media)
         return dest
     except Exception:
         # Backups must never block app startup.
