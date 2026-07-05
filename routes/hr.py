@@ -6,7 +6,7 @@ from datetime import datetime, date
 from utils.helpers import get_active_term
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, jsonify, Response)
+                   flash, jsonify, Response, abort)
 from sqlalchemy import func
 
 from models import (
@@ -41,6 +41,23 @@ _wants_json, _render, _ok, _err = section_responders(
 def _is_admin():
     from utils.access_control import is_admin
     return is_admin()
+
+
+def _require_central_payroll():
+    """Payroll is org-wide: one run carries a payslip for EVERY branch's active
+    staff (see utils.hr.generate_payslips), and PayrollRun has no branch_id. So
+    reading or changing payroll means touching every branch's salary data, which
+    only a central user may do. A branch-scoped admin manages their own staff's
+    pay through the branch-checked staff routes (adjust_salary), not here. Guards
+    against a branch admin reaching another branch's payslip by a guessed id."""
+    from utils.branch_scope import is_central
+    if not is_central():
+        abort(403)
+
+
+def _payslip_branch_id(ps):
+    """The branch a payslip belongs to (via its staff member)."""
+    return ps.staff.branch_id if ps and ps.staff else None
 
 
 def _nav_urls():
@@ -457,6 +474,7 @@ def delete_leave(leave_id):
 @hr_bp.route('/payroll')
 @login_required
 def payroll_list():
+    _require_central_payroll()
     runs = PayrollRun.query.order_by(PayrollRun.year.desc(), PayrollRun.month.desc()).all()
     today = date.today()
     return _render({
@@ -473,6 +491,7 @@ def payroll_list():
 @hr_bp.route('/payroll/create', methods=['POST'])
 @admin_required
 def create_payroll():
+    _require_central_payroll()
     year = request.form.get('year', type=int)
     month = request.form.get('month', type=int)
     if not (year and month and 1 <= month <= 12):
@@ -491,6 +510,7 @@ def create_payroll():
 @hr_bp.route('/payroll/<int:run_id>')
 @login_required
 def payroll_detail(run_id):
+    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
     slips = run.payslips.join(StaffMember).order_by(StaffMember.surname).all()
 
@@ -520,9 +540,12 @@ def payroll_detail(run_id):
 @hr_bp.route('/payroll/<int:run_id>/payslip/<int:slip_id>/edit', methods=['POST'])
 @admin_required
 def edit_payslip(run_id, slip_id):
+    _require_central_payroll()
     ps = db.get_or_404(Payslip, slip_id)
     if ps.run_id != run_id:
         return ('', 404)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(_payslip_branch_id(ps))   # no cross-branch pay edits
     ps.basic = request.form.get('basic', type=float) or 0
     ps.allowances = request.form.get('allowances', type=float) or 0
     ps.deductions = request.form.get('deductions', type=float) or 0
@@ -535,6 +558,7 @@ def edit_payslip(run_id, slip_id):
 @hr_bp.route('/payroll/<int:run_id>/finalize', methods=['POST'])
 @admin_required
 def finalize_payroll(run_id):
+    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
     run.status = 'Finalized'
     # Post the salary run to Finance as a single expense (once).
@@ -577,6 +601,7 @@ def finalize_payroll(run_id):
 @hr_bp.route('/payroll/<int:run_id>/mark-paid', methods=['POST'])
 @admin_required
 def mark_paid(run_id):
+    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
     run.status = 'Paid'
     db.session.commit()
@@ -586,6 +611,7 @@ def mark_paid(run_id):
 @hr_bp.route('/payroll/<int:run_id>/delete', methods=['POST'])
 @admin_required
 def delete_payroll(run_id):
+    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
     db.session.delete(run)
     db.session.commit()
@@ -595,9 +621,12 @@ def delete_payroll(run_id):
 @hr_bp.route('/payroll/<int:run_id>/payslip/<int:slip_id>/print')
 @login_required
 def print_payslip(run_id, slip_id):
+    _require_central_payroll()
     ps = db.get_or_404(Payslip, slip_id)
     if ps.run_id != run_id:
         return ('', 404)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(_payslip_branch_id(ps))   # no cross-branch salary disclosure
     from models import SchoolSettings
     school = {'name': SchoolSettings.get('school_name', 'My School'),
               'address': SchoolSettings.get('school_address', ''),
@@ -608,6 +637,7 @@ def print_payslip(run_id, slip_id):
 @hr_bp.route('/payroll/<int:run_id>/sync-deductions', methods=['POST'])
 @admin_required
 def sync_deductions(run_id):
+    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
     n = hr.sync_attendance_deductions(run)
     db.session.commit()

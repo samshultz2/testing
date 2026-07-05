@@ -10,7 +10,7 @@ from models import (db, ClassArmAssignment, Subject, User, Teacher, TeacherClass
 from utils.access_control import (MODULES, manage_users_required, can_manage,
                                   current_manage_scope, current_rank, get_current_user,
                                   restrict_grant_perms, CAPABILITY_SUBSECTIONS,
-                                  ROLE_DEFAULT_MODULES)
+                                  ROLE_DEFAULT_MODULES, filter_classes_for_user)
 from utils.audit import log_action
 from utils.db_tx import safe_transaction
 from utils.security import is_password_strong
@@ -662,6 +662,17 @@ def assign_class(user_id):
         if not assignment_id:
             return _err('Please select a class.', url_for('users.assign_class', user_id=user_id))
 
+        # A branch manager may only assign classes in their own branch/section —
+        # otherwise they could hand a teacher (and the results they can enter) a
+        # class in a branch they don't manage.
+        caa = db.session.get(ClassArmAssignment, assignment_id)
+        if not caa:
+            return _err('Please select a valid class.', url_for('users.assign_class', user_id=user_id))
+        from utils.branch_scope import can_access_branch
+        if not can_access_branch(caa.branch_id):
+            return _err('That class is outside the branch you manage.',
+                        url_for('users.assign_class', user_id=user_id))
+
         # Check if already assigned
         existing = TeacherClassAssignment.query.filter_by(
             teacher_id=teacher.id,
@@ -688,7 +699,8 @@ def assign_class(user_id):
 
     assignments = []
     if active_term:
-        assignments = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
+        assignments = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=active_term.id).all())
 
     return _render({
         'page': 'assign_class',
@@ -724,6 +736,16 @@ def assign_subject(user_id):
             return _err('Please select both class and subject.',
                         url_for('users.assign_subject', user_id=user_id))
 
+        # Branch guard: a branch manager may only assign a teacher to classes in
+        # the branch/section they manage (mirrors assign_class).
+        caa = db.session.get(ClassArmAssignment, assignment_id)
+        if not caa:
+            return _err('Please select a valid class.', url_for('users.assign_subject', user_id=user_id))
+        from utils.branch_scope import can_access_branch
+        if not can_access_branch(caa.branch_id):
+            return _err('That class is outside the branch you manage.',
+                        url_for('users.assign_subject', user_id=user_id))
+
         # Check if already assigned
         existing = TeacherSubjectAssignment.query.filter_by(
             teacher_id=teacher.id,
@@ -750,7 +772,8 @@ def assign_subject(user_id):
 
     assignments = []
     if active_term:
-        assignments = ClassArmAssignment.query.filter_by(term_id=active_term.id).all()
+        assignments = filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=active_term.id).all())
 
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
 
