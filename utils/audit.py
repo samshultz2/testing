@@ -43,6 +43,7 @@ def log_action(action, detail=None, target=None, target_type=None,
             if ua:
                 ua = ua[:300]
         entry = AuditLog(
+            user_id=session.get('user_id'),
             user=session.get('user') or session.get('username') or 'unknown',
             role=session.get('role'),
             action=action,

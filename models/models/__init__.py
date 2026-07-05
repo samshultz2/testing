@@ -320,7 +320,7 @@ def _ensure_student_exam_columns():
         al_cols = {c['name'] for c in inspect(db.engine).get_columns('audit_logs')}
         for col, ddl in (('target_type', 'VARCHAR(40)'), ('target_id', 'INTEGER'),
                          ('target_label', 'VARCHAR(150)'), ('branch_id', 'INTEGER'),
-                         ('user_agent', 'VARCHAR(300)')):
+                         ('user_agent', 'VARCHAR(300)'), ('user_id', 'INTEGER')):
             if col not in al_cols:
                 statements.append(f'ALTER TABLE audit_logs ADD COLUMN {col} {ddl}')
     except Exception:
@@ -406,6 +406,27 @@ def _ensure_student_exam_columns():
         with db.engine.begin() as conn:
             for stmt in statements:
                 conn.execute(text(_adapt_ddl(stmt, dialect)))
+
+    # Make audit_logs append-only at the DB level too (Postgres): a BEFORE
+    # DELETE/UPDATE trigger blocks tampering even from direct SQL, not just the
+    # ORM guard. Idempotent + best-effort (skipped on SQLite, or if the DB role
+    # lacks rights — the ORM-level guard still applies everywhere).
+    try:
+        if db.engine.dialect.name == 'postgresql':
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE OR REPLACE FUNCTION audit_logs_append_only() "
+                    "RETURNS trigger AS $$ BEGIN "
+                    "RAISE EXCEPTION 'audit_logs is append-only; % is not permitted', TG_OP; "
+                    "END; $$ LANGUAGE plpgsql;"))
+                conn.execute(text(
+                    "DROP TRIGGER IF EXISTS audit_logs_no_delete ON audit_logs;"))
+                conn.execute(text(
+                    "CREATE TRIGGER audit_logs_no_delete "
+                    "BEFORE DELETE OR UPDATE ON audit_logs "
+                    "FOR EACH ROW EXECUTE FUNCTION audit_logs_append_only();"))
+    except Exception:
+        pass
 
     _ensure_indexes()
 

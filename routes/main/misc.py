@@ -162,7 +162,9 @@ def audit_log():
 
     logs = query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
     actions = [a[0] for a in db.session.query(AuditLog.action).distinct().order_by(AuditLog.action).all()]
-    return render_template('audit.html', logs=logs, actions=actions,
+    from models import Branch
+    branch_names = {b.id: b.name for b in Branch.query.all()}
+    return render_template('audit.html', logs=logs, actions=actions, branch_names=branch_names,
         q=q, action=action, user=user, from_s=from_s or '', to_s=to_s or '')
 
 
