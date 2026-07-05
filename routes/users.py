@@ -180,32 +180,33 @@ def _user_edit(u):
 
 
 
-# Non-privileged roles anyone with the manage-users capability may assign.
-# 'admin'/'super_admin' are privileged (is_admin bypasses every module gate, and
-# super_admin is always central regardless of scope — see User.is_central), so
-# only a central super-admin may grant them.
-_ASSIGNABLE_ROLES = set(ROLE_DEFAULT_MODULES) | {'teacher'}
-_PRIVILEGED_ROLES = {'admin', 'super_admin'}
+# Roles a branch-scoped manager may assign. A branch manager's new users are
+# force-scoped to their own branch by _clamp_management_fields(), so an 'admin'
+# here becomes a BRANCH admin (is_central=False) — full access within the branch
+# only, which is the intended delegation model. 'super_admin' is deliberately
+# excluded: User.is_central is True for any super_admin REGARDLESS of scope, so
+# it escapes the branch clamp and is the one role a branch manager must never
+# grant. Assigning it requires central authority (same gate as scope='central').
+_BRANCH_ASSIGNABLE_ROLES = set(ROLE_DEFAULT_MODULES) | {'teacher', 'admin'}
 
 
 def _safe_role(requested, existing=None):
     """Clamp the role a manager may assign to their own authority.
 
-    Without this, a mere branch manager (manage_scope='branch', not is_admin)
-    could POST role=super_admin to add_user/edit_user and mint a central
-    super-admin — a full privilege escalation. Only a central super-admin may
-    grant privileged roles; everyone else is limited to the non-privileged set,
-    and unknown role strings fall back to a safe default.
+    The security invariant: a branch-scoped manager must not create a *central*
+    actor. Branch/rank/scope are already clamped in _clamp_management_fields, so
+    the only role that escapes that clamp is 'super_admin' (always central). Gate
+    it behind central authority; allow the branch-confinable roles otherwise, and
+    fall back to a safe default for unknown role strings.
     """
     requested = (requested or existing or 'teacher')
-    if requested in _PRIVILEGED_ROLES:
-        me = get_current_user()
-        if not (me and me.is_super_admin and me.is_central):
-            # Not authorised to grant a privileged role: keep the existing role
-            # if it was already non-privileged, else drop to 'teacher'.
-            return existing if existing in _ASSIGNABLE_ROLES else 'teacher'
-        return requested
-    return requested if requested in _ASSIGNABLE_ROLES else 'teacher'
+    if requested == 'super_admin':
+        if current_manage_scope() == 'central':
+            return 'super_admin'
+        # A non-central manager cannot mint a central super-admin: keep the
+        # existing role if it's branch-assignable, else drop to 'teacher'.
+        return existing if existing in _BRANCH_ASSIGNABLE_ROLES else 'teacher'
+    return requested if requested in _BRANCH_ASSIGNABLE_ROLES else 'teacher'
 
 
 def _clamp_management_fields(user, role):

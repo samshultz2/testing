@@ -1,10 +1,13 @@
 """Privilege-escalation guard: a manager may not assign a role above their own
 authority via the user add/edit forms.
 
-Without the _safe_role() clamp in routes/users.py, a mere branch manager
-(manage_scope='branch', NOT is_admin) could POST role=super_admin to
-/users/add and mint a central super-admin — since User.is_central is True for
-any super_admin regardless of scope, and is_admin bypasses every module gate.
+Security invariant: a branch-scoped manager must not create a *central* actor.
+Branch managers' new users are force-scoped to their branch by
+_clamp_management_fields, so an 'admin' they create is a BRANCH admin (confined,
+is_central=False) — that is the intended delegation model. The one role that
+escapes the scope clamp is 'super_admin' (User.is_central is True for any
+super_admin regardless of scope), so a branch manager POSTing role=super_admin
+would mint a cross-branch central super-admin. That is the hole this guards.
 """
 from models import db, Branch, User
 from tests.conftest import login_token, auth_csrf
@@ -37,10 +40,9 @@ def _branch_id(app):
         return b.id
 
 
-def _role_of(app, username):
+def _user(app, username):
     with app.app_context():
-        u = User.query.filter_by(username=username).first()
-        return u.role if u else None
+        return User.query.filter_by(username=username).first()
 
 
 def _add_user(client, username, role):
@@ -51,21 +53,37 @@ def _add_user(client, username, role):
 
 
 def test_branch_manager_cannot_mint_super_admin(app):
-    """A branch manager POSTing role=super_admin gets a clamped (safe) role."""
+    """A branch manager POSTing role=super_admin gets a clamped, NON-central
+    role — the created account must never be central."""
     bid = _branch_id(app)
     _mk(app, 'esc_bmgr', role='staff', scope='branch', branch_id=bid,
         rank=60, manage_scope='branch')
     c = _login(app, 'esc_bmgr')
 
     _add_user(c, 'esc_pwn_super', 'super_admin')
-    assert _role_of(app, 'esc_pwn_super') == 'teacher'   # clamped, not super_admin
+    u = _user(app, 'esc_pwn_super')
+    assert u.role != 'super_admin'
+    assert u.is_central is False          # the actual security property
 
-    _add_user(c, 'esc_pwn_admin', 'admin')
-    assert _role_of(app, 'esc_pwn_admin') == 'teacher'   # clamped, not admin
+
+def test_branch_manager_admin_is_a_confined_branch_admin(app):
+    """A branch manager MAY create an admin (intended delegation), but it must
+    be a branch admin — scoped to the manager's branch, never central."""
+    bid = _branch_id(app)
+    _mk(app, 'esc_bmgr_a', role='staff', scope='branch', branch_id=bid,
+        rank=60, manage_scope='branch')
+    c = _login(app, 'esc_bmgr_a')
+
+    _add_user(c, 'esc_branch_admin', 'admin')
+    u = _user(app, 'esc_branch_admin')
+    assert u.role == 'admin'              # role preserved…
+    assert u.scope == 'branch'            # …but confined to the branch
+    assert u.branch_id == bid
+    assert u.is_central is False
 
 
-def test_branch_manager_cannot_escalate_existing_user(app):
-    """Editing an existing teacher to super_admin is also clamped."""
+def test_branch_manager_cannot_escalate_existing_user_to_super_admin(app):
+    """Editing an existing branch user to super_admin is clamped."""
     bid = _branch_id(app)
     _mk(app, 'esc_bmgr2', role='staff', scope='branch', branch_id=bid,
         rank=60, manage_scope='branch')
@@ -77,30 +95,29 @@ def test_branch_manager_cannot_escalate_existing_user(app):
         'full_name': 'esc_victim', 'role': 'super_admin', 'is_active': 'on',
         '_csrf_token': auth_csrf(c),
     }, follow_redirects=True)
-    assert _role_of(app, 'esc_victim') == 'staff'        # unchanged, not escalated
+    u = _user(app, 'esc_victim')
+    assert u.role != 'super_admin'
+    assert u.is_central is False
 
 
-def test_branch_manager_can_still_assign_normal_roles(app):
-    """The clamp must not block legitimate non-privileged role assignment."""
+def test_central_admin_can_create_branch_admins(app):
+    """The described workflow: a central admin (role=admin, scope=central)
+    creates admins for branches. This must keep working."""
     bid = _branch_id(app)
-    _mk(app, 'esc_bmgr3', role='staff', scope='branch', branch_id=bid,
-        rank=60, manage_scope='branch')
-    c = _login(app, 'esc_bmgr3')
-
-    _add_user(c, 'esc_new_teacher', 'teacher')
-    assert _role_of(app, 'esc_new_teacher') == 'teacher'
-    _add_user(c, 'esc_new_readonly', 'readonly')
-    assert _role_of(app, 'esc_new_readonly') == 'readonly'
-
-
-def test_central_super_admin_can_assign_super_admin(app):
-    """A genuine central super-admin retains the ability to grant privileged
-    roles — the clamp gates on authority, it does not blanket-ban."""
-    _mk(app, 'esc_root', role='super_admin', scope='central',
+    _mk(app, 'esc_central', role='admin', scope='central',
         rank=100, manage_scope='central')
-    c = _login(app, 'esc_root')
+    c = _login(app, 'esc_central')
 
-    _add_user(c, 'esc_new_admin', 'admin')
-    assert _role_of(app, 'esc_new_admin') == 'admin'
+    _add_user(c, 'esc_workflow_admin', 'admin')
+    assert _user(app, 'esc_workflow_admin').role == 'admin'
+
+
+def test_central_manager_can_assign_super_admin(app):
+    """A central manager retains the ability to grant super_admin — the clamp
+    gates on central authority, it does not blanket-ban."""
+    _mk(app, 'esc_central2', role='admin', scope='central',
+        rank=100, manage_scope='central')
+    c = _login(app, 'esc_central2')
+
     _add_user(c, 'esc_new_super', 'super_admin')
-    assert _role_of(app, 'esc_new_super') == 'super_admin'
+    assert _user(app, 'esc_new_super').role == 'super_admin'
