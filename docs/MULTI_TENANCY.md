@@ -67,3 +67,43 @@ Today the app builds one global engine from `DATABASE_URL` (`config.py`) and
 uses a single Flask-SQLAlchemy `db`. The change is to resolve the database
 per request (from the host) and bind the scoped session to a per-tenant engine —
 the models, routes, and templates do not need to change.
+
+## Implementation status
+
+### Stage 1 — tenants registry + provisioning — **DONE**
+
+Built and off the request path (the single-school deployment is unaffected):
+
+- **`utils/tenancy.py`** — the control-plane `Tenant` registry on its *own*
+  engine + declarative base (never part of `db.metadata`, so it is never created
+  inside a tenant DB). Location: `CONTROL_PLANE_DATABASE_URL` (defaults to a
+  local SQLite file). API: `register_tenant`, `get_tenant`, `list_tenants`,
+  `set_status`, `delete_tenant`. Subdomains are validated.
+- **`utils/provisioning.py`** — `provision(subdomain)`: creates the physical
+  database (Postgres `CREATE DATABASE` via a privileged provisioner connection;
+  SQLite = a file), builds the full schema (`db.metadata.create_all`), stamps
+  Alembic at head, seeds a default branch + the school's first central
+  super-admin (temp password, must-change), and marks the tenant `active`.
+  Rollback-safe (`failed` + error on exception). `drop_tenant()` tears a tenant
+  database down for rollback/testing.
+- **`scripts/provision_tenant.py`** — CLI: `--list`, register + provision,
+  `--register-only`, `--drop`.
+- **`tests/test_tenant_provisioning.py`** — register/validate, provision two
+  schools, assert full schema + seed + Alembic stamp, and prove **isolation**
+  (a write in one school's DB is invisible in the other).
+
+Config knobs: `CONTROL_PLANE_DATABASE_URL`, `TENANT_DATABASE_URL_TEMPLATE`
+(Postgres, e.g. `postgresql+psycopg://user:pw@host/{name}`) or `TENANT_DB_DIR`
+(SQLite dev), `PROVISIONER_DATABASE_URL` (a role WITH `createdb`, so the app's
+own DB role never needs it).
+
+Example: `python scripts/provision_tenant.py --name "Pioneer" --subdomain pioneer --admin-email head@pioneer.example`
+
+### Still to do
+
+- **Stage 0 — request-time routing:** resolve host → tenant → engine and bind
+  `db.session` per request (a `get_bind()`-override session + engine registry);
+  bind the session cookie to the tenant; namespace uploads per tenant.
+- **Stage 2 — `migrate-all-tenants`** command (iterate the registry, run Alembic
+  per DB); per-tenant `pg_dump` backups.
+- **Stage 3 — registration + approval UI**; wildcard DNS + TLS.

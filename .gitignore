@@ -21,6 +21,9 @@ instance/*.sqlite
 instance/backups/
 instance/.secret_key
 instance/*.jsonl
+# Multi-tenancy: local control-plane + per-tenant SQLite databases (dev only).
+instance/tenants/
+control_plane.db
 /school.db
 
 # Uploads (user-generated)
