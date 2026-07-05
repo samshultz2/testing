@@ -4,6 +4,7 @@ import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired,
          StatCards, SectionTitle, PerfBands } from '../../components/ui';
+import { withGroups, GroupHeadRow } from '../roster';
 
 const round1 = (n) => Math.round(n * 10) / 10;
 
@@ -162,7 +163,9 @@ export default function TermlyReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {d.students.map((s) => (
+                    {withGroups(d.students,
+                      (gender, first, key) => <GroupHeadRow key={key} gender={gender} first={first} colSpan={d.weeks.length + 5} />,
+                      (s) => (
                       <tr key={s.student_id}>
                         <td className="att-grid-name">{s.student_name}<div className="att-sub">{s.gender}</div></td>
                         {s.weekly.map((w) => <td key={w.week_id}>{w.total}</td>)}

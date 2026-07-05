@@ -177,6 +177,8 @@ def test_week_grid_roundtrip(app):
     assert g.status_code == 200
     gj = g.get_json()
     assert gj['week_id'] == ids['week'] and gj['days'] and gj['students']
+    # The week grid carries gender so the React UI can draw the boys/girls split.
+    assert all('gender' in s for s in gj['students'])
     day = gj['days'][0]['date']
     # mark Ann absent (am/pm false) on the first school day
     m = c.post('/attendance/api/week/mark', headers={'X-CSRFToken': tok}, json={

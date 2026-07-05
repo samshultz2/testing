@@ -3,6 +3,7 @@ import { apiGet, apiPost, isPermanent } from '../../lib/api';
 import { cachePut, cacheGet, enqueue } from '../../lib/offline';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
+import { withGroups, genderLabel, groupHeadStyle } from '../roster';
 
 const key = (aid, date) => `roster|${aid}|${date}`;
 
@@ -208,22 +209,30 @@ export default function MarkDaily() {
                   <span style={colStyle}>AM</span>
                   <span style={colStyle}>PM</span>
                 </li>
-                {d.students.map((s) => {
-                  const v = present[s.enrollment_id] || { am: true, pm: true };
-                  return (
-                    <li key={s.enrollment_id} className={(v.am || v.pm) ? 'is-present' : 'is-absent'}
-                        style={{ display: 'flex', alignItems: 'center', padding: '8px' }}>
-                      <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
-                      <span className="att-name" style={{ flex: 1 }}>{s.name}<span className="att-sub">{s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
-                      <label style={colStyle}>
-                        <input type="checkbox" style={boxStyle} checked={v.am} onChange={() => toggle(s.enrollment_id, 'am')} aria-label={`${s.name} present morning`} />
-                      </label>
-                      <label style={colStyle}>
-                        <input type="checkbox" style={boxStyle} checked={v.pm} onChange={() => toggle(s.enrollment_id, 'pm')} aria-label={`${s.name} present afternoon`} />
-                      </label>
+                {withGroups(d.students,
+                  (gender, first, key) => (
+                    <li key={key} className="att-group-head"
+                        style={{ ...groupHeadStyle, listStyle: 'none', padding: '8px', marginTop: first ? 0 : 14 }}>
+                      {genderLabel(gender)}
                     </li>
-                  );
-                })}
+                  ),
+                  (s) => {
+                    const v = present[s.enrollment_id] || { am: true, pm: true };
+                    return (
+                      <li key={s.enrollment_id} className={(v.am || v.pm) ? 'is-present' : 'is-absent'}
+                          style={{ display: 'flex', alignItems: 'center', padding: '8px' }}>
+                        <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
+                        <span className="att-name" style={{ flex: 1 }}>{s.name}<span className="att-sub">{s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
+                        <label style={colStyle}>
+                          <input type="checkbox" style={boxStyle} checked={v.am} onChange={() => toggle(s.enrollment_id, 'am')} aria-label={`${s.name} present morning`} />
+                        </label>
+                        <label style={colStyle}>
+                          <input type="checkbox" style={boxStyle} checked={v.pm} onChange={() => toggle(s.enrollment_id, 'pm')} aria-label={`${s.name} present afternoon`} />
+                        </label>
+                      </li>
+                    );
+                  }
+                )}
               </ul>
             </>
           )}

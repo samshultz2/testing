@@ -272,6 +272,7 @@ def api_week():
             'am': bool(r.morning_present), 'pm': bool(r.afternoon_present)}
     students = [{
         'enrollment_id': e.id, 'student_id': e.student.student_id, 'name': e.student.full_name,
+        'gender': e.student.gender,
         'days': {d.isoformat(): recs.get(e.id, {}).get(d.isoformat(), {'am': True, 'pm': True})
                  for d in days},
     } for e in enrollments]

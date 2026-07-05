@@ -4,6 +4,7 @@ import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill,
          StatCards, InfoGrid, SectionTitle, AmPm } from '../../components/ui';
+import { withGroups, GroupHeadRow } from '../roster';
 
 // Read-only weekly attendance report — full parity with the Jinja weekly page:
 // attendance rate, student/school-day/roll-call counts, week totals (AM/PM/
@@ -101,7 +102,9 @@ export default function WeeklyReport() {
                       </tr>
                     </thead>
                     <tbody>
-                      {d.students.map((s) => (
+                      {withGroups(d.students,
+                        (gender, first, key) => <GroupHeadRow key={key} gender={gender} first={first} colSpan={d.school_days.length + 4} />,
+                        (s) => (
                         <tr key={s.student_id}>
                           <td className="att-grid-name">{s.student_name}<div className="att-sub">{s.gender}</div></td>
                           {s.daily.map((day) => (

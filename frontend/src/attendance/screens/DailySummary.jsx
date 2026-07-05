@@ -3,6 +3,7 @@ import { apiGet } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner } from '../../components/ui';
+import { withGroups, GroupHeadRow } from '../roster';
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
@@ -121,7 +122,9 @@ export default function DailySummary() {
                     </tr>
                   </thead>
                   <tbody>
-                    {d.students.map((s) => (
+                    {withGroups(d.students,
+                      (gender, first, key) => <GroupHeadRow key={key} gender={gender} first={first} colSpan={4} />,
+                      (s) => (
                       <tr key={s.student_id}>
                         <td className="att-grid-name">{s.student_name}</td>
                         <td>{s.gender}</td>

@@ -3,6 +3,7 @@ import { apiGet, apiPost, isPermanent } from '../../lib/api';
 import { cachePut, cacheGet, enqueue } from '../../lib/offline';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
+import { withGroups, GroupHeadRow } from '../roster';
 
 const key = (aid, wid) => `week|${aid}|${wid}`;
 
@@ -149,7 +150,9 @@ export default function WeekGrid() {
                   </tr>
                 </thead>
                 <tbody>
-                  {d.students.map((s) => (
+                  {withGroups(d.students,
+                    (gender, first, key) => <GroupHeadRow key={key} gender={gender} first={first} colSpan={1 + d.days.length} />,
+                    (s) => (
                     <tr key={s.enrollment_id}>
                       <th scope="row" className="att-grid-name">
                         <button type="button" className="att-linkbtn" onClick={() => toggleRow(s.enrollment_id)}
