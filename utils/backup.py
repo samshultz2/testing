@@ -287,6 +287,125 @@ def restore_database(app, upload_path, original_filename):
         return False, f'Restore error: {exc}'
 
 
+def _newest_backup(app):
+    """Path to the most recent DB backup for this backend, or None."""
+    d = _backup_dir(app)
+    pattern = 'school_*.sql' if _is_postgres(app) else 'school_*.db'
+    files = sorted(glob.glob(os.path.join(d, pattern)))
+    return files[-1] if files else None
+
+
+def _safe_count(conn, table):
+    try:
+        return conn.execute(f'SELECT count(*) FROM {table}').fetchone()[0]
+    except Exception:
+        return '?'
+
+
+def _verify_sqlite(app, path):
+    import sqlite3
+    import tempfile
+    data = _read_decrypted(path)          # transparently decrypts encrypted backups
+    fd, tmp = tempfile.mkstemp(suffix='.db', dir=_backup_dir(app))
+    try:
+        with os.fdopen(fd, 'wb') as fh:
+            fh.write(data)
+        _harden_perms(tmp, 0o600)
+        conn = sqlite3.connect(tmp)
+        try:
+            integrity = conn.execute('PRAGMA integrity_check').fetchone()[0]
+            if integrity != 'ok':
+                return False, f'integrity check failed: {integrity}'
+            ntables = conn.execute(
+                "SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
+            if not ntables:
+                return False, 'restored database has no tables'
+            return True, f'OK — opened cleanly, {ntables} tables, ' \
+                         f'{_safe_count(conn, "students")} students'
+        finally:
+            conn.close()
+    finally:
+        _safe_remove(tmp)
+
+
+def _verify_postgres(app, path):
+    """Restore the dump into a throwaway scratch database and count a table.
+
+    Non-destructive: the live database is never touched. Needs CREATEDB
+    privilege and psql on PATH — returns a clear message when it can't.
+    """
+    from urllib.parse import urlsplit, urlunsplit
+    u = urlsplit(_libpq_url(_uri(app)))
+    src_db = u.path.lstrip('/') or 'postgres'
+    scratch = f'{src_db}_verify_{datetime.now().strftime("%Y%m%d%H%M%S")}'
+    admin_url = urlunsplit((u.scheme, u.netloc, '/postgres', '', ''))
+    scratch_url = urlunsplit((u.scheme, u.netloc, '/' + scratch, '', ''))
+
+    def _psql(url, *args, sql=None):
+        cmd = ['psql', url, '-v', 'ON_ERROR_STOP=1', *args]
+        if sql is not None:
+            cmd += ['-c', sql]
+        return subprocess.run(cmd, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, timeout=600)
+
+    import tempfile
+    fd, sqlf = tempfile.mkstemp(suffix='.sql', dir=_backup_dir(app))
+    created = False
+    try:
+        try:
+            with os.fdopen(fd, 'wb') as fh:
+                fh.write(_read_decrypted(path))
+        except Exception as exc:
+            return False, f'could not read backup (wrong encryption key?): {exc}'
+        _harden_perms(sqlf, 0o600)
+        # Create the scratch DB.
+        r = _psql(admin_url, sql=f'CREATE DATABASE "{scratch}" TEMPLATE template0')
+        if r.returncode != 0:
+            return False, ('could not create scratch database (needs CREATEDB '
+                           'privilege): ' + r.stdout.decode('utf-8', 'replace')[-300:])
+        created = True
+        # Restore into it, all-or-nothing.
+        r = _psql(scratch_url, '--single-transaction', '-f', sqlf)
+        if r.returncode != 0:
+            return False, 'restore into scratch DB failed: ' + \
+                          r.stdout.decode('utf-8', 'replace')[-400:]
+        # Sanity-count a core table.
+        r = _psql(scratch_url, '-tA', sql='SELECT count(*) FROM students')
+        count = r.stdout.decode('utf-8', 'replace').strip() if r.returncode == 0 else '?'
+        return True, f'OK — restored into a scratch database, {count} students'
+    except FileNotFoundError:
+        return False, 'psql not found on PATH; cannot verify on this host.'
+    except subprocess.TimeoutExpired:
+        return False, 'verification timed out.'
+    finally:
+        _safe_remove(sqlf)
+        if created:
+            # Drop the scratch DB (best-effort; FORCE closes any stray sessions).
+            try:
+                _psql(admin_url, sql=f'DROP DATABASE IF EXISTS "{scratch}" WITH (FORCE)')
+            except Exception:
+                try:
+                    _psql(admin_url, sql=f'DROP DATABASE IF EXISTS "{scratch}"')
+                except Exception:
+                    app.logger.warning('could not drop scratch DB %s — drop it manually',
+                                       scratch)
+
+
+def verify_backup(app, path=None):
+    """Prove a backup actually restores — 'a backup you haven't tested is not a
+    backup'. Defaults to the newest backup. Non-destructive: the live database
+    is never modified. Returns ``(ok: bool, message: str)`` and never raises."""
+    try:
+        path = path or _newest_backup(app)
+        if not path or not os.path.exists(path):
+            return False, 'no backup found to verify.'
+        name = os.path.basename(path)
+        ok, msg = (_verify_postgres if _is_postgres(app) else _verify_sqlite)(app, path)
+        return ok, f'{name}: {msg}'
+    except Exception as exc:
+        return False, f'verification error: {exc}'
+
+
 def auto_backup(app):
     """Keep one DB + media backup per day, pruned to BACKUP_RETENTION, and ship
     newly-created backups offsite when a destination is configured. Never raises."""

@@ -111,7 +111,29 @@ the DB dump.
 
 ## Verify a backup (do this periodically)
 
-A backup you haven't tested is not a backup. Quick checks:
+A backup you haven't tested is not a backup. There's a script that proves the
+newest backup actually restores — **non-destructively** (it never touches the
+live database) — and exits non-zero on failure so a scheduler can alert you:
+
+```bash
+python scripts/verify_backup.py                    # newest backup
+python scripts/verify_backup.py school_YYYYMMDD.sql # a specific backup (name or path)
+```
+
+- **SQLite** — decrypts if needed, opens the file, runs `PRAGMA integrity_check`
+  and confirms the schema loaded.
+- **PostgreSQL** — restores the dump into a throwaway *scratch* database, counts
+  a core table, then drops the scratch database. Needs `psql` on PATH and a role
+  with the **CREATEDB** privilege (the script reports clearly if it lacks it).
+
+### Schedule it (weekly is plenty)
+```cron
+# Verify the latest backup every Monday at 03:00; mail on failure.
+0 3 * * 1  cd /opt/edusyncra && .venv/bin/python scripts/verify_backup.py \
+             >> /var/log/edusyncra-verify.log 2>&1 || echo "backup verify FAILED" | mail -s "EduSyncra backup" ops@yourschool.edu
+```
+
+Prefer to do it by hand? The equivalent manual checks:
 
 ```bash
 # SQLite — confirm the file is a valid database with tables:
