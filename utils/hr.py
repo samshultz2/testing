@@ -74,23 +74,32 @@ def month_attendance_deduction(staff_id, year, month):
                     extract('month', StaffAttendance.date) == month).scalar()) or 0.0
 
 
-def dashboard_stats():
+def dashboard_stats(branch_id=None):
+    """HR dashboard figures. ``branch_id`` scopes every count and the monthly
+    payroll total to one branch (None = all branches, for central users), so a
+    branch admin never sees other branches' headcount or salary spend."""
     active = StaffMember.query.filter_by(is_active=True)
+    if branch_id is not None:
+        active = active.filter(StaffMember.branch_id == branch_id)
     total = active.count()
     teaching = active.filter_by(staff_type='Teaching').count()
     non_teaching = total - teaching
     on_leave = active.filter_by(status='On Leave').count()
     male = active.filter_by(gender='Male').count()
     female = active.filter_by(gender='Female').count()
-    monthly_payroll = (db.session.query(func.coalesce(func.sum(StaffMember.salary), 0.0))
-                       .filter(StaffMember.is_active == True,
-                               StaffMember.status == 'Active').scalar()) or 0.0
+    pay_q = db.session.query(func.coalesce(func.sum(StaffMember.salary), 0.0)).filter(
+        StaffMember.is_active == True, StaffMember.status == 'Active')
+    if branch_id is not None:
+        pay_q = pay_q.filter(StaffMember.branch_id == branch_id)
+    monthly_payroll = pay_q.scalar() or 0.0
     pending_leave = LeaveRecord.query.filter_by(status='Pending').count()
 
     # by department
+    dept_join = (StaffMember.department_id == Department.id) & (StaffMember.is_active == True)
+    if branch_id is not None:
+        dept_join = dept_join & (StaffMember.branch_id == branch_id)
     dept_rows = (db.session.query(Department.name, func.count(StaffMember.id))
-                 .outerjoin(StaffMember, (StaffMember.department_id == Department.id) &
-                            (StaffMember.is_active == True))
+                 .outerjoin(StaffMember, dept_join)
                  .group_by(Department.name).all())
     dept_chart = [{'name': n, 'count': c} for n, c in dept_rows if c]
 
@@ -130,7 +139,12 @@ def generate_payslips(run):
     Pre-fills attendance (lateness/absence) deductions AND the recurring
     deduction definitions (pension, welfare, …)."""
     existing = {p.staff_id for p in run.payslips}
-    staff = StaffMember.query.filter_by(is_active=True, status='Active').all()
+    q = StaffMember.query.filter_by(is_active=True, status='Active')
+    # Per-branch payroll: a branch run only covers that branch's staff. A legacy
+    # NULL-branch run (org-wide) still covers everyone.
+    if run.branch_id:
+        q = q.filter_by(branch_id=run.branch_id)
+    staff = q.all()
     types = active_deduction_types()
     created = 0
     for s in staff:

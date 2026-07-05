@@ -43,21 +43,20 @@ def _is_admin():
     return is_admin()
 
 
-def _require_central_payroll():
-    """Payroll is org-wide: one run carries a payslip for EVERY branch's active
-    staff (see utils.hr.generate_payslips), and PayrollRun has no branch_id. So
-    reading or changing payroll means touching every branch's salary data, which
-    only a central user may do. A branch-scoped admin manages their own staff's
-    pay through the branch-checked staff routes (adjust_salary), not here. Guards
-    against a branch admin reaching another branch's payslip by a guessed id."""
-    from utils.branch_scope import is_central
-    if not is_central():
-        abort(403)
-
-
-def _payslip_branch_id(ps):
-    """The branch a payslip belongs to (via its staff member)."""
-    return ps.staff.branch_id if ps and ps.staff else None
+def _require_payroll_run_access(run):
+    """Payroll is per-branch: a branch admin manages only their own branch's
+    runs, a central admin manages every branch's. A legacy NULL-branch run is
+    org-wide (pre per-branch payroll) and is therefore central-only. Guards
+    every by-id payroll route against a branch admin reaching another branch's
+    run/payslip via a guessed id."""
+    from utils.branch_scope import is_central, require_branch_access
+    if run is None:
+        abort(404)
+    if run.branch_id is None:
+        if not is_central():
+            abort(403)          # legacy org-wide run: central only
+        return
+    require_branch_access(run.branch_id)
 
 
 def _nav_urls():
@@ -74,8 +73,8 @@ def _nav_urls():
 @hr_bp.route('/')
 @login_required
 def dashboard():
-    from utils.branch_scope import scope_query, scope_by_staff
-    stats = hr.dashboard_stats()
+    from utils.branch_scope import scope_query, scope_by_staff, viewing_branch_id
+    stats = hr.dashboard_stats(viewing_branch_id())
     recent = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(
         StaffMember.created_at.desc()).limit(6).all()
     pending_leaves = scope_by_staff(LeaveRecord.query.filter_by(status='Pending'),
@@ -474,12 +473,21 @@ def delete_leave(leave_id):
 @hr_bp.route('/payroll')
 @login_required
 def payroll_list():
-    _require_central_payroll()
-    runs = PayrollRun.query.order_by(PayrollRun.year.desc(), PayrollRun.month.desc()).all()
+    from utils.branch_scope import scope_query, is_central
+    # Branch admins see only their branch's runs; central admins see all (or the
+    # branch they've picked). Legacy NULL-branch runs surface only to central.
+    q = scope_query(PayrollRun.query, PayrollRun)
+    if not is_central():
+        q = q.filter(PayrollRun.branch_id.isnot(None))
+    runs = q.order_by(PayrollRun.year.desc(), PayrollRun.month.desc()).all()
     today = date.today()
+    show_branch = is_central()
     return _render({
         'page': 'payroll', 'nav': _nav_urls(), 'is_admin': _is_admin(),
-        'rows': [{'id': r.id, 'period_label': r.period_label, 'status': r.status,
+        'rows': [{'id': r.id,
+                  'period_label': (f'{r.period_label} · {r.branch.name}'
+                                   if show_branch and r.branch else r.period_label),
+                  'status': r.status,
                   'count': r.payslips.count(), 'total': hr.run_total(r),
                   'url': url_for('hr.payroll_detail', run_id=r.id)} for r in runs],
         'months': [{'value': m, 'name': PayrollRun.MONTHS[m]} for m in range(1, 13)],
@@ -491,14 +499,20 @@ def payroll_list():
 @hr_bp.route('/payroll/create', methods=['POST'])
 @admin_required
 def create_payroll():
-    _require_central_payroll()
     year = request.form.get('year', type=int)
     month = request.form.get('month', type=int)
     if not (year and month and 1 <= month <= 12):
         return _err('Choose a valid month and year.', url_for('hr.payroll_list'))
-    run = PayrollRun.query.filter_by(year=year, month=month).first()
+    # Which branch's payroll this is: a branch admin is forced to their own
+    # branch; a central admin gets the branch they're viewing (or may pass one).
+    from utils.branch_scope import branch_for_new
+    branch_id = branch_for_new(request.form.get('branch_id', type=int))
+    if not branch_id:
+        return _err('No branch is configured to run payroll for.',
+                    url_for('hr.payroll_list'))
+    run = PayrollRun.query.filter_by(year=year, month=month, branch_id=branch_id).first()
     if not run:
-        run = PayrollRun(year=year, month=month)
+        run = PayrollRun(year=year, month=month, branch_id=branch_id)
         db.session.add(run)
         db.session.flush()
     created = hr.generate_payslips(run)
@@ -510,8 +524,8 @@ def create_payroll():
 @hr_bp.route('/payroll/<int:run_id>')
 @login_required
 def payroll_detail(run_id):
-    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
+    _require_payroll_run_access(run)
     slips = run.payslips.join(StaffMember).order_by(StaffMember.surname).all()
 
     def _slip(ps):
@@ -527,6 +541,7 @@ def payroll_detail(run_id):
     return _render({
         'page': 'payroll_detail', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'run': {'id': run.id, 'period_label': run.period_label, 'status': run.status,
+                'branch_name': run.branch.name if run.branch else None,
                 'posted_expense_id': run.posted_expense_id},
         'slips': [_slip(ps) for ps in slips], 'total': hr.run_total(run),
         'urls': {'sync_deductions': url_for('hr.sync_deductions', run_id=run.id),
@@ -540,12 +555,10 @@ def payroll_detail(run_id):
 @hr_bp.route('/payroll/<int:run_id>/payslip/<int:slip_id>/edit', methods=['POST'])
 @admin_required
 def edit_payslip(run_id, slip_id):
-    _require_central_payroll()
     ps = db.get_or_404(Payslip, slip_id)
     if ps.run_id != run_id:
         return ('', 404)
-    from utils.branch_scope import require_branch_access
-    require_branch_access(_payslip_branch_id(ps))   # no cross-branch pay edits
+    _require_payroll_run_access(ps.run)   # no cross-branch pay edits
     ps.basic = request.form.get('basic', type=float) or 0
     ps.allowances = request.form.get('allowances', type=float) or 0
     ps.deductions = request.form.get('deductions', type=float) or 0
@@ -558,8 +571,8 @@ def edit_payslip(run_id, slip_id):
 @hr_bp.route('/payroll/<int:run_id>/finalize', methods=['POST'])
 @admin_required
 def finalize_payroll(run_id):
-    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
+    _require_payroll_run_access(run)
     run.status = 'Finalized'
     # Post the salary run to Finance as a single expense (once).
     if request.form.get('post_expense') and not run.posted_expense_id:
@@ -572,7 +585,7 @@ def finalize_payroll(run_id):
             exp = Expense(
                 term_id=term.id if term else None,
                 category_id=cat.id if cat else None,
-                branch_id=branch_for_new(),
+                branch_id=run.branch_id or branch_for_new(),
                 description=f'Payroll — {run.period_label}',
                 amount=hr.run_total(run),
                 expense_date=date.today(),
@@ -601,8 +614,8 @@ def finalize_payroll(run_id):
 @hr_bp.route('/payroll/<int:run_id>/mark-paid', methods=['POST'])
 @admin_required
 def mark_paid(run_id):
-    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
+    _require_payroll_run_access(run)
     run.status = 'Paid'
     db.session.commit()
     return _ok('Payroll marked as paid.', url_for('hr.payroll_detail', run_id=run_id))
@@ -611,8 +624,8 @@ def mark_paid(run_id):
 @hr_bp.route('/payroll/<int:run_id>/delete', methods=['POST'])
 @admin_required
 def delete_payroll(run_id):
-    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
+    _require_payroll_run_access(run)
     db.session.delete(run)
     db.session.commit()
     return _ok('Payroll run deleted.', url_for('hr.payroll_list'))
@@ -621,12 +634,10 @@ def delete_payroll(run_id):
 @hr_bp.route('/payroll/<int:run_id>/payslip/<int:slip_id>/print')
 @login_required
 def print_payslip(run_id, slip_id):
-    _require_central_payroll()
     ps = db.get_or_404(Payslip, slip_id)
     if ps.run_id != run_id:
         return ('', 404)
-    from utils.branch_scope import require_branch_access
-    require_branch_access(_payslip_branch_id(ps))   # no cross-branch salary disclosure
+    _require_payroll_run_access(ps.run)   # no cross-branch salary disclosure
     from models import SchoolSettings
     school = {'name': SchoolSettings.get('school_name', 'My School'),
               'address': SchoolSettings.get('school_address', ''),
@@ -637,8 +648,8 @@ def print_payslip(run_id, slip_id):
 @hr_bp.route('/payroll/<int:run_id>/sync-deductions', methods=['POST'])
 @admin_required
 def sync_deductions(run_id):
-    _require_central_payroll()
     run = db.get_or_404(PayrollRun, run_id)
+    _require_payroll_run_access(run)
     n = hr.sync_attendance_deductions(run)
     db.session.commit()
     return _ok(f'Refreshed deductions from attendance ({n} payslip(s) updated).',

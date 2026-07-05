@@ -117,12 +117,19 @@ class PayrollRun(db.Model):
     status = db.Column(db.String(15), default='Draft')       # Draft/Finalized/Paid
     note = db.Column(db.String(200))
     posted_expense_id = db.Column(db.Integer)                # finance Expense id if posted
+    # Payroll is per-branch: each branch runs its own payroll for a period, and a
+    # central admin manages every branch's. NULL = a legacy org-wide run created
+    # before per-branch payroll (central-only access).
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     created_at = db.Column(db.DateTime, default=local_now)
 
+    branch = db.relationship('Branch')
     payslips = db.relationship('Payslip', backref='run',
                                lazy='dynamic', cascade='all, delete-orphan')
 
-    __table_args__ = (db.UniqueConstraint('year', 'month', name='uq_payroll_period'),)
+    # One run per (period, branch) — two branches can each have their own June run.
+    __table_args__ = (db.UniqueConstraint('year', 'month', 'branch_id',
+                                          name='uq_payroll_period_branch'),)
 
     MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June',
               'July', 'August', 'September', 'October', 'November', 'December']

@@ -1,6 +1,7 @@
-"""Red-team regression: payroll is org-wide (one run carries every branch's
-staff), so a branch-scoped admin must not be able to read or tamper with it by
-guessing a run/slip id. Also covers the assign-class branch guard."""
+"""Red-team regression: payroll is per-branch — a branch admin manages only
+their own branch's runs/payslips, a central admin manages every branch's, and no
+branch admin can read or tamper with another branch's payroll by guessing a
+run/slip id. Also covers the assign-class branch guard."""
 from config import Config
 from tests.conftest import login_token, auth_csrf
 
@@ -29,67 +30,98 @@ def _login(app, username, password):
     return client
 
 
-def test_branch_admin_cannot_touch_other_branch_payroll(app):
-    from models import db, Branch, StaffMember, PayrollRun, Payslip, User
-    created = {}
+def _mk_run(branch_id, year, month, salary):
+    """A per-branch payroll run with one payslip for a staff member in that
+    branch. Returns (run_id, slip_id, staff_id)."""
+    from models import db, StaffMember, PayrollRun, Payslip
+    s = StaffMember(staff_id=StaffMember.generate_staff_id(), first_name='Pay',
+                    surname='Target', branch_id=branch_id, salary=salary,
+                    is_active=True, status='Active')
+    db.session.add(s); db.session.flush()
+    run = PayrollRun(year=year, month=month, status='Draft', branch_id=branch_id)
+    db.session.add(run); db.session.flush()
+    ps = Payslip(run_id=run.id, staff_id=s.id, staff_name=s.full_name,
+                 basic=salary, allowances=0, deductions=0)
+    db.session.add(ps); db.session.commit()
+    return run.id, ps.id, s.id
+
+
+def test_branch_admin_payroll_is_scoped_to_own_branch(app):
+    """A branch admin runs their OWN branch's payroll but cannot read or tamper
+    with another branch's; a central admin sees both."""
+    from models import db
+    c = {}
     with app.app_context():
-        # Staff + payslip living in branch "B-Payroll".
-        staff_bid, _ = _make_branch_admin(app, 'B-Payroll', 'payroll_staff_owner')
-        s = StaffMember(staff_id=StaffMember.generate_staff_id(), first_name='Pay',
-                        surname='Target', branch_id=staff_bid, salary=100000,
-                        is_active=True, status='Active')
-        db.session.add(s)
-        db.session.flush()
-        run = PayrollRun(year=2099, month=6, status='Draft')
-        db.session.add(run)
-        db.session.flush()
-        ps = Payslip(run_id=run.id, staff_id=s.id, staff_name=s.full_name,
-                     basic=100000, allowances=0, deductions=0)
-        db.session.add(ps)
-        db.session.commit()
-        # A DIFFERENT branch's admin (non-central).
-        adm_bid, adm_uid = _make_branch_admin(app, 'A-Other', 'branch_admin_a')
-        created = {'run': run.id, 'slip': ps.id, 'staff': s.id,
-                   'branches': [staff_bid, adm_bid], 'user': adm_uid,
-                   'owner_user': User.query.filter_by(username='payroll_staff_owner').first().id}
+        a_bid, a_uid = _make_branch_admin(app, 'PR-Branch-A', 'pr_admin_a')
+        b_bid, _ = _make_branch_admin(app, 'PR-Branch-B', 'pr_owner_b')
+        a_run, a_slip, a_staff = _mk_run(a_bid, 2099, 6, 100000)   # admin A's own
+        b_run, b_slip, b_staff = _mk_run(b_bid, 2099, 6, 200000)   # the other branch
+        c = {'a_bid': a_bid, 'b_bid': b_bid, 'a_uid': a_uid,
+             'owner_b': __import__('models').User.query.filter_by(username='pr_owner_b').first().id,
+             'a_run': a_run, 'a_slip': a_slip, 'a_staff': a_staff,
+             'b_run': b_run, 'b_slip': b_slip, 'b_staff': b_staff}
 
     try:
-        client = _login(app, 'branch_admin_a', 'Str0ng!Passw0rd1')
-        # Sanity: the branch admin IS logged in (HR dashboard reachable, so a
-        # later 403 is the payroll guard — not just an unauthenticated bounce).
-        assert client.get('/hr/').status_code == 200
+        client = _login(app, 'pr_admin_a', 'Str0ng!Passw0rd1')
+        assert client.get('/hr/').status_code == 200          # logged in
 
-        run_id, slip_id = created['run'], created['slip']
-        # Every payroll surface must be denied to a non-central admin.
-        assert client.get('/hr/payroll').status_code == 403
-        assert client.get(f'/hr/payroll/{run_id}').status_code == 403
-        assert client.get(f'/hr/payroll/{run_id}/payslip/{slip_id}/print').status_code == 403
+        # OWN branch: allowed.
+        assert client.get('/hr/payroll').status_code == 200
+        assert client.get(f'/hr/payroll/{c["a_run"]}').status_code == 200
+        assert client.get(f'/hr/payroll/{c["a_run"]}/payslip/{c["a_slip"]}/print').status_code == 200
         token = auth_csrf(client)
-        r = client.post(f'/hr/payroll/{run_id}/payslip/{slip_id}/edit',
+        r = client.post(f'/hr/payroll/{c["a_run"]}/payslip/{c["a_slip"]}/edit',
+                        data={'basic': '123456', '_csrf_token': token},
+                        headers={'X-Requested-With': 'fetch'})
+        assert (r.get_json() or {}).get('ok') is True
+
+        # OTHER branch: denied on every surface.
+        assert client.get(f'/hr/payroll/{c["b_run"]}').status_code == 403
+        assert client.get(f'/hr/payroll/{c["b_run"]}/payslip/{c["b_slip"]}/print').status_code == 403
+        r = client.post(f'/hr/payroll/{c["b_run"]}/payslip/{c["b_slip"]}/edit',
                         data={'basic': '1', '_csrf_token': token},
                         headers={'X-Requested-With': 'fetch'})
         assert r.status_code == 403
-        # The tamper must NOT have taken effect.
+        for run_id in (c['b_run'],):
+            assert client.post(f'/hr/payroll/{run_id}/mark-paid',
+                               data={'_csrf_token': token},
+                               headers={'X-Requested-With': 'fetch'}).status_code == 403
         with app.app_context():
             from models import Payslip as PS
-            assert (db.session.get(PS, slip_id).basic or 0) == 100000
+            assert (db.session.get(PS, c['a_slip']).basic or 0) == 123456   # own edit stuck
+            assert (db.session.get(PS, c['b_slip']).basic or 0) == 200000   # other untouched
 
-        # Control: the central (legacy) admin CAN view payroll — we didn't break it.
+        # Central (legacy) admin sees BOTH branches' runs.
         central = app.test_client()
         ct = login_token(central)
         central.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': ct})
-        assert central.get(f'/hr/payroll/{run_id}').status_code == 200
+        assert central.get(f'/hr/payroll/{c["a_run"]}').status_code == 200
+        assert central.get(f'/hr/payroll/{c["b_run"]}').status_code == 200
+
+        # A branch admin creating payroll stamps it with THEIR branch.
+        r = client.post('/hr/payroll/create',
+                        data={'year': '2098', 'month': '5', '_csrf_token': token},
+                        headers={'X-Requested-With': 'fetch'})
+        with app.app_context():
+            from models import PayrollRun as PR
+            made = PR.query.filter_by(year=2098, month=5).first()
+            assert made is not None and made.branch_id == c['a_bid']
+            c['made_run'] = made.id
     finally:
         with app.app_context():
-            from models import db as _db, Payslip as PS, PayrollRun as PR, StaffMember as SM, User as U, Branch as BR
-            _db.session.get(PS, created['slip']) and _db.session.delete(_db.session.get(PS, created['slip']))
-            _db.session.get(PR, created['run']) and _db.session.delete(_db.session.get(PR, created['run']))
-            _db.session.get(SM, created['staff']) and _db.session.delete(_db.session.get(SM, created['staff']))
-            for uid in (created['user'], created['owner_user']):
-                u = _db.session.get(U, uid)
+            from models import (db as _db, Payslip as PS, PayrollRun as PR,
+                                StaffMember as SM, User as U, Branch as BR)
+            for run_id in (c.get('a_run'), c.get('b_run'), c.get('made_run')):
+                r = run_id and _db.session.get(PR, run_id)
+                r and _db.session.delete(r)   # cascade deletes payslips
+            for sid in (c.get('a_staff'), c.get('b_staff')):
+                s = sid and _db.session.get(SM, sid)
+                s and _db.session.delete(s)
+            for uid in (c.get('a_uid'), c.get('owner_b')):
+                u = uid and _db.session.get(U, uid)
                 u and _db.session.delete(u)
-            for bid in created['branches']:
-                b = _db.session.get(BR, bid)
+            for bid in (c.get('a_bid'), c.get('b_bid')):
+                b = bid and _db.session.get(BR, bid)
                 b and _db.session.delete(b)
             _db.session.commit()
 
