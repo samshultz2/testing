@@ -157,6 +157,11 @@
                         </div>
                     </div>
                     {% for enrollment in enrollments %}
+                    {% if loop.changed(enrollment.student.gender) %}
+                    <div class="attendance-row roster-group-head" style="font-weight:700;color:var(--text-muted);border-top:1px solid var(--border-color);{% if not loop.first %}margin-top:0.9rem;{% endif %}">
+                        <div class="student-info">{% if enrollment.student.gender == 'Male' %}Boys{% elif enrollment.student.gender == 'Female' %}Girls{% else %}{{ enrollment.student.gender or 'Other' }}{% endif %}</div>
+                    </div>
+                    {% endif %}
                     {% set att = existing_attendance.get(enrollment.id) %}
                     {% set am_on = att.morning if att else True %}
                     {% set pm_on = att.afternoon if att else True %}

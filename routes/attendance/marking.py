@@ -76,7 +76,7 @@ def mark_attendance_page():
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id,
             is_active=True
-        ).join(Student).order_by(Student.surname).all()
+        ).join(Student).order_by(*roster_order()).all()
     
     # Parse date
     if target_date:
@@ -296,7 +296,7 @@ def week_grid():
     if selected_assignment and selected_week:
         enrollments = (StudentEnrollment.query
                        .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                       .join(Student).order_by(Student.surname, Student.first_name).all())
+                       .join(Student).order_by(*roster_order()).all())
         school_days = _week_school_days(selected_week, holidays)
         if enrollments and school_days:
             recs = Attendance.query.filter(

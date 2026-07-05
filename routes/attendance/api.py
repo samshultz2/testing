@@ -110,7 +110,7 @@ def api_roster():
     hol = next((h for h in holidays if h.date == target), None)
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).order_by(Student.surname, Student.first_name).all())
+                   .join(Student).order_by(*roster_order()).all())
     existing = {a.enrollment_id: a for a in Attendance.query.filter(
         Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
         Attendance.date == target).all()}
@@ -263,7 +263,7 @@ def api_week():
     days = _week_school_days(week, holidays)
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).order_by(Student.surname, Student.first_name).all())
+                   .join(Student).order_by(*roster_order()).all())
     recs = {}
     for r in Attendance.query.filter(
             Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),

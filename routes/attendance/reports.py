@@ -610,7 +610,7 @@ def print_register():
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id,
             is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        ).join(Student).order_by(*roster_order()).all()
         
         for enrollment in enrollments:
             # Get attendance for the week

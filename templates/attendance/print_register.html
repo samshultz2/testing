@@ -108,6 +108,11 @@
                 </thead>
                 <tbody>
                     {% for row in register_data %}
+                    {% if loop.changed(row.student.gender) %}
+                    <tr class="roster-group-head">
+                        <td colspan="{{ school_days|length * 2 + 3 }}" style="font-weight:700;text-align:left;">{% if row.student.gender == 'Male' %}Boys{% elif row.student.gender == 'Female' %}Girls{% else %}{{ row.student.gender or 'Other' }}{% endif %}</td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <td>{{ loop.index }}</td>
                         <td class="student-name">{{ row.student.full_name }}</td>
