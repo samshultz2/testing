@@ -9,7 +9,8 @@ from models import (db, ClassArmAssignment, Subject, User, Teacher, TeacherClass
                     TeacherSubjectAssignment, PermissionGroup)
 from utils.access_control import (MODULES, manage_users_required, can_manage,
                                   current_manage_scope, current_rank, get_current_user,
-                                  restrict_grant_perms, CAPABILITY_SUBSECTIONS)
+                                  restrict_grant_perms, CAPABILITY_SUBSECTIONS,
+                                  ROLE_DEFAULT_MODULES)
 from utils.audit import log_action
 from utils.db_tx import safe_transaction
 from utils.security import is_password_strong
@@ -179,6 +180,34 @@ def _user_edit(u):
 
 
 
+# Non-privileged roles anyone with the manage-users capability may assign.
+# 'admin'/'super_admin' are privileged (is_admin bypasses every module gate, and
+# super_admin is always central regardless of scope — see User.is_central), so
+# only a central super-admin may grant them.
+_ASSIGNABLE_ROLES = set(ROLE_DEFAULT_MODULES) | {'teacher'}
+_PRIVILEGED_ROLES = {'admin', 'super_admin'}
+
+
+def _safe_role(requested, existing=None):
+    """Clamp the role a manager may assign to their own authority.
+
+    Without this, a mere branch manager (manage_scope='branch', not is_admin)
+    could POST role=super_admin to add_user/edit_user and mint a central
+    super-admin — a full privilege escalation. Only a central super-admin may
+    grant privileged roles; everyone else is limited to the non-privileged set,
+    and unknown role strings fall back to a safe default.
+    """
+    requested = (requested or existing or 'teacher')
+    if requested in _PRIVILEGED_ROLES:
+        me = get_current_user()
+        if not (me and me.is_super_admin and me.is_central):
+            # Not authorised to grant a privileged role: keep the existing role
+            # if it was already non-privileged, else drop to 'teacher'.
+            return existing if existing in _ASSIGNABLE_ROLES else 'teacher'
+        return requested
+    return requested if requested in _ASSIGNABLE_ROLES else 'teacher'
+
+
 def _clamp_management_fields(user, role):
     """Apply branch/rank/manage-scope limits a branch manager cannot exceed.
 
@@ -325,8 +354,8 @@ def add_user():
         confirm_password = request.form.get('confirm_password', '')
         full_name = request.form.get('full_name', '').strip()
         phone = request.form.get('phone', '').strip() or None
-        role = request.form.get('role', 'teacher')
-        
+        role = _safe_role(request.form.get('role', 'teacher'))
+
         # Validation
         if not username or not password:
             return _err('Username and password are required.', url_for('users.add_user'))
@@ -430,7 +459,7 @@ def edit_user(user_id):
         user.email = request.form.get('email', '').strip() or None
         user.full_name = request.form.get('full_name', '').strip()
         user.phone = request.form.get('phone', '').strip() or None
-        user.role = request.form.get('role', user.role)
+        user.role = _safe_role(request.form.get('role', user.role), existing=user.role)
         user.is_active = request.form.get('is_active') == 'on'
 
         # Permission group (base) + fine-grained per-user overrides.
