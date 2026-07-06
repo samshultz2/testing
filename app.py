@@ -418,10 +418,20 @@ def create_app(config_class=None):
             base = {'logged_in': False, 'name': Config.APP_NAME, 'logo_url': '',
                     'user': '', 'role_label': '', 'branch': ''}
             try:
-                if not session.get('logged_in'):
-                    return base
                 from utils.school import logo_url
                 from models import User, Branch, SchoolSettings
+                if not session.get('logged_in'):
+                    # Pre-login (e.g. the login page): show THIS school's name +
+                    # logo, resolved from its subdomain. On the platform's own
+                    # marketing/signup host (no school bound) keep the app brand.
+                    if app.config.get('MULTI_TENANT'):
+                        from utils.tenant_runtime import current_tenant
+                        if current_tenant() is None:
+                            return base
+                    base['name'] = (SchoolSettings.get('school_name', '') or '').strip() or Config.APP_NAME
+                    base['logo_url'] = logo_url()
+                    return base
+                from utils.branch_scope import is_central, viewing_branch_id
                 from utils.branch_scope import is_central, viewing_branch_id
                 name = (SchoolSettings.get('school_name', '') or '').strip() or Config.APP_NAME
                 role = session.get('role', '') or ''
@@ -462,10 +472,28 @@ def create_app(config_class=None):
             except Exception:
                 return {'viewing': None, 'live': None, 'sessions': []}
 
+        def subscription_banner():
+            """Trial / subscription state for the shell banner + a 'where to pay'
+            link. Empty for the owner school and in single-school mode."""
+            try:
+                if not app.config.get('MULTI_TENANT') or not session.get('logged_in'):
+                    return {}
+                from utils.tenant_runtime import current_tenant
+                from utils import billing
+                t = current_tenant()
+                if t is None or billing.is_owner(t):
+                    return {}
+                st = billing.status(t)
+                return {'on_trial': st['on_trial'], 'active': st['active'],
+                        'days_left': st['days_left'], 'url': url_for('billing.index')}
+            except Exception:
+                return {}
+
         return {
             'get_active_session': get_active_session,
             'get_active_term': get_active_term,
             'time_travel': time_travel,
+            'subscription': subscription_banner(),
             'today': date.today(),
             'app_name': Config.APP_NAME,
             'csrf_token': csrf_token,

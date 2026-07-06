@@ -15,31 +15,45 @@ from models import SchoolSettings
 LOGO_REL = 'uploads/branding/logo.png'
 
 
+def logo_rel():
+    """The logo's static-relative path for THIS school.
+
+    Multi-tenant: each customer school gets its own file
+    (``uploads/branding/<subdomain>/logo.png``) so schools never share a logo.
+    The owner school and single-tenant deployments keep the original shared path
+    (so an already-uploaded logo isn't lost)."""
+    try:
+        from utils.tenant_runtime import current_tenant
+        from utils import billing
+        t = current_tenant()
+        if t is not None and not billing.is_owner(t):
+            return f'uploads/branding/{t.subdomain}/logo.png'
+    except Exception:
+        pass
+    return LOGO_REL
+
+
 def logo_path():
     """Absolute filesystem path of the uploaded logo, or None if not present.
 
     Authoritative check for reportlab / PIL builders — they need a real file."""
     try:
-        p = os.path.join(current_app.root_path, 'static', LOGO_REL)
+        p = os.path.join(current_app.root_path, 'static', logo_rel())
     except Exception:
         return None
     return p if os.path.exists(p) else None
 
 
 def logo_url():
-    """Cache-busted static URL of the uploaded logo, or '' if there isn't one.
+    """Cache-busted static URL of THIS school's uploaded logo, or '' if none.
 
-    Prefers the stored ``school_logo_url`` setting (already cache-busted at upload
-    time) but only when the file actually exists, so a stale setting never points
-    at a missing image."""
+    Built from the (per-school) logo path + its mtime, so it is always correct
+    per tenant and never points at a missing or another school's image."""
     p = logo_path()
     if not p:
         return ''
-    stored = SchoolSettings.get('school_logo_url', '') or ''
-    if stored:
-        return stored
     try:
-        return url_for('static', filename=LOGO_REL) + ('?v=%d' % int(os.path.getmtime(p)))
+        return url_for('static', filename=logo_rel()) + ('?v=%d' % int(os.path.getmtime(p)))
     except Exception:
         return ''
 

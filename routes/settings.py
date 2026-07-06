@@ -298,7 +298,8 @@ _LOGO_MAX_H = 240          # px — plenty for letterhead-size printing, small o
 
 
 def _logo_fs_path():
-    return os.path.join(current_app.root_path, 'static', 'uploads', 'branding', 'logo.png')
+    from utils.school import logo_rel
+    return os.path.join(current_app.root_path, 'static', logo_rel())
 
 
 @settings_bp.route('/school/logo', methods=['POST'])
@@ -331,7 +332,8 @@ def upload_school_logo():
         im.save(path, 'PNG')
     except Exception as e:
         return _err(f'Could not process that image: {e}', url_for('settings.school_settings'))
-    url = url_for('static', filename='uploads/branding/logo.png') + ('?v=%d' % int(os.path.getmtime(path)))
+    from utils.school import logo_rel
+    url = url_for('static', filename=logo_rel()) + ('?v=%d' % int(os.path.getmtime(path)))
     SchoolSettings.set('school_logo_url', url, 'string', 'Uploaded school logo (shell + printouts)')
     from utils.audit import log_action
     log_action('settings.logo.upload')

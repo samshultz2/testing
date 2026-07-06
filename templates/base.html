@@ -685,6 +685,25 @@
             {% endif %}
             {% endwith %}
             
+            <style>
+              .sub-banner { display:flex; align-items:center; gap:10px; margin:0 0 14px; padding:11px 16px;
+                            border-radius:12px; text-decoration:none; font-size:13.5px; font-weight:600; }
+              .sub-banner .sub-cta { margin-left:auto; white-space:nowrap; font-weight:700; }
+              .sub-ok   { background:color-mix(in srgb, #3f57c8 12%, transparent); color:#3f57c8; }
+              .sub-warn { background:color-mix(in srgb, #c8384a 13%, transparent); color:#c8384a; }
+              @media (prefers-color-scheme: dark){ .sub-ok{ color:#8496f2; } .sub-warn{ color:#ef6b7c; } }
+            </style>
+            {% if subscription %}
+            <a href="{{ subscription.url }}" class="sub-banner {{ 'sub-warn' if (not subscription.active or (subscription.days_left is not none and subscription.days_left <= 3)) else 'sub-ok' }}">
+                <i class="fas fa-{{ 'exclamation-circle' if not subscription.active else 'crown' }}"></i>
+                <span>
+                {%- if not subscription.active %}Your subscription has ended — click to renew and restore access.
+                {%- elif subscription.on_trial %}Free trial · {{ subscription.days_left }} day{{ '' if subscription.days_left == 1 else 's' }} left — subscribe to keep access.
+                {%- else %}Subscription active · {{ subscription.days_left }} day{{ '' if subscription.days_left == 1 else 's' }} remaining — manage or renew.{% endif %}
+                </span>
+                <span class="sub-cta">Manage subscription →</span>
+            </a>
+            {% endif %}
             <div class="page-content" id="mainContent" tabindex="-1"{% if not page_can_write %} data-readonly="1"{% endif %}>
                 {% block content %}{% endblock %}
             </div>

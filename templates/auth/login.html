@@ -177,8 +177,11 @@
     <div class="login-container">
         <div class="login-card">
             <div class="login-header">
-                <div class="login-logo"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="EduSyncra"></div>
-                <h1>EduSyncra</h1>
+                <div class="login-logo">
+                    <img src="{{ school_brand.logo_url or url_for('static', filename='img/logo-mark.svg') }}"
+                         alt="{{ school_brand.name or 'EduSyncra' }}">
+                </div>
+                <h1>{{ school_brand.name or 'EduSyncra' }}</h1>
                 <p>Student Management System</p>
             </div>
             
