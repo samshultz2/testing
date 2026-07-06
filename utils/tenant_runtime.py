@@ -94,3 +94,24 @@ def bind_session_to_current_tenant():
     t = current_tenant()
     if t is not None:
         session['t'] = t.subdomain
+
+
+def tenant_upload_folder(app=None, tenant=None):
+    """Per-school upload directory (``<UPLOAD_FOLDER>/<subdomain>``) when a tenant
+    is in scope, else the base folder.
+
+    NB: this app currently processes uploads in memory (OCR / imports read the
+    file and discard it; photos are stored inline) — nothing persistent is
+    written here — so cross-tenant file isolation is already satisfied. This
+    helper exists so any *future* persistent upload is namespaced per school by
+    construction. Use it instead of reading ``UPLOAD_FOLDER`` directly."""
+    import os
+    from flask import current_app
+    app = app or current_app
+    base = app.config.get('UPLOAD_FOLDER')
+    t = tenant if tenant is not None else current_tenant()
+    if t is not None and base:
+        path = os.path.join(base, t.subdomain)
+        os.makedirs(path, exist_ok=True)
+        return path
+    return base

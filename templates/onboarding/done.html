@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ 'School ready' if not error else 'Link problem' }} — EduSyncra</title>
+  <style>
+    :root { --ink:#1b2230; --soft:#4a5468; --line:#dbe1ec; --accent:#3f57c8; --ok:#14875a; --bg:#eef1f6; --surface:#fff; }
+    @media (prefers-color-scheme: dark){ :root{ --ink:#e7ebf3; --soft:#a3adc0; --line:#262d3a; --accent:#8496f2; --ok:#4bd39a; --bg:#0d1017; --surface:#151a23; } }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg);
+           color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:24px; }
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:32px;
+            width:100%; max-width:480px; box-shadow:0 10px 40px -20px rgba(20,28,48,.4); }
+    h1 { font-size:22px; margin:0 0 10px; }
+    p { color:var(--soft); font-size:14.5px; line-height:1.55; }
+    .creds { margin:20px 0; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .creds div { display:flex; justify-content:space-between; padding:11px 14px; font-size:14px; }
+    .creds div + div { border-top:1px solid var(--line); }
+    .creds .k { color:var(--soft); }
+    .creds .v { font-family:ui-monospace,Menlo,Consolas,monospace; font-weight:600; }
+    .cta { display:inline-block; margin-top:8px; padding:11px 18px; background:var(--accent); color:#fff;
+           border-radius:9px; text-decoration:none; font-weight:700; font-size:15px; }
+    .badge { display:inline-block; font-size:12px; font-weight:700; color:var(--ok); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    {% if error %}
+      <h1>This link can't be used</h1>
+      <p>{{ error }}</p>
+      <p><a class="cta" href="{{ url_for('onboarding.register') }}">Register again</a></p>
+    {% else %}
+      <span class="badge">✓ Confirmed</span>
+      <h1>{{ tenant.name }} is ready</h1>
+      <p>Your school portal is live. Sign in with the details below — you'll be asked to set a new password on first login.</p>
+      <div class="creds">
+        <div><span class="k">Username</span><span class="v">{{ username }}</span></div>
+        {% if password %}<div><span class="k">Temporary password</span><span class="v">{{ password }}</span></div>
+        {% else %}<div><span class="k">Password</span><span class="v">sent to your email</span></div>{% endif %}
+      </div>
+      {% if login_url %}<a class="cta" href="{{ login_url }}">Go to {{ tenant.subdomain }} →</a>{% endif %}
+    {% endif %}
+  </div>
+</body>
+</html>

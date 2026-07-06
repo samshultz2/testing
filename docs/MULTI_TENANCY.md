@@ -128,11 +128,38 @@ database untouched):
 
 Config: `MULTI_TENANT`, `TENANT_BASE_DOMAIN`.
 
-### Still to do
+### Stage 2 — per-tenant operations — **DONE**
 
-- **Per-tenant uploads** — namespace the upload folder by tenant (helper exists;
-  wire the save sites) before onboarding real schools.
-- **Stage 2 — `migrate-all-tenants`** command (iterate the registry, run Alembic
-  per DB); per-tenant scheduler + `pg_dump` backups.
-- **Stage 3 — public registration + verification routes** (thin wrappers over
-  `utils/onboarding.py`); wildcard DNS + TLS.
+- **`utils/tenant_admin.py`** — binds a throwaway single-DB app to one tenant
+  URL to reuse the app's machinery per school: `active_tenants()`,
+  `migrate_tenant()`, `backup_tenant()`.
+- **`scripts/migrate_all_tenants.py`** — upgrade every school's database to the
+  Alembic head (replaces the single `flask db upgrade`); `--subdomain` for one.
+- **`scripts/backup_all_tenants.py`** — one daily backup per school (loops the
+  registry over the existing `auto_backup`). Run from cron / a timer.
+- **Per-tenant scheduler** — `_tick_dispatch` now iterates active schools and
+  binds each one's engine, so scheduled SMS / fee reminders run per school. The
+  dialect check + advisory lock use the routed bind, not the default engine.
+
+### Stage 3 — public onboarding — **DONE**
+
+- **`routes/onboarding.py`** + `templates/onboarding/*` — `GET/POST /register`
+  (throttled) records a pending school and emails a verification link;
+  `GET /verify/<sub>/<token>` verifies and **auto-provisions everything**
+  (database, subdomain, first admin) then shows the login. 404 unless
+  `MULTI_TENANT` is on, so single-school deployments don't expose it.
+
+### Uploads
+
+The app processes uploads in memory (OCR / imports read and discard; photos are
+stored inline), so nothing persistent is written to a shared disk — cross-tenant
+file isolation is already satisfied. `tenant_upload_folder()` exists so any
+future persistent upload is namespaced per school by construction.
+
+### Still to do (infrastructure, not code)
+
+- **Wildcard DNS + TLS** (`*.edusyncra.app`) so new subdomains need no per-school
+  DNS/cert steps. This is the only remaining piece before onboarding real schools
+  at scale; test locally today with `*.lvh.me` (resolves to 127.0.0.1).
+- Optional: a manual-approval toggle in front of auto-provisioning; per-tenant
+  `FIELD_ENCRYPTION_KEY`; billing.

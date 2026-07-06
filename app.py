@@ -36,10 +36,33 @@ _SCHED_LOCK_KEY = 0x5C8ED01
 
 
 def _tick_dispatch(app):
-    """Run one scheduling tick, guarded so only one worker dispatches at a time."""
+    """Run one scheduling tick. In multi-tenant mode this runs once per active
+    school (bound to that school's database); otherwise once for the single DB."""
+    if app.config.get('MULTI_TENANT'):
+        from flask import g
+        from utils import tenancy
+        from utils.tenant_runtime import _engine_for
+        for t in tenancy.list_tenants():
+            if t.status != 'active' or not t.database_url:
+                continue
+            try:
+                g.tenant_engine = _engine_for(t.database_url)
+                _tick_one(app)
+            except Exception:
+                app.logger.exception('scheduled-jobs tick failed for tenant %s', t.subdomain)
+            finally:
+                g.pop('tenant_engine', None)
+    else:
+        _tick_one(app)
+
+
+def _tick_one(app):
+    """One scheduling tick against the currently-bound database, guarded so only
+    one worker dispatches at a time."""
     from models import db
     from sqlalchemy import text
-    is_pg = db.engine.dialect.name == 'postgresql'
+    # Use the session's routed bind (tenant-aware) rather than the default engine.
+    is_pg = db.session.get_bind().dialect.name == 'postgresql'
     if is_pg:
         got = db.session.execute(
             text('SELECT pg_try_advisory_lock(:k)'), {'k': _SCHED_LOCK_KEY}).scalar()
@@ -168,6 +191,10 @@ def create_app(config_class=None):
     app.register_blueprint(parent_bp)
     app.register_blueprint(sales_bp)
     app.register_blueprint(welfare_bp)
+
+    # Public multi-tenant onboarding (only reachable when MULTI_TENANT is on).
+    from routes.onboarding import onboarding_bp
+    app.register_blueprint(onboarding_bp)
     
     # Initialize database. In multi-tenant mode the app has no single database of
     # its own — each school's database is created by provisioning — so we init
