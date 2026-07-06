@@ -82,6 +82,18 @@ class BillingNotice(_ControlBase):
     sent_at = Column(DateTime, default=_dt.datetime.utcnow)
 
 
+class ProcessedPayment(_ControlBase):
+    """A Paystack transaction reference we've already credited — so the browser
+    callback and the server webhook (which both fire for one payment) can't
+    double-credit, and a receipt is emailed only once."""
+    __tablename__ = 'processed_payments'
+
+    id = Column(Integer, primary_key=True)
+    reference = Column(String(120), nullable=False, unique=True)
+    subdomain = Column(String(63))
+    at = Column(DateTime, default=_dt.datetime.utcnow)
+
+
 # --- control-plane engine (lazy, cached) ------------------------------------
 _engine = None
 _Session = None
@@ -301,6 +313,23 @@ def clear_notice(subdomain):
         if row is not None:
             row.marker = None
             s.commit()
+
+
+def claim_payment(reference, subdomain=None):
+    """Atomically claim a Paystack transaction reference. Returns True if it is
+    new (caller should credit + email the receipt), False if already processed."""
+    if not reference:
+        return True                    # no reference (e.g. test mode) -> don't dedupe
+    from sqlalchemy.exc import IntegrityError
+    init_control_plane()
+    with _session() as s:
+        s.add(ProcessedPayment(reference=reference, subdomain=subdomain))
+        try:
+            s.commit()
+            return True
+        except IntegrityError:
+            s.rollback()
+            return False
 
 
 def adopt_existing(subdomain, name, database_url, admin_email=None):

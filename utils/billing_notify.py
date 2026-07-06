@@ -38,16 +38,20 @@ def due_notice(t, now=None):
     paid = getattr(t, 'paid_until', None)
     trial = getattr(t, 'trial_ends_at', None)
     day = _dt.timedelta(days=1)
+    lockout = billing.lockout_at(t)             # access end + soft grace
+    purge = lockout + _dt.timedelta(days=grace)
 
-    # --- access has ended: lockout -> purge window ---
-    if now >= au:
-        if now >= au + _dt.timedelta(days=grace):
+    # --- locked out: retention window -> purge ---
+    if now >= lockout:
+        if now >= purge:
             return None                         # past grace: the reaper handles it
-        if now >= au + _dt.timedelta(days=grace - 1):
+        if now >= purge - day:
             return 'purge_soon'
-        if now >= au + day:
-            return 'lapsed'
-        return None                             # first day locked out; email at +1 day
+        return 'lapsed'                         # locked; renew to restore
+
+    # soft grace: expired but still working — renewal reminder already sent
+    if now >= au:
+        return None
 
     # --- still active ---
     if paid and paid >= au:                     # subscribed (payment drives access)
@@ -101,6 +105,29 @@ def notice_content(t, marker, link, days_left=None):
     text = '\n\n'.join(paras) + (f'\n\nRenew: {link}' if link else '')
     html = mailer.branded_html(subject, paras, button=btn)
     return subject, text, html
+
+
+def send_receipt(tenant, plan, until=None, link=None):
+    """Email a payment receipt after a successful subscription payment."""
+    if not getattr(tenant, 'admin_email', None):
+        return False
+    amount = plan.get('price_naira') or 0
+    until_str = until.strftime('%d %b %Y') if until else None
+    subject = f'Payment received — {tenant.name} ({plan["label"]})'
+    paras = [f'Thank you! We’ve received your {plan["label"].lower()} subscription '
+             f'payment for {tenant.name}.']
+    if amount:
+        paras.append(f'Amount: ₦{amount:,.0f}  ·  Plan: {plan["label"]} ({plan["days"]} days).')
+    if until_str:
+        paras.append(f'Your portal is active until {until_str}.')
+    btn = {'label': 'Go to your school', 'url': link} if link else None
+    html = mailer.branded_html(subject, paras, button=btn)
+    text = '\n\n'.join(paras) + (f'\n\n{link}' if link else '')
+    try:
+        mailer.send_email(tenant.admin_email, subject, text, html=html)
+        return True
+    except Exception:
+        return False
 
 
 def run_notifications(now=None, send=True):

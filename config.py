@@ -229,6 +229,11 @@ class Config:
     # deleted after a grace period. The owner school (plan='owner') is exempt.
     TENANT_TRIAL_DAYS = int(os.environ.get('TENANT_TRIAL_DAYS', '3'))
     TENANT_PLAN_DAYS = int(os.environ.get('TENANT_PLAN_DAYS', '30'))    # days added per payment
+    # Soft grace: after a subscription/trial ends the portal keeps working for
+    # this many days before it locks; the locked-out reminder fires when it locks.
+    LOCKOUT_GRACE_DAYS = int(os.environ.get('LOCKOUT_GRACE_DAYS', '1'))
+    # Data-retention grace: how long a LOCKED-OUT school's data is kept before the
+    # reaper purges it (database + subdomain).
     TENANT_BILLING_GRACE_DAYS = int(os.environ.get('TENANT_BILLING_GRACE_DAYS', '7'))
     TENANT_PRICE_KOBO = int(os.environ.get('TENANT_PRICE_KOBO', '0'))   # monthly base, kobo
     # Subscription tiers: monthly (base), termly and annual. Termly/annual prices

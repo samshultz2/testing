@@ -37,6 +37,18 @@ def test_trial_active_then_expired_then_reapable():
     assert billing.is_reapable(reapable, grace_days=7)           # past grace
 
 
+def test_soft_grace_then_lockout():
+    # just past the trial/subscription end -> expired, but still usable (soft grace)
+    just_expired = _t(trial_ends_at=_in(-0.5))
+    assert billing.is_blocked(just_expired)              # paid/trial period is over
+    assert not billing.is_locked_out(just_expired)       # ...but not locked yet
+    # past the soft grace -> locked out
+    locked = _t(trial_ends_at=_in(-2))
+    assert billing.is_locked_out(locked)
+    # owner is never locked
+    assert not billing.is_locked_out(_t(plan='owner', trial_ends_at=_in(-30)))
+
+
 def test_payment_extends_access():
     paid = _t(trial_ends_at=_in(-1), paid_until=_in(20))         # expired trial, but paid
     assert billing.is_active(paid) and not billing.on_trial(paid)
@@ -146,8 +158,8 @@ def test_lapsed_school_is_locked_to_billing_then_test_pay_restores(mt):
     r = c.get('/students', headers=H)
     assert '/billing' not in (r.headers.get('Location') or '')
 
-    # expire the trial -> locked to billing
-    tenancy.set_billing('trial', trial_ends_at=dt.datetime.utcnow() - dt.timedelta(days=1))
+    # expire the trial past the soft grace -> locked to billing
+    tenancy.set_billing('trial', trial_ends_at=dt.datetime.utcnow() - dt.timedelta(days=3))
     r = c.get('/students', headers=H)
     assert r.status_code == 302 and '/billing' in (r.headers.get('Location') or '')
 

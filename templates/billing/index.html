@@ -56,9 +56,12 @@
           {% elif st.active %}
             <span class="state ok"><i class="fas fa-circle-check"></i> Active · {{ st.days_left }} day(s) remaining</span>
             <p>Your subscription is active. Renew any time to add another period.</p>
+          {% elif not st.locked_out %}
+            <span class="state warn"><i class="fas fa-clock"></i> Expired — renew before you’re locked out</span>
+            <p>Your trial or subscription has ended. The portal still works for a short grace period — renew now to avoid any interruption.</p>
           {% else %}
             <span class="state gap"><i class="fas fa-triangle-exclamation"></i> Access paused — payment required</span>
-            <p>Your trial or subscription has ended. Choose a plan to restore access to {{ t.name }}. If left unpaid, the school’s data is removed after the grace period.</p>
+            <p>Your subscription has ended and {{ t.name }} is now locked. Choose a plan to restore access. If left unpaid, the school’s data is permanently removed after the grace period.</p>
           {% endif %}
         </div>
 

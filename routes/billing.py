@@ -37,6 +37,21 @@ def _headers():
     return {'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}
 
 
+def _credit_and_receipt(subdomain, plan, reference=None):
+    """Credit a successful payment once (deduped by Paystack reference) and email
+    a receipt. Safe to call from both the callback and the webhook for one
+    payment — the second call is a no-op. Returns True if it credited now."""
+    from utils import tenancy, billing_notify
+    if not tenancy.claim_payment(reference, subdomain):
+        return False                          # already processed (other path won)
+    billing.record_payment(subdomain, days=plan['days'])
+    t = tenancy.get_tenant(subdomain)
+    base = current_app.config.get('TENANT_BASE_DOMAIN')
+    link = f'https://{subdomain}.{base}/' if base else None
+    billing_notify.send_receipt(t, plan, until=getattr(t, 'paid_until', None), link=link)
+    return True
+
+
 @billing_bp.route('/')
 @login_required
 def index():
@@ -60,7 +75,7 @@ def start_payment():
 
     # Dev/testing: apply a simulated payment so the flow can be tested.
     if current_app.config.get('BILLING_TEST_MODE'):
-        billing.record_payment(t.subdomain, days=plan['days'])
+        _credit_and_receipt(t.subdomain, plan)     # no reference in test mode
         flash(f"Test payment applied — {plan['label']} ({plan['days']} days).", 'success')
         return redirect(url_for('main.dashboard'))
 
@@ -105,7 +120,7 @@ def callback():
             if data.get('status') and d.get('status') == 'success' and \
                     (d.get('metadata') or {}).get('subdomain') == t.subdomain:
                 plan = get_plan((d.get('metadata') or {}).get('plan'))
-                billing.record_payment(t.subdomain, days=plan['days'])
+                _credit_and_receipt(t.subdomain, plan, reference=reference)
                 flash(f"Payment received — {plan['label']} subscription active. Thank you!", 'success')
                 return redirect(url_for('main.dashboard'))
         except Exception:
@@ -133,7 +148,7 @@ def webhook():
         if sub and (d.get('status') == 'success'):
             plan = get_plan((d.get('metadata') or {}).get('plan'))
             try:
-                billing.record_payment(sub, days=plan['days'])
+                _credit_and_receipt(sub, plan, reference=d.get('reference'))
             except ValueError:
                 pass
     return jsonify(status='ok')

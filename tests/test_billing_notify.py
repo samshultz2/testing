@@ -32,12 +32,12 @@ def test_subscription_reminders():
 
 
 def test_lapsed_and_purge_warning():
-    # 2 days after access ended -> locked out reminder
+    # locked out (past the 1-day soft grace) -> "renew to restore" reminder
     assert billing_notify.due_notice(_t(paid_until=_in(-2))) == 'lapsed'
-    # just past access end (< 1 day) -> not yet (email at +1 day)
+    # still in the soft grace (portal works) -> no lockout email yet
     assert billing_notify.due_notice(_t(paid_until=_in(-0.2))) is None
-    # 1 day before the 7-day grace ends -> final purge warning
-    assert billing_notify.due_notice(_t(paid_until=_in(-6.5))) == 'purge_soon'
+    # 1 day before the retention grace ends -> final purge warning
+    assert billing_notify.due_notice(_t(paid_until=_in(-7.5))) == 'purge_soon'
     # past grace -> no email (the reaper takes over)
     assert billing_notify.due_notice(_t(paid_until=_in(-30))) is None
 
@@ -55,6 +55,25 @@ def cp(tmp_path, monkeypatch):
     tenancy.init_control_plane()
     yield tenancy
     tenancy._reset_engine()
+
+
+def test_claim_payment_dedupes(cp):
+    assert cp.claim_payment('ref_123', 'acme') is True
+    assert cp.claim_payment('ref_123', 'acme') is False    # already processed -> no double credit
+    assert cp.claim_payment('ref_456') is True             # a different reference is new
+    assert cp.claim_payment(None) is True                  # no reference (test mode) -> never deduped
+    assert cp.claim_payment(None) is True
+
+
+def test_receipt_email_is_built_and_sent(monkeypatch):
+    from utils.plans import get_plan
+    box = []
+    monkeypatch.setattr('utils.mailer.send_email',
+                        lambda to, subj, body, html=None: box.append((to, subj, body)))
+    plan = get_plan('annual', dict(TENANT_PRICE_KOBO=5000000, TENANT_PLAN_DAYS=30, TENANT_TERM_DAYS=120))
+    t = _t(paid_until=dt.datetime.utcnow() + dt.timedelta(days=365))
+    assert billing_notify.send_receipt(t, plan, until=t.paid_until, link='https://acme.test/') is True
+    assert box and 'Payment received' in box[0][1] and 'Annual' in box[0][1]
 
 
 def test_run_notifications_is_idempotent_per_stage(cp, monkeypatch):

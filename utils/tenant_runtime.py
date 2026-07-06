@@ -111,7 +111,7 @@ def enforce_billing():
     if t is None:
         return None
     from utils import billing
-    if not billing.is_blocked(t):
+    if not billing.is_locked_out(t):
         return None
     ep = request.endpoint or ''
     if ep in _BILLING_ALLOWED:

@@ -45,20 +45,40 @@ def is_active(tenant):
 
 
 def is_blocked(tenant):
-    """True if access should be denied (expired, pay to restore) — never for owner."""
+    """True if the paid/trial period has ended (expired) — never for owner.
+    Note: the portal is not *locked* until the soft grace also elapses; see
+    is_locked_out()."""
     return not is_active(tenant)
 
 
-def is_reapable(tenant, grace_days=None):
-    """True if the unpaid grace period has fully elapsed and the database may be
-    deleted. Never for the owner or a still-active school."""
-    if is_owner(tenant):
-        return False
+def lockout_at(tenant):
+    """The moment a lapsed school actually gets locked out — its access end plus
+    the soft grace (LOCKOUT_GRACE_DAYS). None if it never had access."""
     until = access_until(tenant)
     if until is None:
+        return None
+    return until + _dt.timedelta(days=Config.LOCKOUT_GRACE_DAYS)
+
+
+def is_locked_out(tenant):
+    """True if the portal should be locked (soft grace elapsed). Never for owner.
+    Between access-end and this point the school still works (a grace day)."""
+    if is_owner(tenant):
+        return False
+    lo = lockout_at(tenant)
+    return lo is not None and _now() > lo
+
+
+def is_reapable(tenant, grace_days=None):
+    """True once a locked-out school has stayed unpaid past the data-retention
+    grace and its database + subdomain may be purged. Never for the owner."""
+    if is_owner(tenant):
+        return False
+    lo = lockout_at(tenant)
+    if lo is None:
         return False
     grace = Config.TENANT_BILLING_GRACE_DAYS if grace_days is None else grace_days
-    return _now() > until + _dt.timedelta(days=grace)
+    return _now() > lo + _dt.timedelta(days=grace)
 
 
 def days_left(tenant):
@@ -109,6 +129,7 @@ def status(tenant):
         'plan': getattr(tenant, 'plan', 'standard'),
         'owner': is_owner(tenant),
         'active': is_active(tenant),
+        'locked_out': is_locked_out(tenant),
         'on_trial': on_trial(tenant),
         'days_left': days_left(tenant),
         'access_until': access_until(tenant),
