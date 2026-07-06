@@ -147,21 +147,27 @@
   <!-- PRICING -->
   <section id="pricing"><div class="wrap">
     <div class="sec-head reveal"><span class="eyebrow">Simple pricing</span>
-      <h2>Start free, then one flat plan</h2>
-      <p>Every school gets a free trial. Continue for one simple subscription — no per-student fees, no surprises.</p></div>
-    <div class="price-wrap reveal"><div class="price">
-      <span class="tag">{{ content.trial_note }}</span>
-      <div class="amt">₦{{ '{:,.0f}'.format(content.price_naira) }}<small> / {{ content.price_period }}</small></div>
-      <div class="per">per school · unlimited students &amp; staff</div>
-      <ul>
-        <li><i class="fas fa-check"></i> Every feature included</li>
-        <li><i class="fas fa-check"></i> Your own secure subdomain</li>
-        <li><i class="fas fa-check"></i> Unlimited students, staff &amp; parents</li>
-        <li><i class="fas fa-check"></i> Daily backups &amp; encryption</li>
-        <li><i class="fas fa-check"></i> Cancel anytime</li>
-      </ul>
-      <a class="btn btn-primary btn-block btn-lg" href="{{ register_url }}">{{ content.hero_cta }}</a>
-    </div></div>
+      <h2>Start free, then pick a plan</h2>
+      <p>Every school gets a free trial. Continue on the term that suits you — no per-student fees, longer plans save more.</p></div>
+    <div class="tiers reveal">
+      {% for p in plans %}
+      <div class="tier{{ ' feat' if p.id == 'annual' }}">
+        {% if p.badge %}<span class="tier-badge">{{ p.badge }}</span>{% endif %}
+        <div class="tier-name">{{ p.label }}</div>
+        <div class="tier-amt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small> / {{ p.per }}</small></div>
+        <div class="tier-save">{% if p.savings > 0 %}Save {{ p.savings }}% vs monthly{% else %}Pay as you go{% endif %}</div>
+        <ul>
+          <li><i class="fas fa-check"></i> Every feature included</li>
+          <li><i class="fas fa-check"></i> Unlimited students &amp; staff</li>
+          <li><i class="fas fa-check"></i> {{ p.days }} days of access</li>
+          <li><i class="fas fa-check"></i> Daily backups &amp; encryption</li>
+        </ul>
+        <a class="btn btn-block {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }}" href="{{ register_url }}">{{ content.hero_cta }}</a>
+      </div>
+      {% endfor %}
+    </div>
+    <p style="text-align:center;color:var(--faint);font-size:14px;margin-top:22px">
+      <i class="fas fa-gift" style="color:var(--primary)"></i> {{ content.trial_note }} · cancel anytime</p>
   </div></section>
 
   <!-- FAQ -->

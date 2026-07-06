@@ -18,6 +18,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from utils.access_control import login_required, is_admin
 from utils.tenant_runtime import current_tenant
 from utils import billing
+from utils.plans import tenant_plans, get_plan
 
 billing_bp = Blueprint('billing', __name__, url_prefix='/billing')
 
@@ -41,12 +42,10 @@ def _headers():
 def index():
     t = _tenant_or_404()
     st = billing.status(t)
-    price_kobo = current_app.config.get('TENANT_PRICE_KOBO', 0)
     return render_template('billing/index.html', t=t, st=st,
                            is_admin=is_admin(),
-                           price=(price_kobo / 100.0) if price_kobo else None,
-                           test_mode=current_app.config.get('BILLING_TEST_MODE'),
-                           plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+                           plans=tenant_plans(),
+                           test_mode=current_app.config.get('BILLING_TEST_MODE'))
 
 
 @billing_bp.route('/pay', methods=['POST'])
@@ -57,14 +56,16 @@ def start_payment():
         flash('Only an administrator can manage the subscription.', 'error')
         return redirect(url_for('billing.index'))
 
+    plan = get_plan(request.form.get('plan'))     # defaults to Monthly if unknown
+
     # Dev/testing: apply a simulated payment so the flow can be tested.
     if current_app.config.get('BILLING_TEST_MODE'):
-        billing.record_payment(t.subdomain)
-        flash('Test payment applied — subscription extended.', 'success')
+        billing.record_payment(t.subdomain, days=plan['days'])
+        flash(f"Test payment applied — {plan['label']} ({plan['days']} days).", 'success')
         return redirect(url_for('main.dashboard'))
 
     key = current_app.config.get('PLATFORM_PAYSTACK_SECRET_KEY', '')
-    amount = current_app.config.get('TENANT_PRICE_KOBO', 0)
+    amount = plan['price_kobo']
     if not key or not amount:
         flash('Online billing is not configured yet. Please contact support.', 'error')
         return redirect(url_for('billing.index'))
@@ -77,7 +78,7 @@ def start_payment():
         resp = requests.post(f'{_PAYSTACK_API}/transaction/initialize', headers=_headers(),
                              json={'email': t.admin_email, 'amount': amount,
                                    'callback_url': url_for('billing.callback', _external=True),
-                                   'metadata': {'subdomain': t.subdomain}}, timeout=20)
+                                   'metadata': {'subdomain': t.subdomain, 'plan': plan['id']}}, timeout=20)
         data = resp.json()
         if data.get('status') and data['data'].get('authorization_url'):
             return redirect(data['data']['authorization_url'])
@@ -103,8 +104,9 @@ def callback():
             d = data.get('data') or {}
             if data.get('status') and d.get('status') == 'success' and \
                     (d.get('metadata') or {}).get('subdomain') == t.subdomain:
-                billing.record_payment(t.subdomain)
-                flash('Payment received — your subscription is active. Thank you!', 'success')
+                plan = get_plan((d.get('metadata') or {}).get('plan'))
+                billing.record_payment(t.subdomain, days=plan['days'])
+                flash(f"Payment received — {plan['label']} subscription active. Thank you!", 'success')
                 return redirect(url_for('main.dashboard'))
         except Exception:
             current_app.logger.exception('Paystack verify failed for tenant %s', t.subdomain)
@@ -129,8 +131,9 @@ def webhook():
         d = event.get('data') or {}
         sub = (d.get('metadata') or {}).get('subdomain')
         if sub and (d.get('status') == 'success'):
+            plan = get_plan((d.get('metadata') or {}).get('plan'))
             try:
-                billing.record_payment(sub)
+                billing.record_payment(sub, days=plan['days'])
             except ValueError:
                 pass
     return jsonify(status='ok')

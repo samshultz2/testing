@@ -22,8 +22,10 @@ def _base_domain():
 def render_home():
     """Render the marketing homepage from the (editable) stored content."""
     from utils.site_content import get_homepage
+    from utils.plans import tenant_plans
     return render_template('marketing/home.html',
                            content=get_homepage(),
+                           plans=tenant_plans(),
                            base_domain=_base_domain(),
                            register_url=url_for('onboarding.register'))
 

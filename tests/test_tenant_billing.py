@@ -158,3 +158,33 @@ def test_lapsed_school_is_locked_to_billing_then_test_pay_restores(mt):
     assert billing.is_active(tenancy.get_tenant('trial'))
     r = c.get('/students', headers=H)
     assert '/billing' not in (r.headers.get('Location') or '')
+
+
+def test_paying_a_tier_grants_that_tiers_days(mt):
+    app, tenancy = mt
+    H = {'Host': 'trial.edusyncra.test'}
+    c = app.test_client()
+    html = c.get('/login', headers=H).get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+    c.post('/login', headers=H, data={'username': 'admin', 'password': 'Zebra!Mango42Q', '_csrf_token': tok})
+    btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                     c.get('/billing/', headers=H).get_data(as_text=True)).group(1)
+
+    # annual (365 days) via the test-mode pay path
+    c.post('/billing/pay', headers=H, data={'_csrf_token': btok, 'plan': 'annual'})
+    assert billing.days_left(tenancy.get_tenant('trial')) >= 360
+
+    # termly adds another 120 days on top
+    c.post('/billing/pay', headers=H, data={'_csrf_token': btok, 'plan': 'termly'})
+    assert billing.days_left(tenancy.get_tenant('trial')) >= 360 + 118
+
+
+def test_plan_tiers_are_discounted():
+    from utils.plans import tenant_plans, get_plan
+    cfg = dict(TENANT_PRICE_KOBO=5000000, TENANT_PLAN_DAYS=30, TENANT_TERM_DAYS=120)
+    m, t, a = tenant_plans(cfg)
+    assert (m['days'], m['price_naira'], m['savings']) == (30, 50000, 0)
+    assert t['days'] == 120 and t['savings'] == 10
+    assert a['days'] == 365 and a['savings'] == 20
+    assert a['price_naira'] < m['price_naira'] * 12          # annual is cheaper than 12x monthly
+    assert get_plan('nonsense', cfg)['id'] == 'monthly'      # safe fallback

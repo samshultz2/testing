@@ -160,6 +160,24 @@ section{padding:76px 0}
 .price li{display:flex;gap:11px;color:var(--text-secondary);font-size:15px;align-items:center}
 .price li i{color:var(--primary)}
 
+/* pricing tiers */
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;max-width:1000px;margin:0 auto;align-items:stretch}
+@media (max-width:860px){ .tiers{grid-template-columns:1fr;max-width:440px} }
+.tier{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-xl);padding:30px 26px;
+      box-shadow:var(--shadow-sm);display:flex;flex-direction:column;position:relative;transition:transform .18s, box-shadow .18s, border-color .18s}
+.tier:hover{transform:translateY(-4px);box-shadow:var(--shadow-md)}
+.tier.feat{border-color:var(--primary);box-shadow:var(--shadow-lg)}
+.tier-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;
+            font-size:11.5px;font-weight:700;letter-spacing:.03em;padding:5px 14px;border-radius:var(--radius-full)}
+.tier-name{font-family:var(--font-display);font-weight:600;font-size:19px}
+.tier-amt{font-family:var(--font-display);font-weight:700;font-size:38px;letter-spacing:-.03em;margin:12px 0 2px}
+.tier-amt small{font-family:var(--font-sans);font-size:15px;font-weight:500;color:var(--faint)}
+.tier-save{font-size:13px;font-weight:700;color:var(--success);min-height:20px;margin-bottom:6px}
+.tier ul{list-style:none;margin:18px 0 24px;padding:0;display:grid;gap:11px}
+.tier li{display:flex;gap:10px;align-items:center;color:var(--text-secondary);font-size:14.5px}
+.tier li i{color:var(--primary);font-size:13px}
+.tier .btn{margin-top:auto}
+
 /* faq */
 details{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:2px 20px;margin-bottom:12px;transition:border-color .15s}
 details[open]{border-color:var(--primary-light)}

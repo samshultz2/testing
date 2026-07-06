@@ -46,6 +46,12 @@ def _require_mt():
         abort(404)
 
 
+def _render_register(**kw):
+    """Render the signup form with the current subscription tiers available."""
+    from utils.plans import tenant_plans
+    return render_template('onboarding/register.html', plans=tenant_plans(), **kw)
+
+
 def _registration_blocked(ip):
     """Per-IP rate limit + daily ban on signups (provisioning is expensive and
     abusable). Returns a message if blocked, else None (and records the attempt)."""
@@ -69,7 +75,7 @@ def register():
         blocked = _registration_blocked(ip)
         if blocked:
             flash(blocked, 'error')
-            return render_template('onboarding/register.html'), 429
+            return _render_register(), 429
 
         cfg = current_app.config
         name = (request.form.get('name') or '').strip()
@@ -83,13 +89,11 @@ def register():
                     name, subdomain, email, base_domain=cfg.get('TENANT_BASE_DOMAIN'))
             except ValueError as e:
                 flash(str(e), 'error')
-                return render_template('onboarding/register.html',
-                                       name=name, subdomain=subdomain, admin_email=email)
+                return _render_register(name=name, subdomain=subdomain, admin_email=email)
             except Exception:
                 current_app.logger.exception('instant provisioning failed for %s', subdomain)
                 flash('We could not set up your school just now. Please try again.', 'error')
-                return render_template('onboarding/register.html',
-                                       name=name, subdomain=subdomain, admin_email=email)
+                return _render_register(name=name, subdomain=subdomain, admin_email=email)
             from utils import mailer
             base = cfg.get('TENANT_BASE_DOMAIN')
             login_url = f'https://{tenant.subdomain}.{base}/' if base else None
@@ -103,14 +107,13 @@ def register():
             tenant, token = onboarding.request_school(name, subdomain, email)
         except ValueError as e:
             flash(str(e), 'error')
-            return render_template('onboarding/register.html',
-                                   name=name, subdomain=subdomain, admin_email=email)
+            return _render_register(name=name, subdomain=subdomain, admin_email=email)
         verify_url = url_for('onboarding.verify', subdomain=subdomain, token=token, _external=True)
         emailed = onboarding.send_verification_email(tenant, token, verify_url)
         return render_template('onboarding/sent.html', email=email,
                                dev_link=(None if emailed else verify_url))
 
-    return render_template('onboarding/register.html')
+    return _render_register()
 
 
 @onboarding_bp.route('/verify/<subdomain>/<token>')

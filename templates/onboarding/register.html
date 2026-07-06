@@ -72,10 +72,12 @@
 
         <div class="fg">
           <label>Your plan</label>
+          {% set monthly = plans[0] if plans else None %}
+          {% set best = (plans|map(attribute='savings')|max) if plans else 0 %}
           <div class="plan-card">
             <div>
-              <div class="p-amt">₦{{ '{:,.0f}'.format((config.TENANT_PRICE_KOBO or 0) / 100) }}<span style="font-size:13px;font-weight:500;color:var(--text-secondary)"> / month</span></div>
-              <div class="p-meta">Unlimited students &amp; staff · cancel anytime</div>
+              <div class="p-amt">From ₦{{ '{:,.0f}'.format(monthly.price_naira if monthly else 0) }}<span style="font-size:13px;font-weight:500;color:var(--text-secondary)"> / month</span></div>
+              <div class="p-meta">Unlimited students &amp; staff{% if best > 0 %} · termly &amp; annual save up to {{ best }}%{% endif %} · choose after your trial</div>
             </div>
             <span class="p-badge">{{ config.TENANT_TRIAL_DAYS or 3 }} days free</span>
           </div>

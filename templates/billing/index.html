@@ -5,55 +5,89 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Subscription — {{ t.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
   <style>
-    :root { --ink:#1b2230; --soft:#4a5468; --line:#dbe1ec; --accent:#3f57c8; --ok:#14875a; --warn:#b1730a; --gap:#c8384a; --bg:#eef1f6; --surface:#fff; }
-    @media (prefers-color-scheme: dark){ :root{ --ink:#e7ebf3; --soft:#a3adc0; --line:#262d3a; --accent:#8496f2; --ok:#4bd39a; --warn:#e6ad4a; --gap:#ef6b7c; --bg:#0d1017; --surface:#151a23; } }
-    body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg);
-           color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:24px; }
-    .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:32px;
-            width:100%; max-width:460px; box-shadow:0 10px 40px -20px rgba(20,28,48,.4); }
-    h1 { font-size:21px; margin:0 0 4px; }
-    .state { font-size:14px; font-weight:700; margin:2px 0 18px; }
-    .state.ok { color:var(--ok); } .state.warn { color:var(--warn); } .state.gap { color:var(--gap); }
-    p { color:var(--soft); font-size:14.5px; line-height:1.55; }
-    button { width:100%; margin-top:18px; padding:12px; border:0; border-radius:9px; background:var(--accent);
-             color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
-    .flash { padding:10px 12px; border-radius:9px; font-size:13.5px; margin-bottom:14px; background:#e2f3ea; color:#14603f; }
-    .flash.error { background:#fbe4e7; color:#b0263a; } .flash.warning{ background:#f8efdb; color:#7a5310; }
-    .muted { font-size:12.5px; color:var(--soft); margin-top:14px; text-align:center; }
-    a { color:var(--accent); }
+    .bill{width:100%;max-width:760px}
+    .bill .head{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);
+                box-shadow:var(--shadow-sm);padding:26px 28px;margin-bottom:20px}
+    .bill h1{font-size:23px;margin:0 0 6px}
+    .state{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;padding:5px 13px;border-radius:var(--radius-full)}
+    .state.ok{color:var(--success);background:#d1e7dd} .state.warn{color:#7a5310;background:#fef3cd}
+    .state.gap{color:var(--danger);background:var(--danger-light)}
+    .bill .head p{color:var(--text-secondary);font-size:14.5px;margin-top:12px}
+    .plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    @media (max-width:680px){ .plan-grid{grid-template-columns:1fr} }
+    .plan-opt{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-lg);padding:22px;
+              box-shadow:var(--shadow-sm);display:flex;flex-direction:column;position:relative;transition:border-color .15s, transform .15s, box-shadow .15s}
+    .plan-opt:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:var(--primary-light)}
+    .plan-opt.feat{border-color:var(--primary)}
+    .plan-opt .badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;
+                     font-size:11px;font-weight:700;padding:4px 12px;border-radius:var(--radius-full)}
+    .plan-opt .lab{font-family:var(--font-display);font-weight:600;font-size:17px}
+    .plan-opt .amt{font-family:var(--font-display);font-weight:700;font-size:30px;letter-spacing:-.02em;margin:10px 0 2px}
+    .plan-opt .amt small{font-size:14px;font-weight:500;color:var(--faint)}
+    .plan-opt .save{font-size:12.5px;font-weight:700;color:var(--success);min-height:18px}
+    .plan-opt .days{font-size:13px;color:var(--text-secondary);margin:6px 0 16px}
+    .plan-opt form{margin-top:auto}
+    .flash{width:100%;max-width:760px}
+    .foot-links{max-width:760px;width:100%;text-align:center;margin-top:20px;font-size:13px;color:var(--text-secondary)}
+    .foot-links a{color:var(--primary);font-weight:600}
   </style>
 </head>
 <body>
-  <div class="card">
-    {% with msgs = get_flashed_messages(with_categories=true) %}
-      {% for cat, msg in msgs %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
-    {% endwith %}
-    <h1>{{ t.name }} — Subscription</h1>
+  <div class="auth" style="align-content:center">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:760px">
+      {% with msgs = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in msgs %}<div class="flash" style="margin-bottom:14px;padding:12px 14px;border-radius:12px;
+          background:{{ '#d1e7dd' if cat=='success' else '#fef3cd' if cat=='warning' else '#fee2e2' }};
+          color:{{ '#14603f' if cat=='success' else '#7a5310' if cat=='warning' else '#b0263a' }};font-size:14px">{{ msg }}</div>{% endfor %}
+      {% endwith %}
 
-    {% if st.active and st.on_trial %}
-      <div class="state ok">Free trial · {{ st.days_left }} day(s) left</div>
-      <p>Your trial ends soon. Subscribe now to keep access without interruption.</p>
-    {% elif st.active %}
-      <div class="state ok">Active · {{ st.days_left }} day(s) remaining</div>
-      <p>Your subscription is active. You can renew any time to add another period.</p>
-    {% else %}
-      <div class="state gap">Access paused — payment required</div>
-      <p>Your trial or subscription has ended. Make a payment to restore access to {{ t.name }}. If left unpaid, the school's data is removed after the grace period.</p>
-    {% endif %}
+      <div class="bill">
+        <div class="head">
+          <h1>{{ t.name }} — Subscription</h1>
+          {% if st.active and st.on_trial %}
+            <span class="state ok"><i class="fas fa-hourglass-half"></i> Free trial · {{ st.days_left }} day(s) left</span>
+            <p>Your trial ends soon. Choose a plan below to keep access without interruption.</p>
+          {% elif st.active %}
+            <span class="state ok"><i class="fas fa-circle-check"></i> Active · {{ st.days_left }} day(s) remaining</span>
+            <p>Your subscription is active. Renew any time to add another period.</p>
+          {% else %}
+            <span class="state gap"><i class="fas fa-triangle-exclamation"></i> Access paused — payment required</span>
+            <p>Your trial or subscription has ended. Choose a plan to restore access to {{ t.name }}. If left unpaid, the school’s data is removed after the grace period.</p>
+          {% endif %}
+        </div>
 
-    {% if is_admin %}
-      <form method="post" action="{{ url_for('billing.start_payment') }}">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button type="submit">
-          {% if test_mode %}Apply test payment (+{{ plan_days }} days){% elif price %}Pay ₦{{ '%.2f'|format(price) }} — {{ plan_days }} days{% else %}Continue to payment{% endif %}
-        </button>
-      </form>
-    {% else %}
-      <p style="margin-top:16px"><strong>Please ask your school administrator</strong> to renew the subscription.</p>
-    {% endif %}
+        {% if is_admin %}
+          <div class="plan-grid">
+            {% for p in plans %}
+            <div class="plan-opt {{ 'feat' if p.id == 'annual' }}">
+              {% if p.badge %}<span class="badge">{{ p.badge }}</span>{% endif %}
+              <div class="lab">{{ p.label }}</div>
+              <div class="amt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small> / {{ p.per }}</small></div>
+              <div class="save">{% if p.savings > 0 %}Save {{ p.savings }}%{% endif %}</div>
+              <div class="days">{{ p.days }} days of access</div>
+              <form method="post" action="{{ url_for('billing.start_payment') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="plan" value="{{ p.id }}">
+                <button class="btn {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }} btn-block" type="submit">
+                  {% if test_mode %}Apply test payment{% else %}Choose {{ p.label }}{% endif %}
+                </button>
+              </form>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="head"><p style="margin:0"><strong>Please ask your school administrator</strong> to renew the subscription.</p></div>
+        {% endif %}
+      </div>
 
-    <div class="muted"><a href="{{ url_for('auth.logout') }}">Sign out</a></div>
+      <div class="foot-links"><a href="{{ url_for('auth.logout') }}">Sign out</a></div>
+    </div>
   </div>
 </body>
 </html>

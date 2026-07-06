@@ -230,7 +230,12 @@ class Config:
     TENANT_TRIAL_DAYS = int(os.environ.get('TENANT_TRIAL_DAYS', '3'))
     TENANT_PLAN_DAYS = int(os.environ.get('TENANT_PLAN_DAYS', '30'))    # days added per payment
     TENANT_BILLING_GRACE_DAYS = int(os.environ.get('TENANT_BILLING_GRACE_DAYS', '7'))
-    TENANT_PRICE_KOBO = int(os.environ.get('TENANT_PRICE_KOBO', '0'))   # Paystack amount, kobo
+    TENANT_PRICE_KOBO = int(os.environ.get('TENANT_PRICE_KOBO', '0'))   # monthly base, kobo
+    # Subscription tiers: monthly (base), termly and annual. Termly/annual prices
+    # default to a discounted multiple of the monthly base but can be set outright.
+    TENANT_TERM_DAYS = int(os.environ.get('TENANT_TERM_DAYS', '120'))   # one school term
+    TENANT_TERMLY_PRICE_KOBO = int(os.environ.get('TENANT_TERMLY_PRICE_KOBO', '0') or 0)
+    TENANT_ANNUAL_PRICE_KOBO = int(os.environ.get('TENANT_ANNUAL_PRICE_KOBO', '0') or 0)
     # Platform (SaaS) Paystack account that collects school subscriptions —
     # separate from each school's own parent-payment keys.
     PLATFORM_PAYSTACK_SECRET_KEY = os.environ.get('PLATFORM_PAYSTACK_SECRET_KEY', '')
