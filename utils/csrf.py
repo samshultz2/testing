@@ -18,7 +18,7 @@ _SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS', 'TRACE'}
 # Endpoints called by external services or device-side scripts (no usable
 # CSRF token). `parent.pay_webhook` is Paystack; `main.client_error` is the
 # diagnostic JS error reporter (rate-limited, no state change).
-_EXEMPT_ENDPOINTS = {'parent.pay_webhook', 'main.client_error'}
+_EXEMPT_ENDPOINTS = {'parent.pay_webhook', 'main.client_error', 'billing.webhook'}
 
 
 def generate_csrf_token():

@@ -164,6 +164,10 @@ def provision(subdomain, admin_username='admin', admin_password=None):
         finally:
             engine.dispose()
         tenancy.set_status(subdomain, 'active', activated=True)
+        # New schools start their free trial now (owner-adoption doesn't come
+        # through here, so it stays exempt).
+        from utils import billing
+        billing.start_trial(subdomain)
         return tenancy.get_tenant(subdomain), admin_username, temp_password
     except Exception as e:
         tenancy.set_status(subdomain, 'failed', error=str(e))

@@ -156,10 +156,27 @@ stored inline), so nothing persistent is written to a shared disk — cross-tena
 file isolation is already satisfied. `tenant_upload_folder()` exists so any
 future persistent upload is namespaced per school by construction.
 
-### Still to do (infrastructure, not code)
+### Billing — **DONE**
 
-- **Wildcard DNS + TLS** (`*.edusyncra.app`) so new subdomains need no per-school
-  DNS/cert steps. This is the only remaining piece before onboarding real schools
-  at scale; test locally today with `*.lvh.me` (resolves to 127.0.0.1).
-- Optional: a manual-approval toggle in front of auto-provisioning; per-tenant
-  `FIELD_ENCRYPTION_KEY`; billing.
+New schools get a free trial, then must pay or their database is deleted after a
+grace period; the owner school is exempt (free forever). See **docs/BILLING.md**.
+- `utils/billing.py` — trial/paid/lock/reap state machine (date-derived).
+- `enforce_billing` before_request locks a lapsed school to `/billing`.
+- `routes/billing.py` + `templates/billing/` — status page + Paystack (platform
+  account) init/callback/webhook, with a `BILLING_TEST_MODE` for testing.
+- `scripts/reap_unpaid_tenants.py` — deletes unpaid, past-grace databases
+  (skips the owner).
+- Registry gains `plan` / `trial_ends_at` / `paid_until`; `adopt_current_school`
+  sets `plan='owner'`, `provision` starts the trial.
+
+### DNS + TLS — **documented**
+
+**docs/DNS_TLS.md** — wildcard DNS (`*.edusyncra.site`) + wildcard TLS
+(Cloudflare or Let's Encrypt DNS-01) + nginx + the exact env to flip on, and how
+to adopt the current school on the apex. Infrastructure to apply on the host;
+test locally today with `*.lvh.me`.
+
+### Still to do (optional)
+
+- Manual-approval toggle in front of auto-provisioning; per-tenant
+  `FIELD_ENCRYPTION_KEY`; usage-based pricing.

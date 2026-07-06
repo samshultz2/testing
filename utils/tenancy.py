@@ -45,6 +45,10 @@ class Tenant(_ControlBase):
     error = Column(Text)                          # last provisioning error, if any
     verification_token = Column(String(64))       # emailed at registration
     verified_at = Column(DateTime)
+    # Billing. plan: 'owner' (free forever, exempt) or 'standard' (trial -> paid).
+    plan = Column(String(20), nullable=False, default='standard')
+    trial_ends_at = Column(DateTime)
+    paid_until = Column(DateTime)
     created_at = Column(DateTime, default=_dt.datetime.utcnow)
     activated_at = Column(DateTime)
 
@@ -161,6 +165,24 @@ def set_status(subdomain, status, *, error=None, database_url=None, activated=Fa
         return t
 
 
+def set_billing(subdomain, *, plan=None, trial_ends_at=False, paid_until=False):
+    """Update a school's billing fields. Pass trial_ends_at / paid_until as a
+    datetime (or None to clear); the sentinel False leaves them unchanged."""
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            raise ValueError(f'No such tenant: {subdomain}')
+        if plan is not None:
+            t.plan = plan
+        if trial_ends_at is not False:
+            t.trial_ends_at = trial_ends_at
+        if paid_until is not False:
+            t.paid_until = paid_until
+        s.commit()
+        s.expunge(t)
+        return t
+
+
 def delete_tenant(subdomain):
     """Remove the registry row (does NOT drop the tenant's database)."""
     with _session() as s:
@@ -216,6 +238,8 @@ def adopt_existing(subdomain, name, database_url, admin_email=None):
         t.database_url = database_url
         t.admin_email = admin_email or t.admin_email
         t.status = 'active'
+        t.plan = 'owner'                          # free forever, exempt from billing
+        t.trial_ends_at = None
         t.verified_at = _dt.datetime.utcnow()
         t.activated_at = _dt.datetime.utcnow()
         s.commit()

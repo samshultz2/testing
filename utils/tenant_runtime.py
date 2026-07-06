@@ -68,9 +68,16 @@ def route_tenant():
     if not current_app.config.get('MULTI_TENANT') or request.endpoint == 'static':
         return None
     g.tenant = None
-    sub = subdomain_from_host(request.host, current_app.config.get('TENANT_BASE_DOMAIN', ''))
+    cfg = current_app.config
+    sub = subdomain_from_host(request.host, cfg.get('TENANT_BASE_DOMAIN', ''))
     if not sub:
-        return None            # apex / marketing host — nothing tenant-scoped here
+        # Bare apex host: serve the configured owner school there (so the
+        # pre-existing school keeps edusyncra.site), else it's the marketing site.
+        sub = cfg.get('APEX_TENANT') or None
+        if not sub:
+            return None
+    elif sub in cfg.get('RESERVED_SUBDOMAINS', set()):
+        return None            # platform host (marketing / registration) — no school
     t = tenancy.get_tenant(sub)
     if t is None or t.status != 'active' or not t.database_url:
         abort(404)             # unknown or not-yet-active school
@@ -86,6 +93,33 @@ def route_tenant():
 def current_tenant():
     """The Tenant for this request, or None (apex host / single-school mode)."""
     return getattr(g, 'tenant', None)
+
+
+# Endpoints still reachable while a school is locked out for non-payment: the
+# billing pages themselves, logout, and static assets.
+_BILLING_ALLOWED = {'billing.index', 'billing.start_payment', 'billing.callback',
+                    'billing.webhook', 'auth.logout', 'auth.login', 'static'}
+
+
+def enforce_billing():
+    """before_request: if this school's trial/subscription has lapsed, lock it to
+    the billing page until it pays. The owner school is exempt. No-op in
+    single-school mode or on the marketing host."""
+    if not current_app.config.get('MULTI_TENANT'):
+        return None
+    t = current_tenant()
+    if t is None:
+        return None
+    from utils import billing
+    if not billing.is_blocked(t):
+        return None
+    ep = request.endpoint or ''
+    if ep in _BILLING_ALLOWED:
+        return None
+    from flask import redirect, url_for
+    if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+        abort(402)                 # Payment Required
+    return redirect(url_for('billing.index'))
 
 
 def bind_session_to_current_tenant():

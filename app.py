@@ -195,6 +195,8 @@ def create_app(config_class=None):
     # Public multi-tenant onboarding (only reachable when MULTI_TENANT is on).
     from routes.onboarding import onboarding_bp
     app.register_blueprint(onboarding_bp)
+    from routes.billing import billing_bp
+    app.register_blueprint(billing_bp)
     
     # Initialize database. In multi-tenant mode the app has no single database of
     # its own — each school's database is created by provisioning — so we init
@@ -231,8 +233,9 @@ def create_app(config_class=None):
     # Multi-tenancy: resolve host -> school -> database engine BEFORE anything
     # else, so every downstream gate and query sees the right tenant. No-op when
     # MULTI_TENANT is off (single-school mode — current behaviour unchanged).
-    from utils.tenant_runtime import route_tenant
+    from utils.tenant_runtime import route_tenant, enforce_billing
     app.before_request(route_tenant)
+    app.before_request(enforce_billing)   # lock out lapsed (unpaid) schools
 
     app.before_request(_enforce_global_rate_limit)
 

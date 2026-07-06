@@ -217,7 +217,27 @@ class Config:
     # database by the host subdomain (see utils/tenant_runtime.py). Turning this
     # on requires TENANT_BASE_DOMAIN and a populated control plane.
     MULTI_TENANT = _as_bool(os.environ.get('MULTI_TENANT'), default=False)
-    TENANT_BASE_DOMAIN = os.environ.get('TENANT_BASE_DOMAIN', '')   # e.g. 'posyhub.app'
+    TENANT_BASE_DOMAIN = os.environ.get('TENANT_BASE_DOMAIN', '')   # e.g. 'edusyncra.site'
+    # The school served on the BARE apex host (so the pre-existing school keeps
+    # edusyncra.site with no URL change). Empty = apex is the marketing site.
+    APEX_TENANT = os.environ.get('APEX_TENANT', '')
+    # Hosts that are the platform itself, not a school (marketing + registration).
+    RESERVED_SUBDOMAINS = set(filter(None, (s.strip().lower() for s in os.environ.get(
+        'RESERVED_SUBDOMAINS', 'www,signup,app,admin,api').split(','))))
+
+    # Billing: new schools get a free trial, then must pay or their database is
+    # deleted after a grace period. The owner school (plan='owner') is exempt.
+    TENANT_TRIAL_DAYS = int(os.environ.get('TENANT_TRIAL_DAYS', '3'))
+    TENANT_PLAN_DAYS = int(os.environ.get('TENANT_PLAN_DAYS', '30'))    # days added per payment
+    TENANT_BILLING_GRACE_DAYS = int(os.environ.get('TENANT_BILLING_GRACE_DAYS', '7'))
+    TENANT_PRICE_KOBO = int(os.environ.get('TENANT_PRICE_KOBO', '0'))   # Paystack amount, kobo
+    # Platform (SaaS) Paystack account that collects school subscriptions —
+    # separate from each school's own parent-payment keys.
+    PLATFORM_PAYSTACK_SECRET_KEY = os.environ.get('PLATFORM_PAYSTACK_SECRET_KEY', '')
+    PLATFORM_PAYSTACK_PUBLIC_KEY = os.environ.get('PLATFORM_PAYSTACK_PUBLIC_KEY', '')
+    # Dev/testing only: "pay" without a real Paystack charge (simulated). Forced
+    # OFF in production so a school can't self-extend for free.
+    BILLING_TEST_MODE = _as_bool(os.environ.get('BILLING_TEST_MODE'), default=False)
 
     # Pagination
     STUDENTS_PER_PAGE = 20
@@ -284,6 +304,7 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     ENFORCE_SECURITY = True   # security_errors() block startup
+    BILLING_TEST_MODE = False  # never allow simulated (free) payments in production
     # Secure by default in production; flip SESSION_COOKIE_SECURE=0 in the
     # environment only for a plain-HTTP LAN/Termux deployment (the cookie is
     # otherwise not sent over HTTP and login would appear to "not work").
