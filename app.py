@@ -197,6 +197,8 @@ def create_app(config_class=None):
     app.register_blueprint(onboarding_bp)
     from routes.billing import billing_bp
     app.register_blueprint(billing_bp)
+    from routes.platform import platform_bp
+    app.register_blueprint(platform_bp)
     
     # Initialize database. In multi-tenant mode the app has no single database of
     # its own — each school's database is created by provisioning — so we init
