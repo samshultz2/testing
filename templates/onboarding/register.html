@@ -6,55 +6,124 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Register your school — EduSyncra</title>
   <style>
-    :root { --ink:#1b2230; --soft:#4a5468; --line:#dbe1ec; --accent:#3f57c8; --bg:#eef1f6; --surface:#fff; }
-    @media (prefers-color-scheme: dark){ :root{ --ink:#e7ebf3; --soft:#a3adc0; --line:#262d3a; --accent:#8496f2; --bg:#0d1017; --surface:#151a23; } }
+    :root { --ink:#1b2230; --soft:#4a5468; --faint:#7b8598; --line:#dbe1ec; --accent:#3f57c8;
+            --accent2:#6d5cf0; --ok:#14875a; --bg:#eef1f6; --surface:#fff; }
+    @media (prefers-color-scheme: dark){ :root{ --ink:#e7ebf3; --soft:#a3adc0; --faint:#6f7a8d;
+            --line:#262d3a; --accent:#8496f2; --accent2:#a58bf5; --ok:#4bd39a; --bg:#0d1017; --surface:#151a23; } }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg);
            color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:24px; }
-    .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:32px;
-            width:100%; max-width:440px; box-shadow:0 10px 40px -20px rgba(20,28,48,.4); }
-    h1 { font-size:22px; margin:0 0 6px; letter-spacing:-.01em; }
-    p.lede { color:var(--soft); margin:0 0 22px; font-size:14px; }
-    label { display:block; font-size:13px; font-weight:600; margin:14px 0 5px; }
-    input { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px;
+    .shell { width:100%; max-width:900px; background:var(--surface); border:1px solid var(--line);
+             border-radius:20px; overflow:hidden; box-shadow:0 24px 70px -34px rgba(20,28,48,.5);
+             display:grid; grid-template-columns:1fr 1.05fr; }
+    @media (max-width:760px){ .shell{ grid-template-columns:1fr; max-width:460px; } }
+
+    /* left brand panel */
+    .aside { background:linear-gradient(150deg,var(--accent),var(--accent2)); color:#fff;
+             padding:36px 32px; display:flex; flex-direction:column; gap:22px; }
+    .aside .brand { font-size:15px; font-weight:800; letter-spacing:.02em; opacity:.95; }
+    .aside h2 { font-size:25px; line-height:1.25; margin:0; letter-spacing:-.01em; }
+    .trial { display:inline-flex; align-items:center; gap:8px; align-self:flex-start;
+             background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28);
+             padding:6px 12px; border-radius:99px; font-size:12.5px; font-weight:700; }
+    .aside ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+    .aside li { display:flex; gap:10px; font-size:13.5px; line-height:1.4; opacity:.96; }
+    .aside li .ck { flex:0 0 auto; width:18px; height:18px; border-radius:50%; background:rgba(255,255,255,.22);
+             display:grid; place-items:center; font-size:11px; font-weight:900; margin-top:1px; }
+    .aside .foot { margin-top:auto; font-size:12px; opacity:.85; }
+    @media (max-width:760px){ .aside{ padding:26px 24px; gap:16px; } .aside h2{ font-size:21px; } }
+
+    /* right form panel */
+    .panel { padding:36px 34px; }
+    @media (max-width:760px){ .panel{ padding:26px 24px; } }
+    h1 { font-size:21px; margin:0 0 4px; letter-spacing:-.01em; }
+    p.lede { color:var(--soft); margin:0 0 18px; font-size:13.5px; line-height:1.45; }
+    label { display:block; font-size:12.5px; font-weight:700; margin:14px 0 5px; }
+    input { width:100%; padding:11px 13px; border:1px solid var(--line); border-radius:10px;
             background:transparent; color:var(--ink); font-size:15px; }
     input:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
-    .sub-row { display:flex; align-items:center; gap:6px; }
-    .sub-row .suffix { color:var(--soft); font-size:14px; white-space:nowrap; }
-    button { width:100%; margin-top:22px; padding:12px; border:0; border-radius:9px; background:var(--accent);
-             color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
-    .hint { font-size:12px; color:var(--soft); margin-top:4px; }
+    .sub-row { display:flex; align-items:stretch; }
+    .sub-row input { border-top-right-radius:0; border-bottom-right-radius:0; border-right:0; }
+    .sub-row .suffix { display:flex; align-items:center; padding:0 12px; color:var(--soft); font-size:13px;
+            white-space:nowrap; border:1px solid var(--line); border-left:0;
+            border-top-right-radius:10px; border-bottom-right-radius:10px; background:color-mix(in srgb,var(--line) 30%,transparent); }
+    .preview { font-size:12px; color:var(--faint); margin-top:6px; }
+    .preview b { color:var(--accent); font-weight:700; }
+    button { width:100%; margin-top:24px; padding:13px; border:0; border-radius:10px;
+             background:linear-gradient(135deg,var(--accent),var(--accent2));
+             color:#fff; font-size:15px; font-weight:800; cursor:pointer; }
+    button:hover { filter:brightness(1.05); }
+    .hint { font-size:11.5px; color:var(--faint); margin-top:4px; }
+    .signin { margin-top:16px; font-size:12.5px; color:var(--soft); text-align:center; }
+    .signin a { color:var(--accent); font-weight:600; text-decoration:none; }
     .flash { padding:10px 12px; border-radius:9px; font-size:13.5px; margin-bottom:16px;
              background:#fbe4e7; color:#b0263a; }
     @media (prefers-color-scheme: dark){ .flash{ background:#2c1418; color:#ef6b7c; } }
   </style>
 </head>
 <body>
-  <form class="card" method="post" action="{{ url_for('onboarding.register') }}">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <h1>Register your school</h1>
-    <p class="lede">Create your school's private portal. We'll email a link to confirm; once you click it, your database and subdomain are set up automatically.</p>
+  <div class="shell">
+    <aside class="aside">
+      <div class="brand">EduSyncra</div>
+      <h2>Run your whole school from one private portal.</h2>
+      <span class="trial">✦ 3 days free — no card required</span>
+      <ul>
+        <li><span class="ck">✓</span><span>Your own subdomain &amp; isolated database — your data never mixes with another school's.</span></li>
+        <li><span class="ck">✓</span><span>Students, staff, results, exams, fees &amp; payroll in one place.</span></li>
+        <li><span class="ck">✓</span><span>Branches &amp; arms supported — or keep it simple with one campus.</span></li>
+        <li><span class="ck">✓</span><span>Set up automatically the moment you confirm your email.</span></li>
+      </ul>
+      <div class="foot">Trusted for day-to-day school management.</div>
+    </aside>
 
-    {% with msgs = get_flashed_messages(with_categories=true) %}
-      {% for cat, msg in msgs %}<div class="flash">{{ msg }}</div>{% endfor %}
-    {% endwith %}
+    <form class="panel" method="post" action="{{ url_for('onboarding.register') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <h1>Register your school</h1>
+      <p class="lede">We'll email a confirmation link. Click it and your portal, database and subdomain are created automatically.</p>
 
-    <label for="name">School name</label>
-    <input id="name" name="name" value="{{ name or '' }}" required autofocus>
+      {% with msgs = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in msgs %}<div class="flash">{{ msg }}</div>{% endfor %}
+      {% endwith %}
 
-    <label for="subdomain">Choose your subdomain</label>
-    <div class="sub-row">
-      <input id="subdomain" name="subdomain" value="{{ subdomain or '' }}" required
-             pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?" placeholder="pioneer">
-      <span class="suffix">.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.app' }}</span>
-    </div>
-    <div class="hint">Lowercase letters, digits and hyphens.</div>
+      <label for="name">School name</label>
+      <input id="name" name="name" value="{{ name or '' }}" required autofocus>
 
-    <label for="admin_email">Admin email</label>
-    <input id="admin_email" name="admin_email" type="email" value="{{ admin_email or '' }}" required>
-    <div class="hint">Your login and confirmation link go here.</div>
+      <label for="subdomain">Choose your subdomain</label>
+      <div class="sub-row">
+        <input id="subdomain" name="subdomain" value="{{ subdomain or '' }}" required
+               pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?" placeholder="pioneer"
+               autocomplete="off" autocapitalize="none" spellcheck="false">
+        <span class="suffix">.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</span>
+      </div>
+      <div class="preview" id="preview">Your portal will live at <b id="preview-url">pioneer.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b></div>
+      <div class="hint">Lowercase letters, digits and hyphens only.</div>
 
-    <button type="submit">Create my school</button>
-  </form>
+      <label for="admin_email">Admin email</label>
+      <input id="admin_email" name="admin_email" type="email" value="{{ admin_email or '' }}" required>
+      <div class="hint">Your login and the confirmation link go here.</div>
+
+      <button type="submit">Create my school →</button>
+      <div class="signin">Already registered? Go to <b>your-subdomain.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b> and sign in.</div>
+    </form>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var sub = document.getElementById('subdomain');
+      var out = document.getElementById('preview-url');
+      var base = '.' + ({{ (config.TENANT_BASE_DOMAIN or 'edusyncra.site') | tojson }});
+      function clean(v) { return (v || '').toLowerCase().replace(/[^a-z0-9-]/g, ''); }
+      function render() {
+        var v = clean(sub.value);
+        out.textContent = (v || 'your-school') + base;
+      }
+      sub.addEventListener('input', function () {
+        var c = clean(sub.value);
+        if (c !== sub.value) { sub.value = c; }
+        render();
+      });
+      render();
+    })();
+  </script>
 </body>
 </html>
