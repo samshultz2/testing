@@ -87,6 +87,8 @@ def _complete_login(user):
     session['user'] = user.full_name or user.username
     session['role'] = user.role
     session['tv'] = user.token_version        # server-side session revocation
+    from utils.tenant_runtime import bind_session_to_current_tenant
+    bind_session_to_current_tenant()          # cookie valid only on this school's subdomain
     set_session_scope(user)
     set_session_org(user)
     if user.theme:
@@ -167,6 +169,8 @@ def login():
             session['logged_in'] = True
             session['user'] = 'Admin'
             session['role'] = 'admin'
+            from utils.tenant_runtime import bind_session_to_current_tenant
+            bind_session_to_current_tenant()
             from utils.branch_scope import set_session_scope
             from utils.org_scope import set_session_org
             set_session_scope(None)   # legacy admin is central

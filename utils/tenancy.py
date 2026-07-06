@@ -43,6 +43,8 @@ class Tenant(_ControlBase):
     admin_email = Column(String(200))
     status = Column(String(20), nullable=False, default='pending')
     error = Column(Text)                          # last provisioning error, if any
+    verification_token = Column(String(64))       # emailed at registration
+    verified_at = Column(DateTime)
     created_at = Column(DateTime, default=_dt.datetime.utcnow)
     activated_at = Column(DateTime)
 
@@ -166,3 +168,56 @@ def delete_tenant(subdomain):
         if t is not None:
             s.delete(t)
             s.commit()
+
+
+def set_verification(subdomain, token):
+    """Store the email-verification token for a pending registration."""
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            raise ValueError(f'No such tenant: {subdomain}')
+        t.verification_token = token
+        s.commit()
+        s.expunge(t)
+        return t
+
+
+def mark_verified(subdomain):
+    """Record that a school's email was verified (clears the token)."""
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            raise ValueError(f'No such tenant: {subdomain}')
+        t.verified_at = _dt.datetime.utcnow()
+        t.verification_token = None
+        if t.status == 'pending':
+            t.status = 'verified'
+        s.commit()
+        s.expunge(t)
+        return t
+
+
+def adopt_existing(subdomain, name, database_url, admin_email=None):
+    """Register an ALREADY-EXISTING, already-populated database as an active
+    tenant WITHOUT provisioning it — used to bring the current single school in
+    as tenant #1. The database is never opened or modified here."""
+    subdomain = (subdomain or '').strip().lower()
+    if not VALID_SUBDOMAIN.match(subdomain):
+        raise ValueError(f'Invalid subdomain: {subdomain!r}')
+    if not database_url:
+        raise ValueError('database_url is required to adopt an existing school.')
+    init_control_plane()
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            t = Tenant(name=name.strip(), subdomain=subdomain)
+            s.add(t)
+        t.name = name.strip()
+        t.database_url = database_url
+        t.admin_email = admin_email or t.admin_email
+        t.status = 'active'
+        t.verified_at = _dt.datetime.utcnow()
+        t.activated_at = _dt.datetime.utcnow()
+        s.commit()
+        s.expunge(t)
+        return t

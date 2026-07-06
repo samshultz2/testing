@@ -99,11 +99,40 @@ own DB role never needs it).
 
 Example: `python scripts/provision_tenant.py --name "Pioneer" --subdomain pioneer --admin-email head@pioneer.example`
 
+### Stage 0 — request-time routing — **DONE**
+
+Gated behind `MULTI_TENANT` (default **off** → single-school behaviour, current
+database untouched):
+
+- **`models/models/__init__.py`** — `db` now uses a `_TenantRoutingSession`
+  whose `get_bind()` routes to the request's tenant engine when one is bound, and
+  otherwise falls through to the stock binding (so flag-off is a no-op).
+- **`utils/tenant_runtime.py`** — engine registry (one cached engine per school
+  DB), `subdomain_from_host` (uses `TENANT_BASE_DOMAIN`; also `*.localhost` /
+  `*.lvh.me` for dev), and the `route_tenant` before_request (first in the chain)
+  that resolves host → active tenant → engine, 404s unknown/inactive schools, and
+  drops a session cookie replayed on the wrong school's subdomain.
+- **`app.py`** — `route_tenant` registered first; boot-time `init_db` is skipped
+  in MT mode (only the control plane is initialised — no tenant DB is ever
+  create_all'd/seeded at boot).
+- **`routes/auth.py`** — login stamps the resolved tenant into the session
+  (`session['t']`) so the cookie is only valid on that school's subdomain.
+- **`utils/onboarding.py`** — the automatic pipeline: `request_school()` (pending
+  + verification token, emailed) → `verify_and_provision()` which, once the email
+  is verified, creates the database, makes the subdomain live, creates the first
+  admin, and emails the credentials — all in one call. `adopt_current_school()`
+  brings the existing single school in as tenant #1 **without touching its DB**.
+- **`tests/test_tenant_routing.py`** — host routes to the right DB, cross-tenant
+  cookie rejected, unknown subdomain 404, flag-off no-op, adopt leaves the DB
+  byte-unchanged. Full suite: 610 passed.
+
+Config: `MULTI_TENANT`, `TENANT_BASE_DOMAIN`.
+
 ### Still to do
 
-- **Stage 0 — request-time routing:** resolve host → tenant → engine and bind
-  `db.session` per request (a `get_bind()`-override session + engine registry);
-  bind the session cookie to the tenant; namespace uploads per tenant.
+- **Per-tenant uploads** — namespace the upload folder by tenant (helper exists;
+  wire the save sites) before onboarding real schools.
 - **Stage 2 — `migrate-all-tenants`** command (iterate the registry, run Alembic
-  per DB); per-tenant `pg_dump` backups.
-- **Stage 3 — registration + approval UI**; wildcard DNS + TLS.
+  per DB); per-tenant scheduler + `pg_dump` backups.
+- **Stage 3 — public registration + verification routes** (thin wrappers over
+  `utils/onboarding.py`); wildcard DNS + TLS.

@@ -169,9 +169,16 @@ def create_app(config_class=None):
     app.register_blueprint(sales_bp)
     app.register_blueprint(welfare_bp)
     
-    # Initialize database
+    # Initialize database. In multi-tenant mode the app has no single database of
+    # its own — each school's database is created by provisioning — so we init
+    # only the control plane here and NEVER create_all/seed against a tenant DB
+    # at boot.
     with app.app_context():
-        init_db(app)
+        if app.config.get('MULTI_TENANT'):
+            from utils.tenancy import init_control_plane
+            init_control_plane()
+        else:
+            init_db(app)
 
     # Enable CSRF protection for all state-changing requests
     from utils.csrf import init_csrf
@@ -193,6 +200,12 @@ def create_app(config_class=None):
         ip = _request.remote_addr or 'anon'
         if global_rate_exceeded(f'req:{ip}', cap, 60):
             _abort(429, description='Too many requests. Please slow down and try again shortly.')
+
+    # Multi-tenancy: resolve host -> school -> database engine BEFORE anything
+    # else, so every downstream gate and query sees the right tenant. No-op when
+    # MULTI_TENANT is off (single-school mode — current behaviour unchanged).
+    from utils.tenant_runtime import route_tenant
+    app.before_request(route_tenant)
 
     app.before_request(_enforce_global_rate_limit)
 

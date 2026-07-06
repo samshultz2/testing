@@ -211,6 +211,14 @@ class Config:
     # below what a script needs to stress the single worker. 0 disables it.
     GLOBAL_RATE_PER_MIN = int(os.environ.get('GLOBAL_RATE_PER_MIN', '300'))
 
+    # --- Multi-tenancy (Stage 0 routing) --------------------------------------
+    # OFF by default: the app runs as a single-school install and the current
+    # database is untouched. When ON, each request is routed to its school's
+    # database by the host subdomain (see utils/tenant_runtime.py). Turning this
+    # on requires TENANT_BASE_DOMAIN and a populated control plane.
+    MULTI_TENANT = _as_bool(os.environ.get('MULTI_TENANT'), default=False)
+    TENANT_BASE_DOMAIN = os.environ.get('TENANT_BASE_DOMAIN', '')   # e.g. 'posyhub.app'
+
     # Pagination
     STUDENTS_PER_PAGE = 20
 

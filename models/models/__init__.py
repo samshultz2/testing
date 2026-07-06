@@ -5,10 +5,30 @@ All models use SQLAlchemy ORM for database operations
 import os
 from datetime import datetime, date
 from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy.session import Session as _FSQLASession
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.types import TypeDecorator, Text
 
-db = SQLAlchemy()
+
+class _TenantRoutingSession(_FSQLASession):
+    """Routes every query/flush to the current request's tenant database when
+    multi-tenancy is active. If no tenant engine is bound (single-school mode, or
+    outside a request), it falls through to the normal Flask-SQLAlchemy binding —
+    so with MULTI_TENANT off this behaves identically to the stock session."""
+
+    def get_bind(self, *args, **kwargs):
+        try:
+            from flask import g, has_app_context
+            if has_app_context():
+                eng = g.__dict__.get('tenant_engine')
+                if eng is not None:
+                    return eng
+        except Exception:
+            pass
+        return super().get_bind(*args, **kwargs)
+
+
+db = SQLAlchemy(session_options={'class_': _TenantRoutingSession})
 
 
 class EncryptedString(TypeDecorator):

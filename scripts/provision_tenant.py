@@ -49,12 +49,28 @@ def main(argv=None):
                     help='Only record the school as pending; do not create its database.')
     ap.add_argument('--drop', action='store_true',
                     help='Tear down the tenant database and reset it to pending.')
+    ap.add_argument('--adopt-current', action='store_true',
+                    help='Register the CURRENT database (DATABASE_URL) as an active '
+                         'tenant WITHOUT touching it — brings the existing school in as tenant #1.')
+    ap.add_argument('--database-url', help='DB URL for --adopt-current (defaults to $DATABASE_URL).')
     args = ap.parse_args(argv)
 
     tenancy.init_control_plane()
 
     if args.list:
         _print_tenants()
+        return 0
+
+    if args.adopt_current:
+        if not (args.name and args.subdomain):
+            ap.error('--adopt-current requires --name and --subdomain')
+        db_url = args.database_url or os.environ.get('DATABASE_URL')
+        if not db_url:
+            ap.error('--adopt-current needs --database-url or $DATABASE_URL')
+        from utils import onboarding
+        t = onboarding.adopt_current_school(args.subdomain, args.name, db_url, args.admin_email)
+        print(f'✓ Adopted current school as tenant "{t.subdomain}" (active, database untouched).')
+        print(f'  database: {t.database_url}')
         return 0
 
     if args.drop:
