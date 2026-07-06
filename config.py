@@ -239,6 +239,14 @@ class Config:
     # OFF in production so a school can't self-extend for free.
     BILLING_TEST_MODE = _as_bool(os.environ.get('BILLING_TEST_MODE'), default=False)
 
+    # Registration. Default: a school is created (database + subdomain + admin +
+    # free trial) instantly on signup — no email-verification step — protected by
+    # per-IP rate limiting and a daily ban. Set REGISTRATION_AUTO_PROVISION=0 to
+    # require an email-verification link before the database is created instead.
+    REGISTRATION_AUTO_PROVISION = _as_bool(os.environ.get('REGISTRATION_AUTO_PROVISION'), default=True)
+    REGISTRATION_MAX_PER_HOUR = int(os.environ.get('REGISTRATION_MAX_PER_HOUR', '2'))
+    REGISTRATION_MAX_PER_DAY = int(os.environ.get('REGISTRATION_MAX_PER_DAY', '5'))
+
     # Pagination
     STUDENTS_PER_PAGE = 20
 

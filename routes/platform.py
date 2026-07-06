@@ -91,6 +91,38 @@ def suspend(subdomain):
     return redirect(url_for('platform.dashboard'))
 
 
+@platform_bp.route('/bulk', methods=['POST'])
+@platform_admin_required
+def bulk():
+    """Apply one action to several schools at once (suspend / reactivate /
+    delete). The owner school is always skipped."""
+    subs = request.form.getlist('subdomains')
+    action = request.form.get('action')
+    if not subs:
+        flash('Select at least one school first.', 'error')
+        return redirect(url_for('platform.dashboard'))
+    if action == 'delete' and request.form.get('confirm_delete') != 'yes':
+        flash('Tick "confirm delete" to delete the selected schools.', 'error')
+        return redirect(url_for('platform.dashboard'))
+
+    done = 0
+    for sub in subs:
+        t = tenancy.get_tenant(sub)
+        if t is None or billing.is_owner(t):
+            continue                                   # never touch the owner
+        if action == 'suspend':
+            tenancy.set_status(sub, 'suspended', error='suspended by platform admin')
+            done += 1
+        elif action == 'reactivate':
+            tenancy.set_status(sub, 'active')
+            done += 1
+        elif action == 'delete':
+            provisioning.drop_tenant(sub, forget=True)
+            done += 1
+    flash(f'{(action or "").title()} applied to {done} school(s).', 'success')
+    return redirect(url_for('platform.dashboard'))
+
+
 @platform_bp.route('/<subdomain>/delete', methods=['POST'])
 @platform_admin_required
 def delete(subdomain):

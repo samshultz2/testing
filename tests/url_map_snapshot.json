@@ -3053,6 +3053,13 @@
 ]
 ],
 [
+"platform.bulk",
+"/platform/bulk",
+[
+"POST"
+]
+],
+[
 "platform.dashboard",
 "/platform/",
 [

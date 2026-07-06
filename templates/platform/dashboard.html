@@ -61,11 +61,12 @@
     <div class="tablewrap">
       <table>
         <thead><tr>
-          <th>School</th><th>Subdomain</th><th>Status</th><th>Access until</th><th>Admin email</th><th>Created</th><th>Actions</th>
+          <th></th><th>School</th><th>Subdomain</th><th>Status</th><th>Access until</th><th>Admin email</th><th>Created</th><th>Actions</th>
         </tr></thead>
         <tbody>
         {% for r in rows %}
           <tr>
+            <td>{% if not r.owner %}<input type="checkbox" name="subdomains" value="{{ r.subdomain }}" form="bulkform">{% endif %}</td>
             <td>{{ r.name }}</td>
             <td class="muted">{{ r.subdomain }}</td>
             <td>
@@ -89,10 +90,9 @@
                   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button class="btn">{{ 'Reactivate' if r.status == 'suspended' else 'Suspend' }}</button>
                 </form>
-                <form class="inline" method="post" action="{{ url_for('platform.delete', subdomain=r.subdomain) }}"
-                      onsubmit="return confirm('Delete {{ r.name }} and its database permanently?');">
+                <form class="inline" method="post" action="{{ url_for('platform.delete', subdomain=r.subdomain) }}">
                   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                  <input class="conf" name="confirm" placeholder="{{ r.subdomain }}" title="type the subdomain to confirm">
+                  <input class="conf" name="confirm" placeholder="type {{ r.subdomain }}" title="type the subdomain to confirm">
                   <button class="btn danger">Delete</button>
                 </form>
               {% else %}<span class="muted">—</span>{% endif %}
@@ -102,6 +102,22 @@
         </tbody>
       </table>
     </div>
+
+    <form id="bulkform" method="post" action="{{ url_for('platform.bulk') }}"
+          style="margin-top:16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <strong style="font-size:13px;">With selected:</strong>
+      <select name="action" class="btn" required>
+        <option value="suspend">Suspend</option>
+        <option value="reactivate">Reactivate</option>
+        <option value="delete">Delete (database + all data)</option>
+      </select>
+      <label style="font-size:12.5px; color:var(--gap);">
+        <input type="checkbox" name="confirm_delete" value="yes"> confirm delete (required to delete)
+      </label>
+      <button class="btn danger" type="submit">Apply</button>
+      <span class="muted" style="font-size:12px;">The owner school is never affected.</span>
+    </form>
   </div>
 </body>
 </html>

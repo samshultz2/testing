@@ -19,6 +19,21 @@ import secrets
 from utils import tenancy, provisioning
 
 
+def register_and_provision(name, subdomain, admin_email, base_domain=None):
+    """Instant onboarding: record the school, create its database + first admin,
+    start the free trial, and email the login — all in one step (no email
+    verification). Returns (tenant, admin_username, temp_password).
+
+    Raises ValueError for a bad/duplicate subdomain; other exceptions mean the
+    database couldn't be created (the tenant is left marked 'failed')."""
+    if not admin_email:
+        raise ValueError('An admin email is required to register a school.')
+    tenancy.register_tenant(name, subdomain, admin_email)     # validates + dedupes
+    tenant, username, password = provisioning.provision(subdomain)
+    _send_welcome_email(tenant, username, password, base_domain)
+    return tenant, username, password
+
+
 def request_school(name, subdomain, admin_email):
     """A school signs up. Records it as pending and returns a verification token
     (which the caller emails). No database is created yet."""

@@ -32,7 +32,7 @@
     {% else %}
       <span class="badge">✓ Confirmed</span>
       <h1>{{ tenant.name }} is ready</h1>
-      <p>Your school portal is live. Sign in with the details below — you'll be asked to set a new password on first login.</p>
+      <p>Your school portal is live{% if trial_days %} with a {{ trial_days }}-day free trial{% endif %}. Sign in with the details below — you'll be asked to set a new password on first login.</p>
       <div class="creds">
         <div><span class="k">Username</span><span class="v">{{ username }}</span></div>
         {% if password %}<div><span class="k">Temporary password</span><span class="v">{{ password }}</span></div>

@@ -24,33 +24,69 @@ def _require_mt():
         abort(404)
 
 
+def _registration_blocked(ip):
+    """Per-IP rate limit + daily ban on signups (provisioning is expensive and
+    abusable). Returns a message if blocked, else None (and records the attempt)."""
+    cfg = current_app.config
+    if login_limiter.is_rate_limited(f'reg_ban:{ip}', cfg['REGISTRATION_MAX_PER_DAY'], 24 * 60):
+        return 'Too many registrations from your network today. Please try again tomorrow.'
+    if login_limiter.is_rate_limited(f'reg_hour:{ip}', cfg['REGISTRATION_MAX_PER_HOUR'], 60):
+        return 'Please wait a little before registering another school.'
+    # Count the attempt against both windows BEFORE provisioning, so failures and
+    # retries still count toward the limit.
+    login_limiter.record_attempt(f'reg_hour:{ip}')
+    login_limiter.record_attempt(f'reg_ban:{ip}')
+    return None
+
+
 @onboarding_bp.route('/register', methods=['GET', 'POST'])
 def register():
     _require_mt()
     if request.method == 'POST':
-        # Throttle signups per IP — provisioning is expensive and abusable.
-        rkey = 'school_register:' + (request.remote_addr or 'unknown')
-        if login_limiter.is_rate_limited(rkey, max_attempts=5, window_minutes=60):
-            flash('Too many registration attempts. Please try again later.', 'error')
-            return render_template('onboarding/register.html')
-        login_limiter.record_attempt(rkey)
+        ip = request.remote_addr or 'unknown'
+        blocked = _registration_blocked(ip)
+        if blocked:
+            flash(blocked, 'error')
+            return render_template('onboarding/register.html'), 429
 
+        cfg = current_app.config
         name = (request.form.get('name') or '').strip()
         subdomain = (request.form.get('subdomain') or '').strip().lower()
         email = (request.form.get('admin_email') or '').strip()
+
+        # Default: create the school instantly (no email-verification step).
+        if cfg.get('REGISTRATION_AUTO_PROVISION', True):
+            try:
+                tenant, username, password = onboarding.register_and_provision(
+                    name, subdomain, email, base_domain=cfg.get('TENANT_BASE_DOMAIN'))
+            except ValueError as e:
+                flash(str(e), 'error')
+                return render_template('onboarding/register.html',
+                                       name=name, subdomain=subdomain, admin_email=email)
+            except Exception:
+                current_app.logger.exception('instant provisioning failed for %s', subdomain)
+                flash('We could not set up your school just now. Please try again.', 'error')
+                return render_template('onboarding/register.html',
+                                       name=name, subdomain=subdomain, admin_email=email)
+            from utils import mailer
+            base = cfg.get('TENANT_BASE_DOMAIN')
+            login_url = f'https://{tenant.subdomain}.{base}/' if base else None
+            show_pw = not mailer.is_configured()
+            return render_template('onboarding/done.html', tenant=tenant, login_url=login_url,
+                                   username=username, password=(password if show_pw else None),
+                                   trial_days=cfg.get('TENANT_TRIAL_DAYS'))
+
+        # Opt-in: require an email-verification link before creating the database.
         try:
             tenant, token = onboarding.request_school(name, subdomain, email)
         except ValueError as e:
             flash(str(e), 'error')
             return render_template('onboarding/register.html',
                                    name=name, subdomain=subdomain, admin_email=email)
-
-        verify_url = url_for('onboarding.verify', subdomain=subdomain, token=token,
-                             _external=True)
+        verify_url = url_for('onboarding.verify', subdomain=subdomain, token=token, _external=True)
         emailed = onboarding.send_verification_email(tenant, token, verify_url)
-        # In dev (no mail configured) show the link so the flow is testable.
-        dev_link = None if emailed else verify_url
-        return render_template('onboarding/sent.html', email=email, dev_link=dev_link)
+        return render_template('onboarding/sent.html', email=email,
+                               dev_link=(None if emailed else verify_url))
 
     return render_template('onboarding/register.html')
 

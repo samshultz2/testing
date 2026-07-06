@@ -107,3 +107,34 @@ def test_grant_and_delete_actions(mt):
     r = c.post('/platform/owner/delete', headers=H, data={'confirm': 'owner', '_csrf_token': tok})
     assert r.status_code == 404
     assert tenancy.get_tenant('owner') is not None
+
+
+def test_bulk_suspend_and_delete(mt):
+    app, tenancy = mt
+    import os
+    from utils import provisioning
+    # add two more customer schools to act on in bulk
+    tenancy.register_tenant('Gamma', 'gamma'); provisioning.provision('gamma')
+    tenancy.register_tenant('Delta', 'delta'); provisioning.provision('delta')
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/', headers=H).get_data(as_text=True)).group(1)
+
+    # bulk suspend two schools (+ owner in the list, which must be skipped)
+    c.post('/platform/bulk', headers=H,
+           data={'action': 'suspend', 'subdomains': ['gamma', 'delta', 'owner'], '_csrf_token': tok})
+    assert tenancy.get_tenant('gamma').status == 'suspended'
+    assert tenancy.get_tenant('delta').status == 'suspended'
+    assert tenancy.get_tenant('owner').status == 'active'          # owner untouched
+
+    # bulk delete requires the confirm flag
+    gamma_db = tenancy.get_tenant('gamma').database_url.replace('sqlite:///', '')
+    c.post('/platform/bulk', headers=H,
+           data={'action': 'delete', 'subdomains': ['gamma', 'delta'], '_csrf_token': tok})
+    assert tenancy.get_tenant('gamma') is not None                 # no confirm -> nothing deleted
+    c.post('/platform/bulk', headers=H,
+           data={'action': 'delete', 'subdomains': ['gamma', 'delta'],
+                 'confirm_delete': 'yes', '_csrf_token': tok})
+    assert tenancy.get_tenant('gamma') is None and tenancy.get_tenant('delta') is None
+    assert not os.path.exists(gamma_db)
