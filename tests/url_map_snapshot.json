@@ -3081,6 +3081,14 @@
 ]
 ],
 [
+"platform.homepage",
+"/platform/homepage",
+[
+"GET",
+"POST"
+]
+],
+[
 "platform.suspend",
 "/platform/<subdomain>/suspend",
 [

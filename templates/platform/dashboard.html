@@ -47,8 +47,13 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Schools</h1>
-    <p class="sub">Every school on the platform, with billing status and controls.</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+      <div>
+        <h1>Schools</h1>
+        <p class="sub">Every school on the platform, with billing status and controls.</p>
+      </div>
+      <a class="btn" href="{{ url_for('platform.homepage') }}" style="white-space:nowrap;">Edit homepage</a>
+    </div>
 
     {% with msgs = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in msgs %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}

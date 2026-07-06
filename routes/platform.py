@@ -69,6 +69,39 @@ def dashboard():
                            price=price, plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 
+@platform_bp.route('/homepage', methods=['GET', 'POST'])
+@platform_admin_required
+def homepage():
+    """Edit the public marketing homepage content (stored in the control plane).
+    Lets the marketing/sales team change copy, pricing and FAQ live — no deploy."""
+    from utils import site_content
+    if request.method == 'POST':
+        content = site_content.get_homepage()
+        for k in ('brand', 'hero_title', 'hero_subtitle', 'hero_cta',
+                  'trial_note', 'price_period', 'footer'):
+            content[k] = (request.form.get(k) or '').strip()
+        price = request.form.get('price_naira', type=int)
+        content['price_naira'] = price if price else None
+        content['features'] = site_content.parse_pairs(
+            request.form.get('features'), ('title', 'body'))
+        content['steps'] = site_content.parse_pairs(
+            request.form.get('steps'), ('title', 'body'))
+        content['faqs'] = site_content.parse_pairs(
+            request.form.get('faqs'), ('q', 'a'))
+        site_content.save_homepage(content)
+        flash('Homepage updated — changes are live.', 'success')
+        return redirect(url_for('platform.homepage'))
+
+    content = site_content.get_homepage()
+    base = current_app.config.get('TENANT_BASE_DOMAIN', '')
+    marketing_url = f'https://www.{base}/' if base else '/'
+    return render_template(
+        'platform/homepage.html', content=content, marketing_url=marketing_url,
+        features_text=site_content.format_pairs(content.get('features'), ('title', 'body')),
+        steps_text=site_content.format_pairs(content.get('steps'), ('title', 'body')),
+        faqs_text=site_content.format_pairs(content.get('faqs'), ('q', 'a')))
+
+
 @platform_bp.route('/<subdomain>/grant', methods=['POST'])
 @platform_admin_required
 def grant(subdomain):

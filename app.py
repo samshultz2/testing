@@ -199,6 +199,8 @@ def create_app(config_class=None):
     app.register_blueprint(billing_bp)
     from routes.platform import platform_bp
     app.register_blueprint(platform_bp)
+    from routes.marketing import marketing_bp
+    app.register_blueprint(marketing_bp)
     
     # Initialize database. In multi-tenant mode the app has no single database of
     # its own — each school's database is created by provisioning — so we init
@@ -236,7 +238,11 @@ def create_app(config_class=None):
     # else, so every downstream gate and query sees the right tenant. No-op when
     # MULTI_TENANT is off (single-school mode — current behaviour unchanged).
     from utils.tenant_runtime import route_tenant, enforce_billing
+    from routes.marketing import serve_marketing_home
     app.before_request(route_tenant)
+    # On a platform host (www/signup/apex-without-owner) the homepage is the
+    # public marketing page, served here before any login gate. No-op otherwise.
+    app.before_request(serve_marketing_home)
     app.before_request(enforce_billing)   # lock out lapsed (unpaid) schools
 
     app.before_request(_enforce_global_rate_limit)

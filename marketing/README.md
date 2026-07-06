@@ -1,78 +1,40 @@
-# EduSyncra marketing site
+# Marketing homepage
 
-This folder is the **public marketing homepage** — the page a brand-new school
-lands on before it has an account. It is deliberately kept **separate from the
-Flask application** so the marketing/sales team can edit copy, pricing and
-design and redeploy it **without touching the product codebase**.
+The public marketing homepage is now **served by the app itself and edited
+live** — there is no separate static site and nothing for Cloudflare to host.
+Cloudflare only ever handles DNS.
 
-It is a single, self-contained `index.html` (all CSS + JS inline, no build
-step, no dependencies). Open it in a browser to preview; edit the text and
-redeploy.
+## Where it lives
 
----
+- **Public page:** `https://www.<your-domain>` (e.g. `https://www.edusyncra.site`)
+  — served by the app on any *platform host* (a reserved subdomain such as
+  `www`/`signup`, or the apex if no owner school claims it).
+  Template: `templates/marketing/home.html`.
+- **Register link on the page** → `/register` (the in-app signup form).
+- **"Sign in" box** → sends a school to `https://<subdomain>.<your-domain>/`.
 
-## What it does
+## Editing the content (no code, no deploy)
 
-- **Hero + features + pricing + FAQ** landing page, light/dark aware, mobile
-  responsive.
-- **"Start free trial" / "Register"** buttons point at the product's signup
-  route. The target URL is set once at the top of the inline `<script>`:
+The marketing/sales team edits everything from the platform dashboard:
 
-  ```js
-  const SIGNUP_URL = "https://signup.edusyncra.site/register";
-  ```
+1. Sign in as a platform admin on the owner host (`https://<your-domain>`).
+2. Go to **`/platform`** → click **Edit homepage** (`/platform/homepage`).
+3. Change the headline, sub-headline, CTA text, trial note, price, features,
+   how-it-works steps, FAQ and footer, then **Save**. Changes are live
+   immediately.
 
-  Every `<a class="reg">` on the page is wired to that URL, so changing this
-  one line repoints all the CTAs.
+Features / steps / FAQ are edited as simple `Title | description` (or
+`Question | Answer`) lines — one per line — so no JSON or code is involved.
 
-- **"Sign in"** box: a school types its subdomain (e.g. `glovic`) and is sent
-  to `https://<subdomain>.edusyncra.site/login`. Existing schools therefore
-  keep using the same address they already know — nothing to re-learn.
+Content is stored in the **control-plane database**
+(`utils/tenancy.py` → `SiteContent`), with sensible defaults in
+`utils/site_content.py` used until something is overridden. The price defaults
+to the configured subscription amount (`TENANT_PRICE_KOBO`) unless you set an
+explicit figure in the editor.
 
----
+## Making the URLs resolve (DNS only)
 
-## Where to host it (so existing users don't need a new URL)
-
-The product lives on `edusyncra.site` (the owner school is served at the apex,
-each tenant at `<subdomain>.edusyncra.site`). Until `edusyncra.com` is bought,
-host this page on a subdomain of the domain you already own:
-
-- **`www.edusyncra.site`** — recommended. Marketing homepage.
-- **`signup.edusyncra.site`** — reserved subdomain that maps to the app's
-  `/register` route (already in `RESERVED_SUBDOMAINS`), so `SIGNUP_URL` above
-  resolves to the real signup form inside the app.
-
-Existing schools never see this page — they go straight to their own
-subdomain — so their bookmarks keep working unchanged.
-
-### Option A — Cloudflare Pages (recommended, free, marketing edits it directly)
-
-1. Push this `marketing/` folder to its own tiny repo (or a subfolder) that the
-   marketing team owns.
-2. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
-3. Build settings: **no framework**, build command empty, output directory
-   `marketing` (or the repo root if you split it out).
-4. After the first deploy, **Custom domains → Set up a custom domain →
-   `www.edusyncra.site`**. Cloudflare adds the CNAME for you since the zone is
-   already on Cloudflare.
-5. Marketing now edits `index.html` in that repo; every push redeploys. The
-   product codebase is never touched.
-
-### Option B — serve it from the phone/Termux server
-
-If you'd rather not use Pages, drop `index.html` behind the same Cloudflare
-tunnel on a path/subdomain of its own (e.g. a static route or a second tiny
-static server on another port), then point `www` at it. This keeps everything
-on the one box but couples redeploys to the server.
-
-**Recommendation:** Option A. It keeps marketing fully independent, is free, and
-survives the phone being offline.
-
----
-
-## Editing checklist for marketing
-
-- Price / trial length: search the file for `50,000` and `3 days`.
-- Signup destination: the `SIGNUP_URL` constant near the bottom.
-- Everything else (headlines, features, FAQ) is plain HTML text — edit in place.
-- After editing, just commit & push (Pages) or re-copy the file (self-host).
+Point `www` (and `signup`) at the app the same way your school subdomains
+already resolve — the wildcard `*.<domain>` record through your tunnel covers
+them, and both are in `RESERVED_SUBDOMAINS` so the app treats them as platform
+hosts rather than schools. Nothing else in Cloudflare is involved.

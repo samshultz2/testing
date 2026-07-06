@@ -56,6 +56,21 @@ class Tenant(_ControlBase):
         return f'<Tenant {self.subdomain} {self.status}>'
 
 
+class SiteContent(_ControlBase):
+    """Editable content for platform-owned pages (e.g. the marketing homepage).
+
+    Platform-level, not per-school, so it lives in the control-plane DB. Stored
+    as a single JSON document per key so the marketing/sales team can edit copy
+    from the platform dashboard without a code change or redeploy."""
+    __tablename__ = 'site_content'
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(64), nullable=False, unique=True)
+    data = Column(Text)                            # JSON document
+    updated_at = Column(DateTime, default=_dt.datetime.utcnow,
+                        onupdate=_dt.datetime.utcnow)
+
+
 # --- control-plane engine (lazy, cached) ------------------------------------
 _engine = None
 _Session = None
@@ -217,6 +232,33 @@ def mark_verified(subdomain):
         s.commit()
         s.expunge(t)
         return t
+
+
+def get_content(key):
+    """Return the stored JSON document for a content key, or None."""
+    import json
+    init_control_plane()
+    with _session() as s:
+        row = s.query(SiteContent).filter_by(key=key).first()
+        if row is None or not row.data:
+            return None
+        try:
+            return json.loads(row.data)
+        except (ValueError, TypeError):
+            return None
+
+
+def save_content(key, data):
+    """Upsert the JSON document for a content key."""
+    import json
+    init_control_plane()
+    with _session() as s:
+        row = s.query(SiteContent).filter_by(key=key).first()
+        if row is None:
+            row = SiteContent(key=key)
+            s.add(row)
+        row.data = json.dumps(data)
+        s.commit()
 
 
 def adopt_existing(subdomain, name, database_url, admin_email=None):

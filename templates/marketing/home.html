@@ -3,19 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EduSyncra — School management, simplified</title>
-<meta name="description" content="Run your whole school from one place — students, results, fees, attendance, CBT, WAEC/JAMB and parent communication. Start a free 3-day trial.">
-<!--
-  MARKETING HOMEPAGE — standalone, no dependency on the app.
-  Edit freely and deploy to Cloudflare Pages (see README.md in this folder).
-  The one thing to keep working: the "Register" / "Start free trial" links point
-  to your live signup page.  Change SIGNUP_URL below in one place.
--->
+<title>{{ content.brand }} — School management, simplified</title>
+<meta name="description" content="{{ content.hero_subtitle }}">
 <style>
   :root{
     --bg:#f6f7fb; --surface:#ffffff; --ink:#141a2b; --soft:#4b5568; --faint:#8a93a6;
-    --line:#e6e9f2; --accent:#3f57c8; --accent-2:#5a72 f0; --accent-2:#5a72f0;
-    --accent-ink:#2c3f9e; --good:#14875a;
+    --line:#e6e9f2; --accent:#3f57c8; --accent-ink:#2c3f9e; --good:#14875a;
     --radius:16px; --shadow:0 1px 2px rgba(20,26,43,.04), 0 20px 40px -28px rgba(20,26,43,.28);
   }
   @media (prefers-color-scheme:dark){
@@ -38,7 +31,6 @@
   .btn-ghost:hover{border-color:var(--accent)}
   .eyebrow{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink)}
 
-  /* nav */
   header.nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
              background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line)}
   .nav-in{display:flex;align-items:center;gap:20px;height:64px}
@@ -51,13 +43,11 @@
   .school-form{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
   .school-form input{border:0;background:transparent;color:var(--ink);padding:8px 10px;font-size:13.5px;width:120px;outline:none}
   .school-form .suffix{color:var(--faint);font-size:12.5px;padding-right:8px}
-  .school-form button{border:0;background:var(--surface-2,transparent);color:var(--accent-ink);font-weight:700;padding:0 12px;cursor:pointer;height:100%}
+  .school-form button{border:0;background:transparent;color:var(--accent-ink);font-weight:700;padding:0 12px;cursor:pointer;height:100%}
   @media (max-width:820px){ .nav-links,.school-form{display:none} }
 
-  /* hero */
   .hero{padding:72px 0 48px;text-align:center}
-  .hero h1{font-size:clamp(34px,6vw,58px);line-height:1.03;letter-spacing:-.025em;margin:16px auto 14px;max-width:15ch;text-wrap:balance;font-weight:850}
-  .hero h1 .grad{background:linear-gradient(120deg,var(--accent),#8496f2);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero h1{font-size:clamp(34px,6vw,58px);line-height:1.03;letter-spacing:-.025em;margin:16px auto 14px;max-width:16ch;text-wrap:balance;font-weight:850}
   .hero p.sub{font-size:clamp(16px,2.2vw,20px);color:var(--soft);max-width:60ch;margin:0 auto 26px}
   .hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
   .hero .micro{margin-top:14px;font-size:13px;color:var(--faint)}
@@ -72,7 +62,6 @@
   .shot .tile .v{font-size:22px;font-weight:800;margin-top:4px}
   .shot .tile .v.good{color:var(--good)}
 
-  /* sections */
   section{padding:64px 0}
   .sec-head{text-align:center;max-width:60ch;margin:0 auto 40px}
   .sec-head h2{font-size:clamp(26px,4vw,38px);letter-spacing:-.02em;margin:10px 0 8px;text-wrap:balance;font-weight:820}
@@ -92,7 +81,6 @@
                 width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:15px;margin-bottom:10px}
   .step h3{margin:0 0 6px;font-size:16px}.step p{margin:0;color:var(--soft);font-size:14px}
 
-  /* pricing */
   .price-wrap{max-width:460px;margin:0 auto}
   .price{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:30px;text-align:center}
   .price .tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
@@ -103,7 +91,6 @@
   .price li{display:flex;gap:10px;color:var(--soft);font-size:14.5px}
   .price li::before{content:"✓";color:var(--good);font-weight:800}
 
-  /* faq */
   details{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:4px 18px;margin-bottom:10px}
   details summary{cursor:pointer;font-weight:700;padding:14px 0;list-style:none}
   details summary::-webkit-details-marker{display:none}
@@ -119,7 +106,7 @@
 </head>
 <body>
 <header class="nav"><div class="wrap nav-in">
-  <a class="brand" href="#top"><span class="dot">✦</span> EduSyncra</a>
+  <a class="brand" href="#top"><span class="dot">✦</span> {{ content.brand }}</a>
   <nav class="nav-links">
     <a href="#features">Features</a><a href="#how">How it works</a>
     <a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
@@ -127,23 +114,23 @@
   <div class="nav-right">
     <form class="school-form" id="schoolForm" title="Go to your school">
       <input id="sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
-      <span class="suffix">.edusyncra.site</span>
+      <span class="suffix">.{{ base_domain }}</span>
       <button type="submit">Sign in</button>
     </form>
-    <a class="btn btn-primary reg" href="#">Start free trial</a>
+    <a class="btn btn-primary" href="{{ register_url }}">{{ content.hero_cta }}</a>
   </div>
 </div></header>
 
 <main id="top">
   <section class="hero"><div class="wrap">
     <span class="eyebrow">School management, simplified</span>
-    <h1>Run your whole school from <span class="grad">one place</span>.</h1>
-    <p class="sub">Students, results, fees, attendance, CBT, WAEC &amp; JAMB analytics, and parent communication — one secure portal for your school, on any device. Start free in minutes.</p>
+    <h1>{{ content.hero_title }}</h1>
+    <p class="sub">{{ content.hero_subtitle }}</p>
     <div class="hero-cta">
-      <a class="btn btn-primary reg" href="#">Start your free 3-day trial</a>
+      <a class="btn btn-primary" href="{{ register_url }}">{{ content.hero_cta }}</a>
       <a class="btn btn-ghost" href="#how">See how it works</a>
     </div>
-    <p class="micro">No card required for the trial · Set up in under 5 minutes</p>
+    <p class="micro">{{ content.trial_note }}</p>
 
     <div class="shot">
       <div class="bar"><i></i><i></i><i></i></div>
@@ -158,15 +145,12 @@
 
   <section id="features"><div class="wrap">
     <div class="sec-head"><span class="eyebrow">Everything in one system</span>
-      <h2>Built for the way Nigerian schools actually run</h2>
-      <p>Stop juggling spreadsheets and WhatsApp groups. EduSyncra puts every part of school administration in one connected place.</p></div>
+      <h2>Built for the way schools actually run</h2>
+      <p>Stop juggling spreadsheets and chat groups. Every part of school administration in one connected place.</p></div>
     <div class="features">
-      <div class="feature"><div class="ic">🎓</div><h3>Students &amp; admissions</h3><p>Enrolment, classes &amp; arms, promotions, and a full student record with photos and history.</p></div>
-      <div class="feature"><div class="ic">📊</div><h3>Results &amp; report cards</h3><p>Score entry, automatic report cards, broadsheets, and WAEC/JAMB analytics and predictions.</p></div>
-      <div class="feature"><div class="ic">💳</div><h3>Fees &amp; finance</h3><p>Fee structures, payments and receipts, discounts, defaulters, expenses and reports.</p></div>
-      <div class="feature"><div class="ic">🗓️</div><h3>Attendance &amp; timetable</h3><p>Daily registers, staff attendance, and an optimal timetable generator.</p></div>
-      <div class="feature"><div class="ic">🖥️</div><h3>CBT &amp; mock exams</h3><p>Run computer-based tests and mock WAEC/JAMB with instant marking and insights.</p></div>
-      <div class="feature"><div class="ic">📣</div><h3>Parent communication</h3><p>SMS/WhatsApp announcements, a parent portal, and a public result checker.</p></div>
+      {% for f in content.features %}
+      <div class="feature"><div class="ic">✦</div><h3>{{ f.title }}</h3><p>{{ f.body }}</p></div>
+      {% endfor %}
     </div>
   </div></section>
 
@@ -174,19 +158,19 @@
     <div class="sec-head"><span class="eyebrow">Get started today</span>
       <h2>Your school, live in three steps</h2></div>
     <div class="steps">
-      <div class="step"><h3>Register your school</h3><p>Tell us your school name and pick your web address. Confirm your email — that's it.</p></div>
-      <div class="step"><h3>Your portal is created</h3><p>We instantly set up your private, secure portal at <b>your-school.edusyncra.site</b> with your admin login.</p></div>
-      <div class="step"><h3>Invite &amp; go</h3><p>Add your staff and students, and start managing results, fees and attendance right away.</p></div>
+      {% for s in content.steps %}
+      <div class="step"><h3>{{ s.title }}</h3><p>{{ s.body }}</p></div>
+      {% endfor %}
     </div>
   </div></section>
 
   <section id="pricing"><div class="wrap">
     <div class="sec-head"><span class="eyebrow">Simple pricing</span>
       <h2>Start free, then one flat plan</h2>
-      <p>Every school gets a free 3-day trial. Continue for one simple subscription — no per-student fees, no surprises.</p></div>
+      <p>Every school gets a free trial. Continue for one simple subscription — no per-student fees, no surprises.</p></div>
     <div class="price-wrap"><div class="price">
-      <span class="tag">3 days free</span>
-      <div class="amt">₦50,000<small> / month</small></div>
+      <span class="tag">{{ content.trial_note }}</span>
+      <div class="amt">₦{{ '{:,.0f}'.format(content.price_naira) }}<small> / {{ content.price_period }}</small></div>
       <div style="color:var(--faint);font-size:13px">per school · unlimited students &amp; staff</div>
       <ul>
         <li>Every feature included</li>
@@ -195,37 +179,31 @@
         <li>Daily backups &amp; encryption</li>
         <li>Cancel anytime</li>
       </ul>
-      <a class="btn btn-primary reg" href="#" style="width:100%;justify-content:center">Start free trial</a>
+      <a class="btn btn-primary" href="{{ register_url }}" style="width:100%;justify-content:center">{{ content.hero_cta }}</a>
     </div></div>
   </div></section>
 
   <section id="faq"><div class="wrap" style="max-width:760px">
     <div class="sec-head"><span class="eyebrow">Questions</span><h2>Frequently asked</h2></div>
-    <details><summary>Do I need to install anything?</summary><p>No. EduSyncra runs in any web browser on phones, tablets and computers. Your school gets its own web address.</p></details>
-    <details><summary>What happens after the free trial?</summary><p>You'll be asked to subscribe to keep your access. If you don't, your data is safely held for a short grace period before removal — nothing is deleted the moment the trial ends.</p></details>
-    <details><summary>Is my school's data private?</summary><p>Yes. Every school has its own separate, encrypted database — your data is never mixed with any other school's.</p></details>
-    <details><summary>Can parents and students use it too?</summary><p>Yes — there's a parent portal, a public result checker, and SMS/WhatsApp communication built in.</p></details>
+    {% for q in content.faqs %}
+    <details><summary>{{ q.q }}</summary><p>{{ q.a }}</p></details>
+    {% endfor %}
   </div></section>
 
   <div class="wrap"><div class="cta-band">
     <h2>Ready to simplify your school?</h2>
-    <p>Set up your free trial in under five minutes.</p>
-    <a class="btn btn-primary reg" href="#">Start your free 3-day trial</a>
+    <p>Set up your free trial in a few minutes.</p>
+    <a class="btn btn-primary" href="{{ register_url }}">{{ content.hero_cta }}</a>
   </div></div>
 </main>
 
 <footer><div class="wrap row">
-  <div class="brand"><span class="dot">✦</span> EduSyncra</div>
-  <div>© <span id="yr"></span> EduSyncra. School management, simplified.</div>
+  <div class="brand"><span class="dot">✦</span> {{ content.brand }}</div>
+  <div>{{ content.footer }}</div>
 </div></footer>
 
-<script>
-  // The one setting to keep updated: your live signup page.
-  var SIGNUP_URL = "https://signup.edusyncra.site/register";
-  var BASE_DOMAIN = "edusyncra.site";
-  document.querySelectorAll("a.reg").forEach(function(a){ a.href = SIGNUP_URL; });
-  document.getElementById("yr").textContent = new Date().getFullYear();
-  // "Sign in" -> go to the entered school's subdomain
+<script nonce="{{ csp_nonce }}">
+  var BASE_DOMAIN = {{ base_domain | tojson }};
   document.getElementById("schoolForm").addEventListener("submit", function(e){
     e.preventDefault();
     var s = (document.getElementById("sub").value || "").trim().toLowerCase()
