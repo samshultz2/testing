@@ -94,6 +94,7 @@ def _form_meta():
     """Shared metadata for the add/edit user forms (modules, presets, etc.)."""
     from models import Branch
     from utils.role_presets import presets_for_form
+    from utils.security import password_rules
     from utils.access_control import (MODULE_SUBSECTIONS, ROLE_DEFAULT_MODULES,
                                       CAPABILITY_SUBSECTIONS as CAPS)
     return {
@@ -107,6 +108,9 @@ def _form_meta():
                      for b in Branch.query.order_by(Branch.name).all()],
         'presets': presets_for_form(),
         'groups': [_group_json(g) for g in _groups_in_scope()],
+        # Password policy from the single server source of truth (utils.security),
+        # so the React form's live checklist matches what add/edit will accept.
+        'password_rules': password_rules(),
     }
 
 

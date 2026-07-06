@@ -249,23 +249,54 @@ def _looks_common(password: str) -> bool:
     return low in _COMMON_PASSWORDS or core in _COMMON_PASSWORDS
 
 
+PASSWORD_MIN_LENGTH = 12
+
+# Single source of truth for the password policy. The server enforces these in
+# is_password_strong(); the browser (Jinja password pages + the React user form)
+# renders the SAME rules for its live checklist by consuming password_rules()
+# below — so the client can never drift from what the server accepts.
+#
+# Each rule is either a min-length rule or a regex that is valid in BOTH Python's
+# `re` and JavaScript's `RegExp` (the char-class patterns below are identical in
+# both), so one spec drives server checks and client-side validation alike.
+PASSWORD_RULES = [
+    {'id': 'len', 'label': f'At least {PASSWORD_MIN_LENGTH} characters',
+     'min_length': PASSWORD_MIN_LENGTH,
+     'message': f'Password must be at least {PASSWORD_MIN_LENGTH} characters long'},
+    {'id': 'upper', 'label': 'An uppercase letter (A–Z)', 'regex': r'[A-Z]',
+     'message': 'Password must contain at least one uppercase letter'},
+    {'id': 'lower', 'label': 'A lowercase letter (a–z)', 'regex': r'[a-z]',
+     'message': 'Password must contain at least one lowercase letter'},
+    {'id': 'digit', 'label': 'A number (0–9)', 'regex': r'\d',
+     'message': 'Password must contain at least one number'},
+    {'id': 'symbol', 'label': 'A symbol (!, @, #, …)', 'regex': r'[^A-Za-z0-9]',
+     'message': 'Password must contain at least one symbol'},
+]
+
+
+def _rule_ok(rule: dict, password: str) -> bool:
+    if 'min_length' in rule:
+        return len(password) >= rule['min_length']
+    return re.search(rule['regex'], password) is not None
+
+
+def password_rules() -> list[dict]:
+    """The public, JSON-serialisable password policy for the browser (Jinja +
+    React). Each entry has `id`, `label`, and either `min_length` or `regex`;
+    the server-only `message` is dropped."""
+    return [{k: v for k, v in r.items() if k != 'message'} for r in PASSWORD_RULES]
+
+
 def is_password_strong(password: str) -> tuple[bool, str]:
     """
     Check password strength
     Returns (is_valid, error_message)
     """
-    if len(password) < 12:
-        return False, "Password must be at least 12 characters long"
     if len(password) > MAX_PASSWORD_LEN:
         return False, f"Password must be at most {MAX_PASSWORD_LEN} characters long"
-    if not re.search(r'[A-Z]', password):
-        return False, "Password must contain at least one uppercase letter"
-    if not re.search(r'[a-z]', password):
-        return False, "Password must contain at least one lowercase letter"
-    if not re.search(r'\d', password):
-        return False, "Password must contain at least one number"
-    if not re.search(r'[^A-Za-z0-9]', password):
-        return False, "Password must contain at least one symbol"
+    for rule in PASSWORD_RULES:
+        if not _rule_ok(rule, password):
+            return False, rule['message']
     if _looks_common(password):
         return False, "That password is too common or guessable — choose something unique."
     return True, ""

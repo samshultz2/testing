@@ -323,6 +323,12 @@ def create_app(config_class=None):
         def _csp_nonce_value():
             from utils.security import get_csp_nonce
             return get_csp_nonce()
+
+        def _password_rules():
+            """The server's password policy, for the live checklist on the
+            password pages (single source of truth: utils.security)."""
+            from utils.security import password_rules
+            return password_rules()
         
         # User access context
         def get_user_permissions():
@@ -510,6 +516,7 @@ def create_app(config_class=None):
             'school_brand': school_brand(),
             'current_theme': current_theme(),
             'themes': THEMES,
+            'password_rules': _password_rules(),
         }
     
     # Custom Jinja filters
