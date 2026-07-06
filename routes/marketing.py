@@ -28,6 +28,14 @@ def render_home():
                            register_url=url_for('onboarding.register'))
 
 
+@marketing_bp.route('/home')
+def home():
+    """Marketing homepage at a fixed path on ANY host — including the owner's
+    main domain (e.g. edusyncra.site/home). Lets the homepage be shown on the
+    main domain today; a dedicated marketing domain can point at it later."""
+    return render_home()
+
+
 def serve_marketing_home():
     """before_request hook: on a platform host, the bare homepage is the public
     marketing page rather than the login-gated dashboard. No-op everywhere else

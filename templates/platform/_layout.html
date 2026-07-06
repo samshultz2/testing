@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Platform{% endblock %} · EduSyncra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <style>
+    :root{
+      --bg:#f4f6fb; --surface:#ffffff; --surface-2:#f9fafe; --ink:#111726; --soft:#4a5468;
+      --faint:#828da3; --line:#e6e9f2; --line-2:#eef1f7;
+      --accent:#4457e6; --accent-ink:#3346c9; --accent-soft:#eef1fe;
+      --ok:#0f9d63; --ok-soft:#e6f6ee; --warn:#c07a08; --warn-soft:#fbf1dd;
+      --bad:#d63a4e; --bad-soft:#fce8ec; --sidebar:#141a2e; --sidebar-ink:#cdd4e6; --sidebar-faint:#7c86a3;
+      --radius:14px; --shadow:0 1px 2px rgba(17,23,38,.04), 0 12px 30px -18px rgba(17,23,38,.24);
+    }
+    @media (prefers-color-scheme:dark){
+      :root{
+        --bg:#0b0e16; --surface:#141926; --surface-2:#1a2030; --ink:#eef1f8; --soft:#aab3c6;
+        --faint:#727c92; --line:#242b3b; --line-2:#1e2434;
+        --accent:#8496f2; --accent-ink:#a7b4f7; --accent-soft:#1b2138;
+        --ok:#4bd39a; --ok-soft:#12271f; --warn:#e6ad4a; --warn-soft:#2a2212;
+        --bad:#f0697c; --bad-soft:#2c151a; --sidebar:#0f1420; --sidebar-ink:#c4cce0; --sidebar-faint:#6b7590;
+        --shadow:0 1px 2px rgba(0,0,0,.4), 0 16px 40px -22px rgba(0,0,0,.7);
+      }
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;
+         font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+    a{color:inherit;text-decoration:none}
+    .app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+
+    /* sidebar */
+    .side{background:var(--sidebar);color:var(--sidebar-ink);display:flex;flex-direction:column;
+          position:sticky;top:0;height:100vh;padding:18px 14px}
+    .side .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;color:#fff;padding:6px 8px 18px}
+    .side .logo .dot{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+                     background:linear-gradient(135deg,var(--accent),#8496f2);color:#fff;font-size:15px}
+    .side .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--sidebar-faint);
+               padding:16px 10px 6px;font-weight:700}
+    .side nav a{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;
+                color:var(--sidebar-ink);font-size:14px;font-weight:500;margin-bottom:2px;transition:.12s}
+    .side nav a i{width:18px;text-align:center;font-size:14px;color:var(--sidebar-faint)}
+    .side nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+    .side nav a.on{background:linear-gradient(135deg,var(--accent),#6f83f5);color:#fff;box-shadow:0 6px 16px -8px var(--accent)}
+    .side nav a.on i{color:#fff}
+    .side .foot{margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);font-size:13px}
+    .side .foot a{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:9px;color:var(--sidebar-faint)}
+    .side .foot a:hover{background:rgba(255,255,255,.06);color:#fff}
+
+    /* main */
+    .main{min-width:0;display:flex;flex-direction:column}
+    .topbar{display:flex;align-items:center;gap:14px;padding:20px 30px 6px}
+    .topbar .burger{display:none;background:transparent;border:0;color:var(--ink);font-size:20px;cursor:pointer}
+    .topbar h1{font-size:22px;margin:0;letter-spacing:-.02em;font-weight:800}
+    .topbar .sub{color:var(--soft);font-size:13.5px;margin:1px 0 0}
+    .topbar .spacer{margin-left:auto}
+    .who{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--soft);background:var(--surface);
+         border:1px solid var(--line);border-radius:99px;padding:5px 6px 5px 13px}
+    .who .av{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);
+             display:grid;place-items:center;font-weight:800;font-size:12px}
+    .content{padding:14px 30px 48px}
+    @media (max-width:860px){
+      .app{grid-template-columns:1fr}
+      .side{position:fixed;left:0;top:0;z-index:60;width:250px;transform:translateX(-100%);transition:.2s;box-shadow:var(--shadow)}
+      body.nav-open .side{transform:none}
+      .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50}
+      body.nav-open .scrim{display:block}
+      .topbar .burger{display:block}
+      .topbar,.content{padding-left:18px;padding-right:18px}
+    }
+
+    /* shared components */
+    .flash{padding:11px 14px;border-radius:11px;font-size:13.5px;margin-bottom:14px;display:flex;gap:9px;align-items:center}
+    .flash::before{font-family:"Font Awesome 6 Free";font-weight:900}
+    .flash.success{background:var(--ok-soft);color:var(--ok)} .flash.success::before{content:"\f058"}
+    .flash.error{background:var(--bad-soft);color:var(--bad)} .flash.error::before{content:"\f06a"}
+    .flash.info{background:var(--accent-soft);color:var(--accent-ink)} .flash.info::before{content:"\f05a"}
+    .cards{display:grid;gap:14px;margin-bottom:20px}
+    .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+    .kpi .lab{font-size:12px;color:var(--faint);font-weight:600;display:flex;align-items:center;gap:7px}
+    .kpi .lab i{font-size:12px}
+    .kpi .num{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+    .kpi.hero{background:linear-gradient(140deg,var(--accent),#6f83f5);color:#fff;border:0}
+    .kpi.hero .lab,.kpi.hero .lab i{color:rgba(255,255,255,.85)} .kpi.hero .num{font-size:30px}
+    .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:20px}
+    .panel > h2{font-size:14px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line-2);
+                display:flex;align-items:center;gap:9px;font-weight:700}
+    .panel > h2 .tag{margin-left:auto;font-size:12px;color:var(--faint);font-weight:500}
+    .tablewrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13.5px}
+    th,td{padding:12px 16px;text-align:left;white-space:nowrap}
+    th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);border-bottom:1px solid var(--line-2);font-weight:700}
+    tbody tr+tr td{border-top:1px solid var(--line-2)}
+    tbody tr:hover td{background:var(--surface-2)}
+    .school{display:flex;align-items:center;gap:10px}
+    .school .ic{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);
+                display:grid;place-items:center;font-weight:800;font-size:12px;flex:0 0 auto}
+    .school .sub{font-size:12px;color:var(--faint)}
+    .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:5px}
+    .p-owner{color:var(--accent-ink);background:var(--accent-soft)}
+    .p-paying,.p-active{color:var(--ok);background:var(--ok-soft)}
+    .p-trial{color:var(--warn);background:var(--warn-soft)}
+    .p-unpaid{color:var(--bad);background:var(--bad-soft)}
+    .p-suspended{color:var(--faint);background:var(--line)}
+    .btn{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:9px;border:1px solid var(--line);
+         background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.12s}
+    .btn:hover{border-color:var(--accent);color:var(--accent-ink)}
+    .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .btn.primary:hover{filter:brightness(1.06);color:#fff}
+    .btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 35%,var(--line))}
+    .btn.danger:hover{background:var(--bad-soft);color:var(--bad)}
+    .btn.sm{padding:5px 9px;font-size:12px}
+    form.inline{display:inline}
+    .muted{color:var(--faint)}
+    .field{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);font-size:13px;font-family:inherit}
+    .empty{padding:34px;text-align:center;color:var(--faint);font-size:14px}
+    .empty i{font-size:26px;display:block;margin-bottom:8px;opacity:.6}
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="dot">✦</span> EduSyncra</div>
+      <div class="grp">Platform</div>
+      <nav>
+        <a href="{{ url_for('platform.dashboard') }}" class="{{ 'on' if active=='overview' }}"><i class="fas fa-gauge-high"></i> Overview</a>
+        <a href="{{ url_for('platform.schools') }}" class="{{ 'on' if active=='schools' }}"><i class="fas fa-school"></i> Schools</a>
+        <a href="{{ url_for('platform.subscriptions') }}" class="{{ 'on' if active=='subscriptions' }}"><i class="fas fa-credit-card"></i> Subscriptions</a>
+      </nav>
+      <div class="grp">Website</div>
+      <nav>
+        <a href="{{ url_for('platform.homepage') }}" class="{{ 'on' if active=='homepage' }}"><i class="fas fa-pen-ruler"></i> Homepage</a>
+      </nav>
+      <div class="foot">
+        <a href="/" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> View my school</a>
+        <a href="{{ url_for('auth.logout') }}"><i class="fas fa-right-from-bracket"></i> Sign out</a>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <div class="main">
+      <div class="topbar">
+        <button class="burger" id="burger" aria-label="Menu"><i class="fas fa-bars"></i></button>
+        <div>
+          <h1>{% block heading %}Platform{% endblock %}</h1>
+          <p class="sub">{% block subheading %}{% endblock %}</p>
+        </div>
+        <div class="spacer"></div>
+        {% block topbar_right %}
+        <div class="who"><span class="av">{{ (session.get('username') or 'A')[0]|upper }}</span> {{ session.get('username') or 'Admin' }}</div>
+        {% endblock %}
+      </div>
+      <div class="content">
+        {% with msgs = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in msgs %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+  <script nonce="{{ csp_nonce }}">
+    (function(){
+      var b=document.getElementById('burger'), s=document.getElementById('scrim');
+      function close(){document.body.classList.remove('nav-open');}
+      if(b) b.addEventListener('click',function(){document.body.classList.toggle('nav-open');});
+      if(s) s.addEventListener('click',close);
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

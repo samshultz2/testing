@@ -1,0 +1,79 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Overview{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block subheading %}Revenue, subscriptions and what needs your attention.{% endblock %}
+
+{% block head %}
+<style>
+  .kpis{grid-template-columns:1.3fr 1fr 1fr 1fr 1fr}
+  @media (max-width:960px){ .kpis{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:520px){ .kpis{grid-template-columns:1fr} }
+  .two{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start}
+  @media (max-width:900px){ .two{grid-template-columns:1fr} }
+  .att{display:flex;align-items:center;gap:12px;padding:12px 18px}
+  .att + .att{border-top:1px solid var(--line-2)}
+  .att .spacer{margin-left:auto}
+  .rec{display:flex;align-items:center;gap:12px;padding:11px 18px}
+  .rec + .rec{border-top:1px solid var(--line-2)}
+  .quick{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="cards kpis">
+    <div class="kpi hero">
+      <div class="lab"><i class="fas fa-sack-dollar"></i> Estimated monthly revenue</div>
+      <div class="num">₦{{ '{:,.0f}'.format(summary.mrr) }}</div>
+    </div>
+    <div class="kpi"><div class="lab"><i class="fas fa-circle-check"></i> Paying</div><div class="num">{{ summary.paying }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-hourglass-half"></i> On trial</div><div class="num">{{ summary.trial }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-triangle-exclamation"></i> Unpaid / locked</div><div class="num">{{ summary.blocked }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-school"></i> Customer schools</div><div class="num">{{ summary.customers }}</div></div>
+  </div>
+
+  <div class="two">
+    <div class="panel">
+      <h2><i class="fas fa-bell"></i> Needs attention <span class="tag">{{ attention|length }} item(s)</span></h2>
+      {% if attention %}
+        {% for r in attention %}
+        <div class="att">
+          <span class="school"><span class="ic">{{ r.name[0]|upper }}</span>
+            <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></span>
+          <span class="spacer"></span>
+          {% if r.bucket == 'unpaid' %}<span class="pill p-unpaid">Unpaid</span>
+          {% else %}<span class="pill p-trial">{{ r.days_left }}d left</span>{% endif %}
+          <form class="inline" method="post" action="{{ url_for('platform.grant', subdomain=r.subdomain) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="days" value="{{ plan_days }}">
+            <button class="btn sm primary" title="Grant {{ plan_days }} days"><i class="fas fa-plus"></i> {{ plan_days }}d</button>
+          </form>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty"><i class="fas fa-mug-hot"></i>All good — nothing needs attention.</div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2><i class="fas fa-clock-rotate-left"></i> Recent signups</h2>
+      {% if recent %}
+        {% for r in recent %}
+        <a class="rec" href="{{ url_for('platform.schools') }}">
+          <span class="school"><span class="ic">{{ r.name[0]|upper }}</span>
+            <span><b>{{ r.name }}</b><br><span class="sub">{{ r.created }}</span></span></span>
+          <span class="spacer" style="margin-left:auto"></span>
+          <span class="pill p-{{ r.bucket }}">{{ r.bucket|capitalize }}</span>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="empty"><i class="fas fa-inbox"></i>No customer schools yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="quick">
+    <a class="btn" href="{{ url_for('platform.schools') }}"><i class="fas fa-school"></i> Manage schools</a>
+    <a class="btn" href="{{ url_for('platform.subscriptions') }}"><i class="fas fa-credit-card"></i> Subscriptions</a>
+    <a class="btn" href="{{ url_for('platform.homepage') }}"><i class="fas fa-pen-ruler"></i> Edit homepage</a>
+  </div>
+{% endblock %}

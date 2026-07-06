@@ -8,6 +8,7 @@ Access is restricted to a logged-in admin **on the owner school's host** — i.e
 you, on edusyncra.site (the APEX_TENANT). It 404s everywhere else, so a normal
 school never sees it.
 """
+import datetime as _dt
 from functools import wraps
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
@@ -18,6 +19,10 @@ from utils.tenant_runtime import current_tenant
 from utils import tenancy, billing, provisioning
 
 platform_bp = Blueprint('platform', __name__, url_prefix='/platform')
+
+
+def _dt_min():
+    return _dt.datetime.min
 
 
 def platform_admin_required(f):
@@ -36,37 +41,89 @@ def platform_admin_required(f):
 
 def _row(t):
     st = billing.status(t)
+    au = st['access_until']
     return {
         'name': t.name, 'subdomain': t.subdomain, 'status': t.status,
         'plan': st['plan'], 'owner': st['owner'], 'active': st['active'],
         'on_trial': st['on_trial'], 'days_left': st['days_left'],
-        'access_until': st['access_until'].strftime('%d %b %Y') if st['access_until'] else '—',
+        'access_until': au.strftime('%d %b %Y') if au else '—',
+        'paid_until': t.paid_until.strftime('%d %b %Y') if t.paid_until else '—',
         'admin_email': t.admin_email or '—',
         'created': t.created_at.strftime('%d %b %Y') if t.created_at else '—',
+        'created_at': t.created_at,
+        # A subscriber whose access lapses within 3 days needs attention.
+        'ending_soon': (not st['owner'] and st['active']
+                        and st['days_left'] is not None and st['days_left'] <= 3),
+        # customer state bucket for filtering/segments
+        'bucket': ('owner' if st['owner']
+                   else 'suspended' if t.status == 'suspended'
+                   else 'trial' if st['on_trial']
+                   else 'paying' if (st['active'] and t.status == 'active')
+                   else 'unpaid'),
     }
+
+
+def _rows_and_summary():
+    """Shared data for every console page: the school rows plus the roll-up
+    numbers (revenue, counts by state)."""
+    tenants = tenancy.list_tenants()
+    rows = [_row(t) for t in tenants]
+    price = (current_app.config.get('TENANT_PRICE_KOBO', 0) or 0) / 100.0
+    paying = sum(1 for r in rows if r['bucket'] == 'paying')
+    customers = sum(1 for r in rows if not r['owner'])
+    summary = {
+        'total': len(rows),
+        'customers': customers,
+        'active': sum(1 for r in rows if r['active'] and r['status'] == 'active'),
+        'trial': sum(1 for r in rows if r['bucket'] == 'trial'),
+        'paying': paying,
+        'blocked': sum(1 for r in rows if r['bucket'] == 'unpaid'),
+        'suspended': sum(1 for r in rows if r['status'] == 'suspended'),
+        'ending_soon': sum(1 for r in rows if r['ending_soon']),
+        'mrr': paying * price,
+        'arpa': (paying and (paying * price) / paying) or 0,   # = price when paying>0
+    }
+    return rows, summary, price
 
 
 @platform_bp.route('/')
 @platform_admin_required
 def dashboard():
-    tenants = tenancy.list_tenants()
-    rows = [_row(t) for t in tenants]
-    # Paying = active, not on trial, not the owner (i.e. a real subscriber).
-    paying = sum(1 for t, r in zip(tenants, rows)
-                 if r['active'] and not r['on_trial'] and not r['owner'] and r['status'] == 'active')
-    price = (current_app.config.get('TENANT_PRICE_KOBO', 0) or 0) / 100.0
-    summary = {
-        'total': len(rows),
-        'customers': sum(1 for r in rows if not r['owner']),
-        'active': sum(1 for r in rows if r['active'] and r['status'] == 'active'),
-        'trial': sum(1 for r in rows if r['on_trial']),
-        'paying': paying,
-        'blocked': sum(1 for r in rows if not r['active'] and r['status'] == 'active'),
-        'suspended': sum(1 for r in rows if r['status'] == 'suspended'),
-        'mrr': paying * price,                    # simple monthly-revenue estimate
-    }
-    return render_template('platform/dashboard.html', rows=rows, summary=summary,
-                           price=price, plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+    """Overview: headline numbers, what needs attention, and recent signups."""
+    rows, summary, price = _rows_and_summary()
+    attention = [r for r in rows if r['bucket'] == 'unpaid' or r['ending_soon']]
+    attention.sort(key=lambda r: (r['bucket'] != 'unpaid', r['days_left'] if r['days_left'] is not None else 999))
+    recent = sorted([r for r in rows if not r['owner']],
+                    key=lambda r: r['created_at'] or _dt_min(), reverse=True)[:6]
+    return render_template('platform/overview.html', active='overview',
+                           summary=summary, price=price,
+                           attention=attention[:8], recent=recent,
+                           plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+
+
+@platform_bp.route('/schools')
+@platform_admin_required
+def schools():
+    """Full school management: search, per-school actions, bulk actions."""
+    rows, summary, price = _rows_and_summary()
+    rows.sort(key=lambda r: (r['owner'] is False, r['name'].lower()))
+    return render_template('platform/schools.html', active='schools',
+                           rows=rows, summary=summary,
+                           plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+
+
+@platform_bp.route('/subscriptions')
+@platform_admin_required
+def subscriptions():
+    """Billing & subscriptions: revenue, who's paying / on trial / lapsed."""
+    rows, summary, price = _rows_and_summary()
+    customers = [r for r in rows if not r['owner']]
+    customers.sort(key=lambda r: ({'unpaid': 0, 'trial': 1, 'paying': 2, 'suspended': 3}.get(r['bucket'], 9),
+                                  r['days_left'] if r['days_left'] is not None else 999))
+    return render_template('platform/subscriptions.html', active='subscriptions',
+                           rows=customers, summary=summary, price=price,
+                           period=current_app.config.get('TENANT_PLAN_DAYS'),
+                           plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 
 @platform_bp.route('/homepage', methods=['GET', 'POST'])
@@ -96,10 +153,20 @@ def homepage():
     base = current_app.config.get('TENANT_BASE_DOMAIN', '')
     marketing_url = f'https://www.{base}/' if base else '/'
     return render_template(
-        'platform/homepage.html', content=content, marketing_url=marketing_url,
+        'platform/homepage.html', active='homepage', content=content, marketing_url=marketing_url,
         features_text=site_content.format_pairs(content.get('features'), ('title', 'body')),
         steps_text=site_content.format_pairs(content.get('steps'), ('title', 'body')),
         faqs_text=site_content.format_pairs(content.get('faqs'), ('q', 'a')))
+
+
+def _back(default='platform.schools'):
+    """Return to the page the action was triggered from (Schools or
+    Subscriptions), falling back to the schools list."""
+    ref = request.referrer or ''
+    for ep in ('platform.subscriptions', 'platform.schools', 'platform.dashboard'):
+        if url_for(ep) in ref:
+            return redirect(ref)
+    return redirect(url_for(default))
 
 
 @platform_bp.route('/<subdomain>/grant', methods=['POST'])
@@ -110,11 +177,11 @@ def grant(subdomain):
         abort(404)
     if billing.is_owner(t):
         flash('The owner school is already free forever.', 'info')
-        return redirect(url_for('platform.dashboard'))
+        return _back()
     days = request.form.get('days', type=int) or current_app.config.get('TENANT_PLAN_DAYS')
     billing.record_payment(subdomain, days=days)
     flash(f'Granted {days} day(s) to {t.name}.', 'success')
-    return redirect(url_for('platform.dashboard'))
+    return _back()
 
 
 @platform_bp.route('/<subdomain>/suspend', methods=['POST'])
@@ -129,7 +196,7 @@ def suspend(subdomain):
     else:
         tenancy.set_status(subdomain, 'suspended', error='suspended by platform admin')
         flash(f'{t.name} suspended — its portal is now unreachable.', 'success')
-    return redirect(url_for('platform.dashboard'))
+    return _back()
 
 
 @platform_bp.route('/bulk', methods=['POST'])
@@ -141,10 +208,10 @@ def bulk():
     action = request.form.get('action')
     if not subs:
         flash('Select at least one school first.', 'error')
-        return redirect(url_for('platform.dashboard'))
+        return _back()
     if action == 'delete' and request.form.get('confirm_delete') != 'yes':
         flash('Tick "confirm delete" to delete the selected schools.', 'error')
-        return redirect(url_for('platform.dashboard'))
+        return _back()
 
     done = 0
     for sub in subs:
@@ -161,7 +228,7 @@ def bulk():
             provisioning.drop_tenant(sub, forget=True)
             done += 1
     flash(f'{(action or "").title()} applied to {done} school(s).', 'success')
-    return redirect(url_for('platform.dashboard'))
+    return _back()
 
 
 @platform_bp.route('/<subdomain>/delete', methods=['POST'])
@@ -172,7 +239,7 @@ def delete(subdomain):
         abort(404)                           # never delete the owner
     if (request.form.get('confirm') or '').strip().lower() != t.subdomain:
         flash('Type the subdomain to confirm deletion.', 'error')
-        return redirect(url_for('platform.dashboard'))
+        return _back()
     provisioning.drop_tenant(subdomain, forget=True)   # drop DB + remove registry row
     flash(f'{t.name} and its database were deleted.', 'success')
-    return redirect(url_for('platform.dashboard'))
+    return _back()

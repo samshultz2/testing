@@ -1,0 +1,84 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Subscriptions{% endblock %}
+{% block heading %}Subscriptions{% endblock %}
+{% block subheading %}Billing status, revenue and payments across all schools.{% endblock %}
+
+{% block head %}
+<style>
+  .kpis3{grid-template-columns:1.3fr 1fr 1fr 1fr}
+  @media (max-width:820px){ .kpis3{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:520px){ .kpis3{grid-template-columns:1fr} }
+  .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line);background:var(--surface);color:var(--soft);border-radius:99px;
+               padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="cards kpis3">
+    <div class="kpi hero"><div class="lab"><i class="fas fa-sack-dollar"></i> Monthly revenue</div>
+      <div class="num">₦{{ '{:,.0f}'.format(summary.mrr) }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-circle-check"></i> Paying schools</div><div class="num">{{ summary.paying }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-hourglass-half"></i> On trial</div><div class="num">{{ summary.trial }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-coins"></i> Price / school</div><div class="num">₦{{ '{:,.0f}'.format(price) }}</div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="on" data-f="all">All ({{ rows|length }})</button>
+    <button data-f="unpaid">Unpaid ({{ summary.blocked }})</button>
+    <button data-f="trial">Trial ({{ summary.trial }})</button>
+    <button data-f="paying">Paying ({{ summary.paying }})</button>
+  </div>
+
+  <div class="panel">
+    <div class="tablewrap">
+      <table id="tbl">
+        <thead><tr>
+          <th>School</th><th>Status</th><th>Trial ends / paid until</th><th>Access until</th><th>Grant time</th>
+        </tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr data-bucket="{{ r.bucket }}">
+            <td><span class="school"><span class="ic">{{ r.name[0]|upper }}</span>
+              <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></span></td>
+            <td>
+              {% if r.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
+              {% elif r.on_trial %}<span class="pill p-trial">Trial · {{ r.days_left }}d</span>
+              {% elif r.active %}<span class="pill p-active">Active · {{ r.days_left }}d</span>
+              {% else %}<span class="pill p-unpaid">Unpaid</span>{% endif %}
+            </td>
+            <td class="muted">{{ r.paid_until if r.bucket == 'paying' else r.access_until }}</td>
+            <td class="muted">{{ r.access_until }}</td>
+            <td>
+              <form class="inline" method="post" action="{{ url_for('platform.grant', subdomain=r.subdomain) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input class="field" style="width:56px" name="days" type="number" value="{{ plan_days }}" min="1" title="days">
+                <button class="btn sm primary"><i class="fas fa-plus"></i> record payment</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+          <tr id="nomatch" style="display:none"><td colspan="5"><div class="empty"><i class="fas fa-inbox"></i>Nothing here.</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if not rows %}<div class="empty"><i class="fas fa-store"></i>No customer schools yet.</div>{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  (function(){
+    var tabs=document.getElementById('tabs'), rows=[].slice.call(document.querySelectorAll('#tbl tbody tr[data-bucket]')),
+        nomatch=document.getElementById('nomatch');
+    tabs.addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b) return;
+      tabs.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
+      var f=b.getAttribute('data-f'), shown=0;
+      rows.forEach(function(tr){ var hit=(f==='all'||tr.getAttribute('data-bucket')===f); tr.style.display=hit?'':'none'; if(hit) shown++; });
+      nomatch.style.display=(rows.length&&!shown)?'table-row':'none';
+    });
+  })();
+</script>
+{% endblock %}

@@ -58,15 +58,32 @@ def _login_owner(app):
     return c
 
 
-def test_dashboard_lists_all_schools_for_owner_admin(mt):
+def test_overview_loads_for_owner_admin(mt):
     app, _ = mt
     c = _login_owner(app)
     r = c.get('/platform/', headers={'Host': 'edusyncra.test'})
     assert r.status_code == 200
     body = r.get_data(as_text=True)
+    assert 'Overview' in body and 'monthly revenue' in body.lower()
+
+
+def test_schools_page_lists_all_schools_for_owner_admin(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    r = c.get('/platform/schools', headers={'Host': 'edusyncra.test'})
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
     for name in ('My School', 'Alpha', 'Beta'):
         assert name in body
     assert 'Owner · free' in body
+
+
+def test_subscriptions_page_loads(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    r = c.get('/platform/subscriptions', headers={'Host': 'edusyncra.test'})
+    assert r.status_code == 200
+    assert 'Subscriptions' in r.get_data(as_text=True)
 
 
 def test_dashboard_is_404_from_a_customer_host(mt):
@@ -89,7 +106,7 @@ def test_grant_and_delete_actions(mt):
     c = _login_owner(app)
     H = {'Host': 'edusyncra.test'}
     tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
-                    c.get('/platform/', headers=H).get_data(as_text=True)).group(1)
+                    c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
 
     # grant 30 days to alpha
     c.post('/platform/alpha/grant', headers=H, data={'days': '30', '_csrf_token': tok})
@@ -119,7 +136,7 @@ def test_bulk_suspend_and_delete(mt):
     c = _login_owner(app)
     H = {'Host': 'edusyncra.test'}
     tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
-                    c.get('/platform/', headers=H).get_data(as_text=True)).group(1)
+                    c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
 
     # bulk suspend two schools (+ owner in the list, which must be skipped)
     c.post('/platform/bulk', headers=H,
