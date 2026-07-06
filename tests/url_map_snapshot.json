@@ -2988,6 +2988,13 @@
 ]
 ],
 [
+"onboarding.check_subdomain",
+"/register/check",
+[
+"GET"
+]
+],
+[
 "onboarding.register",
 "/register",
 [

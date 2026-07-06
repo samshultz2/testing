@@ -10,13 +10,35 @@ These live on the apex/marketing host (no tenant). They only work when
 MULTI_TENANT is on — a single-school deployment does not expose registration.
 """
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, current_app, abort)
+                   flash, current_app, abort, jsonify)
 
 from config import Config
 from utils import onboarding
 from utils.security import login_limiter
 
 onboarding_bp = Blueprint('onboarding', __name__)
+
+
+@onboarding_bp.route('/register/check')
+def check_subdomain():
+    """Live availability check for the registration form. Returns
+    {available: bool, reason: str} for the given ?subdomain=."""
+    _require_mt()
+    from utils.tenancy import VALID_SUBDOMAIN, get_tenant
+    sub = (request.args.get('subdomain') or '').strip().lower()
+    reserved = current_app.config.get('RESERVED_SUBDOMAINS', set())
+    apex = (current_app.config.get('APEX_TENANT') or '').lower()
+    if not sub:
+        return jsonify(available=False, reason='')
+    if len(sub) < 3:
+        return jsonify(available=False, reason='At least 3 characters.')
+    if not VALID_SUBDOMAIN.match(sub):
+        return jsonify(available=False, reason='Only lowercase letters, digits and hyphens.')
+    if sub in reserved or sub == apex:
+        return jsonify(available=False, reason='That address is reserved.')
+    if get_tenant(sub) is not None:
+        return jsonify(available=False, reason='Already taken — try another.')
+    return jsonify(available=True, reason='Available')
 
 
 def _require_mt():

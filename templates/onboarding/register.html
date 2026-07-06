@@ -5,144 +5,129 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Register your school — EduSyncra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  <style>
-    :root{
-      --bg:#eef1f8; --surface:#ffffff; --ink:#111726; --soft:#4a5468; --faint:#828da3;
-      --line:#e4e8f2; --accent:#4457e6; --accent2:#6f83f5; --accent-ink:#3346c9; --accent-soft:#eef1fe; --ok:#0f9d63;
-    }
-    @media (prefers-color-scheme:dark){
-      :root{ --bg:#0b0e16; --surface:#141926; --ink:#eef1f8; --soft:#aab3c6; --faint:#727c92;
-             --line:#242b3b; --accent:#8496f2; --accent2:#a58bf5; --accent-ink:#a7b4f7; --accent-soft:#1b2138; --ok:#4bd39a; }
-    }
-    *{box-sizing:border-box}
-    body{margin:0;min-height:100vh;display:grid;place-items:center;background:
-         radial-gradient(1100px 500px at 15% -10%, color-mix(in srgb,var(--accent) 12%, var(--bg)), var(--bg));
-         color:var(--ink);padding:24px;-webkit-font-smoothing:antialiased;
-         font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-    .shell{width:100%;max-width:940px;background:var(--surface);border:1px solid var(--line);border-radius:22px;
-           overflow:hidden;box-shadow:0 30px 80px -40px rgba(17,23,38,.55);display:grid;grid-template-columns:1fr 1.02fr}
-    @media (max-width:800px){ .shell{grid-template-columns:1fr;max-width:480px} }
-
-    /* left brand panel */
-    .aside{background:linear-gradient(155deg,var(--accent),var(--accent2));color:#fff;padding:38px 34px;
-           display:flex;flex-direction:column;gap:22px;position:relative;overflow:hidden}
-    .aside::after{content:"";position:absolute;right:-70px;bottom:-70px;width:220px;height:220px;border-radius:50%;
-                  background:rgba(255,255,255,.09)}
-    .aside .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:16px}
-    .aside .brand .dot{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.18);display:grid;place-items:center}
-    .aside h2{font-size:26px;line-height:1.24;margin:0;letter-spacing:-.015em;font-weight:820}
-    .trial{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;background:rgba(255,255,255,.18);
-           border:1px solid rgba(255,255,255,.3);padding:6px 13px;border-radius:99px;font-size:12.5px;font-weight:700}
-    .mock{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:14px;
-          display:grid;grid-template-columns:1fr 1fr;gap:9px;position:relative;z-index:1}
-    .mock .t{background:rgba(255,255,255,.14);border-radius:9px;padding:10px 12px}
-    .mock .t .k{font-size:10.5px;opacity:.85} .mock .t .v{font-size:19px;font-weight:800;margin-top:2px}
-    .aside ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px;position:relative;z-index:1}
-    .aside li{display:flex;gap:10px;font-size:13.5px;line-height:1.4;opacity:.97}
-    .aside li i{margin-top:2px;font-size:12px;opacity:.9}
-    .aside .foot{margin-top:auto;font-size:12px;opacity:.85;position:relative;z-index:1}
-    @media (max-width:800px){ .aside{padding:28px 24px;gap:16px} .aside h2{font-size:22px} .mock{display:none} }
-
-    /* right form panel */
-    .panel{padding:40px 38px}
-    @media (max-width:800px){ .panel{padding:28px 24px} }
-    .eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink)}
-    h1{font-size:23px;margin:8px 0 5px;letter-spacing:-.02em;font-weight:820}
-    p.lede{color:var(--soft);margin:0 0 20px;font-size:13.5px;line-height:1.5}
-    label{display:block;font-size:12.5px;font-weight:700;margin:15px 0 6px}
-    .ipt{position:relative;display:flex;align-items:center}
-    .ipt > i{position:absolute;left:13px;color:var(--faint);font-size:13px}
-    input{width:100%;padding:12px 13px 12px 38px;border:1px solid var(--line);border-radius:11px;
-          background:var(--surface);color:var(--ink);font-size:15px;font-family:inherit;transition:.12s}
-    input:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-    .sub-row{display:flex;align-items:stretch}
-    .sub-row .ipt{flex:1}
-    .sub-row input{border-top-right-radius:0;border-bottom-right-radius:0;border-right:0}
-    .sub-row .suffix{display:flex;align-items:center;padding:0 13px;color:var(--soft);font-size:13px;white-space:nowrap;
-          border:1px solid var(--line);border-left:0;border-top-right-radius:11px;border-bottom-right-radius:11px;
-          background:color-mix(in srgb,var(--line) 30%,transparent)}
-    .preview{font-size:12px;color:var(--faint);margin-top:7px} .preview b{color:var(--accent-ink);font-weight:700}
-    .hint{font-size:11.5px;color:var(--faint);margin-top:5px}
-    button.go{width:100%;margin-top:24px;padding:14px;border:0;border-radius:12px;
-              background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:15px;font-weight:800;
-              cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px}
-    button.go:hover{filter:brightness(1.06)}
-    .signin{margin-top:16px;font-size:12.5px;color:var(--soft);text-align:center}
-    .signin b{color:var(--ink)}
-    .flash{padding:11px 13px;border-radius:11px;font-size:13.5px;margin-bottom:16px;display:flex;gap:9px;align-items:center;
-           background:#fbe4e7;color:#b0263a}
-    @media (prefers-color-scheme:dark){ .flash{background:#2c1418;color:#ef6b7c} }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
 </head>
 <body>
-  <div class="shell">
-    <aside class="aside">
-      <div class="brand"><span class="dot">✦</span> EduSyncra</div>
-      <h2>Your school, running from one private portal.</h2>
-      <span class="trial"><i class="fas fa-gift"></i> 3 days free — no card required</span>
-      <div class="mock">
-        <div class="t"><div class="k">Students</div><div class="v">1,248</div></div>
-        <div class="t"><div class="k">Fees today</div><div class="v">₦4.2M</div></div>
-        <div class="t"><div class="k">Attendance</div><div class="v">96%</div></div>
-        <div class="t"><div class="k">WAEC pass</div><div class="v">89%</div></div>
-      </div>
-      <ul>
-        <li><i class="fas fa-shield-halved"></i><span>Your own subdomain &amp; isolated database — data never mixes with another school’s.</span></li>
-        <li><i class="fas fa-layer-group"></i><span>Students, staff, results, exams, fees &amp; payroll in one place.</span></li>
-        <li><i class="fas fa-bolt"></i><span>Set up automatically the moment you confirm your email.</span></li>
-      </ul>
-      <div class="foot">Trusted for day-to-day school management.</div>
-    </aside>
+  <div class="auth">
+    <div class="shell">
+      <aside class="aside">
+        <div class="brand"><span class="mark">✦</span> EduSyncra</div>
+        <h2>Your school, running from one private portal.</h2>
+        <span class="trial"><i class="fas fa-gift"></i> {{ config.TENANT_TRIAL_DAYS or 3 }} days free — no card required</span>
+        <div class="mini">
+          <div><div class="k">Students</div><div class="v">1,248</div></div>
+          <div><div class="k">Fees today</div><div class="v">₦4.2M</div></div>
+          <div><div class="k">Attendance</div><div class="v">96%</div></div>
+          <div><div class="k">WAEC pass</div><div class="v">89%</div></div>
+        </div>
+        <ul>
+          <li><i class="fas fa-shield-halved"></i><span>Your own subdomain &amp; isolated database — data never mixes with another school’s.</span></li>
+          <li><i class="fas fa-layer-group"></i><span>Students, staff, results, exams, fees &amp; payroll in one place.</span></li>
+          <li><i class="fas fa-bolt"></i><span>Set up automatically the moment you confirm your email.</span></li>
+        </ul>
+        <div class="foot">Trusted for day-to-day school management.</div>
+      </aside>
 
-    <form class="panel" method="post" action="{{ url_for('onboarding.register') }}">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <div class="eyebrow">Start free</div>
-      <h1>Register your school</h1>
-      <p class="lede">We’ll email a confirmation link. Click it and your portal, database and subdomain are created automatically.</p>
+      <form class="form-side" method="post" action="{{ url_for('onboarding.register') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <span class="eyebrow">Start free</span>
+        <h1>Register your school</h1>
+        <p class="lede">We’ll email a confirmation link. Click it and your portal, database and subdomain are created automatically.</p>
 
-      {% with msgs = get_flashed_messages(with_categories=true) %}
-        {% for cat, msg in msgs %}<div class="flash"><i class="fas fa-circle-exclamation"></i>{{ msg }}</div>{% endfor %}
-      {% endwith %}
+        {% with msgs = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in msgs %}<div class="flash"><i class="fas fa-circle-exclamation"></i>{{ msg }}</div>{% endfor %}
+        {% endwith %}
 
-      <label for="name">School name</label>
-      <div class="ipt"><i class="fas fa-school"></i>
-        <input id="name" name="name" value="{{ name or '' }}" required autofocus placeholder="Pioneer High School"></div>
+        <div class="fg">
+          <label for="name">School name</label>
+          <div class="ctrl"><i class="fas fa-school"></i>
+            <input id="name" name="name" value="{{ name or '' }}" required autofocus placeholder="Pioneer High School"></div>
+        </div>
 
-      <label for="subdomain">Choose your subdomain</label>
-      <div class="sub-row">
-        <div class="ipt"><i class="fas fa-globe"></i>
-          <input id="subdomain" name="subdomain" value="{{ subdomain or '' }}" required
-                 pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?" placeholder="pioneer"
-                 autocomplete="off" autocapitalize="none" spellcheck="false"></div>
-        <span class="suffix">.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</span>
-      </div>
-      <div class="preview">Your portal will live at <b id="preview-url">pioneer.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b></div>
-      <div class="hint">Lowercase letters, digits and hyphens only.</div>
+        <div class="fg">
+          <label for="subdomain">Choose your subdomain</label>
+          <div class="sub-row">
+            <div class="ctrl"><i class="fas fa-globe"></i>
+              <input id="subdomain" name="subdomain" value="{{ subdomain or '' }}" required
+                     pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?" placeholder="pioneer"
+                     autocomplete="off" autocapitalize="none" spellcheck="false"
+                     aria-describedby="avail"></div>
+            <span class="sfx">.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</span>
+          </div>
+          <div class="avail" id="avail" aria-live="polite">
+            Your portal will live at <b id="preview-url" style="margin-left:4px">pioneer.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b>
+          </div>
+        </div>
 
-      <label for="admin_email">Admin email</label>
-      <div class="ipt"><i class="fas fa-envelope"></i>
-        <input id="admin_email" name="admin_email" type="email" value="{{ admin_email or '' }}" required placeholder="you@school.com"></div>
-      <div class="hint">Your login and the confirmation link go here.</div>
+        <div class="fg">
+          <label for="admin_email">Admin email</label>
+          <div class="ctrl"><i class="fas fa-envelope"></i>
+            <input id="admin_email" name="admin_email" type="email" value="{{ admin_email or '' }}" required placeholder="you@school.com"></div>
+          <div class="hint">Your login and the confirmation link go here.</div>
+        </div>
 
-      <button class="go" type="submit"><i class="fas fa-arrow-right"></i> Create my school</button>
-      <div class="signin">Already registered? Go to <b>your-subdomain.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b> and sign in.</div>
-    </form>
+        <div class="fg">
+          <label>Your plan</label>
+          <div class="plan-card">
+            <div>
+              <div class="p-amt">₦{{ '{:,.0f}'.format((config.TENANT_PRICE_KOBO or 0) / 100) }}<span style="font-size:13px;font-weight:500;color:var(--text-secondary)"> / month</span></div>
+              <div class="p-meta">Unlimited students &amp; staff · cancel anytime</div>
+            </div>
+            <span class="p-badge">{{ config.TENANT_TRIAL_DAYS or 3 }} days free</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block btn-lg" type="submit" id="submit" style="margin-top:22px">
+          <i class="fas fa-arrow-right"></i> Create my school</button>
+        <div class="signin-note">Already registered? Go to <b>your-subdomain.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b> and sign in.</div>
+      </form>
+    </div>
   </div>
 
   <script nonce="{{ csp_nonce }}">
     (function () {
-      var sub = document.getElementById('subdomain');
-      var out = document.getElementById('preview-url');
-      var base = '.' + ({{ (config.TENANT_BASE_DOMAIN or 'edusyncra.site') | tojson }});
+      var sub = document.getElementById('subdomain'),
+          out = document.getElementById('preview-url'),
+          avail = document.getElementById('avail'),
+          base = '.' + ({{ (config.TENANT_BASE_DOMAIN or 'edusyncra.site') | tojson }}),
+          checkUrl = {{ url_for('onboarding.check_subdomain') | tojson }},
+          timer = null, seq = 0;
       function clean(v){ return (v || '').toLowerCase().replace(/[^a-z0-9-]/g, ''); }
-      function render(){ out.textContent = (clean(sub.value) || 'your-school') + base; }
+      function setNeutral(){
+        avail.className = 'avail';
+        avail.innerHTML = 'Your portal will live at <b style="margin-left:4px">' + (clean(sub.value) || 'your-school') + base + '</b>';
+      }
+      function render(){
+        var v = clean(sub.value);
+        if (!v){ setNeutral(); return; }
+        avail.className = 'avail checking';
+        avail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking ' + v + base + ' …';
+        var mine = ++seq;
+        fetch(checkUrl + '?subdomain=' + encodeURIComponent(v), {headers:{'Accept':'application/json'}})
+          .then(function(r){ return r.json(); })
+          .then(function(d){
+            if (mine !== seq) return;                 // a newer keystroke won
+            if (d.available){
+              avail.className = 'avail ok';
+              avail.innerHTML = '<i class="fas fa-circle-check"></i> ' + v + base + ' is available';
+            } else {
+              avail.className = 'avail bad';
+              avail.innerHTML = '<i class="fas fa-circle-xmark"></i> ' + (d.reason || 'Not available');
+            }
+          })
+          .catch(function(){ if (mine===seq) setNeutral(); });
+      }
       sub.addEventListener('input', function () {
         var c = clean(sub.value);
         if (c !== sub.value) sub.value = c;
-        render();
+        clearTimeout(timer);
+        timer = setTimeout(render, 350);
       });
-      render();
+      if (sub.value) render();
     })();
   </script>
 </body>

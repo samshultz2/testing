@@ -145,6 +145,8 @@ def homepage():
             request.form.get('steps'), ('title', 'body'))
         content['faqs'] = site_content.parse_pairs(
             request.form.get('faqs'), ('q', 'a'))
+        content['testimonials'] = site_content.parse_pairs(
+            request.form.get('testimonials'), ('name', 'quote'))
         site_content.save_homepage(content)
         flash('Homepage updated — changes are live.', 'success')
         return redirect(url_for('platform.homepage'))
@@ -156,7 +158,8 @@ def homepage():
         'platform/homepage.html', active='homepage', content=content, marketing_url=marketing_url,
         features_text=site_content.format_pairs(content.get('features'), ('title', 'body')),
         steps_text=site_content.format_pairs(content.get('steps'), ('title', 'body')),
-        faqs_text=site_content.format_pairs(content.get('faqs'), ('q', 'a')))
+        faqs_text=site_content.format_pairs(content.get('faqs'), ('q', 'a')),
+        testimonials_text=site_content.format_pairs(content.get('testimonials'), ('name', 'quote')))
 
 
 def _back(default='platform.schools'):

@@ -68,6 +68,14 @@ DEFAULTS = {
          'a': 'Securely online from your portal’s billing page once your '
               'trial starts. You can also be granted time by the platform team.'},
     ],
+    'testimonials': [
+        {'name': 'Mrs. Adeyemi, Principal', 'quote': 'Result processing that took '
+         'us a week now takes an afternoon. Report cards are ready the same day.'},
+        {'name': 'Mr. Okoro, Proprietor', 'quote': 'One portal for three campuses. '
+         'I can see fees, attendance and results across every branch from my phone.'},
+        {'name': 'Mrs. Bello, Admin', 'quote': 'Parents stopped calling for results '
+         '— they just check the portal. Setup took minutes, not weeks.'},
+    ],
     'footer': '© EduSyncra — school management, simplified.',
 }
 

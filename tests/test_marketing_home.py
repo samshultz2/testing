@@ -79,6 +79,22 @@ def test_flag_off_has_no_marketing_interception(client):
     assert 'Run your whole school' not in r.get_data(as_text=True)
 
 
+def test_subdomain_availability_check(mt):
+    app, _ = mt
+    c = app.test_client()
+    H = {'Host': 'signup.posyhub.test'}
+    # already provisioned in the fixture -> taken
+    assert c.get('/register/check?subdomain=pioneer', headers=H).get_json()['available'] is False
+    # reserved
+    assert c.get('/register/check?subdomain=www', headers=H).get_json()['available'] is False
+    # too short / invalid
+    assert c.get('/register/check?subdomain=ab', headers=H).get_json()['available'] is False
+    assert c.get('/register/check?subdomain=Bad_Name', headers=H).get_json()['available'] is False
+    # free
+    r = c.get('/register/check?subdomain=brandnew', headers=H).get_json()
+    assert r['available'] is True
+
+
 def test_line_editor_round_trips():
     from utils.site_content import parse_pairs, format_pairs
     text = 'Title A | Body A\nTitle B | Body B'
