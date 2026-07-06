@@ -144,10 +144,13 @@ Config: `MULTI_TENANT`, `TENANT_BASE_DOMAIN`.
 ### Stage 3 — public onboarding — **DONE**
 
 - **`routes/onboarding.py`** + `templates/onboarding/*` — `GET/POST /register`
-  (throttled) records a pending school and emails a verification link;
-  `GET /verify/<sub>/<token>` verifies and **auto-provisions everything**
-  (database, subdomain, first admin) then shows the login. 404 unless
-  `MULTI_TENANT` is on, so single-school deployments don't expose it.
+  (per-IP rate-limited + daily-banned). **By default a school must confirm its
+  email first**: register records a `pending` row and emails a verification link;
+  **nothing is provisioned until** `GET /verify/<sub>/<token>` is clicked, which
+  then creates the database + subdomain + first admin, starts the trial, and
+  emails the login. Verification/welcome emails use the platform `SMTP_*` config.
+  Set `REGISTRATION_AUTO_PROVISION=1` to skip the email step and create the
+  school instantly instead. 404 unless `MULTI_TENANT` is on.
 
 ### Uploads
 
