@@ -10,6 +10,30 @@ const A = ({ to, className, children, title }) => {
     onClick={(e) => { e.preventDefault(); nav.go(to); }}>{children}</a>;
 };
 
+// Password policy — mirrors utils/security.is_password_strong (server-enforced).
+// The server rejects anything weaker, so the UI must ask for the same.
+const PW_RULES = [
+  ['len', 'At least 12 characters', (v) => v.length >= 12],
+  ['upper', 'An uppercase letter (A–Z)', (v) => /[A-Z]/.test(v)],
+  ['lower', 'A lowercase letter (a–z)', (v) => /[a-z]/.test(v)],
+  ['digit', 'A number (0–9)', (v) => /\d/.test(v)],
+  ['symbol', 'A symbol (!, @, #, …)', (v) => /[^A-Za-z0-9]/.test(v)],
+];
+const pwStrong = (v) => PW_RULES.every(([, , test]) => test(v || ''));
+const PwReqs = ({ value }) => (
+  <ul className="pw-reqs" style={{ listStyle: 'none', margin: '6px 0 2px', padding: 0, display: 'grid', gap: 3 }}>
+    {PW_RULES.map(([key, label, test]) => {
+      const ok = test(value || '');
+      return (
+        <li key={key} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, color: ok ? '#14875a' : 'var(--text-muted,#7b8598)' }}>
+          <i aria-hidden="true" className={'fas ' + (ok ? 'fa-circle-check' : 'fa-circle')} style={{ fontSize: ok ? 11 : 7 }} />
+          {label}
+        </li>
+      );
+    })}
+  </ul>
+);
+
 // ---- Index ------------------------------------------------------------------
 function Index({ d, notify }) {
   const nav = useNav();
@@ -255,10 +279,10 @@ function UserForm({ d, notify }) {
     // Client-side checks HTML5 can't express (password confirmation match).
     const errs = {};
     if (!edit) {
-      if ((f.password || '').length < 6) errs.password = 'Use at least 6 characters.';
+      if (!pwStrong(f.password)) errs.password = 'Password does not meet the requirements below.';
       if (f.confirm_password !== f.password) errs.confirm_password = 'Passwords do not match.';
-    } else if (f.new_password && f.new_password.length < 6) {
-      errs.new_password = 'Use at least 6 characters.';
+    } else if (f.new_password && !pwStrong(f.new_password)) {
+      errs.new_password = 'Password does not meet the requirements below.';
     }
     setErrors(errs);
     if (Object.keys(errs).length) { notify('error', 'Please fix the highlighted fields.'); return; }
@@ -323,7 +347,8 @@ function UserForm({ d, notify }) {
               <>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Password <span className="text-danger">*</span></label>
-                    <input type="password" className={'form-control' + (errors.password ? ' is-invalid' : '')} value={f.password} onChange={set('password')} required minLength="6" placeholder="Min 6 characters" aria-invalid={!!errors.password} />
+                    <input type="password" className={'form-control' + (errors.password ? ' is-invalid' : '')} value={f.password} onChange={set('password')} required minLength="12" placeholder="At least 12 characters" aria-invalid={!!errors.password} />
+                    <PwReqs value={f.password} />
                     {errors.password && <div className="field-error">{errors.password}</div>}</div>
                   <div className="form-group"><label className="form-label">Confirm Password <span className="text-danger">*</span></label>
                     <input type="password" className={'form-control' + (errors.confirm_password ? ' is-invalid' : '')} value={f.confirm_password} onChange={set('confirm_password')}
@@ -343,7 +368,8 @@ function UserForm({ d, notify }) {
             </div>
             {edit && (
               <div className="form-group"><label className="form-label">New Password</label>
-                <input type="password" className={'form-control' + (errors.new_password ? ' is-invalid' : '')} value={f.new_password} onChange={set('new_password')} placeholder="Leave blank to keep current" minLength="6" aria-invalid={!!errors.new_password} />
+                <input type="password" className={'form-control' + (errors.new_password ? ' is-invalid' : '')} value={f.new_password} onChange={set('new_password')} placeholder="Leave blank to keep current" minLength="12" aria-invalid={!!errors.new_password} />
+                {f.new_password && <PwReqs value={f.new_password} />}
                 {errors.new_password && <div className="field-error">{errors.new_password}</div>}</div>
             )}
             <div className="form-group"><label className="form-label">Quick preset</label>
