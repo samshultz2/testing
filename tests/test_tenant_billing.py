@@ -93,7 +93,7 @@ def test_reaper_deletes_unpaid_but_spares_owner(cp):
     from scripts.reap_unpaid_tenants import main as reap
     reap([])                                                    # actually delete
     assert not os.path.exists(dead_path)                       # database gone
-    assert cp.get_tenant('dead').status == 'suspended'
+    assert cp.get_tenant('dead') is None                       # subdomain purged too
 
 
 # --- enforcement + test-mode payment through the app ------------------------

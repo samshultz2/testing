@@ -97,8 +97,10 @@ def record_payment(subdomain, days=None):
     if t is None:
         raise ValueError(f'No such school: {subdomain}')
     base = max(_now(), t.paid_until or _now())
-    return tenancy.set_billing(subdomain, plan='standard',
-                               paid_until=base + _dt.timedelta(days=days))
+    res = tenancy.set_billing(subdomain, plan='standard',
+                              paid_until=base + _dt.timedelta(days=days))
+    tenancy.clear_notice(subdomain)      # new paid cycle -> reminders reset
+    return res
 
 
 def status(tenant):

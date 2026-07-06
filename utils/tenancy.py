@@ -71,6 +71,17 @@ class SiteContent(_ControlBase):
                         onupdate=_dt.datetime.utcnow)
 
 
+class BillingNotice(_ControlBase):
+    """The last billing reminder emailed to a school, so the daily job sends
+    each lifecycle notice (trial-ending, renewal, lapsed, purge) only once."""
+    __tablename__ = 'billing_notices'
+
+    id = Column(Integer, primary_key=True)
+    subdomain = Column(String(63), nullable=False, unique=True)
+    marker = Column(String(32))                    # e.g. 'sub_7d', 'lapsed'
+    sent_at = Column(DateTime, default=_dt.datetime.utcnow)
+
+
 # --- control-plane engine (lazy, cached) ------------------------------------
 _engine = None
 _Session = None
@@ -259,6 +270,37 @@ def save_content(key, data):
             s.add(row)
         row.data = json.dumps(data)
         s.commit()
+
+
+def get_notice(subdomain):
+    """The marker of the last billing notice emailed to this school, or None."""
+    init_control_plane()
+    with _session() as s:
+        row = s.query(BillingNotice).filter_by(subdomain=subdomain).first()
+        return row.marker if row else None
+
+
+def set_notice(subdomain, marker):
+    """Record that a billing notice (marker) was emailed to this school."""
+    init_control_plane()
+    with _session() as s:
+        row = s.query(BillingNotice).filter_by(subdomain=subdomain).first()
+        if row is None:
+            row = BillingNotice(subdomain=subdomain)
+            s.add(row)
+        row.marker = marker
+        row.sent_at = _dt.datetime.utcnow()
+        s.commit()
+
+
+def clear_notice(subdomain):
+    """Reset a school's notice state (called on payment, so the next billing
+    cycle's reminders fire again)."""
+    with _session() as s:
+        row = s.query(BillingNotice).filter_by(subdomain=subdomain).first()
+        if row is not None:
+            row.marker = None
+            s.commit()
 
 
 def adopt_existing(subdomain, name, database_url, admin_email=None):

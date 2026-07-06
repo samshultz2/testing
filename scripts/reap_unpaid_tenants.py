@@ -37,15 +37,15 @@ def main(argv=None):
             print(f'would delete: {t.subdomain} (access ended {billing.access_until(t)})')
             continue
         try:
-            provisioning.drop_tenant(t.subdomain, forget=False)   # delete DB
-            tenancy.set_status(t.subdomain, 'suspended',
-                               error='database deleted for non-payment')
-            print(f'✓ deleted database for {t.subdomain}')
+            # Full purge: drop the database AND remove the registry row, so the
+            # subdomain is released too — nothing of the school remains.
+            provisioning.drop_tenant(t.subdomain, forget=True)
+            print(f'✓ purged {t.subdomain} (database + subdomain)')
             reaped += 1
         except Exception as e:
             print(f'✗ {t.subdomain}: {e}')
     if not args.dry_run:
-        print(f'\nDone: {reaped} school database(s) deleted.')
+        print(f'\nDone: {reaped} school(s) purged (database + subdomain).')
     return 0
 
 
