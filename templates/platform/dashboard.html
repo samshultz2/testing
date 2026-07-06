@@ -14,10 +14,14 @@
     .wrap { max-width:1040px; margin:0 auto; padding:32px 20px 60px; }
     h1 { font-size:24px; margin:0 0 4px; letter-spacing:-.01em; }
     .sub { color:var(--soft); font-size:14px; margin:0 0 22px; }
-    .cards { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:24px; }
-    @media (max-width:680px){ .cards{ grid-template-columns:repeat(2,1fr); } }
+    .cards { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:24px; }
+    @media (max-width:900px){ .cards{ grid-template-columns:repeat(3,1fr); } }
+    @media (max-width:560px){ .cards{ grid-template-columns:repeat(2,1fr); } }
     .kpi { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
-    .kpi .n { font-size:26px; font-weight:800; } .kpi .l { font-size:12px; color:var(--faint); }
+    .kpi .n { font-size:24px; font-weight:800; } .kpi .l { font-size:12px; color:var(--faint); margin-top:2px; }
+    .kpi-hero { grid-column:span 2; background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), var(--surface)); border-color:color-mix(in srgb, var(--accent) 30%, var(--line)); }
+    .kpi-hero .n { color:var(--accent); font-size:27px; }
+    @media (max-width:560px){ .kpi-hero{ grid-column:span 2; } }
     .flash { padding:10px 12px; border-radius:9px; font-size:13.5px; margin-bottom:14px; background:#e2f3ea; color:#14603f; }
     .flash.error{ background:#fbe4e7; color:#b0263a; } .flash.info{ background:#eef1f6; color:#3f57c8; }
     .tablewrap { overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:14px; }
@@ -51,10 +55,11 @@
     {% endwith %}
 
     <div class="cards">
-      <div class="kpi"><div class="n">{{ summary.total }}</div><div class="l">Total</div></div>
-      <div class="kpi"><div class="n">{{ summary.active }}</div><div class="l">Active</div></div>
+      <div class="kpi kpi-hero"><div class="n">₦{{ '{:,.0f}'.format(summary.mrr) }}</div><div class="l">Est. monthly revenue</div></div>
+      <div class="kpi"><div class="n">{{ summary.paying }}</div><div class="l">Paying</div></div>
       <div class="kpi"><div class="n">{{ summary.trial }}</div><div class="l">On trial</div></div>
       <div class="kpi"><div class="n">{{ summary.blocked }}</div><div class="l">Unpaid / locked</div></div>
+      <div class="kpi"><div class="n">{{ summary.customers }}</div><div class="l">Customer schools</div></div>
       <div class="kpi"><div class="n">{{ summary.suspended }}</div><div class="l">Suspended</div></div>
     </div>
 

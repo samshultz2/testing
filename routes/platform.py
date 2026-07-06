@@ -49,16 +49,24 @@ def _row(t):
 @platform_bp.route('/')
 @platform_admin_required
 def dashboard():
-    rows = [_row(t) for t in tenancy.list_tenants()]
+    tenants = tenancy.list_tenants()
+    rows = [_row(t) for t in tenants]
+    # Paying = active, not on trial, not the owner (i.e. a real subscriber).
+    paying = sum(1 for t, r in zip(tenants, rows)
+                 if r['active'] and not r['on_trial'] and not r['owner'] and r['status'] == 'active')
+    price = (current_app.config.get('TENANT_PRICE_KOBO', 0) or 0) / 100.0
     summary = {
         'total': len(rows),
+        'customers': sum(1 for r in rows if not r['owner']),
         'active': sum(1 for r in rows if r['active'] and r['status'] == 'active'),
         'trial': sum(1 for r in rows if r['on_trial']),
+        'paying': paying,
         'blocked': sum(1 for r in rows if not r['active'] and r['status'] == 'active'),
         'suspended': sum(1 for r in rows if r['status'] == 'suspended'),
+        'mrr': paying * price,                    # simple monthly-revenue estimate
     }
     return render_template('platform/dashboard.html', rows=rows, summary=summary,
-                           plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+                           price=price, plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 
 @platform_bp.route('/<subdomain>/grant', methods=['POST'])
