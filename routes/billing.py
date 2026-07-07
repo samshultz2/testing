@@ -100,14 +100,14 @@ def start_payment():
         flash('No billing email is on file for this school.', 'error')
         return redirect(url_for('billing.index'))
 
-    import requests
+    from utils import http
     try:
-        resp = requests.post(f'{_PAYSTACK_API}/transaction/initialize', headers=_headers(),
-                             json={'email': t.admin_email, 'amount': amount,
-                                   'callback_url': url_for('billing.callback', _external=True),
-                                   'metadata': {'subdomain': t.subdomain, 'plan': plan['id'],
-                                                'auto_renew': '1' if auto_renew else '0'}},
-                             timeout=(8, 20))     # (connect, read) — never hang forever
+        resp = http.post_json(f'{_PAYSTACK_API}/transaction/initialize', headers=_headers(),
+                              json={'email': t.admin_email, 'amount': amount,
+                                    'callback_url': url_for('billing.callback', _external=True),
+                                    'metadata': {'subdomain': t.subdomain, 'plan': plan['id'],
+                                                 'auto_renew': '1' if auto_renew else '0'}},
+                              timeout=20)          # stdlib socket timeout — never hangs forever
         data = resp.json() if resp.content else {}
         if data.get('status') and (data.get('data') or {}).get('authorization_url'):
             return redirect(data['data']['authorization_url'])
@@ -155,10 +155,10 @@ def callback():
     reference = request.args.get('reference') or request.args.get('trxref')
     key = current_app.config.get('PLATFORM_PAYSTACK_SECRET_KEY', '')
     if reference and key:
-        import requests
+        from utils import http
         try:
-            resp = requests.get(f'{_PAYSTACK_API}/transaction/verify/{reference}',
-                                headers=_headers(), timeout=(8, 20))
+            resp = http.get_json(f'{_PAYSTACK_API}/transaction/verify/{reference}',
+                                 headers=_headers(), timeout=20)
             data = resp.json()
             d = data.get('data') or {}
             if data.get('status') and d.get('status') == 'success' and \

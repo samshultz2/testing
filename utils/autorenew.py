@@ -88,14 +88,14 @@ def is_due(t, now=None, lead=None):
 
 def _charge_authorization(secret, email, amount_kobo, auth_code, subdomain, plan_id):
     """POST /transaction/charge_authorization. Returns (ok, data, error)."""
-    import requests
+    from utils import http
     try:
-        resp = requests.post(
+        resp = http.post_json(
             f'{_PAYSTACK_API}/transaction/charge_authorization',
             headers={'Authorization': f'Bearer {secret}', 'Content-Type': 'application/json'},
             json={'email': email, 'amount': amount_kobo, 'authorization_code': auth_code,
                   'metadata': {'subdomain': subdomain, 'plan': plan_id, 'auto_renew': '1'}},
-            timeout=(8, 25))
+            timeout=25)
         body = resp.json() if resp.content else {}
         data = body.get('data') or {}
         if resp.ok and data.get('status') == 'success':
