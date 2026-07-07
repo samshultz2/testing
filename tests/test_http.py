@@ -41,6 +41,24 @@ def test_post_json_sends_body_and_parses_response():
     assert json.loads(captured['body']) == {'amount': 500000}
 
 
+def test_default_user_agent_is_sent_and_overridable():
+    seen = {}
+    def fake_urlopen(req, timeout=None):
+        seen.update(req.headers)
+        return _FakeResp(200, '{}')
+    with patch('urllib.request.urlopen', fake_urlopen):
+        http.post_json('https://api.test/pay', headers={'Authorization': 'Bearer k'}, json={})
+    # urllib.request title-cases header names
+    assert seen['User-agent'].startswith('EduSyncra/')     # not "Python-urllib" (Cloudflare 403s that)
+    assert seen['Accept'] == 'application/json'
+    assert seen['Authorization'] == 'Bearer k'             # caller header preserved
+
+    seen.clear()
+    with patch('urllib.request.urlopen', fake_urlopen):
+        http.post_json('https://api.test/pay', headers={'User-Agent': 'Custom/9'}, json={})
+    assert seen['User-agent'] == 'Custom/9'                 # caller can override
+
+
 def test_http_error_returns_body_not_raises():
     err = urllib.error.HTTPError('u', 401, 'Unauthorized', {},
                                  io.BytesIO(json.dumps({'status': False, 'message': 'Invalid key'}).encode()))

@@ -17,6 +17,14 @@ import json as _json
 import urllib.request
 import urllib.error
 
+# urllib's default User-Agent is "Python-urllib/x.y", which Cloudflare-fronted
+# APIs (Paystack) block with a 403. Send an explicit, well-behaved UA + Accept so
+# the request is allowed through. Callers can still override either header.
+_DEFAULT_HEADERS = {
+    'User-Agent': 'EduSyncra/1.0 (+https://edusyncra.site)',
+    'Accept': 'application/json',
+}
+
 
 class HttpResult:
     def __init__(self, status_code, body):
@@ -50,7 +58,9 @@ def request_json(method, url, headers=None, json=None, timeout=20):
     """Perform a JSON request and return an HttpResult. Raises on network/timeout
     errors; returns the response (with its body) even on 4xx/5xx."""
     data = _json.dumps(json).encode('utf-8') if json is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+    hdrs = dict(_DEFAULT_HEADERS)
+    hdrs.update(headers or {})                        # caller's Authorization/etc. win
+    req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
     try:
         with urllib.request.urlopen(req, timeout=_read_timeout(timeout)) as resp:
             return HttpResult(resp.status, resp.read().decode('utf-8', 'replace'))
