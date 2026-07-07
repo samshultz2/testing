@@ -3,6 +3,9 @@
 Move EduSyncra to a real VPS and bring your current school's data with it — in a
 few commands. Cloudflare only ever does DNS; everything else is set up here.
 
+> **In a hurry / want a tick-box runbook?** Follow **[CHECKLIST.md](CHECKLIST.md)** —
+> the exact steps in order. This file is the fuller explanation.
+
 ## What you get after running it
 - Postgres role + your **owner** database + the **control-plane** (tenant registry)
 - a Python venv with dependencies
