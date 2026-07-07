@@ -550,7 +550,11 @@ def add_security_headers(response):
         "frame-src 'self' blob:; "
         "base-uri 'self'; "
         "frame-ancestors 'self'; "
-        "form-action 'self';"
+        # 'self' plus Paystack: the subscription billing form POSTs to our own
+        # /billing/pay, which 302-redirects to checkout.paystack.com. Browsers
+        # enforce form-action across the whole redirect chain, so without the
+        # Paystack host here the redirect to the card page is silently blocked.
+        "form-action 'self' https://checkout.paystack.com https://*.paystack.com;"
     )
     return response
 

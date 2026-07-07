@@ -110,7 +110,11 @@ def start_payment():
                               timeout=20)          # stdlib socket timeout — never hangs forever
         data = resp.json() if resp.content else {}
         if data.get('status') and (data.get('data') or {}).get('authorization_url'):
-            return redirect(data['data']['authorization_url'])
+            # Interstitial page that JS-redirects to Paystack (with a visible
+            # fallback link). More robust than a bare 302 across proxies/CSP —
+            # a JS navigation isn't a form submission, so form-action can't block it.
+            return render_template('billing/redirect.html',
+                                   url=data['data']['authorization_url'])
         # Paystack answered but rejected it — surface *why* (bad key, bad amount…).
         msg = data.get('message') or f'Paystack returned HTTP {resp.status_code}'
         current_app.logger.error('Paystack init rejected for %s: %s', t.subdomain, msg)

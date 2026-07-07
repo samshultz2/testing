@@ -230,6 +230,38 @@ def test_billing_page_flags_unconfigured_and_clicking_explains(mt):
     assert 'isn’t priced yet' in after
 
 
+def test_paying_redirects_to_paystack_and_csp_allows_it(mt):
+    """A real (non-test-mode) payment renders the interstitial that redirects to
+    Paystack, and the CSP form-action permits that cross-origin redirect."""
+    from unittest.mock import patch
+    app, tenancy = mt
+    app.config['BILLING_TEST_MODE'] = False
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = 'sk_test_x'
+    app.config['TENANT_PRICE_KOBO'] = 5000000
+    H = {'Host': 'trial.edusyncra.test'}
+    c = app.test_client()
+    html = c.get('/login', headers=H).get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+    c.post('/login', headers=H, data={'username': 'admin', 'password': 'Zebra!Mango42Q', '_csrf_token': tok})
+    btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                     c.get('/billing/', headers=H).get_data(as_text=True)).group(1)
+
+    class FakeResp:
+        content = '{"ok":1}'
+        def json(self):
+            return {'status': True, 'data': {'authorization_url': 'https://checkout.paystack.com/abc123'}}
+
+    with patch('utils.http.post_json', return_value=FakeResp()):
+        r = c.post('/billing/pay', headers=H, data={'_csrf_token': btok, 'plan': 'monthly'})
+
+    page = r.get_data(as_text=True)
+    assert r.status_code == 200                                    # interstitial, not a bare 302
+    assert 'https://checkout.paystack.com/abc123' in page          # visible fallback link
+    assert 'window.location.replace' in page                       # explicit JS redirect
+    # the CSP must permit the cross-origin redirect to Paystack (else browsers block it)
+    assert 'checkout.paystack.com' in r.headers.get('Content-Security-Policy', '')
+
+
 def test_autorenew_optin_and_toggle_through_the_app(mt):
     app, tenancy = mt
     H = {'Host': 'trial.edusyncra.test'}
