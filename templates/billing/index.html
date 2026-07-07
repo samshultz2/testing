@@ -52,6 +52,10 @@
            font-size:13px;color:var(--text-secondary);cursor:pointer}
     .optin input{margin-top:2px;width:16px;height:16px;flex:0 0 auto;accent-color:var(--primary)}
     .optin strong{color:var(--text-primary)}
+    .notpay{display:flex;gap:11px;align-items:flex-start;margin-bottom:20px;padding:14px 16px;
+            background:#fef3cd;color:#7a5310;border:1px solid #f2d98a;border-radius:var(--radius-lg);font-size:13.5px}
+    .notpay i{margin-top:2px}
+    .notpay strong{font-weight:700}
   </style>
 </head>
 <body>
@@ -82,6 +86,14 @@
         </div>
 
         {% if is_admin %}
+          {% if not payable %}
+          <div class="notpay">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>Online payments aren’t fully set up yet — the payment provider keys or plan prices are missing,
+            so the buttons below won’t start a checkout. If you’re the platform owner, set your keys in the
+            server config and your prices at <strong>/platform → Pricing</strong>.</span>
+          </div>
+          {% endif %}
           {% if st.card_on_file %}
           <div class="renew {{ 'on' if st.auto_renew else 'off' }}">
             <div class="renew-main">

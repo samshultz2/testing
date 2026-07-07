@@ -50,11 +50,16 @@ def _credit_and_receipt(subdomain, plan, reference=None):
 def index():
     t = _tenant_or_404()
     st = billing.status(t)
+    plans = tenant_plans()
+    test_mode = current_app.config.get('BILLING_TEST_MODE')
+    # Can a payment actually be started? (Paystack key present AND a plan priced.)
+    payable = test_mode or (bool(current_app.config.get('PLATFORM_PAYSTACK_SECRET_KEY'))
+                            and any(p['price_kobo'] for p in plans))
     return render_template('billing/index.html', t=t, st=st,
                            is_admin=is_admin(),
-                           plans=tenant_plans(),
+                           plans=plans, payable=payable,
                            lead_days=current_app.config.get('AUTO_RENEW_LEAD_DAYS'),
-                           test_mode=current_app.config.get('BILLING_TEST_MODE'))
+                           test_mode=test_mode)
 
 
 @billing_bp.route('/pay', methods=['POST'])
@@ -83,8 +88,13 @@ def start_payment():
 
     key = current_app.config.get('PLATFORM_PAYSTACK_SECRET_KEY', '')
     amount = plan['price_kobo']
-    if not key or not amount:
-        flash('Online billing is not configured yet. Please contact support.', 'error')
+    if not key:
+        current_app.logger.error('Billing: PLATFORM_PAYSTACK_SECRET_KEY is not set.')
+        flash('Online billing isn’t set up yet. Please contact support.', 'error')
+        return redirect(url_for('billing.index'))
+    if not amount:
+        current_app.logger.error('Billing: plan %s has no price (set it at /platform → Pricing).', plan['id'])
+        flash('This plan isn’t priced yet. Please contact support.', 'error')
         return redirect(url_for('billing.index'))
     if not t.admin_email:
         flash('No billing email is on file for this school.', 'error')
@@ -97,12 +107,16 @@ def start_payment():
                                    'callback_url': url_for('billing.callback', _external=True),
                                    'metadata': {'subdomain': t.subdomain, 'plan': plan['id'],
                                                 'auto_renew': '1' if auto_renew else '0'}}, timeout=20)
-        data = resp.json()
-        if data.get('status') and data['data'].get('authorization_url'):
+        data = resp.json() if resp.content else {}
+        if data.get('status') and (data.get('data') or {}).get('authorization_url'):
             return redirect(data['data']['authorization_url'])
+        # Paystack answered but rejected it — surface *why* (bad key, bad amount…).
+        msg = data.get('message') or f'Paystack returned HTTP {resp.status_code}'
+        current_app.logger.error('Paystack init rejected for %s: %s', t.subdomain, msg)
+        flash(f'Could not start the payment: {msg}', 'error')
     except Exception:
         current_app.logger.exception('Paystack init failed for tenant %s', t.subdomain)
-    flash('Could not start the payment. Please try again.', 'error')
+        flash('Could not reach Paystack. Check your connection and try again.', 'error')
     return redirect(url_for('billing.index'))
 
 

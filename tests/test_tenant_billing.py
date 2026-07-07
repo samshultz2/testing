@@ -202,6 +202,34 @@ def test_subscription_link_in_sidebar_for_tenant_admin(mt):
     assert '/billing' in page and 'Subscription' in page      # sidebar link renders
 
 
+def test_billing_page_flags_unconfigured_and_clicking_explains(mt):
+    """When Paystack keys / prices aren't set, the page says so and clicking a
+    tier gives a clear reason instead of silently reloading."""
+    app, tenancy = mt
+    app.config['BILLING_TEST_MODE'] = False
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = ''      # not set
+    app.config['TENANT_PRICE_KOBO'] = 0                  # no price
+    H = {'Host': 'trial.edusyncra.test'}
+    c = app.test_client()
+    html = c.get('/login', headers=H).get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+    c.post('/login', headers=H, data={'username': 'admin', 'password': 'Zebra!Mango42Q', '_csrf_token': tok})
+
+    page = c.get('/billing/', headers=H).get_data(as_text=True)
+    assert 'aren’t fully set up' in page                 # proactive page notice
+    btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', page).group(1)
+
+    c.post('/billing/pay', headers=H, data={'_csrf_token': btok, 'plan': 'monthly'})
+    after = c.get('/billing/', headers=H).get_data(as_text=True)
+    assert 'isn’t set up yet' in after                   # specific flash: missing key
+
+    # with a key but still no price -> the message points at pricing
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = 'sk_test_x'
+    c.post('/billing/pay', headers=H, data={'_csrf_token': btok, 'plan': 'monthly'})
+    after = c.get('/billing/', headers=H).get_data(as_text=True)
+    assert 'isn’t priced yet' in after
+
+
 def test_autorenew_optin_and_toggle_through_the_app(mt):
     app, tenancy = mt
     H = {'Host': 'trial.edusyncra.test'}
