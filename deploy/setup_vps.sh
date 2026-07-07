@@ -123,15 +123,52 @@ else
   echo "  crontab not found — add this line to your scheduler:"; echo "    $JOB"
 fi
 
+# 8. systemd service so the app starts on boot and restarts on crash
+if [ "${INSTALL_SERVICE:-yes}" = "yes" ] && command -v systemctl >/dev/null 2>&1; then
+  log "installing systemd service (edusyncra)"
+  RUN_USER="${APP_USER:-$(id -un)}"
+  sudo tee /etc/systemd/system/edusyncra.service >/dev/null <<UNIT
+[Unit]
+Description=EduSyncra (multi-tenant school management)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${RUN_USER}
+WorkingDirectory=${ROOT}
+ExecStart=${ROOT}/.venv/bin/python app_production.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now edusyncra
+  echo "  service installed + started"
+else
+  echo "  (no systemd or INSTALL_SERVICE!=yes — start manually with app_production.py)"
+fi
+
+# 9. optional: Cloudflare tunnel (interactive login)
+if [ "${SETUP_TUNNEL:-no}" = "yes" ]; then
+  log "Cloudflare tunnel"
+  bash "$HERE/setup_tunnel.sh" "$CONF"
+fi
+
 log "SETUP COMPLETE"
 cat <<DONE
 
-Start the app (production):
-    cd $ROOT && .venv/bin/python app_production.py     # waitress on :5000
+The app runs under systemd (if installed):
+    sudo systemctl status edusyncra        # check it
+    sudo journalctl -u edusyncra -f        # follow logs
+  (or run directly:  cd $ROOT && .venv/bin/python app_production.py)
 
-Then, in Cloudflare (DNS only):
+Cloudflare (DNS only):
   • wildcard  *.${TENANT_BASE_DOMAIN}  and the apex  ->  your tunnel
   • Paystack webhook URL:  https://api.${TENANT_BASE_DOMAIN}/billing/webhook
+$( [ "${SETUP_TUNNEL:-no}" != "yes" ] && printf '  • install the tunnel now:  bash deploy/setup_tunnel.sh' )
 
 Your existing school is live at  https://${TENANT_BASE_DOMAIN}
 New schools register at          https://signup.${TENANT_BASE_DOMAIN}/register

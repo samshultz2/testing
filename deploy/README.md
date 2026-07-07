@@ -13,6 +13,19 @@ few commands. Cloudflare only ever does DNS; everything else is set up here.
 
 The setup is **idempotent** — re-running never drops data or rotates your secrets.
 
+## Do I need to do anything now?
+
+No — nothing about your current phone/Termux setup has to change; it keeps
+running as-is. All of this happens **on the new VPS, when you have one**.
+
+The only things you *can* prepare ahead of time (all outside the code):
+- get the VPS and point your domain's nameservers at Cloudflare (probably already done),
+- create a Paystack account and copy your **test** keys,
+- have SMTP credentials ready (for verification + billing emails).
+
+When the VPS is ready: **dump → scp → fill `setup.env` → `bash deploy/setup_vps.sh`.**
+That's the whole move.
+
 ---
 
 ## Step 1 — Dump your current database (on your CURRENT machine)
@@ -56,16 +69,36 @@ your dump, writes `.env`, brings the schema to head, adopts your school as the
 apex owner, and installs the cron. When it finishes it prints your start command
 and URLs.
 
-## Step 4 — Start the app + DNS
+## Step 4 — It's already running
+
+If `INSTALL_SERVICE=yes` (the default), the app is installed as a **systemd
+service** and started — it auto-starts on boot and restarts on crash:
 
 ```bash
-cd ~/edusyncra && .venv/bin/python app_production.py     # waitress on :5000
+sudo systemctl status edusyncra        # check it
+sudo journalctl -u edusyncra -f        # follow logs
+```
+(No systemd? Run it directly: `.venv/bin/python app_production.py`.)
+
+**Cloudflare tunnel** — set `SETUP_TUNNEL=yes` in `setup.env` and the installer
+also installs `cloudflared`, creates a named tunnel, writes its ingress config
+(wildcard + apex → the local app), and runs it as a service. You can also do it
+separately any time:
+
+```bash
+bash deploy/setup_tunnel.sh
 ```
 
-In Cloudflare (DNS only):
-- wildcard `*.your-domain` **and** the apex → your tunnel (→ `http://127.0.0.1:5000`)
-- Paystack dashboard → **Webhook URL**: `https://api.your-domain/billing/webhook`
-  (leave the dashboard *Callback URL* blank — the app sets it per payment)
+It's the one step with a browser login (to authorise the tunnel on your
+Cloudflare zone), and it prints **one** DNS record to add by hand — the wildcard:
+
+```
+Type: CNAME   Name: *   Target: <tunnel-id>.cfargotunnel.com   Proxy: ON
+```
+
+Everything else (apex, `www`, `signup`, `api`) is routed for you. Finally, in the
+Paystack dashboard set the **Webhook URL** to `https://api.your-domain/billing/webhook`
+(leave the dashboard *Callback URL* blank — the app sets it per payment).
 
 Your existing school stays at `https://your-domain`, new schools register at
 `https://signup.your-domain/register`, and you manage everything at
