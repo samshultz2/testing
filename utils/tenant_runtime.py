@@ -97,8 +97,9 @@ def current_tenant():
 
 # Endpoints still reachable while a school is locked out for non-payment: the
 # billing pages themselves, logout, and static assets.
-_BILLING_ALLOWED = {'billing.index', 'billing.start_payment', 'billing.callback',
-                    'billing.webhook', 'auth.logout', 'auth.login', 'static'}
+_BILLING_ALLOWED = {'billing.index', 'billing.start_payment', 'billing.autorenew_toggle',
+                    'billing.callback', 'billing.webhook', 'auth.logout', 'auth.login',
+                    'static'}
 
 
 def enforce_billing():

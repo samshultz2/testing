@@ -39,6 +39,29 @@ confirmation and calls `record_payment`, extending `paid_until`. The
 In Paystack, set the webhook URL to `https://<any-school>.edusyncra.site/billing/webhook`
 (the app routes it to the right school from the payment metadata).
 
+## Automatic renewal (saved card)
+
+By default the flow is **pay-as-you-go** — each period the admin comes back and
+pays. A school can instead opt into **automatic renewal** at checkout (the
+"keep my card" box on `/billing`, on by default). Then:
+
+1. On that first successful payment, the reusable Paystack **authorization** (a
+   token tied to our secret key — never the card number) is saved on the tenant,
+   along with the card brand/last4/expiry for display. See `utils/autorenew.py`
+   → `capture_authorization` (called from the callback **and** the webhook).
+2. The daily job (`scripts/billing_cron.py`) charges that saved card
+   `AUTO_RENEW_LEAD_DAYS` (default 2) before access ends, via Paystack
+   `charge_authorization`. On success it extends `paid_until` and emails a
+   receipt — no reminder is sent. It attempts at most once per day.
+3. If a charge **fails** (e.g. insufficient funds), the reason is stored and
+   shown on the billing page, and the normal reminder → soft-grace → lockout
+   flow takes over, so nothing is ever silently lost. It keeps retrying daily
+   until the card clears or the school is reaped.
+
+The admin can turn auto-renew off any time from `/billing` (the saved card is
+kept so it can be switched back on without paying again). The owner school is
+never auto-charged.
+
 ## Testing the whole flow without real money
 
 Set `BILLING_TEST_MODE=1` (dev only — it is **forced off** in production). Then
@@ -65,6 +88,7 @@ To test the reaper: expire a school and run
 | `TENANT_PLAN_DAYS` | 30 | days added per payment |
 | `TENANT_BILLING_GRACE_DAYS` | 7 | unpaid days after expiry before deletion |
 | `TENANT_PRICE_KOBO` | 0 | monthly base price (kobo) — the **seed** price |
+| `AUTO_RENEW_LEAD_DAYS` | 2 | days before expiry the saved card is auto-charged |
 | `BILLING_TEST_MODE` | off | simulate payments (never in production) |
 
 ### Editing prices live (no redeploy)

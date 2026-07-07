@@ -191,6 +191,33 @@ def test_paying_a_tier_grants_that_tiers_days(mt):
     assert billing.days_left(tenancy.get_tenant('trial')) >= 360 + 118
 
 
+def test_autorenew_optin_and_toggle_through_the_app(mt):
+    app, tenancy = mt
+    H = {'Host': 'trial.edusyncra.test'}
+    c = app.test_client()
+    html = c.get('/login', headers=H).get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+    c.post('/login', headers=H, data={'username': 'admin', 'password': 'Zebra!Mango42Q', '_csrf_token': tok})
+
+    # the billing page offers the auto-renew opt-in
+    bill = c.get('/billing/', headers=H).get_data(as_text=True)
+    assert 'automatic renewal' in bill.lower()
+    btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', bill).group(1)
+
+    # pay (test mode) opting into auto-renew -> card saved + enabled
+    c.post('/billing/pay', headers=H, data={'_csrf_token': btok, 'plan': 'monthly', 'auto_renew': 'on'})
+    t = tenancy.get_tenant('trial')
+    assert t.auto_renew == 1 and t.card_last4 == '4081' and t.renew_plan == 'monthly'
+
+    # the page now shows it's ON, and the toggle turns it off (card kept)
+    bill = c.get('/billing/', headers=H).get_data(as_text=True)
+    assert 'Automatic renewal is ON' in bill
+    btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', bill).group(1)
+    c.post('/billing/autorenew', headers=H, data={'_csrf_token': btok, 'enabled': 'off'})
+    t = tenancy.get_tenant('trial')
+    assert t.auto_renew == 0 and t.paystack_auth_code == 'AUTH_test'   # kept for re-enable
+
+
 def test_plan_tiers_are_discounted():
     from utils.plans import tenant_plans, get_plan
     cfg = dict(TENANT_PRICE_KOBO=5000000, TENANT_PLAN_DAYS=30, TENANT_TERM_DAYS=120)
@@ -228,3 +255,101 @@ def test_pricing_overrides_are_live(cp):
     allt = plans.tenant_plans(cfg, include_disabled=True)
     assert len(allt) == 3
     assert next(p for p in allt if p['id'] == 'termly')['enabled'] is False
+
+
+# --- auto-renew (Approach B: stored authorization + scheduled charge) --------
+def _paystack_tx(auth_code='AUTH_x', reusable=True, auto_renew='1', plan='monthly',
+                 reference='ref_1'):
+    return {
+        'status': 'success', 'reference': reference,
+        'metadata': {'subdomain': 'ar', 'plan': plan, 'auto_renew': auto_renew},
+        'authorization': {'authorization_code': auth_code, 'reusable': reusable,
+                          'brand': 'visa', 'last4': '4081', 'exp_month': '12', 'exp_year': '2030'},
+    }
+
+
+def test_autorenew_capture_stores_card_only_when_opted_in(cp):
+    from utils import autorenew
+    cp.register_tenant('AR School', 'ar', 'ar@x.test')
+
+    # opted out -> nothing stored
+    assert autorenew.capture_authorization('ar', _paystack_tx(auto_renew='0')) is False
+    assert cp.get_tenant('ar').auto_renew == 0
+
+    # non-reusable card -> can't be saved
+    assert autorenew.capture_authorization('ar', _paystack_tx(reusable=False)) is False
+    assert not cp.get_tenant('ar').paystack_auth_code
+
+    # opted in + reusable -> stored + enabled
+    assert autorenew.capture_authorization('ar', _paystack_tx()) is True
+    t = cp.get_tenant('ar')
+    assert t.auto_renew == 1 and t.paystack_auth_code == 'AUTH_x'
+    assert t.card_brand == 'visa' and t.card_last4 == '4081' and t.card_exp == '12/2030'
+    assert t.renew_plan == 'monthly'
+
+
+def test_autorenew_charges_due_card_and_extends(cp, monkeypatch):
+    from config import Config
+    from utils import autorenew
+    monkeypatch.setattr(Config, 'TENANT_PRICE_KOBO', 5000000, raising=False)
+    monkeypatch.setattr(Config, 'PLATFORM_PAYSTACK_SECRET_KEY', 'sk_test_x', raising=False)
+    cp.register_tenant('AR School', 'ar', 'ar@x.test')
+    cp.set_status('ar', 'active')
+    cp.set_billing('ar', paid_until=_in(1))          # ends tomorrow -> inside lead window
+    cp.set_autorenew('ar', auto_renew=1, renew_plan='monthly', paystack_auth_code='AUTH_x')
+
+    calls = {}
+    def fake_charge(secret, email, amount, code, sub, plan_id):
+        calls.update(amount=amount, code=code, sub=sub)
+        return True, {'reference': 'psref_1'}, None
+    monkeypatch.setattr(autorenew, '_charge_authorization', fake_charge)
+
+    res = autorenew.charge_due()
+    assert res and res[0]['action'] == 'charged'
+    assert calls == {'amount': 5000000, 'code': 'AUTH_x', 'sub': 'ar'}
+    assert billing.days_left(cp.get_tenant('ar')) >= 29       # +30 days from ~tomorrow
+    assert cp.get_tenant('ar').auto_renew_last_error is None
+
+    # running again the same day does not double-charge (already attempted today)
+    calls.clear()
+    assert autorenew.charge_due() == []
+    assert calls == {}
+
+
+def test_autorenew_skips_owner_and_not_yet_due(cp, monkeypatch):
+    from utils import autorenew
+    fired = []
+    monkeypatch.setattr(autorenew, '_charge_authorization',
+                        lambda *a, **k: (fired.append(1), (True, {'reference': 'r'}, None))[1])
+    # far from expiry -> not due
+    cp.register_tenant('Later', 'later', 'l@x.test')
+    cp.set_status('later', 'active')
+    cp.set_billing('later', paid_until=_in(60))
+    cp.set_autorenew('later', auto_renew=1, paystack_auth_code='AUTH_y')
+    # owner is never auto-charged
+    from utils import onboarding
+    onboarding.adopt_current_school('own', 'Owner', 'sqlite:///o.db', 'o@x.test')
+    cp.set_autorenew('own', auto_renew=1, paystack_auth_code='AUTH_z')
+
+    assert autorenew.charge_due() == []
+    assert fired == []
+
+
+def test_autorenew_failed_charge_records_error_without_extending(cp, monkeypatch):
+    from config import Config
+    from utils import autorenew
+    monkeypatch.setattr(Config, 'TENANT_PRICE_KOBO', 5000000, raising=False)
+    monkeypatch.setattr(Config, 'PLATFORM_PAYSTACK_SECRET_KEY', 'sk_test_x', raising=False)
+    cp.register_tenant('AR School', 'ar', 'ar@x.test')
+    cp.set_status('ar', 'active')
+    cp.set_billing('ar', paid_until=_in(1))
+    cp.set_autorenew('ar', auto_renew=1, renew_plan='monthly', paystack_auth_code='AUTH_x')
+    before = billing.days_left(cp.get_tenant('ar'))
+    monkeypatch.setattr(autorenew, '_charge_authorization',
+                        lambda *a, **k: (False, {}, 'insufficient funds'))
+
+    res = autorenew.charge_due()
+    assert res and res[0]['action'] == 'failed'
+    t = cp.get_tenant('ar')
+    assert t.auto_renew_last_error == 'insufficient funds'
+    assert billing.days_left(t) == before                     # access unchanged

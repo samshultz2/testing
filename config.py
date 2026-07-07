@@ -245,6 +245,10 @@ class Config:
     # separate from each school's own parent-payment keys.
     PLATFORM_PAYSTACK_SECRET_KEY = os.environ.get('PLATFORM_PAYSTACK_SECRET_KEY', '')
     PLATFORM_PAYSTACK_PUBLIC_KEY = os.environ.get('PLATFORM_PAYSTACK_PUBLIC_KEY', '')
+    # Auto-renew (Approach B): after an opt-in payment we store the reusable
+    # Paystack authorization and the daily job charges the saved card this many
+    # days before access ends, so a subscription renews without the admin acting.
+    AUTO_RENEW_LEAD_DAYS = int(os.environ.get('AUTO_RENEW_LEAD_DAYS', '2'))
     # Dev/testing only: "pay" without a real Paystack charge (simulated). Forced
     # OFF in production so a school can't self-extend for free.
     BILLING_TEST_MODE = _as_bool(os.environ.get('BILLING_TEST_MODE'), default=False)

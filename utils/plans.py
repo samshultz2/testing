@@ -19,11 +19,21 @@ TIER_IDS = ('monthly', 'termly', 'annual')
 PRICING_KEY = 'pricing'
 
 
+_CFG_KEYS = ('TENANT_PRICE_KOBO', 'TENANT_PLAN_DAYS', 'TENANT_TERM_DAYS',
+             'TENANT_TERMLY_PRICE_KOBO', 'TENANT_ANNUAL_PRICE_KOBO')
+
+
 def _cfg(cfg=None):
     if cfg is not None:
         return cfg
-    from flask import current_app
-    return current_app.config
+    try:
+        from flask import current_app
+        return current_app.config          # inside a request / app context
+    except Exception:
+        pass
+    # No app context (e.g. the daily billing cron): read the Config class.
+    from config import Config
+    return {k: getattr(Config, k, None) for k in _CFG_KEYS}
 
 
 def _naira(kobo):

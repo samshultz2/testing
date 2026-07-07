@@ -19,15 +19,25 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import tenancy, billing_notify   # noqa: E402
+from utils import tenancy, billing_notify, autorenew   # noqa: E402
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description='Daily billing reminders + purge.')
-    ap.add_argument('--dry-run', action='store_true', help='Report only; send/delete nothing.')
-    ap.add_argument('--no-purge', action='store_true', help='Send reminders but skip purging.')
+    ap = argparse.ArgumentParser(description='Daily billing: auto-renew + reminders + purge.')
+    ap.add_argument('--dry-run', action='store_true', help='Report only; charge/send/delete nothing.')
+    ap.add_argument('--no-purge', action='store_true', help='Skip purging (still renews + reminds).')
     args = ap.parse_args(argv)
     tenancy.init_control_plane()
+
+    # 1. auto-renew saved cards that are due (before reminders, so a successful
+    #    renewal suppresses the "renew now" email).
+    renewed = autorenew.charge_due(charge=not args.dry_run)
+    if renewed:
+        for r in renewed:
+            print(f'auto-renew: {r["subdomain"]} [{r["action"]}]'
+                  + (f' — {r.get("reason")}' if r.get('reason') else ''))
+    else:
+        print('No cards due for auto-renew.')
 
     sent = billing_notify.run_notifications(send=not args.dry_run)
     if sent:

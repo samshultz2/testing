@@ -607,6 +607,13 @@
 ]
 ],
 [
+"billing.autorenew_toggle",
+"/billing/autorenew",
+[
+"POST"
+]
+],
+[
 "billing.callback",
 "/billing/callback",
 [

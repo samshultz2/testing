@@ -335,6 +335,21 @@ def create_app(config_class=None):
             password pages (single source of truth: utils.security)."""
             from utils.security import password_rules
             return password_rules()
+
+        def _billing_nav():
+            """Whether to show the school-side Subscription link (multi-tenant,
+            non-owner school), plus days left for a subtle badge."""
+            try:
+                if not current_app.config.get('MULTI_TENANT'):
+                    return {'show': False}
+                from utils.tenant_runtime import current_tenant
+                from utils import billing
+                t = current_tenant()
+                if t is None or billing.is_owner(t):
+                    return {'show': False}
+                return {'show': True, 'days_left': billing.days_left(t)}
+            except Exception:
+                return {'show': False}
         
         # User access context
         def get_user_permissions():
@@ -523,6 +538,7 @@ def create_app(config_class=None):
             'current_theme': current_theme(),
             'themes': THEMES,
             'password_rules': _password_rules(),
+            'billing_nav': _billing_nav(),
         }
     
     # Custom Jinja filters

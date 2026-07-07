@@ -41,15 +41,8 @@ def _credit_and_receipt(subdomain, plan, reference=None):
     """Credit a successful payment once (deduped by Paystack reference) and email
     a receipt. Safe to call from both the callback and the webhook for one
     payment — the second call is a no-op. Returns True if it credited now."""
-    from utils import tenancy, billing_notify
-    if not tenancy.claim_payment(reference, subdomain):
-        return False                          # already processed (other path won)
-    billing.record_payment(subdomain, days=plan['days'])
-    t = tenancy.get_tenant(subdomain)
-    base = current_app.config.get('TENANT_BASE_DOMAIN')
-    link = f'https://{subdomain}.{base}/' if base else None
-    billing_notify.send_receipt(t, plan, until=getattr(t, 'paid_until', None), link=link)
-    return True
+    return billing.credit_payment(subdomain, plan, reference=reference,
+                                  base_domain=current_app.config.get('TENANT_BASE_DOMAIN'))
 
 
 @billing_bp.route('/')
@@ -60,6 +53,7 @@ def index():
     return render_template('billing/index.html', t=t, st=st,
                            is_admin=is_admin(),
                            plans=tenant_plans(),
+                           lead_days=current_app.config.get('AUTO_RENEW_LEAD_DAYS'),
                            test_mode=current_app.config.get('BILLING_TEST_MODE'))
 
 
@@ -72,11 +66,19 @@ def start_payment():
         return redirect(url_for('billing.index'))
 
     plan = get_plan(request.form.get('plan'))     # defaults to Monthly if unknown
+    auto_renew = request.form.get('auto_renew') == 'on'
 
     # Dev/testing: apply a simulated payment so the flow can be tested.
     if current_app.config.get('BILLING_TEST_MODE'):
         _credit_and_receipt(t.subdomain, plan)     # no reference in test mode
-        flash(f"Test payment applied — {plan['label']} ({plan['days']} days).", 'success')
+        if auto_renew:                             # simulate a saved card
+            from utils import tenancy
+            tenancy.set_autorenew(t.subdomain, auto_renew=1, renew_plan=plan['id'],
+                                  paystack_auth_code='AUTH_test', card_brand='visa',
+                                  card_last4='4081', card_exp='12/2030',
+                                  auto_renew_last_error=None)
+        flash(f"Test payment applied — {plan['label']} ({plan['days']} days)."
+              + (' Auto-renew on.' if auto_renew else ''), 'success')
         return redirect(url_for('main.dashboard'))
 
     key = current_app.config.get('PLATFORM_PAYSTACK_SECRET_KEY', '')
@@ -93,13 +95,40 @@ def start_payment():
         resp = requests.post(f'{_PAYSTACK_API}/transaction/initialize', headers=_headers(),
                              json={'email': t.admin_email, 'amount': amount,
                                    'callback_url': url_for('billing.callback', _external=True),
-                                   'metadata': {'subdomain': t.subdomain, 'plan': plan['id']}}, timeout=20)
+                                   'metadata': {'subdomain': t.subdomain, 'plan': plan['id'],
+                                                'auto_renew': '1' if auto_renew else '0'}}, timeout=20)
         data = resp.json()
         if data.get('status') and data['data'].get('authorization_url'):
             return redirect(data['data']['authorization_url'])
     except Exception:
         current_app.logger.exception('Paystack init failed for tenant %s', t.subdomain)
     flash('Could not start the payment. Please try again.', 'error')
+    return redirect(url_for('billing.index'))
+
+
+@billing_bp.route('/autorenew', methods=['POST'])
+@login_required
+def autorenew_toggle():
+    """Turn automatic renewal on or off for this school. Turning it on needs a
+    saved card (from a previous opt-in payment); the stored card is kept when it's
+    turned off, so it can be switched back on without paying again."""
+    t = _tenant_or_404()
+    if not is_admin():
+        flash('Only an administrator can manage the subscription.', 'error')
+        return redirect(url_for('billing.index'))
+    from utils import tenancy
+    want_on = request.form.get('enabled') == 'on'
+    if want_on and not getattr(t, 'paystack_auth_code', None):
+        flash('No saved card yet. Choose a plan and tick "keep my card for '
+              'automatic renewal" at checkout.', 'warning')
+        return redirect(url_for('billing.index'))
+    fields = {'auto_renew': 1 if want_on else 0}
+    plan_id = request.form.get('renew_plan')
+    if plan_id:
+        fields['renew_plan'] = get_plan(plan_id)['id']       # validated tier id
+    tenancy.set_autorenew(t.subdomain, **fields)
+    flash('Automatic renewal turned on.' if want_on else 'Automatic renewal turned off.',
+          'success')
     return redirect(url_for('billing.index'))
 
 
@@ -120,6 +149,8 @@ def callback():
             if data.get('status') and d.get('status') == 'success' and \
                     (d.get('metadata') or {}).get('subdomain') == t.subdomain:
                 plan = get_plan((d.get('metadata') or {}).get('plan'))
+                from utils import autorenew
+                autorenew.capture_authorization(t.subdomain, d)     # if opted in
                 _credit_and_receipt(t.subdomain, plan, reference=reference)
                 flash(f"Payment received — {plan['label']} subscription active. Thank you!", 'success')
                 return redirect(url_for('main.dashboard'))
@@ -148,6 +179,8 @@ def webhook():
         if sub and (d.get('status') == 'success'):
             plan = get_plan((d.get('metadata') or {}).get('plan'))
             try:
+                from utils import autorenew
+                autorenew.capture_authorization(sub, d)             # if opted in
                 _credit_and_receipt(sub, plan, reference=d.get('reference'))
             except ValueError:
                 pass

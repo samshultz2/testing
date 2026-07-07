@@ -524,6 +524,14 @@
                         </a>
                     </li>
                     {% endif %}
+                    {% if billing_nav.show %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('billing.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('billing.') %}active{% endif %}">
+                            <i class="fas fa-credit-card"></i><span>Subscription</span>
+                            {% if billing_nav.days_left is not none and billing_nav.days_left <= 7 %}<span class="nav-badge">{{ billing_nav.days_left }}d</span>{% endif %}
+                        </a>
+                    </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a href="{{ url_for('settings.index') }}" class="nav-link">
                             <i class="fas fa-cog"></i><span>Settings</span>
@@ -1025,6 +1033,8 @@
         background:linear-gradient(90deg,var(--primary),var(--accent));
         z-index:9999;opacity:0;transition:width .25s ease,opacity .25s ease;
         box-shadow:0 0 10px var(--primary);border-top-right-radius:3px;border-bottom-right-radius:3px;}
+    .nav-badge{margin-left:auto;font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:999px;
+        background:var(--warning,#e67e22);color:#fff;line-height:1.6;}
     .nav-section-toggle{cursor:pointer;display:flex !important;align-items:center;justify-content:space-between;}
     .nav-sec-chev{font-size:.65rem;opacity:.55;transition:transform .2s ease;}
     .nav-section-toggle:not(.open) .nav-sec-chev{transform:rotate(-90deg);}

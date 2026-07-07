@@ -36,6 +36,22 @@
     .flash{width:100%;max-width:760px}
     .foot-links{max-width:760px;width:100%;text-align:center;margin-top:20px;font-size:13px;color:var(--text-secondary)}
     .foot-links a{color:var(--primary);font-weight:600}
+    .renew{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);
+           box-shadow:var(--shadow-sm);padding:18px 20px;margin-bottom:20px;display:flex;gap:16px;
+           align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .renew.on{border-color:var(--primary);background:linear-gradient(0deg,rgba(13,106,78,.04),rgba(13,106,78,.04)),var(--surface)}
+    .renew-main{display:flex;gap:14px;align-items:flex-start;min-width:0}
+    .renew-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;
+                background:var(--danger-light);color:var(--faint)}
+    .renew.on .renew-icon{background:#d1e7dd;color:var(--success)}
+    .renew-title{font-family:var(--font-display);font-weight:600;font-size:15.5px}
+    .renew-sub{font-size:13px;color:var(--text-secondary);margin-top:3px}
+    .renew-err{font-size:12.5px;color:var(--danger);margin-top:7px}
+    .optin{display:flex;gap:10px;align-items:flex-start;margin-top:18px;padding:14px 16px;
+           background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);
+           font-size:13px;color:var(--text-secondary);cursor:pointer}
+    .optin input{margin-top:2px;width:16px;height:16px;flex:0 0 auto;accent-color:var(--primary)}
+    .optin strong{color:var(--text-primary)}
   </style>
 </head>
 <body>
@@ -66,24 +82,61 @@
         </div>
 
         {% if is_admin %}
-          <div class="plan-grid">
-            {% for p in plans %}
-            <div class="plan-opt {{ 'feat' if p.id == 'annual' }}">
-              {% if p.badge %}<span class="badge">{{ p.badge }}</span>{% endif %}
-              <div class="lab">{{ p.label }}</div>
-              <div class="amt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small> / {{ p.per }}</small></div>
-              <div class="save">{% if p.savings > 0 %}Save {{ p.savings }}%{% endif %}</div>
-              <div class="days">{{ p.days }} days of access</div>
-              <form method="post" action="{{ url_for('billing.start_payment') }}">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="plan" value="{{ p.id }}">
-                <button class="btn {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }} btn-block" type="submit">
+          {% if st.card_on_file %}
+          <div class="renew {{ 'on' if st.auto_renew else 'off' }}">
+            <div class="renew-main">
+              <div class="renew-icon"><i class="fas fa-{{ 'repeat' if st.auto_renew else 'rotate' }}"></i></div>
+              <div>
+                <div class="renew-title">
+                  Automatic renewal is {{ 'ON' if st.auto_renew else 'off' }}
+                </div>
+                <div class="renew-sub">
+                  Card on file: {{ (st.card_brand or 'card')|capitalize }} ending {{ st.card_last4 or '••••' }}{% if st.card_exp %} · exp {{ st.card_exp }}{% endif %}.
+                  {% if st.auto_renew %}
+                    We’ll charge it on the <strong>{{ st.renew_plan or 'monthly' }}</strong> plan about {{ lead_days }} day(s) before
+                    {% if st.access_until %}{{ st.access_until.strftime('%d %b %Y') }}{% else %}your access ends{% endif %}.
+                  {% else %}
+                    Turn it on and we’ll renew this subscription for you.
+                  {% endif %}
+                </div>
+                {% if st.auto_renew_error %}
+                  <div class="renew-err"><i class="fas fa-triangle-exclamation"></i> Last attempt failed: {{ st.auto_renew_error }}. We’ll retry; you can also pay manually below.</div>
+                {% endif %}
+              </div>
+            </div>
+            <form method="post" action="{{ url_for('billing.autorenew_toggle') }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="enabled" value="{{ 'off' if st.auto_renew else 'on' }}">
+              <button class="btn {{ 'btn-ghost' if st.auto_renew else 'btn-primary' }}" type="submit">
+                {{ 'Turn off' if st.auto_renew else 'Turn on' }}
+              </button>
+            </form>
+          </div>
+          {% endif %}
+
+          <form method="post" action="{{ url_for('billing.start_payment') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="plan-grid">
+              {% for p in plans %}
+              <div class="plan-opt {{ 'feat' if p.id == 'annual' }}">
+                {% if p.badge %}<span class="badge">{{ p.badge }}</span>{% endif %}
+                <div class="lab">{{ p.label }}</div>
+                <div class="amt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small> / {{ p.per }}</small></div>
+                <div class="save">{% if p.savings > 0 %}Save {{ p.savings }}%{% endif %}</div>
+                <div class="days">{{ p.days }} days of access</div>
+                <button class="btn {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }} btn-block" type="submit" name="plan" value="{{ p.id }}">
                   {% if test_mode %}Apply test payment{% else %}Choose {{ p.label }}{% endif %}
                 </button>
-              </form>
+              </div>
+              {% endfor %}
             </div>
-            {% endfor %}
-          </div>
+            {% if not st.auto_renew %}
+            <label class="optin">
+              <input type="checkbox" name="auto_renew" checked>
+              <span>Keep my card for <strong>automatic renewal</strong> — we’ll charge it each period so your portal never lapses. Cancel anytime from this page.</span>
+            </label>
+            {% endif %}
+          </form>
         {% else %}
           <div class="head"><p style="margin:0"><strong>Please ask your school administrator</strong> to renew the subscription.</p></div>
         {% endif %}

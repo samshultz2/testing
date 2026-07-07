@@ -123,6 +123,22 @@ def record_payment(subdomain, days=None):
     return res
 
 
+def credit_payment(subdomain, plan, reference=None, base_domain=None):
+    """Credit one successful payment: dedup by Paystack reference, extend paid
+    access by the plan's days, and email a receipt. Returns True if it credited
+    now, False if the reference was already processed. Context-free, so the web
+    callback/webhook and the auto-renew cron all funnel through here."""
+    from utils import tenancy, billing_notify
+    if not tenancy.claim_payment(reference, subdomain):
+        return False                              # already processed elsewhere
+    record_payment(subdomain, days=plan['days'])
+    t = tenancy.get_tenant(subdomain)
+    base = base_domain if base_domain is not None else Config.TENANT_BASE_DOMAIN
+    link = f'https://{subdomain}.{base}/' if base else None
+    billing_notify.send_receipt(t, plan, until=getattr(t, 'paid_until', None), link=link)
+    return True
+
+
 def status(tenant):
     """A small dict for the billing page / API."""
     return {
@@ -134,4 +150,12 @@ def status(tenant):
         'days_left': days_left(tenant),
         'access_until': access_until(tenant),
         'paid_until': getattr(tenant, 'paid_until', None),
+        # auto-renew (card on file drives whether it can be switched on)
+        'auto_renew': bool(getattr(tenant, 'auto_renew', 0)),
+        'renew_plan': getattr(tenant, 'renew_plan', None),
+        'card_on_file': bool(getattr(tenant, 'paystack_auth_code', None)),
+        'card_brand': getattr(tenant, 'card_brand', None),
+        'card_last4': getattr(tenant, 'card_last4', None),
+        'card_exp': getattr(tenant, 'card_exp', None),
+        'auto_renew_error': getattr(tenant, 'auto_renew_last_error', None),
     }

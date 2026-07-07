@@ -51,6 +51,17 @@ class Tenant(_ControlBase):
     paid_until = Column(DateTime)
     created_at = Column(DateTime, default=_dt.datetime.utcnow)
     activated_at = Column(DateTime)
+    # Auto-renew (Approach B): a reusable Paystack authorization is stored after a
+    # successful payment where the admin opted in; the daily job then charges the
+    # saved card near expiry. Only card metadata is kept for display — never a PAN.
+    auto_renew = Column(Integer, nullable=False, default=0)
+    renew_plan = Column(String(20))                # tier id to charge on renewal
+    paystack_auth_code = Column(String(120))       # reusable authorization_code
+    card_brand = Column(String(20))
+    card_last4 = Column(String(4))
+    card_exp = Column(String(7))                   # MM/YYYY, for display only
+    auto_renew_last_attempt = Column(DateTime)     # guards one attempt per day
+    auto_renew_last_error = Column(String(300))    # surfaced on the billing page
 
     def __repr__(self):
         return f'<Tenant {self.subdomain} {self.status}>'
@@ -127,9 +138,38 @@ def _reset_engine():
 
 
 def init_control_plane():
-    """Create the ``tenants`` table if missing (idempotent)."""
+    """Create the ``tenants`` table if missing (idempotent), and add any columns
+    introduced after a control-plane DB was first created."""
     engine, _ = _engine_and_session()
     _ControlBase.metadata.create_all(engine)
+    _ensure_columns(engine)
+
+
+# Columns added after the first release; ``create_all`` won't add columns to an
+# existing table, so bring older control-plane DBs up to date in place. Kept as a
+# tiny dialect-portable ADD COLUMN (no defaults/constraints beyond the type).
+_ADDED_COLUMNS = {
+    'auto_renew': 'INTEGER DEFAULT 0',
+    'renew_plan': 'VARCHAR(20)',
+    'paystack_auth_code': 'VARCHAR(120)',
+    'card_brand': 'VARCHAR(20)',
+    'card_last4': 'VARCHAR(4)',
+    'card_exp': 'VARCHAR(7)',
+    'auto_renew_last_attempt': 'TIMESTAMP',
+    'auto_renew_last_error': 'VARCHAR(300)',
+}
+
+
+def _ensure_columns(engine):
+    from sqlalchemy import inspect, text
+    try:
+        existing = {c['name'] for c in inspect(engine).get_columns('tenants')}
+    except Exception:
+        return
+    for name, ddl in _ADDED_COLUMNS.items():
+        if name not in existing:
+            with engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE tenants ADD COLUMN {name} {ddl}'))
 
 
 def _session():
@@ -216,6 +256,28 @@ def set_billing(subdomain, *, plan=None, trial_ends_at=False, paid_until=False):
             t.trial_ends_at = trial_ends_at
         if paid_until is not False:
             t.paid_until = paid_until
+        s.commit()
+        s.expunge(t)
+        return t
+
+
+_AUTORENEW_FIELDS = ('auto_renew', 'renew_plan', 'paystack_auth_code', 'card_brand',
+                     'card_last4', 'card_exp', 'auto_renew_last_attempt',
+                     'auto_renew_last_error')
+
+
+def set_autorenew(subdomain, **fields):
+    """Update auto-renew fields on a school. Only the keys in _AUTORENEW_FIELDS
+    are accepted; a value of the sentinel False leaves that field unchanged."""
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            raise ValueError(f'No such tenant: {subdomain}')
+        for k, v in fields.items():
+            if k not in _AUTORENEW_FIELDS:
+                raise ValueError(f'Unknown auto-renew field: {k}')
+            if v is not False:
+                setattr(t, k, v)
         s.commit()
         s.expunge(t)
         return t
