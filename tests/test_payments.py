@@ -91,3 +91,68 @@ def test_webhook_records_with_valid_signature(app, monkeypatch):
     with app.app_context():
         from models import FeePayment
         assert FeePayment.query.filter_by(reference=ref).count() == 1
+
+
+# --- per-school (multi-tenant) Paystack keys ---------------------------------
+def test_per_school_keys_stored_encrypted_and_reused(app):
+    from utils import payments, crypto
+    from models import SchoolSettings
+    with app.app_context():
+        payments.save_keys('pk_test_pub', 'sk_test_secret')
+        assert payments.is_configured() is True
+        assert payments.public_key() == 'pk_test_pub'
+        assert payments.secret_key() == 'sk_test_secret'         # round-trips
+        raw = SchoolSettings.get('paystack_secret_key')
+        if crypto.is_enabled():                                   # stored encrypted, not cleartext
+            assert raw and 'sk_test_secret' not in raw and crypto.looks_encrypted(raw)
+        # editing only the public key keeps the saved secret
+        payments.save_keys('pk_test_pub2', '')
+        assert payments.public_key() == 'pk_test_pub2'
+        assert payments.secret_key() == 'sk_test_secret'
+        # removing turns the feature off
+        payments.clear_keys()
+        assert payments.is_configured() is False
+
+
+def test_multitenant_never_falls_back_to_platform_env_keys(app, monkeypatch):
+    """A school with no keys of its own must NOT silently collect into the
+    platform's env-configured account when multi-tenant."""
+    from utils import payments
+    from config import Config
+    monkeypatch.setattr(Config, 'PAYSTACK_SECRET_KEY', 'sk_env_platform', raising=False)
+    with app.app_context():
+        payments.clear_keys()
+        monkeypatch.setattr(Config, 'MULTI_TENANT', False, raising=False)
+        assert payments.is_configured() is True          # single-school: env fallback ok
+        monkeypatch.setattr(Config, 'MULTI_TENANT', True, raising=False)
+        assert payments.is_configured() is False          # multi-tenant: no cross-tenant leak
+
+
+def test_payment_settings_page_saves_keys(app):
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['logged_in'] = True
+        s['role'] = 'super_admin'
+    page = c.get('/settings/payments').get_data(as_text=True)
+    assert 'Online fee payments' in page
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', page).group(1)
+    c.post('/settings/payments', data={'public_key': 'pk_test_1', 'secret_key': 'sk_test_1',
+                                       '_csrf_token': tok})
+    with app.app_context():
+        from utils import payments
+        assert payments.public_key() == 'pk_test_1'
+        assert payments.secret_key() == 'sk_test_1'
+        payments.clear_keys()
+
+
+def test_payment_settings_rejects_malformed_keys(app):
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['logged_in'] = True
+        s['role'] = 'super_admin'
+    page = c.get('/settings/payments').get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', page).group(1)
+    c.post('/settings/payments', data={'public_key': 'not_a_key', 'secret_key': '', '_csrf_token': tok})
+    with app.app_context():
+        from utils import payments
+        assert payments.public_key() != 'not_a_key'      # rejected, not stored

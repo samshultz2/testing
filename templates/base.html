@@ -538,6 +538,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('settings.payments_settings') }}" class="nav-link {% if request.endpoint == 'settings.payments_settings' %}active{% endif %}">
+                            <i class="fas fa-money-bill-wave"></i><span>Online Payments</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('settings.backup_page') }}" class="nav-link">
                             <i class="fas fa-database"></i><span>Backup</span>
                         </a>

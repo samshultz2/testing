@@ -3927,6 +3927,14 @@
 ]
 ],
 [
+"settings.payments_settings",
+"/settings/payments",
+[
+"GET",
+"POST"
+]
+],
+[
 "settings.remove_school_logo",
 "/settings/school/logo/remove",
 [

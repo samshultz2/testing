@@ -334,8 +334,7 @@ def pay_webhook():
     a successful charge from its metadata (idempotent by reference)."""
     import hmac
     import hashlib
-    from config import Config
-    secret = (Config.PAYSTACK_SECRET_KEY or '').encode()
+    secret = (payments.secret_key() or '').encode()      # this school's own key
     signature = request.headers.get('x-paystack-signature', '')
     body = request.get_data()
     if not secret or not signature:

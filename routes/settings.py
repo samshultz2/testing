@@ -254,6 +254,46 @@ def edit_branch(branch_id):
     return _ok('Branch updated.', url_for('settings.branches'))
 
 
+@settings_bp.route('/payments', methods=['GET', 'POST'])
+@login_required
+def payments_settings():
+    """This school's OWN Paystack keys, for collecting fees online (parents paying
+    tuition/books). Separate from the platform subscription — money goes straight
+    to this school's Paystack account. The secret key is stored encrypted."""
+    from utils import payments as pay_gw
+    from config import Config
+    if request.method == 'POST':
+        if request.form.get('action') == 'clear':
+            pay_gw.clear_keys()
+            log_action('payment_keys_cleared', target_type='settings')
+            return _ok('Paystack keys removed — online fee payment is now off.',
+                       url_for('settings.payments_settings'))
+        pub = (request.form.get('public_key') or '').strip()
+        sec = (request.form.get('secret_key') or '').strip()
+        if pub and not pub.startswith('pk_'):
+            return _err('That public key looks wrong — it should start with "pk_".',
+                        url_for('settings.payments_settings'))
+        if sec and not sec.startswith('sk_'):
+            return _err('That secret key looks wrong — it should start with "sk_".',
+                        url_for('settings.payments_settings'))
+        pay_gw.save_keys(pub, sec)
+        log_action('payment_keys_updated', target_type='settings')  # never logs the key itself
+        msg = ('Payment settings saved — online fee collection is on.'
+               if pay_gw.is_configured()
+               else 'Public key saved. Add your secret key to start collecting.')
+        return _ok(msg, url_for('settings.payments_settings'))
+
+    base = Config.TENANT_BASE_DOMAIN
+    from utils.tenant_runtime import current_tenant
+    t = current_tenant()
+    host = f'{t.subdomain}.{base}' if (t and base) else request.host
+    return render_template('settings/payments.html',
+                           configured=pay_gw.is_configured(),
+                           public_key=pay_gw.public_key(),
+                           webhook_url=f'https://{host}/parent/pay/webhook',
+                           back_url=url_for('settings.index'))
+
+
 @settings_bp.route('/school', methods=['GET', 'POST'])
 @login_required
 def school_settings():
