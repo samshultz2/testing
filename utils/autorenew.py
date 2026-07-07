@@ -94,7 +94,8 @@ def _charge_authorization(secret, email, amount_kobo, auth_code, subdomain, plan
             f'{_PAYSTACK_API}/transaction/charge_authorization',
             headers={'Authorization': f'Bearer {secret}', 'Content-Type': 'application/json'},
             json={'email': email, 'amount': amount_kobo, 'authorization_code': auth_code,
-                  'metadata': {'subdomain': subdomain, 'plan': plan_id, 'auto_renew': '1'}},
+                  'metadata': {'subdomain': subdomain, 'plan': plan_id, 'amt': amount_kobo,
+                               'auto_renew': '1'}},
             timeout=25)
         body = resp.json() if resp.content else {}
         data = body.get('data') or {}

@@ -262,6 +262,136 @@ def test_paying_redirects_to_paystack_and_csp_allows_it(mt):
     assert 'checkout.paystack.com' in r.headers.get('Content-Security-Policy', '')
 
 
+def _signed_webhook(secret, payload):
+    import hmac, hashlib, json as _json
+    body = _json.dumps(payload).encode()
+    sig = hmac.new(secret.encode(), body, hashlib.sha512).hexdigest()
+    return body, sig
+
+
+def _charge(subdomain, plan='monthly', amount=5000000, amt=5000000, reference='ref1', status='success'):
+    return {'event': 'charge.success',
+            'data': {'status': status, 'reference': reference, 'amount': amount,
+                     'metadata': {'subdomain': subdomain, 'plan': plan, 'amt': amt}}}
+
+
+def test_webhook_credits_once_and_dedups_replays(mt):
+    app, tenancy = mt
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = 'sk_test_x'
+    app.config['TENANT_PRICE_KOBO'] = 5000000
+    c = app.test_client()
+    tenancy.set_billing('trial', trial_ends_at=_in(-2))            # expired
+    assert billing.is_blocked(tenancy.get_tenant('trial'))
+
+    body, sig = _signed_webhook('sk_test_x', _charge('trial'))
+    H = {'X-Paystack-Signature': sig, 'Content-Type': 'application/json'}
+    r = c.post('/billing/webhook', data=body, headers=H)
+    assert r.status_code == 200
+    assert billing.is_active(tenancy.get_tenant('trial'))          # granted
+    left = billing.days_left(tenancy.get_tenant('trial'))
+
+    # same reference again -> no double credit
+    c.post('/billing/webhook', data=body, headers=H)
+    assert billing.days_left(tenancy.get_tenant('trial')) == left
+
+
+def test_webhook_rejects_forged_signature(mt):
+    app, tenancy = mt
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = 'sk_test_x'
+    c = app.test_client()
+    tenancy.set_billing('trial', trial_ends_at=_in(-2))
+    body, _ = _signed_webhook('sk_test_x', _charge('trial', reference='forge'))
+    r = c.post('/billing/webhook', data=body,
+               headers={'X-Paystack-Signature': 'deadbeef', 'Content-Type': 'application/json'})
+    assert r.status_code == 400
+    assert billing.is_blocked(tenancy.get_tenant('trial'))         # nothing granted
+
+
+def test_webhook_ignores_unsuccessful_and_underpaid(mt):
+    app, tenancy = mt
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = 'sk_test_x'
+    app.config['TENANT_PRICE_KOBO'] = 5000000
+    c = app.test_client()
+    tenancy.set_billing('trial', trial_ends_at=_in(-2))
+
+    # a non-success charge event -> no grant
+    body, sig = _signed_webhook('sk_test_x', _charge('trial', reference='a', status='failed'))
+    c.post('/billing/webhook', data=body, headers={'X-Paystack-Signature': sig, 'Content-Type': 'application/json'})
+    assert billing.is_blocked(tenancy.get_tenant('trial'))
+
+    # a *successful* charge but underpaid (paid < the amount we asked for) -> no grant
+    body, sig = _signed_webhook('sk_test_x', _charge('trial', reference='b', amount=100000, amt=5000000))
+    c.post('/billing/webhook', data=body, headers={'X-Paystack-Signature': sig, 'Content-Type': 'application/json'})
+    assert billing.is_blocked(tenancy.get_tenant('trial'))         # underpayment buys nothing
+
+
+def test_callback_does_not_grant_on_abandoned_or_wrong_school(mt):
+    """A user who reaches the payment page and backs out (or a reference that
+    isn't a success / belongs elsewhere) gets no value."""
+    from unittest.mock import patch
+    app, tenancy = mt
+    app.config['BILLING_TEST_MODE'] = False
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = 'sk_test_x'
+    H = {'Host': 'trial.edusyncra.test'}
+    c = app.test_client()
+    html = c.get('/login', headers=H).get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+    c.post('/login', headers=H, data={'username': 'admin', 'password': 'Zebra!Mango42Q', '_csrf_token': tok})
+    tenancy.set_billing('trial', trial_ends_at=_in(-2))
+    assert billing.is_blocked(tenancy.get_tenant('trial'))
+
+    class Resp:
+        def __init__(self, d): self._d = d
+        def json(self): return {'status': True, 'data': self._d}
+
+    # abandoned checkout: verify says the transaction was not successful
+    abandoned = {'status': 'abandoned', 'reference': 'x', 'amount': 0,
+                 'metadata': {'subdomain': 'trial', 'plan': 'monthly', 'amt': 5000000}}
+    with patch('utils.http.get_json', return_value=Resp(abandoned)):
+        c.get('/billing/callback?reference=x', headers=H)
+    assert billing.is_blocked(tenancy.get_tenant('trial'))         # no value
+
+    # a success but for a DIFFERENT school -> must not credit this one
+    other = {'status': 'success', 'reference': 'y', 'amount': 5000000,
+             'metadata': {'subdomain': 'someoneelse', 'plan': 'monthly', 'amt': 5000000}}
+    with patch('utils.http.get_json', return_value=Resp(other)):
+        c.get('/billing/callback?reference=y', headers=H)
+    assert billing.is_blocked(tenancy.get_tenant('trial'))         # still nothing
+
+
+def test_webhook_optin_saves_card_then_cron_renews(mt, monkeypatch):
+    """End-to-end: an opted-in payment (via webhook) stores the card, and the
+    daily cron later auto-charges it near expiry."""
+    from config import Config
+    from utils import autorenew
+    app, tenancy = mt
+    app.config['PLATFORM_PAYSTACK_SECRET_KEY'] = 'sk_test_x'
+    app.config['TENANT_PRICE_KOBO'] = 5000000
+    monkeypatch.setattr(Config, 'PLATFORM_PAYSTACK_SECRET_KEY', 'sk_test_x', raising=False)
+    monkeypatch.setattr(Config, 'TENANT_PRICE_KOBO', 5000000, raising=False)
+    c = app.test_client()
+    tenancy.set_billing('trial', trial_ends_at=_in(-2))
+
+    evt = _charge('trial', reference='pay1')
+    evt['data']['metadata']['auto_renew'] = '1'
+    evt['data']['authorization'] = {'authorization_code': 'AUTH_z', 'reusable': True,
+                                    'brand': 'visa', 'last4': '4081', 'exp_month': '12', 'exp_year': '2030'}
+    body, sig = _signed_webhook('sk_test_x', evt)
+    c.post('/billing/webhook', data=body,
+           headers={'X-Paystack-Signature': sig, 'Content-Type': 'application/json'})
+
+    t = tenancy.get_tenant('trial')
+    assert billing.is_active(t) and t.auto_renew == 1 and t.paystack_auth_code == 'AUTH_z'
+
+    # near expiry, the cron auto-charges the saved card
+    tenancy.set_billing('trial', paid_until=_in(1))
+    monkeypatch.setattr(autorenew, '_charge_authorization',
+                        lambda *a, **k: (True, {'reference': 'auto1'}, None))
+    res = autorenew.charge_due()
+    assert any(r['subdomain'] == 'trial' and r['action'] == 'charged' for r in res)
+    assert billing.days_left(tenancy.get_tenant('trial')) >= 29
+
+
 def test_autorenew_optin_and_toggle_through_the_app(mt):
     app, tenancy = mt
     H = {'Host': 'trial.edusyncra.test'}

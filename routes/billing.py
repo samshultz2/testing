@@ -45,6 +45,32 @@ def _credit_and_receipt(subdomain, plan, reference=None):
                                   base_domain=current_app.config.get('TENANT_BASE_DOMAIN'))
 
 
+def _grant_from_paystack(subdomain, d):
+    """Given a genuinely successful Paystack transaction `d`, credit the plan it
+    was for — but only if the amount actually paid covers what we asked for.
+    Returns the plan dict when value was granted (or already had been), or None
+    when the payment was rejected as underpaid. Deduped by reference internally,
+    so it's safe from both the callback and the webhook.
+
+    Security: the expected amount is read from the transaction's own metadata
+    (`amt`, stamped by us at initialize) — never from the user — so a live price
+    change can't reject a legitimate payment, and a partial/underpaid charge can
+    never buy a full plan."""
+    meta = d.get('metadata') or {}
+    plan = get_plan(meta.get('plan'))
+    expected = int(meta.get('amt') or plan.get('price_kobo') or 0)
+    paid = int(d.get('amount') or 0)
+    if expected and paid < expected:
+        current_app.logger.warning(
+            'Billing: underpaid — %s ref=%s paid=%s expected=%s; not credited.',
+            subdomain, d.get('reference'), paid, expected)
+        return None
+    from utils import autorenew
+    autorenew.capture_authorization(subdomain, d)      # only if opted in
+    _credit_and_receipt(subdomain, plan, reference=d.get('reference'))
+    return plan
+
+
 @billing_bp.route('/')
 @login_required
 def index():
@@ -106,6 +132,7 @@ def start_payment():
                               json={'email': t.admin_email, 'amount': amount,
                                     'callback_url': url_for('billing.callback', _external=True),
                                     'metadata': {'subdomain': t.subdomain, 'plan': plan['id'],
+                                                 'amt': amount,
                                                  'auto_renew': '1' if auto_renew else '0'}},
                               timeout=20)          # stdlib socket timeout — never hangs forever
         data = resp.json() if resp.content else {}
@@ -167,12 +194,12 @@ def callback():
             d = data.get('data') or {}
             if data.get('status') and d.get('status') == 'success' and \
                     (d.get('metadata') or {}).get('subdomain') == t.subdomain:
-                plan = get_plan((d.get('metadata') or {}).get('plan'))
-                from utils import autorenew
-                autorenew.capture_authorization(t.subdomain, d)     # if opted in
-                _credit_and_receipt(t.subdomain, plan, reference=reference)
-                flash(f"Payment received — {plan['label']} subscription active. Thank you!", 'success')
-                return redirect(url_for('main.dashboard'))
+                plan = _grant_from_paystack(t.subdomain, d)
+                if plan:
+                    flash(f"Payment received — {plan['label']} subscription active. Thank you!", 'success')
+                    return redirect(url_for('main.dashboard'))
+                flash('That payment could not be applied. If you were charged, please contact support.', 'error')
+                return redirect(url_for('billing.index'))
         except Exception:
             current_app.logger.exception('Paystack verify failed for tenant %s', t.subdomain)
     flash('We could not confirm that payment yet. If you were charged it will apply shortly.', 'warning')
@@ -196,11 +223,8 @@ def webhook():
         d = event.get('data') or {}
         sub = (d.get('metadata') or {}).get('subdomain')
         if sub and (d.get('status') == 'success'):
-            plan = get_plan((d.get('metadata') or {}).get('plan'))
             try:
-                from utils import autorenew
-                autorenew.capture_authorization(sub, d)             # if opted in
-                _credit_and_receipt(sub, plan, reference=d.get('reference'))
+                _grant_from_paystack(sub, d)       # verifies amount, dedups, credits
             except ValueError:
                 pass
     return jsonify(status='ok')
