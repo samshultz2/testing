@@ -191,6 +191,17 @@ def test_paying_a_tier_grants_that_tiers_days(mt):
     assert billing.days_left(tenancy.get_tenant('trial')) >= 360 + 118
 
 
+def test_subscription_link_in_sidebar_for_tenant_admin(mt):
+    app, tenancy = mt
+    H = {'Host': 'trial.edusyncra.test'}
+    c = app.test_client()
+    html = c.get('/login', headers=H).get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+    c.post('/login', headers=H, data={'username': 'admin', 'password': 'Zebra!Mango42Q', '_csrf_token': tok})
+    page = c.get('/students', headers=H).get_data(as_text=True)
+    assert '/billing' in page and 'Subscription' in page      # sidebar link renders
+
+
 def test_autorenew_optin_and_toggle_through_the_app(mt):
     app, tenancy = mt
     H = {'Host': 'trial.edusyncra.test'}

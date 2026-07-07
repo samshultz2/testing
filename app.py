@@ -340,7 +340,7 @@ def create_app(config_class=None):
             """Whether to show the school-side Subscription link (multi-tenant,
             non-owner school), plus days left for a subtle badge."""
             try:
-                if not current_app.config.get('MULTI_TENANT'):
+                if not app.config.get('MULTI_TENANT'):
                     return {'show': False}
                 from utils.tenant_runtime import current_tenant
                 from utils import billing
