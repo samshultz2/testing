@@ -64,5 +64,19 @@ To test the reaper: expire a school and run
 | `TENANT_TRIAL_DAYS` | 3 | free trial length |
 | `TENANT_PLAN_DAYS` | 30 | days added per payment |
 | `TENANT_BILLING_GRACE_DAYS` | 7 | unpaid days after expiry before deletion |
-| `TENANT_PRICE_KOBO` | 0 | price per period (kobo) |
+| `TENANT_PRICE_KOBO` | 0 | monthly base price (kobo) — the **seed** price |
 | `BILLING_TEST_MODE` | off | simulate payments (never in production) |
+
+### Editing prices live (no redeploy)
+
+The env vars above only **seed** the tiers. Day-to-day, prices are edited from
+the platform console at **`/platform/pricing`** (Monthly / Termly / Annual: price,
+duration, label, badge, on/off). The edit is stored in the control-plane DB and
+takes effect immediately everywhere the tiers appear — the marketing homepage,
+the sign-up page, and each school's billing page (all read `utils.plans.tenant_plans`).
+
+The price is captured at checkout, so **a price change only affects future
+payments** — schools that already paid keep the access they bought; the new
+price applies the next time they renew. The Monthly tier is the anchor (it sets
+every other tier's savings % and the homepage headline price) and can't be
+switched off.

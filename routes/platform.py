@@ -137,8 +137,6 @@ def homepage():
         for k in ('brand', 'hero_title', 'hero_subtitle', 'hero_cta',
                   'trial_note', 'price_period', 'footer'):
             content[k] = (request.form.get(k) or '').strip()
-        price = request.form.get('price_naira', type=int)
-        content['price_naira'] = price if price else None
         content['features'] = site_content.parse_pairs(
             request.form.get('features'), ('title', 'body'))
         content['steps'] = site_content.parse_pairs(
@@ -160,6 +158,53 @@ def homepage():
         steps_text=site_content.format_pairs(content.get('steps'), ('title', 'body')),
         faqs_text=site_content.format_pairs(content.get('faqs'), ('q', 'a')),
         testimonials_text=site_content.format_pairs(content.get('testimonials'), ('name', 'quote')))
+
+
+@platform_bp.route('/pricing', methods=['GET', 'POST'])
+@platform_admin_required
+def pricing():
+    """Edit the subscription tiers (price, duration, label, badge, on/off).
+    Stored in the control plane, so changes are live everywhere — homepage,
+    register and each school's billing page — with no redeploy. Changing a price
+    only affects future payments; existing subscribers keep what they paid for."""
+    from utils import plans
+    if request.method == 'POST':
+        tiers = {}
+        for pid in plans.TIER_IDS:
+            price = request.form.get(f'{pid}_price', type=int)      # naira
+            days = request.form.get(f'{pid}_days', type=int)
+            if price is not None and price < 0:
+                flash('Prices cannot be negative.', 'error')
+                return redirect(url_for('platform.pricing'))
+            if days is not None and days < 1:
+                flash('Duration must be at least 1 day.', 'error')
+                return redirect(url_for('platform.pricing'))
+            tiers[pid] = {
+                'enabled': request.form.get(f'{pid}_enabled') == 'on',
+                'label': (request.form.get(f'{pid}_label') or '').strip() or None,
+                'price_kobo': price * 100 if price is not None else None,
+                'days': days or None,
+                'badge': (request.form.get(f'{pid}_badge') or '').strip() or None,
+            }
+        # The Monthly tier is the anchor for every other tier's savings and the
+        # homepage headline price — it can never be switched off.
+        if not tiers['monthly']['enabled']:
+            tiers['monthly']['enabled'] = True
+            flash('The Monthly tier stays on — it anchors pricing everywhere. '
+                  'Other changes were saved.', 'info')
+        plans.save_pricing({
+            'tiers': tiers,
+            'updated_at': _dt.datetime.utcnow().isoformat() + 'Z',
+            'updated_by': session.get('username') or 'admin',
+        })
+        flash('Pricing updated — changes are live.', 'success')
+        return redirect(url_for('platform.pricing'))
+
+    stored = plans.get_pricing()
+    return render_template(
+        'platform/pricing.html', active='pricing',
+        tiers=plans.tenant_plans(include_disabled=True),
+        updated_at=stored.get('updated_at'), updated_by=stored.get('updated_by'))
 
 
 def _back(default='platform.schools'):

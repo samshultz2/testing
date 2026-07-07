@@ -3103,6 +3103,14 @@
 ]
 ],
 [
+"platform.pricing",
+"/platform/pricing",
+[
+"GET",
+"POST"
+]
+],
+[
 "platform.schools",
 "/platform/schools",
 [

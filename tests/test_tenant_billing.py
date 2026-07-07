@@ -200,3 +200,31 @@ def test_plan_tiers_are_discounted():
     assert a['days'] == 365 and a['savings'] == 20
     assert a['price_naira'] < m['price_naira'] * 12          # annual is cheaper than 12x monthly
     assert get_plan('nonsense', cfg)['id'] == 'monthly'      # safe fallback
+
+
+def test_pricing_overrides_are_live(cp):
+    """Admin edits at /platform/pricing (stored in the control plane) take
+    precedence over config, hide disabled tiers, and re-anchor savings on the
+    new Monthly price — with no redeploy."""
+    from utils import plans
+    cfg = dict(TENANT_PRICE_KOBO=5000000, TENANT_PLAN_DAYS=30, TENANT_TERM_DAYS=120)
+    assert plans.get_plan('monthly', cfg)['price_naira'] == 50000     # config default
+
+    plans.save_pricing({'tiers': {
+        'monthly': {'enabled': True, 'price_kobo': 4000000},                       # ₦40,000
+        'termly':  {'enabled': False},                                             # hidden
+        'annual':  {'enabled': True, 'label': 'Yearly', 'price_kobo': 36000000,    # ₦360,000
+                    'badge': 'Cheapest'},
+    }})
+
+    live = plans.tenant_plans(cfg)
+    assert [p['id'] for p in live] == ['monthly', 'annual']            # termly dropped
+    assert plans.get_plan('monthly', cfg)['price_naira'] == 40000      # override wins
+    a = plans.get_plan('annual', cfg)
+    assert a['label'] == 'Yearly' and a['badge'] == 'Cheapest'
+    assert a['savings'] == 25                                          # vs new ₦40k x12
+
+    # the admin editor still sees every tier, with the enabled flag
+    allt = plans.tenant_plans(cfg, include_disabled=True)
+    assert len(allt) == 3
+    assert next(p for p in allt if p['id'] == 'termly')['enabled'] is False

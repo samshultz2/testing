@@ -44,12 +44,10 @@
 
     <div class="sect">
       <h3>Pricing</h3>
-      <div class="row2">
-        <div><label>Price (₦)</label><input type="number" name="price_naira" min="0" value="{{ content.price_naira }}">
-          <div class="hint">Leave blank to use the configured subscription price.</div></div>
-        <div><label>Billing period</label><input type="text" name="price_period" value="{{ content.price_period }}">
-          <div class="hint">e.g. month, term, year.</div></div>
-      </div>
+      <label>Billing period word</label>
+      <input type="text" name="price_period" value="{{ content.price_period }}">
+      <div class="hint">e.g. month, term, year. The <strong>price</strong> and plans are set on the
+        <a href="{{ url_for('platform.pricing') }}">Pricing</a> page — the homepage shows your live Monthly price automatically.</div>
     </div>
 
     <div class="sect">

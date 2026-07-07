@@ -81,6 +81,15 @@ DEFAULTS = {
 
 
 def _price_naira():
+    """The headline price shown on the homepage — always the live Monthly tier,
+    so pricing has a single source (the /platform/pricing editor)."""
+    try:
+        from utils.plans import tenant_plans
+        for p in tenant_plans():
+            if p['id'] == 'monthly':
+                return p['price_naira']
+    except Exception:
+        pass
     kobo = (current_app.config.get('TENANT_PRICE_KOBO', 0) or 0)
     return int(kobo // 100)
 
@@ -96,9 +105,9 @@ def get_homepage():
         stored = None
     if stored:
         content.update({k: v for k, v in stored.items() if v is not None})
-    if not content.get('price_naira'):
-        content['price_naira'] = _price_naira()
-    # Keep trial note in step with the configured trial length if left default.
+    # Price is owned by the pricing editor (the Monthly tier), not the homepage
+    # editor — one source of truth, so the two can never drift apart.
+    content['price_naira'] = _price_naira()
     return content
 
 

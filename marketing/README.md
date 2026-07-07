@@ -28,9 +28,9 @@ Features / steps / FAQ are edited as simple `Title | description` (or
 
 Content is stored in the **control-plane database**
 (`utils/tenancy.py` → `SiteContent`), with sensible defaults in
-`utils/site_content.py` used until something is overridden. The price defaults
-to the configured subscription amount (`TENANT_PRICE_KOBO`) unless you set an
-explicit figure in the editor.
+`utils/site_content.py` used until something is overridden. The headline price is
+**not** set here — it always mirrors the live Monthly tier from the pricing editor
+(`/platform/pricing`), so the homepage and the actual plans can never drift apart.
 
 ## Making the URLs resolve (DNS only)
 
