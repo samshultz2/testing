@@ -42,6 +42,13 @@ waitress==3.0.2
 # QR code for the in-app "Share App" panel (pure Python, SVG output — no Pillow).
 qrcode==8.2
 
+# HTTP client for outbound calls (Paystack billing). Declared explicitly with a
+# compatible urllib3 so a stray transitive combo can't trigger
+# "RequestsDependencyWarning: urllib3 ... doesn't match a supported version" or,
+# worse, hang a request. requests 2.32+ supports urllib3 2.x.
+requests==2.32.3
+urllib3==2.2.3
+
 # Database migrations (Alembic via Flask-Migrate). `flask db ...` commands;
 # schema is tracked in db_migrations/. See docs/MIGRATIONS.md.
 Flask-Migrate==4.1.0

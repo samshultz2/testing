@@ -106,7 +106,8 @@ def start_payment():
                              json={'email': t.admin_email, 'amount': amount,
                                    'callback_url': url_for('billing.callback', _external=True),
                                    'metadata': {'subdomain': t.subdomain, 'plan': plan['id'],
-                                                'auto_renew': '1' if auto_renew else '0'}}, timeout=20)
+                                                'auto_renew': '1' if auto_renew else '0'}},
+                             timeout=(8, 20))     # (connect, read) — never hang forever
         data = resp.json() if resp.content else {}
         if data.get('status') and (data.get('data') or {}).get('authorization_url'):
             return redirect(data['data']['authorization_url'])
@@ -157,7 +158,7 @@ def callback():
         import requests
         try:
             resp = requests.get(f'{_PAYSTACK_API}/transaction/verify/{reference}',
-                                headers=_headers(), timeout=20)
+                                headers=_headers(), timeout=(8, 20))
             data = resp.json()
             d = data.get('data') or {}
             if data.get('status') and d.get('status') == 'success' and \
