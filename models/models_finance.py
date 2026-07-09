@@ -93,6 +93,35 @@ class FeeDiscount(db.Model):
         return f'<FeeDiscount {self.student_id} t{self.term_id}: {self.amount}>'
 
 
+class AdditionalCharge(db.Model):
+    """An ad-hoc line on a student's term bill beyond the standard fee structure:
+    an extra charge (excursion, extra lesson, late-payment penalty) or a credit
+    note (goodwill credit that reduces what's owed). Bulk billing and penalty runs
+    create these in batches; student_bill folds them into the payable amount."""
+    __tablename__ = 'additional_charges'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    kind = db.Column(db.String(10), nullable=False, default='charge')  # 'charge' | 'credit'
+    category = db.Column(db.String(60))            # Penalty, Extra Lesson, Credit Note, …
+    description = db.Column(db.String(200))
+    amount = db.Column(db.Float, nullable=False, default=0)            # always positive
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    student = db.relationship('Student', backref=db.backref('additional_charges', lazy='dynamic'))
+    term = db.relationship('Term')
+
+    @property
+    def signed(self):
+        return (self.amount or 0) * (1 if self.kind == 'charge' else -1)
+
+    def __repr__(self):
+        return f'<AdditionalCharge {self.kind} {self.amount} s{self.student_id}>'
+
+
 class FinanceTransaction(db.Model):
     """Central finance ledger — the single source of truth for every monetary
     event across the platform.

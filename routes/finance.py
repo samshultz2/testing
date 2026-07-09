@@ -16,7 +16,7 @@ from utils.branch_scope import require_branch_access, scope_query, scope_by_stud
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
     Student, Term, SchoolClass, ClassArm, StudentEnrollment,
-    ClassArmAssignment,
+    ClassArmAssignment, AdditionalCharge,
 )
 from utils.access_control import (
     login_required, admin_required, filter_classes_for_user,
@@ -757,12 +757,22 @@ def delete_payment(payment_id):
     payment = db.get_or_404(FeePayment, payment_id)
     require_branch_access(payment.branch_id)   # no cross-branch payment deletion
     term_id = payment.term_id
+    reason = (request.form.get('reason') or '').strip()
+    # Audited reversal: record the full before-state + who/why. The ledger keeps a
+    # permanent reversing entry (FeePayment.after_delete), so the money movement is
+    # never lost even though the payment row is removed.
     from utils.audit import log_action
-    log_action('finance.payment_delete', detail=f'{payment.amount:g}',
+    from utils.access_control import get_current_user
+    who = getattr(get_current_user(), 'full_name', None) or session.get('user') or 'unknown'
+    before = (f'₦{payment.amount:g} · {payment.method} · {payment.receipt_no or "-"} · '
+              f'{payment.payment_date} · student {payment.student_id}')
+    log_action('finance.payment_reversed',
+               detail=f'reversed by {who}: {reason or "(no reason given)"} | was: {before}',
                target_type='feepayment', target_id=payment.id, target_label=payment.receipt_no)
     db.session.delete(payment)
     db.session.commit()
-    return _ok('Payment deleted.', url_for('finance.payments_list', term_id=term_id))
+    return _ok('Payment reversed (audit logged, ledger updated).',
+               url_for('finance.payments_list', term_id=term_id))
 
 
 # ============================================================================
@@ -924,6 +934,8 @@ def defaulters():
         disc_map = dict(scope_by_student(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
                         .filter(FeeDiscount.term_id == term_id), FeeDiscount)
                         .group_by(FeeDiscount.student_id).all())
+        from utils.finance import charges_map
+        extra_map = charges_map(term_id)                 # net additional charges / credit notes
         total_cache = {}
         for e in enrollments:
             asg = e.class_arm_assignment
@@ -931,7 +943,7 @@ def defaulters():
             if key not in total_cache:
                 total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
             billed = total_cache[key]
-            payable = max(billed - (disc_map.get(e.student_id) or 0.0), 0)
+            payable = max(billed + (extra_map.get(e.student_id) or 0.0) - (disc_map.get(e.student_id) or 0.0), 0)
             paid = paid_map.get(e.student_id) or 0.0
             balance = payable - paid
             if balance > 0.005:
@@ -1424,3 +1436,130 @@ def accounting_export():
     cf.append([]); cf.append(['Net Cash Movement', s['cash_flow']['net_change']])
 
     return xlsx_response(wb, 'financial_statements.xlsx')
+
+
+# ============================================================================
+# BILLING TOOLS — additional charges, bulk billing, penalties, credit notes
+# (Phase 3). Server-rendered; results flow straight into student_bill.
+# ============================================================================
+def _enrolled_students(term_id, class_id=None):
+    """Active students enrolled in a term (optionally one class), branch-scoped,
+    with their branch — for bulk billing."""
+    from utils.branch_scope import scope_query
+    q = scope_query(
+        StudentEnrollment.query
+        .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .filter(StudentEnrollment.is_active == True, ClassArmAssignment.term_id == term_id),
+        ClassArmAssignment)
+    if class_id:
+        q = q.filter(ClassArmAssignment.class_id == class_id)
+    out = []
+    for e in q.all():
+        if e.student and e.student.is_active:
+            out.append((e.student, e.class_arm_assignment))
+    return out
+
+
+def _who():
+    from utils.access_control import get_current_user
+    return getattr(get_current_user(), 'full_name', None) or session.get('user') or 'staff'
+
+
+@finance_bp.route('/billing-tools')
+@login_required
+def billing_tools():
+    """Bulk billing, late-payment penalties and credit notes — the advanced
+    billing actions, kept off the everyday screens."""
+    term_id = request.args.get('term_id', type=int) or _active_term_id()
+    terms = Term.query.order_by(Term.id.desc()).all()
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+    recent = (AdditionalCharge.query.filter_by(term_id=term_id)
+              .order_by(AdditionalCharge.id.desc()).limit(50).all() if term_id else [])
+    charge_rows = [{
+        'id': c.id, 'student': (c.student.full_name if c.student else '—'),
+        'kind': c.kind, 'category': c.category or '', 'description': c.description or '',
+        'amount': c.amount, 'by': c.created_by or '',
+        'date': c.created_at.strftime('%d %b %Y') if c.created_at else '',
+    } for c in recent]
+    return render_template('finance/billing_tools.html',
+                           term_id=term_id, sel=request.args,
+                           terms=[{'id': t.id, 'full_name': t.full_name} for t in terms],
+                           classes=[{'id': c.id, 'name': c.name} for c in classes],
+                           charges=charge_rows, nav=_nav_urls())
+
+
+@finance_bp.route('/billing-tools/bulk-charge', methods=['POST'])
+@login_required
+def bulk_charge():
+    """Add one extra charge (or credit) to every enrolled student in a term/class."""
+    term_id = request.form.get('term_id', type=int)
+    class_id = request.form.get('class_id', type=int)
+    kind = 'credit' if request.form.get('kind') == 'credit' else 'charge'
+    amount = request.form.get('amount', type=float) or 0
+    category = (request.form.get('category') or ('Credit Note' if kind == 'credit' else 'Additional Charge')).strip()
+    description = (request.form.get('description') or category).strip()
+    if not term_id or amount <= 0:
+        return _err('Pick a term and a positive amount.', url_for('finance.billing_tools', term_id=term_id))
+    students = _enrolled_students(term_id, class_id)
+    for student, caa in students:
+        db.session.add(AdditionalCharge(student_id=student.id, term_id=term_id,
+                                        branch_id=caa.branch_id, kind=kind, category=category,
+                                        description=description, amount=amount, created_by=_who()))
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('finance.bulk_charge', detail=f'{kind} ₦{amount:g} x{len(students)} — {description}')
+    verb = 'Credit note' if kind == 'credit' else 'Charge'
+    return _ok(f'{verb} of ₦{amount:,.0f} applied to {len(students)} student(s).',
+               url_for('finance.billing_tools', term_id=term_id))
+
+
+@finance_bp.route('/billing-tools/penalties', methods=['POST'])
+@login_required
+def apply_penalties():
+    """Apply a late-payment penalty to students who still owe for the term. Fixed
+    amount or a percentage of the outstanding balance. Skips students who already
+    have a penalty this term, so a re-run never double-charges."""
+    term_id = request.form.get('term_id', type=int)
+    if not term_id:
+        return _err('Pick a term.', url_for('finance.billing_tools'))
+    ptype = request.form.get('ptype')                       # 'fixed' | 'percent'
+    value = request.form.get('value', type=float) or 0
+    if value <= 0:
+        return _err('Enter a penalty amount / percentage.', url_for('finance.billing_tools', term_id=term_id))
+    existing = {c.student_id for c in AdditionalCharge.query
+                .filter_by(term_id=term_id, category='Penalty').all()}
+    applied = 0
+    for student, caa in _enrolled_students(term_id):
+        if student.id in existing:
+            continue
+        bill = student_bill(student.id, term_id)
+        if bill['balance'] <= 0.005:
+            continue
+        amount = round(bill['balance'] * value / 100.0, 2) if ptype == 'percent' else value
+        if amount <= 0:
+            continue
+        db.session.add(AdditionalCharge(student_id=student.id, term_id=term_id,
+                                        branch_id=caa.branch_id, kind='charge', category='Penalty',
+                                        description=('Late payment penalty (%.0f%%)' % value) if ptype == 'percent'
+                                        else 'Late payment penalty', amount=amount, created_by=_who()))
+        applied += 1
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('finance.penalties', detail=f'{ptype} {value} -> {applied} student(s), term {term_id}')
+    return _ok(f'Penalty applied to {applied} student(s) with an outstanding balance.',
+               url_for('finance.billing_tools', term_id=term_id))
+
+
+@finance_bp.route('/billing-tools/charge/<int:charge_id>/remove', methods=['POST'])
+@login_required
+def remove_charge(charge_id):
+    c = db.get_or_404(AdditionalCharge, charge_id)
+    require_branch_access(c.branch_id)
+    term_id = c.term_id
+    from utils.audit import log_action
+    log_action('finance.charge_removed',
+               detail=f'{c.kind} ₦{c.amount:g} — {c.description}',
+               target_type='additionalcharge', target_id=c.id)
+    db.session.delete(c)
+    db.session.commit()
+    return _ok('Removed.', url_for('finance.billing_tools', term_id=term_id))

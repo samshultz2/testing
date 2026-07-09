@@ -75,18 +75,45 @@ def student_bill(student_id, term_id):
     paid = (db.session.query(func.coalesce(func.sum(FeePayment.amount), 0.0))
             .filter(FeePayment.student_id == student_id,
                     FeePayment.term_id == term_id).scalar()) or 0.0
+    charges, credits = student_charges(student_id, term_id)
 
-    payable = max(billed - discount, 0)
+    payable = max(billed + charges - discount - credits, 0)
     return {
         'class_id': class_id,
         'arm_id': arm_id,
         'lines': lines,
         'billed': billed,
+        'charges': charges,           # ad-hoc extra charges (penalties, extras)
+        'credits': credits,           # credit notes
         'discount': discount,
         'paid': paid,
         'payable': payable,
         'balance': payable - paid,
     }
+
+
+def student_charges(student_id, term_id):
+    """(extra charges, credit notes) for one student in a term."""
+    from models import AdditionalCharge
+    rows = (db.session.query(AdditionalCharge.kind, func.coalesce(func.sum(AdditionalCharge.amount), 0.0))
+            .filter(AdditionalCharge.student_id == student_id,
+                    AdditionalCharge.term_id == term_id)
+            .group_by(AdditionalCharge.kind).all())
+    m = {k: float(v or 0) for k, v in rows}
+    return m.get('charge', 0.0), m.get('credit', 0.0)
+
+
+def charges_map(term_id):
+    """{student_id: net extra (charges - credits)} for a term — for bulk reports."""
+    from models import AdditionalCharge
+    rows = (db.session.query(AdditionalCharge.student_id, AdditionalCharge.kind,
+                             func.coalesce(func.sum(AdditionalCharge.amount), 0.0))
+            .filter(AdditionalCharge.term_id == term_id)
+            .group_by(AdditionalCharge.student_id, AdditionalCharge.kind).all())
+    out = {}
+    for sid, kind, total in rows:
+        out[sid] = out.get(sid, 0.0) + float(total or 0) * (1 if kind == 'charge' else -1)
+    return out
 
 
 def next_receipt_no():
