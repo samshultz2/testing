@@ -304,7 +304,15 @@ function Scores({ d, notify }) {
   const nav = useNav();
   const [scores, setScores] = useState(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); return m; });
   const [busy, setBusy] = useState(false);
-  React.useEffect(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); setScores(m); }, [d.students_data]);
+  // Multi-select + bulk fill: tick several students and set them all to one score
+  // at once (e.g. everyone who scored 5 in 1st CA).
+  const [selected, setSelected] = useState({});
+  const [fillValue, setFillValue] = useState('');
+  React.useEffect(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); setScores(m); setSelected({}); }, [d.students_data]);
+  const selectedIds = d.students_data.filter((s) => selected[s.id]).map((s) => s.id);
+  const allSelected = d.students_data.length > 0 && d.students_data.every((s) => selected[s.id]);
+  const toggleAll = (on) => { const m = {}; if (on) d.students_data.forEach((s) => { m[s.id] = true; }); setSelected(m); };
+  const applyFill = () => { if (!selectedIds.length) return; setScores((m) => { const n = { ...m }; selectedIds.forEach((id) => { n[id] = fillValue; }); return n; }); };
   const set = (params) => navParams(nav.go, d.self_url, { term_id: d.term_id, assignment_id: d.assignment_id, class_subject_id: d.class_subject_id, assessment_type_id: d.assessment_type_id, ...params });
   // Remember the last term+class so returning to score entry doesn't re-ask for
   // them; restore once on a fresh visit when nothing is selected yet.
@@ -375,10 +383,25 @@ function Scores({ d, notify }) {
           <div className="card-header"><h3>{d.selected_subject} - {d.selected_assessment}</h3><span className="badge badge-primary">Max: {d.max_score}</span></div>
           <div className="card-body"><form onSubmit={save}>
             <p className="text-muted text-sm mb-2"><i aria-hidden="true" className="fas fa-keyboard" /> Type a score and press <kbd>Enter</kbd> (or <kbd>↓</kbd>/<kbd>↑</kbd>) to jump to the next student — no mouse needed.</p>
+            <div className="bulk-fill" style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap', padding: '.6rem .75rem', marginBottom: '.75rem', background: 'var(--surface-2, #f4f6f9)', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10 }}>
+              <span className="text-sm" style={{ fontWeight: 600 }}><i aria-hidden="true" className="fas fa-people-group" /> Tick students, then set them all at once:</span>
+              <input type="number" className="form-control" style={{ width: 110 }} min="0" max={d.max_score} step="0.5"
+                     value={fillValue} placeholder="e.g. 5" aria-label="Value to fill selected students"
+                     onChange={(e) => setFillValue(e.target.value)}
+                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyFill(); } }} />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={applyFill} disabled={!selectedIds.length}>
+                <i aria-hidden="true" className="fas fa-fill-drip" /> Fill {selectedIds.length ? selectedIds.length + ' selected' : 'selected'}</button>
+              {selectedIds.length > 0 && <button type="button" className="btn btn-link btn-sm" onClick={() => setSelected({})}>Clear selection</button>}
+            </div>
             <div className="table-container"><table className="data-table">
-              <thead><tr><th>S/N</th><th>Student</th><th>Gender</th><th>Score (Max: {d.max_score})</th></tr></thead>
+              <thead><tr>
+                <th style={{ width: 34 }}><input type="checkbox" checked={allSelected} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all students" /></th>
+                <th>S/N</th><th>Student</th><th>Gender</th><th>Score (Max: {d.max_score})</th></tr></thead>
               <tbody>{d.students_data.map((s, i) => (
-                <tr key={s.id}><td>{i + 1}</td><td>{s.full_name}</td>
+                <tr key={s.id} className={selected[s.id] ? 'row-selected' : ''}>
+                  <td><input type="checkbox" checked={!!selected[s.id]} aria-label={'Select ' + s.full_name}
+                             onChange={(e) => setSelected((m) => ({ ...m, [s.id]: e.target.checked }))} /></td>
+                  <td>{i + 1}</td><td>{s.full_name}</td>
                   <td><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></td>
                   <td><input type="number" className="form-control score-input" style={{ width: 100 }} min="0" max={d.max_score} step="0.5"
                              value={scores[s.id] ?? ''} onKeyDown={onScoreKey}
