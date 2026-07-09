@@ -158,6 +158,17 @@ def _reverse_by_origin(connection, origin_type, origin_id):
                 description='Reversal (source deleted)', reversal_of_id=row.id)
 
 
+def ensure_tables(bind=None):
+    """Create the finance tables (ledger, additional charges, installment plans)
+    if they don't exist yet. Idempotent (checkfirst). Needed because production
+    runs with SKIP_CREATE_ALL=1 — Alembic owns the schema and never auto-creates
+    these newer tables — and because existing tenant databases predate them."""
+    from models import db, FinanceTransaction, AdditionalCharge, InstallmentPlan
+    tables = [FinanceTransaction.__table__, AdditionalCharge.__table__, InstallmentPlan.__table__]
+    engine = bind if bind is not None else db.engine
+    db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
+
+
 _HOOKS_REGISTERED = False
 
 

@@ -215,8 +215,15 @@ def create_app(config_class=None):
 
     # Finance ledger: mirror every money event (fees, sales, expenses) into the
     # central FinanceTransaction ledger — the single source of truth.
-    from utils.finance_ledger import register_ledger_hooks
+    from utils.finance_ledger import register_ledger_hooks, ensure_tables
     register_ledger_hooks()
+    # Ensure the finance tables exist even under SKIP_CREATE_ALL (Alembic-managed
+    # production) — they were added after the schema baseline.
+    try:
+        with app.app_context():
+            ensure_tables()
+    except Exception:
+        app.logger.exception('Could not ensure finance tables on the main database')
 
     # Enable CSRF protection for all state-changing requests
     from utils.csrf import init_csrf

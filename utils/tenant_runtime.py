@@ -30,6 +30,13 @@ def _engine_for(url):
                     if url.startswith('postgresql') else {})
             eng = create_engine(url, **opts)
             _engines[url] = eng
+            # Existing tenant DBs predate the finance tables; create them once on
+            # first use (idempotent) so /finance never 500s on a missing table.
+            try:
+                from utils.finance_ledger import ensure_tables
+                ensure_tables(bind=eng)
+            except Exception:
+                current_app.logger.exception('Could not ensure finance tables for tenant engine')
         return eng
 
 
