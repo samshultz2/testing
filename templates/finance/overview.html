@@ -64,6 +64,8 @@
       <select name="method"><option value="">All</option>{% for m in opts.methods %}<option value="{{ m }}" {{ 'selected' if sel.get('method')==m }}>{{ m }}</option>{% endfor %}</select></div>
     <div class="fg"><label>Type</label>
       <select name="direction"><option value="">Both</option><option value="in" {{ 'selected' if sel.get('direction')=='in' }}>Revenue</option><option value="out" {{ 'selected' if sel.get('direction')=='out' }}>Expense</option></select></div>
+    {% set views_key = 'overview' %}{% set views_base = url_for('finance.overview') %}
+    {% include 'finance/_saved_filters.html' %}
     <div class="fo-actions">
       <button type="submit" class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-filter"></i> Apply</button>
       <a href="{{ url_for('finance.overview') }}" class="btn btn-link btn-sm">Reset</a>

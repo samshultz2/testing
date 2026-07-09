@@ -1363,6 +1363,70 @@ def ledger_sync():
     return redirect(url_for('finance.overview'))
 
 
+@finance_bp.route('/search')
+@login_required
+def search():
+    """One search box across the whole finance module — matches students,
+    fee payments, expenses and charges/credits (branch-scoped) and links each
+    hit to where it lives."""
+    from utils.search import like_term
+    q = (request.args.get('q') or '').strip()
+    results = {'students': [], 'payments': [], 'expenses': [], 'charges': []}
+    total = 0
+    if len(q) >= 2:
+        pat = like_term(q)
+        esc = '\\'
+
+        students = (scope_query(Student.query.filter(Student.is_active.is_(True)), Student)
+                    .filter(db.or_(Student.student_id.ilike(pat, escape=esc),
+                                   Student.first_name.ilike(pat, escape=esc),
+                                   Student.surname.ilike(pat, escape=esc)))
+                    .order_by(Student.surname).limit(15).all())
+        results['students'] = [{
+            'name': s.full_name, 'sid': s.student_id,
+            'url': url_for('finance.record_payment', student_id=s.id)} for s in students]
+
+        pays = (scope_query(FeePayment.query, FeePayment)
+                .options(joinedload(FeePayment.student))
+                .filter(db.or_(FeePayment.receipt_no.ilike(pat, escape=esc),
+                               FeePayment.reference.ilike(pat, escape=esc),
+                               FeePayment.received_by.ilike(pat, escape=esc)))
+                .order_by(FeePayment.payment_date.desc()).limit(15).all())
+        results['payments'] = [{
+            'receipt': p.receipt_no or '—', 'ref': p.reference or '',
+            'student': p.student.full_name if p.student else '—',
+            'amount': round(float(p.amount or 0), 2),
+            'date': p.payment_date.strftime('%d %b %Y') if p.payment_date else '',
+            'url': url_for('finance.record_payment', student_id=p.student_id)} for p in pays]
+
+        exps = (scope_query(Expense.query, Expense)
+                .filter(db.or_(Expense.description.ilike(pat, escape=esc),
+                               Expense.reference.ilike(pat, escape=esc),
+                               Expense.payee.ilike(pat, escape=esc)))
+                .order_by(Expense.expense_date.desc()).limit(15).all())
+        results['expenses'] = [{
+            'description': e.description or '—', 'payee': e.payee or '',
+            'amount': round(float(e.amount or 0), 2),
+            'date': e.expense_date.strftime('%d %b %Y') if e.expense_date else '',
+            'url': url_for('finance.expenses_list')} for e in exps]
+
+        charges = (scope_query(AdditionalCharge.query, AdditionalCharge)
+                   .filter(db.or_(AdditionalCharge.category.ilike(pat, escape=esc),
+                                  AdditionalCharge.description.ilike(pat, escape=esc)))
+                   .order_by(AdditionalCharge.id.desc()).limit(15).all())
+        cmap = {s.id: s.full_name for s in Student.query.filter(
+            Student.id.in_([c.student_id for c in charges])).all()} if charges else {}
+        results['charges'] = [{
+            'kind': c.kind, 'category': c.category or '—',
+            'description': c.description or '', 'student': cmap.get(c.student_id, '—'),
+            'amount': round(float(c.amount or 0), 2),
+            'url': url_for('finance.billing_tools', term_id=c.term_id)} for c in charges]
+
+        total = sum(len(v) for v in results.values())
+    return render_template('finance/search.html', q=q, results=results,
+                           total=total, nav=_nav_urls())
+
+
 # ============================================================================
 # ACCOUNTING — double-entry statements derived from the ledger (Phase 2)
 # ============================================================================
@@ -1667,3 +1731,26 @@ def notify_overdue():
                    url_for('finance.installments', term_id=term_id))
     return _ok('No students are behind — nothing to alert.',
                url_for('finance.installments', term_id=term_id))
+
+
+@finance_bp.route('/reminders/draft', methods=['POST'])
+@login_required
+def draft_reminders():
+    """Queue an SMS fee reminder to every defaulter's parent for the term as a
+    Draft campaign, then hand off to Communication for review + send. Nothing is
+    sent to parents here — a human confirms in the campaign editor."""
+    from utils import finance_notify
+    term_id = request.form.get('term_id', type=int) or _active_term_id()
+    class_id = request.form.get('class_id', type=int) or None
+    term = db.session.get(Term, term_id) if term_id else None
+    if not term:
+        return _err('Pick a term first.', url_for('finance.installments'))
+    msg = finance_notify.draft_parent_reminders(term, class_id=class_id, created_by=_who())
+    if not msg:
+        return _ok('No defaulters with a parent phone number — nothing to draft.',
+                   url_for('finance.installments', term_id=term_id, class_id=class_id or ''))
+    from utils.audit import log_action
+    log_action('finance.fee_reminders_drafted',
+               detail=f'term {term_id}: {msg.recipient_count} parent(s)')
+    return _ok(f'Drafted reminders for {msg.recipient_count} parent(s) — review and send.',
+               url_for('comms.message_detail', message_id=msg.id))

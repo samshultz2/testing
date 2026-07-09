@@ -51,6 +51,8 @@
     <div class="fg"><label>Term</label><select name="term_id"><option value="">All</option>{% for t in opts.terms %}<option value="{{ t.id }}" {{ 'selected' if sel.get('term_id')|string == t.id|string }}>{{ t.name }}</option>{% endfor %}</select></div>
     <div class="fg"><label>From</label><input type="date" name="from" value="{{ sel.get('from','') }}"></div>
     <div class="fg"><label>To</label><input type="date" name="to" value="{{ sel.get('to','') }}"></div>
+    {% set views_key = 'accounting' %}{% set views_base = url_for('finance.accounting') %}
+    {% include 'finance/_saved_filters.html' %}
     <div class="ac-actions">
       <button type="submit" class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-filter"></i> Apply</button>
       <a href="{{ url_for('finance.accounting') }}" class="btn btn-link btn-sm">Reset</a>

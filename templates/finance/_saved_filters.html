@@ -1,0 +1,54 @@
+{# Saved-view widget for a finance filter bar. Include with:
+     views_key  — a stable per-page storage key (e.g. 'overview')
+     views_base — the page URL to reload a saved view onto
+   Views are stored per-browser in localStorage (no server state / migration). #}
+<div class="fg fin-views" data-views-key="{{ views_key }}" data-views-base="{{ views_base }}">
+  <label>Saved views</label>
+  <div style="display:flex;gap:6px;align-items:center">
+    <select data-views-select style="min-width:130px"><option value="">— none —</option></select>
+    <button type="button" class="btn btn-secondary btn-sm" data-views-save title="Save the current filters as a view"><i aria-hidden="true" class="fas fa-bookmark"></i></button>
+    <button type="button" class="btn btn-link btn-sm" data-views-del title="Delete the selected view"><i aria-hidden="true" class="fas fa-trash"></i></button>
+  </div>
+</div>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  if (window.__finViews) return; window.__finViews = true;
+  var LS = window.localStorage;
+  function load(key){ try { return JSON.parse(LS.getItem('finViews:'+key)) || {}; } catch(e){ return {}; } }
+  function save(key, obj){ try { LS.setItem('finViews:'+key, JSON.stringify(obj)); } catch(e){} }
+  function fill(sel, views, current){
+    sel.innerHTML = '<option value="">— none —</option>';
+    Object.keys(views).sort().forEach(function(name){
+      var o = document.createElement('option');
+      o.value = name; o.textContent = name;
+      if (views[name] === current) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+  document.querySelectorAll('.fin-views').forEach(function(box){
+    var key = box.getAttribute('data-views-key');
+    var base = box.getAttribute('data-views-base');
+    var sel = box.querySelector('[data-views-select]');
+    var views = load(key);
+    var current = (window.location.search || '').replace(/^\?/, '');
+    fill(sel, views, current);
+    sel.addEventListener('change', function(){
+      if (!sel.value) return;
+      var qs = views[sel.value] || '';
+      window.location.assign(base + (qs ? '?' + qs : ''));
+    });
+    box.querySelector('[data-views-save]').addEventListener('click', function(){
+      var qs = (window.location.search || '').replace(/^\?/, '');
+      if (!qs){ alert('Apply some filters first, then save them as a view.'); return; }
+      var name = (prompt('Name this view (e.g. "This term, POS only"):') || '').trim();
+      if (!name) return;
+      views[name] = qs; save(key, views); fill(sel, views, qs);
+    });
+    box.querySelector('[data-views-del]').addEventListener('click', function(){
+      if (!sel.value){ return; }
+      if (!confirm('Delete saved view "' + sel.value + '"?')) return;
+      delete views[sel.value]; save(key, views); fill(sel, views, current);
+    });
+  });
+})();
+</script>

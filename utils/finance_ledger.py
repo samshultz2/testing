@@ -127,8 +127,35 @@ def _expense_vals(connection, e):
                 occurred_on=e.expense_date or _today())
 
 
+# Product categories → the revenue bucket a sale of them is booked under, so the
+# ledger/accounting splits shop income into meaningful lines (Bookshop, Uniform…)
+# instead of one opaque "Sales". Anything unmapped falls back to "Other sales".
+_SALE_BUCKETS = {
+    'Textbook': 'Bookshop', 'Workbook': 'Bookshop', 'Notebook': 'Bookshop',
+    'Stationery': 'Bookshop', 'Uniform': 'Uniform',
+}
+
+
+def sale_category(product_categories):
+    """Revenue category for a sale, from the product categories of its line items.
+    One bucket → that bucket ('Bookshop'/'Uniform'); several → 'Mixed sales';
+    none/unknown → 'Other sales'."""
+    buckets = {_SALE_BUCKETS.get((c or '').strip(), 'Other sales')
+               for c in (product_categories or []) if c is not None}
+    buckets.discard(None)
+    if not buckets:
+        return 'Sales'
+    if len(buckets) == 1:
+        return next(iter(buckets))
+    return 'Mixed sales'
+
+
 def _sale_vals(connection, s):
-    return dict(direction=REVENUE, source_module='sales', category='Sales',
+    # The sales route stamps the computed bucket on the object before flush (the
+    # line items don't exist in the DB yet at after_insert time); fall back to a
+    # generic label for any sale created without one.
+    category = getattr(s, '_ledger_category', None) or 'Sales'
+    return dict(direction=REVENUE, source_module='sales', category=category,
                 amount=(s.amount_paid if s.amount_paid else s.total), method=s.payment_method,
                 branch_id=s.branch_id, student_id=s.student_id,
                 origin_type='sale', origin_id=s.id, reference=s.receipt_no,
@@ -361,6 +388,9 @@ def backfill():
     if Sale is not None:
         for s in Sale.query.all():
             if ('sale', s.id) not in have:
+                if not getattr(s, '_ledger_category', None):
+                    s._ledger_category = sale_category(
+                        [(it.product.category if it.product else None) for it in s.items])
                 _insert_row(conn, **_sale_vals(conn, s)); added += 1
     db.session.commit()
     return added

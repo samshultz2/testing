@@ -1444,6 +1444,13 @@
 ]
 ],
 [
+"finance.draft_reminders",
+"/finance/reminders/draft",
+[
+"POST"
+]
+],
+[
 "finance.edit_discount",
 "/finance/discounts/<int:discount_id>/edit",
 [
@@ -1597,6 +1604,13 @@
 "/finance/structure/save",
 [
 "POST"
+]
+],
+[
+"finance.search",
+"/finance/search",
+[
+"GET"
 ]
 ],
 [

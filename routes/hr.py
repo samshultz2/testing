@@ -580,6 +580,12 @@ def finalize_payroll(run_id):
             from models import Expense, ExpenseCategory
             cat = ExpenseCategory.query.filter(
                 ExpenseCategory.name.ilike('%salar%')).first()
+            if not cat:
+                # Give payroll its own ledger line rather than the generic
+                # "Expenses" fallback the first time a run is posted.
+                cat = ExpenseCategory(name='Salaries', is_active=True)
+                db.session.add(cat)
+                db.session.flush()
             term = get_active_term()
             from utils.branch_scope import branch_for_new
             exp = Expense(

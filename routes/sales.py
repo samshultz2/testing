@@ -188,6 +188,11 @@ def new_sale():
             amount_paid=request.form.get('amount_paid', type=float) or round(total, 2),
             sold_by=session.get('user') or session.get('username') or 'Bursar',
             notes=(request.form.get('notes') or '').strip() or None)
+        # Stamp the revenue bucket (Bookshop / Uniform / …) from the line items so
+        # the finance ledger categorises this sale when its after_insert fires —
+        # the SaleItem rows don't exist in the DB yet at that point.
+        from utils.finance_ledger import sale_category
+        sale._ledger_category = sale_category([p.category for p, _, _ in lines])
         db.session.add(sale)
         db.session.flush()
         sale.receipt_no = f'SL{sale.id:05d}'
