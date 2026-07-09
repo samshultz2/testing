@@ -290,6 +290,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('finance.installments') }}" class="nav-link {% if request.endpoint == 'finance.installments' %}active{% endif %}">
+                            <i class="fas fa-calendar-check"></i><span>Installments</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('finance.record_payment') }}" class="nav-link {% if 'record_payment' in request.endpoint or 'payments_list' in request.endpoint %}active{% endif %}">
                             <i class="fas fa-cash-register"></i><span>Payments</span>
                         </a>

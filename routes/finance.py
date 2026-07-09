@@ -16,7 +16,7 @@ from utils.branch_scope import require_branch_access, scope_query, scope_by_stud
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
     Student, Term, SchoolClass, ClassArm, StudentEnrollment,
-    ClassArmAssignment, AdditionalCharge,
+    ClassArmAssignment, AdditionalCharge, InstallmentPlan,
 )
 from utils.access_control import (
     login_required, admin_required, filter_classes_for_user,
@@ -1532,10 +1532,18 @@ def apply_penalties():
     for student, caa in _enrolled_students(term_id):
         if student.id in existing:
             continue
-        bill = student_bill(student.id, term_id)
-        if bill['balance'] <= 0.005:
-            continue
-        amount = round(bill['balance'] * value / 100.0, 2) if ptype == 'percent' else value
+        if ptype == 'installment':
+            # penalise only the overdue installment shortfall
+            from utils import finance_installments as I
+            stt = I.student_status(student.id, term_id)
+            if not stt['has_plan'] or stt['behind'] <= 0.005:
+                continue
+            amount = value                             # flat penalty per behind student
+        else:
+            bill = student_bill(student.id, term_id)
+            if bill['balance'] <= 0.005:
+                continue
+            amount = round(bill['balance'] * value / 100.0, 2) if ptype == 'percent' else value
         if amount <= 0:
             continue
         db.session.add(AdditionalCharge(student_id=student.id, term_id=term_id,
@@ -1563,3 +1571,84 @@ def remove_charge(charge_id):
     db.session.delete(c)
     db.session.commit()
     return _ok('Removed.', url_for('finance.billing_tools', term_id=term_id))
+
+
+# ============================================================================
+# INSTALLMENT PLANS — a term's payment schedule (Phase 3)
+# ============================================================================
+@finance_bp.route('/installments')
+@login_required
+def installments():
+    """Set a term's installment schedule (a class-specific one overrides the
+    term-wide one) and see which students are on track or behind."""
+    from utils import finance_installments as I
+    term_id = request.args.get('term_id', type=int) or _active_term_id()
+    class_id = request.args.get('class_id', type=int)
+    terms = Term.query.order_by(Term.id.desc()).all()
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+
+    plan = I.get_plan(term_id, class_id) if term_id else []
+    plan_rows = [{'label': r.label, 'due': r.due_date.strftime('%Y-%m-%d') if r.due_date else '',
+                  'percent': r.percent} for r in plan]
+    total_pct = round(sum(r.percent for r in plan), 2)
+
+    roster = []
+    if term_id and plan:
+        for r in I.roster(term_id, _enrolled_students(term_id, class_id)):
+            st = r['status']
+            roster.append({
+                'name': r['student'].full_name, 'sid': r['student'].student_id,
+                'payable': st['payable'], 'paid': st['paid'],
+                'expected': st['expected_to_date'], 'behind': st['behind'],
+                'on_track': st['on_track'],
+                'next_due': (st['next_due']['due_date'].strftime('%d %b') if st['next_due'] and st['next_due']['due_date'] else '—'),
+            })
+    return render_template('finance/installments.html',
+                           term_id=term_id, class_id=class_id or '', sel=request.args,
+                           terms=[{'id': t.id, 'full_name': t.full_name} for t in terms],
+                           classes=[{'id': c.id, 'name': c.name} for c in classes],
+                           plan_rows=plan_rows or [{'label': '', 'due': '', 'percent': ''}],
+                           total_pct=total_pct, roster=roster, nav=_nav_urls())
+
+
+@finance_bp.route('/installments/save', methods=['POST'])
+@login_required
+def installments_save():
+    from utils import finance_installments as I
+    from utils.branch_scope import branch_for_new
+    term_id = request.form.get('term_id', type=int)
+    class_id = request.form.get('class_id', type=int)
+    if not term_id:
+        return _err('Pick a term.', url_for('finance.installments'))
+    labels = request.form.getlist('label')
+    dues = request.form.getlist('due')
+    pcts = request.form.getlist('percent')
+    rows = []
+    for i, label in enumerate(labels):
+        try:
+            pct = float(pcts[i]) if i < len(pcts) and pcts[i] else 0.0
+        except ValueError:
+            pct = 0.0
+        due = _overview_date(dues[i]) if i < len(dues) else None
+        rows.append({'label': label, 'due_date': due, 'percent': pct})
+    total = sum(r['percent'] for r in rows if (r['label'] or '').strip() and r['percent'] > 0)
+    if total > 100.5:
+        return _err(f'Installments add up to {total:g}% — must not exceed 100%.',
+                    url_for('finance.installments', term_id=term_id, class_id=class_id or ''))
+    I.save_plan(term_id, class_id, rows, branch_id=branch_for_new())
+    from utils.audit import log_action
+    log_action('finance.installment_plan', detail=f'term {term_id} class {class_id or "all"}: {total:g}%')
+    return _ok('Installment schedule saved.',
+               url_for('finance.installments', term_id=term_id, class_id=class_id or ''))
+
+
+@finance_bp.route('/installments/clear', methods=['POST'])
+@login_required
+def installments_clear():
+    from utils import finance_installments as I
+    term_id = request.form.get('term_id', type=int)
+    class_id = request.form.get('class_id', type=int)
+    if term_id:
+        I.clear_plan(term_id, class_id)
+    return _ok('Installment schedule cleared.',
+               url_for('finance.installments', term_id=term_id, class_id=class_id or ''))

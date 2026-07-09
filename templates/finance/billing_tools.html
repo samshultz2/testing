@@ -64,7 +64,7 @@
         <input type="hidden" name="term_id" value="{{ term_id }}">
         <div class="row2">
           <div><label>Penalty type</label>
-            <select name="ptype"><option value="fixed">Fixed amount (₦)</option><option value="percent">% of outstanding</option></select></div>
+            <select name="ptype"><option value="fixed">Fixed amount (₦)</option><option value="percent">% of outstanding</option><option value="installment">Fixed ₦ (only students behind on installments)</option></select></div>
           <div><label>Value</label><input type="number" name="value" min="0" step="0.01" required placeholder="e.g. 2000 or 5"></div>
         </div>
         <div class="hint">Charges only students with an outstanding balance. Re-running never double-charges (students who already have a penalty this term are skipped).</div>

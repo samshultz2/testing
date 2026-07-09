@@ -122,6 +122,28 @@ class AdditionalCharge(db.Model):
         return f'<AdditionalCharge {self.kind} {self.amount} s{self.student_id}>'
 
 
+class InstallmentPlan(db.Model):
+    """One installment in a term's payment schedule. A schedule is the set of rows
+    for a (term, class) — each row is a portion of the student's payable due by a
+    date (e.g. '1st Installment, 40%, due 15 Sep'). Percent-based so it scales to
+    every student's own bill with no per-student setup. class_id NULL = the whole
+    term (a class-specific schedule overrides the term-wide one)."""
+    __tablename__ = 'installment_plans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False, index=True)
+    class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'), index=True)  # NULL = all classes
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    label = db.Column(db.String(60), nullable=False)
+    due_date = db.Column(db.Date)
+    percent = db.Column(db.Float, nullable=False, default=0)     # portion of payable, 0-100
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    def __repr__(self):
+        return f'<InstallmentPlan t{self.term_id} c{self.class_id} {self.label} {self.percent}%>'
+
+
 class FinanceTransaction(db.Model):
     """Central finance ledger — the single source of truth for every monetary
     event across the platform.
