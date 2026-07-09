@@ -4318,6 +4318,13 @@
 ]
 ],
 [
+"timetable.my_timetable",
+"/timetable/mine",
+[
+"GET"
+]
+],
+[
 "timetable.print_timetable",
 "/timetable/print/<int:assignment_id>",
 [

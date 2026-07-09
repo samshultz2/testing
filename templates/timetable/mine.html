@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}My Timetable · {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ class_view_url }}">Timetable</a> <span>/ My Timetable</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tt-wrap{max-width:1000px}
+  .tt-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .tt-top h2{margin:0;font-size:20px}
+  .tt-top .who{color:var(--text-secondary,#667);font-size:13.5px}
+  .tt-top form{margin-left:auto}
+  .tt-scroll{overflow-x:auto}
+  table.tt{border-collapse:collapse;width:100%;min-width:640px;font-size:13px}
+  table.tt th,table.tt td{border:1px solid var(--border,#e5e7eb);padding:8px 9px;text-align:center;vertical-align:middle}
+  table.tt thead th{background:var(--surface-2,#f4f6f9);font-weight:700}
+  table.tt tbody th{background:var(--surface-2,#f4f6f9);text-align:left;white-space:nowrap;font-weight:600}
+  table.tt tbody th small{display:block;color:var(--text-secondary,#889);font-weight:400;font-size:11px}
+  .cell{min-height:38px}
+  .cell .subj{font-weight:700}
+  .cell .klass{font-size:11.5px;color:var(--text-secondary,#667);margin-top:2px}
+  .cell.free{color:#b9c0cc}
+  .brk td{background:#faf7ef;color:#9a8a5f;font-style:italic}
+  .empty{padding:26px;text-align:center;color:var(--text-secondary,#667);
+         border:1px dashed var(--border,#e5e7eb);border-radius:12px;background:var(--surface-2,#f8fafc)}
+  .empty b{color:var(--text-primary,#334)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tt-wrap">
+  <div class="tt-top">
+    <div>
+      <h2>My timetable</h2>
+      <div class="who">Every period you teach{% if teacher_name %} — matched to <b>{{ teacher_name }}</b>{% endif %}. <a href="{{ class_view_url }}">View a class timetable →</a></div>
+    </div>
+    {% if terms %}
+    <form method="get" action="{{ self_url }}">
+      <select name="term_id" class="form-control" onchange="this.form.submit()">
+        {% for t in terms %}<option value="{{ t.id }}" {{ 'selected' if t.id == term_id }}>{{ t.full_name }}</option>{% endfor %}
+      </select>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if period_count == 0 %}
+  <div class="empty">
+    <p>No periods are assigned to you for this term yet.</p>
+    <p style="font-size:12.5px">Timetables record the teacher for each period <b>by name</b>. If you do teach classes,
+       ask an admin to make sure the teacher name on your periods matches your account name
+       (<b>{{ teacher_name or 'your name' }}</b>) exactly.</p>
+  </div>
+  {% else %}
+  <div class="card"><div class="card-body tt-scroll">
+    <table class="tt">
+      <thead>
+        <tr>
+          <th>Period</th>
+          {% for dnum, dname in days %}<th>{{ dname }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in slots %}
+        <tr class="{{ 'brk' if s.is_break }}">
+          <th>{{ s.name }}<small>{{ s.start }}{% if s.end %}–{{ s.end }}{% endif %}</small></th>
+          {% if s.is_break %}
+            <td colspan="{{ days|length }}">{{ s.name }}</td>
+          {% else %}
+            {% for dnum, dname in days %}
+              {% set c = grid.get(dnum ~ '_' ~ s.id) %}
+              {% if c %}
+                <td><div class="cell"><div class="subj">{{ c.subject }}</div><div class="klass">{{ c.klass }}</div></div></td>
+              {% else %}
+                <td><div class="cell free">·</div></td>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+  {% endif %}
+</div>
+{% endblock %}

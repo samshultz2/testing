@@ -339,6 +339,59 @@ def index():
     })
 
 
+@timetable_bp.route('/mine')
+@login_required
+def my_timetable():
+    """A teacher's PERSONAL timetable — every period they personally teach, across
+    all classes, laid out by day and slot. Complements the per-class view (which a
+    form teacher uses for their class). Matches the teacher's name against the
+    name recorded on each timetable entry."""
+    from sqlalchemy import func
+    from utils.access_control import get_current_user
+    from utils.branch_scope import can_access_branch
+
+    user = get_current_user()
+    name = ((user.full_name if user and user.full_name else (user.username if user else '')) or '').strip()
+
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        at = get_active_term()
+        term_id = at.id if at else None
+
+    terms = Term.query.order_by(Term.id.desc()).all()
+    slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
+
+    grid = {}                       # 'day_slot' -> {subject, klass}
+    if term_id and name:
+        entries = (ClassTimetable.query
+                   .join(ClassArmAssignment,
+                         ClassTimetable.class_arm_assignment_id == ClassArmAssignment.id)
+                   .filter(ClassArmAssignment.term_id == term_id,
+                           ClassTimetable.is_active.is_(True),
+                           ClassTimetable.subject_id.isnot(None),
+                           func.lower(func.trim(ClassTimetable.teacher_name)) == name.lower())
+                   .all())
+        for e in entries:
+            caa = e.class_arm_assignment
+            if caa is None or not can_access_branch(caa.branch_id):
+                continue
+            if e.subject:
+                grid[f'{e.day_of_week}_{e.slot_id}'] = {
+                    'subject': e.subject.short_name or e.subject.name,
+                    'klass': caa.display_name}
+
+    return render_template('timetable/mine.html',
+                           teacher_name=name,
+                           terms=[{'id': t.id, 'full_name': t.full_name} for t in terms],
+                           term_id=term_id,
+                           days=DAYS_OF_WEEK,
+                           slots=[_slot_dict(s) for s in slots],
+                           grid=grid, period_count=len(grid),
+                           self_url=url_for('timetable.my_timetable'),
+                           class_view_url=url_for('timetable.index', term_id=term_id) if term_id
+                           else url_for('timetable.index'))
+
+
 @timetable_bp.route('/edit/<int:assignment_id>')
 @login_required
 def edit_timetable(assignment_id):
