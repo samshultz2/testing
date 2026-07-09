@@ -888,7 +888,8 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if not session.get('logged_in'):
             flash('Please log in to access this page.', 'warning')
-            return redirect(url_for('auth.login'))
+            from utils.nav import login_url
+            return redirect(login_url())
         return f(*args, **kwargs)
     return decorated_function
 

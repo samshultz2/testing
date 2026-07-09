@@ -74,10 +74,11 @@ def _alert_lockout(ident):
         pass
 
 
-def _complete_login(user):
+def _complete_login(user, dest=None):
     """Finish a fully-authenticated login (password, and 2FA if enabled): drop
     any pre-login session, set identity, rotate the CSRF token, and land on the
-    dashboard. Shared by the password path and the 2FA verify path."""
+    intended page (``dest``) or the dashboard. Shared by the password path and
+    the 2FA verify path. ``dest`` is captured before the session is cleared."""
     from utils.branch_scope import set_session_scope
     from utils.org_scope import set_session_org
     from utils.csrf import rotate_csrf_token
@@ -100,15 +101,19 @@ def _complete_login(user):
     db.session.commit()
     log_action('auth.login', detail=user.username)   # session identity now set
     flash(f'Welcome back, {user.full_name or user.username}!', 'success')
-    return redirect(url_for('main.dashboard'))
+    from utils.nav import safe_next
+    return redirect(safe_next(dest, url_for('main.dashboard')))
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login - supports username/password or legacy password"""
+    from utils.nav import safe_next
+    # Remembered destination: from the form on POST, else the ?next= on GET.
+    next_url = safe_next(request.form.get('next') or request.args.get('next'))
     if session.get('logged_in'):
-        return redirect(url_for('main.dashboard'))
-    
+        return redirect(next_url or url_for('main.dashboard'))
+
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -146,12 +151,14 @@ def login():
                     session.clear()
                     session['_pending_mfa_uid'] = user.id
                     session['_pending_mfa_ts'] = int(datetime.now().timestamp())
+                    if next_url:
+                        session['_pending_next'] = next_url   # survive the 2FA hop
                     from utils.csrf import rotate_csrf_token
                     rotate_csrf_token()
                     session.permanent = True
                     return redirect(url_for('auth.verify_mfa'))
 
-                return _complete_login(user)
+                return _complete_login(user, dest=next_url)
 
             elif user:
                 _record_login_failure(username)
@@ -180,12 +187,12 @@ def login():
             session.permanent = True
             log_action('auth.login', detail='legacy-admin')
             flash('Welcome back, Admin!', 'success')
-            return redirect(url_for('main.dashboard'))
+            return redirect(next_url or url_for('main.dashboard'))
 
         _record_login_failure(username or None)
         flash('Invalid credentials. Please try again.', 'error')
 
-    return render_template('auth/login.html')
+    return render_template('auth/login.html', next_url=next_url)
 
 
 @auth_bp.route('/login/verify', methods=['GET', 'POST'])
@@ -225,9 +232,10 @@ def verify_mfa():
             login_limiter.clear_attempts(rkey)
             session.pop('_pending_mfa_uid', None)
             session.pop('_pending_mfa_ts', None)
+            dest = session.pop('_pending_next', None)      # remembered before 2FA
             if used_backup:
                 flash('Backup code used — consider regenerating your backup codes.', 'info')
-            return _complete_login(user)
+            return _complete_login(user, dest=dest)
         login_limiter.record_attempt(rkey)
         flash('Invalid code. Please try again.', 'error')
         return redirect(url_for('auth.verify_mfa'))
