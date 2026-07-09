@@ -1349,3 +1349,78 @@ def ledger_sync():
     flash(f'Ledger synced — {added} existing record(s) added.'
           if added else 'Ledger already up to date — nothing to add.', 'success')
     return redirect(url_for('finance.overview'))
+
+
+# ============================================================================
+# ACCOUNTING — double-entry statements derived from the ledger (Phase 2)
+# ============================================================================
+@finance_bp.route('/accounting')
+@login_required
+def accounting():
+    """Trial Balance, Income Statement (P&L), Balance Sheet, Cash Flow and Chart
+    of Accounts — all auto-derived from the ledger, filterable like the overview."""
+    from utils import finance_accounting as A
+    from utils.branch_scope import is_central
+    filters = _overview_filters()
+    return render_template('finance/accounting.html',
+                           s=A.all_statements(filters), sel=request.args,
+                           is_central=is_central(), opts=_accounting_options(),
+                           selected_branches=set(filters['branch_ids']),
+                           nav=_nav_urls(),
+                           export_url=url_for('finance.accounting_export'))
+
+
+def _accounting_options():
+    from utils import finance_ledger as L
+    return L.filter_options()
+
+
+@finance_bp.route('/accounting/export')
+@login_required
+def accounting_export():
+    """Every statement as an Excel workbook (one sheet each) — auditor-ready."""
+    from utils import finance_accounting as A
+    from openpyxl import Workbook
+    filters = _overview_filters()
+    s = A.all_statements(filters)
+    wb = Workbook()
+
+    tb = wb.active; tb.title = 'Trial Balance'
+    tb.append(['Code', 'Account', 'Type', 'Debit', 'Credit'])
+    for a in s['trial_balance']['accounts']:
+        tb.append([a['code'], a['name'], a['type'], a['debit'], a['credit']])
+    tb.append(['', 'TOTAL', '', s['trial_balance']['total_debit'], s['trial_balance']['total_credit']])
+
+    pl = wb.create_sheet('Income Statement')
+    pl.append(['Income', 'Amount'])
+    for r in s['income_statement']['income']:
+        pl.append([r['name'], r['amount']])
+    pl.append(['Total Income', s['income_statement']['total_income']])
+    pl.append([]); pl.append(['Expenses', 'Amount'])
+    for r in s['income_statement']['expense']:
+        pl.append([r['name'], r['amount']])
+    pl.append(['Total Expenses', s['income_statement']['total_expense']])
+    pl.append([]); pl.append(['Net Surplus / (Deficit)', s['income_statement']['net']])
+
+    bs = wb.create_sheet('Balance Sheet')
+    bs.append(['Assets', 'Amount'])
+    for r in s['balance_sheet']['assets']:
+        bs.append([r['name'], r['amount']])
+    bs.append(['Total Assets', s['balance_sheet']['total_assets']])
+    bs.append([]); bs.append(['Equity', 'Amount'])
+    for r in s['balance_sheet']['equity']:
+        bs.append([r['name'], r['amount']])
+    bs.append(['Total Equity', s['balance_sheet']['total_equity']])
+
+    cf = wb.create_sheet('Cash Flow')
+    cf.append(['Inflows', 'Amount'])
+    for r in s['cash_flow']['inflows']:
+        cf.append([r['name'], r['amount']])
+    cf.append(['Total In', s['cash_flow']['total_in']])
+    cf.append([]); cf.append(['Outflows', 'Amount'])
+    for r in s['cash_flow']['outflows']:
+        cf.append([r['name'], r['amount']])
+    cf.append(['Total Out', s['cash_flow']['total_out']])
+    cf.append([]); cf.append(['Net Cash Movement', s['cash_flow']['net_change']])
+
+    return xlsx_response(wb, 'financial_statements.xlsx')
