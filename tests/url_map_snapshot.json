@@ -1522,6 +1522,13 @@
 ]
 ],
 [
+"finance.notify_overdue",
+"/finance/installments/notify-overdue",
+[
+"POST"
+]
+],
+[
 "finance.overview",
 "/finance/overview",
 [

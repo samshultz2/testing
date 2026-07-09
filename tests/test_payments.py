@@ -98,7 +98,7 @@ def test_per_school_keys_stored_encrypted_and_reused(app):
     from utils import payments, crypto
     from models import SchoolSettings
     with app.app_context():
-        payments.save_keys('pk_test_pub', 'sk_test_secret')
+        payments.save_keys('paystack', 'pk_test_pub', 'sk_test_secret')
         assert payments.is_configured() is True
         assert payments.public_key() == 'pk_test_pub'
         assert payments.secret_key() == 'sk_test_secret'         # round-trips
@@ -106,7 +106,7 @@ def test_per_school_keys_stored_encrypted_and_reused(app):
         if crypto.is_enabled():                                   # stored encrypted, not cleartext
             assert raw and 'sk_test_secret' not in raw and crypto.looks_encrypted(raw)
         # editing only the public key keeps the saved secret
-        payments.save_keys('pk_test_pub2', '')
+        payments.save_keys('paystack', 'pk_test_pub2', '')
         assert payments.public_key() == 'pk_test_pub2'
         assert payments.secret_key() == 'sk_test_secret'
         # removing turns the feature off

@@ -1652,3 +1652,18 @@ def installments_clear():
         I.clear_plan(term_id, class_id)
     return _ok('Installment schedule cleared.',
                url_for('finance.installments', term_id=term_id, class_id=class_id or ''))
+
+
+@finance_bp.route('/installments/notify-overdue', methods=['POST'])
+@login_required
+def notify_overdue():
+    """Alert admins in-app about students behind on fees for the term."""
+    from utils import finance_notify
+    term_id = request.form.get('term_id', type=int) or _active_term_id()
+    s = finance_notify.run_fee_reminders(
+        term_id, url=url_for('finance.defaulters', term_id=term_id) if term_id else None)
+    if s['count']:
+        return _ok(f"Alerted admins — {s['count']} student(s) behind, ₦{s['total']:,.0f} outstanding.",
+                   url_for('finance.installments', term_id=term_id))
+    return _ok('No students are behind — nothing to alert.',
+               url_for('finance.installments', term_id=term_id))

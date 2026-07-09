@@ -1,129 +1,122 @@
-"""Paystack online-payment integration for SCHOOL FEES (parents → their school).
+"""Online fee collection (parents → their school) — provider-agnostic facade.
 
-Each school collects into its **own** Paystack account. The keys live per-school
-in that school's database (SchoolSettings), with the secret key encrypted at rest
-(utils.crypto). In a single-school (non-multi-tenant) deployment the keys can also
-come from the environment (PAYSTACK_SECRET_KEY) as a fallback.
+Each school picks a payment provider (Paystack / Flutterwave / Monnify) and stores
+that provider's own keys, per-school, in its database (SchoolSettings) with the
+secret encrypted at rest. This module resolves the active provider + keys and
+delegates the real work to utils.payment_gateways. The public API
+(is_configured / public_key / initialize / verify / verify_webhook) is unchanged,
+so the parent portal and finance routes don't care which gateway is in use.
 
-This is separate from the platform SUBSCRIPTION billing (utils/billing.py +
-routes/billing.py), which uses the PLATFORM_PAYSTACK_* keys — schools paying the
-platform, not parents paying schools.
+Separate from the platform SUBSCRIPTION billing (utils/billing.py), which uses the
+PLATFORM_PAYSTACK_* keys — schools paying the platform, not parents paying schools.
 
-Kept thin and side-effect free so the routes (and tests) can drive it. Uses the
-dependency-free stdlib HTTP client (utils.http) so a mismatched requests/urllib3
-can't hang a payment, and a proper User-Agent gets past Paystack's WAF.
+Backward compatible: schools already configured for Paystack keep working with no
+change (their keys live under paystack_* and the default provider is paystack).
 """
 import secrets
 
 from config import Config
+from utils import payment_gateways as gw
 
-_API = 'https://api.paystack.co'
-
-PUBLIC_KEY_SETTING = 'paystack_public_key'
-SECRET_KEY_SETTING = 'paystack_secret_key'          # stored encrypted
+PROVIDER_SETTING = 'payment_provider'
 
 
-def _keys():
-    """(public, secret) for the CURRENT school. Per-school stored keys win; a
-    single-school deployment falls back to the env keys. Multi-tenant never falls
-    back to env (that would route a school's money to the platform account)."""
-    pub = sec = ''
+def active_provider():
     try:
         from models import SchoolSettings
-        from utils import crypto
-        pub = (SchoolSettings.get(PUBLIC_KEY_SETTING, '') or '').strip()
-        raw = SchoolSettings.get(SECRET_KEY_SETTING, '') or ''
-        sec = (crypto.decrypt(raw) or '').strip() if raw else ''
+        p = (SchoolSettings.get(PROVIDER_SETTING, '') or '').strip().lower()
+        if p in gw.PROVIDERS:
+            return p
     except Exception:
-        pub, sec = '', ''
-    if not sec and not Config.MULTI_TENANT:
+        pass
+    return 'paystack'
+
+
+def _s(key, default=''):
+    from models import SchoolSettings
+    return SchoolSettings.get(key, default)
+
+
+def provider_keys(provider=None):
+    """{'public','secret','extra'} for a provider (secret + extra decrypted)."""
+    provider = provider or active_provider()
+    pub = sec = extra = ''
+    try:
+        from utils import crypto
+        pub = (_s(f'{provider}_public_key', '') or '').strip()
+        rawsec = _s(f'{provider}_secret_key', '') or ''
+        sec = (crypto.decrypt(rawsec) or '').strip() if rawsec else ''
+        rawx = _s(f'{provider}_extra', '') or ''
+        extra = (crypto.decrypt(rawx) or '').strip() if rawx else ''
+    except Exception:
+        pub = sec = extra = ''
+    # Single-school (non-multi-tenant) Paystack falls back to env keys.
+    if provider == 'paystack' and not sec and not Config.MULTI_TENANT:
         pub = pub or (Config.PAYSTACK_PUBLIC_KEY or '')
         sec = Config.PAYSTACK_SECRET_KEY or ''
-    return pub, sec
+    return {'public': pub, 'secret': sec, 'extra': extra}
 
 
 def is_configured():
-    return bool(_keys()[1])
+    k = provider_keys()
+    prov = active_provider()
+    if prov == 'monnify':
+        return bool(k['secret'] and k['public'] and k['extra'])   # apiKey+secret+contractCode
+    return bool(k['secret'])
 
 
 def public_key():
-    return _keys()[0]
+    return provider_keys()['public']
 
 
 def secret_key():
-    """The current school's Paystack secret (for webhook signature checks)."""
-    return _keys()[1]
+    return provider_keys()['secret']
 
 
-def save_keys(public_key_value, secret_key_value):
-    """Persist this school's Paystack keys (secret encrypted). A blank secret
-    means 'leave the stored secret unchanged'; use clear_keys() to remove."""
+def save_keys(provider, public_key_value, secret_key_value, extra_value=None):
+    """Persist this school's keys for a provider and make it the active provider.
+    Blank secret/extra means 'leave the stored value unchanged'."""
     from models import SchoolSettings
     from utils import crypto
-    SchoolSettings.set(PUBLIC_KEY_SETTING, (public_key_value or '').strip(),
-                       'string', 'Paystack public key (online fee payments)')
+    provider = provider if provider in gw.PROVIDERS else 'paystack'
+    SchoolSettings.set(PROVIDER_SETTING, provider, 'string', 'Active payment provider')
+    SchoolSettings.set(f'{provider}_public_key', (public_key_value or '').strip(),
+                       'string', f'{provider} public key')
     sec = (secret_key_value or '').strip()
     if sec:
-        SchoolSettings.set(SECRET_KEY_SETTING, crypto.encrypt(sec),
-                           'string', 'Paystack secret key (encrypted)')
+        SchoolSettings.set(f'{provider}_secret_key', crypto.encrypt(sec), 'string',
+                           f'{provider} secret key (encrypted)')
+    if extra_value is not None and extra_value.strip():
+        SchoolSettings.set(f'{provider}_extra', crypto.encrypt(extra_value.strip()), 'string',
+                           f'{provider} extra credential (encrypted)')
 
 
-def clear_keys():
+def clear_keys(provider=None):
     from models import SchoolSettings
-    SchoolSettings.set(PUBLIC_KEY_SETTING, '', 'string')
-    SchoolSettings.set(SECRET_KEY_SETTING, '', 'string')
+    provider = provider or active_provider()
+    SchoolSettings.set(f'{provider}_public_key', '', 'string')
+    SchoolSettings.set(f'{provider}_secret_key', '', 'string')
+    SchoolSettings.set(f'{provider}_extra', '', 'string')
 
 
 def new_reference(prefix='PSK'):
     return f'{prefix}-{secrets.token_hex(8)}'
 
 
-def _headers():
-    return {'Authorization': f'Bearer {_keys()[1]}',
-            'Content-Type': 'application/json'}
-
-
 def initialize(email, amount_naira, reference, callback_url, metadata=None):
-    """Start a transaction. Returns {'ok': True, 'authorization_url': ...} or
-    {'ok': False, 'error': ...}. Never raises."""
     if not is_configured():
         return {'ok': False, 'error': 'Online payment is not configured.'}
-    try:
-        from utils import http
-        payload = {
-            'email': email or 'parent@example.com',
-            'amount': int(round(amount_naira * 100)),   # kobo
-            'reference': reference,
-            'callback_url': callback_url,
-        }
-        if metadata:
-            payload['metadata'] = metadata
-        resp = http.post_json(f'{_API}/transaction/initialize', headers=_headers(),
-                              json=payload, timeout=20)
-        data = resp.json()
-        if data.get('status') and data.get('data', {}).get('authorization_url'):
-            return {'ok': True, 'authorization_url': data['data']['authorization_url'],
-                    'reference': reference}
-        return {'ok': False, 'error': data.get('message', 'Could not start payment.')}
-    except Exception as exc:
-        return {'ok': False, 'error': f'Payment gateway error: {exc}'}
+    return gw.initialize(active_provider(), provider_keys(), email=email, amount_naira=amount_naira,
+                         reference=reference, callback_url=callback_url, metadata=metadata or {})
 
 
 def verify(reference):
-    """Verify a transaction. Returns {'ok': True, 'success': bool,
-    'amount_naira': float, 'reference': ...} or {'ok': False, 'error': ...}."""
     if not is_configured():
         return {'ok': False, 'error': 'Online payment is not configured.'}
-    try:
-        from utils import http
-        resp = http.get_json(f'{_API}/transaction/verify/{reference}',
-                             headers=_headers(), timeout=20)
-        data = resp.json()
-        if data.get('status'):
-            d = data.get('data', {})
-            return {'ok': True, 'success': d.get('status') == 'success',
-                    'amount_naira': (d.get('amount', 0) or 0) / 100.0,
-                    'reference': d.get('reference', reference)}
-        return {'ok': False, 'error': data.get('message', 'Verification failed.')}
-    except Exception as exc:
-        return {'ok': False, 'error': f'Payment gateway error: {exc}'}
+    return gw.verify(active_provider(), provider_keys(), reference)
+
+
+def verify_webhook(headers, body):
+    """Validate + parse an incoming provider webhook for the active provider.
+    Returns {'ok': signature_valid, 'event': {...}}."""
+    return gw.verify_webhook(active_provider(), provider_keys(), headers, body)

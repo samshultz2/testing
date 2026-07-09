@@ -317,6 +317,9 @@ def pay_callback():
 
     res = payments.verify(reference)
     if not (res.get('ok') and res.get('success')):
+        if not res.get('ok'):        # a real verification failure (not a user abandon)
+            from utils import finance_notify
+            finance_notify.payment_verification_failed(reference, res.get('error') or '')
         flash(res.get('error') or 'Payment was not completed.', 'error')
         return redirect(url_for('parent.home', term_id=pending.get('term_id')))
 
@@ -329,30 +332,19 @@ def pay_callback():
 
 @parent_bp.route('/pay/webhook', methods=['POST'])
 def pay_webhook():
-    """Paystack server-to-server webhook — the reliable record path (the browser
-    redirect callback can be dropped). Verifies the HMAC signature, then records
-    a successful charge from its metadata (idempotent by reference)."""
-    import hmac
-    import hashlib
-    secret = (payments.secret_key() or '').encode()      # this school's own key
-    signature = request.headers.get('x-paystack-signature', '')
-    body = request.get_data()
-    if not secret or not signature:
-        return ('', 400)
-    expected = hmac.new(secret, body, hashlib.sha512).hexdigest()
-    if not hmac.compare_digest(expected, signature):
-        return ('', 400)
-
-    event = request.get_json(silent=True) or {}
-    if event.get('event') == 'charge.success':
-        data = event.get('data') or {}
-        meta = data.get('metadata') or {}
+    """Provider webhook — the reliable record path (the browser redirect callback
+    can be dropped). Verifies the signature for this school's active gateway, then
+    records a successful charge from its metadata (idempotent by reference)."""
+    result = payments.verify_webhook(request.headers, request.get_data())
+    if not result.get('ok'):
+        return ('', 400)                                  # bad/absent signature
+    ev = result.get('event') or {}
+    if ev.get('success'):
+        meta = ev.get('metadata') or {}
         try:
             student_id = int(meta.get('student_id'))
             term_id = int(meta.get('term_id'))
         except (TypeError, ValueError):
             student_id = term_id = None
-        amount = (data.get('amount', 0) or 0) / 100.0
-        if data.get('status') == 'success':
-            _record_online_payment(student_id, term_id, amount, data.get('reference'))
+        _record_online_payment(student_id, term_id, ev.get('amount_naira') or 0, ev.get('reference'))
     return ('', 200)

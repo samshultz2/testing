@@ -64,7 +64,12 @@
   </div></div>
 
   {% if roster %}
-  <div class="card2"><h3>Student progress ({{ roster|length }})</h3><div class="bd" style="padding:0;overflow-x:auto">
+  <div class="card2"><h3>Student progress ({{ roster|length }})
+    <form method="post" action="{{ url_for('finance.notify_overdue') }}" style="margin-left:auto">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="term_id" value="{{ term_id }}">
+      <button type="submit" class="btn btn-secondary btn-sm" title="Send an in-app alert to admins about students behind"><i aria-hidden="true" class="fas fa-bell"></i> Alert admins</button>
+    </form></h3><div class="bd" style="padding:0;overflow-x:auto">
     <table class="ro"><thead><tr><th>Student</th><th>ID</th><th class="num">Payable</th><th class="num">Paid</th><th class="num">Expected by now</th><th class="num">Behind</th><th>Next due</th><th>Status</th></tr></thead>
       <tbody>
         {% for r in roster %}
