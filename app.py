@@ -213,6 +213,11 @@ def create_app(config_class=None):
         else:
             init_db(app)
 
+    # Finance ledger: mirror every money event (fees, sales, expenses) into the
+    # central FinanceTransaction ledger — the single source of truth.
+    from utils.finance_ledger import register_ledger_hooks
+    register_ledger_hooks()
+
     # Enable CSRF protection for all state-changing requests
     from utils.csrf import init_csrf
     init_csrf(app)

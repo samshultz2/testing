@@ -93,6 +93,60 @@ class FeeDiscount(db.Model):
         return f'<FeeDiscount {self.student_id} t{self.term_id}: {self.amount}>'
 
 
+class FinanceTransaction(db.Model):
+    """Central finance ledger — the single source of truth for every monetary
+    event across the platform.
+
+    Other modules keep owning their own domain (Sales owns products/POS, HR owns
+    payroll, fee payments own receipts); whenever any of them records money moving,
+    a row is mirrored here automatically (see utils.finance_ledger). Finance never
+    owns inventory or products — it only *classifies and reports* the money.
+
+    Denormalised on purpose (scope ids are plain, indexed columns) so it stays a
+    fast, self-contained reporting/audit table. One row per source record is
+    enforced by the (origin_type, origin_id) unique key, which also makes the
+    auto-posting idempotent (a replayed sale/payment can't double-count)."""
+    __tablename__ = 'finance_transactions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Scope — every record belongs to a branch, session and term (school = the tenant DB).
+    branch_id = db.Column(db.Integer, index=True)        # null = central / unbranched
+    session_id = db.Column(db.Integer, index=True)
+    term_id = db.Column(db.Integer, index=True)
+    # Classification
+    direction = db.Column(db.String(3), nullable=False)  # 'in' = revenue, 'out' = expense
+    source_module = db.Column(db.String(30), nullable=False, index=True)  # fees, sales, expense, payroll, manual
+    category = db.Column(db.String(80), index=True)      # revenue source / expense category
+    amount = db.Column(db.Float, nullable=False, default=0)
+    method = db.Column(db.String(30))                    # Cash, Transfer, POS, Online, …
+    # Links back to the originating record (polymorphic, denormalised).
+    student_id = db.Column(db.Integer, index=True)
+    origin_type = db.Column(db.String(40), index=True)   # fee_payment, sale, expense, payslip, reversal, manual
+    origin_id = db.Column(db.Integer, index=True)
+    reference = db.Column(db.String(80))                 # external ref / receipt no
+    description = db.Column(db.String(255))
+    occurred_on = db.Column(db.Date, nullable=False, default=local_now, index=True)
+    # Reversal / audit
+    reversed = db.Column(db.Boolean, default=False)
+    reversal_of_id = db.Column(db.Integer)               # -> finance_transactions.id
+    created_by_id = db.Column(db.Integer)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('origin_type', 'origin_id', name='uq_finance_origin'),
+        db.Index('ix_finance_scope', 'branch_id', 'term_id', 'direction'),
+    )
+
+    @property
+    def signed_amount(self):
+        """+revenue / -expense, for straight summing."""
+        return (self.amount or 0) * (1 if self.direction == 'in' else -1)
+
+    def __repr__(self):
+        return f'<FinanceTransaction {self.direction} {self.source_module} {self.amount}>'
+
+
 class ExpenseCategory(db.Model):
     """A category for school expenditure (Salaries, Utilities, Supplies, …)."""
     __tablename__ = 'expense_categories'

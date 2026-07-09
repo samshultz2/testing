@@ -318,7 +318,7 @@ def items_list():
 
 
 @finance_bp.route('/items/add', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def add_item():
     name = (request.form.get('name') or '').strip()
     if not name:
@@ -331,7 +331,7 @@ def add_item():
 
 
 @finance_bp.route('/items/<int:item_id>/edit', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def edit_item(item_id):
     item = db.get_or_404(FeeItem, item_id)
     name = (request.form.get('name') or '').strip()
@@ -344,7 +344,7 @@ def edit_item(item_id):
 
 
 @finance_bp.route('/items/<int:item_id>/delete', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def delete_item(item_id):
     item = db.get_or_404(FeeItem, item_id)
     from utils.audit import log_action
@@ -402,7 +402,7 @@ def structure():
 
 
 @finance_bp.route('/structure/save', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def save_structure():
     term_id = request.form.get('term_id', type=int)
     class_id = request.form.get('class_id', type=int)
@@ -445,7 +445,7 @@ def save_structure():
 
 
 @finance_bp.route('/structure/copy', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def copy_structure():
     """Copy a whole term's fee structure into another term."""
     from_term_id = request.form.get('from_term_id', type=int)
@@ -471,7 +471,7 @@ def copy_structure():
 
 
 @finance_bp.route('/structure/clear', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def clear_structure():
     """Remove every fee row for a term + class (+ arm)."""
     term_id = request.form.get('term_id', type=int)
@@ -752,7 +752,7 @@ def edit_payment(payment_id):
 
 
 @finance_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def delete_payment(payment_id):
     payment = db.get_or_404(FeePayment, payment_id)
     require_branch_access(payment.branch_id)   # no cross-branch payment deletion
@@ -834,7 +834,7 @@ def payment_link(student_id):
 
 
 @finance_bp.route('/discounts/add', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def add_discount():
     student_id = request.form.get('student_id', type=int)
     term_id = request.form.get('term_id', type=int)
@@ -858,7 +858,7 @@ def add_discount():
 
 
 @finance_bp.route('/discounts/<int:discount_id>/edit', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def edit_discount(discount_id):
     d = db.get_or_404(FeeDiscount, discount_id)
     require_branch_access(d.student.branch_id if d.student else None)
@@ -877,7 +877,7 @@ def edit_discount(discount_id):
 
 
 @finance_bp.route('/discounts/<int:discount_id>/delete', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def delete_discount(discount_id):
     d = db.get_or_404(FeeDiscount, discount_id)
     require_branch_access(d.student.branch_id if d.student else None)
@@ -1066,7 +1066,7 @@ def edit_expense(expense_id):
 
 
 @finance_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def delete_expense(expense_id):
     e = db.get_or_404(Expense, expense_id)
     require_branch_access(e.branch_id)   # no cross-branch expense deletion
@@ -1080,7 +1080,7 @@ def delete_expense(expense_id):
 
 
 @finance_bp.route('/expense-categories/add', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def add_expense_category():
     name = (request.form.get('name') or '').strip()
     if not name:
@@ -1093,7 +1093,7 @@ def add_expense_category():
 
 
 @finance_bp.route('/expense-categories/<int:category_id>/delete', methods=['POST'])
-@admin_required
+@login_required   # finance CRUD: gated to finance 'edit' users (bursars/accountants/admins) by enforce_write_level / subsection access
 def delete_expense_category(category_id):
     cat = db.get_or_404(ExpenseCategory, category_id)
     from utils.audit import log_action
