@@ -32,6 +32,7 @@
 
 {% block content %}
 <div class="ac-wrap">
+  {% set fin_active = 'accounting' %}{% include 'finance/_header.html' %}
   <div class="page-header"><h1>Accounting</h1>
     <div class="page-header-actions">
       <a href="{{ export_url }}?{{ request.query_string.decode() }}" class="btn btn-secondary" data-native><i aria-hidden="true" class="fas fa-file-excel"></i> Export statements</a>

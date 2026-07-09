@@ -27,6 +27,7 @@
 
 {% block content %}
 <div class="bt-wrap">
+  {% set fin_active = 'billing' %}{% include 'finance/_header.html' %}
   <div class="page-header"><h1>Billing Tools</h1></div>
 
   <form method="get" action="{{ url_for('finance.billing_tools') }}" class="bt-term">

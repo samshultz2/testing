@@ -28,6 +28,7 @@
 
 {% block content %}
 <div class="in-wrap">
+  {% set fin_active = 'installments' %}{% include 'finance/_header.html' %}
   <div class="page-header"><h1>Installment plans</h1></div>
 
   <form method="get" action="{{ url_for('finance.installments') }}" class="in-pick">

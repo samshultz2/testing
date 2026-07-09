@@ -1,0 +1,36 @@
+{# Shared finance module header: identity + quick actions + section tabs.
+   Include with a `fin_active` variable set to the current section key. #}
+<div class="fin-shell">
+  <div class="fin-bar">
+    <div class="fin-id"><i aria-hidden="true" class="fas fa-coins"></i> Finance</div>
+    <div class="fin-quick">
+      <a href="{{ url_for('finance.record_payment') }}" data-native class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-cash-register"></i> Collect payment</a>
+      <a href="{{ url_for('finance.expenses_list') }}" data-native class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-money-bill-wave"></i> Record expense</a>
+      <a href="{{ url_for('finance.billing_tools') }}" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-wand-magic-sparkles"></i> Bill / charge</a>
+      <a href="{{ url_for('finance.defaulters') }}" data-native class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> Defaulters</a>
+    </div>
+  </div>
+  <nav class="fin-tabs" aria-label="Finance sections">
+    <a href="{{ url_for('finance.dashboard') }}" data-native class="{{ 'on' if fin_active == 'dashboard' }}">Dashboard</a>
+    <a href="{{ url_for('finance.overview') }}" class="{{ 'on' if fin_active == 'overview' }}">Reports &amp; Ledger</a>
+    <a href="{{ url_for('finance.accounting') }}" class="{{ 'on' if fin_active == 'accounting' }}">Accounting</a>
+    <a href="{{ url_for('finance.billing_tools') }}" class="{{ 'on' if fin_active == 'billing' }}">Billing Tools</a>
+    <a href="{{ url_for('finance.installments') }}" class="{{ 'on' if fin_active == 'installments' }}">Installments</a>
+  </nav>
+</div>
+<style>
+  .fin-shell{margin-bottom:18px}
+  .fin-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+  .fin-id{font-family:var(--font-display,inherit);font-weight:800;font-size:20px;display:flex;align-items:center;gap:9px;letter-spacing:-.01em}
+  .fin-id i{color:var(--primary,#0d6a4e)}
+  .fin-quick{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .fin-tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--border,#e5e7eb)}
+  .fin-tabs a{padding:9px 14px;font-size:13.5px;font-weight:600;color:var(--text-secondary,#667);
+              text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+  .fin-tabs a:hover{color:var(--text-primary,#223)}
+  .fin-tabs a.on{color:var(--primary,#0d6a4e);border-bottom-color:var(--primary,#0d6a4e)}
+  @media (max-width:640px){
+    .fin-quick{width:100%;margin-left:0}
+    .fin-tabs{overflow-x:auto}
+  }
+</style>

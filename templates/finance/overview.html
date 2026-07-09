@@ -35,6 +35,7 @@
 
 {% block content %}
 <div class="fo-wrap">
+  {% set fin_active = 'overview' %}{% include 'finance/_header.html' %}
   <div class="page-header"><h1>Financial Overview</h1>
     <div class="page-header-actions">
       <form method="post" action="{{ sync_url }}" style="display:inline" onsubmit="return confirm('Sync existing payments, expenses and sales into the ledger?');">
