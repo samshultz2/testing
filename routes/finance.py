@@ -1263,3 +1263,89 @@ def export_report():
 
     fname = f"finance_report_{(term.full_name if term else 'all').replace(' ', '_').replace('/', '-')}.xlsx"
     return xlsx_response(wb, fname)
+
+
+# ============================================================================
+# FINANCIAL OVERVIEW — ledger-backed consolidated reporting (Phase 1)
+# ============================================================================
+def _overview_date(v):
+    try:
+        return datetime.strptime(v, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _overview_filters():
+    """Parse the overview filters, enforcing branch scope (a branch user can only
+    ever see their own branch; a central owner may pick one, several, or all)."""
+    from utils.branch_scope import is_central, viewing_branch_id
+    args = request.args
+    if is_central():
+        branch_ids = [b for b in args.getlist('branch', type=int) if b]   # empty = all
+    else:
+        bid = viewing_branch_id()
+        branch_ids = [bid] if bid not in (None, -1) else [-1]
+    return {
+        'branch_ids': branch_ids,
+        'session_id': args.get('session_id', type=int),
+        'term_id': args.get('term_id', type=int),
+        'date_from': _overview_date(args.get('from')),
+        'date_to': _overview_date(args.get('to')),
+        'source_module': args.get('source') or None,
+        'method': args.get('method') or None,
+        'direction': args.get('direction') or None,
+    }
+
+
+@finance_bp.route('/overview')
+@login_required
+def overview():
+    """Consolidated financial overview reading the central ledger — every revenue
+    source and expense across the platform, filterable by branch/session/term/
+    date/source/method, with a multi-branch owner view."""
+    from utils import finance_ledger as L
+    from utils.branch_scope import is_central
+    filters = _overview_filters()
+    return render_template('finance/overview.html',
+                           d=L.summary(filters), opts=L.filter_options(),
+                           sel=request.args, is_central=is_central(),
+                           selected_branches=set(filters['branch_ids']),
+                           nav=_nav_urls(),
+                           export_url=url_for('finance.overview_export'),
+                           sync_url=url_for('finance.ledger_sync'))
+
+
+@finance_bp.route('/overview/export')
+@login_required
+def overview_export():
+    from utils import finance_ledger as L
+    rows = L.export_rows(_overview_filters())
+    headers = ['Date', 'Type', 'Source', 'Category', 'Method', 'Branch', 'Amount', 'Reference', 'Description']
+    if request.args.get('format') == 'xlsx':
+        from openpyxl import Workbook
+        wb = Workbook(); ws = wb.active; ws.title = 'Ledger'
+        ws.append(headers)
+        for r in rows:
+            ws.append(r)
+        return xlsx_response(wb, 'finance_ledger.xlsx')
+    import csv
+    import io
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(headers)
+    w.writerows(rows)
+    from flask import Response
+    return Response(buf.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=finance_ledger.csv'})
+
+
+@finance_bp.route('/ledger/sync', methods=['POST'])
+@login_required
+def ledger_sync():
+    """One-click backfill: mirror any pre-existing payments/expenses/sales into
+    the ledger. Idempotent — safe to run repeatedly."""
+    from utils import finance_ledger as L
+    added = L.backfill()
+    flash(f'Ledger synced — {added} existing record(s) added.'
+          if added else 'Ledger already up to date — nothing to add.', 'success')
+    return redirect(url_for('finance.overview'))

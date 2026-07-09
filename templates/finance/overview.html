@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Financial Overview · {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ nav.dashboard }}">Finance</a> <span>/ Overview</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .fo-wrap{max-width:1200px}
+  .fo-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;
+              padding:14px;background:var(--surface-2,#f4f6f9);border:1px solid var(--border,#e5e7eb);border-radius:12px}
+  .fo-filters .fg{display:flex;flex-direction:column;gap:3px}
+  .fo-filters label{font-size:11.5px;font-weight:600;color:var(--text-secondary,#667)}
+  .fo-filters select,.fo-filters input{padding:7px 9px;border:1px solid var(--border,#d7dde5);border-radius:8px;font-size:13px;background:var(--surface,#fff);color:inherit}
+  .fo-actions{margin-left:auto;display:flex;gap:8px;align-items:flex-end}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  .kpi{background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:14px 16px}
+  .kpi .lab{font-size:11.5px;color:var(--text-secondary,#667);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+  .kpi .val{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-top:5px}
+  .kpi.rev .val{color:#14603f}.kpi.exp .val{color:#b0263a}
+  .kpi.net.pos .val{color:#14603f}.kpi.net.neg .val{color:#b0263a}
+  .fo-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+  @media(max-width:900px){.fo-grid{grid-template-columns:1fr}}
+  .panel{background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;margin-bottom:16px}
+  .panel h3{margin:0;padding:12px 16px;font-size:14px;border-bottom:1px solid var(--border,#eef1f5)}
+  .panel .bd{padding:14px 16px}
+  table.mini{width:100%;border-collapse:collapse;font-size:13px}
+  table.mini td{padding:7px 6px;border-bottom:1px solid var(--border,#f0f2f6)}
+  table.mini td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+  .tag.in{background:#d1e7dd;color:#14603f}.tag.out{background:#fde2e4;color:#b0263a}
+  .fo-scroll{overflow-x:auto}
+  .empty{padding:22px;text-align:center;color:var(--text-secondary,#889)}
+  canvas{max-height:260px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fo-wrap">
+  <div class="page-header"><h1>Financial Overview</h1>
+    <div class="page-header-actions">
+      <form method="post" action="{{ sync_url }}" style="display:inline" onsubmit="return confirm('Sync existing payments, expenses and sales into the ledger?');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary"><i aria-hidden="true" class="fas fa-rotate"></i> Sync existing data</button>
+      </form>
+    </div>
+  </div>
+
+  <form method="get" action="{{ url_for('finance.overview') }}" class="fo-filters">
+    {% if is_central and opts.branches %}
+    <div class="fg"><label>Branch(es)</label>
+      <select name="branch" multiple size="1" style="min-width:150px">
+        {% for b in opts.branches %}<option value="{{ b.id }}" {{ 'selected' if b.id in selected_branches }}>{{ b.name }}</option>{% endfor %}
+      </select></div>
+    {% endif %}
+    <div class="fg"><label>Session</label>
+      <select name="session_id"><option value="">All</option>{% for s in opts.sessions %}<option value="{{ s.id }}" {{ 'selected' if sel.get('session_id')|string == s.id|string }}>{{ s.name }}</option>{% endfor %}</select></div>
+    <div class="fg"><label>Term</label>
+      <select name="term_id"><option value="">All</option>{% for t in opts.terms %}<option value="{{ t.id }}" {{ 'selected' if sel.get('term_id')|string == t.id|string }}>{{ t.name }}</option>{% endfor %}</select></div>
+    <div class="fg"><label>From</label><input type="date" name="from" value="{{ sel.get('from','') }}"></div>
+    <div class="fg"><label>To</label><input type="date" name="to" value="{{ sel.get('to','') }}"></div>
+    <div class="fg"><label>Source</label>
+      <select name="source"><option value="">All</option>{% for s in opts.sources %}<option value="{{ s }}" {{ 'selected' if sel.get('source')==s }}>{{ s|capitalize }}</option>{% endfor %}</select></div>
+    <div class="fg"><label>Method</label>
+      <select name="method"><option value="">All</option>{% for m in opts.methods %}<option value="{{ m }}" {{ 'selected' if sel.get('method')==m }}>{{ m }}</option>{% endfor %}</select></div>
+    <div class="fg"><label>Type</label>
+      <select name="direction"><option value="">Both</option><option value="in" {{ 'selected' if sel.get('direction')=='in' }}>Revenue</option><option value="out" {{ 'selected' if sel.get('direction')=='out' }}>Expense</option></select></div>
+    <div class="fo-actions">
+      <button type="submit" class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-filter"></i> Apply</button>
+      <a href="{{ url_for('finance.overview') }}" class="btn btn-link btn-sm">Reset</a>
+      <a href="{{ export_url }}?{{ request.query_string.decode() }}" class="btn btn-secondary btn-sm" data-native><i aria-hidden="true" class="fas fa-file-csv"></i> CSV</a>
+      <a href="{{ export_url }}?format=xlsx&amp;{{ request.query_string.decode() }}" class="btn btn-secondary btn-sm" data-native><i aria-hidden="true" class="fas fa-file-excel"></i> Excel</a>
+    </div>
+  </form>
+
+  <div class="kpis">
+    <div class="kpi rev"><div class="lab">Total Revenue</div><div class="val">₦{{ '{:,.0f}'.format(d.revenue) }}</div></div>
+    <div class="kpi exp"><div class="lab">Total Expenses</div><div class="val">₦{{ '{:,.0f}'.format(d.expense) }}</div></div>
+    <div class="kpi net {{ 'pos' if d.net >= 0 else 'neg' }}"><div class="lab">Net {{ 'Profit' if d.net >= 0 else 'Loss' }}</div><div class="val">₦{{ '{:,.0f}'.format(d.net) }}</div></div>
+    <div class="kpi"><div class="lab">Today</div><div class="val">₦{{ '{:,.0f}'.format(d.today) }}</div></div>
+    <div class="kpi"><div class="lab">This Week</div><div class="val">₦{{ '{:,.0f}'.format(d.week) }}</div></div>
+    <div class="kpi"><div class="lab">This Month</div><div class="val">₦{{ '{:,.0f}'.format(d.month) }}</div></div>
+    <div class="kpi"><div class="lab">This Year</div><div class="val">₦{{ '{:,.0f}'.format(d.year) }}</div></div>
+    <div class="kpi"><div class="lab">Transactions</div><div class="val">{{ d.count }}</div></div>
+  </div>
+
+  <div class="fo-grid">
+    <div class="panel"><h3>Revenue vs Expenses</h3><div class="bd"><canvas id="chRevExp"></canvas></div></div>
+    <div class="panel"><h3>Revenue by Source</h3><div class="bd">{% if d.by_source %}<canvas id="chSrc"></canvas>{% else %}<div class="empty">No revenue yet.</div>{% endif %}</div></div>
+  </div>
+
+  {% if is_central and d.by_branch|length > 1 %}
+  <div class="panel"><h3>Branch comparison</h3><div class="bd"><canvas id="chBranch" style="max-height:220px"></canvas></div></div>
+  {% endif %}
+
+  <div class="fo-grid">
+    <div class="panel"><h3>Revenue by Source</h3><div class="bd">
+      <table class="mini"><tbody>
+        {% for r in d.by_source %}<tr><td>{{ r.key or 'Uncategorised' }}</td><td class="num">₦{{ '{:,.0f}'.format(r.total) }}</td></tr>{% else %}<tr><td class="empty">—</td></tr>{% endfor %}
+      </tbody></table></div></div>
+    <div class="panel"><h3>Expenses by Category</h3><div class="bd">
+      <table class="mini"><tbody>
+        {% for r in d.by_expense %}<tr><td>{{ r.key or 'Uncategorised' }}</td><td class="num">₦{{ '{:,.0f}'.format(r.total) }}</td></tr>{% else %}<tr><td class="empty">—</td></tr>{% endfor %}
+      </tbody></table></div></div>
+  </div>
+
+  <div class="fo-grid">
+    <div class="panel"><h3>By Payment Method</h3><div class="bd">
+      <table class="mini"><tbody>
+        {% for r in d.by_method %}<tr><td>{{ r.key or '—' }}</td><td class="num">₦{{ '{:,.0f}'.format(r.total) }}</td></tr>{% else %}<tr><td class="empty">—</td></tr>{% endfor %}
+      </tbody></table></div></div>
+    <div class="panel"><h3>By Branch</h3><div class="bd">
+      <table class="mini"><tbody>
+        {% for r in d.by_branch %}<tr><td>{{ r.label }}</td><td class="num">₦{{ '{:,.0f}'.format(r.total) }}</td></tr>{% else %}<tr><td class="empty">—</td></tr>{% endfor %}
+      </tbody></table></div></div>
+  </div>
+
+  <div class="panel"><h3>Recent transactions</h3><div class="bd fo-scroll">
+    <table class="mini"><thead><tr><td>Date</td><td>Type</td><td>Source</td><td>Category</td><td>Method</td><td>Branch</td><td class="num">Amount</td></tr></thead>
+      <tbody>
+        {% for t in d.recent %}
+        <tr><td>{{ t.date }}</td>
+          <td><span class="tag {{ t.direction }}">{{ 'Revenue' if t.direction=='in' else 'Expense' }}</span></td>
+          <td>{{ t.source|capitalize }}</td><td>{{ t.category or '—' }}</td><td>{{ t.method }}</td><td>{{ t.branch }}</td>
+          <td class="num">₦{{ '{:,.0f}'.format(t.amount) }}</td></tr>
+        {% else %}<tr><td colspan="7" class="empty">No transactions match these filters.</td></tr>{% endfor %}
+      </tbody></table>
+  </div></div>
+</div>
+
+<script type="application/json" id="fin-chart">{{ {
+  'src_labels': d.by_source|map(attribute='key')|list,
+  'src_values': d.by_source|map(attribute='total')|list,
+  'br_labels': d.by_branch|map(attribute='label')|list,
+  'br_values': d.by_branch|map(attribute='total')|list,
+  'revenue': d.revenue, 'expense': d.expense
+}|tojson }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+  (function(){
+    if (typeof Chart === 'undefined') return;
+    var el = document.getElementById('fin-chart'); if (!el) return;
+    var d; try { d = JSON.parse(el.textContent); } catch(e){ return; }
+    var palette = ['#0d6a4e','#11998e','#2f80ed','#e67e22','#8e44ad','#c0392b','#16a085','#d4a017','#7f8c8d'];
+    var mk = function(id, cfg){ var c = document.getElementById(id); if (c) new Chart(c, cfg); };
+    mk('chRevExp', { type:'bar', data:{ labels:['Revenue','Expenses'], datasets:[{ data:[d.revenue, d.expense], backgroundColor:['#0d6a4e','#c0392b'] }] },
+      options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} } });
+    if (d.src_labels && d.src_labels.length) mk('chSrc', { type:'doughnut',
+      data:{ labels:d.src_labels, datasets:[{ data:d.src_values, backgroundColor:palette }] },
+      options:{ plugins:{legend:{position:'right'}} } });
+    if (d.br_labels && d.br_labels.length > 1) mk('chBranch', { type:'bar',
+      data:{ labels:d.br_labels, datasets:[{ label:'Net', data:d.br_values, backgroundColor:'#11998e' }] },
+      options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} } });
+  })();
+</script>
+{% endblock %}

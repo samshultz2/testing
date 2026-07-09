@@ -200,6 +200,133 @@ def register_ledger_hooks():
     _HOOKS_REGISTERED = True
 
 
+# --- reporting: read the ledger (Phase 1) -----------------------------------
+def _effective_query(filters):
+    """Base query over 'live' ledger rows (excludes reversed originals and the
+    reversal entries themselves) matching the given filters."""
+    from models import db, FinanceTransaction as F
+    q = db.session.query(F).filter(F.reversed.is_(False), F.origin_type != 'reversal')
+    branch_ids = filters.get('branch_ids')
+    if branch_ids:
+        q = q.filter(F.branch_id.in_(branch_ids))
+    if filters.get('session_id'):
+        q = q.filter(F.session_id == filters['session_id'])
+    if filters.get('term_id'):
+        q = q.filter(F.term_id == filters['term_id'])
+    if filters.get('date_from'):
+        q = q.filter(F.occurred_on >= filters['date_from'])
+    if filters.get('date_to'):
+        q = q.filter(F.occurred_on <= filters['date_to'])
+    if filters.get('source_module'):
+        q = q.filter(F.source_module == filters['source_module'])
+    if filters.get('category'):
+        q = q.filter(F.category == filters['category'])
+    if filters.get('method'):
+        q = q.filter(F.method == filters['method'])
+    if filters.get('direction'):
+        q = q.filter(F.direction == filters['direction'])
+    if filters.get('student_id'):
+        q = q.filter(F.student_id == filters['student_id'])
+    return q
+
+
+def _branch_names():
+    from models import Branch
+    return {b.id: b.name for b in Branch.query.all()}
+
+
+def _sum(q, direction):
+    from sqlalchemy import func
+    from models import FinanceTransaction as F
+    v = q.filter(F.direction == direction).with_entities(func.coalesce(func.sum(F.amount), 0)).scalar()
+    return round(float(v or 0), 2)
+
+
+def _group(q, col, direction=None):
+    from sqlalchemy import func
+    from models import FinanceTransaction as F
+    qq = q
+    if direction:
+        qq = qq.filter(F.direction == direction)
+    rows = qq.with_entities(col, func.coalesce(func.sum(F.amount), 0), func.count(F.id)).group_by(col).all()
+    return [{'key': r[0], 'total': round(float(r[1] or 0), 2), 'count': int(r[2])} for r in rows]
+
+
+def summary(filters):
+    """Everything the finance overview needs, computed from the ledger."""
+    import datetime as dt
+    from models import FinanceTransaction as F
+    base = _effective_query(filters)
+    revenue, expense = _sum(base, REVENUE), _sum(base, EXPENSE)
+    names = _branch_names()
+
+    def label_branch(rows):
+        for r in rows:
+            r['label'] = names.get(r['key'], 'Central / unbranched' if r['key'] is None else f'Branch {r["key"]}')
+        return rows
+
+    # collections for standard windows (revenue only)
+    today = dt.date.today()
+    def collected(since):
+        f = dict(filters); f['date_from'] = since; f['date_to'] = today; f['direction'] = REVENUE
+        return _sum(_effective_query(f), REVENUE)
+    week_start = today - dt.timedelta(days=today.weekday())
+    year_start = today.replace(month=1, day=1)
+    month_start = today.replace(day=1)
+
+    recent = (base.order_by(F.occurred_on.desc(), F.id.desc()).limit(15).all())
+    return {
+        'revenue': revenue, 'expense': expense, 'net': round(revenue - expense, 2),
+        'count': base.count(),
+        'today': collected(today), 'week': collected(week_start),
+        'month': collected(month_start), 'year': collected(year_start),
+        'by_source': sorted(_group(base, F.category, REVENUE), key=lambda r: -r['total']),
+        'by_expense': sorted(_group(base, F.category, EXPENSE), key=lambda r: -r['total']),
+        'by_method': sorted(_group(base, F.method, REVENUE), key=lambda r: -r['total']),
+        'by_branch': label_branch(_group(base, F.branch_id)),
+        'by_module': _group(base, F.source_module),
+        'recent': [{
+            'date': (t.occurred_on.strftime('%d %b %Y') if t.occurred_on else ''),
+            'direction': t.direction, 'source': t.source_module, 'category': t.category,
+            'amount': round(float(t.amount or 0), 2), 'method': t.method or '',
+            'branch': names.get(t.branch_id, '—' if t.branch_id is None else ''),
+            'description': t.description or '', 'reference': t.reference or '',
+        } for t in recent],
+    }
+
+
+def filter_options():
+    """Distinct values for the overview filter dropdowns."""
+    from models import db, FinanceTransaction as F, Branch, AcademicSession, Term
+    def distinct(col):
+        return [r[0] for r in db.session.query(col).filter(col.isnot(None)).distinct().all() if r[0] != '']
+    return {
+        'branches': [{'id': b.id, 'name': b.name} for b in Branch.query.order_by(Branch.name).all()],
+        'sessions': [{'id': s.id, 'name': s.name} for s in AcademicSession.query.order_by(AcademicSession.id.desc()).all()],
+        'terms': [{'id': t.id, 'name': t.full_name} for t in Term.query.order_by(Term.id.desc()).all()],
+        'sources': sorted(distinct(F.source_module)),
+        'methods': sorted(distinct(F.method)),
+        'categories': sorted(distinct(F.category)),
+    }
+
+
+def export_rows(filters):
+    """Flat rows for CSV/Excel export of the filtered ledger."""
+    from models import FinanceTransaction as F
+    names = _branch_names()
+    q = _effective_query(filters).order_by(F.occurred_on.desc(), F.id.desc())
+    out = []
+    for t in q.all():
+        out.append([
+            t.occurred_on.strftime('%Y-%m-%d') if t.occurred_on else '',
+            'Revenue' if t.direction == REVENUE else 'Expense',
+            t.source_module, t.category or '', t.method or '',
+            names.get(t.branch_id, '') if t.branch_id else 'Central',
+            round(float(t.amount or 0), 2), t.reference or '', t.description or '',
+        ])
+    return out
+
+
 # --- backfill existing data into the ledger (one-off, idempotent) -----------
 def backfill():
     """Post any pre-existing FeePayment / Expense / Sale rows that aren't in the

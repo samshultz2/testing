@@ -275,6 +275,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('finance.overview') }}" class="nav-link {% if request.endpoint == 'finance.overview' %}active{% endif %}">
+                            <i class="fas fa-scale-balanced"></i><span>Reports &amp; Ledger</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('finance.record_payment') }}" class="nav-link {% if 'record_payment' in request.endpoint or 'payments_list' in request.endpoint %}active{% endif %}">
                             <i class="fas fa-cash-register"></i><span>Payments</span>
                         </a>
