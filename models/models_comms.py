@@ -19,6 +19,7 @@ class Announcement(db.Model):
     audience = db.Column(db.String(20), default='All')   # All/Staff/Students/Parents
     category = db.Column(db.String(20), default='Info')   # Info/Important/Event
     is_pinned = db.Column(db.Boolean, default=False)
+    needs_ack = db.Column(db.Boolean, default=False)   # require staff to acknowledge
     starts_on = db.Column(db.Date)
     ends_on = db.Column(db.Date)
     created_by = db.Column(db.String(100))
@@ -36,6 +37,19 @@ class Announcement(db.Model):
 
     def __repr__(self):
         return f'<Announcement {self.title!r}>'
+
+
+class AnnouncementAck(db.Model):
+    """Records that a user has acknowledged a (needs_ack) announcement."""
+    __tablename__ = 'announcement_acks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    announcement_id = db.Column(db.Integer, db.ForeignKey('announcements.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    acked_at = db.Column(db.DateTime, default=local_now)
+
+    __table_args__ = (db.UniqueConstraint('announcement_id', 'user_id',
+                                          name='uq_ann_ack'),)
 
 
 class Notification(db.Model):

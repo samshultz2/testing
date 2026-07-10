@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Chart, { chartTheme } from './charts';
 import { Kpi, Widget, Empty, ChartBox, naira, nairaShort } from './components';
 import Customize from './Customize';
-import { apiGet } from '../lib/api';
+import { apiGet, csrfToken } from '../lib/api';
 import { Toast, SetupChecklist } from '../components/ui';
 
 const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboard-list' };
@@ -16,6 +16,14 @@ export default function App({ data: initialData }) {
   const urls = d.urls || {};
   const t = chartTheme();
   const [customizing, setCustomizing] = useState(false);
+  const [ackedIds, setAckedIds] = useState(new Set());
+  const ackAnn = async (a) => {
+    try {
+      await fetch(a.ack_url, { method: 'POST', credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': csrfToken() } });
+      setAckedIds((s) => new Set(s).add(a.id));
+    } catch (_) { /* ignore */ }
+  };
 
   // Re-fetch widget data in place after customising — no full page reload.
   const refresh = async () => {
@@ -121,7 +129,11 @@ export default function App({ data: initialData }) {
             return (
               <div key={i} style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeft: '4px solid ' + color, borderRadius: 'var(--radius-md)', padding: '.7rem .9rem' }}>
                 <i aria-hidden="true" className={'fas ' + icon} style={{ color, marginTop: '.2rem' }} />
-                <div style={{ flex: 1 }}><strong>{a.title}</strong>{a.body && <div className="text-muted text-sm">{a.body}</div>}</div>
+                <div style={{ flex: 1 }}><strong>{a.title}</strong>{a.body && <div className="text-muted text-sm">{a.body}</div>}
+                  {a.needs_ack && ((a.acked || ackedIds.has(a.id))
+                    ? <div className="text-sm" style={{ color: 'var(--success)', marginTop: '.35rem' }}><i aria-hidden="true" className="fas fa-circle-check" /> Acknowledged</div>
+                    : <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '.4rem' }} onClick={() => ackAnn(a)}><i aria-hidden="true" className="fas fa-check" /> Acknowledge</button>)}
+                </div>
                 {a.is_pinned && <i aria-hidden="true" className="fas fa-thumbtack text-muted" title="Pinned" />}
               </div>
             );

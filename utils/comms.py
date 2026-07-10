@@ -403,6 +403,7 @@ def _resolve_staff(spec):
         out.append({
             'student': None, 'staff': st, 'name': name, 'parent_name': name,
             'phone': st.phone or '', 'email': st.email or '', 'balance': None,
+            'user_id': st.user_id,      # for in-app (bell) delivery
         })
     return out
 
@@ -411,9 +412,16 @@ def channel_is_email(channel):
     return (channel or '').lower() == 'email'
 
 
+def channel_is_inapp(channel):
+    return (channel or '').lower() in ('in-app', 'inapp', 'in_app')
+
+
 def reachable_targets(targets, channel):
     """Filter resolved audience targets to those actually reachable on ``channel``
-    — an email address for Email, a phone number for SMS/WhatsApp."""
+    — an email address for Email, a linked user account for In-app, else a phone
+    number for SMS/WhatsApp."""
+    if channel_is_inapp(channel):
+        return [t for t in targets if t.get('user_id')]
     by_email = channel_is_email(channel)
     return [t for t in targets if (t.get('email') if by_email else t.get('phone'))]
 
@@ -458,23 +466,38 @@ def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None
     if not reachable:
         return None
 
+    # In-app (bell) notifications are instant and gateway-free, so they're
+    # delivered on creation and the campaign is recorded as already Sent.
+    inapp = channel_is_inapp(channel)
+    if inapp:
+        status = 'Sent'
     label = audience_label or title or f'{str(audience).title()} ({len(reachable)})'
     msg = Message(title=title or label, body=body, channel=channel,
                   audience=str(audience), audience_label=label,
                   term_id=term.id if term else None,
                   branch_id=(branch_id if branch_id is not None else branch_for_new()),
                   created_by=created_by, recipient_count=len(reachable),
-                  status=status, scheduled_at=scheduled_at)
+                  status=status, scheduled_at=scheduled_at,
+                  sent_count=(len(reachable) if inapp else 0))
     db.session.add(msg)
     db.session.flush()
+    from datetime import datetime as _now
     for t in reachable:
         ctx = campaign_context(t, term)
+        rendered = render(body, ctx)
         db.session.add(MessageRecipient(
             message_id=msg.id,
             student_id=(t['student'].id if t.get('student') is not None else None),
             parent_name=(t.get('parent_name') or t.get('name')),
             phone=t['phone'], email=t.get('email') or None,
-            body=render(body, ctx)))
+            body=rendered,
+            status=('Sent' if inapp else 'Pending'),
+            sent_at=(_now.now() if inapp else None)))
+        if inapp and t.get('user_id'):
+            from models import Notification
+            db.session.add(Notification(
+                user_id=t['user_id'], title=(title or 'Notice'), body=rendered,
+                category='info'))
     db.session.commit()
     return msg
 

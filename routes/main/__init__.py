@@ -208,6 +208,17 @@ def dashboard_payload():
         Student.created_at.desc()).limit(5).all()
     recent_activity = _dash_recent_activity()
     announcements = _dash_announcements()
+    # Which of these the viewer has already acknowledged (for needs_ack notices).
+    _acked_ann_ids = set()
+    _ann_ack_ids = [a.id for a in announcements if a.needs_ack]
+    if _ann_ack_ids:
+        from models import AnnouncementAck
+        from utils.access_control import get_current_user
+        _u = get_current_user()
+        if _u is not None:
+            _acked_ann_ids = {r[0] for r in db.session.query(AnnouncementAck.announcement_id)
+                              .filter(AnnouncementAck.user_id == _u.id,
+                                      AnnouncementAck.announcement_id.in_(_ann_ack_ids)).all()}
     sales = _dash_sales(active_term) if 'sales' in enabled else None
 
     from utils.access_control import can_access_module
@@ -231,8 +242,11 @@ def dashboard_payload():
         widget_catalog=[{'key': k, 'label': label, 'group': cat,
                          'permitted': k in permitted_set, 'enabled': k in enabled_set}
                         for k, label, cat, _ in DASHBOARD_WIDGETS],
-        announcements=[{'title': a.title, 'body': a.body, 'category': a.category,
-                        'is_pinned': bool(a.is_pinned)} for a in announcements],
+        announcements=[{'id': a.id, 'title': a.title, 'body': a.body, 'category': a.category,
+                        'is_pinned': bool(a.is_pinned), 'needs_ack': bool(a.needs_ack),
+                        'acked': a.id in _acked_ann_ids,
+                        'ack_url': url_for('comms.ack_announcement', ann_id=a.id)}
+                       for a in announcements],
         recent_students=[_ser_student_brief(s) for s in recent_students],
         active_enrollments=active_enrollments,
         total_classes=total_classes,

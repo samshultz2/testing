@@ -119,16 +119,17 @@ function Dashboard({ d }) {
 // ---- Announcements ---------------------------------------------------------
 function Announcements({ d, notify }) {
   const nav = useNav();
-  const [f, setF] = useState({ title: '', body: '', category: 'Info', audience: 'All', starts_on: '', ends_on: '', is_pinned: false });
+  const blank = { title: '', body: '', category: 'Info', audience: 'All', starts_on: '', ends_on: '', is_pinned: false, needs_ack: false };
+  const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const submit = async (e) => {
     e.preventDefault();
     if (!f.title.trim()) { notify('error', 'Title is required.'); return; }
     setBusy(true);
-    const r = await submitJson(d.add_url, { ...f, is_pinned: f.is_pinned ? 'on' : '' });
+    const r = await submitJson(d.add_url, { ...f, is_pinned: f.is_pinned ? 'on' : '', needs_ack: f.needs_ack ? 'on' : '' });
     setBusy(false);
-    if (r.ok) { setF({ title: '', body: '', category: 'Info', audience: 'All', starts_on: '', ends_on: '', is_pinned: false }); nav.refresh(); }
+    if (r.ok) { setF(blank); nav.refresh(); }
     else notify('error', r.error || 'Could not post.');
   };
   const del = async (url) => {
@@ -157,6 +158,7 @@ function Announcements({ d, notify }) {
             <div className="form-group"><label className="form-label">Until</label>
               <input type="date" className="form-control" value={f.ends_on} onChange={(e) => set('ends_on', e.target.value)} /></div>
             <div className="form-group" style={{ alignSelf: 'center' }}><label className="form-check"><input type="checkbox" checked={f.is_pinned} onChange={(e) => set('is_pinned', e.target.checked)} /> Pin to top</label></div>
+            <div className="form-group" style={{ alignSelf: 'center' }}><label className="form-check" title="Staff must click Acknowledge to confirm they've read it"><input type="checkbox" checked={f.needs_ack} onChange={(e) => set('needs_ack', e.target.checked)} /> Require acknowledgement</label></div>
           </div>
           <button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-bullhorn" /> Post</button>
         </form></div></div>
@@ -169,6 +171,7 @@ function Announcements({ d, notify }) {
                 <div><strong>{a.title}</strong> {a.is_pinned && <i aria-hidden="true" className="fas fa-thumbtack text-muted" title="Pinned" />}
                   {' '}<span className={catBadge(a.category)}>{a.category}</span>{' '}
                   <span className="badge badge-secondary">{a.audience}</span>{' '}
+                  {a.needs_ack && <span className="badge badge-info" title="Requires acknowledgement"><i aria-hidden="true" className="fas fa-circle-check" /> {a.ack_count} ack{a.ack_count === 1 ? '' : 's'}</span>}{' '}
                   {!a.is_active && <span className="badge badge-secondary">Inactive</span>}</div>
                 <button className="btn btn-danger btn-sm" onClick={() => del(a.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
               </div>
@@ -709,6 +712,9 @@ function Compose({ d, notify }) {
   const ptRef = useRef();
 
   const isEmail = String(channel).toLowerCase() === 'email';
+  const isInapp = String(channel).toLowerCase() === 'in-app';
+  // In-app notifications reach staff bells, so force the recipient type to staff.
+  useEffect(() => { if (isInapp && to !== 'staff' && canStaff) setTo('staff'); /* eslint-disable-next-line */ }, [isInapp]);
   // The recipient selection as a flat spec — shared by preview and submit.
   const buildSpec = () => {
     const sp = { to };
@@ -789,8 +795,9 @@ function Compose({ d, notify }) {
 
   const charCount = body.length;
   const segs = charCount ? Math.ceil(charCount / 160) : 0;
-  const channelReady = isEmail ? d.email_ready : d.gateway_ready;
-  const channelLabel = isEmail ? 'Email (SMTP)' : (d.gateway_label || 'SMS gateway');
+  const channelReady = isInapp ? true : (isEmail ? d.email_ready : d.gateway_ready);
+  const channelLabel = isInapp ? 'In-app' : (isEmail ? 'Email (SMTP)' : (d.gateway_label || 'SMS gateway'));
+  const reachNoun = isInapp ? 'account' : (isEmail ? 'email' : 'phone');
   const audCards = [['all', 'fa-users', 'All parents'], ['class', 'fa-school', 'By class'],
     ['defaulters', 'fa-triangle-exclamation', 'Fee defaulters'], ['students', 'fa-user-check', 'Selected']];
 
@@ -891,7 +898,7 @@ function Compose({ d, notify }) {
                 <div className="form-group mb-0"><label className="form-label">Message body <span className="required">*</span></label>
                   <div className="ph-btns">{d.placeholders.map((p) => <span className="ph-btn" key={p} onClick={() => insertPh(p)}>{p}</span>)}</div>
                   <textarea ref={bodyRef} className="form-control" rows="6" required placeholder="Type your message. Tap a tag above to personalise it." value={body} onChange={(e) => setBody(e.target.value)} />
-                  <div className="seg-info"><span>{charCount} character{charCount === 1 ? '' : 's'}</span><span>{isEmail ? 'Email body' : `${segs} SMS segment${segs === 1 ? '' : 's'}`}</span></div>
+                  <div className="seg-info"><span>{charCount} character{charCount === 1 ? '' : 's'}</span><span>{isInapp ? 'In-app notice' : (isEmail ? 'Email body' : `${segs} SMS segment${segs === 1 ? '' : 's'}`)}</span></div>
                 </div>
               </div></div>
           </div>
@@ -901,23 +908,25 @@ function Compose({ d, notify }) {
               <div className="card-body">
                 <div className="d-flex gap-2 align-center mb-2" style={{ fontSize: 'var(--text-sm)' }}>
                   <span className="badge badge-info">{preview.reachable} recipient{preview.reachable === 1 ? '' : 's'}</span>
-                  <span className="text-muted">{preview.no_phone ? `${preview.no_phone} have no ${isEmail ? 'email' : 'phone'}` : ''}</span>
+                  <span className="text-muted">{preview.no_phone ? `${preview.no_phone} have no ${reachNoun}` : ''}</span>
                 </div>
                 <div className="text-muted text-sm mb-1">Sample (first recipient):</div>
                 <div className="preview-phone mb-3"><div className="bubble">{preview.sample}</div></div>
                 <button type="button" className="btn btn-secondary w-100 mb-2" onClick={runPreview}><i aria-hidden="true" className="fas fa-rotate" /> Refresh preview</button>
-                {channelReady && (<>
+                {channelReady && !isInapp && (<>
                   <label className="form-check mb-2"><input type="checkbox" checked={schedule} onChange={(e) => setSchedule(e.target.checked)} /> Schedule for later</label>
                   {schedule && <div className="form-group"><label className="form-label">Send at</label>
                     <input type="datetime-local" className="form-control" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
                     <span className="form-hint d-block">The campaign will auto-send via {channelLabel} at this time.</span></div>}
                 </>)}
-                <button type="submit" className="btn btn-primary w-100" disabled={busy}><i aria-hidden="true" className="fas fa-paper-plane" /> {schedule ? 'Schedule campaign' : 'Create campaign'}</button>
-                {channelReady
-                  ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-tower-broadcast" style={{ color: 'var(--success)' }} /> {channelLabel} active — after creating, send to everyone automatically with one tap.</p>
-                  : (isEmail
-                    ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> Email isn't configured yet. You can still create the campaign and review recipients; set up SMTP to send.</p>
-                    : <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export. <a href={d.urls.settings}>Add an SMS gateway</a> to auto-send.</p>)}
+                <button type="submit" className="btn btn-primary w-100" disabled={busy}><i aria-hidden="true" className="fas fa-paper-plane" /> {isInapp ? 'Send notification' : (schedule ? 'Schedule campaign' : 'Create campaign')}</button>
+                {isInapp
+                  ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-bell" style={{ color: 'var(--success)' }} /> Posts instantly to the notification bell of each staff member with an account.</p>
+                  : channelReady
+                    ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-tower-broadcast" style={{ color: 'var(--success)' }} /> {channelLabel} active — after creating, send to everyone automatically with one tap.</p>
+                    : (isEmail
+                      ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> Email isn't configured yet. You can still create the campaign and review recipients; set up SMTP to send.</p>
+                      : <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export. <a href={d.urls.settings}>Add an SMS gateway</a> to auto-send.</p>)}
               </div></div>
           </div>
         </div>

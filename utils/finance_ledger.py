@@ -192,6 +192,7 @@ _ADDED_COLUMNS = {
     'parent_contacts': {'email': 'VARCHAR(120)'},
     'message_recipients': {'email': 'VARCHAR(120)'},
     'message_templates': {'is_favorite': 'BOOLEAN'},
+    'announcements': {'needs_ack': 'BOOLEAN'},
 }
 
 
@@ -220,9 +221,10 @@ def ensure_tables(bind=None):
     owns the schema and never auto-creates these newer tables/columns — and because
     existing tenant databases predate them."""
     from models import (db, FinanceTransaction, AdditionalCharge, InstallmentPlan,
-                        RecipientGroup)
+                        RecipientGroup, AnnouncementAck)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
-              InstallmentPlan.__table__, RecipientGroup.__table__]
+              InstallmentPlan.__table__, RecipientGroup.__table__,
+              AnnouncementAck.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

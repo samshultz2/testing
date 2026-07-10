@@ -916,6 +916,13 @@
 ]
 ],
 [
+"comms.ack_announcement",
+"/communication/announcements/<int:ann_id>/ack",
+[
+"POST"
+]
+],
+[
 "comms.add_announcement",
 "/communication/announcements/add",
 [

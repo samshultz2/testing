@@ -28,9 +28,10 @@ from utils.security import strip_tags
 comms_bp = Blueprint('comms', __name__, url_prefix='/communication')
 
 # Delivery channels the composer offers. SMS/WhatsApp reach a phone number; Email
-# reaches a parent's stored email address. (WhatsApp is a click-to-chat deep link;
-# SMS and Email send through the configured gateway / SMTP.)
-CHANNELS = ['SMS', 'WhatsApp', 'Email']
+# reaches a stored email address; In-app posts a bell notification to staff with a
+# user account. (WhatsApp is a click-to-chat deep link; SMS/Email send through the
+# configured gateway / SMTP; In-app is instant.)
+CHANNELS = ['SMS', 'WhatsApp', 'Email', 'In-app']
 
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
@@ -155,11 +156,21 @@ def dashboard():
 def announcements():
     items = Announcement.query.order_by(Announcement.is_pinned.desc(),
                                         Announcement.created_at.desc()).all()
+    # Acknowledgement counts (only meaningful for needs_ack announcements).
+    from models import AnnouncementAck
+    ack_ids = [a.id for a in items if a.needs_ack]
+    ack_counts = {}
+    if ack_ids:
+        ack_counts = dict(db.session.query(AnnouncementAck.announcement_id,
+                                           func.count(AnnouncementAck.id))
+                          .filter(AnnouncementAck.announcement_id.in_(ack_ids))
+                          .group_by(AnnouncementAck.announcement_id).all())
     return _render({
         'page': 'announcements', 'nav': _nav_urls(),
         'items': [{'id': a.id, 'title': a.title, 'body': a.body or '',
                    'category': a.category or 'Info', 'audience': a.audience or 'All',
                    'is_pinned': bool(a.is_pinned), 'is_active': bool(a.is_active),
+                   'needs_ack': bool(a.needs_ack), 'ack_count': ack_counts.get(a.id, 0),
                    'created_at': a.created_at.strftime('%d %b %Y') if a.created_at else '',
                    'created_by': a.created_by or '',
                    'starts_on': a.starts_on.strftime('%d %b') if a.starts_on else '',
@@ -169,12 +180,32 @@ def announcements():
     })
 
 
+@comms_bp.route('/announcements/<int:ann_id>/ack', methods=['POST'])
+@login_required
+def ack_announcement(ann_id):
+    """Record that the current user has acknowledged an announcement (idempotent)."""
+    from models import AnnouncementAck
+    from utils.access_control import get_current_user
+    from sqlalchemy.exc import IntegrityError
+    user = get_current_user()
+    if user is None:
+        return _err('Sign in to acknowledge.', url_for('main.dashboard'))
+    if not AnnouncementAck.query.filter_by(announcement_id=ann_id, user_id=user.id).first():
+        db.session.add(AnnouncementAck(announcement_id=ann_id, user_id=user.id))
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()          # raced a duplicate — already acknowledged
+    return _ok('Acknowledged.', url_for('main.dashboard'))
+
+
 def _read_announcement(a):
     a.title = strip_tags(request.form.get('title'))
     a.body = strip_tags(request.form.get('body')) or None
     a.audience = request.form.get('audience') or 'All'
     a.category = request.form.get('category') or 'Info'
     a.is_pinned = bool(request.form.get('is_pinned'))
+    a.needs_ack = bool(request.form.get('needs_ack'))
     a.starts_on = _date(request.form.get('starts_on'))
     a.ends_on = _date(request.form.get('ends_on'))
 
@@ -420,7 +451,9 @@ def compose():
             body, channel=channel, spec=spec, term=term, title=title,
             audience_label=label, created_by=_current_user(),
             status=status, scheduled_at=scheduled_at, branch_id=branch_for_new())
-        if status == 'Scheduled':
+        if comms.channel_is_inapp(channel):
+            note = f'In-app notification sent to {len(reachable)} staff member(s).'
+        elif status == 'Scheduled':
             note = (f'Campaign scheduled for {scheduled_at.strftime("%d %b %Y, %I:%M %p")} '
                     f'({len(reachable)} recipient(s)).')
         else:
@@ -466,7 +499,9 @@ def compose():
         'genders': ['Male', 'Female'],
         'templates': [{'id': t.id, 'name': t.name, 'category': t.category or '', 'body': t.body}
                       for t in templates],
-        'channels': CHANNELS, 'placeholders': comms.PLACEHOLDERS, 'cov': comms.coverage_stats(),
+        # In-app posts to staff bells, so it's offered only where staff messaging is.
+        'channels': (CHANNELS if _is_admin() else [c for c in CHANNELS if c != 'In-app']),
+        'placeholders': comms.PLACEHOLDERS, 'cov': comms.coverage_stats(),
         'gateway_ready': sms_gateway.is_configured(gw),
         'gateway_label': sms_gateway.provider_label(gw),
         'email_ready': mailer.is_configured(),
@@ -931,8 +966,13 @@ def message_detail(message_id):
                      'sent_url': url_for('comms.mark_sent', message_id=msg.id, rid=r.id)})
     from utils import sms_gateway, mailer
     gw = sms_gateway.get_config()
-    channel_ready = mailer.is_configured() if is_email else sms_gateway.is_configured(gw)
-    channel_label = 'Email' if is_email else sms_gateway.provider_label(gw)
+    is_inapp = comms.channel_is_inapp(msg.channel)
+    if is_inapp:                       # bell notifications are delivered on creation
+        channel_ready, channel_label = False, 'In-app'
+    elif is_email:
+        channel_ready, channel_label = mailer.is_configured(), 'Email'
+    else:
+        channel_ready, channel_label = sms_gateway.is_configured(gw), sms_gateway.provider_label(gw)
     return _render({
         'page': 'message_detail', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'msg': {'id': msg.id, 'title': msg.title or 'Campaign', 'channel': msg.channel,
@@ -1031,6 +1071,9 @@ def send_gateway(message_id):
     from flask import current_app
     msg = db.get_or_404(Message, message_id)
     require_branch_access(msg.branch_id)
+    if comms.channel_is_inapp(msg.channel):
+        return _err('In-app notifications are delivered instantly — nothing to send.',
+                    url_for('comms.message_detail', message_id=message_id))
     is_email = (msg.channel or '').lower() == 'email'
 
     if is_email:
