@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiGet } from '../../lib/api';
+import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner } from '../../components/ui';
@@ -7,10 +7,20 @@ import { withGroups, GroupHeadRow } from '../roster';
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
-  const { classes = [], today, online, sync = {}, default_class } = useCtx();
+  const { classes = [], today, online, sync = {}, default_class, can_mark } = useCtx();
   // A form teacher lands on their own class without picking it.
   const [assignmentId, setAssignmentId] = useState(default_class ? String(default_class) : '');
   const [date, setDate] = useState(today || '');
+  const [notifying, setNotifying] = useState(false);
+  const notifyAbsentees = async () => {
+    setNotifying(true);
+    try {
+      const r = await apiPost('/attendance/api/notify/absentees', { assignment_id: assignmentId, date });
+      if (r && r.ok && r.redirect) window.location.href = r.redirect;
+      else alert((r && r.error) || 'Could not draft the notice.');
+    } catch (e) { alert(e.message || 'Could not draft the notice.'); }
+    setNotifying(false);
+  };
 
   // Wait for queued offline marks to flush before computing the summary.
   const pending = sync.pending || 0;
@@ -90,6 +100,10 @@ export default function DailySummary() {
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
               <strong>{d.class_name}</strong>
               <span style={{ color: 'var(--text-muted)' }}>{new Date(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              {can_mark !== false && (d.morning_absent > 0 || d.afternoon_absent > 0) && (
+                <button className="btn btn-primary btn-sm no-print" style={{ marginLeft: 'auto' }}
+                        disabled={notifying} onClick={notifyAbsentees}>
+                  <i className="fas fa-comment-sms" aria-hidden="true" /> Notify absentees’ parents</button>)}
             </div>
 
             {d.school_day === false && (

@@ -21,6 +21,14 @@ REGISTRY = [
     ('attendance_alert', 'Attendance absence alerts',
      "Alert admins when a student crosses the consecutive-absence threshold.",
      'Attendance', True),
+    ('attendance_absent_parent', 'Absent-today parent notices',
+     "Let staff draft a message to the parents of students absent on a given day "
+     "(reviewed before sending).",
+     'Attendance', False),
+    ('attendance_low_parent', 'Low-attendance parent notices',
+     "Let staff draft a message to the parents of students below the attendance "
+     "warning threshold for a term (reviewed before sending).",
+     'Attendance', False),
     ('results_published', 'Results published',
      "Draft a parent notification when results are released for a term.",
      'Academics', True),

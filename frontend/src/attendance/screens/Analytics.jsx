@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiGet } from '../../lib/api';
+import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Toolbar, Spinner, EmptyState, ErrorState, OfflineRequired,
@@ -53,7 +53,18 @@ function HeatStrip({ rows }) {
 export default function Analytics() {
   const { term, terms = [], online } = useCtx();
   const [termId, setTermId] = useState(term ? String(term.id) : '');
+  const [notifyChannel, setNotifyChannel] = useState('SMS');
+  const [notifying, setNotifying] = useState(false);
   const tid = termId || (term ? String(term.id) : '');
+  const notifyLow = async () => {
+    setNotifying(true);
+    try {
+      const r = await apiPost('/attendance/api/notify/low', { term_id: tid, channel: notifyChannel });
+      if (r && r.ok && r.redirect) window.location.href = r.redirect;
+      else alert((r && r.error) || 'Could not draft the notice.');
+    } catch (e) { alert(e.message || 'Could not draft the notice.'); }
+    setNotifying(false);
+  };
   const [state] = useAsync(
     () => (online && tid ? apiGet(`/attendance/api/analytics?term_id=${tid}`) : Promise.resolve(null)),
     [tid, online]);
@@ -128,6 +139,15 @@ export default function Analytics() {
             </>)}
 
             <SectionTitle icon="fa-triangle-exclamation">Chronic absentees</SectionTitle>
+            {d.chronic_list.length > 0 && (
+              <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                <select className="form-control" style={{ maxWidth: 120 }} value={notifyChannel}
+                        onChange={(e) => setNotifyChannel(e.target.value)}>
+                  <option>SMS</option><option>Email</option></select>
+                <button className="btn btn-primary btn-sm" disabled={notifying} onClick={notifyLow}>
+                  <i className="fas fa-comment-sms" aria-hidden="true" /> Notify parents (below {d.threshold}%)</button>
+                <span className="att-sub">Drafts a message for review — nothing sends automatically.</span>
+              </div>)}
             {d.chronic_list.length === 0
               ? <EmptyState icon="fa-circle-check" title="None flagged" hint={`No student is below ${d.critical}% this term.`} />
               : (

@@ -577,6 +577,8 @@ def api_student_profile(student_id):
     data = build_student_profile(student_id, focus_term_id=request.args.get('term_id', type=int))
     if not data:
         return jsonify({'error': 'not found'}), 404
+    from utils import attendance_notify as AN
+    data['notifications'] = AN.student_notification_history(student_id)
     return jsonify(data)
 
 
@@ -597,6 +599,64 @@ def api_analytics():
     data = AA.build(term, accessible, is_central=is_central(),
                     use_cache=(request.args.get('nocache') != '1'))
     return jsonify(data)
+
+
+@attendance_bp.route('/api/notify/absentees', methods=['POST'])
+@login_required
+def api_notify_absentees():
+    """Draft a Communication campaign to the parents of students absent (both
+    sessions) on a date, for one class. Never auto-sends."""
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    from utils import automations
+    if not automations.is_enabled('attendance_absent_parent'):
+        return jsonify({'ok': False, 'error': 'Absent-today parent notices are turned off in the Automation Center.'}), 400
+    data = request.get_json(silent=True) or {}
+    caa = db.session.get(ClassArmAssignment, data.get('assignment_id'))
+    if not caa:
+        return jsonify({'error': 'invalid assignment'}), 400
+    require_branch_access(caa.branch_id)
+    if not can_mark_attendance(caa.id):
+        return jsonify({'error': 'forbidden'}), 403
+    try:
+        target = datetime.strptime(data['date'], '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({'error': 'bad date'}), 400
+    from utils import attendance_notify as AN
+    term = db.session.get(Term, caa.term_id)
+    msg = AN.draft_absentee_notice(term, target, [caa.id],
+                                   channel=data.get('channel'), created_by=_actor_name())
+    if not msg:
+        return jsonify({'ok': False, 'error': 'No absentees with a reachable parent for that day.'}), 400
+    return jsonify({'ok': True, 'message': f'Drafted a notice to {msg.recipient_count} parent(s).',
+                    'redirect': url_for('comms.message_detail', message_id=msg.id)})
+
+
+@attendance_bp.route('/api/notify/low', methods=['POST'])
+@login_required
+def api_notify_low():
+    """Draft a Communication campaign to parents of students below the term
+    attendance warning threshold, across the classes the user may access."""
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    from utils import automations
+    if not automations.is_enabled('attendance_low_parent'):
+        return jsonify({'ok': False, 'error': 'Low-attendance parent notices are turned off in the Automation Center.'}), 400
+    data = request.get_json(silent=True) or {}
+    term = (db.session.get(Term, data.get('term_id')) if data.get('term_id') else None) or get_active_term()
+    if not term:
+        return jsonify({'error': 'no term'}), 400
+    accessible = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
+    caa_ids = [c.id for c in accessible]
+    from utils.attendance_profile import warning_threshold
+    from utils import attendance_notify as AN
+    msg = AN.draft_low_attendance_notice(term, caa_ids, warning_threshold(),
+                                         channel=data.get('channel'), created_by=_actor_name())
+    if not msg:
+        return jsonify({'ok': False, 'error': 'No students below threshold with a reachable parent.'}), 400
+    return jsonify({'ok': True, 'message': f'Drafted a notice to {msg.recipient_count} parent(s).',
+                    'redirect': url_for('comms.message_detail', message_id=msg.id)})
 
 
 @attendance_bp.route('/api/student-search')

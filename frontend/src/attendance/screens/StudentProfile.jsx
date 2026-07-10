@@ -141,6 +141,22 @@ export default function StudentProfile() {
                 </div>
                 <TermCalendar calendar={d.focus.calendar} />
               </>)}
+
+            {(d.notifications || []).length > 0 && (
+              <>
+                <SectionTitle icon="fa-comment-sms">Parent notifications</SectionTitle>
+                <div className="att-grid-wrap">
+                  <table className="att-grid" aria-label="Parent notification history">
+                    <thead><tr><th className="att-grid-name" scope="col">Notice</th><th scope="col">Channel</th>
+                      <th scope="col">Date</th><th scope="col">Status</th></tr></thead>
+                    <tbody>{d.notifications.map((n, i) => (
+                      <tr key={i}><td className="att-grid-name">{n.title.replace('Attendance: ', '')}</td>
+                        <td>{n.channel}</td><td>{n.date}</td>
+                        <td><Pill tone={n.status === 'Sent' ? 'green' : 'amber'}>{n.status}</Pill></td></tr>))}
+                    </tbody>
+                  </table>
+                </div>
+              </>)}
           </div>
         )}
     </div>
