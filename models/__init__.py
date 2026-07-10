@@ -30,6 +30,7 @@ from .models_hr import (Department, StaffMember, StaffEvent, LeaveRecord, Payrol
                         PayslipDeduction, StaffDocument, TrainingRecord, PerformanceReview)
 from .models_admissions import Applicant
 from .models_recruitment import JobVacancy, JobApplication, Interview
+from .models_attendance_intervention import AttendanceIntervention, InterventionNote
 from .models_library import Book, BookLoan, BookReservation, ReadingListItem
 from .models_events import SchoolEvent
 from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
@@ -69,6 +70,7 @@ __all__ = [
     'StaffDocument', 'TrainingRecord', 'PerformanceReview',
     'Applicant',
     'JobVacancy', 'JobApplication', 'Interview',
+    'AttendanceIntervention', 'InterventionNote',
     'Book', 'BookLoan', 'BookReservation', 'ReadingListItem',
     'SchoolEvent',
     'CBTExam', 'CBTQuestion', 'CBTAttempt', 'CBTAnswer', 'CBTViolation', 'QuestionBank'

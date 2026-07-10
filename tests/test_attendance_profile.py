@@ -98,7 +98,8 @@ def test_profile_api_and_access(app):
 def test_student_search_endpoint(app):
     sid, tid = _setup_profile(app, 'SR1')
     client = _admin(app)
-    rows = client.get('/attendance/api/student-search?q=Zz').get_json()
+    # Query the student's unique id (the shared test DB holds many 'Zz…' students).
+    rows = client.get('/attendance/api/student-search?q=PRSR1').get_json()
     assert any(r['id'] == sid and 'student_id=' in r['url'] for r in rows)
     assert client.get('/attendance/api/student-search?q=z').get_json() == []
 

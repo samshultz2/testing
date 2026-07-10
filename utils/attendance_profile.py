@@ -85,6 +85,21 @@ def _term_stats(enrollment, term_id, want_calendar=False):
     return out
 
 
+def student_term_percentage(student_id, term_id):
+    """A single student's attendance % for one term (None if not enrolled / no
+    school days). Used by the intervention tracker to compare against a baseline."""
+    if not term_id:
+        return None
+    enr = (StudentEnrollment.query
+           .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+           .filter(StudentEnrollment.student_id == student_id,
+                   ClassArmAssignment.term_id == term_id).first())
+    if not enr:
+        return None
+    stats = _term_stats(enr, term_id)
+    return stats['percentage'] if stats else None
+
+
 def build_student_profile(student_id, focus_term_id=None):
     """The full cross-term attendance profile for a student, or None if unknown.
     ``focus_term_id`` selects which term's calendar is expanded (default: latest)."""

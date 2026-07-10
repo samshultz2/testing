@@ -11,6 +11,7 @@ import TermlyReport from './screens/TermlyReport';
 import Alerts from './screens/Alerts';
 import StudentProfile from './screens/StudentProfile';
 import Analytics from './screens/Analytics';
+import Interventions from './screens/Interventions';
 
 const Ctx = createContext(null);
 export const useCtx = () => useContext(Ctx);
@@ -35,6 +36,7 @@ const TABS = [
   { path: 'weekly', label: 'Weekly report', icon: 'fa-calendar-week', el: WeeklyReport },
   { path: 'termly', label: 'Termly report', icon: 'fa-calendar-days', el: TermlyReport },
   { path: 'analytics', label: 'Analytics', icon: 'fa-chart-line', el: Analytics, insight: true },
+  { path: 'interventions', label: 'Interventions', icon: 'fa-hand-holding-heart', el: Interventions, insight: true },
   { path: 'student', label: 'Student profile', icon: 'fa-user', el: StudentProfile, insight: true },
   { path: 'alerts', label: 'Alerts', icon: 'fa-bell', el: Alerts },
 ];

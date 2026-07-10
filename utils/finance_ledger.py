@@ -263,7 +263,8 @@ def ensure_tables(bind=None):
                         Conversation, ConversationMember, ChatMessage,
                         BookReservation, ReadingListItem, StaffEvent,
                         StaffDocument, TrainingRecord, PerformanceReview,
-                        JobVacancy, JobApplication, Interview)
+                        JobVacancy, JobApplication, Interview,
+                        AttendanceIntervention, InterventionNote)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
@@ -272,7 +273,8 @@ def ensure_tables(bind=None):
               ReadingListItem.__table__, StaffEvent.__table__,
               StaffDocument.__table__, TrainingRecord.__table__,
               PerformanceReview.__table__, JobVacancy.__table__,
-              JobApplication.__table__, Interview.__table__]
+              JobApplication.__table__, Interview.__table__,
+              AttendanceIntervention.__table__, InterventionNote.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

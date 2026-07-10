@@ -579,6 +579,9 @@ def api_student_profile(student_id):
         return jsonify({'error': 'not found'}), 404
     from utils import attendance_notify as AN
     data['notifications'] = AN.student_notification_history(student_id)
+    from utils import attendance_interventions as IV
+    data['interventions'] = IV.student_interventions(student_id)
+    data['active_term_id'] = (get_active_term().id if get_active_term() else None)
     return jsonify(data)
 
 
@@ -657,6 +660,99 @@ def api_notify_low():
         return jsonify({'ok': False, 'error': 'No students below threshold with a reachable parent.'}), 400
     return jsonify({'ok': True, 'message': f'Drafted a notice to {msg.recipient_count} parent(s).',
                     'redirect': url_for('comms.message_detail', message_id=msg.id)})
+
+
+# ============================================================================
+# INTERVENTION MANAGEMENT
+# ============================================================================
+
+def _intervention_or_403(iv_id):
+    """Load an intervention the current user may act on (branch + class scope via
+    the student's current-term class)."""
+    from models import AttendanceIntervention
+    iv = db.session.get(AttendanceIntervention, iv_id)
+    if not iv:
+        return None, (jsonify({'error': 'not found'}), 404)
+    from utils.attendance_profile import build_student_profile  # noqa: F401 (ensure import ok)
+    student = db.session.get(Student, iv.student_id)
+    if not student or not _can_view_student(student):
+        return None, (jsonify({'error': 'forbidden'}), 403)
+    return iv, None
+
+
+@attendance_bp.route('/api/interventions')
+@login_required
+def api_interventions():
+    """Intervention dashboard for a term over the classes the user may view."""
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    req_term = request.args.get('term_id', type=int)
+    term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
+    if not term:
+        return jsonify({'error': 'no term'}), 400
+    accessible = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
+    from utils import attendance_interventions as IV
+    return jsonify(IV.dashboard(term, [c.id for c in accessible]))
+
+
+@attendance_bp.route('/api/interventions/open', methods=['POST'])
+@login_required
+def api_intervention_open():
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    student = db.session.get(Student, data.get('student_id'))
+    if not student:
+        return jsonify({'error': 'invalid student'}), 400
+    if not _can_view_student(student):
+        return jsonify({'error': 'forbidden'}), 403
+    term = (db.session.get(Term, data.get('term_id')) if data.get('term_id') else None) or get_active_term()
+    from utils import attendance_interventions as IV
+    iv, created = IV.open_intervention(student.id, term,
+                                       reason=(data.get('reason') or '').strip() or None,
+                                       opened_by=_actor_name())
+    return jsonify({'ok': True, 'id': iv.id, 'created': created,
+                    'message': 'Intervention opened.' if created else 'An open intervention already exists.'})
+
+
+@attendance_bp.route('/api/interventions/<int:iv_id>/note', methods=['POST'])
+@login_required
+def api_intervention_note(iv_id):
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    iv, err = _intervention_or_403(iv_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    from utils import attendance_interventions as IV
+    from models import InterventionNote
+    kind = data.get('kind') if data.get('kind') in InterventionNote.KINDS else 'Note'
+    nd = None
+    if data.get('next_date'):
+        try:
+            nd = datetime.strptime(data['next_date'], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            nd = None
+    IV.add_note(iv, kind=kind, body=(data.get('body') or '').strip() or None,
+                next_action=(data.get('next_action') or '').strip() or None,
+                next_date=nd, author=_actor_name())
+    return jsonify({'ok': True, 'message': 'Follow-up added.'})
+
+
+@attendance_bp.route('/api/interventions/<int:iv_id>/status', methods=['POST'])
+@login_required
+def api_intervention_status(iv_id):
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    iv, err = _intervention_or_403(iv_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    from utils import attendance_interventions as IV
+    if not IV.set_status(iv, data.get('status'), outcome=(data.get('outcome') or '').strip() or None):
+        return jsonify({'ok': False, 'error': 'Invalid status.'}), 400
+    return jsonify({'ok': True, 'message': f'Intervention {(data.get("status") or "").lower()}.'})
 
 
 @attendance_bp.route('/api/student-search')

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiGet } from '../../lib/api';
+import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Toolbar, Autocomplete, Spinner, EmptyState, ErrorState,
@@ -63,11 +63,18 @@ function TrendBars({ trend }) {
 export default function StudentProfile() {
   const { initial = {} } = useCtx();
   const [studentId, setStudentId] = useState(initial.studentId || '');
+  const [tick, setTick] = useState(0);
   const [state] = useAsync(
     () => (studentId ? apiGet(`/attendance/api/student/${studentId}`) : Promise.resolve(null)),
-    [studentId]);
+    [studentId, tick]);
 
   const d = state.data;
+  const openIntervention = async () => {
+    const r = await apiPost('/attendance/api/interventions/open',
+      { student_id: studentId, term_id: d && d.active_term_id });
+    if (r && r.ok) setTick((t) => t + 1); else alert((r && r.error) || 'Could not open intervention.');
+  };
+  const hasOpen = d && (d.interventions || []).some((i) => ['Open', 'In progress', 'Escalated'].includes(i.status));
   return (
     <div>
       <Toolbar>
@@ -76,6 +83,8 @@ export default function StudentProfile() {
                         placeholder="Search name or student ID…"
                         onPick={(id) => id && setStudentId(String(id))} />
         </div>
+        {d && d.warning && !hasOpen && <button className="btn btn-primary btn-sm no-print" onClick={openIntervention}>
+          <i className="fas fa-hand-holding-heart" aria-hidden="true" /> Open intervention</button>}
         {d && <button className="btn btn-secondary btn-sm no-print" onClick={() => window.print()}>
           <i className="fas fa-print" aria-hidden="true" /> Print</button>}
       </Toolbar>
@@ -140,6 +149,28 @@ export default function StudentProfile() {
                     <span key={s}><span className="att-cal-dot" style={{ background: STATUS_TONE[s] }} /> {STATUS_LABEL[s]}</span>))}
                 </div>
                 <TermCalendar calendar={d.focus.calendar} />
+              </>)}
+
+            {(d.interventions || []).length > 0 && (
+              <>
+                <SectionTitle icon="fa-hand-holding-heart">Interventions</SectionTitle>
+                {d.interventions.map((iv) => (
+                  <div key={iv.id} className="iv-case">
+                    <div className="iv-case-head">
+                      <div><strong>{iv.reason || 'Intervention'}</strong>
+                        <span className="att-sub"> · opened {iv.opened}{iv.opened_by ? ' by ' + iv.opened_by : ''}</span></div>
+                      <div className="iv-case-metrics">
+                        {iv.baseline != null && <span className="att-sub">was {iv.baseline}%</span>}
+                        {iv.current != null && <Pill tone={iv.direction === 'up' ? 'green' : iv.direction === 'down' ? 'red' : 'gray'}>{iv.current}%{iv.delta != null ? ` (${iv.delta > 0 ? '+' : ''}${iv.delta})` : ''}</Pill>}
+                        <Pill tone={iv.status === 'Resolved' ? 'green' : iv.status === 'Escalated' ? 'red' : 'amber'}>{iv.status}</Pill>
+                      </div>
+                    </div>
+                    {iv.outcome && <div className="att-sub">Outcome: {iv.outcome}</div>}
+                    {iv.notes.length > 0 && (
+                      <ul className="iv-notes">{iv.notes.map((n, i) => (
+                        <li key={i}><b>{n.kind}</b> · {n.date}{n.body ? ` — ${n.body}` : ''}{n.next_action ? <span className="att-sub"> → {n.next_action}{n.next_date ? ` (${n.next_date})` : ''}</span> : null}</li>))}
+                      </ul>)}
+                  </div>))}
               </>)}
 
             {(d.notifications || []).length > 0 && (
