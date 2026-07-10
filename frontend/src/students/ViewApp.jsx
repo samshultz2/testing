@@ -230,6 +230,8 @@ export default function ViewApp({ initial }) {
         </div>
       )}
 
+      {d.history && d.history.length > 0 && <ChangeHistory rows={d.history} />}
+
       <Welfare title="Discipline" icon="fa-gavel" count={(d.discipline || []).length}>
         <DisciplineForm categories={d.discipline_categories || []} today={d.today} disabled={busy}
                         onAdd={(f) => run(urls.discipline_add, f, 'Discipline record added.')} />
@@ -267,6 +269,47 @@ export default function ViewApp({ initial }) {
           </table></div>
         ) : <p className="text-muted">No clinic visits.</p>}
       </Welfare>
+    </div>
+  );
+}
+
+const ACTION_LABELS = {
+  'student.create': 'Created', 'student.update': 'Edited', 'student.import': 'Imported',
+  'delete_student': 'Deleted', 'bulk_set_stream': 'Stream (bulk)', 'bulk_set_gender': 'Gender (bulk)',
+  'bulk_set_house': 'House (bulk)', 'bulk_set_boarding': 'Boarding (bulk)',
+  'bulk_message_students': 'Messaged parents', 'bulk_add_subject': 'WAEC subject (bulk)',
+};
+
+function ChangeHistory({ rows }) {
+  const [q, setQ] = useState('');
+  const term = q.trim().toLowerCase();
+  const shown = term
+    ? rows.filter((r) => `${ACTION_LABELS[r.action] || r.action} ${r.user} ${r.detail} ${r.when}`.toLowerCase().includes(term))
+    : rows;
+  return (
+    <div className="card mb-3">
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Change History ({rows.length})</h3>
+        <input type="search" className="form-control" style={{ maxWidth: 240 }} placeholder="Search history…"
+               value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search change history" />
+      </div>
+      <div className="card-body" style={{ padding: 0 }}>
+        {shown.length ? (
+          <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+            <table className="data-table">
+              <thead><tr><th>When</th><th>Action</th><th>By</th><th>Details</th></tr></thead>
+              <tbody>{shown.map((r, i) => (
+                <tr key={i}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{r.when}</td>
+                  <td><span className="badge badge-secondary">{ACTION_LABELS[r.action] || r.action}</span></td>
+                  <td>{r.user}{r.role && <span className="text-muted"> · {r.role}</span>}</td>
+                  <td style={{ fontSize: '.85rem' }}>{r.detail || '—'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <p className="text-muted" style={{ padding: '.75rem 1rem' }}>No matching history.</p>}
+      </div>
     </div>
   );
 }

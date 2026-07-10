@@ -212,7 +212,7 @@ def test_students_api_shape_and_pagination(app):
     j = c.get('/api/students?per_page=5&page=1').get_json()
     assert j['per_page'] == 5 and 'page' in j and 'pages' in j and 'total' in j
     assert isinstance(j['students'], list)
-    assert set(j['filters']) == {'classes', 'arms', 'religions', 'streams', 'subjects'}
+    assert set(j['filters']) == {'classes', 'arms', 'religions', 'streams', 'subjects', 'houses'}
     if j['students']:
         s = j['students'][0]
         assert {'id', 'student_id', 'name', 'gender', 'url'} <= set(s)

@@ -1088,6 +1088,29 @@ def _student_comms_history(sid, limit=8):
     return {'count': total, 'items': items}
 
 
+def _student_audit_history(sid, limit=50):
+    """Recent audit-log entries targeting this student (edits, welfare, comms),
+    newest first — the profile's searchable change history. Read-only; the
+    append-only log already records who/when and (for edits) previous → new."""
+    from models import AuditLog
+    try:
+        rows = (AuditLog.query
+                .filter(AuditLog.target_type == 'student', AuditLog.target_id == sid)
+                .order_by(AuditLog.created_at.desc())
+                .limit(limit).all())
+    except Exception:
+        return []
+    out = []
+    for r in rows:
+        out.append({
+            'action': r.action,
+            'user': r.user or 'unknown', 'role': r.role or '',
+            'detail': r.detail or '',
+            'when': r.created_at.strftime('%d %b %Y %H:%M') if r.created_at else '',
+        })
+    return out
+
+
 def _student_view_payload(student):
     """Everything the student detail page shows, JSON-serialisable."""
     enrollments = student.enrollments.join(ClassArmAssignment).order_by(
@@ -1144,6 +1167,9 @@ def _student_view_payload(student):
                     'delete_url': url_for('welfare.delete_clinic', visit_id=v.id)} for v in clinic],
         'attendance': _student_attendance_summary(sid),
         'communications': _student_comms_history(sid),
+        # Change history is only shown to users who can manage the student, since
+        # it can carry previous values of edited fields.
+        'history': _student_audit_history(sid) if can_manage else None,
         'today': date.today().isoformat(),
         'can_manage': can_manage,
         'urls': {

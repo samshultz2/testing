@@ -4,6 +4,53 @@ from utils.search import like_term
 from utils.security import strip_tags
 
 
+# Fields whose edits are worth an audit trail with their previous value. The
+# three sensitive ones (encrypted at rest) are audited as "changed" only — we
+# never copy their plaintext into the append-only log.
+_AUDIT_STUDENT_FIELDS = {
+    'first_name': 'First name', 'middle_name': 'Middle name', 'surname': 'Surname',
+    'gender': 'Gender', 'date_of_birth': 'Date of birth', 'religion': 'Religion',
+    'stream': 'Stream', 'jamb_target': 'JAMB target',
+    'waec_subjects': 'WAEC subjects', 'jamb_subjects': 'JAMB subjects',
+    'house': 'House', 'boarding_status': 'Boarding status',
+    'nin': 'NIN', 'jamb_reg_number': 'JAMB reg number', 'jamb_profile_code': 'JAMB profile code',
+    'blood_group': 'Blood group', 'genotype': 'Genotype', 'allergies': 'Allergies',
+    'medical_conditions': 'Medical conditions', 'disabilities': 'Disabilities',
+    'medications': 'Medications',
+    'home_address': 'Home address', 'medical_notes': 'Medical notes',
+    'emergency_medical': 'Emergency medical',
+}
+_AUDIT_STUDENT_SENSITIVE = {'home_address', 'medical_notes', 'emergency_medical'}
+
+
+def _snapshot_student(student):
+    """Capture the audited fields' values before an edit, so the change summary
+    can show previous → new."""
+    return {f: getattr(student, f, None) for f in _AUDIT_STUDENT_FIELDS}
+
+
+def _student_change_detail(before, student):
+    """Human 'Label: "old" → "new"' summary of what an edit changed, for the
+    audit log. Sensitive fields are reported as changed without their values;
+    returns '' when nothing tracked changed."""
+    def norm(v):
+        return None if (v is None or v == '') else v
+
+    def fmt(v):
+        return f'"{v}"' if norm(v) is not None else '(empty)'
+
+    parts = []
+    for f, label in _AUDIT_STUDENT_FIELDS.items():
+        old, new = norm(before.get(f)), norm(getattr(student, f, None))
+        if old == new:
+            continue
+        if f in _AUDIT_STUDENT_SENSITIVE:
+            parts.append(f'{label}: changed')
+        else:
+            parts.append(f'{label}: {fmt(old)} → {fmt(new)}')
+    return '; '.join(parts)
+
+
 @main_bp.route('/students')
 @login_required
 def students_list():
@@ -235,6 +282,7 @@ def edit_student(student_id):
             # accidentally.
             complete = request.form.get('form_complete') == '1'
             form = request.form
+            before = _snapshot_student(student)   # for the audit change summary
 
             def has(key):
                 return complete or key in form
@@ -268,6 +316,8 @@ def edit_student(student_id):
             # Update contacts only when the contacts section was submitted
             if not (complete or 'phone_number[]' in form):
                 db.session.commit()
+                log_action('student.update', detail=(_student_change_detail(before, student) or None),
+                           target=student)
                 flash(FlashMessages.STUDENT_UPDATED, 'success')
                 dest = _safe_next(form.get('return_to'),
                                   url_for('main.view_student', student_id=student.id))
@@ -295,7 +345,8 @@ def edit_student(student_id):
                     db.session.add(contact)
 
             db.session.commit()
-            log_action('student.update', target=student)
+            log_action('student.update', detail=(_student_change_detail(before, student) or None),
+                       target=student)
             from utils.notify import notify_student_change
             notify_student_change('update', student=student,
                                   url=url_for('main.view_student', student_id=student.id))
