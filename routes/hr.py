@@ -157,7 +157,8 @@ def staff_list():
         'statuses': hr.STATUSES, 'staff_types': hr.STAFF_TYPES,
         'self_url': url_for('hr.staff_list'),
         'urls': {'add': url_for('hr.add_staff'), 'export': url_for('hr.export_staff'),
-                 'import': url_for('hr.import_staff'), 'notify': url_for('hr.notify_staff')},
+                 'import': url_for('hr.import_staff'), 'notify': url_for('hr.notify_staff'),
+                 'search': url_for('hr.staff_search')},
     })
 
 
@@ -316,7 +317,8 @@ def staff_detail(staff_id):
         'can_transfer': _branches_for_transfer(s),
         'doc_types': StaffDocument.DOC_TYPES, 'training_kinds': TrainingRecord.KINDS,
         'documents': [_doc_row(x) for x in
-                      s.documents.order_by(StaffDocument.created_at.desc()).all()],
+                      s.documents.filter(StaffDocument.is_current.isnot(False))
+                      .order_by(StaffDocument.created_at.desc()).all()],
         'training': [_training_row(x) for x in
                      s.training.order_by(TrainingRecord.created_at.desc()).all()],
         'reviews': [_review_row(x) for x in
@@ -340,6 +342,7 @@ def staff_detail(staff_id):
                  'upload_document': url_for('hr.upload_document', staff_id=s.id),
                  'add_training': url_for('hr.add_training', staff_id=s.id),
                  'add_review': url_for('hr.add_review', staff_id=s.id),
+                 'self': url_for('hr.staff_detail', staff_id=s.id),
                  'add_leave': url_for('hr.add_leave'), 'list': url_for('hr.staff_list')},
     })
 
@@ -482,13 +485,23 @@ def add_staff_note(staff_id):
 # ---- Documents / training / performance (attached to a profile) -----------
 
 def _doc_row(doc):
+    # Walk the supersession chain to list prior versions (newest-first).
+    prior, p, seen = [], doc.replaces, {doc.id}
+    while p and p.id not in seen:
+        seen.add(p.id)
+        prior.append({'version': p.version or 1,
+                      'created': p.created_at.strftime('%d %b %Y') if p.created_at else '',
+                      'download_url': (url_for('comms.download_attachment', att_id=p.attachment_id)
+                                       if p.attachment_id else None)})
+        p = p.replaces
     return {'id': doc.id, 'title': doc.title, 'doc_type': doc.doc_type or 'Other',
             'name': doc.attachment.original_name if doc.attachment else '',
             'size': doc.attachment.human_size if doc.attachment else '',
             'expires_on': doc.expires_on.strftime('%d %b %Y') if doc.expires_on else '',
-            'is_expired': doc.is_expired,
+            'is_expired': doc.is_expired, 'version': doc.version or 1, 'prior': prior,
             'download_url': (url_for('comms.download_attachment', att_id=doc.attachment_id)
                              if doc.attachment_id else None),
+            'replace_url': url_for('hr.upload_document', staff_id=doc.staff_id) + f'?replace_id={doc.id}',
             'delete_url': url_for('hr.delete_document', staff_id=doc.staff_id, doc_id=doc.id)}
 
 
@@ -520,19 +533,32 @@ def upload_document(staff_id):
         return _err('Give the document a title.', url_for('hr.staff_detail', staff_id=staff_id))
     from utils import comm_attachments as CA
     from models import StaffDocument
+    # Replacing an existing document keeps the old one as a prior version.
+    replace_id = request.form.get('replace_id', type=int) or request.args.get('replace_id', type=int)
+    old = None
+    if replace_id:
+        old = db.session.get(StaffDocument, replace_id)
+        if not old or old.staff_id != s.id:
+            return _err('Cannot find the document to replace.', url_for('hr.staff_detail', staff_id=staff_id))
     try:
         att = CA.save(request.files.get('file'), created_by=_current_user())
     except ValueError as e:
         return _err(str(e), url_for('hr.staff_detail', staff_id=staff_id))
-    doc = StaffDocument(staff_id=s.id, attachment_id=att.id, title=title,
-                        doc_type=request.form.get('doc_type') or 'Other',
+    doc = StaffDocument(staff_id=s.id, attachment_id=att.id,
+                        title=title or (old.title if old else title),
+                        doc_type=request.form.get('doc_type') or (old.doc_type if old else 'Other'),
                         expires_on=_d(request.form.get('expires_on')),
-                        uploaded_by=_current_user())
+                        uploaded_by=_current_user(), is_current=True)
+    if old:
+        doc.version = (old.version or 1) + 1
+        doc.replaces_id = old.id
+        old.is_current = False
     db.session.add(doc)
     db.session.commit()
     from utils.audit import log_action
-    log_action('hr.document_add', detail=title, target=s)
-    return _ok('Document uploaded.', url_for('hr.staff_detail', staff_id=staff_id))
+    log_action('hr.document_add', detail=f'{title} v{doc.version}', target=s)
+    return _ok('New version uploaded.' if old else 'Document uploaded.',
+               url_for('hr.staff_detail', staff_id=staff_id))
 
 
 @hr_bp.route('/staff/<int:staff_id>/documents/<int:doc_id>/delete', methods=['POST'])
@@ -644,6 +670,27 @@ def delete_staff(staff_id):
     from utils.audit import log_action
     log_action('hr.staff_delete', target=s)
     return _ok(f'{s.full_name} archived.', url_for('hr.staff_list'))
+
+
+@hr_bp.route('/staff/search')
+@login_required
+def staff_search():
+    """Type-ahead staff search for the directory's quick jump-to-profile box."""
+    from utils.branch_scope import scope_query
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    like = like_term(q)
+    rows = (scope_query(StaffMember.query.filter_by(is_active=True), StaffMember)
+            .filter(db.or_(StaffMember.first_name.ilike(like, escape='\\'),
+                           StaffMember.surname.ilike(like, escape='\\'),
+                           StaffMember.staff_id.ilike(like, escape='\\'),
+                           StaffMember.designation.ilike(like, escape='\\'),
+                           StaffMember.phone.ilike(like, escape='\\')))
+            .order_by(StaffMember.surname).limit(15).all())
+    return jsonify([{'id': s.id, 'label': f'{s.full_name} ({s.staff_id})'
+                     + (f' · {s.designation}' if s.designation else ''),
+                     'url': url_for('hr.staff_detail', staff_id=s.id)} for s in rows])
 
 
 @hr_bp.route('/staff/export')

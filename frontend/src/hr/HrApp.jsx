@@ -2,7 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, SectionShell, SectionTabs, Empty, Modal } from '../components/ui';
+import { confirm, Banner, SectionShell, SectionTabs, Empty, Modal, Autocomplete } from '../components/ui';
+
+// Small localStorage helpers for recently-viewed staff + saved directory filters.
+const lsGet = (key, fallback) => {
+  try { return JSON.parse(window.localStorage.getItem(key)) || fallback; } catch (_) { return fallback; }
+};
+const lsSet = (key, val) => { try { window.localStorage.setItem(key, JSON.stringify(val)); } catch (_) { /* ignore */ } };
+const pushRecent = (staff) => {
+  if (!staff || !staff.id) return;
+  const list = lsGet('hr_recent', []).filter((x) => x.id !== staff.id);
+  list.unshift({ id: staff.id, name: staff.name, staff_id: staff.staff_id, url: staff.url });
+  lsSet('hr_recent', list.slice(0, 8));
+};
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['staff', 'fa-users', 'Staff'],
@@ -158,6 +170,8 @@ function Staff({ d, notify }) {
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef();
+  const [recent] = useState(() => lsGet('hr_recent', []));
+  const [saved, setSaved] = useState(() => lsGet('hr_saved_filters', []));
   const go = (extra) => navParams(nav.go, d.self_url, { department_id: a.department_id, staff_type: a.staff_type, status: a.status, q, ...extra });
   const onImport = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -168,6 +182,19 @@ function Staff({ d, notify }) {
     setBusy(false);
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Import failed.');
   };
+  const saveFilter = () => {
+    const name = window.prompt('Name this filter:');
+    if (!name) return;
+    const next = [...saved.filter((x) => x.name !== name),
+      { name, params: { department_id: a.department_id, staff_type: a.staff_type, status: a.status } }];
+    setSaved(next); lsSet('hr_saved_filters', next);
+    notify('success', `Saved filter “${name}”.`);
+  };
+  const applySaved = (name) => {
+    const found = saved.find((x) => x.name === name);
+    if (found) navParams(nav.go, d.self_url, { ...found.params, q: '' });
+  };
+  const removeSaved = (name) => { const next = saved.filter((x) => x.name !== name); setSaved(next); lsSet('hr_saved_filters', next); };
   return (
     <>
       <div className="page-header"><h1>Staff Directory</h1>
@@ -182,6 +209,15 @@ function Staff({ d, notify }) {
       <Tabs d={d} />
       {notifyOpen && <NotifyStaffModal d={d} onClose={() => setNotifyOpen(false)} notify={notify} />}
       <div className="card mb-3"><div className="card-body">
+        <div style={{ maxWidth: 420 }}>
+          <Autocomplete label="Jump to a staff member" url={d.urls.search} placeholder="Search anyone by name / ID / role…"
+            onPick={(id, item) => { if (item && item.url) nav.go(item.url); }} />
+        </div>
+        {recent.length > 0 && (
+          <div className="mt-1"><span className="text-muted text-sm">Recently viewed: </span>
+            {recent.map((r) => <a key={r.id} href={r.url} className="badge badge-secondary" style={{ marginRight: '.3rem', textDecoration: 'none' }}>{r.name}</a>)}</div>)}
+      </div></div>
+      <div className="card mb-3"><div className="card-body">
         <form className="filter-form" onSubmit={(e) => { e.preventDefault(); go(); }}>
           <div className="form-group"><label className="form-label">Department</label>
             <select className="form-control" value={a.department_id} onChange={(e) => go({ department_id: e.target.value })}>
@@ -194,7 +230,18 @@ function Staff({ d, notify }) {
               <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Search</label>
             <input type="text" className="form-control" value={q} placeholder="Name, ID, role, phone" onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+            <button type="button" className="btn btn-secondary" onClick={saveFilter}><i aria-hidden="true" className="fas fa-bookmark" /> Save filter</button></div>
         </form>
+        {saved.length > 0 && (
+          <div className="mt-2 d-flex gap-1 flex-wrap align-center">
+            <span className="text-muted text-sm">Saved:</span>
+            {saved.map((sf) => (
+              <span key={sf.name} className="badge badge-secondary" style={{ cursor: 'pointer' }}>
+                <span onClick={() => applySaved(sf.name)}>{sf.name}</span>
+                <i aria-hidden="true" className="fas fa-xmark" style={{ marginLeft: '.4rem', cursor: 'pointer' }} onClick={() => removeSaved(sf.name)} />
+              </span>))}
+          </div>)}
       </div></div>
       <div className="card"><div className="card-header"><h3>{d.staff.length} staff</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -361,6 +408,8 @@ function ProfileHub({ d }) {
 function StaffDetail({ d, notify }) {
   const nav = useNav();
   const s = d.s;
+  useEffect(() => { pushRecent({ id: s.id, name: s.full_name, staff_id: s.staff_id, url: d.urls.self }); },
+    [s.id, s.full_name, s.staff_id, d.urls.self]);
   const act = async (url, fields, confirmMsg, follow) => {
     if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
@@ -518,7 +567,10 @@ function DocumentsSection({ d, act, notify }) {
   const [f, setF] = useState({ title: '', doc_type: (d.doc_types || ['Other'])[0], expires_on: '' });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showHist, setShowHist] = useState({});
   const fileRef = useRef();
+  const replaceRef = useRef();
+  const replacingRef = useRef(null);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const submit = async (e) => {
     e.preventDefault();
@@ -530,9 +582,20 @@ function DocumentsSection({ d, act, notify }) {
     if (r.ok) { notify('success', r.message); setF({ title: '', doc_type: (d.doc_types || ['Other'])[0], expires_on: '' }); setFile(null); if (fileRef.current) fileRef.current.value = ''; nav.refresh(); }
     else notify('error', r.error || 'Upload failed.');
   };
+  const onReplace = async (e) => {
+    const picked = e.target.files && e.target.files[0];
+    e.target.value = '';
+    const doc = replacingRef.current;
+    if (!picked || !doc) return;
+    setBusy(true);
+    const r = await postFile(doc.replace_url, picked, { title: doc.title, doc_type: doc.doc_type });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Upload failed.');
+  };
   return (
     <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-folder-open" /> Documents</h3></div>
       <div className="card-body">
+        <input type="file" ref={replaceRef} style={{ display: 'none' }} onChange={onReplace} />
         <form onSubmit={submit} className="lc-form">
           <div className="form-group mb-0" style={{ flex: 2 }}><label className="form-label">Title</label><input type="text" className="form-control" placeholder="e.g. Appointment letter 2024" value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
           <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.doc_type} onChange={(e) => set('doc_type', e.target.value)}>{(d.doc_types || []).map((t) => <option key={t}>{t}</option>)}</select></div>
@@ -544,10 +607,19 @@ function DocumentsSection({ d, act, notify }) {
           <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
             <thead><tr><th>Title</th><th>Type</th><th>Expires</th><th /></tr></thead>
             <tbody>{d.documents.map((doc) => (
-              <tr key={doc.id}><td data-label="Title">{doc.download_url ? <a href={doc.download_url} data-native>{doc.title}</a> : doc.title}{doc.name && <div className="text-muted text-sm">{doc.name}{doc.size ? ` · ${doc.size}` : ''}</div>}</td>
+              <React.Fragment key={doc.id}>
+              <tr><td data-label="Title">{doc.download_url ? <a href={doc.download_url} data-native>{doc.title}</a> : doc.title}{doc.version > 1 && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>v{doc.version}</span>}{doc.name && <div className="text-muted text-sm">{doc.name}{doc.size ? ` · ${doc.size}` : ''}{doc.prior && doc.prior.length > 0 && <> · <a href="#" onClick={(e) => { e.preventDefault(); setShowHist((h) => ({ ...h, [doc.id]: !h[doc.id] })); }}>{doc.prior.length} older</a></>}</div>}</td>
                 <td data-label="Type"><span className="badge badge-secondary">{doc.doc_type}</span></td>
                 <td data-label="Expires">{doc.expires_on ? <span className={doc.is_expired ? 'text-danger' : ''}>{doc.expires_on}{doc.is_expired ? ' (expired)' : ''}</span> : '—'}</td>
-                <td className="actions"><button className="btn btn-danger btn-sm" onClick={() => act(doc.delete_url, {}, `Delete “${doc.title}”?`)}><i aria-hidden="true" className="fas fa-trash" /></button></td></tr>))}</tbody>
+                <td className="actions"><div className="d-flex gap-1 justify-end">
+                  <button className="btn btn-secondary btn-sm" title="Upload new version" onClick={() => { replacingRef.current = doc; replaceRef.current && replaceRef.current.click(); }}><i aria-hidden="true" className="fas fa-arrow-up-from-bracket" /></button>
+                  <button className="btn btn-danger btn-sm" onClick={() => act(doc.delete_url, {}, `Delete “${doc.title}” and all its versions?`)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                </div></td></tr>
+              {showHist[doc.id] && (doc.prior || []).map((pv, i) => (
+                <tr key={doc.id + '-' + i} style={{ background: 'var(--gray-50)' }}><td className="stack-full" colSpan={4} style={{ paddingLeft: '1.5rem' }}>
+                  <span className="text-muted text-sm">v{pv.version} · {pv.created} · </span>{pv.download_url ? <a href={pv.download_url} data-native className="text-sm">download</a> : <span className="text-muted text-sm">file removed</span>}
+                </td></tr>))}
+              </React.Fragment>))}</tbody>
           </table></div>
         ) : <p className="text-muted mb-0">No documents on file yet.</p>}
       </div></div>

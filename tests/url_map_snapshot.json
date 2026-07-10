@@ -2739,6 +2739,13 @@
 ]
 ],
 [
+"hr.staff_search",
+"/hr/staff/search",
+[
+"GET"
+]
+],
+[
 "hr.sync_deductions",
 "/hr/payroll/<int:run_id>/sync-deductions",
 [

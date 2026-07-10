@@ -331,12 +331,16 @@ class StaffDocument(db.Model):
     title = db.Column(db.String(150), nullable=False)
     doc_type = db.Column(db.String(30), default='Other')
     expires_on = db.Column(db.Date)              # optional (e.g. licence, permit)
+    version = db.Column(db.Integer, default=1)
+    replaces_id = db.Column(db.Integer, db.ForeignKey('staff_documents.id'))  # prior version
+    is_current = db.Column(db.Boolean, default=True)   # False once superseded
     uploaded_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=local_now)
 
     staff = db.relationship('StaffMember', backref=db.backref(
         'documents', lazy='dynamic', cascade='all, delete-orphan'))
     attachment = db.relationship('CommAttachment')
+    replaces = db.relationship('StaffDocument', remote_side=[id], uselist=False)
 
     @property
     def is_expired(self):

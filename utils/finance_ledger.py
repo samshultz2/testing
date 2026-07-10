@@ -214,6 +214,9 @@ _ADDED_COLUMNS = {
         'tax_id': 'TEXT', 'pension_pin': 'TEXT', 'pension_provider': 'VARCHAR(120)',
         'blood_group': 'VARCHAR(6)', 'medical_notes': 'TEXT',
     },
+    'staff_documents': {
+        'version': 'INTEGER', 'replaces_id': 'INTEGER', 'is_current': 'BOOLEAN',
+    },
 }
 
 # Columns whose NOT NULL constraint must be relaxed on existing databases (a
