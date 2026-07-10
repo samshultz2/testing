@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { naira } from '../lib/format';
-import { useSection, NavCtx, useNav } from '../lib/section';
+import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table } from '../components/ui';
 
 const TABS = [
@@ -9,9 +9,10 @@ const TABS = [
   ['books', 'fa-book', 'Catalogue'],
   ['issue', 'fa-hand-holding', 'Issue'],
   ['loans', 'fa-rotate-left', 'Loans'],
+  ['reports', 'fa-chart-line', 'Reports'],
   ['settings', 'fa-gear', 'Settings'],
 ];
-const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', settings: 'settings' };
+const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', reports: 'reports', settings: 'settings' };
 const Tabs = ({ urls, page }) => { const { go } = useNav(); return <SectionTabs tabs={TABS} urls={urls} active={ACTIVE[page]} go={go} />; };
 
 function statusBadge(l) {
@@ -388,10 +389,18 @@ function Loans({ d, notify }) {
     act(l.mark_url, { kind: 'Damaged', cost });
   };
   const onStatus = (v) => { nav.go(d.urls.loans + '?status=' + v); };
+  const remind = async () => {
+    if (!await confirm('Draft an SMS reminder to the parents of students with overdue books? Nothing sends until you review it in Communication.')) return;
+    const r = await submitJson(d.urls.remind_overdue, {});
+    if (r.ok) { notify('success', r.message); if (r.redirect) nav.go(r.redirect); }
+    else notify('error', r.error || 'Could not draft reminders.');
+  };
 
   return (
     <>
-      <PageHeader title="Loans" actions={<a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>} />
+      <PageHeader title="Loans" actions={<>
+        {d.status === 'Overdue' && <button type="button" className="btn btn-secondary" onClick={remind}><i aria-hidden="true" className="fas fa-comment-sms" /> Remind parents</button>}
+        <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a></>} />
       <Tabs urls={d.urls} page="loans" />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Show</label>
@@ -464,7 +473,71 @@ function Settings({ d, notify }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue: Issue, loans: Loans, settings: Settings };
+// ---- Reports ---------------------------------------------------------------
+function Reports({ d }) {
+  const nav = useNav();
+  const sel = d.sel || {};
+  const rep = d.report || { columns: [], rows: [], summary: [], title: '' };
+  const [from, setFrom] = useState(sel.from || '');
+  const [to, setTo] = useState(sel.to || '');
+  const [category, setCategory] = useState(sel.category || '');
+  const [subject, setSubject] = useState(sel.subject || '');
+  const params = (extra) => ({ type: sel.type, from, to, category, subject, ...extra });
+  const go = (extra) => navParams(nav.go, d.urls.self, params(extra));
+  const qs = () => Object.entries(params({})).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  const cell = (col, row) => {
+    const v = row[col.key];
+    if (col.money) return typeof v === 'number' ? naira(v) : v;
+    return (v === '' || v == null) ? '—' : v;
+  };
+  return (
+    <>
+      <PageHeader title="Reports" actions={<>
+        <a href={`${d.urls.export}?format=csv&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
+        <a href={`${d.urls.export}?format=xlsx&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+      </>} />
+      <Tabs urls={d.urls} page="reports" />
+      <div className="card mb-3"><div className="card-body">
+        <div className="filter-form">
+          <div className="form-group"><label className="form-label">Report</label>
+            <select className="form-control" value={sel.type} onChange={(e) => go({ type: e.target.value })}>
+              {d.report_types.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">From</label>
+            <input type="date" className="form-control" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">To</label>
+            <input type="date" className="form-control" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Category</label>
+            <select className="form-control" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">All</option>{d.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Subject</label>
+            <select className="form-control" value={subject} onChange={(e) => setSubject(e.target.value)}>
+              <option value="">All</option>{(d.subjects || []).map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+          <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+            <button type="button" className="btn btn-primary" onClick={() => go({})}><i aria-hidden="true" className="fas fa-filter" /> Apply</button></div>
+        </div>
+      </div></div>
+
+      {rep.summary && rep.summary.length > 0 && (
+        <div className="kpi-row" style={{ gridTemplateColumns: `repeat(${Math.min(rep.summary.length, 4)}, 1fr)` }}>
+          {rep.summary.map((s, i) => (
+            <div className="kpi" key={i}><div className="ic blue"><i aria-hidden="true" className="fas fa-chart-simple" /></div>
+              <div><div className="v" style={{ fontSize: '1.15rem' }}>{s.value}</div><div className="l">{s.label}</div></div></div>))}
+        </div>)}
+
+      <div className="card">
+        <div className="card-header"><h3>{rep.title} · {rep.rows.length} row(s)</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <Table rowKey={(r, i) => i} rows={rep.rows} pageSize={50} sticky maxHeight="60vh"
+            empty={<Empty icon="fa-chart-line" title="No data"><p>Nothing matches these filters.</p></Empty>}
+            columns={rep.columns.map((col) => ({ key: col.key, label: col.label, align: col.align,
+              render: (r) => cell(col, r) }))} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue: Issue, loans: Loans, reports: Reports, settings: Settings };
 
 export default function LibraryApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

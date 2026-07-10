@@ -55,9 +55,10 @@ def _err(message, redirect_url=None, info=False):
 def _urls():
     return {k: url_for('library.' + v) for k, v in {
         'dashboard': 'dashboard', 'books': 'books', 'issue': 'issue', 'loans': 'loans',
-        'settings': 'settings', 'add_book': 'add_book', 'export': 'export',
+        'reports': 'reports', 'settings': 'settings', 'add_book': 'add_book', 'export': 'export',
         'book_search': 'book_search', 'student_search': 'student_search',
-        'staff_search': 'staff_search', 'barcode_lookup': 'barcode_lookup'}.items()}
+        'staff_search': 'staff_search', 'barcode_lookup': 'barcode_lookup',
+        'remind_overdue': 'remind_overdue'}.items()}
 
 
 def _render(payload):
@@ -543,6 +544,94 @@ def barcode_lookup():
         return jsonify({'ok': False})
     return jsonify({'ok': True, 'book': {'id': b.id, 'title': b.title,
                     'available': b.copies_available, 'reference_only': bool(b.reference_only)}})
+
+
+def _report_filters():
+    return {
+        'from': _d(request.args.get('from')),
+        'to': _d(request.args.get('to')),
+        'category': request.args.get('category') or None,
+        'subject': request.args.get('subject') or None,
+    }
+
+
+@library_bp.route('/reports')
+@login_required
+def reports():
+    from utils import library_reports as R
+    rtype = request.args.get('type') or 'inventory'
+    data = R.build(rtype, _report_filters())
+    return _render({
+        'page': 'reports', 'report': data, 'report_types': [{'key': k, 'label': v} for k, v in R.REPORTS],
+        'sel': {'type': data['type'], 'from': request.args.get('from', ''),
+                'to': request.args.get('to', ''), 'category': request.args.get('category', ''),
+                'subject': request.args.get('subject', '')},
+        'categories': _distinct_categories(), 'subjects': _distinct('subject'),
+        'urls': {'self': url_for('library.reports'), 'export': url_for('library.reports_export'),
+                 'remind': url_for('library.remind_overdue')},
+    })
+
+
+@library_bp.route('/reports/export')
+@login_required
+def reports_export():
+    from utils import library_reports as R
+    rtype = request.args.get('type') or 'inventory'
+    data = R.build(rtype, _report_filters())
+    headers = [c['label'] for c in data['columns']]
+    keys = [c['key'] for c in data['columns']]
+    fname = f'library_{data["type"]}'
+    from utils.audit import log_action
+    log_action('library.report_export', detail=data['type'])
+    if request.args.get('format') == 'xlsx':
+        from openpyxl import Workbook
+        from utils.web_exports import xlsx_response
+        wb = Workbook(); ws = wb.active; ws.title = data['title'][:31]
+        ws.append(headers)
+        for r in data['rows']:
+            ws.append([r.get(k, '') for k in keys])
+        ws.append([])
+        for s in data['summary']:
+            ws.append([s['label'], s['value']])
+        return xlsx_response(wb, f'{fname}.xlsx')
+    out = io.StringIO(); w = csv.writer(out)
+    w.writerow(headers)
+    for r in data['rows']:
+        w.writerow([r.get(k, '') for k in keys])
+    w.writerow([])
+    for s in data['summary']:
+        w.writerow([s['label'], s['value']])
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
+
+
+@library_bp.route('/remind-overdue', methods=['POST'])
+@login_required
+def remind_overdue():
+    """Draft an SMS reminder (via Communication) to the parents of students who
+    have overdue library books. Staff borrowers have no parent channel, so only
+    student borrowers are included. Never auto-sends — a human reviews the draft."""
+    q = (_scope_loans(BookLoan.query)
+         .filter(BookLoan.status == 'Borrowed', BookLoan.due_date < date.today(),
+                 BookLoan.borrower_type != 'staff', BookLoan.student_id.isnot(None)))
+    student_ids = sorted({l.student_id for l in q.all() if l.student_id})
+    if not student_ids:
+        return _err('No students with overdue books.', url_for('library.loans') + '?status=Overdue', info=True)
+    from utils import comms
+    from utils.helpers import get_active_term
+    from utils.access_control import get_current_user
+    body = ('Dear {parent}, our records show {student} has an overdue library book. '
+            'Please return it to the school library. Thank you — {school}.')
+    who = getattr(get_current_user(), 'full_name', None) or 'Librarian'
+    msg = comms.build_campaign(
+        body, channel='SMS', term=get_active_term(), title='Library overdue reminder',
+        spec={'to': 'parents', 'audience': 'students', 'student_ids': student_ids},
+        created_by=who)
+    if not msg:
+        return _err('None of those students have a parent phone number on file.',
+                    url_for('library.loans') + '?status=Overdue', info=True)
+    return _ok(f'Drafted reminders for {msg.recipient_count} parent(s) — review and send.',
+               url_for('comms.message_detail', message_id=msg.id))
 
 
 @library_bp.route('/export')
