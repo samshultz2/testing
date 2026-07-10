@@ -29,7 +29,7 @@ from .models_hr import (Department, StaffMember, LeaveRecord, PayrollRun, Paysli
                         SalaryHistory, StaffAttendance, PayrollDeductionType,
                         PayslipDeduction)
 from .models_admissions import Applicant
-from .models_library import Book, BookLoan
+from .models_library import Book, BookLoan, BookReservation, ReadingListItem
 from .models_events import SchoolEvent
 from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
                          QuestionBank, CBTLoginEvent, CBTDeviceSession)
@@ -66,7 +66,7 @@ __all__ = [
     'Department', 'StaffMember', 'LeaveRecord', 'PayrollRun', 'Payslip',
     'SalaryHistory', 'StaffAttendance', 'PayrollDeductionType', 'PayslipDeduction',
     'Applicant',
-    'Book', 'BookLoan',
+    'Book', 'BookLoan', 'BookReservation', 'ReadingListItem',
     'SchoolEvent',
     'CBTExam', 'CBTQuestion', 'CBTAttempt', 'CBTAnswer', 'CBTViolation', 'QuestionBank'
 ]

@@ -34,6 +34,9 @@ class Book(db.Model):
     reference_only = db.Column(db.Boolean, default=False)  # can't be borrowed
     price = db.Column(db.Float, default=0)                 # unit value (valuation / replacement)
     status = db.Column(db.String(15), default='Available')  # Available / Withdrawn
+    supplier = db.Column(db.String(120))                   # acquisition source / vendor
+    source = db.Column(db.String(20), default='Purchase')  # Purchase / Donation
+    donated_by = db.Column(db.String(120))                 # donor (when a donation)
     copies_total = db.Column(db.Integer, default=1)
     copies_available = db.Column(db.Integer, default=1)
     lost_count = db.Column(db.Integer, default=0)
@@ -115,3 +118,51 @@ class BookLoan(db.Model):
 
     def __repr__(self):
         return f'<BookLoan book{self.book_id} student{self.student_id} {self.status}>'
+
+
+class BookReservation(db.Model):
+    """A hold on a title. When no copy is free a borrower joins the queue; the
+    earliest queued hold becomes Ready when a copy is returned."""
+    __tablename__ = 'library_reservations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, db.ForeignKey('library_books.id'), nullable=False, index=True)
+    borrower_type = db.Column(db.String(10), default='student')
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'))
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'))
+    status = db.Column(db.String(12), default='Queued')   # Queued/Ready/Fulfilled/Cancelled/Expired
+    created_at = db.Column(db.DateTime, default=local_now)
+    ready_at = db.Column(db.DateTime)
+    expires_on = db.Column(db.Date)
+    note = db.Column(db.String(200))
+
+    book = db.relationship('Book')
+    student = db.relationship('Student')
+    staff = db.relationship('StaffMember')
+
+    @property
+    def is_student(self):
+        return (self.borrower_type or 'student') == 'student'
+
+    @property
+    def borrower_name(self):
+        if not self.is_student and self.staff:
+            return self.staff.display_name or self.staff.full_name
+        return self.student.full_name if self.student else '—'
+
+
+class ReadingListItem(db.Model):
+    """A book recommended to a class (class-recommended reading list)."""
+    __tablename__ = 'library_reading_list'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'), nullable=False, index=True)
+    book_id = db.Column(db.Integer, db.ForeignKey('library_books.id'), nullable=False)
+    note = db.Column(db.String(200))
+    added_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    book = db.relationship('Book')
+    school_class = db.relationship('SchoolClass')
+
+    __table_args__ = (db.UniqueConstraint('class_id', 'book_id', name='uq_reading_item'),)

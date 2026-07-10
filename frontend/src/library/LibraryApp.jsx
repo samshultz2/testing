@@ -1,19 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { submitJson } from '../lib/forms';
+import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table } from '../components/ui';
+import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table, Modal } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'],
   ['books', 'fa-book', 'Catalogue'],
   ['issue', 'fa-hand-holding', 'Issue'],
   ['loans', 'fa-rotate-left', 'Loans'],
+  ['reservations', 'fa-bookmark', 'Reservations'],
   ['borrowers', 'fa-users', 'Borrowers'],
+  ['reading_lists', 'fa-list-check', 'Reading lists'],
   ['reports', 'fa-chart-line', 'Reports'],
   ['settings', 'fa-gear', 'Settings'],
 ];
-const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', borrowers: 'borrowers', borrower: 'borrowers', reports: 'reports', settings: 'settings' };
+const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', reservations: 'reservations', borrowers: 'borrowers', borrower: 'borrowers', reading_lists: 'reading_lists', reports: 'reports', settings: 'settings' };
 const Tabs = ({ urls, page }) => { const { go } = useNav(); return <SectionTabs tabs={TABS} urls={urls} active={ACTIVE[page]} go={go} />; };
 
 function statusBadge(l) {
@@ -123,6 +125,8 @@ function Books({ d, notify }) {
   const [subject, setSubject] = useState(d.subject || '');
   const [availOnly, setAvailOnly] = useState(d.avail === '1');
   const [busy, setBusy] = useState(false);
+  const [reserving, setReserving] = useState(null);
+  const fileRef = useRef();
 
   const del = async (b) => {
     if (!await confirm(`Remove ${b.title}?`)) return;
@@ -131,6 +135,17 @@ function Books({ d, notify }) {
     setBusy(false);
     if (r.ok) nav.refresh();
     else notify('error', r.error || 'Could not remove the book.');
+  };
+
+  const onImport = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    const r = await postFile(d.urls.import, file);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message || 'Imported.'); nav.refresh(); }
+    else notify('error', r.error || 'Could not import that file.');
   };
 
   const shown = d.books.filter((b) =>
@@ -142,10 +157,14 @@ function Books({ d, notify }) {
   return (
     <>
       <PageHeader title="Catalogue" actions={<>
+        <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import CSV</button>
         <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
         <a href={d.urls.add_book} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>
       </>} />
       <Tabs urls={d.urls} page="books" />
+      {reserving && <ReserveModal d={d} book={reserving} onClose={() => setReserving(null)}
+        onDone={(m) => { setReserving(null); notify('success', m); }} notify={notify} />}
 
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form">
@@ -176,6 +195,7 @@ function Books({ d, notify }) {
               { key: 'act', label: '', render: (b) => (
                 <div className="d-flex gap-1 justify-end">
                   {b.copies_available > 0 && !b.reference_only && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i aria-hidden="true" className="fas fa-hand-holding" /></a>}
+                  {!b.reference_only && <button type="button" className="btn btn-secondary btn-sm" title="Reserve / hold" onClick={() => setReserving(b)}><i aria-hidden="true" className="fas fa-bookmark" /></button>}
                   <a href={b.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
                   {d.is_admin && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div>) },
@@ -200,6 +220,7 @@ function BookForm({ d, notify }) {
     language: init('language', ''), description: init('description', ''), shelf: init('shelf', ''),
     rack: init('rack', ''), condition: init('condition', 'Good'), status: init('status', 'Available'),
     price: init('price', ''), reference_only: !!b.reference_only,
+    supplier: init('supplier', ''), source: init('source', 'Purchase'), donated_by: init('donated_by', ''),
     copies_total: b.copies_total != null ? b.copies_total : 1, notes: init('notes', ''),
   });
   const [busy, setBusy] = useState(false);
@@ -271,6 +292,14 @@ function BookForm({ d, notify }) {
             <div className="form-group"><label className="form-label">Status</label>
               <select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{['Available', 'Withdrawn'].map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
             <div className="form-group" style={{ alignSelf: 'center' }}><label className="form-check" title="Reference books stay in the library and can't be borrowed"><input type="checkbox" checked={f.reference_only} onChange={(e) => set('reference_only', e.target.checked)} /> Reference-only</label></div>
+          </div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Acquired via</label>
+              <select className="form-control" value={f.source} onChange={(e) => set('source', e.target.value)}>{['Purchase', 'Donation'].map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Supplier / vendor</label>
+              <input type="text" className="form-control" value={f.supplier} onChange={(e) => set('supplier', e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Donated by</label>
+              <input type="text" className="form-control" placeholder="Donor name (if a donation)" value={f.donated_by} onChange={(e) => set('donated_by', e.target.value)} /></div>
           </div>
           <div className="form-group"><label className="form-label">Description</label>
             <textarea className="form-control" rows="2" value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
@@ -624,7 +653,166 @@ function Borrower({ d, notify }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue: Issue, loans: Loans, borrowers: Borrowers, borrower: Borrower, reports: Reports, settings: Settings };
+// ---- Reserve modal ---------------------------------------------------------
+function ReserveModal({ d, book, onClose, onDone, notify }) {
+  const [borrowerType, setBorrowerType] = useState('student');
+  const [studentId, setStudentId] = useState('');
+  const [staffId, setStaffId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    const borrowerId = borrowerType === 'staff' ? staffId : studentId;
+    if (!borrowerId) { notify('error', 'Choose a borrower.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.urls.reserve, { book_id: book.id, borrower_type: borrowerType,
+      student_id: borrowerType === 'student' ? studentId : '', staff_id: borrowerType === 'staff' ? staffId : '' });
+    setBusy(false);
+    if (r.ok) onDone(r.message || 'Reserved.');
+    else notify('error', r.error || 'Could not reserve.');
+  };
+  return (
+    <Modal title={`Reserve “${book.title}”`} icon="fa-bookmark" size="sm" onClose={onClose}
+           footer={<>
+             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+             <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i aria-hidden="true" className="fas fa-bookmark" /> Reserve</button>
+           </>}>
+      <form onSubmit={submit}>
+        <p className="text-muted text-sm">{book.copies_available > 0
+          ? 'A copy is free — this hold will be ready to collect immediately.'
+          : 'No copy is free — the borrower joins the queue and is promoted when one is returned.'}</p>
+        <div className="borrower-toggle" role="tablist">
+          {[['student', 'fa-user-graduate', 'Student'], ['staff', 'fa-user-tie', 'Staff']].map(([v, ic, lab]) => (
+            <button type="button" key={v} role="tab" aria-selected={borrowerType === v}
+              className={borrowerType === v ? 'on' : ''} onClick={() => setBorrowerType(v)}><i aria-hidden="true" className={'fas ' + ic} /> {lab}</button>))}
+        </div>
+        {borrowerType === 'student'
+          ? <Autocomplete label="Student" required url={d.urls.student_search} placeholder="Search name / student ID…" onPick={setStudentId} />
+          : <Autocomplete label="Staff" required url={d.urls.staff_search} placeholder="Search name / staff ID…" onPick={setStaffId} />}
+      </form>
+    </Modal>
+  );
+}
+
+// ---- Reservations ----------------------------------------------------------
+function Reservations({ d, notify }) {
+  const nav = useNav();
+  const [busy, setBusy] = useState(false);
+  const act = async (url, confirmMsg) => {
+    if (confirmMsg && !await confirm(confirmMsg)) return;
+    setBusy(true);
+    const r = await submitJson(url, {});
+    setBusy(false);
+    if (r.ok) { if (r.message) notify('success', r.message); nav.refresh(); }
+    else notify('error', r.error || 'Action failed.');
+  };
+  const onStatus = (v) => nav.go(d.urls.reservations + '?status=' + v);
+  const resBadge = (s) => {
+    const map = { Ready: 'badge-success', Queued: 'badge-warning', Fulfilled: 'badge-secondary', Cancelled: 'badge-secondary', Expired: 'badge-danger' };
+    return <span className={'badge ' + (map[s] || 'badge-secondary')}>{s}</span>;
+  };
+  return (
+    <>
+      <PageHeader title="Reservations" />
+      <Tabs urls={d.urls} page="reservations" />
+      <div className="card mb-3"><div className="card-body">
+        <div className="filter-form"><div className="form-group"><label className="form-label">Show</label>
+          <select className="form-control" value={d.status} onChange={(e) => onStatus(e.target.value)}>
+            <option value="open">Open (queued + ready)</option>
+            {['Queued', 'Ready', 'Fulfilled', 'Cancelled', 'Expired'].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select></div></div>
+      </div></div>
+      <div className="card">
+        <div className="card-header"><h3>{d.reservations.length} reservation(s)</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <Table rowKey={(r) => r.id} rows={d.reservations} pageSize={30} sticky maxHeight="65vh"
+            empty={<Empty icon="fa-bookmark" title="No reservations"><p>Holds placed from the catalogue appear here.</p></Empty>}
+            columns={[
+              { key: 'book', label: 'Book', sortable: true, sortValue: (r) => r.book, render: (r) => r.book },
+              { key: 'borrower', label: 'For', render: (r) => <>{r.borrower}{r.borrower_type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}</> },
+              { key: 'created', label: 'Placed', render: (r) => r.created },
+              { key: 'status', label: 'Status', render: (r) => <>{resBadge(r.status)}{r.status === 'Ready' && r.expires && <div className="text-muted text-sm">expires {r.expires}</div>}</> },
+              { key: 'act', label: '', render: (r) => (r.status === 'Queued' || r.status === 'Ready')
+                ? <div className="d-flex gap-1 justify-end">
+                    {r.available > 0 && <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Issue now" onClick={() => act(r.fulfill_url, `Issue “${r.book}” to ${r.borrower}?`)}><i aria-hidden="true" className="fas fa-hand-holding" /></button>}
+                    <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Cancel" onClick={() => act(r.cancel_url, 'Cancel this reservation?')}><i aria-hidden="true" className="fas fa-xmark" /></button>
+                  </div>
+                : '—' },
+            ]} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---- Reading lists ---------------------------------------------------------
+function ReadingLists({ d, notify }) {
+  const nav = useNav();
+  const [classId, setClassId] = useState(d.class_id ? String(d.class_id) : '');
+  const [bookId, setBookId] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const bookRef = useRef(0);
+  const add = async (e) => {
+    e.preventDefault();
+    if (!classId || !bookId) { notify('error', 'Pick a class and a book.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.urls.add, { class_id: classId, book_id: bookId, note });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message || 'Added.'); setBookId(''); setNote(''); bookRef.current += 1; nav.refresh(); }
+    else notify('error', r.error || 'Could not add.');
+  };
+  const remove = async (it) => {
+    if (!await confirm(`Remove “${it.book}” from ${it.class}?`)) return;
+    setBusy(true);
+    const r = await submitJson(it.remove_url, {});
+    setBusy(false);
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not remove.');
+  };
+  const onClassFilter = (v) => nav.go(v ? d.urls.self + '?class_id=' + v : d.urls.self);
+  return (
+    <>
+      <PageHeader title="Reading lists" />
+      <Tabs urls={d.urls} page="reading_lists" />
+      <div className="card mb-3">
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Recommend a book to a class</h3></div>
+        <div className="card-body">
+          <form onSubmit={add}><div className="form-row">
+            <div className="form-group"><label className="form-label">Class <span className="required">*</span></label>
+              <select className="form-control" value={classId} onChange={(e) => setClassId(e.target.value)}>
+                <option value="">Select…</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div className="form-group" style={{ flex: 2 }}>
+              <Autocomplete key={bookRef.current} label="Book" required url={d.urls.book_search} placeholder="Search title / author / ISBN…" onPick={setBookId} /></div>
+            <div className="form-group" style={{ flex: 2 }}><label className="form-label">Note</label>
+              <input type="text" className="form-control" placeholder="Optional (e.g. Term 1 core text)" value={note} onChange={(e) => setNote(e.target.value)} /></div>
+            <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+              <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
+          </div></form>
+        </div>
+      </div>
+      <div className="card mb-3"><div className="card-body">
+        <div className="filter-form"><div className="form-group"><label className="form-label">Filter by class</label>
+          <select className="form-control" value={d.class_id || ''} onChange={(e) => onClassFilter(e.target.value)}>
+            <option value="">All classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div></div>
+      </div></div>
+      <div className="card">
+        <div className="card-header"><h3>{d.items.length} recommendation(s)</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <Table rowKey={(it) => it.id} rows={d.items} pageSize={30} sticky maxHeight="60vh"
+            empty={<Empty icon="fa-list-check" title="No recommendations yet"><p>Add books above to build class reading lists.</p></Empty>}
+            columns={[
+              { key: 'class', label: 'Class', sortable: true, sortValue: (it) => it.class, render: (it) => <span className="badge badge-secondary">{it.class}</span> },
+              { key: 'book', label: 'Book', sortable: true, sortValue: (it) => it.book, render: (it) => <><strong>{it.book}</strong>{it.author && <div className="text-muted text-sm">{it.author}</div>}</> },
+              { key: 'note', label: 'Note', render: (it) => it.note || '—' },
+              { key: 'by', label: 'Added by', render: (it) => it.by || '—' },
+              { key: 'act', label: '', render: (it) => <button type="button" className="btn btn-danger btn-sm" disabled={busy} aria-label="Remove" onClick={() => remove(it)}><i aria-hidden="true" className="fas fa-trash" /></button> },
+            ]} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue: Issue, loans: Loans, reservations: Reservations, borrowers: Borrowers, borrower: Borrower, reading_lists: ReadingLists, reports: Reports, settings: Settings };
 
 export default function LibraryApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

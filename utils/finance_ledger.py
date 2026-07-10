@@ -201,6 +201,7 @@ _ADDED_COLUMNS = {
         'language': 'VARCHAR(40)', 'description': 'TEXT', 'rack': 'VARCHAR(40)',
         'condition': 'VARCHAR(20)', 'reference_only': 'BOOLEAN', 'price': 'FLOAT',
         'status': 'VARCHAR(15)', 'lost_count': 'INTEGER', 'damaged_count': 'INTEGER',
+        'supplier': 'VARCHAR(120)', 'source': 'VARCHAR(20)', 'donated_by': 'VARCHAR(120)',
     },
     'library_loans': {
         'borrower_type': 'VARCHAR(10)', 'staff_id': 'INTEGER', 'renew_count': 'INTEGER',
@@ -249,12 +250,14 @@ def ensure_tables(bind=None):
     existing tenant databases predate them."""
     from models import (db, FinanceTransaction, AdditionalCharge, InstallmentPlan,
                         RecipientGroup, AnnouncementAck, CommAttachment,
-                        Conversation, ConversationMember, ChatMessage)
+                        Conversation, ConversationMember, ChatMessage,
+                        BookReservation, ReadingListItem)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
               Conversation.__table__, ConversationMember.__table__,
-              ChatMessage.__table__]
+              ChatMessage.__table__, BookReservation.__table__,
+              ReadingListItem.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

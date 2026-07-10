@@ -56,7 +56,9 @@ def _urls():
     return {k: url_for('library.' + v) for k, v in {
         'dashboard': 'dashboard', 'books': 'books', 'issue': 'issue', 'loans': 'loans',
         'borrowers': 'borrowers', 'reports': 'reports', 'settings': 'settings',
-        'add_book': 'add_book', 'export': 'export',
+        'add_book': 'add_book', 'export': 'export', 'import': 'import_books',
+        'reservations': 'reservations', 'reserve': 'reserve',
+        'reading_lists': 'reading_lists', 'reading_list_add': 'reading_list_add',
         'book_search': 'book_search', 'student_search': 'student_search',
         'staff_search': 'staff_search', 'barcode_lookup': 'barcode_lookup',
         'remind_overdue': 'remind_overdue'}.items()}
@@ -198,7 +200,8 @@ def _book_dict(b):
         'language': b.language or '', 'description': b.description or '',
         'shelf': b.shelf or '', 'rack': b.rack or '', 'condition': b.condition or 'Good',
         'reference_only': bool(b.reference_only), 'price': b.price or 0,
-        'status': b.status or 'Available',
+        'status': b.status or 'Available', 'supplier': b.supplier or '',
+        'source': b.source or 'Purchase', 'donated_by': b.donated_by or '',
         'copies_total': b.copies_total, 'copies_available': b.copies_available,
         'on_loan': b.on_loan, 'notes': b.notes or '',
     }
@@ -215,7 +218,8 @@ def _book_payload(b):
 
 
 _STR_FIELDS = ('title', 'subtitle', 'author', 'isbn', 'barcode', 'category', 'subject',
-               'keywords', 'publisher', 'edition', 'language', 'shelf', 'rack', 'notes')
+               'keywords', 'publisher', 'edition', 'language', 'shelf', 'rack', 'notes',
+               'supplier', 'donated_by')
 
 
 def _read_book(b):
@@ -227,6 +231,7 @@ def _read_book(b):
     b.condition = (request.form.get('condition') or 'Good').strip() or 'Good'
     b.reference_only = bool(request.form.get('reference_only'))
     b.status = (request.form.get('status') or 'Available').strip() or 'Available'
+    b.source = (request.form.get('source') or 'Purchase').strip() or 'Purchase'
     b.price = request.form.get('price', type=float) or 0
     b.publication_year = request.form.get('publication_year', type=int)
 
@@ -405,6 +410,7 @@ def return_loan(loan_id):
     else:
         loan.fine = round(loan.days_overdue * s['fine_per_day'], 2)
     _restock(loan.book)
+    _promote_next(loan.book)   # a freed copy may satisfy the next queued hold
     posted = _post_library_charge(loan, loan.fine, 'Overdue library book') if loan.fine else False
     db.session.commit()
     from utils.audit import log_action
@@ -582,6 +588,194 @@ def borrower_history(btype, bid):
     })
 
 
+# ============================================================================
+# RESERVATIONS
+# ============================================================================
+
+def _res_row(r):
+    return {'id': r.id, 'book': r.book.title if r.book else '—', 'book_id': r.book_id,
+            'borrower': r.borrower_name, 'borrower_type': r.borrower_type or 'student',
+            'status': r.status,
+            'created': r.created_at.strftime('%d %b %Y') if r.created_at else '',
+            'expires': r.expires_on.strftime('%d %b') if r.expires_on else '',
+            'available': (r.book.copies_available if r.book else 0),
+            'cancel_url': url_for('library.reservation_cancel', res_id=r.id),
+            'fulfill_url': url_for('library.reservation_fulfill', res_id=r.id)}
+
+
+@library_bp.route('/reserve', methods=['POST'])
+@login_required
+def reserve():
+    from models import BookReservation, StaffMember
+    book = db.session.get(Book, request.form.get('book_id', type=int) or 0)
+    if not book:
+        return _err('Select a book to reserve.', url_for('library.books'))
+    require_branch_access(book.branch_id)
+    if book.reference_only:
+        return _err('Reference-only books cannot be reserved.', url_for('library.books'))
+    btype = 'staff' if request.form.get('borrower_type') == 'staff' else 'student'
+    r = BookReservation(book_id=book.id, borrower_type=btype, status='Queued')
+    if btype == 'staff':
+        st = db.session.get(StaffMember, request.form.get('staff_id', type=int) or 0)
+        if not st:
+            return _err('Select a staff borrower.', url_for('library.books'))
+        r.staff_id = st.id
+    else:
+        st = db.session.get(Student, request.form.get('student_id', type=int) or 0)
+        if not st:
+            return _err('Select a student.', url_for('library.books'))
+        r.student_id = st.id
+    # A free copy? make it ready immediately.
+    if book.borrowable:
+        _mark_ready(r)
+    db.session.add(r)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('library.reserve', detail=f'{book.title} ({r.borrower_name})', target=r)
+    return _ok(f'Reserved "{book.title}" for {r.borrower_name}.'
+               + (' A copy is available — ready to collect.' if r.status == 'Ready' else ' Added to the queue.'),
+               url_for('library.reservations'))
+
+
+def _mark_ready(r):
+    import datetime as _dt
+    r.status = 'Ready'
+    r.ready_at = _dt.datetime.now()
+    r.expires_on = _dt.date.today() + _dt.timedelta(days=3)
+
+
+def _promote_next(book):
+    """When a copy frees up, make the earliest queued hold Ready and alert admins."""
+    from models import BookReservation
+    if not book or (book.copies_available or 0) <= 0:
+        return
+    nxt = (BookReservation.query.filter_by(book_id=book.id, status='Queued')
+           .order_by(BookReservation.created_at).first())
+    if not nxt:
+        return
+    _mark_ready(nxt)
+    try:
+        from utils.notify import notify_admins
+        notify_admins('Library: reserved book ready',
+                      f'"{book.title}" is now available for {nxt.borrower_name} (reserved).',
+                      url=url_for('library.reservations'), category='info')
+    except Exception:
+        pass
+
+
+@library_bp.route('/reservations')
+@login_required
+def reservations():
+    from models import BookReservation
+    show = request.args.get('status', 'open')
+    q = scope_query(BookReservation.query.join(Book, BookReservation.book_id == Book.id), Book)
+    if show == 'open':
+        q = q.filter(BookReservation.status.in_(['Queued', 'Ready']))
+    elif show in ('Queued', 'Ready', 'Fulfilled', 'Cancelled', 'Expired'):
+        q = q.filter(BookReservation.status == show)
+    rows = q.order_by(BookReservation.created_at.desc()).limit(400).all()
+    return _render({
+        'page': 'reservations', 'status': show,
+        'reservations': [_res_row(r) for r in rows],
+    })
+
+
+@library_bp.route('/reservations/<int:res_id>/cancel', methods=['POST'])
+@login_required
+def reservation_cancel(res_id):
+    from models import BookReservation
+    r = db.get_or_404(BookReservation, res_id)
+    require_branch_access(r.book.branch_id if r.book else None)
+    r.status = 'Cancelled'
+    db.session.commit()
+    return _ok('Reservation cancelled.', url_for('library.reservations'))
+
+
+@library_bp.route('/reservations/<int:res_id>/fulfill', methods=['POST'])
+@login_required
+def reservation_fulfill(res_id):
+    """Issue the reserved book to the borrower and close the hold."""
+    from models import BookReservation
+    r = db.get_or_404(BookReservation, res_id)
+    require_branch_access(r.book.branch_id if r.book else None)
+    book = r.book
+    if not book or not book.borrowable:
+        return _err('No copy available to fulfil this reservation yet.', url_for('library.reservations'))
+    s = _settings()
+    loan = BookLoan(book_id=book.id, borrower_type=r.borrower_type,
+                    student_id=r.student_id, staff_id=r.staff_id,
+                    borrowed_date=date.today(),
+                    due_date=date.today() + timedelta(days=s['loan_days']), status='Borrowed')
+    book.copies_available = (book.copies_available or 0) - 1
+    r.status = 'Fulfilled'
+    db.session.add(loan)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('library.reserve_fulfill', detail=f'{book.title} ({r.borrower_name})', target=loan)
+    return _ok(f'Issued "{book.title}" to {r.borrower_name}.', url_for('library.loans'))
+
+
+# ============================================================================
+# READING LISTS — class-recommended books
+# ============================================================================
+
+@library_bp.route('/reading-lists')
+@login_required
+def reading_lists():
+    from models import ReadingListItem, SchoolClass
+    class_id = request.args.get('class_id', type=int)
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+    q = ReadingListItem.query.join(Book, ReadingListItem.book_id == Book.id)
+    q = scope_query(q, Book)
+    if class_id:
+        q = q.filter(ReadingListItem.class_id == class_id)
+    items = q.order_by(ReadingListItem.class_id, ReadingListItem.created_at.desc()).all()
+    cls_name = {c.id: c.name for c in classes}
+    return _render({
+        'page': 'reading_lists', 'class_id': class_id or '',
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'items': [{'id': it.id, 'class_id': it.class_id, 'class': cls_name.get(it.class_id, '—'),
+                   'book': it.book.title if it.book else '—', 'author': it.book.author if it.book else '',
+                   'note': it.note or '', 'by': it.added_by or '',
+                   'remove_url': url_for('library.reading_list_remove', item_id=it.id)} for it in items],
+        'urls': {'add': url_for('library.reading_list_add'), 'self': url_for('library.reading_lists'),
+                 'book_search': url_for('library.book_search')},
+    })
+
+
+@library_bp.route('/reading-lists/add', methods=['POST'])
+@login_required
+def reading_list_add():
+    from models import ReadingListItem
+    class_id = request.form.get('class_id', type=int)
+    book_id = request.form.get('book_id', type=int)
+    book = db.session.get(Book, book_id) if book_id else None
+    if not (class_id and book):
+        return _err('Pick a class and a book.', url_for('library.reading_lists'))
+    require_branch_access(book.branch_id)
+    if ReadingListItem.query.filter_by(class_id=class_id, book_id=book_id).first():
+        return _err('That book is already on the class list.', url_for('library.reading_lists'), info=True)
+    from utils.access_control import get_current_user
+    who = getattr(get_current_user(), 'full_name', None) or 'Librarian'
+    db.session.add(ReadingListItem(class_id=class_id, book_id=book_id,
+                                   note=(request.form.get('note') or '').strip() or None, added_by=who))
+    db.session.commit()
+    return _ok(f'Added "{book.title}" to the reading list.',
+               url_for('library.reading_lists', class_id=class_id))
+
+
+@library_bp.route('/reading-lists/<int:item_id>/remove', methods=['POST'])
+@login_required
+def reading_list_remove(item_id):
+    from models import ReadingListItem
+    it = db.get_or_404(ReadingListItem, item_id)
+    if it.book:
+        require_branch_access(it.book.branch_id)
+    db.session.delete(it)
+    db.session.commit()
+    return _ok('Removed from the reading list.', url_for('library.reading_lists'))
+
+
 @library_bp.route('/book-search')
 @login_required
 def book_search():
@@ -729,6 +923,83 @@ def remind_overdue():
                     url_for('library.loans') + '?status=Overdue', info=True)
     return _ok(f'Drafted reminders for {msg.recipient_count} parent(s) — review and send.',
                url_for('comms.message_detail', message_id=msg.id))
+
+
+_IMPORT_ALIASES = {
+    'title': 'title', 'subtitle': 'subtitle', 'author': 'author', 'authors': 'author',
+    'isbn': 'isbn', 'barcode': 'barcode', 'accession': 'barcode', 'category': 'category',
+    'subject': 'subject', 'keywords': 'keywords', 'publisher': 'publisher',
+    'edition': 'edition', 'year': 'publication_year', 'publication_year': 'publication_year',
+    'language': 'language', 'shelf': 'shelf', 'rack': 'rack', 'condition': 'condition',
+    'price': 'price', 'supplier': 'supplier', 'source': 'source', 'copies': 'copies_total',
+    'total': 'copies_total', 'copies_total': 'copies_total',
+}
+
+
+@library_bp.route('/import', methods=['POST'])
+@login_required
+def import_books():
+    """Bulk-create catalogue books from an uploaded CSV. Header row maps common
+    column names (title, author, isbn, category, copies…). Title is required."""
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return _err('Choose a CSV file to import.', url_for('library.books'))
+    try:
+        text = f.read().decode('utf-8-sig', errors='replace')
+    except Exception:
+        return _err('Could not read that file.', url_for('library.books'))
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        return _err('The CSV has no header row.', url_for('library.books'))
+    colmap = {}
+    for col in reader.fieldnames:
+        key = _IMPORT_ALIASES.get((col or '').strip().lower())
+        if key:
+            colmap[col] = key
+    if 'title' not in colmap.values():
+        return _err('The CSV needs at least a "Title" column.', url_for('library.books'))
+    from utils.branch_scope import branch_for_new
+    branch_id = branch_for_new()
+    created = skipped = 0
+    for row in reader:
+        vals = {}
+        for col, key in colmap.items():
+            vals[key] = (row.get(col) or '').strip()
+        title = vals.get('title')
+        if not title:
+            skipped += 1
+            continue
+        total = 1
+        try:
+            total = max(int(float(vals.get('copies_total') or 1)), 0) or 1
+        except (ValueError, TypeError):
+            total = 1
+        price = 0
+        try:
+            price = float(vals.get('price') or 0)
+        except (ValueError, TypeError):
+            price = 0
+        year = None
+        try:
+            year = int(vals['publication_year']) if vals.get('publication_year') else None
+        except (ValueError, TypeError):
+            year = None
+        b = Book(branch_id=branch_id, title=title[:200], copies_total=total, copies_available=total,
+                 author=vals.get('author') or None, isbn=vals.get('isbn') or None,
+                 barcode=vals.get('barcode') or None, category=vals.get('category') or None,
+                 subject=vals.get('subject') or None, keywords=vals.get('keywords') or None,
+                 publisher=vals.get('publisher') or None, edition=vals.get('edition') or None,
+                 language=vals.get('language') or None, shelf=vals.get('shelf') or None,
+                 rack=vals.get('rack') or None, condition=vals.get('condition') or 'Good',
+                 supplier=vals.get('supplier') or None, source=vals.get('source') or 'Purchase',
+                 price=price, publication_year=year)
+        db.session.add(b)
+        created += 1
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('library.import', detail=f'{created} book(s)')
+    return _ok(f'Imported {created} book(s).' + (f' {skipped} row(s) skipped.' if skipped else ''),
+               url_for('library.books'))
 
 
 @library_bp.route('/export')
