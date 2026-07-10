@@ -18,7 +18,8 @@ function Tabs({ d }) {
   return <SectionTabs tabs={TABS} urls={d.nav} active={TAB_FOR[d.page] || d.page} go={nav.go} />;
 }
 
-const channelBadge = (ch) => 'badge ' + (ch === 'WhatsApp' ? 'badge-success' : 'badge-info');
+const channelBadge = (ch) => 'badge ' + (ch === 'WhatsApp' ? 'badge-success' : ch === 'Email' ? 'badge-warning' : 'badge-info');
+const statusBadge = (s) => 'badge ' + (s === 'Sent' ? 'badge-success' : s === 'Failed' ? 'badge-danger' : s === 'Scheduled' ? 'badge-info' : 'badge-warning');
 
 // ---- Dashboard -------------------------------------------------------------
 function Dashboard({ d }) {
@@ -38,20 +39,40 @@ function Dashboard({ d }) {
     return () => chart.destroy();
   }, [d.channel_chart]);
 
-  const kpis = [['blue', 'fa-bullhorn', d.total_campaigns, 'Campaigns'],
-    ['teal', 'fa-users', d.total_recipients, 'Recipients'],
-    ['green', 'fa-paper-plane', d.total_sent, 'Marked sent'],
-    ['amber', 'fa-address-book', d.cov.pct + '%', 'Contact coverage']];
+  const s = d.stats || {};
+  const quick = [
+    [d.urls.compose_sms || d.nav.compose, 'fa-comment-sms', 'Send SMS', 'btn-primary'],
+    [d.urls.compose_email || d.nav.compose, 'fa-envelope', 'Send Email', 'btn-secondary'],
+    [d.nav.announcements, 'fa-bullhorn', 'Announcement', 'btn-secondary'],
+    [d.nav.templates, 'fa-file-lines', 'Templates', 'btn-secondary'],
+    [d.nav.messages, 'fa-clock-rotate-left', 'History', 'btn-secondary'],
+  ];
+  const kpis = [
+    ['blue', 'fa-paper-plane', s.sent_today != null ? s.sent_today : 0, 'Sent today', d.nav.messages],
+    ['teal', 'fa-comment-sms', s.sms_today != null ? s.sms_today : 0, 'SMS today', null],
+    ['green', 'fa-envelope', s.email_today != null ? s.email_today : 0, 'Emails today', null],
+    ['amber', 'fa-clock', s.scheduled != null ? s.scheduled : 0, 'Scheduled', d.nav.messages],
+    ['blue', 'fa-file-pen', s.drafts != null ? s.drafts : 0, 'Drafts', d.nav.messages],
+    ['red', 'fa-triangle-exclamation', s.failed != null ? s.failed : 0, 'Failed', d.nav.messages],
+    ['green', 'fa-circle-check', s.success_rate == null ? '—' : s.success_rate + '%', 'Delivery rate', null],
+    ['amber', 'fa-address-book', d.cov.pct + '%', 'Contact coverage', d.urls.contacts_missing],
+  ];
 
   return (
     <>
-      <div className="page-header"><h1>Parent Communication</h1>
+      <div className="page-header"><h1>Communication Center</h1>
         <div className="page-header-actions"><a href={d.nav.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a></div>
       </div>
       <Tabs d={d} />
-      <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
-          <div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}
+      <div className="cm-quick d-flex gap-2 flex-wrap mb-3">{quick.map(([href, ic, label, cls]) => (
+        <a href={href} className={'btn ' + cls + ' btn-sm'} key={label}><i aria-hidden="true" className={'fas ' + ic} /> {label}</a>))}
+      </div>
+      <div className="kpi-row">{kpis.map(([c, ic, v, l, href]) => {
+        const inner = (<><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
+          <div><div className="v">{v}</div><div className="l">{l}</div></div></>);
+        return href ? <a className="kpi" key={l} href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
+          : <div className="kpi" key={l}>{inner}</div>;
+      })}
       </div>
 
       <div className="card mb-3"><div className="card-body">
@@ -71,12 +92,13 @@ function Dashboard({ d }) {
           <div className="wb" style={{ padding: 0 }}>
             {d.recent.length ? (
               <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Date</th><th>Title</th><th>Audience</th><th>Channel</th><th className="text-right">Sent</th></tr></thead>
+                <thead><tr><th>Date</th><th>Title</th><th>Audience</th><th>Channel</th><th>Status</th><th className="text-right">Sent</th></tr></thead>
                 <tbody>{d.recent.map((m) => (
                   <tr key={m.id}><td data-label="Date">{m.date}</td>
                     <td data-label="Title"><a href={m.url}>{m.title}</a></td>
                     <td data-label="Audience" className="text-muted text-sm">{m.audience_label}</td>
                     <td data-label="Channel"><span className={channelBadge(m.channel)}>{m.channel}</span></td>
+                    <td data-label="Status"><span className={statusBadge(m.status)}>{m.status}</span></td>
                     <td data-label="Sent" className="text-right">{m.sent_count}/{m.recipient_count}</td></tr>))}
                 </tbody></table></div>
             ) : <Empty icon="fa-paper-plane" title="No campaigns yet"><a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a></Empty>}
@@ -358,7 +380,6 @@ function MessageDetail({ d, notify }) {
   const linkFor = (r) => m.channel === 'SMS'
     ? `sms:${r.phone}?body=${encodeURIComponent(r.body)}`
     : `https://wa.me/${r.intl}?text=${encodeURIComponent(r.body)}`;
-  const statusBadge = (s) => 'badge ' + (s === 'Sent' ? 'badge-success' : s === 'Failed' ? 'badge-danger' : 'badge-warning');
 
   return (
     <>
@@ -516,7 +537,7 @@ function Compose({ d, notify }) {
   const [armId, setArmId] = useState('');
   const [picked, setPicked] = useState([]);   // [{id,label}]
   const [title, setTitle] = useState('');
-  const [channel, setChannel] = useState(d.channels[0]);
+  const [channel, setChannel] = useState(d.pre_channel || d.channels[0]);
   const [tpl, setTpl] = useState(d.pre_tpl || '');
   const [body, setBody] = useState(d.pre_body || '');
   const [schedule, setSchedule] = useState(false);
@@ -526,9 +547,11 @@ function Compose({ d, notify }) {
   const bodyRef = useRef();
   const ptRef = useRef();
 
+  const isEmail = String(channel).toLowerCase() === 'email';
   const runPreview = async () => {
     const body2 = new URLSearchParams();
     body2.set('term_id', termId); body2.set('audience', audience); body2.set('body', body);
+    body2.set('channel', channel);
     if (classId) body2.set('class_id', classId);
     if (armId) body2.set('arm_id', armId);
     picked.forEach((p) => body2.append('student_ids', p.id));
@@ -536,11 +559,12 @@ function Compose({ d, notify }) {
       const res = await fetch(d.urls.preview, { method: 'POST', credentials: 'same-origin',
         headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': csrfToken(), 'Content-Type': 'application/x-www-form-urlencoded' }, body: body2 });
       const j = await res.json();
-      setPreview({ reachable: j.reachable, no_phone: j.no_phone, sample: j.sample || '(no matching recipients)' });
+      setPreview({ reachable: j.reachable, no_phone: j.unreachable != null ? j.unreachable : j.no_phone,
+        by_email: j.by_email, sample: j.sample || '(no matching recipients)' });
     } catch (_) { /* ignore */ }
   };
   const schedulePreview = () => { clearTimeout(ptRef.current); ptRef.current = setTimeout(runPreview, 400); };
-  useEffect(() => { schedulePreview(); /* eslint-disable-next-line */ }, [audience, termId, classId, armId, picked, body]);
+  useEffect(() => { schedulePreview(); /* eslint-disable-next-line */ }, [audience, termId, classId, armId, picked, body, channel]);
 
   const insertPh = (ph) => {
     const el = bodyRef.current; const s = el ? el.selectionStart : body.length; const e = el ? el.selectionEnd : body.length;
@@ -565,6 +589,8 @@ function Compose({ d, notify }) {
 
   const charCount = body.length;
   const segs = charCount ? Math.ceil(charCount / 160) : 0;
+  const channelReady = isEmail ? d.email_ready : d.gateway_ready;
+  const channelLabel = isEmail ? 'Email (SMTP)' : (d.gateway_label || 'SMS gateway');
   const audCards = [['all', 'fa-users', 'All parents'], ['class', 'fa-school', 'By class'],
     ['defaulters', 'fa-triangle-exclamation', 'Fee defaulters'], ['students', 'fa-user-check', 'Selected']];
 
@@ -605,7 +631,7 @@ function Compose({ d, notify }) {
             <div className="card"><div className="card-header"><h3>2 · Message</h3></div>
               <div className="card-body">
                 <div className="form-row">
-                  <div className="form-group"><label className="form-label">Title (internal)</label><input type="text" className="form-control" placeholder="e.g., June fee reminder" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+                  <div className="form-group"><label className="form-label">{isEmail ? 'Email subject' : 'Title (internal)'}</label><input type="text" className="form-control" placeholder={isEmail ? 'e.g., June fee reminder' : 'e.g., June fee reminder'} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
                   <div className="form-group"><label className="form-label">Channel</label><select className="form-control" value={channel} onChange={(e) => setChannel(e.target.value)}>{d.channels.map((ch) => <option key={ch} value={ch}>{ch}</option>)}</select></div>
                 </div>
                 <div className="form-group"><label className="form-label">Use a template</label>
@@ -615,7 +641,7 @@ function Compose({ d, notify }) {
                 <div className="form-group mb-0"><label className="form-label">Message body <span className="required">*</span></label>
                   <div className="ph-btns">{d.placeholders.map((p) => <span className="ph-btn" key={p} onClick={() => insertPh(p)}>{p}</span>)}</div>
                   <textarea ref={bodyRef} className="form-control" rows="6" required placeholder="Type your message. Tap a tag above to personalise it." value={body} onChange={(e) => setBody(e.target.value)} />
-                  <div className="seg-info"><span>{charCount} character{charCount === 1 ? '' : 's'}</span><span>{segs} SMS segment{segs === 1 ? '' : 's'}</span></div>
+                  <div className="seg-info"><span>{charCount} character{charCount === 1 ? '' : 's'}</span><span>{isEmail ? 'Email body' : `${segs} SMS segment${segs === 1 ? '' : 's'}`}</span></div>
                 </div>
               </div></div>
           </div>
@@ -625,21 +651,23 @@ function Compose({ d, notify }) {
               <div className="card-body">
                 <div className="d-flex gap-2 align-center mb-2" style={{ fontSize: 'var(--text-sm)' }}>
                   <span className="badge badge-info">{preview.reachable} recipient{preview.reachable === 1 ? '' : 's'}</span>
-                  <span className="text-muted">{preview.no_phone ? `${preview.no_phone} have no phone` : ''}</span>
+                  <span className="text-muted">{preview.no_phone ? `${preview.no_phone} have no ${isEmail ? 'email' : 'phone'}` : ''}</span>
                 </div>
                 <div className="text-muted text-sm mb-1">Sample (first recipient):</div>
                 <div className="preview-phone mb-3"><div className="bubble">{preview.sample}</div></div>
                 <button type="button" className="btn btn-secondary w-100 mb-2" onClick={runPreview}><i aria-hidden="true" className="fas fa-rotate" /> Refresh preview</button>
-                {d.gateway_ready && (<>
+                {channelReady && (<>
                   <label className="form-check mb-2"><input type="checkbox" checked={schedule} onChange={(e) => setSchedule(e.target.checked)} /> Schedule for later</label>
                   {schedule && <div className="form-group"><label className="form-label">Send at</label>
                     <input type="datetime-local" className="form-control" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
-                    <span className="form-hint d-block">The campaign will auto-send via {d.gateway_label} at this time.</span></div>}
+                    <span className="form-hint d-block">The campaign will auto-send via {channelLabel} at this time.</span></div>}
                 </>)}
                 <button type="submit" className="btn btn-primary w-100" disabled={busy}><i aria-hidden="true" className="fas fa-paper-plane" /> {schedule ? 'Schedule campaign' : 'Create campaign'}</button>
-                {d.gateway_ready
-                  ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-tower-broadcast" style={{ color: 'var(--success)' }} /> SMS gateway active ({d.gateway_label}) — after creating, send all automatically with one tap, or use the WhatsApp / SMS links.</p>
-                  : <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export. <a href={d.urls.settings}>Add an SMS gateway</a> to auto-send.</p>}
+                {channelReady
+                  ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-tower-broadcast" style={{ color: 'var(--success)' }} /> {channelLabel} active — after creating, send to everyone automatically with one tap.</p>
+                  : (isEmail
+                    ? <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> Email isn't configured yet. You can still create the campaign and review recipients; set up SMTP to send.</p>
+                    : <p className="text-muted text-sm mt-2 mb-0"><i aria-hidden="true" className="fas fa-circle-info" /> You'll get a recipient list with one-tap WhatsApp / SMS links and a CSV export. <a href={d.urls.settings}>Add an SMS gateway</a> to auto-send.</p>)}
               </div></div>
           </div>
         </div>

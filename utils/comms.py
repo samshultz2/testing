@@ -325,17 +325,29 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
     return out
 
 
-def create_draft_campaign(body, *, audience='all', term=None, title=None,
-                          channel='SMS', class_id=None, arm_id=None,
-                          student_ids=None, created_by='system'):
-    """Create a *Draft* campaign (status='Draft') with one personalised recipient
-    per reachable parent in ``audience``.
+def channel_is_email(channel):
+    return (channel or '').lower() == 'email'
 
-    A Draft is never auto-dispatched (only 'Scheduled' campaigns are), so this is
-    safe to call from automated triggers: it queues messages for a human to review
-    and send. Reachability depends on the channel — a phone number for SMS/WhatsApp,
-    an email address for Email. Returns the Message, or None when the body is empty
-    or no recipient is reachable on that channel.
+
+def reachable_targets(targets, channel):
+    """Filter resolved audience targets to those actually reachable on ``channel``
+    — an email address for Email, a phone number for SMS/WhatsApp."""
+    by_email = channel_is_email(channel)
+    return [t for t in targets if (t.get('email') if by_email else t.get('phone'))]
+
+
+def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None,
+                   audience_label=None, class_id=None, arm_id=None, student_ids=None,
+                   created_by='system', status='Draft', scheduled_at=None,
+                   branch_id=None):
+    """The single campaign builder used by every entry point (the composer UI and
+    automated triggers alike). Resolves the audience, keeps only recipients
+    reachable on the chosen channel, persists the Message + one personalised
+    MessageRecipient each, and returns the Message — or None when the body is empty
+    or nobody is reachable.
+
+    Reachability is channel-aware (phone for SMS/WhatsApp, email for Email). A
+    'Draft'/'Scheduled' status controls whether the scheduler may auto-send it.
     """
     from models import Message, MessageRecipient
     from utils.branch_scope import branch_for_new
@@ -345,17 +357,17 @@ def create_draft_campaign(body, *, audience='all', term=None, title=None,
         return None
     targets = resolve_audience(audience, term, class_id=class_id, arm_id=arm_id,
                                student_ids=student_ids or [])
-    by_email = (channel or '').lower() == 'email'
-    reachable = [t for t in targets if (t.get('email') if by_email else t['phone'])]
+    reachable = reachable_targets(targets, channel)
     if not reachable:
         return None
 
-    label = title or f'{audience.title()} ({len(reachable)})'
+    label = audience_label or title or f'{audience.title()} ({len(reachable)})'
     msg = Message(title=title or label, body=body, channel=channel,
                   audience=audience, audience_label=label,
-                  term_id=term.id if term else None, branch_id=branch_for_new(),
+                  term_id=term.id if term else None,
+                  branch_id=(branch_id if branch_id is not None else branch_for_new()),
                   created_by=created_by, recipient_count=len(reachable),
-                  status='Draft', scheduled_at=None)
+                  status=status, scheduled_at=scheduled_at)
     db.session.add(msg)
     db.session.flush()
     for t in reachable:
@@ -366,3 +378,15 @@ def create_draft_campaign(body, *, audience='all', term=None, title=None,
             body=render(body, ctx)))
     db.session.commit()
     return msg
+
+
+def create_draft_campaign(body, *, audience='all', term=None, title=None,
+                          channel='SMS', class_id=None, arm_id=None,
+                          student_ids=None, created_by='system'):
+    """Create a *Draft* campaign (never auto-dispatched) for a human to review and
+    send — the safe entry point for automated triggers. Thin wrapper over
+    :func:`build_campaign`; see it for reachability semantics."""
+    return build_campaign(body, channel=channel, audience=audience, term=term,
+                          title=title, class_id=class_id, arm_id=arm_id,
+                          student_ids=student_ids, created_by=created_by,
+                          status='Draft', scheduled_at=None)

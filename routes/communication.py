@@ -1,7 +1,10 @@
 """
-Parent Communication routes — broadcast messaging to parents via WhatsApp / SMS
-deep links, reusable templates, audience targeting (class, arm, fee defaulters,
-selected students), a full send log and CSV export for bulk SMS gateways.
+Communication routes — the school's communication center. Broadcast to parents
+over SMS, WhatsApp (click-to-chat) or Email from one composer, with reusable
+templates, audience targeting (class, arm, fee defaulters, selected students),
+scheduling, a full send log with per-recipient delivery status, and CSV export.
+Automated notifications from other modules funnel through the same campaign
+engine (see utils.comms.build_campaign / create_draft_campaign).
 """
 from datetime import datetime
 from utils.helpers import get_active_term
@@ -24,7 +27,10 @@ from utils.security import strip_tags
 
 comms_bp = Blueprint('comms', __name__, url_prefix='/communication')
 
-CHANNELS = ['WhatsApp', 'SMS']
+# Delivery channels the composer offers. SMS/WhatsApp reach a phone number; Email
+# reaches a parent's stored email address. (WhatsApp is a click-to-chat deep link;
+# SMS and Email send through the configured gateway / SMTP.)
+CHANNELS = ['SMS', 'WhatsApp', 'Email']
 
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
@@ -72,26 +78,70 @@ def _dt(value):
 @comms_bp.route('/')
 @login_required
 def dashboard():
+    from datetime import datetime, time, date
     cov = comms.coverage_stats()
-    total_campaigns = scope_query(Message.query, Message).count()
+    base_msgs = scope_query(Message.query, Message)
+    total_campaigns = base_msgs.count()
     total_recipients = scope_query(db.session.query(func.coalesce(func.sum(Message.recipient_count), 0)), Message).scalar() or 0
     total_sent = scope_query(db.session.query(func.coalesce(func.sum(Message.sent_count), 0)), Message).scalar() or 0
     channel_rows = (scope_query(db.session.query(Message.channel, func.count(Message.id)), Message)
                     .group_by(Message.channel).all())
     channel_chart = [{'channel': ch or 'Other', 'count': n} for ch, n in channel_rows]
-    recent = scope_query(Message.query, Message).order_by(Message.created_at.desc()).limit(8).all()
     template_count = MessageTemplate.query.filter_by(is_active=True).count()
+
+    # Pipeline snapshot — what needs attention right now.
+    scheduled_ct = base_msgs.filter(Message.status == 'Scheduled').count()
+    draft_ct = base_msgs.filter(Message.status == 'Draft').count()
+
+    # Recipient-level delivery stats (scoped by the owning campaign's branch).
+    def _recip_q():
+        return scope_query(
+            db.session.query(MessageRecipient).join(Message, MessageRecipient.message_id == Message.id),
+            Message)
+    status_rows = (_recip_q().with_entities(MessageRecipient.status, func.count(MessageRecipient.id))
+                   .group_by(MessageRecipient.status).all())
+    by_status = {s: n for s, n in status_rows}
+    sent_all = by_status.get('Sent', 0)
+    failed_all = by_status.get('Failed', 0)
+    attempted = sent_all + failed_all
+    success_rate = round(sent_all / attempted * 100, 1) if attempted else None
+
+    # Today's deliveries, split by channel (SMS / Email / other).
+    start = datetime.combine(date.today(), time.min)
+    today_rows = (_recip_q().with_entities(Message.channel, func.count(MessageRecipient.id))
+                  .filter(MessageRecipient.status == 'Sent', MessageRecipient.sent_at >= start)
+                  .group_by(Message.channel).all())
+    today_by_channel = {(ch or 'Other'): n for ch, n in today_rows}
+
+    def _chan(*names):
+        return sum(today_by_channel.get(n, 0) for n in names)
+    sent_today = sum(today_by_channel.values())
+
+    recent = base_msgs.order_by(Message.created_at.desc()).limit(8).all()
     return _render({
         'page': 'dashboard', 'nav': _nav_urls(),
         'cov': cov, 'total_campaigns': total_campaigns,
         'total_recipients': int(total_recipients), 'total_sent': int(total_sent),
         'channel_chart': channel_chart, 'template_count': template_count,
+        'stats': {
+            'sent_today': sent_today,
+            'sms_today': _chan('SMS', 'WhatsApp'),
+            'email_today': _chan('Email'),
+            'scheduled': scheduled_ct, 'drafts': draft_ct,
+            'failed': failed_all, 'success_rate': success_rate,
+        },
         'recent': [{'id': m.id, 'date': m.created_at.strftime('%d %b'),
                     'title': m.title or 'Message', 'audience_label': m.audience_label,
-                    'channel': m.channel, 'sent_count': m.sent_count or 0,
+                    'channel': m.channel, 'status': m.status, 'sent_count': m.sent_count or 0,
                     'recipient_count': m.recipient_count or 0,
                     'url': url_for('comms.message_detail', message_id=m.id)} for m in recent],
-        'urls': {'contacts_missing': url_for('comms.contacts', missing=1)},
+        'urls': {'contacts_missing': url_for('comms.contacts', missing=1),
+                 'compose': url_for('comms.compose'),
+                 'compose_sms': url_for('comms.compose', channel='SMS'),
+                 'compose_email': url_for('comms.compose', channel='Email'),
+                 'announcements': url_for('comms.announcements'),
+                 'templates': url_for('comms.templates_list'),
+                 'messages': url_for('comms.messages_list')},
     })
 
 
@@ -294,7 +344,7 @@ def compose():
     if request.method == 'POST':
         audience = request.form.get('audience') or 'all'
         body = strip_tags(request.form.get('body'))
-        channel = request.form.get('channel') or 'WhatsApp'
+        channel = request.form.get('channel') or 'SMS'
         title = strip_tags(request.form.get('title'))
         class_id = request.form.get('class_id', type=int)
         arm_id = request.form.get('arm_id', type=int)
@@ -303,45 +353,38 @@ def compose():
         if not body:
             return _err('Message body cannot be empty.', url_for('comms.compose'))
 
+        # How many are reachable on this channel (phone for SMS/WhatsApp, email for
+        # Email) — decides the count in the label and whether there's anyone to send.
         targets = comms.resolve_audience(audience, term, class_id=class_id,
                                          arm_id=arm_id, student_ids=student_ids)
-        # Only those with a phone number can actually be messaged.
-        reachable = [t for t in targets if t['phone']]
+        reachable = comms.reachable_targets(targets, channel)
         if not reachable:
-            return _err('No recipients with a phone number matched that audience.',
+            miss = 'an email address' if comms.channel_is_email(channel) else 'a phone number'
+            return _err(f'No recipients with {miss} matched that audience.',
                         url_for('comms.compose'))
 
-        # Optional scheduling (auto-send via gateway at a future time).
-        from utils import sms_gateway
-        scheduled_at = None
-        status = 'Draft'
-        if request.form.get('schedule') and sms_gateway.is_configured():
+        # Optional scheduling (auto-send via the matching gateway at a future time).
+        from utils import sms_gateway, mailer
+        gateway_ready = mailer.is_configured() if comms.channel_is_email(channel) \
+            else sms_gateway.is_configured()
+        scheduled_at, status = None, 'Draft'
+        if request.form.get('schedule') and gateway_ready:
             scheduled_at = _dt(request.form.get('scheduled_at'))
             if scheduled_at and scheduled_at > datetime.now():
                 status = 'Scheduled'
 
-        label = _audience_label(audience, classes, arms, class_id, arm_id, len(reachable))
         from utils.branch_scope import branch_for_new
-        msg = Message(title=title or label, body=body, channel=channel,
-                      audience=audience, audience_label=label,
-                      term_id=term.id if term else None, branch_id=branch_for_new(),
-                      created_by=_current_user(), recipient_count=len(reachable),
-                      status=status, scheduled_at=scheduled_at)
-        db.session.add(msg)
-        db.session.flush()
-
-        for t in reachable:
-            ctx = comms.build_context(t['student'], term, t['parent_name'], t['balance'])
-            db.session.add(MessageRecipient(
-                message_id=msg.id, student_id=t['student'].id,
-                parent_name=t['parent_name'], phone=t['phone'],
-                body=comms.render(body, ctx)))
-        db.session.commit()
+        label = _audience_label(audience, classes, arms, class_id, arm_id, len(reachable))
+        msg = comms.build_campaign(
+            body, channel=channel, audience=audience, term=term, title=title,
+            audience_label=label, class_id=class_id, arm_id=arm_id,
+            student_ids=student_ids, created_by=_current_user(),
+            status=status, scheduled_at=scheduled_at, branch_id=branch_for_new())
         if status == 'Scheduled':
             note = (f'Campaign scheduled for {scheduled_at.strftime("%d %b %Y, %I:%M %p")} '
-                    f'({len(reachable)} parent(s)).')
+                    f'({len(reachable)} recipient(s)).')
         else:
-            note = f'Campaign created for {len(reachable)} parent(s).'
+            note = f'Campaign created for {len(reachable)} recipient(s).'
         return _ok(note, url_for('comms.message_detail', message_id=msg.id))
 
     # Pre-selection from query params (e.g. "Message defaulters" from Finance,
@@ -367,7 +410,7 @@ def compose():
         if t:
             pre_tpl, pre_body = t.id, t.body
 
-    from utils import sms_gateway
+    from utils import sms_gateway, mailer
     gw = sms_gateway.get_config()
     return _render({
         'page': 'compose', 'nav': _nav_urls(),
@@ -380,6 +423,8 @@ def compose():
         'channels': CHANNELS, 'placeholders': comms.PLACEHOLDERS, 'cov': comms.coverage_stats(),
         'gateway_ready': sms_gateway.is_configured(gw),
         'gateway_label': sms_gateway.provider_label(gw),
+        'email_ready': mailer.is_configured(),
+        'pre_channel': (request.args.get('channel') if request.args.get('channel') in CHANNELS else ''),
         'pre_audience': pre_audience, 'pre_class': pre_class or '',
         'pre_tpl': pre_tpl or '', 'pre_body': pre_body,
         'urls': {'submit': url_for('comms.compose'), 'preview': url_for('comms.compose_preview'),
@@ -413,22 +458,26 @@ def _audience_label(audience, classes, arms, class_id, arm_id, count):
 @comms_bp.route('/compose/preview', methods=['POST'])
 @login_required
 def compose_preview():
-    """JSON: count of recipients + a personalised sample for the chosen audience."""
+    """JSON: recipient counts (channel-aware) + a personalised sample for the
+    chosen audience."""
     term = _term_from(request.form.get('term_id', type=int))
     audience = request.form.get('audience') or 'all'
+    channel = request.form.get('channel') or 'SMS'
     body = request.form.get('body') or ''
     targets = comms.resolve_audience(audience, term,
         class_id=request.form.get('class_id', type=int),
         arm_id=request.form.get('arm_id', type=int),
         student_ids=request.form.getlist('student_ids', type=int))
-    reachable = [t for t in targets if t['phone']]
+    reachable = comms.reachable_targets(targets, channel)
     sample = ''
     if reachable:
         t = reachable[0]
         ctx = comms.build_context(t['student'], term, t['parent_name'], t['balance'])
         sample = comms.render(body, ctx)
     return jsonify({'total': len(targets), 'reachable': len(reachable),
-                    'no_phone': len(targets) - len(reachable), 'sample': sample})
+                    'no_phone': len(targets) - len(reachable),
+                    'unreachable': len(targets) - len(reachable),
+                    'by_email': comms.channel_is_email(channel), 'sample': sample})
 
 
 @comms_bp.route('/students/search')

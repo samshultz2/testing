@@ -1,10 +1,10 @@
 """
-Parent Communication models — message templates, broadcast campaigns and the
-per-parent recipient log.
+Communication models — message templates, broadcast campaigns and the
+per-recipient delivery log.
 
-The platform stores parent phone numbers (no emails), so messaging is phone
-first: WhatsApp / SMS deep links plus a CSV export for bulk SMS gateways. Every
-campaign and recipient is logged so schools keep a full communication history.
+Campaigns reach parents over SMS / WhatsApp (via a stored phone number) or Email
+(via a stored parent email). Each recipient row carries its personalised body and
+delivery status, so schools keep a full, auditable communication history.
 """
 from models.models import db, local_now
 
