@@ -353,6 +353,7 @@ function StaffDetail({ d, notify }) {
         </div>{s.notes && <p className="text-muted text-sm mt-2">{s.notes}</p>}</div></div>
       </div>
 
+      <LifecycleTimeline d={d} act={act} />
       <SalarySection d={d} act={act} />
       <LeaveSection d={d} act={act} notify={notify} />
       {d.payslips.length > 0 && (
@@ -367,6 +368,71 @@ function StaffDetail({ d, notify }) {
           </table></div></div></div>
       )}
     </>
+  );
+}
+
+// ---- Lifecycle quick-actions + merged timeline -----------------------------
+const TL_TONE = { green: 'var(--success)', blue: 'var(--primary)', amber: 'var(--warning)', purple: '#7e6cf0', muted: 'var(--text-muted)' };
+
+function LifecycleTimeline({ d, act }) {
+  const s = d.s;
+  const [open, setOpen] = useState(null);   // 'promote' | 'transfer' | 'confirm' | 'note'
+  const [f, setF] = useState({});
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const toggle = (which, seed) => { setOpen(open === which ? null : which); setF(seed || {}); };
+  const done = () => { setOpen(null); setF({}); };
+  const submit = async (url, fields, confirmMsg) => { await act(url, fields, confirmMsg); done(); };
+  const branches = d.can_transfer || [];
+
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-timeline" /> Employment timeline</h3>
+      <div className="d-flex gap-1 flex-wrap">
+        {d.is_admin && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('promote', { designation: s.designation || '', new_salary: s.salary || '', effective_date: d.today })}><i aria-hidden="true" className="fas fa-arrow-trend-up" /> Promote</button>}
+        {d.is_admin && branches.length > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('transfer', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-arrows-left-right" /> Transfer</button>}
+        {d.is_admin && !s.confirmation_date && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('confirm', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-user-check" /> Confirm</button>}
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('note', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-note-sticky" /> Note</button>
+      </div>
+    </div>
+      <div className="card-body">
+        {open === 'promote' && (
+          <form className="lc-form" onSubmit={(e) => { e.preventDefault(); if (!(f.designation || '').trim()) return; submit(d.urls.promote, f); }}>
+            <div className="form-group mb-0"><label className="form-label">New position/title</label><input type="text" className="form-control" required value={f.designation || ''} onChange={(e) => set('designation', e.target.value)} /></div>
+            <div className="form-group mb-0"><label className="form-label">New salary (optional)</label><input type="number" className="form-control" min="0" step="500" value={f.new_salary || ''} onChange={(e) => set('new_salary', e.target.value)} /></div>
+            <div className="form-group mb-0"><label className="form-label">Effective</label><input type="date" className="form-control" value={f.effective_date || ''} onChange={(e) => set('effective_date', e.target.value)} /></div>
+            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-check" /> Save</button>
+          </form>
+        )}
+        {open === 'transfer' && (
+          <form className="lc-form" onSubmit={(e) => { e.preventDefault(); if (!f.branch_id) return; submit(d.urls.transfer, f, `Transfer ${s.full_name} to another branch?`); }}>
+            <div className="form-group mb-0"><label className="form-label">Destination branch</label>
+              <select className="form-control" required value={f.branch_id || ''} onChange={(e) => set('branch_id', e.target.value)}>
+                <option value="">Select…</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+            <div className="form-group mb-0"><label className="form-label">Effective</label><input type="date" className="form-control" value={f.effective_date || ''} onChange={(e) => set('effective_date', e.target.value)} /></div>
+            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-check" /> Transfer</button>
+          </form>
+        )}
+        {open === 'confirm' && (
+          <form className="lc-form" onSubmit={(e) => { e.preventDefault(); submit(d.urls.confirm, f, `Confirm ${s.full_name} off probation?`); }}>
+            <div className="form-group mb-0"><label className="form-label">Confirmation date</label><input type="date" className="form-control" value={f.effective_date || ''} onChange={(e) => set('effective_date', e.target.value)} /></div>
+            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-check" /> Confirm</button>
+          </form>
+        )}
+        {open === 'note' && (
+          <form className="lc-form" onSubmit={(e) => { e.preventDefault(); if (!(f.title || '').trim()) return; submit(d.urls.add_note, f); }}>
+            <div className="form-group mb-0" style={{ flex: 2 }}><label className="form-label">Note</label><input type="text" className="form-control" required placeholder="e.g., Received award, Warning issued" value={f.title || ''} onChange={(e) => set('title', e.target.value)} /></div>
+            <div className="form-group mb-0"><label className="form-label">Date</label><input type="date" className="form-control" value={f.effective_date || ''} onChange={(e) => set('effective_date', e.target.value)} /></div>
+            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-check" /> Add</button>
+          </form>
+        )}
+        {(d.timeline || []).length ? (
+          <ul className="hr-timeline">
+            {d.timeline.map((t, i) => (
+              <li key={i}><span className="tl-dot" style={{ background: TL_TONE[t.tone] || TL_TONE.muted }}><i aria-hidden="true" className={'fas ' + t.icon} /></span>
+                <div className="tl-body"><div className="tl-top"><strong>{t.title}</strong><span className="tl-date">{t.date_label}</span></div>
+                  {t.detail && <div className="text-muted text-sm">{t.detail}</div>}</div></li>))}
+          </ul>
+        ) : <p className="text-muted mb-0">No timeline events yet. Employment, promotions, transfers, salary changes and approved leave appear here.</p>}
+      </div></div>
   );
 }
 

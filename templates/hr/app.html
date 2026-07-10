@@ -44,6 +44,16 @@
 .hub-stat .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
 .hub-stat .l{font-size:.68rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
 .chip-wrap{display:flex;flex-wrap:wrap;gap:.35rem}
+/* lifecycle quick-action forms + timeline */
+.hr-hub-grid + .hr-2col{margin-top:0}
+.lc-form{display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius);padding:.85rem;margin-bottom:1rem}
+.hr-timeline{list-style:none;margin:0;padding:0;position:relative}
+.hr-timeline::before{content:'';position:absolute;left:15px;top:6px;bottom:6px;width:2px;background:var(--border-color)}
+.hr-timeline li{position:relative;display:flex;gap:.85rem;padding:.35rem 0 .8rem 0}
+.hr-timeline .tl-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.8rem;flex-shrink:0;z-index:1}
+.hr-timeline .tl-body{flex:1;min-width:0;padding-top:.25rem}
+.hr-timeline .tl-top{display:flex;justify-content:space-between;gap:1rem;align-items:baseline}
+.hr-timeline .tl-date{color:var(--text-muted);font-size:.78rem;white-space:nowrap}
 .info-grid{display:grid;grid-template-columns:1fr;gap:.1rem}
 @media(min-width:640px){.info-grid{grid-template-columns:1fr 1fr}}
 .info-row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}

@@ -270,3 +270,74 @@ def leave_summary(staff_id, year):
         total += (lv.days or 0)
     pending = LeaveRecord.query.filter_by(staff_id=staff_id, status='Pending').count()
     return {'total_days': total, 'by_type': by_type, 'pending': pending}
+
+
+# ---- Lifecycle events + timeline -------------------------------------------
+
+def record_event(staff, kind, title, detail=None, effective_date=None, created_by=None):
+    """Append a lifecycle event (promotion / transfer / …) to a staff member."""
+    from models import StaffEvent
+    from datetime import date
+    ev = StaffEvent(staff_id=staff.id, kind=kind, title=title,
+                    detail=(detail or None), effective_date=effective_date or date.today(),
+                    created_by=created_by)
+    db.session.add(ev)
+    return ev
+
+
+# Icon + tone per timeline entry kind (consumed by the React timeline).
+_TIMELINE_STYLE = {
+    'employment': ('fa-briefcase', 'green'),
+    'confirmation': ('fa-user-check', 'green'),
+    'promotion': ('fa-arrow-trend-up', 'blue'),
+    'transfer': ('fa-arrows-left-right', 'amber'),
+    'department': ('fa-sitemap', 'blue'),
+    'status': ('fa-flag', 'amber'),
+    'salary': ('fa-money-bill-trend-up', 'blue'),
+    'leave': ('fa-plane-departure', 'purple'),
+    'note': ('fa-note-sticky', 'muted'),
+}
+
+
+def build_timeline(staff):
+    """Merge a staff member's lifecycle into one reverse-chronological feed:
+    the employment + confirmation dates (from the record itself), StaffEvent rows
+    (promotions / transfers / notes), salary changes and approved leave — each
+    already owned by its own module, surfaced together here."""
+    from models import StaffEvent, SalaryHistory, LeaveRecord
+    from datetime import date
+    items = []
+
+    def _add(d, kind, title, detail=None):
+        if not d:
+            return
+        icon, tone = _TIMELINE_STYLE.get(kind, ('fa-circle', 'muted'))
+        items.append({'date': d, 'kind': kind, 'title': title,
+                      'detail': detail or '', 'icon': icon, 'tone': tone})
+
+    if staff.date_employed:
+        _add(staff.date_employed, 'employment', 'Joined the school',
+             staff.designation or (staff.staff_type or ''))
+    if staff.confirmation_date:
+        _add(staff.confirmation_date, 'confirmation', 'Confirmed (off probation)')
+
+    for ev in StaffEvent.query.filter_by(staff_id=staff.id).all():
+        _add(ev.effective_date or (ev.created_at.date() if ev.created_at else None),
+             ev.kind or 'note', ev.title, ev.detail)
+
+    for h in SalaryHistory.query.filter_by(staff_id=staff.id).all():
+        d = h.effective_date or (h.created_at.date() if h.created_at else None)
+        arrow = 'increase' if h.change >= 0 else 'decrease'
+        _add(d, 'salary', f'Salary {arrow}',
+             f'{(h.previous_salary or 0):,.0f} → {(h.new_salary or 0):,.0f}'
+             + (f' · {h.reason}' if h.reason else ''))
+
+    for lv in (LeaveRecord.query.filter_by(staff_id=staff.id, status='Approved').all()):
+        _add(lv.start_date, 'leave', f'{lv.leave_type or "Leave"} ({lv.days or 0} day(s))',
+             lv.reason or '')
+
+    items.sort(key=lambda x: (x['date'] or date.min), reverse=True)
+    for it in items:
+        it['date_label'] = it['date'].strftime('%d %b %Y') if it['date'] else ''
+        it.pop('date')
+    return items

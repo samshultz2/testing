@@ -142,6 +142,31 @@ class StaffMember(db.Model):
         return f'<StaffMember {self.staff_id} {self.full_name}>'
 
 
+class StaffEvent(db.Model):
+    """A dated milestone in a staff member's employment lifecycle — promotions,
+    branch transfers, department moves, status changes and free-form notes.
+
+    Salary changes (SalaryHistory), leave (LeaveRecord) and employment/confirmation
+    dates (on StaffMember) are their own records; the timeline *merges* all of
+    them, so this table only stores events that have no home elsewhere."""
+    __tablename__ = 'staff_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False, index=True)
+    kind = db.Column(db.String(20), default='note')   # promotion/transfer/department/status/confirmation/note
+    title = db.Column(db.String(120), nullable=False)
+    detail = db.Column(db.String(255))
+    effective_date = db.Column(db.Date)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    staff = db.relationship('StaffMember', backref=db.backref(
+        'events', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<StaffEvent staff{self.staff_id} {self.kind} {self.title!r}>'
+
+
 class LeaveRecord(db.Model):
     __tablename__ = 'leave_records'
 

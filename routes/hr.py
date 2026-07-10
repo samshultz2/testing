@@ -59,6 +59,19 @@ def _require_payroll_run_access(run):
     require_branch_access(run.branch_id)
 
 
+def _branches_for_transfer(s):
+    """Destination branches a central admin may transfer this staff member to
+    (all active branches except their current one). Empty for branch admins, who
+    cannot move staff across branches."""
+    from utils.branch_scope import is_central
+    if not is_central():
+        return []
+    from models import Branch
+    return [{'id': b.id, 'name': b.name} for b in
+            Branch.query.filter_by(is_active=True).order_by(Branch.name).all()
+            if b.id != s.branch_id]
+
+
 def _nav_urls():
     return {'dashboard': url_for('hr.dashboard'), 'staff': url_for('hr.staff_list'),
             'attendance': url_for('hr.attendance'), 'leave': url_for('hr.leave_list'),
@@ -287,6 +300,8 @@ def staff_detail(staff_id):
         'attendance_summary': hr.attendance_summary(s.id, today.year, today.month),
         'attendance_month': today.strftime('%B %Y'),
         'leave_summary': hr.leave_summary(s.id, today.year),
+        'timeline': hr.build_timeline(s),
+        'can_transfer': _branches_for_transfer(s),
         'salary_history': [{'effective': (h.effective_date or h.created_at).strftime('%d %b %Y'),
                             'previous_salary': h.previous_salary or 0, 'new_salary': h.new_salary or 0,
                             'change': h.change, 'reason': h.reason or '—'} for h in salary_history],
@@ -299,6 +314,10 @@ def staff_detail(staff_id):
         'urls': {'edit': url_for('hr.edit_staff', staff_id=s.id),
                  'delete': url_for('hr.delete_staff', staff_id=s.id),
                  'adjust_salary': url_for('hr.adjust_salary', staff_id=s.id),
+                 'promote': url_for('hr.promote_staff', staff_id=s.id),
+                 'transfer': url_for('hr.transfer_staff', staff_id=s.id),
+                 'confirm': url_for('hr.confirm_staff', staff_id=s.id),
+                 'add_note': url_for('hr.add_staff_note', staff_id=s.id),
                  'add_leave': url_for('hr.add_leave'), 'list': url_for('hr.staff_list')},
     })
 
@@ -341,6 +360,101 @@ def adjust_salary(staff_id):
     log_action('hr.salary_adjust',
                detail=f'{old_salary:,.2f}→{new_salary:,.2f}', target=s)
     return _ok(f'Salary updated to {new_salary:,.2f}.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/promote', methods=['POST'])
+@admin_required
+def promote_staff(staff_id):
+    """Record a promotion: update the job title (and optionally the salary, which
+    also lands in salary history) and log a lifecycle event."""
+    s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)
+    new_title = (request.form.get('designation') or '').strip()
+    if not new_title:
+        return _err('Enter the new position/title.', url_for('hr.staff_detail', staff_id=staff_id))
+    old_title = s.designation or '—'
+    eff = _d(request.form.get('effective_date')) or date.today()
+    detail = f'{old_title} → {new_title}'
+    # Optional salary change rides along with the promotion.
+    new_salary = request.form.get('new_salary', type=float)
+    if new_salary is not None and new_salary >= 0 and new_salary != (s.salary or 0):
+        db.session.add(SalaryHistory(
+            staff_id=s.id, previous_salary=s.salary or 0, new_salary=new_salary,
+            effective_date=eff, reason=f'Promotion: {new_title}', created_by=_current_user()))
+        s.salary = new_salary
+        detail += f' · salary {new_salary:,.0f}'
+    s.designation = new_title
+    hr.record_event(s, 'promotion', f'Promoted to {new_title}', detail=detail,
+                    effective_date=eff, created_by=_current_user())
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.promote', detail=detail, target=s)
+    return _ok(f'{s.full_name} promoted to {new_title}.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/transfer', methods=['POST'])
+@admin_required
+def transfer_staff(staff_id):
+    """Transfer a staff member to another branch (central admins only) and log it."""
+    s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access, is_central
+    require_branch_access(s.branch_id)
+    if not is_central():
+        return _err('Only a central administrator can transfer staff between branches.',
+                    url_for('hr.staff_detail', staff_id=staff_id))
+    from models import Branch
+    target_id = request.form.get('branch_id', type=int)
+    target = db.session.get(Branch, target_id) if target_id else None
+    if not target:
+        return _err('Choose a destination branch.', url_for('hr.staff_detail', staff_id=staff_id))
+    if target.id == s.branch_id:
+        return _err('The staff member is already at that branch.',
+                    url_for('hr.staff_detail', staff_id=staff_id), info=True)
+    old_branch = db.session.get(Branch, s.branch_id) if s.branch_id else None
+    old = old_branch.name if old_branch else 'Unassigned'
+    eff = _d(request.form.get('effective_date')) or date.today()
+    s.branch_id = target.id
+    hr.record_event(s, 'transfer', f'Transferred to {target.name}',
+                    detail=f'{old} → {target.name}', effective_date=eff, created_by=_current_user())
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.transfer', detail=f'{old} -> {target.name}', target=s)
+    return _ok(f'{s.full_name} transferred to {target.name}.',
+               url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/confirm', methods=['POST'])
+@admin_required
+def confirm_staff(staff_id):
+    """Confirm a staff member off probation (sets the confirmation date)."""
+    s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)
+    eff = _d(request.form.get('effective_date')) or date.today()
+    s.confirmation_date = eff
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.confirm', detail=eff.isoformat(), target=s)
+    return _ok(f'{s.full_name} confirmed as of {eff.strftime("%d %b %Y")}.',
+               url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/note', methods=['POST'])
+@login_required
+def add_staff_note(staff_id):
+    """Attach a dated note to the staff timeline."""
+    s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)
+    title = (request.form.get('title') or '').strip()
+    if not title:
+        return _err('Enter a note.', url_for('hr.staff_detail', staff_id=staff_id))
+    hr.record_event(s, 'note', title, detail=(request.form.get('detail') or '').strip() or None,
+                    effective_date=_d(request.form.get('effective_date')) or date.today(),
+                    created_by=_current_user())
+    db.session.commit()
+    return _ok('Note added to the timeline.', url_for('hr.staff_detail', staff_id=staff_id))
 
 
 @hr_bp.route('/staff/<int:staff_id>/delete', methods=['POST'])
