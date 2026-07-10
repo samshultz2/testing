@@ -33,6 +33,13 @@ REGISTRY = [
     ('student_change', 'Student record changes',
      "Post an in-app notification when a student is added, updated or removed.",
      'Students', True),
+    ('library_overdue', 'Library overdue reminders',
+     "Once a day, alert admins about overdue library books and draft a reminder to "
+     "the borrowers' parents for review.",
+     'Library', False),
+    ('library_due_soon', 'Library due-soon alerts',
+     "Once a day, alert admins about library books due within the next two days.",
+     'Library', False),
 ]
 
 _DEFAULTS = {k: d for k, _l, _desc, _cat, d in REGISTRY}

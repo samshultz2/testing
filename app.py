@@ -81,6 +81,16 @@ def _tick_one(app):
             run_fee_reminders(app)                  # opt-in; no-op unless enabled
             SchoolSettings.set('last_fee_reminder_date', today, 'string',
                                'Last date the daily fee-reminder job ran')
+        # Daily library reminders (overdue + due-soon), opt-in via the automation
+        # center; a DB-shared marker fires them once per day across all workers.
+        if SchoolSettings.get('last_library_reminder_date') != today:
+            try:
+                from utils.library_notify import run_library_reminders
+                run_library_reminders(app)
+            except Exception:
+                app.logger.exception('library reminder job failed')
+            SchoolSettings.set('last_library_reminder_date', today, 'string',
+                               'Last date the daily library-reminder job ran')
     finally:
         if is_pg:
             db.session.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': _SCHED_LOCK_KEY})

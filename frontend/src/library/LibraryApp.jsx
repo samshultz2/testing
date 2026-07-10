@@ -9,10 +9,11 @@ const TABS = [
   ['books', 'fa-book', 'Catalogue'],
   ['issue', 'fa-hand-holding', 'Issue'],
   ['loans', 'fa-rotate-left', 'Loans'],
+  ['borrowers', 'fa-users', 'Borrowers'],
   ['reports', 'fa-chart-line', 'Reports'],
   ['settings', 'fa-gear', 'Settings'],
 ];
-const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', reports: 'reports', settings: 'settings' };
+const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', borrowers: 'borrowers', borrower: 'borrowers', reports: 'reports', settings: 'settings' };
 const Tabs = ({ urls, page }) => { const { go } = useNav(); return <SectionTabs tabs={TABS} urls={urls} active={ACTIVE[page]} go={go} />; };
 
 function statusBadge(l) {
@@ -417,7 +418,7 @@ function Loans({ d, notify }) {
             empty={<Empty icon="fa-rotate-left" title="No loans"><p>Nothing matches this filter.</p></Empty>}
             columns={[
               { key: 'book', label: 'Book', sortable: true, sortValue: (l) => l.book, render: (l) => l.book },
-              { key: 'student', label: 'Borrower', sortable: true, sortValue: (l) => l.student, render: (l) => <>{l.student}{l.borrower_type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}{l.borrower_ref && <div className="text-muted text-sm">{l.borrower_ref}</div>}</> },
+              { key: 'student', label: 'Borrower', sortable: true, sortValue: (l) => l.student, render: (l) => <>{l.borrower_url ? <a href={l.borrower_url}>{l.student}</a> : l.student}{l.borrower_type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}{l.borrower_ref && <div className="text-muted text-sm">{l.borrower_ref}</div>}</> },
               { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
               { key: 'due', label: 'Due', render: (l) => <>{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d late)</span>}{l.renew_count > 0 && <span className="text-muted text-sm"> · renewed ×{l.renew_count}</span>}</> },
               { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
@@ -537,7 +538,93 @@ function Reports({ d }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue: Issue, loans: Loans, reports: Reports, settings: Settings };
+// ---- Borrowers directory ---------------------------------------------------
+function Borrowers({ d }) {
+  const nav = useNav();
+  const [q, setQ] = useState(d.q || '');
+  const [type, setType] = useState(d.type || '');
+  const shown = d.borrowers.filter((b) =>
+    (!type || b.type === type)
+    && (!q || (b.name + ' ' + b.ref + ' ' + (b.class || '')).toLowerCase().includes(q.toLowerCase())));
+  return (
+    <>
+      <PageHeader title="Borrowers" />
+      <Tabs urls={d.urls} page="borrowers" />
+      <div className="card mb-3"><div className="card-body">
+        <div className="filter-form">
+          <div className="form-group"><label className="form-label">Search</label>
+            <input type="text" className="form-control" value={q} placeholder="Name, ID, class" onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Type</label>
+            <select className="form-control" value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="">All</option><option value="student">Students</option><option value="staff">Staff</option></select></div>
+        </div>
+      </div></div>
+      <div className="card">
+        <div className="card-header"><h3>{shown.length} borrower(s)</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <Table rowKey={(b) => b.type + b.id} rows={shown} pageSize={30} sticky maxHeight="65vh"
+            empty={<Empty icon="fa-users" title="No borrowers yet"><p>Loans appear here once books are issued.</p></Empty>}
+            columns={[
+              { key: 'name', label: 'Borrower', sortable: true, sortValue: (b) => b.name, render: (b) => <><a href={b.url}><strong>{b.name}</strong></a>{b.type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}<div className="text-muted text-sm">{b.ref}{b.class ? ` · ${b.class}` : ''}</div></> },
+              { key: 'active', label: 'Out now', align: 'right', sortable: true, sortValue: (b) => b.active, render: (b) => b.active || '—' },
+              { key: 'overdue', label: 'Overdue', align: 'right', render: (b) => b.overdue ? <span className="badge badge-danger">{b.overdue}</span> : '—' },
+              { key: 'total', label: 'Total loans', align: 'right', sortable: true, sortValue: (b) => b.total, render: (b) => b.total },
+              { key: 'act', label: '', render: (b) => <a href={b.url} className="btn btn-secondary btn-sm" aria-label="History"><i aria-hidden="true" className="fas fa-arrow-right" /></a> },
+            ]} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---- Borrower history ------------------------------------------------------
+function Borrower({ d, notify }) {
+  const nav = useNav();
+  const [busy, setBusy] = useState(false);
+  const b = d.borrower;
+  const act = async (url, fields, confirmMsg) => {
+    if (confirmMsg && !await confirm(confirmMsg)) return;
+    setBusy(true);
+    const r = await submitJson(url, fields || {});
+    setBusy(false);
+    if (r.ok) { if (r.message) notify('success', r.message); nav.refresh(); }
+    else notify('error', r.error || 'Action failed.');
+  };
+  const s = d.stats;
+  const kpis = [['blue', 'fa-book', s.total, 'Total loans'], ['amber', 'fa-hand-holding', s.out, 'Out now'],
+    ['red', 'fa-clock', s.overdue, 'Overdue'], ['red', 'fa-triangle-exclamation', s.lost + s.damaged, 'Lost/damaged']];
+  const loanCols = (withActions) => [
+    { key: 'book', label: 'Book', render: (l) => l.book },
+    { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
+    { key: 'due', label: 'Due', render: (l) => <>{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d)</span>}</> },
+    { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
+    ...(withActions ? [{ key: 'act', label: '', render: (l) => (
+      <div className="d-flex gap-1 justify-end">
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Return" onClick={() => act(l.return_url, {}, `Return '${l.book}'?`)}><i aria-hidden="true" className="fas fa-rotate-left" /></button>
+        <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Renew" onClick={() => act(l.renew_url, {})}><i aria-hidden="true" className="fas fa-arrows-rotate" /></button>
+      </div>) }] : [{ key: 'closed', label: '', render: (l) => <span className="text-muted text-sm">{l.returned}{l.fine ? ` · ${naira(l.fine)}` : ''}{l.replacement_cost ? ` · ${naira(l.replacement_cost)}` : ''}</span> }]),
+  ];
+  return (
+    <>
+      <PageHeader title={b.name} actions={<a href={d.urls.back} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Borrowers</a>} />
+      <div className="text-muted mb-3">{b.type === 'staff' ? 'Staff' : 'Student'}{b.ref ? ` · ${b.ref}` : ''}{b.class ? ` · ${b.class}` : ''}{s.fines ? ` · fines/costs ${naira(s.fines)}` : ''}</div>
+      <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
+        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
+          <div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}
+      </div>
+      <div className="card mb-3"><div className="card-header"><h3>Current loans ({d.current.length})</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <Table rowKey={(l) => l.id} rows={d.current} empty={<Empty icon="fa-hand-holding" title="Nothing out" />} columns={loanCols(true)} />
+        </div></div>
+      <div className="card"><div className="card-header"><h3>Past loans ({d.past.length})</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <Table rowKey={(l) => l.id} rows={d.past} pageSize={20} empty={<Empty icon="fa-clock-rotate-left" title="No history" />} columns={loanCols(false)} />
+        </div></div>
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue: Issue, loans: Loans, borrowers: Borrowers, borrower: Borrower, reports: Reports, settings: Settings };
 
 export default function LibraryApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

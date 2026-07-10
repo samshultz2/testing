@@ -55,7 +55,8 @@ def _err(message, redirect_url=None, info=False):
 def _urls():
     return {k: url_for('library.' + v) for k, v in {
         'dashboard': 'dashboard', 'books': 'books', 'issue': 'issue', 'loans': 'loans',
-        'reports': 'reports', 'settings': 'settings', 'add_book': 'add_book', 'export': 'export',
+        'borrowers': 'borrowers', 'reports': 'reports', 'settings': 'settings',
+        'add_book': 'add_book', 'export': 'export',
         'book_search': 'book_search', 'student_search': 'student_search',
         'staff_search': 'staff_search', 'barcode_lookup': 'barcode_lookup',
         'remind_overdue': 'remind_overdue'}.items()}
@@ -130,6 +131,10 @@ def _loan_row(l, short=False):
         'id': l.id, 'book': l.book.title if l.book else '—',
         'student': l.borrower_name, 'borrower_type': l.borrower_type or 'student',
         'borrower_ref': l.borrower_ref,
+        'borrower_url': (url_for('library.borrower_history',
+                                 btype=(l.borrower_type or 'student'),
+                                 bid=(l.staff_id if (l.borrower_type == 'staff') else l.student_id))
+                         if (l.staff_id or l.student_id) else None),
         'borrowed': l.borrowed_date.strftime(bfmt) if l.borrowed_date else '',
         'due': l.due_date.strftime(bfmt) if l.due_date else '',
         'is_overdue': bool(l.is_overdue), 'days_overdue': l.days_overdue,
@@ -482,6 +487,98 @@ def loans():
     return _render({
         'page': 'loans', 'status': status, 'settings': _settings(),
         'loans': [_loan_row(l) for l in rows],
+    })
+
+
+# ============================================================================
+# BORROWERS — directory + per-borrower history
+# ============================================================================
+
+@library_bp.route('/borrowers')
+@login_required
+def borrowers():
+    """Directory of everyone who has ever borrowed, aggregated with their active /
+    overdue / total counts. Searchable and filterable by borrower type."""
+    from sqlalchemy import func, case, and_
+    today = date.today()
+    btype = request.args.get('type') or ''
+    q = (request.args.get('q') or '').strip().lower()
+    active = case((BookLoan.status == 'Borrowed', 1), else_=0)
+    over = case((and_(BookLoan.status == 'Borrowed', BookLoan.due_date < today), 1), else_=0)
+    agg = (_scope_loans(db.session.query(
+                BookLoan.borrower_type, BookLoan.student_id, BookLoan.staff_id,
+                func.count(BookLoan.id), func.sum(active), func.sum(over)))
+           .group_by(BookLoan.borrower_type, BookLoan.student_id, BookLoan.staff_id).all())
+
+    student_ids = {r[1] for r in agg if (r[0] or 'student') == 'student' and r[1]}
+    staff_ids = {r[2] for r in agg if r[0] == 'staff' and r[2]}
+    from utils import library_reports as LR
+    cls_map = LR._student_class_map(student_ids)
+    smap = {s.id: s for s in Student.query.filter(Student.id.in_(student_ids)).all()} if student_ids else {}
+    from models import StaffMember
+    fmap = {s.id: s for s in StaffMember.query.filter(StaffMember.id.in_(staff_ids)).all()} if staff_ids else {}
+
+    rows = []
+    for bt, sid, stid, total, act, ov in agg:
+        bt = bt or 'student'
+        if bt == 'staff':
+            if not stid or stid not in fmap:
+                continue
+            person = fmap[stid]
+            name, ref, cls, key = (person.display_name or person.full_name), (person.staff_id or ''), '', stid
+        else:
+            if not sid or sid not in smap:
+                continue
+            person = smap[sid]
+            name, ref, cls, key = person.full_name, (person.student_id or ''), cls_map.get(sid, ''), sid
+        if btype and btype != bt:
+            continue
+        if q and q not in (name + ' ' + ref).lower():
+            continue
+        rows.append({'type': bt, 'id': key, 'name': name, 'ref': ref, 'class': cls,
+                     'total': int(total or 0), 'active': int(act or 0), 'overdue': int(ov or 0),
+                     'url': url_for('library.borrower_history', btype=bt, bid=key)})
+    rows.sort(key=lambda r: (-r['active'], -r['total']))
+    return _render({
+        'page': 'borrowers', 'q': request.args.get('q', ''), 'type': btype,
+        'borrowers': rows, 'urls': {'self': url_for('library.borrowers')},
+    })
+
+
+@library_bp.route('/borrower/<btype>/<int:bid>')
+@login_required
+def borrower_history(btype, bid):
+    btype = 'staff' if btype == 'staff' else 'student'
+    if btype == 'staff':
+        from models import StaffMember
+        person = db.get_or_404(StaffMember, bid)
+        require_branch_access(person.branch_id)
+        name, ref = (person.display_name or person.full_name), (person.staff_id or '')
+        cls = ''
+        col = BookLoan.staff_id
+    else:
+        person = db.get_or_404(Student, bid)
+        require_branch_access(person.branch_id)
+        name, ref = person.full_name, (person.student_id or '')
+        from utils import library_reports as LR
+        cls = LR._student_class_map({bid}).get(bid, '')
+        col = BookLoan.student_id
+    loans = (_scope_loans(BookLoan.query).filter(BookLoan.borrower_type == btype, col == bid)
+             .order_by(BookLoan.borrowed_date.desc(), BookLoan.id.desc()).all())
+    current = [_loan_row(l) for l in loans if l.status == 'Borrowed']
+    past = [_loan_row(l) for l in loans if l.status != 'Borrowed']
+    stats = {
+        'total': len(loans),
+        'out': sum(1 for l in loans if l.status == 'Borrowed'),
+        'overdue': sum(1 for l in loans if l.is_overdue),
+        'lost': sum(1 for l in loans if l.status == 'Lost'),
+        'damaged': sum(1 for l in loans if l.status == 'Damaged'),
+        'fines': round(sum((l.fine or 0) + (l.replacement_cost or 0) for l in loans), 2),
+    }
+    return _render({
+        'page': 'borrower', 'borrower': {'type': btype, 'name': name, 'ref': ref, 'class': cls},
+        'stats': stats, 'current': current, 'past': past,
+        'urls': {'back': url_for('library.borrowers')},
     })
 
 
