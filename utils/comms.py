@@ -433,6 +433,11 @@ def _resolve_staff(spec):
     from models import StaffMember
     from utils.branch_scope import scope_query
     q = scope_query(StaffMember.query.filter(StaffMember.is_active.is_(True)), StaffMember)
+    # An explicit id list (e.g. a filtered HR directory selection) takes priority
+    # over the coarse staff_scope filters.
+    ids = [int(x) for x in (spec.get('staff_ids') or []) if str(x).strip()]
+    if ids:
+        q = q.filter(StaffMember.id.in_(ids))
     scope = (spec.get('staff_scope') or 'all').lower()
     if scope == 'teaching':
         q = q.filter(StaffMember.staff_type == 'Teaching')

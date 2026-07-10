@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, SectionTabs, Empty, Modal } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['staff', 'fa-users', 'Staff'],
   ['attendance', 'fa-user-clock', 'Attendance'], ['leave', 'fa-plane-departure', 'Leave'],
   ['payroll', 'fa-money-check-dollar', 'Payroll'], ['departments', 'fa-sitemap', 'Departments'],
-  ['settings', 'fa-gear', 'Settings'],
+  ['reports', 'fa-chart-line', 'Reports'], ['settings', 'fa-gear', 'Settings'],
 ];
 const TAB_FOR = { staff_form: 'staff', staff_detail: 'staff', payroll_detail: 'payroll' };
 
@@ -54,17 +54,35 @@ function Dashboard({ d }) {
     return () => charts.forEach((c) => c.destroy());
   }, [st]);
 
-  const kpis = [['blue', 'fa-users', st.total, 'Total staff'], ['green', 'fa-chalkboard-user', st.teaching, 'Teaching'],
-    ['purple', 'fa-user-gear', st.non_teaching, 'Non-teaching'], ['amber', 'fa-money-check-dollar', nairaShort(st.monthly_payroll), 'Monthly payroll', naira(st.monthly_payroll)]];
+  const kpis = [['blue', 'fa-users', st.total, 'Total staff', null, d.nav.staff],
+    ['green', 'fa-chalkboard-user', st.teaching, 'Teaching', null, d.nav.staff + '?staff_type=Teaching'],
+    ['purple', 'fa-user-gear', st.non_teaching, 'Non-teaching', null, d.nav.staff + '?staff_type=Non-teaching'],
+    ['green', 'fa-user-check', st.active != null ? st.active : st.total, 'Active', null, null],
+    ['amber', 'fa-plane-departure', st.on_leave, 'On leave', null, d.nav.staff + '?status=On Leave'],
+    ['blue', 'fa-user-plus', st.new_hires || 0, 'New this month', null, null],
+    ['red', 'fa-file-contract', st.contract_expiring || 0, 'Contracts expiring', null, d.urls.reports + '?type=contracts'],
+    ['amber', 'fa-money-check-dollar', nairaShort(st.monthly_payroll), 'Monthly payroll', naira(st.monthly_payroll), null]];
+  const quick = [
+    [d.urls.add_staff, 'fa-user-plus', 'Add staff', 'btn-primary'],
+    [d.urls.attendance, 'fa-user-clock', 'Attendance', 'btn-secondary'],
+    [d.urls.leave_pending, 'fa-plane-departure', 'Approve leave', 'btn-secondary'],
+    [d.urls.reports, 'fa-chart-line', 'Reports', 'btn-secondary'],
+  ];
   return (
     <>
       <div className="page-header"><h1>Staff &amp; HR</h1>
         <div className="page-header-actions"><a href={d.urls.add_staff} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a></div>
       </div>
       <Tabs d={d} />
-      <div className="kpi-row">{kpis.map(([c, ic, v, l, title]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
-          <div><div className="v" title={title || ''}>{v}</div><div className="l">{l}</div></div></div>))}
+      <div className="d-flex gap-2 flex-wrap mb-3">
+        {quick.map(([href, ic, label, cls]) => <a key={label} href={href} className={'btn btn-sm ' + cls}><i aria-hidden="true" className={'fas ' + ic} /> {label}</a>)}
+      </div>
+      <div className="kpi-row">{kpis.map(([c, ic, v, l, title, href]) => {
+        const inner = <><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
+          <div><div className="v" title={title || ''}>{v}</div><div className="l">{l}</div></div></>;
+        return href ? <a className="kpi" key={l} href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
+          : <div className="kpi" key={l}>{inner}</div>;
+      })}
       </div>
       <div className="hr-grid c2">
         <div className="widget"><div className="wh"><h3><i aria-hidden="true" className="fas fa-sitemap" /> Staff by department</h3></div>
@@ -98,25 +116,69 @@ function Dashboard({ d }) {
           </div>
         </div>
       </div>
+      <div className="hr-grid c2">
+        <div className="widget">
+          <div className="wh"><h3><i aria-hidden="true" className="fas fa-cake-candles" /> Upcoming birthdays</h3></div>
+          <div className="wb" style={{ padding: 0 }}>
+            {(d.birthdays || []).length ? (
+              <table className="data-table table-stack no-mobile-scroll"><tbody>
+                {d.birthdays.map((b) => (
+                  <tr key={b.id}><td data-label="Name"><a href={b.url}>{b.name}</a></td>
+                    <td data-label="Birthday">{b.date}</td>
+                    <td data-label="In" className="text-right"><span className="badge badge-secondary">{b.in_days === 0 ? 'Today' : `in ${b.in_days}d`}</span></td></tr>))}
+              </tbody></table>
+            ) : <Empty icon="fa-cake-candles" title="" style={{ padding: '1.4rem' }}><p>None in the next 30 days</p></Empty>}
+          </div>
+        </div>
+        <div className="widget">
+          <div className="wh"><h3><i aria-hidden="true" className="fas fa-file-contract" /> Contracts expiring</h3><a href={d.urls.reports + '?type=contracts'} className="text-sm">All</a></div>
+          <div className="wb" style={{ padding: 0 }}>
+            {(d.contracts || []).length ? (
+              <table className="data-table table-stack no-mobile-scroll"><tbody>
+                {d.contracts.map((c) => (
+                  <tr key={c.id}><td data-label="Name"><a href={c.url}>{c.name}</a></td>
+                    <td data-label="Ends">{c.ends}</td>
+                    <td data-label="Left" className="text-right"><span className={'badge ' + (c.days_left <= 14 ? 'badge-danger' : 'badge-warning')}>{c.days_left}d</span></td></tr>))}
+              </tbody></table>
+            ) : <Empty icon="fa-file-contract" title="" style={{ padding: '1.4rem' }}><p>None expiring soon</p></Empty>}
+          </div>
+        </div>
+      </div>
     </>
   );
 }
 
 // ---- Staff list ------------------------------------------------------------
-function Staff({ d }) {
+function Staff({ d, notify }) {
   const nav = useNav();
   const a = d.applied;
   const [q, setQ] = useState(a.q);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef();
   const go = (extra) => navParams(nav.go, d.self_url, { department_id: a.department_id, staff_type: a.staff_type, status: a.status, q, ...extra });
+  const onImport = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    const r = await postFile(d.urls.import, file);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Import failed.');
+  };
   return (
     <>
       <div className="page-header"><h1>Staff Directory</h1>
         <div className="page-header-actions">
+          <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
+          {d.is_admin !== false && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
+          <button type="button" className="btn btn-secondary" onClick={() => setNotifyOpen(true)}><i aria-hidden="true" className="fas fa-bullhorn" /> Notify</button>
           <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
           <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>
         </div>
       </div>
       <Tabs d={d} />
+      {notifyOpen && <NotifyStaffModal d={d} onClose={() => setNotifyOpen(false)} notify={notify} />}
       <div className="card mb-3"><div className="card-body">
         <form className="filter-form" onSubmit={(e) => { e.preventDefault(); go(); }}>
           <div className="form-group"><label className="form-label">Department</label>
@@ -1141,9 +1203,112 @@ function Settings({ d, notify }) {
   );
 }
 
+// ---- Notify staff (HR → Communication) -------------------------------------
+function NotifyStaffModal({ d, onClose, notify }) {
+  const a = d.applied || {};
+  const [f, setF] = useState({ channel: 'SMS', title: 'Staff notice', body: '' });
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.body.trim()) { notify('error', 'Enter a message.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.urls.notify, { ...f, department_id: a.department_id,
+      staff_type: a.staff_type, status: a.status });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); onClose(); if (r.redirect) window.location.href = r.redirect; }
+    else notify('error', r.error || 'Could not draft the message.');
+  };
+  const filterNote = [a.department_id && 'department', a.staff_type, a.status].filter(Boolean).join(' · ');
+  return (
+    <Modal title="Notify staff" icon="fa-bullhorn" onClose={onClose}
+           footer={<>
+             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+             <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i aria-hidden="true" className="fas fa-paper-plane" /> Draft message</button>
+           </>}>
+      <form onSubmit={submit}>
+        <p className="text-muted text-sm">Drafts a Communication campaign to the staff matching your current filter{filterNote ? ` (${filterNote})` : ' (all staff)'}. Nothing sends until you review it in Communication.</p>
+        <div className="form-row">
+          <div className="form-group"><label className="form-label">Channel</label>
+            <select className="form-control" value={f.channel} onChange={(e) => set('channel', e.target.value)}><option>SMS</option><option>Email</option></select></div>
+          <div className="form-group" style={{ flex: 2 }}><label className="form-label">Title</label>
+            <input type="text" className="form-control" value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
+        </div>
+        <div className="form-group"><label className="form-label">Message</label>
+          <textarea className="form-control" rows="4" placeholder="You can use {first_name}, {surname}…" value={f.body} onChange={(e) => set('body', e.target.value)} /></div>
+      </form>
+    </Modal>
+  );
+}
+
+// ---- Reports ---------------------------------------------------------------
+function Reports({ d }) {
+  const nav = useNav();
+  const sel = d.sel || {};
+  const rep = d.report || { columns: [], rows: [], summary: [], title: '' };
+  const [flt, setFlt] = useState({ department_id: sel.department_id || '', staff_type: sel.staff_type || '', status: sel.status || '', from: sel.from || '', to: sel.to || '' });
+  const params = (extra) => ({ type: sel.type, ...flt, ...extra });
+  const go = (extra) => navParams(nav.go, d.urls.self, params(extra));
+  const qs = () => Object.entries(params({})).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  const setF = (k, v) => setFlt((x) => ({ ...x, [k]: v }));
+  const cell = (col, row) => {
+    const v = row[col.key];
+    if (col.money) return typeof v === 'number' ? naira(v) : v;
+    return (v === '' || v == null) ? '—' : v;
+  };
+  return (
+    <>
+      <div className="page-header"><h1>HR Reports</h1>
+        <div className="page-header-actions">
+          <a href={`${d.urls.export}?format=csv&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
+          <a href={`${d.urls.export}?format=xlsx&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+        </div>
+      </div>
+      <Tabs d={d} />
+      <div className="card mb-3"><div className="card-body">
+        <div className="filter-form">
+          <div className="form-group"><label className="form-label">Report</label>
+            <select className="form-control" value={sel.type} onChange={(e) => go({ type: e.target.value })}>
+              {d.report_types.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Department</label>
+            <select className="form-control" value={flt.department_id} onChange={(e) => setF('department_id', e.target.value)}>
+              <option value="">All</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Type</label>
+            <select className="form-control" value={flt.staff_type} onChange={(e) => setF('staff_type', e.target.value)}>
+              <option value="">All</option>{d.staff_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Status</label>
+            <select className="form-control" value={flt.status} onChange={(e) => setF('status', e.target.value)}>
+              <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">From</label><input type="date" className="form-control" value={flt.from} onChange={(e) => setF('from', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">To</label><input type="date" className="form-control" value={flt.to} onChange={(e) => setF('to', e.target.value)} /></div>
+          <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="button" className="btn btn-primary" onClick={() => go({})}><i aria-hidden="true" className="fas fa-filter" /> Apply</button></div>
+        </div>
+      </div></div>
+
+      {rep.summary && rep.summary.length > 0 && (
+        <div className="kpi-row" style={{ gridTemplateColumns: `repeat(${Math.min(rep.summary.length, 4)}, 1fr)` }}>
+          {rep.summary.map((s, i) => (
+            <div className="kpi" key={i}><div className="ic blue"><i aria-hidden="true" className="fas fa-chart-simple" /></div>
+              <div><div className="v" style={{ fontSize: '1.15rem' }}>{s.value}</div><div className="l">{s.label}</div></div></div>))}
+        </div>)}
+
+      <div className="card"><div className="card-header"><h3>{rep.title} · {rep.rows.length} row(s)</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {rep.rows.length ? (
+            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+              <thead><tr>{rep.columns.map((c) => <th key={c.key} className={c.align === 'right' ? 'text-right' : ''}>{c.label}</th>)}</tr></thead>
+              <tbody>{rep.rows.map((r, i) => (
+                <tr key={i}>{rep.columns.map((c) => <td key={c.key} data-label={c.label} className={c.align === 'right' ? 'text-right' : ''}>{cell(c, r)}</td>)}</tr>))}</tbody>
+            </table></div>
+          ) : <Empty icon="fa-chart-line" title="No data"><p>Nothing matches these filters.</p></Empty>}
+        </div></div>
+    </>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, staff: Staff, staff_form: StaffForm, staff_detail: StaffDetail,
   departments: Departments, leave: Leave, payroll: Payroll, payroll_detail: PayrollDetail,
-  attendance: Attendance, settings: Settings };
+  attendance: Attendance, reports: Reports, settings: Settings };
 
 export default function HrApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

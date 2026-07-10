@@ -76,7 +76,7 @@ def _nav_urls():
     return {'dashboard': url_for('hr.dashboard'), 'staff': url_for('hr.staff_list'),
             'attendance': url_for('hr.attendance'), 'leave': url_for('hr.leave_list'),
             'payroll': url_for('hr.payroll_list'), 'departments': url_for('hr.departments'),
-            'settings': url_for('hr.settings')}
+            'reports': url_for('hr.reports'), 'settings': url_for('hr.settings')}
 
 
 # ============================================================================
@@ -93,15 +93,22 @@ def dashboard():
     pending_leaves = scope_by_staff(LeaveRecord.query.filter_by(status='Pending'),
                                     LeaveRecord).order_by(
         LeaveRecord.created_at.desc()).limit(6).all()
+    bid = viewing_branch_id()
     return _render({
         'page': 'dashboard', 'nav': _nav_urls(), 'stats': stats,
         'recent': [{'id': s.id, 'full_name': s.full_name, 'designation': s.designation or '—',
                     'department': s.department.name if s.department else '—',
                     'url': url_for('hr.staff_detail', staff_id=s.id)} for s in recent],
-        'pending_leaves': [{'staff_name': lv.staff.full_name, 'leave_type': lv.leave_type,
+        'pending_leaves': [{'id': lv.id, 'staff_name': lv.staff.full_name, 'leave_type': lv.leave_type,
                             'dates': f"{lv.start_date.strftime('%d %b')}–{lv.end_date.strftime('%d %b')}",
-                            'days': lv.days} for lv in pending_leaves],
+                            'days': lv.days,
+                            'staff_url': url_for('hr.staff_detail', staff_id=lv.staff_id)} for lv in pending_leaves],
+        'birthdays': [{**b, 'url': url_for('hr.staff_detail', staff_id=b['id'])}
+                      for b in hr.upcoming_birthdays(bid)],
+        'contracts': [{**c, 'url': url_for('hr.staff_detail', staff_id=c['id'])}
+                      for c in hr.expiring_contracts(bid)],
         'urls': {'add_staff': url_for('hr.add_staff'),
+                 'attendance': url_for('hr.attendance'), 'reports': url_for('hr.reports'),
                  'leave_pending': url_for('hr.leave_list', status='Pending')},
     })
 
@@ -147,7 +154,8 @@ def staff_list():
                     'status': status or '', 'q': q},
         'statuses': hr.STATUSES, 'staff_types': hr.STAFF_TYPES,
         'self_url': url_for('hr.staff_list'),
-        'urls': {'add': url_for('hr.add_staff'), 'export': url_for('hr.export_staff')},
+        'urls': {'add': url_for('hr.add_staff'), 'export': url_for('hr.export_staff'),
+                 'import': url_for('hr.import_staff'), 'notify': url_for('hr.notify_staff')},
     })
 
 
@@ -1061,6 +1069,194 @@ def save_attendance():
     db.session.commit()
     return _ok(f'Attendance saved for {saved} staff on {day.strftime("%d %b %Y")}.',
                url_for('hr.attendance', date=day.isoformat()))
+
+
+# ============================================================================
+# REPORTS
+# ============================================================================
+
+def _report_filters():
+    return {
+        'department_id': request.args.get('department_id', type=int),
+        'staff_type': request.args.get('staff_type') or None,
+        'status': request.args.get('status') or None,
+        'from': _d(request.args.get('from')),
+        'to': _d(request.args.get('to')),
+    }
+
+
+@hr_bp.route('/reports')
+@login_required
+def reports():
+    from utils import hr_reports as R
+    rtype = request.args.get('type') or 'directory'
+    data = R.build(rtype, _report_filters())
+    depts = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    return _render({
+        'page': 'reports', 'nav': _nav_urls(), 'report': data,
+        'report_types': [{'key': k, 'label': v} for k, v in R.REPORTS],
+        'departments': [{'id': d.id, 'name': d.name} for d in depts],
+        'statuses': hr.STATUSES, 'staff_types': hr.STAFF_TYPES,
+        'sel': {'type': data['type'], 'department_id': request.args.get('department_id', ''),
+                'staff_type': request.args.get('staff_type', ''), 'status': request.args.get('status', ''),
+                'from': request.args.get('from', ''), 'to': request.args.get('to', '')},
+        'urls': {'self': url_for('hr.reports'), 'export': url_for('hr.reports_export')},
+    })
+
+
+@hr_bp.route('/reports/export')
+@login_required
+def reports_export():
+    import csv, io
+    from utils import hr_reports as R
+    rtype = request.args.get('type') or 'directory'
+    data = R.build(rtype, _report_filters())
+    headers = [c['label'] for c in data['columns']]
+    keys = [c['key'] for c in data['columns']]
+    fname = f'hr_{data["type"]}'
+    from utils.audit import log_action
+    log_action('hr.report_export', detail=data['type'])
+    if request.args.get('format') == 'xlsx':
+        from openpyxl import Workbook
+        from utils.web_exports import xlsx_response
+        wb = Workbook(); ws = wb.active; ws.title = data['title'][:31]
+        ws.append(headers)
+        for r in data['rows']:
+            ws.append([r.get(k, '') for k in keys])
+        ws.append([])
+        for sm in data['summary']:
+            ws.append([sm['label'], sm['value']])
+        return xlsx_response(wb, f'{fname}.xlsx')
+    out = io.StringIO(); w = csv.writer(out)
+    from utils.web_exports import formula_guard as _fg
+    w.writerow(headers)
+    for r in data['rows']:
+        w.writerow([_fg(r.get(k, '')) for k in keys])
+    w.writerow([])
+    for sm in data['summary']:
+        w.writerow([sm['label'], sm['value']])
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
+
+
+# ============================================================================
+# BULK IMPORT + BULK NOTIFY
+# ============================================================================
+
+_IMPORT_ALIASES = {
+    'first name': 'first_name', 'firstname': 'first_name', 'first_name': 'first_name',
+    'surname': 'surname', 'last name': 'surname', 'lastname': 'surname',
+    'middle name': 'middle_name', 'middle_name': 'middle_name',
+    'gender': 'gender', 'phone': 'phone', 'email': 'email',
+    'department': 'department', 'designation': 'designation', 'title': 'designation',
+    'staff type': 'staff_type', 'staff_type': 'staff_type', 'type': 'staff_type',
+    'employment': 'employment_type', 'employment type': 'employment_type',
+    'employment_type': 'employment_type',
+    'qualification': 'qualification', 'salary': 'salary',
+    'date employed': 'date_employed', 'date_employed': 'date_employed', 'employed': 'date_employed',
+}
+
+
+@hr_bp.route('/staff/import', methods=['POST'])
+@admin_required
+def import_staff():
+    """Bulk-create staff from a CSV. Header row maps common column names; first
+    name + surname required. Departments are matched (case-insensitive) or created."""
+    import csv, io
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return _err('Choose a CSV file to import.', url_for('hr.staff_list'))
+    try:
+        text = f.read().decode('utf-8-sig', errors='replace')
+    except Exception:
+        return _err('Could not read that file.', url_for('hr.staff_list'))
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        return _err('The CSV has no header row.', url_for('hr.staff_list'))
+    colmap = {}
+    for col in reader.fieldnames:
+        key = _IMPORT_ALIASES.get((col or '').strip().lower())
+        if key:
+            colmap[col] = key
+    have = set(colmap.values())
+    if 'first_name' not in have or 'surname' not in have:
+        return _err('The CSV needs at least "First name" and "Surname" columns.',
+                    url_for('hr.staff_list'))
+    from utils.branch_scope import branch_for_new
+    branch_id = branch_for_new()
+    # cache departments for case-insensitive match / create
+    dept_by_name = {d.name.lower(): d for d in Department.query.all()}
+    created = skipped = 0
+    for row in reader:
+        vals = {key: (row.get(col) or '').strip() for col, key in colmap.items()}
+        if not (vals.get('first_name') and vals.get('surname')):
+            skipped += 1
+            continue
+        s = StaffMember(staff_id=StaffMember.generate_staff_id(), branch_id=branch_id,
+                        first_name=vals['first_name'][:60], surname=vals['surname'][:60],
+                        middle_name=vals.get('middle_name') or None,
+                        gender=vals.get('gender') or None, phone=vals.get('phone') or None,
+                        email=vals.get('email') or None, designation=vals.get('designation') or None,
+                        staff_type=vals.get('staff_type') or 'Teaching',
+                        employment_type=vals.get('employment_type') or 'Full-time',
+                        qualification=vals.get('qualification') or None,
+                        date_employed=_d(vals.get('date_employed')))
+        try:
+            s.salary = float(vals.get('salary') or 0)
+        except (ValueError, TypeError):
+            s.salary = 0
+        dname = (vals.get('department') or '').strip()
+        if dname:
+            dep = dept_by_name.get(dname.lower())
+            if not dep:
+                dep = Department(name=dname)
+                db.session.add(dep)
+                db.session.flush()
+                dept_by_name[dname.lower()] = dep
+            s.department_id = dep.id
+        db.session.add(s)
+        # flush so generate_staff_id increments correctly across rows
+        db.session.flush()
+        created += 1
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.staff_import', detail=f'{created} staff')
+    return _ok(f'Imported {created} staff.' + (f' {skipped} row(s) skipped.' if skipped else ''),
+               url_for('hr.staff_list'))
+
+
+@hr_bp.route('/staff/notify', methods=['POST'])
+@login_required
+def notify_staff():
+    """Draft a Communication campaign (SMS or email) to the staff matching the
+    current directory filters. Never auto-sends — a human reviews the draft."""
+    from utils.branch_scope import scope_query
+    channel = 'Email' if request.form.get('channel') == 'Email' else 'SMS'
+    query = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember)
+    if request.form.get('department_id', type=int):
+        query = query.filter_by(department_id=request.form.get('department_id', type=int))
+    if request.form.get('staff_type'):
+        query = query.filter_by(staff_type=request.form.get('staff_type'))
+    if request.form.get('status'):
+        query = query.filter_by(status=request.form.get('status'))
+    staff_ids = [s.id for s in query.all()]
+    if not staff_ids:
+        return _err('No staff match the current filter.', url_for('hr.staff_list'), info=True)
+    body = (request.form.get('body') or '').strip()
+    if not body:
+        return _err('Enter a message to send.', url_for('hr.staff_list'))
+    from utils import comms
+    from utils.helpers import get_active_term
+    msg = comms.build_campaign(
+        body, channel=channel, term=get_active_term(),
+        title=(request.form.get('title') or 'Staff notice').strip(),
+        spec={'to': 'staff', 'audience': 'staff', 'staff_ids': staff_ids},
+        created_by=_current_user())
+    if not msg:
+        return _err(f'None of those staff have {"an email" if channel == "Email" else "a phone number"} on file.',
+                    url_for('hr.staff_list'), info=True)
+    return _ok(f'Drafted a {channel} to {msg.recipient_count} staff — review and send.',
+               url_for('comms.message_detail', message_id=msg.id))
 
 
 # ============================================================================

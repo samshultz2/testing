@@ -156,12 +156,88 @@ def dashboard_stats(branch_id=None):
     type_chart = [{'name': 'Teaching', 'count': teaching},
                   {'name': 'Non-teaching', 'count': non_teaching}]
 
+    active_status = active.filter_by(status='Active').count()
+    import datetime as _dt
+    today = _dt.date.today()
+    month_start = today.replace(day=1)
+    new_hires = active.filter(StaffMember.date_employed >= month_start).count()
+
+    # Contracts expiring within 60 days (and not already past).
+    horizon = today + _dt.timedelta(days=60)
+    contract_expiring = active.filter(
+        StaffMember.contract_end.isnot(None),
+        StaffMember.contract_end <= horizon,
+        StaffMember.contract_end >= today).count()
+
+    # Qualification breakdown (top few).
+    qual_q = (db.session.query(StaffMember.qualification, func.count(StaffMember.id))
+              .filter(StaffMember.is_active == True))
+    if branch_id is not None:
+        qual_q = qual_q.filter(StaffMember.branch_id == branch_id)
+    qual_rows = qual_q.group_by(StaffMember.qualification).all()
+    qual_chart = sorted([{'name': (q or 'Not recorded'), 'count': c} for q, c in qual_rows if c],
+                        key=lambda x: -x['count'])[:8]
+
+    # Branch distribution (only meaningful for a central view).
+    branch_chart = []
+    if branch_id is None:
+        from models import Branch
+        bmap = {b.id: b.name for b in Branch.query.all()}
+        brows = (db.session.query(StaffMember.branch_id, func.count(StaffMember.id))
+                 .filter(StaffMember.is_active == True).group_by(StaffMember.branch_id).all())
+        branch_chart = [{'name': bmap.get(bid, 'Unassigned'), 'count': c} for bid, c in brows if c]
+
     return {
         'total': total, 'teaching': teaching, 'non_teaching': non_teaching,
-        'on_leave': on_leave, 'male': male, 'female': female,
+        'active': active_status, 'on_leave': on_leave, 'male': male, 'female': female,
+        'new_hires': new_hires, 'contract_expiring': contract_expiring,
         'monthly_payroll': monthly_payroll, 'pending_leave': pending_leave,
         'dept_chart': dept_chart, 'type_chart': type_chart,
+        'qual_chart': qual_chart, 'branch_chart': branch_chart,
     }
+
+
+def upcoming_birthdays(branch_id=None, days=30, limit=8):
+    """Staff with a birthday within the next ``days`` (branch-scoped)."""
+    import datetime as _dt
+    q = StaffMember.query.filter(StaffMember.is_active == True,
+                                 StaffMember.date_of_birth.isnot(None))
+    if branch_id is not None:
+        q = q.filter(StaffMember.branch_id == branch_id)
+    today = _dt.date.today()
+    out = []
+    for s in q.all():
+        dob = s.date_of_birth
+        try:
+            nxt = dob.replace(year=today.year)
+        except ValueError:
+            nxt = dob.replace(year=today.year, day=28)
+        if nxt < today:
+            try:
+                nxt = dob.replace(year=today.year + 1)
+            except ValueError:
+                nxt = dob.replace(year=today.year + 1, day=28)
+        delta = (nxt - today).days
+        if 0 <= delta <= days:
+            out.append((delta, nxt, s))
+    out.sort(key=lambda x: x[0])
+    return [{'id': s.id, 'name': s.full_name, 'date': nxt.strftime('%d %b'),
+             'in_days': delta, 'turning': nxt.year - s.date_of_birth.year} for delta, nxt, s in out[:limit]]
+
+
+def expiring_contracts(branch_id=None, days=60, limit=8):
+    import datetime as _dt
+    today = _dt.date.today()
+    q = StaffMember.query.filter(
+        StaffMember.is_active == True, StaffMember.contract_end.isnot(None),
+        StaffMember.contract_end >= today,
+        StaffMember.contract_end <= today + _dt.timedelta(days=days))
+    if branch_id is not None:
+        q = q.filter(StaffMember.branch_id == branch_id)
+    rows = q.order_by(StaffMember.contract_end).limit(limit).all()
+    return [{'id': s.id, 'name': s.full_name,
+             'ends': s.contract_end.strftime('%d %b %Y'),
+             'days_left': (s.contract_end - today).days} for s in rows]
 
 
 def active_deduction_types():
