@@ -3,6 +3,7 @@ import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
+import BulkMessageModal from './BulkMessageModal';
 import { confirm, Empty, Pagination } from '../components/ui';
 import { recentSearches, rememberSearch, clearSearches, recentViewed,
          savedFilters, saveFilter, deleteFilter } from '../lib/studprefs';
@@ -71,6 +72,9 @@ export default function App({ initial }) {
   const [bulkStream, setBulkStream] = useState('');
   const [bulkGender, setBulkGender] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
+  const [bulkHouse, setBulkHouse] = useState('');
+  const [bulkBoarding, setBulkBoarding] = useState('');
+  const [showMessage, setShowMessage] = useState(false);
   const [menuFor, setMenuFor] = useState(null);   // which student card's ⋯ menu is open
   const [saved, setSaved] = useState(() => savedFilters());
   const [recentQ, setRecentQ] = useState(() => recentSearches());
@@ -338,6 +342,19 @@ export default function App({ initial }) {
             </select>
             <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStream} title="Also fills WAEC subjects from the stream where not already set"
                     onClick={() => needSel() && runAction(d.bulk_stream_url, { stream: bulkStream, student_ids: selectedIds }, 'Stream updated.')}>Apply</button>
+            <input className="form-control" style={{ width: 130 }} value={bulkHouse} placeholder="Set house…"
+                   onChange={(e) => setBulkHouse(e.target.value)} aria-label="Bulk house" maxLength={40} />
+            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkHouse.trim()}
+                    onClick={() => needSel() && runAction(d.bulk_house_url, { house: bulkHouse.trim(), student_ids: selectedIds }, 'House updated.')}>Apply</button>
+            <select className="form-control" style={{ width: 'auto' }} value={bulkBoarding} onChange={(e) => setBulkBoarding(e.target.value)} aria-label="Bulk boarding status">
+              <option value="">Set boarding…</option>
+              <option value="Day">Day</option>
+              <option value="Boarding">Boarding</option>
+            </select>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkBoarding}
+                    onClick={() => needSel() && runAction(d.bulk_boarding_url, { boarding: bulkBoarding, student_ids: selectedIds }, 'Boarding status updated.')}>Apply</button>
+            {d.bulk_message_url && <button type="button" className="btn btn-info btn-sm" title="Draft a message to the selected students' parents"
+                    onClick={() => needSel() && setShowMessage(true)}><i aria-hidden="true" className="fas fa-comment-dots" /> Message parents</button>}
             {canSss3 && <>
               <select className="form-control" style={{ width: 'auto' }} value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} aria-label="Bulk WAEC subject">
                 <option value="">Add WAEC subject…</option>
@@ -408,6 +425,18 @@ export default function App({ initial }) {
         <ImportModal importUrl={d.import_url} enrolment={d.enrolment}
                      onClose={() => setShowImport(false)}
                      onDone={(text) => { setShowImport(false); setMsg({ tone: 'success', text }); refresh(); }} />
+      )}
+
+      {showMessage && (
+        <BulkMessageModal count={selectedIds.length} selectedIds={selectedIds} messageUrl={d.bulk_message_url}
+                          onClose={() => setShowMessage(false)}
+                          onDone={(j) => {
+                            setShowMessage(false);
+                            setMsg({ tone: 'success', text: (
+                              <span>{j.info || 'Message drafted.'}{' '}
+                                {j.review_url && <a href={j.review_url}>Review &amp; send →</a>}</span>
+                            ) });
+                          }} />
       )}
     </div>
   );

@@ -952,6 +952,9 @@ def _students_payload():
         'bulk_stream_url': url_for('main.bulk_set_stream'),
         'bulk_gender_url': url_for('main.bulk_set_gender'),
         'bulk_subject_url': url_for('main.bulk_add_subject'),
+        'bulk_house_url': url_for('main.bulk_set_house'),
+        'bulk_boarding_url': url_for('main.bulk_set_boarding'),
+        'bulk_message_url': url_for('main.bulk_message_students'),
     }
 
 

@@ -451,6 +451,99 @@ def bulk_set_gender():
     return jsonify({'updated': updated, 'gender': gender})
 
 
+@main_bp.route('/students/bulk-house', methods=['POST'])
+@login_required
+def bulk_set_house():
+    """Assign a pastoral house to several students at once (scoped to the
+    caller's students). Blank clears the house."""
+    house = (request.form.get('house') or '').strip()
+    house = strip_tags(house)[:40] or None
+    student_ids = request.form.getlist('student_ids')
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+    ids = _manageable_student_ids(ids)
+    if not ids:
+        return jsonify({'error': 'No students you can edit were selected'}), 403
+    updated = Student.query.filter(Student.id.in_(ids)).update(
+        {Student.house: house}, synchronize_session=False)
+    db.session.commit()
+    label = house if house else 'cleared'
+    log_action('bulk_set_house', f'{updated} students -> {label}')
+    flash(f'House set to {label} for {updated} student(s).', 'success')
+    return jsonify({'updated': updated, 'house': house})
+
+
+@main_bp.route('/students/bulk-boarding', methods=['POST'])
+@login_required
+def bulk_set_boarding():
+    """Set boarding status (Day/Boarding) for several students at once."""
+    boarding = request.form.get('boarding') or None
+    if boarding not in ('Day', 'Boarding'):
+        return jsonify({'error': 'Invalid boarding status'}), 400
+    student_ids = request.form.getlist('student_ids')
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+    ids = _manageable_student_ids(ids)
+    if not ids:
+        return jsonify({'error': 'No students you can edit were selected'}), 403
+    updated = Student.query.filter(Student.id.in_(ids)).update(
+        {Student.boarding_status: boarding}, synchronize_session=False)
+    db.session.commit()
+    log_action('bulk_set_boarding', f'{updated} students -> {boarding}')
+    flash(f'Boarding status set to {boarding} for {updated} student(s).', 'success')
+    return jsonify({'updated': updated, 'boarding': boarding})
+
+
+@main_bp.route('/students/bulk-message', methods=['POST'])
+@login_required
+def bulk_message_students():
+    """Draft a Communication campaign to the selected students' parents. Reuses
+    the shared campaign builder (never auto-sends on a gateway channel) and hands
+    the user to Communication to review + send. Scoped to the caller's students."""
+    body = (request.form.get('body') or '').strip()
+    channel = request.form.get('channel') or 'SMS'
+    title = strip_tags(request.form.get('title') or '')[:120] or None
+    student_ids = request.form.getlist('student_ids')
+    if not body:
+        return jsonify({'error': 'Message body is required'}), 400
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+    ids = _manageable_student_ids(ids)
+    if not ids:
+        return jsonify({'error': 'No students you can message were selected'}), 403
+
+    from utils import comms
+    from utils.access_control import get_current_user
+    who = getattr(get_current_user(), 'full_name', None) or 'Staff'
+    msg = comms.build_campaign(
+        body, channel=channel, term=get_active_term(),
+        title=title or 'Message to parents',
+        spec={'to': 'parents', 'audience': 'students', 'student_ids': ids},
+        created_by=who)
+    if not msg:
+        return jsonify({'error': 'None of those students have a reachable parent '
+                        f'contact for {channel}.'}), 400
+    log_action('bulk_message_students',
+               f'draft to parents of {len(ids)} students -> message {msg.id}')
+    review_url = url_for('comms.message_detail', message_id=msg.id)
+    return jsonify({'ok': True, 'message_id': msg.id, 'recipients': msg.recipient_count,
+                    'students': len(ids), 'review_url': review_url,
+                    'info': f'Drafted a {channel} message for {msg.recipient_count} '
+                            'parent(s) — review and send in Communication.'})
+
+
 @main_bp.route('/students/bulk-add-subject', methods=['POST'])
 @admin_required
 def bulk_add_subject():
