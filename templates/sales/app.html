@@ -8,5 +8,5 @@
 {% block content %}
 <div id="sales-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="sales-data">{{ sales_json|tojson }}</script>
-<script src="{{ url_for('static', filename='js/react/sales-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/sales-app.js') }}" defer></script>
 {% endblock %}

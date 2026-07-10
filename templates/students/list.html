@@ -53,5 +53,5 @@
 {% block content %}
 <div id="students-app"><p class="text-muted" style="padding:2rem 0"><span class="stu-spinner"></span> Loading students…</p></div>
 <script type="application/json" id="students-data">{{ students_json|tojson }}</script>
-<script src="{{ url_for('static', filename='js/react/students-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/students-app.js') }}" defer></script>
 {% endblock %}

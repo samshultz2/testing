@@ -529,6 +529,36 @@ def inbox_unread():
 
 
 # ============================================================================
+# EMAIL OPEN-TRACKING PIXEL (public — loaded by the recipient's email client)
+# ============================================================================
+
+# A 1x1 transparent GIF returned regardless of whether the token is valid, so the
+# endpoint never leaks whether a recipient exists.
+_TRACK_PIXEL = (b'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!'
+                b'\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00'
+                b'\x00\x02\x02D\x01\x00;')
+
+
+@comms_bp.route('/track/open')
+def track_open():
+    """Mark an email recipient read when their client loads the tracking pixel.
+    Public + unauthenticated (email clients aren't logged in); the signed token is
+    the only thing that maps to a recipient."""
+    from models import MessageRecipient
+    from models.models import local_now
+    token = request.args.get('t')
+    rid = comms.read_open_token(token) if token else None
+    if rid:
+        rec = db.session.get(MessageRecipient, rid)
+        if rec is not None and rec.read_at is None:
+            rec.read_at = local_now()
+            db.session.commit()
+    return Response(_TRACK_PIXEL, mimetype='image/gif',
+                    headers={'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+                             'Pragma': 'no-cache'})
+
+
+# ============================================================================
 # ATTACHMENTS (announcements + email campaigns)
 # ============================================================================
 
@@ -1281,7 +1311,11 @@ def send_gateway(message_id):
     msg.status = 'Sending'
     db.session.commit()
     if is_email:
-        comms.dispatch_campaign_email_async(current_app._get_current_object(), msg.id)
+        # Capture the tenant's external base URL here (request context) so the
+        # background dispatcher can build absolute open-tracking pixel URLs.
+        base_url = request.url_root
+        comms.dispatch_campaign_email_async(current_app._get_current_object(), msg.id,
+                                            base_url=base_url)
         via = 'email'
     else:
         comms.dispatch_campaign_async(current_app._get_current_object(), msg.id, cfg)

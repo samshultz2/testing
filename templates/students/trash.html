@@ -5,5 +5,5 @@
 {% block content %}
 <div id="student-trash-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="student-trash-data">{{ trash_json|tojson }}</script>
-<script src="{{ url_for('static', filename='js/react/student-trash-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/student-trash-app.js') }}" defer></script>
 {% endblock %}

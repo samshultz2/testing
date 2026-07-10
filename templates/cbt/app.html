@@ -34,5 +34,5 @@ kbd{background:var(--gray-100);border:1px solid var(--border-color);border-radiu
 {% block content %}
 <div id="cbt-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="cbt-data">{{ cbt_json|tojson }}</script>
-<script src="{{ url_for('static', filename='js/react/cbt-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/cbt-app.js') }}" defer></script>
 {% endblock %}

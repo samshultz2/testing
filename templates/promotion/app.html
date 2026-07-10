@@ -23,5 +23,5 @@
 {% block content %}
 <div id="promo-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="promo-data">{{ promo_json|tojson }}</script>
-<script src="{{ url_for('static', filename='js/react/promotion-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/promotion-app.js') }}" defer></script>
 {% endblock %}

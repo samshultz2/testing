@@ -55,5 +55,5 @@
 {% block content %}
 <div id="contrib-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="contrib-data">{{ contrib_json|tojson }}</script>
-<script src="{{ url_for('static', filename='js/react/contributions-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/contributions-app.js') }}" defer></script>
 {% endblock %}

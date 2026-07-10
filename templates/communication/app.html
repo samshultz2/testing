@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set _t = {'dashboard':'Parent Communication','compose':'Compose Message','announcements':'Announcements','messages':'Message History','message_detail':'Campaign','templates':'Message Templates','contacts':'Contact Directory','settings':'SMS Gateway'} %}
+{% set _t = {'dashboard':'Communication Center','compose':'Compose Message','inbox':'Inbox','announcements':'Announcements','messages':'Communication History','message_detail':'Campaign','reports':'Reports','templates':'Message Templates','contacts':'Contact Directory','settings':'Settings'} %}
 {% block title %}{{ _t.get(comm_json.page,'Communication') }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}
 {% if comm_json.page == 'dashboard' %}<span>Communication</span>
@@ -139,5 +139,5 @@ a.kpi:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px)}
 <div id="comm-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="comm-data">{{ comm_json|tojson }}</script>
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/react/comms-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/comms-app.js') }}" defer></script>
 {% endblock %}

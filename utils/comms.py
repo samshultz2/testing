@@ -165,17 +165,47 @@ def dispatch_campaign_async(app, message_id, cfg=None):
     threading.Thread(target=_run, daemon=True).start()
 
 
-def dispatch_campaign_email(msg):
+# --- email open-tracking tokens ---------------------------------------------
+def _open_serializer():
+    from flask import current_app
+    from itsdangerous import URLSafeSerializer
+    return URLSafeSerializer(current_app.config['SECRET_KEY'], salt='comm-open')
+
+
+def open_token(recipient_id):
+    return _open_serializer().dumps(int(recipient_id))
+
+
+def read_open_token(token):
+    """Recipient id from an open-tracking token, or None if invalid."""
+    from itsdangerous import BadData
+    try:
+        return int(_open_serializer().loads(token))
+    except (BadData, ValueError, TypeError):
+        return None
+
+
+def _tracking_html(body, pixel_url):
+    """A minimal HTML alternative that embeds a 1x1 open-tracking pixel."""
+    from markupsafe import escape
+    safe = str(escape(body or '')).replace('\n', '<br>')
+    return (f'<div style="white-space:pre-wrap;font-family:sans-serif">{safe}</div>'
+            f'<img src="{pixel_url}" width="1" height="1" alt="" style="display:none">')
+
+
+def dispatch_campaign_email(msg, base_url=None):
     """Send every pending recipient of an Email-channel campaign via SMTP.
 
     Mirrors :func:`dispatch_campaign` (per-recipient commit so an interruption
     never resends) but delivers over email. The campaign title is the subject and
-    each recipient's personalised body is the plain-text content. Requires a
-    configured mailer. Returns (sent, failed)."""
+    each recipient's personalised body is the plain-text content. When ``base_url``
+    is given, each email also carries a per-recipient open-tracking pixel so opens
+    become read-receipts. Requires a configured mailer. Returns (sent, failed)."""
     from datetime import datetime
     from models import MessageRecipient
     from utils import mailer
     subject = msg.title or 'Message from your school'
+    base = (base_url or '').rstrip('/')
     # Resolve an attached file once for the whole campaign.
     attachments = None
     if getattr(msg, 'attachment_id', None):
@@ -187,7 +217,12 @@ def dispatch_campaign_email(msg):
             attachments = [(path, att.original_name, att.content_type)]
     sent = failed = 0
     for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
-        if r.email and mailer.send_email(r.email, subject, r.body, attachments=attachments):
+        html = None
+        if base and r.id:
+            pixel = f'{base}/communication/track/open?t={open_token(r.id)}'
+            html = _tracking_html(r.body, pixel)
+        if r.email and mailer.send_email(r.email, subject, r.body, html=html,
+                                         attachments=attachments):
             r.status, r.sent_at, r.error = 'Sent', datetime.now(), None
             sent += 1
         else:
@@ -200,9 +235,11 @@ def dispatch_campaign_email(msg):
     return sent, failed
 
 
-def dispatch_campaign_email_async(app, message_id):
+def dispatch_campaign_email_async(app, message_id, base_url=None):
     """Send an email campaign in a background thread so the request returns at once.
-    The campaign should already be claimed ('Sending'). Marks it 'Sent' when done."""
+    The campaign should already be claimed ('Sending'). Marks it 'Sent' when done.
+    ``base_url`` (the tenant's external URL, captured in the request) enables the
+    open-tracking pixel."""
     import threading
 
     def _run():
@@ -212,7 +249,7 @@ def dispatch_campaign_email_async(app, message_id):
                 msg = _db.session.get(Message, message_id)
                 if msg is None:
                     return
-                dispatch_campaign_email(msg)
+                dispatch_campaign_email(msg, base_url=base_url)
                 msg.status = 'Sent'
                 _db.session.commit()
             except Exception:

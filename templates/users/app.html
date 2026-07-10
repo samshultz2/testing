@@ -47,5 +47,5 @@ table.matrix tr.admin-row td{color:var(--text-muted);font-style:italic}
 {% block content %}
 <div id="users-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="users-data">{{ users_json|tojson }}</script>
-<script src="{{ url_for('static', filename='js/react/users-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/users-app.js') }}" defer></script>
 {% endblock %}

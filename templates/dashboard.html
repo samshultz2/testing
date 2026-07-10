@@ -86,5 +86,5 @@
 <div id="dashboard-app"><p class="text-muted" style="padding:2rem 0">Loading dashboard…</p></div>
 <script type="application/json" id="dash-data">{{ dash_json|tojson }}</script>
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/react/dashboard-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/dashboard-app.js') }}" defer></script>
 {% endblock %}

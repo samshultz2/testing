@@ -29,5 +29,5 @@
 <div id="library-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="library-data">{{ library_json|tojson }}</script>
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/react/library-app.js') }}" defer></script>
+<script src="{{ bundle_url('js/react/library-app.js') }}" defer></script>
 {% endblock %}

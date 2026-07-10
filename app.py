@@ -342,6 +342,19 @@ def create_app(config_class=None):
             from utils.security import get_csp_nonce
             return get_csp_nonce()
 
+        def bundle_url(filename):
+            """Versioned URL for a static asset — appends ?v=<file mtime> so a
+            rebuilt JS/CSS bundle busts browser, service-worker and CDN caches on
+            the next deploy instead of serving a stale copy."""
+            import os
+            from flask import url_for as _url_for
+            url = _url_for('static', filename=filename)
+            try:
+                path = os.path.join(app.static_folder, filename)
+                return f'{url}?v={int(os.path.getmtime(path))}'
+            except OSError:
+                return url
+
         def _password_rules():
             """The server's password policy, for the live checklist on the
             password pages (single source of truth: utils.security)."""
@@ -536,6 +549,7 @@ def create_app(config_class=None):
             'today': date.today(),
             'app_name': Config.APP_NAME,
             'csrf_token': csrf_token,
+            'bundle_url': bundle_url,
             'csp_nonce': _csp_nonce_value(),
             'user_permissions': get_user_permissions(),
             'can_access_module': can_access_module,

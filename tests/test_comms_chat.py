@@ -140,3 +140,61 @@ def test_reports_include_read_metrics(app):
     client.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
     html = client.get('/communication/reports').get_data(as_text=True)
     assert '"read"' in html and 'read_rate' in html
+
+
+# --- email open-tracking ----------------------------------------------------
+def test_open_token_roundtrip(app):
+    from utils import comms
+    with app.test_request_context('/'):
+        tok = comms.open_token(4242)
+        assert comms.read_open_token(tok) == 4242
+        assert comms.read_open_token('tampered') is None
+
+
+def test_open_pixel_marks_read_unauthenticated(app):
+    from models import Message, MessageRecipient
+    from utils import comms
+    with app.app_context():
+        m = Message(title='E', body='hi', channel='Email', status='Sent', recipient_count=1)
+        db.session.add(m); db.session.flush()
+        r = MessageRecipient(message_id=m.id, email='p@ex.com', body='hi', status='Sent')
+        db.session.add(r); db.session.commit()
+        rid = r.id
+    with app.test_request_context('/'):
+        token = comms.open_token(rid)
+    client = app.test_client()   # no login — an email client isn't authenticated
+    resp = client.get('/communication/track/open?t=' + token)
+    assert resp.status_code == 200 and resp.mimetype == 'image/gif'
+    with app.app_context():
+        assert db.session.get(MessageRecipient, rid).read_at is not None
+    # a bad token still returns the pixel, never errors
+    assert client.get('/communication/track/open?t=nope').status_code == 200
+
+
+def test_email_dispatch_embeds_tracking_pixel(app, monkeypatch):
+    from utils import comms, mailer
+    from models import Message, MessageRecipient
+    captured = {}
+    monkeypatch.setattr(mailer, 'send_email',
+                        lambda to, subject, body, html=None, attachments=None:
+                        (captured.update(html=html) or True))
+    with app.app_context():
+        m = Message(title='Open me', body='hello', channel='Email', status='Sending',
+                    recipient_count=1)
+        db.session.add(m); db.session.flush()
+        db.session.add(MessageRecipient(message_id=m.id, email='p@ex.com', body='hello',
+                                        status='Pending'))
+        db.session.commit()
+        comms.dispatch_campaign_email(m, base_url='https://school.example/')
+        assert captured['html'] and '/communication/track/open?t=' in captured['html']
+
+
+def test_bundle_url_is_versioned(app):
+    # The React bundle must be served with a cache-busting version query so a
+    # rebuilt bundle reaches clients instead of a stale cached copy.
+    client = app.test_client()
+    tok = login_token(client)
+    client.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    html = client.get('/communication/').get_data(as_text=True)
+    import re
+    assert re.search(r'js/react/comms-app\.js\?v=\d+', html)

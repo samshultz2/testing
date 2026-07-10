@@ -1197,6 +1197,13 @@
 ]
 ],
 [
+"comms.track_open",
+"/communication/track/open",
+[
+"GET"
+]
+],
+[
 "comms.upload_attachment",
 "/communication/attachments",
 [
