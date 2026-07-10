@@ -87,6 +87,12 @@ export default function Analytics() {
               {terms.map((t) => <option key={t.id} value={String(t.id)}>{t.name}{t.active ? ' (active)' : ''}</option>)}
             </select>
           </label>)}
+        {d && (
+          <span className="no-print" style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <a className="btn btn-secondary btn-sm" href={`/attendance/analytics/export?term_id=${tid}&format=csv`}><i className="fas fa-file-csv" aria-hidden="true" /> CSV</a>
+            <a className="btn btn-success btn-sm" href={`/attendance/analytics/export?term_id=${tid}&format=xlsx`}><i className="fas fa-file-excel" aria-hidden="true" /> Excel</a>
+            <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><i className="fas fa-print" aria-hidden="true" /> Print</button>
+          </span>)}
       </Toolbar>
 
       {!online ? <OfflineRequired what="Attendance analytics" />

@@ -4,6 +4,7 @@ import { cachePut, cacheGet, enqueue } from '../../lib/offline';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
 import { withGroups, genderLabel, groupHeadStyle } from '../roster';
+import { rememberClass } from '../../lib/attprefs';
 
 const key = (aid, date) => `roster|${aid}|${date}`;
 
@@ -42,10 +43,13 @@ export default function MarkDaily() {
     seeded ? String(initial.assignmentId)
            : (default_class ? String(default_class) : remembered));
   const [date, setDate] = useState((seeded && initial.date) || today || '');
-  // Remember the chosen class for next time.
+  // Remember the chosen class for next time (shared with the other screens'
+  // "recent classes" quick-pick).
   useEffect(() => {
-    if (assignmentId) { try { localStorage.setItem('attendance:lastClass', String(assignmentId)); } catch (e) { /* ignore */ } }
-  }, [assignmentId]);
+    if (!assignmentId) return;
+    const c = classes.find((x) => String(x.id) === String(assignmentId));
+    rememberClass(assignmentId, c ? c.name : String(assignmentId));
+  }, [assignmentId]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [state, setState] = useState({ idle: true });   // idle | loading | data | error
   // Per enrollment: { am: bool, pm: bool }. Morning and afternoon are marked
   // independently and saved together — no "which session?" picker.

@@ -144,6 +144,13 @@
 .iv-case-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .iv-noteform { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
 .iv-noteform .form-control { flex: 1; min-width: 140px; }
+
+/* ---- recent-class quick pick ---- */
+.att-recent { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: -4px 0 10px; }
+.att-chip { border: 1px solid var(--gray-200, #e5e7eb); background: var(--bg-card); border-radius: 999px;
+  padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--text-primary, #111827); }
+.att-chip:hover { border-color: var(--primary, #2563eb); }
+.att-chip.is-active { background: var(--primary, #2563eb); color: #fff; border-color: var(--primary, #2563eb); }
 </style>
 {% endblock %}
 

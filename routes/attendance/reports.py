@@ -645,3 +645,97 @@ def print_register():
         weeks=weeks, week_id=week_id, selected_week=selected_week,
         register_data=register_data, school_days=school_days, school_name=school_name
     )
+
+
+@attendance_bp.route('/analytics/export')
+@login_required
+def analytics_export():
+    """Presentation-ready attendance analytics as a multi-section Excel workbook
+    or a flattened CSV (executive summary, class ranking, distribution, chronic
+    absentees, most improved). Branch/role-scoped like the analytics screen."""
+    if not can_access_module('attendance'):
+        abort(403)
+    req_term = request.args.get('term_id', type=int)
+    term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
+    if not term:
+        abort(400)
+    accessible = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
+    from utils.branch_scope import is_central
+    from utils import attendance_analytics as AA
+    d = AA.build(term, accessible, is_central=is_central(), use_cache=False)
+    fmt = request.args.get('format', 'xlsx')
+    fname = f'attendance_analytics_{term.name}'.replace(' ', '_')
+    from utils.audit import log_action
+    log_action('attendance.analytics_export', detail=f'{term.name} ({fmt})')
+
+    k = d['kpis']
+    summary_rows = [
+        ('Term', term.name), ('Overall attendance rate', f"{k['overall']}%"),
+        ('Students', k['students']), ('Classes', k['classes']),
+        ('School days', k['school_days']),
+        (f"Chronic (< {d['critical']}%)", k['chronic']),
+        ('Best class', k['best_class']), ('Needs attention', k['worst_class']),
+    ]
+
+    if fmt == 'csv':
+        import csv, io
+        from utils.web_exports import formula_guard as _fg
+        out = io.StringIO(); w = csv.writer(out)
+        w.writerow(['Attendance analytics', term.name])
+        w.writerow([])
+        w.writerow(['Executive summary'])
+        for label, val in summary_rows:
+            w.writerow([label, val])
+        w.writerow([]); w.writerow(['Class ranking', 'Students', 'Attendance %'])
+        for r in d['class_rank']:
+            w.writerow([_fg(r['class']), r['students'], r['percentage']])
+        w.writerow([]); w.writerow(['Distribution', 'Students'])
+        for label, key in (('Excellent (>=90%)', 'excellent'), ('Good (75-89%)', 'good'),
+                           ('Fair (50-74%)', 'fair'), ('Poor (<50%)', 'poor')):
+            w.writerow([label, d['distribution'][key]])
+        w.writerow([]); w.writerow(['Chronic absentees', 'Class', 'Attendance %'])
+        for r in d['chronic_list']:
+            w.writerow([_fg(r['name']), _fg(r['class']), r['percentage']])
+        if d['most_improved']:
+            w.writerow([]); w.writerow(['Most improved', 'Class', 'From %', 'To %', 'Change'])
+            for r in d['most_improved']:
+                w.writerow([_fg(r['name']), _fg(r['class']), r['from'], r['to'], r['delta']])
+        return Response(out.getvalue(), mimetype='text/csv',
+                        headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
+
+    from openpyxl import Workbook
+    from utils.web_exports import xlsx_response
+    wb = Workbook()
+    ws = wb.active; ws.title = 'Summary'
+    ws.append(['Attendance analytics', term.name]); ws.append([])
+    ws.append(['Executive summary'])
+    for label, val in summary_rows:
+        ws.append([label, val])
+    ws.append([]); ws.append(['Attendance distribution', 'Students'])
+    for label, key in (('Excellent (>=90%)', 'excellent'), ('Good (75-89%)', 'good'),
+                       ('Fair (50-74%)', 'fair'), ('Poor (<50%)', 'poor')):
+        ws.append([label, d['distribution'][key]])
+
+    wr = wb.create_sheet('Class ranking')
+    wr.append(['Class', 'Students', 'Attendance %'])
+    for r in d['class_rank']:
+        wr.append([r['class'], r['students'], r['percentage']])
+    if d['branch_rank']:
+        wb2 = wb.create_sheet('Branch ranking')
+        wb2.append(['Branch', 'Attendance %'])
+        for r in d['branch_rank']:
+            wb2.append([r['branch'], r['percentage']])
+
+    wc = wb.create_sheet('Chronic absentees')
+    wc.append(['Student', 'Class', 'Attendance %'])
+    for r in d['chronic_list']:
+        wc.append([r['name'], r['class'], r['percentage']])
+
+    if d['most_improved']:
+        wi = wb.create_sheet('Most improved')
+        wi.append(['Student', 'Class', 'From %', 'To %', 'Change'])
+        for r in d['most_improved']:
+            wi.append([r['name'], r['class'], r['from'], r['to'], r['delta']])
+
+    return xlsx_response(wb, f'{fname}.xlsx')

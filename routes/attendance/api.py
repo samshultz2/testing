@@ -631,6 +631,8 @@ def api_notify_absentees():
                                    channel=data.get('channel'), created_by=_actor_name())
     if not msg:
         return jsonify({'ok': False, 'error': 'No absentees with a reachable parent for that day.'}), 400
+    from utils.audit import log_action
+    log_action('attendance.notify_absentees', detail=f'{caa.display_name} {target.isoformat()} ({msg.recipient_count})')
     return jsonify({'ok': True, 'message': f'Drafted a notice to {msg.recipient_count} parent(s).',
                     'redirect': url_for('comms.message_detail', message_id=msg.id)})
 
@@ -658,6 +660,8 @@ def api_notify_low():
                                          channel=data.get('channel'), created_by=_actor_name())
     if not msg:
         return jsonify({'ok': False, 'error': 'No students below threshold with a reachable parent.'}), 400
+    from utils.audit import log_action
+    log_action('attendance.notify_low', detail=f'{term.name} ({msg.recipient_count})')
     return jsonify({'ok': True, 'message': f'Drafted a notice to {msg.recipient_count} parent(s).',
                     'redirect': url_for('comms.message_detail', message_id=msg.id)})
 
@@ -712,6 +716,9 @@ def api_intervention_open():
     iv, created = IV.open_intervention(student.id, term,
                                        reason=(data.get('reason') or '').strip() or None,
                                        opened_by=_actor_name())
+    if created:
+        from utils.audit import log_action
+        log_action('attendance.intervention_open', detail=student.full_name, target=iv)
     return jsonify({'ok': True, 'id': iv.id, 'created': created,
                     'message': 'Intervention opened.' if created else 'An open intervention already exists.'})
 
@@ -752,6 +759,8 @@ def api_intervention_status(iv_id):
     from utils import attendance_interventions as IV
     if not IV.set_status(iv, data.get('status'), outcome=(data.get('outcome') or '').strip() or None):
         return jsonify({'ok': False, 'error': 'Invalid status.'}), 400
+    from utils.audit import log_action
+    log_action('attendance.intervention_status', detail=data.get('status'), target=iv)
     return jsonify({'ok': True, 'message': f'Intervention {(data.get("status") or "").lower()}.'})
 
 

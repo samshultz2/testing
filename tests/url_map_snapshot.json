@@ -301,6 +301,13 @@
 ]
 ],
 [
+"attendance.analytics_export",
+"/attendance/analytics/export",
+[
+"GET"
+]
+],
+[
 "attendance.api_analytics",
 "/attendance/api/analytics",
 [

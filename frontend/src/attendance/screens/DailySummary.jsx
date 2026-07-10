@@ -4,12 +4,23 @@ import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner } from '../../components/ui';
 import { withGroups, GroupHeadRow } from '../roster';
+import { lastClass, recentClasses, rememberClass } from '../../lib/attprefs';
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
   const { classes = [], today, online, sync = {}, default_class, can_mark } = useCtx();
-  // A form teacher lands on their own class without picking it.
-  const [assignmentId, setAssignmentId] = useState(default_class ? String(default_class) : '');
+  // A form teacher lands on their own class; otherwise fall back to the last one
+  // this user looked at (if it's still one they can access).
+  const classIds = new Set(classes.map((c) => String(c.id)));
+  const initClass = default_class ? String(default_class)
+    : (classIds.has(lastClass()) ? lastClass() : '');
+  const [assignmentId, setAssignmentId] = useState(initClass);
+  const pickClass = (id) => {
+    setAssignmentId(id);
+    const c = classes.find((x) => String(x.id) === String(id));
+    if (c) rememberClass(id, c.name);
+  };
+  const recents = recentClasses().filter((r) => classIds.has(String(r.id)));
   const [date, setDate] = useState(today || '');
   const [notifying, setNotifying] = useState(false);
   const notifyAbsentees = async () => {
@@ -50,7 +61,7 @@ export default function DailySummary() {
     <div>
       <Toolbar>
         <Field label="Class" htmlFor="ds-class" grow>
-          <Select id="ds-class" value={assignmentId} onChange={setAssignmentId}
+          <Select id="ds-class" value={assignmentId} onChange={pickClass}
                   placeholder={classes.length ? '— Select class —' : 'No classes available'}
                   options={classes.map((c) => ({ value: String(c.id), label: c.name }))} />
         </Field>
@@ -58,6 +69,13 @@ export default function DailySummary() {
           <input id="ds-date" type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
       </Toolbar>
+      {recents.length > 1 && (
+        <div className="att-recent" role="group" aria-label="Recent classes">
+          <span className="att-sub">Recent:</span>
+          {recents.map((r) => (
+            <button key={r.id} type="button" className={'att-chip' + (String(r.id) === String(assignmentId) ? ' is-active' : '')}
+                    onClick={() => pickClass(String(r.id))}>{r.label}</button>))}
+        </div>)}
 
       {!online ? <OfflineRequired what="The daily summary" />
         : syncing ? <Spinner label={`Syncing your saved marks… (${pending} left) — the summary will update once they reach the server.`} />
