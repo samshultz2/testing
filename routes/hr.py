@@ -300,6 +300,7 @@ def staff_detail(staff_id):
         'attendance_summary': hr.attendance_summary(s.id, today.year, today.month),
         'attendance_month': today.strftime('%B %Y'),
         'leave_summary': hr.leave_summary(s.id, today.year),
+        'leave_balances': hr.leave_balances(s.id, today.year),
         'timeline': hr.build_timeline(s),
         'can_transfer': _branches_for_transfer(s),
         'salary_history': [{'effective': (h.effective_date or h.created_at).strftime('%d %b %Y'),
@@ -563,10 +564,11 @@ def leave_list():
     staff = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(StaffMember.surname).all()
     return _render({
         'page': 'leave', 'nav': _nav_urls(), 'status': status or '',
-        'leave_types': hr.LEAVE_TYPES,
+        'leave_types': hr.LEAVE_TYPES, 'today': date.today().isoformat(),
         'staff': [{'id': s.id, 'full_name': s.full_name} for s in staff],
         'leaves': [{'id': lv.id, 'staff_name': lv.staff.full_name, 'staff_id': lv.staff_id,
                     'leave_type': lv.leave_type, 'days': lv.days, 'status': lv.status,
+                    'start': lv.start_date.isoformat(), 'end': lv.end_date.isoformat(),
                     'dates': f"{lv.start_date.strftime('%d %b %Y')} – {lv.end_date.strftime('%d %b %Y')}",
                     'staff_url': url_for('hr.staff_detail', staff_id=lv.staff_id),
                     'approve_url': url_for('hr.leave_status', leave_id=lv.id),
@@ -604,6 +606,20 @@ def leave_status(leave_id):
         if new_status == 'Approved' and lv.start_date <= date.today() <= lv.end_date:
             lv.staff.status = 'On Leave'
         db.session.commit()
+        # Tell the staff member (if they have a login) that their request moved.
+        if new_status in ('Approved', 'Rejected') and lv.staff and lv.staff.user_id:
+            try:
+                from utils.notify import notify
+                span = f"{lv.start_date.strftime('%d %b')}–{lv.end_date.strftime('%d %b %Y')}"
+                notify(f'Leave {new_status.lower()}',
+                       body=f'Your {lv.leave_type or "leave"} request ({span}) was {new_status.lower()}.',
+                       url=url_for('hr.staff_detail', staff_id=lv.staff_id),
+                       user_id=lv.staff.user_id,
+                       category='success' if new_status == 'Approved' else 'warning')
+            except Exception:
+                pass
+        from utils.audit import log_action
+        log_action('hr.leave_status', detail=new_status, target=lv.staff)
         return _ok(f'Leave {new_status.lower()}.', url_for('hr.leave_list'))
     return _err('Invalid status.', url_for('hr.leave_list'))
 
@@ -894,6 +910,7 @@ def settings():
     return _render({
         'page': 'settings', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'settings': hr.get_settings(),
+        'leave_types': hr.LEAVE_TYPES, 'leave_allowances': hr.leave_allowances(),
         'deductions': [{'id': d.id, 'name': d.name, 'kind': d.kind, 'value': d.value or 0,
                         'is_active': bool(d.is_active),
                         'toggle_url': url_for('hr.toggle_deduction_type', type_id=d.id),
@@ -944,5 +961,6 @@ def delete_deduction_type(type_id):
 @admin_required
 def save_hr_settings():
     hr.save_settings(request.form)
+    hr.save_leave_allowances(request.form)
     db.session.commit()
     return _ok('HR settings saved.', url_for('hr.settings'))

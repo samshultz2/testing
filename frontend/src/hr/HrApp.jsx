@@ -277,9 +277,16 @@ function ProfileHub({ d }) {
             <div className="hub-stat"><div className="v">{lv.total_days || 0}</div><div className="l">Days taken</div></div>
             <div className="hub-stat"><div className="v">{lv.pending || 0}</div><div className="l">Pending</div></div>
           </div>
-          {leaveTypes.length > 0
-            ? <div className="chip-wrap mt-2">{leaveTypes.map(([t, n]) => <span key={t} className="badge badge-secondary">{t}: {n}d</span>)}</div>
-            : <p className="text-muted text-sm mb-0 mt-2">No approved leave this year.</p>}
+          {(d.leave_balances || []).length > 0
+            ? <table className="data-table" style={{ marginTop: '.5rem' }}><tbody>
+                {d.leave_balances.map((b) => (
+                  <tr key={b.type}><td>{b.type}</td>
+                    <td className="text-right text-muted text-sm">{b.taken}/{b.allowance}</td>
+                    <td className="text-right"><span className={'badge ' + (b.remaining > 0 ? 'badge-success' : b.remaining < 0 ? 'badge-danger' : 'badge-secondary')}>{b.remaining} left</span></td></tr>))}
+              </tbody></table>
+            : (leaveTypes.length > 0
+                ? <div className="chip-wrap mt-2">{leaveTypes.map(([t, n]) => <span key={t} className="badge badge-secondary">{t}: {n}d</span>)}</div>
+                : <p className="text-muted text-sm mb-0 mt-2">No approved leave this year.</p>)}
         </div>
       </div>
     </div>
@@ -566,10 +573,71 @@ function DeptEdit({ dep, notify, onDone }) {
   );
 }
 
+// ---- Leave calendar (month grid of who is off) -----------------------------
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+  'August', 'September', 'October', 'November', 'December'];
+const leaveDotTone = (s) => (s === 'Approved' ? 'var(--success)' : s === 'Rejected' ? 'var(--danger)' : 'var(--warning)');
+
+function LeaveCalendar({ leaves, today }) {
+  const base = today ? new Date(today) : new Date();
+  const [ym, setYm] = useState({ y: base.getFullYear(), m: base.getMonth() });
+  const first = new Date(ym.y, ym.m, 1);
+  const startPad = first.getDay();
+  const daysInMonth = new Date(ym.y, ym.m + 1, 0).getDate();
+  const monthStart = new Date(ym.y, ym.m, 1); const monthEnd = new Date(ym.y, ym.m, daysInMonth);
+  // Leaves overlapping this month, expanded to the days they touch.
+  const byDay = {};
+  (leaves || []).forEach((lv) => {
+    if (!lv.start || !lv.end) return;
+    const s = new Date(lv.start); const e = new Date(lv.end);
+    if (e < monthStart || s > monthEnd) return;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dte = new Date(ym.y, ym.m, day);
+      if (dte >= s && dte <= e) (byDay[day] = byDay[day] || []).push(lv);
+    }
+  });
+  const cells = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) cells.push(day);
+  const shift = (delta) => setYm(({ y, m }) => { const nm = m + delta; return { y: y + Math.floor(nm / 12), m: ((nm % 12) + 12) % 12 }; });
+  const todayStr = (today || new Date().toISOString().slice(0, 10));
+  return (
+    <div className="card"><div className="card-header">
+      <h3><i aria-hidden="true" className="fas fa-calendar-days" /> {MONTHS[ym.m]} {ym.y}</h3>
+      <div className="d-flex gap-1"><button type="button" className="btn btn-secondary btn-sm" onClick={() => shift(-1)} aria-label="Previous month"><i aria-hidden="true" className="fas fa-chevron-left" /></button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setYm({ y: base.getFullYear(), m: base.getMonth() })}>Today</button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => shift(1)} aria-label="Next month"><i aria-hidden="true" className="fas fa-chevron-right" /></button></div>
+    </div>
+      <div className="card-body">
+        <div className="leave-cal">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((w) => <div key={w} className="lc-head">{w}</div>)}
+          {cells.map((day, i) => {
+            if (!day) return <div key={i} className="lc-cell lc-empty" />;
+            const iso = `${ym.y}-${String(ym.m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const items = byDay[day] || [];
+            return (
+              <div key={i} className={'lc-cell' + (iso === todayStr ? ' lc-today' : '')}>
+                <div className="lc-day">{day}</div>
+                {items.slice(0, 3).map((lv, j) => (
+                  <div key={j} className="lc-item" title={`${lv.staff_name} · ${lv.leave_type} (${lv.status})`}>
+                    <span className="lc-dot" style={{ background: leaveDotTone(lv.status) }} />{lv.staff_name.split(' ')[0]}</div>))}
+                {items.length > 3 && <div className="lc-more">+{items.length - 3}</div>}
+              </div>);
+          })}
+        </div>
+        <div className="d-flex gap-2 mt-2 text-sm text-muted flex-wrap">
+          <span><span className="lc-dot" style={{ background: 'var(--success)' }} /> Approved</span>
+          <span><span className="lc-dot" style={{ background: 'var(--warning)' }} /> Pending</span>
+        </div>
+      </div></div>
+  );
+}
+
 // ---- Leave -----------------------------------------------------------------
 function Leave({ d, notify }) {
   const nav = useNav();
   const [f, setF] = useState({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' });
+  const [view, setView] = useState('list');
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const act = async (url, fields, confirmMsg) => {
     if (confirmMsg && !await confirm(confirmMsg)) return;
@@ -598,12 +666,21 @@ function Leave({ d, notify }) {
         </form></div></div>
 
       <div className="card mb-3"><div className="card-body">
-        <form className="filter-form"><div className="form-group"><label className="form-label">Status</label>
-          <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.self_url, { status: e.target.value })}>
-            <option value="">All</option>{['Pending', 'Approved', 'Rejected'].map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-        </form>
+        <div className="d-flex justify-between align-end flex-wrap gap-2">
+          <form className="filter-form"><div className="form-group"><label className="form-label">Status</label>
+            <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.self_url, { status: e.target.value })}>
+              <option value="">All</option>{['Pending', 'Approved', 'Rejected'].map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          </form>
+          <div className="btn-group" role="tablist" aria-label="View">
+            <button type="button" className={'btn btn-sm ' + (view === 'list' ? 'btn-primary' : 'btn-secondary')} aria-selected={view === 'list'} onClick={() => setView('list')}><i aria-hidden="true" className="fas fa-list" /> List</button>
+            <button type="button" className={'btn btn-sm ' + (view === 'calendar' ? 'btn-primary' : 'btn-secondary')} aria-selected={view === 'calendar'} onClick={() => setView('calendar')}><i aria-hidden="true" className="fas fa-calendar-days" /> Calendar</button>
+          </div>
+        </div>
       </div></div>
 
+      {view === 'calendar' && <LeaveCalendar leaves={d.leaves} today={d.today} />}
+
+      {view === 'list' && (
       <div className="card"><div className="card-header"><h3>{d.leaves.length} record(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.leaves.length ? (
@@ -621,6 +698,7 @@ function Leave({ d, notify }) {
             </table></div>
           ) : <Empty icon="fa-plane-departure" title="No leave records"><p>Record staff leave above.</p></Empty>}
         </div></div>
+      )}
     </>
   );
 }
@@ -815,7 +893,15 @@ function Settings({ d, notify }) {
   const nav = useNav();
   const [s, setS] = useState(d.settings);
   const [ded, setDed] = useState({ name: '', kind: 'percent', value: '' });
+  const [allow, setAllow] = useState(d.leave_allowances || {});
   const set = (k, v) => setS((x) => ({ ...x, [k]: v }));
+  const saveAllowances = async (e) => {
+    e.preventDefault();
+    const fields = {};
+    Object.entries(allow).forEach(([t, v]) => { fields['leave_allow_' + t] = v; });
+    const r = await submitJson(d.urls.save, fields);
+    if (r.ok) notify('success', 'Leave allowances saved.'); else notify('error', r.error || 'Could not save.');
+  };
   const act = async (url, fields, confirmMsg) => {
     if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
@@ -874,6 +960,21 @@ function Settings({ d, notify }) {
                 </tr>))}</tbody>
             </table>
           ) : <p className="text-muted text-sm">No recurring deductions yet.</p>}
+        </div></div>
+
+      <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plane-departure" /> Leave Allowances</h3></div>
+        <div className="card-body">
+          <p className="text-muted text-sm" style={{ marginTop: 0 }}>Annual entitlement (days) per leave type. Balances on each staff profile count approved leave against these.</p>
+          <form onSubmit={saveAllowances}>
+            <fieldset disabled={!d.is_admin} style={{ border: 0, padding: 0, margin: 0 }}>
+              <div className="form-row" style={{ flexWrap: 'wrap' }}>
+                {(d.leave_types || []).map((t) => (
+                  <div className="form-group" key={t} style={{ minWidth: 110 }}><label className="form-label">{t}</label>
+                    <input type="number" className="form-control" min="0" value={allow[t] != null ? allow[t] : ''} onChange={(e) => setAllow((x) => ({ ...x, [t]: e.target.value }))} /></div>))}
+              </div>
+              <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Allowances</button>
+            </fieldset>
+          </form>
         </div></div>
 
       <div className="card mt-3"><div className="card-body">

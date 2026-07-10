@@ -54,6 +54,17 @@
 .hr-timeline .tl-body{flex:1;min-width:0;padding-top:.25rem}
 .hr-timeline .tl-top{display:flex;justify-content:space-between;gap:1rem;align-items:baseline}
 .hr-timeline .tl-date{color:var(--text-muted);font-size:.78rem;white-space:nowrap}
+/* leave calendar */
+.leave-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;background:var(--border-color);border:1px solid var(--border-color);border-radius:var(--radius);overflow:hidden}
+.leave-cal .lc-head{background:var(--gray-50);text-align:center;font-size:.72rem;font-weight:600;color:var(--text-muted);padding:.4rem 0;text-transform:uppercase}
+.lc-cell{background:var(--bg-card);min-height:78px;padding:.3rem;font-size:.75rem}
+.lc-cell.lc-empty{background:var(--gray-50);opacity:.5}
+.lc-cell.lc-today{outline:2px solid var(--primary);outline-offset:-2px}
+.lc-day{font-weight:600;color:var(--text-secondary);margin-bottom:.2rem}
+.lc-item{display:flex;align-items:center;gap:.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.lc-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.lc-more{color:var(--text-muted);font-size:.7rem}
+@media(max-width:640px){.lc-cell{min-height:56px;font-size:.68rem}.lc-item span:last-child{display:none}}
 .info-grid{display:grid;grid-template-columns:1fr;gap:.1rem}
 @media(min-width:640px){.info-grid{grid-template-columns:1fr 1fr}}
 .info-row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}

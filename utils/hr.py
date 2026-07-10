@@ -33,6 +33,55 @@ def save_settings(form):
                        'string', 'Deduction per day absent')
 
 
+# ---- Leave allowances + balances -------------------------------------------
+
+# Sensible Nigerian-school defaults; overridable per school in HR settings.
+DEFAULT_LEAVE_ALLOWANCES = {
+    'Annual': 20, 'Sick': 12, 'Casual': 6, 'Maternity': 90,
+    'Paternity': 7, 'Study': 14, 'Other': 0,
+}
+
+
+def leave_allowances():
+    """Per-type annual leave entitlement (days), school-configurable."""
+    out = {}
+    for t in LEAVE_TYPES:
+        raw = SchoolSettings.get(f'hr_leave_allow_{t}', None)
+        try:
+            out[t] = int(float(raw)) if raw is not None else DEFAULT_LEAVE_ALLOWANCES.get(t, 0)
+        except (ValueError, TypeError):
+            out[t] = DEFAULT_LEAVE_ALLOWANCES.get(t, 0)
+    return out
+
+
+def save_leave_allowances(form):
+    for t in LEAVE_TYPES:
+        key = f'leave_allow_{t}'
+        if key in form:
+            val = form.get(key) or '0'
+            SchoolSettings.set(f'hr_leave_allow_{t}', str(val), 'int',
+                               f'Annual {t} leave entitlement (days)')
+
+
+def leave_balances(staff_id, year):
+    """Per-type leave balance for a staff member in a year:
+    [{'type','allowance','taken','remaining'}] — only types with an allowance or
+    some usage are returned, so the list stays meaningful."""
+    allow = leave_allowances()
+    approved = (LeaveRecord.query.filter(
+        LeaveRecord.staff_id == staff_id, LeaveRecord.status == 'Approved',
+        extract('year', LeaveRecord.start_date) == year).all())
+    taken = {}
+    for lv in approved:
+        taken[lv.leave_type or 'Other'] = taken.get(lv.leave_type or 'Other', 0) + (lv.days or 0)
+    rows = []
+    for t in LEAVE_TYPES:
+        a, tk = allow.get(t, 0), taken.get(t, 0)
+        if a or tk:
+            rows.append({'type': t, 'allowance': a, 'taken': tk, 'remaining': a - tk})
+    return rows
+
+
 def _to_minutes(hhmm):
     try:
         h, m = str(hhmm).split(':')
