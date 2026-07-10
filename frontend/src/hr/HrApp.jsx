@@ -200,12 +200,27 @@ function StaffForm({ d, notify }) {
               <select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
           </div>
           <div className="form-row"><T k="date_employed" label="Date employed" type="date" /><T k="salary" label="Monthly salary (₦)" type="number" min="0" step="500" /></div>
-          <T k="qualification" label="Qualification" placeholder="e.g., B.Sc Mathematics, PGDE" />
+          <div className="form-row"><T k="confirmation_date" label="Confirmation date" type="date" />
+            <T k="contract_start" label="Contract start" type="date" /><T k="contract_end" label="Contract end / expiry" type="date" /></div>
+          <div className="form-row"><T k="qualification" label="Qualification" placeholder="e.g., B.Sc Mathematics, PGDE" />
+            <T k="prior_experience_years" label="Prior experience (yrs)" type="number" min="0" /></div>
+          <T k="certifications" label="Professional certifications" placeholder="e.g., TRCN, ICAN" />
         </div></div>
 
-        <div className="card mb-3"><div className="card-header"><h3>Next of kin &amp; bank</h3></div><div className="card-body">
+        <div className="card mb-3"><div className="card-header"><h3>Next of kin &amp; emergency</h3></div><div className="card-body">
           <div className="form-row"><T k="nok_name" label="Next of kin" /><T k="nok_phone" label="NOK phone" /><T k="nok_relationship" label="Relationship" /></div>
+          <div className="form-row"><T k="emergency_name" label="Emergency contact" /><T k="emergency_phone" label="Emergency phone" /></div>
+        </div></div>
+
+        <div className="card mb-3"><div className="card-header"><h3>Bank, statutory &amp; medical</h3></div><div className="card-body">
           <div className="form-row"><T k="bank_name" label="Bank" /><T k="account_number" label="Account number" /><T k="account_name" label="Account name" /></div>
+          <div className="form-row"><T k="tax_id" label="Tax ID (TIN)" /><T k="pension_pin" label="Pension PIN" /><T k="pension_provider" label="Pension provider (PFA)" /></div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Blood group</label>
+              <select className="form-control" value={f.blood_group} onChange={(e) => set('blood_group', e.target.value)}><option value="">—</option>{(d.blood_groups || []).map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+            <div className="form-group" style={{ flex: 2 }}><label className="form-label">Medical notes</label>
+              <input type="text" className="form-control" placeholder="Allergies, conditions (confidential)" value={f.medical_notes} onChange={(e) => set('medical_notes', e.target.value)} /></div>
+          </div>
           <div className="form-group"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         </div></div>
 
@@ -215,6 +230,59 @@ function StaffForm({ d, notify }) {
         </div>
       </form>
     </>
+  );
+}
+
+// ---- Profile hub: cross-module snapshot (teaching, attendance, leave) ------
+function ProfileHub({ d }) {
+  const tl = d.teaching_load;
+  const att = d.attendance_summary || {};
+  const lv = d.leave_summary || {};
+  const leaveTypes = Object.entries(lv.by_type || {});
+  return (
+    <div className="hr-hub-grid mb-3">
+      {tl && tl.is_teacher && (
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chalkboard-user" /> Teaching load</h3></div>
+          <div className="card-body">
+            <div className="hub-stat-row">
+              <div className="hub-stat"><div className="v">{tl.class_count}</div><div className="l">Classes</div></div>
+              <div className="hub-stat"><div className="v">{tl.subject_count}</div><div className="l">Subject slots</div></div>
+              <div className="hub-stat"><div className="v">{tl.form_classes.length}</div><div className="l">Form classes</div></div>
+            </div>
+            {tl.form_classes.length > 0 && <p className="text-sm mt-2 mb-1"><strong>Form teacher:</strong> {tl.form_classes.join(', ')}</p>}
+            {tl.subjects.length > 0
+              ? <div className="chip-wrap">{tl.subjects.slice(0, 12).map((x, i) => <span key={i} className="badge badge-secondary">{x.subject} · {x.class}</span>)}
+                  {tl.subjects.length > 12 && <span className="badge badge-light">+{tl.subjects.length - 12}</span>}</div>
+              : <p className="text-muted text-sm mb-0">No subject assignments this term.</p>}
+          </div>
+        </div>
+      )}
+      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-clock" /> Attendance</h3>
+        <span className="text-muted text-sm">{d.attendance_month}</span></div>
+        <div className="card-body">
+          <div className="hub-stat-row">
+            <div className="hub-stat"><div className="v text-success">{att.present || 0}</div><div className="l">Present</div></div>
+            <div className="hub-stat"><div className="v text-warning">{att.late || 0}</div><div className="l">Late</div></div>
+            <div className="hub-stat"><div className="v text-danger">{att.absent || 0}</div><div className="l">Absent</div></div>
+            <div className="hub-stat"><div className="v">{att.excused || 0}</div><div className="l">Excused</div></div>
+          </div>
+          {att.deduction > 0 && <p className="text-sm mt-2 mb-0 text-muted">Deductions this month: <strong>{naira(att.deduction)}</strong></p>}
+          {!att.marked && <p className="text-muted text-sm mb-0 mt-2">No attendance marked yet this month.</p>}
+        </div>
+      </div>
+      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plane-departure" /> Leave (this year)</h3>
+        {lv.pending > 0 && <span className="badge badge-warning">{lv.pending} pending</span>}</div>
+        <div className="card-body">
+          <div className="hub-stat-row">
+            <div className="hub-stat"><div className="v">{lv.total_days || 0}</div><div className="l">Days taken</div></div>
+            <div className="hub-stat"><div className="v">{lv.pending || 0}</div><div className="l">Pending</div></div>
+          </div>
+          {leaveTypes.length > 0
+            ? <div className="chip-wrap mt-2">{leaveTypes.map(([t, n]) => <span key={t} className="badge badge-secondary">{t}: {n}d</span>)}</div>
+            : <p className="text-muted text-sm mb-0 mt-2">No approved leave this year.</p>}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -241,7 +309,7 @@ function StaffDetail({ d, notify }) {
       </div>
 
       <div className="card mb-3"><div className="card-body"><div className="profile-head">
-        <div className="avatar">{s.initials}</div>
+        {s.photo_url ? <img className="avatar" src={s.photo_url} alt="" /> : <div className="avatar">{s.initials}</div>}
         <div style={{ flex: 1, minWidth: 200 }}>
           <h2 style={{ margin: 0 }}>{s.full_name}</h2>
           <div className="text-muted">{s.designation || '—'}{s.department && ` · ${s.department}`}</div>
@@ -250,19 +318,38 @@ function StaffDetail({ d, notify }) {
             <span className="badge badge-secondary">{s.employment_type}</span>{' '}
             <span className={statusBadge(s.status)}>{s.status}</span>{' '}
             <span className="badge badge-primary">{s.staff_id}</span>
+            {s.years_of_service > 0 && <> <span className="badge badge-info">{s.years_of_service} yr{s.years_of_service !== 1 ? 's' : ''} service</span></>}
           </div>
         </div>
       </div></div></div>
 
+      {s.contract_expiring && (
+        <Banner tone={s.contract_days_left < 0 ? 'error' : 'warning'}>
+          <i aria-hidden="true" className="fas fa-file-contract" />{' '}
+          {s.contract_days_left < 0
+            ? `Contract expired on ${s.contract_end} (${-s.contract_days_left} day(s) ago).`
+            : `Contract expires on ${s.contract_end} — in ${s.contract_days_left} day(s).`}
+        </Banner>
+      )}
+
+      <ProfileHub d={d} />
+
       <div className="hr-2col">
         <div className="card"><div className="card-header"><h3>Details</h3></div><div className="card-body"><div className="info-grid">
           <Row k="Phone" v={s.phone} /><Row k="Email" v={s.email} /><Row k="Gender" v={s.gender} />
-          <Row k="Date of birth" v={s.date_of_birth} /><Row k="Date employed" v={s.date_employed} />
-          <Row k="Salary" v={s.salary ? naira(s.salary) : ''} /><Row k="Qualification" v={s.qualification} /><Row k="Address" v={s.address} />
+          <Row k="Date of birth" v={s.date_of_birth + (s.age != null ? ` (${s.age})` : '')} />
+          <Row k="Date employed" v={s.date_employed} /><Row k="Confirmed" v={s.confirmation_date} />
+          <Row k="Experience" v={s.total_experience_years ? `${s.total_experience_years} yr(s)` : ''} />
+          <Row k="Salary" v={s.salary ? naira(s.salary) : ''} /><Row k="Qualification" v={s.qualification} />
+          <Row k="Certifications" v={s.certifications} /><Row k="Address" v={s.address} />
+          {(s.contract_start || s.contract_end) && <Row k="Contract" v={[s.contract_start, s.contract_end].filter(Boolean).join(' – ')} />}
         </div></div></div>
-        <div className="card"><div className="card-header"><h3>Next of kin &amp; bank</h3></div><div className="card-body"><div className="info-grid">
+        <div className="card"><div className="card-header"><h3>Kin, statutory &amp; medical</h3></div><div className="card-body"><div className="info-grid">
           <Row k="Next of kin" v={s.nok_name} /><Row k="NOK phone" v={s.nok_phone} /><Row k="Relationship" v={s.nok_relationship} />
+          <Row k="Emergency" v={s.emergency_name} /><Row k="Emergency phone" v={s.emergency_phone} />
           <Row k="Bank" v={s.bank_name} /><Row k="Account no." v={s.account_number} /><Row k="Account name" v={s.account_name} />
+          <Row k="Tax ID" v={s.tax_id} /><Row k="Pension PIN" v={s.pension_pin} /><Row k="PFA" v={s.pension_provider} />
+          <Row k="Blood group" v={s.blood_group} /><Row k="Medical" v={s.medical_notes} />
         </div>{s.notes && <p className="text-muted text-sm mt-2">{s.notes}</p>}</div></div>
       </div>
 

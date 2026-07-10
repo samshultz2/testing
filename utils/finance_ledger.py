@@ -207,6 +207,13 @@ _ADDED_COLUMNS = {
         'borrower_type': 'VARCHAR(10)', 'staff_id': 'INTEGER', 'renew_count': 'INTEGER',
         'fine_waived': 'BOOLEAN', 'fine_posted': 'BOOLEAN', 'replacement_cost': 'FLOAT',
     },
+    'staff_members': {
+        'confirmation_date': 'DATE', 'contract_start': 'DATE', 'contract_end': 'DATE',
+        'certifications': 'VARCHAR(255)', 'prior_experience_years': 'INTEGER',
+        'emergency_name': 'TEXT', 'emergency_phone': 'TEXT',
+        'tax_id': 'TEXT', 'pension_pin': 'TEXT', 'pension_provider': 'VARCHAR(120)',
+        'blood_group': 'VARCHAR(6)', 'medical_notes': 'TEXT',
+    },
 }
 
 # Columns whose NOT NULL constraint must be relaxed on existing databases (a

@@ -152,12 +152,24 @@ def _read_staff_form(s):
     s.staff_type = request.form.get('staff_type') or 'Teaching'
     s.employment_type = request.form.get('employment_type') or 'Full-time'
     s.date_employed = _d(request.form.get('date_employed'))
+    s.confirmation_date = _d(request.form.get('confirmation_date'))
+    s.contract_start = _d(request.form.get('contract_start'))
+    s.contract_end = _d(request.form.get('contract_end'))
     s.status = request.form.get('status') or 'Active'
     s.qualification = (request.form.get('qualification') or '').strip() or None
+    s.certifications = (request.form.get('certifications') or '').strip() or None
+    s.prior_experience_years = request.form.get('prior_experience_years', type=int)
     s.salary = request.form.get('salary', type=float) or 0
     s.nok_name = (request.form.get('nok_name') or '').strip() or None
     s.nok_phone = (request.form.get('nok_phone') or '').strip() or None
     s.nok_relationship = (request.form.get('nok_relationship') or '').strip() or None
+    s.emergency_name = (request.form.get('emergency_name') or '').strip() or None
+    s.emergency_phone = (request.form.get('emergency_phone') or '').strip() or None
+    s.tax_id = (request.form.get('tax_id') or '').strip() or None
+    s.pension_pin = (request.form.get('pension_pin') or '').strip() or None
+    s.pension_provider = (request.form.get('pension_provider') or '').strip() or None
+    s.blood_group = (request.form.get('blood_group') or '').strip() or None
+    s.medical_notes = (request.form.get('medical_notes') or '').strip() or None
     s.bank_name = (request.form.get('bank_name') or '').strip() or None
     s.account_number = (request.form.get('account_number') or '').strip() or None
     s.account_name = (request.form.get('account_name') or '').strip() or None
@@ -180,11 +192,20 @@ def _staff_form_payload(s, submit_url, cancel_url):
             'staff_type': g('staff_type') or 'Teaching', 'employment_type': g('employment_type') or 'Full-time',
             'status': g('status') or 'Active',
             'date_employed': s.date_employed.isoformat() if s and s.date_employed else '',
+            'confirmation_date': s.confirmation_date.isoformat() if s and s.confirmation_date else '',
+            'contract_start': s.contract_start.isoformat() if s and s.contract_start else '',
+            'contract_end': s.contract_end.isoformat() if s and s.contract_end else '',
             'salary': (s.salary if s and s.salary else ''), 'qualification': g('qualification'),
+            'certifications': g('certifications'),
+            'prior_experience_years': (s.prior_experience_years if s and s.prior_experience_years is not None else ''),
             'nok_name': g('nok_name'), 'nok_phone': g('nok_phone'), 'nok_relationship': g('nok_relationship'),
+            'emergency_name': g('emergency_name'), 'emergency_phone': g('emergency_phone'),
+            'tax_id': g('tax_id'), 'pension_pin': g('pension_pin'), 'pension_provider': g('pension_provider'),
+            'blood_group': g('blood_group'), 'medical_notes': g('medical_notes'),
             'bank_name': g('bank_name'), 'account_number': g('account_number'),
             'account_name': g('account_name'), 'notes': g('notes'),
         },
+        'blood_groups': hr.BLOOD_GROUPS,
         'departments': [{'id': d.id, 'name': d.name} for d in
                         Department.query.filter_by(is_active=True).order_by(Department.name).all()],
         'statuses': hr.STATUSES, 'staff_types': hr.STAFF_TYPES, 'employment_types': hr.EMPLOYMENT_TYPES,
@@ -232,22 +253,40 @@ def staff_detail(staff_id):
 
     initials = ((s.first_name[0] if s.first_name else '') + (s.surname[0] if s.surname else '')).upper()
     from utils.comms import normalise_phone
+    today = date.today()
+    contract_left = s.contract_days_left
     return _render({
         'page': 'staff_detail', 'nav': _nav_urls(), 'is_admin': _is_admin(),
-        'today': date.today().isoformat(), 'leave_types': hr.LEAVE_TYPES,
+        'today': today.isoformat(), 'leave_types': hr.LEAVE_TYPES,
         's': {
             'id': s.id, 'full_name': s.full_name, 'staff_id': s.staff_id, 'initials': initials,
+            'photo_url': s.photo_url or '',
             'designation': s.designation or '', 'department': s.department.name if s.department else '',
             'staff_type': s.staff_type, 'employment_type': s.employment_type, 'status': s.status,
             'phone': s.phone or '', 'wa_intl': (normalise_phone(s.phone) if s.phone else ''),
             'email': s.email or '', 'gender': s.gender or '',
             'date_of_birth': s.date_of_birth.strftime('%d %b %Y') if s.date_of_birth else '',
+            'age': s.age,
             'date_employed': s.date_employed.strftime('%d %b %Y') if s.date_employed else '',
-            'salary': s.salary or 0, 'qualification': s.qualification or '', 'address': s.address or '',
+            'confirmation_date': s.confirmation_date.strftime('%d %b %Y') if s.confirmation_date else '',
+            'contract_start': s.contract_start.strftime('%d %b %Y') if s.contract_start else '',
+            'contract_end': s.contract_end.strftime('%d %b %Y') if s.contract_end else '',
+            'contract_days_left': contract_left,
+            'contract_expiring': (contract_left is not None and contract_left <= 60),
+            'years_of_service': s.years_of_service, 'total_experience_years': s.total_experience_years,
+            'salary': s.salary or 0, 'qualification': s.qualification or '',
+            'certifications': s.certifications or '', 'address': s.address or '',
             'nok_name': s.nok_name or '', 'nok_phone': s.nok_phone or '', 'nok_relationship': s.nok_relationship or '',
+            'emergency_name': s.emergency_name or '', 'emergency_phone': s.emergency_phone or '',
+            'tax_id': s.tax_id or '', 'pension_pin': s.pension_pin or '', 'pension_provider': s.pension_provider or '',
+            'blood_group': s.blood_group or '', 'medical_notes': s.medical_notes or '',
             'bank_name': s.bank_name or '', 'account_number': s.account_number or '',
             'account_name': s.account_name or '', 'notes': s.notes or '',
         },
+        'teaching_load': hr.teaching_load(s),
+        'attendance_summary': hr.attendance_summary(s.id, today.year, today.month),
+        'attendance_month': today.strftime('%B %Y'),
+        'leave_summary': hr.leave_summary(s.id, today.year),
         'salary_history': [{'effective': (h.effective_date or h.created_at).strftime('%d %b %Y'),
                             'previous_salary': h.previous_salary or 0, 'new_salary': h.new_salary or 0,
                             'change': h.change, 'reason': h.reason or '—'} for h in salary_history],

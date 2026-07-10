@@ -33,7 +33,17 @@
 .chart-box{position:relative;height:230px}
 /* staff detail */
 .profile-head{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
-.avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#11998e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;flex-shrink:0}
+.avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#11998e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;flex-shrink:0;object-fit:cover}
+/* profile hub (cross-module snapshot) */
+.hr-hub-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:768px){.hr-hub-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1200px){.hr-hub-grid{grid-template-columns:repeat(3,1fr)}}
+.hr-hub-grid .card-header{display:flex;justify-content:space-between;align-items:center}
+.hub-stat-row{display:flex;gap:1rem;flex-wrap:wrap}
+.hub-stat{flex:1;min-width:64px;text-align:center}
+.hub-stat .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.hub-stat .l{font-size:.68rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:.35rem}
 .info-grid{display:grid;grid-template-columns:1fr;gap:.1rem}
 @media(min-width:640px){.info-grid{grid-template-columns:1fr 1fr}}
 .info-row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}

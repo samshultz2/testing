@@ -48,14 +48,32 @@ class StaffMember(db.Model):
     staff_type = db.Column(db.String(20), default='Teaching')  # Teaching / Non-teaching
     employment_type = db.Column(db.String(20), default='Full-time')  # Full-time/Part-time/Contract/NYSC/Volunteer
     date_employed = db.Column(db.Date)
+    confirmation_date = db.Column(db.Date)                   # date confirmed off probation
+    contract_start = db.Column(db.Date)                     # for Contract staff
+    contract_end = db.Column(db.Date)                      # contract expiry (dashboard alert)
     status = db.Column(db.String(20), default='Active')      # Active/On Leave/Suspended/Resigned/Terminated
     qualification = db.Column(db.String(200))
+    certifications = db.Column(db.String(255))              # professional certifications
+    prior_experience_years = db.Column(db.Integer)          # experience before joining
     salary = db.Column(db.Float, default=0)                  # monthly gross
 
     # Next of kin — encrypted at rest (never searched)
     nok_name = db.Column(EncryptedString())
     nok_phone = db.Column(EncryptedString())
     nok_relationship = db.Column(EncryptedString())
+
+    # Emergency contact — encrypted at rest (never searched)
+    emergency_name = db.Column(EncryptedString())
+    emergency_phone = db.Column(EncryptedString())
+
+    # Statutory / payroll identity — encrypted at rest (never searched)
+    tax_id = db.Column(EncryptedString())                   # TIN
+    pension_pin = db.Column(EncryptedString())
+    pension_provider = db.Column(db.String(120))
+
+    # Medical — encrypted at rest (never searched)
+    blood_group = db.Column(db.String(6))
+    medical_notes = db.Column(EncryptedString())
 
     # Payroll bank details — encrypted at rest (never searched)
     bank_name = db.Column(EncryptedString())
@@ -80,6 +98,39 @@ class StaffMember(db.Model):
     @property
     def display_name(self):
         return ' '.join(p for p in [self.first_name, self.surname] if p)
+
+    @property
+    def years_of_service(self):
+        """Whole years since date_employed (0 if unknown)."""
+        if not self.date_employed:
+            return 0
+        from datetime import date
+        today = date.today()
+        yrs = today.year - self.date_employed.year - (
+            (today.month, today.day) < (self.date_employed.month, self.date_employed.day))
+        return max(yrs, 0)
+
+    @property
+    def total_experience_years(self):
+        """Service here plus any experience gained before joining."""
+        return self.years_of_service + (self.prior_experience_years or 0)
+
+    @property
+    def age(self):
+        if not self.date_of_birth:
+            return None
+        from datetime import date
+        today = date.today()
+        return today.year - self.date_of_birth.year - (
+            (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day))
+
+    @property
+    def contract_days_left(self):
+        """Days until the contract expires (None if no end date). Negative = expired."""
+        if not self.contract_end:
+            return None
+        from datetime import date
+        return (self.contract_end - date.today()).days
 
     @staticmethod
     def generate_staff_id():

@@ -11,6 +11,7 @@ STAFF_TYPES = ['Teaching', 'Non-teaching']
 EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'NYSC', 'Volunteer']
 LEAVE_TYPES = ['Annual', 'Sick', 'Casual', 'Maternity', 'Paternity', 'Study', 'Other']
 ATT_STATUSES = ['Present', 'Late', 'Absent', 'Excused']
+BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 
 # ---- Settings (lateness / absence rules) -----------------------------------
@@ -180,3 +181,92 @@ def sync_attendance_deductions(run):
 def run_total(run):
     return (db.session.query(func.coalesce(func.sum(Payslip.net), 0.0))
             .filter(Payslip.run_id == run.id).scalar()) or 0.0
+
+
+# ---- Cross-module profile hub ----------------------------------------------
+# The staff profile pulls together data owned by other modules (teaching
+# assignments, attendance, leave) so an administrator sees everything about a
+# person in one place — without duplicating those modules' own screens.
+
+def teaching_load(staff):
+    """Teaching assignments for a staff member, resolved through their linked
+    User → Teacher record. Returns None for staff who don't teach / aren't
+    linked to a login. Only the *current* (active) session's assignments count,
+    matching how the Academics module scopes a teacher's classes.
+
+    Shape: {'form_classes': [str], 'subjects': [{'class','subject'}],
+            'subject_count': int, 'class_count': int}
+    """
+    if not staff or not staff.user_id:
+        return None
+    from models import (Teacher, TeacherClassAssignment, TeacherSubjectAssignment,
+                        ClassArmAssignment, Term)
+    teacher = Teacher.query.filter_by(user_id=staff.user_id).first()
+    if not teacher:
+        return None
+    # Restrict to the active term's assignments so we show the current workload.
+    active_term = Term.query.filter_by(is_active=True).first()
+    caa_ids = None
+    if active_term:
+        caa_ids = {r[0] for r in db.session.query(ClassArmAssignment.id)
+                   .filter(ClassArmAssignment.term_id == active_term.id).all()}
+
+    def _current(assignments):
+        for a in assignments:
+            if not a.is_active:
+                continue
+            if caa_ids is not None and a.class_arm_assignment_id not in caa_ids:
+                continue
+            yield a
+
+    form_classes = []
+    for a in _current(teacher.class_assignments.filter_by(is_form_teacher=True).all()):
+        caa = a.class_arm_assignment
+        if caa:
+            form_classes.append(caa.display_name)
+
+    subjects = []
+    for a in _current(teacher.subject_assignments.all()):
+        caa = a.class_arm_assignment
+        subjects.append({'class': caa.display_name if caa else '—',
+                         'subject': a.subject.name if a.subject else '—'})
+    subjects.sort(key=lambda x: (x['class'], x['subject']))
+    classes = {s['class'] for s in subjects} | set(form_classes)
+    return {
+        'form_classes': sorted(set(form_classes)),
+        'subjects': subjects,
+        'subject_count': len(subjects),
+        'class_count': len(classes),
+        'is_teacher': True,
+    }
+
+
+def attendance_summary(staff_id, year, month):
+    """This-month staff-attendance tally (present/late/absent/excused + deduction)."""
+    from models import StaffAttendance
+    rows = (StaffAttendance.query.filter(
+        StaffAttendance.staff_id == staff_id,
+        extract('year', StaffAttendance.date) == year,
+        extract('month', StaffAttendance.date) == month).all())
+    out = {'present': 0, 'late': 0, 'absent': 0, 'excused': 0, 'deduction': 0.0, 'marked': len(rows)}
+    for a in rows:
+        key = (a.status or 'Present').lower()
+        if key in out:
+            out[key] += 1
+        out['deduction'] += (a.deduction or 0)
+    out['deduction'] = round(out['deduction'], 2)
+    return out
+
+
+def leave_summary(staff_id, year):
+    """Approved leave days taken this year (by type) plus a pending count."""
+    approved = (LeaveRecord.query.filter(
+        LeaveRecord.staff_id == staff_id, LeaveRecord.status == 'Approved',
+        extract('year', LeaveRecord.start_date) == year).all())
+    by_type = {}
+    total = 0
+    for lv in approved:
+        by_type[lv.leave_type or 'Other'] = by_type.get(lv.leave_type or 'Other', 0) + (lv.days or 0)
+        total += (lv.days or 0)
+    pending = LeaveRecord.query.filter_by(staff_id=staff_id, status='Pending').count()
+    return {'total_days': total, 'by_type': by_type, 'pending': pending}
