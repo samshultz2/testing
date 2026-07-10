@@ -59,6 +59,29 @@ a.kpi:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px)}
 .attach-chip{display:inline-flex;align-items:center;gap:.4rem;background:var(--gray-100);border-radius:var(--radius-full);padding:.3rem .7rem;font-size:.82rem}
 .attach-chip button{border:none;background:none;cursor:pointer;color:var(--danger);font-size:1rem;line-height:1}
 .attach-link{display:inline-flex;align-items:center;gap:.35rem;font-size:.82rem}
+/* inbox */
+.inbox-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:820px){.inbox-grid{grid-template-columns:300px 1fr}}
+.inbox-list{display:flex;flex-direction:column;gap:.4rem;max-height:70vh;overflow-y:auto}
+.conv-item{text-align:left;border:1px solid var(--border-color);background:var(--bg-card);border-radius:var(--radius-md);padding:.6rem .75rem;cursor:pointer}
+.conv-item.on{border-color:var(--primary);background:var(--primary-light,rgba(13,106,78,.08))}
+.conv-top{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+.conv-title{font-weight:600;font-size:.88rem}
+.conv-last{font-size:.8rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-at{font-size:.72rem;color:var(--text-muted);margin-top:.15rem}
+.inbox-thread{display:flex;flex-direction:column;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--bg-card);min-height:60vh}
+.thread-head{padding:.7rem 1rem;border-bottom:1px solid var(--border-light)}
+.thread-body{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.5rem;max-height:60vh}
+.thread-empty{display:grid;place-items:center;flex:1}
+.bub-row{display:flex}
+.bub-row.mine{justify-content:flex-end}
+.bub{max-width:78%;background:var(--gray-100);border-radius:12px;padding:.5rem .75rem;font-size:.88rem}
+.bub-row.mine .bub{background:#dcf8c6}
+[data-theme="dark"] .bub-row.mine .bub{background:#075e54;color:#e9edef}
+.bub-sender{font-size:.72rem;font-weight:700;color:var(--primary);margin-bottom:.15rem}
+.bub-at{font-size:.68rem;color:var(--text-muted);margin-top:.2rem;text-align:right}
+.thread-compose{display:flex;gap:.5rem;align-items:center;padding:.6rem;border-top:1px solid var(--border-light)}
+.thread-compose input{flex:1}
 /* message detail */
 .wa-btn{background:#25D366;color:#fff}
 .wa-btn:hover{background:#1da851;color:#fff}

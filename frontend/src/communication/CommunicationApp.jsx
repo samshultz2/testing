@@ -6,6 +6,7 @@ import { confirm, Banner, SectionShell, SectionTabs, Empty, Autocomplete } from 
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['compose', 'fa-paper-plane', 'Compose'],
+  ['inbox', 'fa-comments', 'Inbox'],
   ['announcements', 'fa-bullhorn', 'Announcements'], ['messages', 'fa-clock-rotate-left', 'History'],
   ['reports', 'fa-chart-line', 'Reports'],
   ['templates', 'fa-file-lines', 'Templates'], ['contacts', 'fa-address-book', 'Contacts'],
@@ -482,6 +483,7 @@ function Reports({ d }) {
     ['green', 'fa-circle-check', r.sent, 'Delivered'],
     ['red', 'fa-triangle-exclamation', r.failed, 'Failed'],
     ['green', 'fa-percent', r.delivery_rate == null ? '—' : r.delivery_rate + '%', 'Delivery rate'],
+    ['green', 'fa-book-open', r.read == null ? 0 : r.read, 'Read'],
     ['amber', 'fa-clock', r.scheduled, 'Scheduled'],
     ['blue', 'fa-file-pen', r.drafts, 'Drafts'],
     ['amber', 'fa-bullhorn', r.announcements, 'Announcements'],
@@ -567,7 +569,7 @@ function MessageDetail({ d, notify }) {
           <div><span className={channelBadge(m.channel)}>{m.channel}</span> <span className="badge badge-secondary">{m.audience_label}</span>
             {m.status === 'Scheduled' && <> <span className="badge badge-warning"><i aria-hidden="true" className="fas fa-clock" /> Scheduled {m.scheduled_at}</span></>}
             <span className="text-muted text-sm"> · {m.created_at} by {m.created_by}</span></div>
-          <div className="text-sm"><strong>{m.sent_count}</strong> / {m.recipient_count} sent{d.failed_count ? <> · <span className="text-danger">{d.failed_count} failed</span></> : ''}{d.pending_count && m.status !== 'Sent' ? ` · ${d.pending_count} pending` : ''} · {d.segments} SMS segment(s)</div>
+          <div className="text-sm"><strong>{m.sent_count}</strong> / {m.recipient_count} sent{d.failed_count ? <> · <span className="text-danger">{d.failed_count} failed</span></> : ''}{d.pending_count && m.status !== 'Sent' ? ` · ${d.pending_count} pending` : ''}{d.read_count ? <> · <span style={{ color: 'var(--success)' }}>{d.read_count} read</span></> : ''} · {d.segments} SMS segment(s)</div>
         </div>
         <div className="msg-body">{m.body}</div>
         {m.attachment && <div className="mt-2"><a href={m.attachment.url} className="attach-link" data-native><i aria-hidden="true" className="fas fa-paperclip" /> {m.attachment.name}{m.attachment.size ? ` · ${m.attachment.size}` : ''}</a></div>}
@@ -590,6 +592,7 @@ function MessageDetail({ d, notify }) {
                 <td data-label="Student">{r.student_name}</td>
                 <td data-label="Phone"><a href={'tel:' + r.phone}>{r.phone}</a></td>
                 <td data-label="Status"><span className={statusBadge(r.status)}>{r.status}</span>
+                  {r.read && <span className="badge badge-success" style={{ marginLeft: '.3rem' }} title="Opened"><i aria-hidden="true" className="fas fa-book-open" /> Read</span>}
                   {r.status === 'Failed' && r.error && <div className="text-danger text-sm" title={r.error}>{r.error.slice(0, 40)}</div>}</td>
                 <td className="actions"><div className="act-links">
                   <a className={'btn btn-sm ' + (m.channel === 'SMS' ? 'btn-secondary' : 'wa-btn')} href={linkFor(r)} target="_blank" rel="noopener" title={m.channel === 'SMS' ? 'Open SMS' : 'Open WhatsApp'} onClick={() => markSent(r)}>
@@ -706,9 +709,117 @@ function Settings({ d, notify }) {
   );
 }
 
+// ---- Inbox (internal staff messaging) --------------------------------------
+function Inbox({ d, notify }) {
+  const nav = useNav();
+  const active = d.active;
+  const [text, setText] = useState('');
+  const [att, setAtt] = useState(null);
+  const [starting, setStarting] = useState(false);
+  const [picked, setPicked] = useState([]);   // [{id,label}] for a new conversation
+  const [groupTitle, setGroupTitle] = useState('');
+  const endRef = useRef();
+  useEffect(() => { if (endRef.current) endRef.current.scrollIntoView(); }, [active && active.id, active && active.messages.length]);
+
+  const openConv = (id) => nav.go(d.urls.thread + id);
+  const send = async (e) => {
+    e.preventDefault();
+    if (!text.trim() && !att) return;
+    const r = await submitJson(active.send_url, { body: text, attachment_id: att ? att.id : '' });
+    if (r.ok) { setText(''); setAtt(null); nav.refresh(); } else notify('error', r.error || 'Could not send.');
+  };
+  const startConv = async () => {
+    if (!picked.length) { notify('error', 'Pick at least one person.'); return; }
+    const r = await submitJson(d.urls.start, { user_ids: picked.map((p) => p.id), title: groupTitle });
+    if (r.ok) { setStarting(false); setPicked([]); setGroupTitle(''); nav.go(r.redirect); }
+    else notify('error', r.error || 'Could not start.');
+  };
+
+  return (
+    <>
+      <div className="page-header"><h1>Inbox</h1>
+        <div className="page-header-actions"><button className="btn btn-primary" onClick={() => setStarting(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> New conversation</button></div>
+      </div>
+      <Tabs d={d} />
+      {starting && (
+        <div className="card mb-3"><div className="card-header"><h3>New conversation</h3></div>
+          <div className="card-body">
+            <UserPicker url={d.urls.users} onAdd={(o) => setPicked((p) => (p.some((x) => x.id === o.id) ? p : [...p, o]))} />
+            <div className="mb-2">{picked.map((p) => <span className="chip" key={p.id}>{p.label} <button type="button" onClick={() => setPicked((s) => s.filter((x) => x.id !== p.id))}>×</button></span>)}</div>
+            {picked.length > 1 && <div className="form-group"><label className="form-label">Group name</label><input className="form-control" value={groupTitle} onChange={(e) => setGroupTitle(e.target.value)} placeholder="e.g. Exams committee" /></div>}
+            <button className="btn btn-primary btn-sm" onClick={startConv}><i aria-hidden="true" className="fas fa-paper-plane" /> Start</button>
+            <button className="btn btn-link btn-sm" onClick={() => setStarting(false)}>Cancel</button>
+          </div></div>)}
+
+      <div className="inbox-grid">
+        <div className="inbox-list">
+          {(d.conversations || []).length ? d.conversations.map((c) => (
+            <button key={c.id} className={'conv-item' + (active && active.id === c.id ? ' on' : '')} onClick={() => openConv(c.id)}>
+              <div className="conv-top"><span className="conv-title">{c.kind === 'group' ? <i aria-hidden="true" className="fas fa-users" /> : <i aria-hidden="true" className="fas fa-user" />} {c.title}</span>
+                {c.unread > 0 && <span className="badge badge-danger">{c.unread}</span>}</div>
+              <div className="conv-last">{c.last || 'No messages yet'}</div>
+              <div className="conv-at">{c.last_at}</div>
+            </button>
+          )) : <Empty icon="fa-comments" title="No conversations"><p>Start one to message a colleague.</p></Empty>}
+        </div>
+        <div className="inbox-thread">
+          {active ? (
+            <>
+              <div className="thread-head"><strong>{active.title}</strong> {active.kind === 'group' && <span className="badge badge-secondary">Group</span>}</div>
+              <div className="thread-body">
+                {active.messages.length ? active.messages.map((m) => (
+                  <div key={m.id} className={'bub-row' + (m.mine ? ' mine' : '')}>
+                    <div className="bub">
+                      {!m.mine && active.kind === 'group' && <div className="bub-sender">{m.sender}</div>}
+                      {m.body && <div>{m.body}</div>}
+                      {m.attachment && <a href={m.attachment.url} className="attach-link" data-native><i aria-hidden="true" className="fas fa-paperclip" /> {m.attachment.name}</a>}
+                      <div className="bub-at">{m.at}</div>
+                    </div>
+                  </div>
+                )) : <div className="text-muted text-sm" style={{ padding: '1rem' }}>No messages yet — say hello.</div>}
+                <div ref={endRef} />
+              </div>
+              <form className="thread-compose" onSubmit={send}>
+                <AttachField url={d.urls.upload} value={att} onChange={setAtt} notify={notify} />
+                <input className="form-control" placeholder="Write a message…" value={text} onChange={(e) => setText(e.target.value)} />
+                <button type="submit" className="btn btn-primary" aria-label="Send"><i aria-hidden="true" className="fas fa-paper-plane" /></button>
+              </form>
+            </>
+          ) : <div className="thread-empty"><Empty icon="fa-comment-dots" title="Select a conversation"><p>Or start a new one.</p></Empty></div>}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Staff-user type-ahead for starting a conversation.
+function UserPicker({ url, onAdd }) {
+  const [text, setText] = useState('');
+  const [list, setList] = useState([]);
+  const [open, setOpen] = useState(false);
+  const tRef = useRef();
+  const onInput = (v) => {
+    setText(v); clearTimeout(tRef.current);
+    if (v.trim().length < 2) { setList([]); setOpen(false); return; }
+    tRef.current = setTimeout(async () => {
+      try { const r = await fetch(url + '?q=' + encodeURIComponent(v.trim()), { credentials: 'same-origin' });
+        const rows = await r.json(); setList(rows); setOpen(rows.length > 0); } catch (_) { /* ignore */ }
+    }, 220);
+  };
+  const pick = (o) => { onAdd({ id: o.id, label: o.label || o.name }); setText(''); setList([]); setOpen(false); };
+  return (
+    <div className="form-group ac-wrap">
+      <label className="form-label">Add people</label>
+      <input type="text" className="form-control" placeholder="Search staff by name…" autoComplete="off"
+             value={text} onChange={(e) => onInput(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {open && <div className="ac-list">{list.map((o) => <div key={o.id} onMouseDown={() => pick(o)}>{o.label || o.name}</div>)}</div>}
+    </div>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, compose: Compose, announcements: Announcements,
   templates: Templates, contacts: Contacts, messages: Messages, message_detail: MessageDetail,
-  reports: Reports, settings: Settings };
+  reports: Reports, settings: Settings, inbox: Inbox };
 
 export default function CommunicationApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

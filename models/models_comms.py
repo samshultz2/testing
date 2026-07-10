@@ -95,6 +95,9 @@ class Notification(db.Model):
     url = db.Column(db.String(300))
     category = db.Column(db.String(20), default='info')   # info/success/warning/error
     is_read = db.Column(db.Boolean, default=False, index=True)
+    # When this bell notice was delivered by an in-app campaign, links back to the
+    # campaign recipient so reading it counts as a campaign read-receipt.
+    origin_recipient_id = db.Column(db.Integer, db.ForeignKey('message_recipients.id'))
     created_at = db.Column(db.DateTime, default=local_now, index=True)
 
     def to_dict(self):
@@ -188,6 +191,7 @@ class MessageRecipient(db.Model):
     body = db.Column(db.Text)                       # personalised message
     status = db.Column(db.String(15), default='Pending')  # Pending / Sent / Failed
     sent_at = db.Column(db.DateTime)
+    read_at = db.Column(db.DateTime)      # when the recipient opened/read it
     error = db.Column(db.Text)            # provider error on a failed gateway send
     created_at = db.Column(db.DateTime, default=local_now)
 

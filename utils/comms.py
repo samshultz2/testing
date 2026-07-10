@@ -495,19 +495,21 @@ def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None
     for t in reachable:
         ctx = campaign_context(t, term)
         rendered = render(body, ctx)
-        db.session.add(MessageRecipient(
+        rec = MessageRecipient(
             message_id=msg.id,
             student_id=(t['student'].id if t.get('student') is not None else None),
             parent_name=(t.get('parent_name') or t.get('name')),
             phone=t['phone'], email=t.get('email') or None,
             body=rendered,
             status=('Sent' if inapp else 'Pending'),
-            sent_at=(_now.now() if inapp else None)))
+            sent_at=(_now.now() if inapp else None))
+        db.session.add(rec)
         if inapp and t.get('user_id'):
+            db.session.flush()            # need rec.id to link the bell for read-receipts
             from models import Notification
             db.session.add(Notification(
                 user_id=t['user_id'], title=(title or 'Notice'), body=rendered,
-                category='info'))
+                category='info', origin_recipient_id=rec.id))
     db.session.commit()
     return msg
 

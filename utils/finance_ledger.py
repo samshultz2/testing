@@ -190,10 +190,11 @@ def _reverse_by_origin(connection, origin_type, origin_id):
 # a tiny, dialect-portable ADD COLUMN (no defaults/constraints beyond the type).
 _ADDED_COLUMNS = {
     'parent_contacts': {'email': 'VARCHAR(120)'},
-    'message_recipients': {'email': 'VARCHAR(120)'},
+    'message_recipients': {'email': 'VARCHAR(120)', 'read_at': 'TIMESTAMP'},
     'message_templates': {'is_favorite': 'BOOLEAN'},
     'announcements': {'needs_ack': 'BOOLEAN', 'attachment_id': 'INTEGER'},
     'messages': {'attachment_id': 'INTEGER'},
+    'notifications': {'origin_recipient_id': 'INTEGER'},
 }
 
 
@@ -222,10 +223,13 @@ def ensure_tables(bind=None):
     owns the schema and never auto-creates these newer tables/columns — and because
     existing tenant databases predate them."""
     from models import (db, FinanceTransaction, AdditionalCharge, InstallmentPlan,
-                        RecipientGroup, AnnouncementAck, CommAttachment)
+                        RecipientGroup, AnnouncementAck, CommAttachment,
+                        Conversation, ConversationMember, ChatMessage)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
-              AnnouncementAck.__table__, CommAttachment.__table__]
+              AnnouncementAck.__table__, CommAttachment.__table__,
+              Conversation.__table__, ConversationMember.__table__,
+              ChatMessage.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

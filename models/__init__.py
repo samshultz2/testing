@@ -24,6 +24,7 @@ from .models_contributions import ContributionSettings, ContributionPayment, Con
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
                              ExpenseCategory, Expense, FinanceTransaction, AdditionalCharge, InstallmentPlan)
 from .models_comms import MessageTemplate, Message, MessageRecipient, Announcement, Notification, RecipientGroup, AnnouncementAck, CommAttachment
+from .models_chat import Conversation, ConversationMember, ChatMessage
 from .models_hr import (Department, StaffMember, LeaveRecord, PayrollRun, Payslip,
                         SalaryHistory, StaffAttendance, PayrollDeductionType,
                         PayslipDeduction)
@@ -61,6 +62,7 @@ __all__ = [
     'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
     'ExpenseCategory', 'Expense', 'FinanceTransaction', 'AdditionalCharge', 'InstallmentPlan',
     'MessageTemplate', 'Message', 'MessageRecipient', 'Announcement', 'Notification', 'RecipientGroup', 'AnnouncementAck', 'CommAttachment',
+    'Conversation', 'ConversationMember', 'ChatMessage',
     'Department', 'StaffMember', 'LeaveRecord', 'PayrollRun', 'Payslip',
     'SalaryHistory', 'StaffAttendance', 'PayrollDeductionType', 'PayslipDeduction',
     'Applicant',

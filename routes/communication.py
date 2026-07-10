@@ -48,6 +48,7 @@ def _is_admin():
 
 def _nav_urls():
     return {'dashboard': url_for('comms.dashboard'), 'compose': url_for('comms.compose'),
+            'inbox': url_for('comms.inbox'),
             'announcements': url_for('comms.announcements'), 'messages': url_for('comms.messages_list'),
             'reports': url_for('comms.reports'),
             'templates': url_for('comms.templates_list'), 'contacts': url_for('comms.contacts'),
@@ -404,6 +405,127 @@ def toggle_favorite(template_id):
     db.session.commit()
     return _ok('Favourite updated.' if t.is_favorite else 'Removed from favourites.',
                url_for('comms.templates_list'))
+
+
+# ============================================================================
+# INBOX — internal staff-to-staff messaging
+# ============================================================================
+
+def _me():
+    from utils.access_control import get_current_user
+    return get_current_user()
+
+
+@comms_bp.route('/inbox')
+@login_required
+def inbox():
+    """The staff messaging inbox — conversation list (the thread loads client-side)."""
+    from utils import chat
+    me = _me()
+    if me is None:
+        return _err('Messaging is for staff accounts.', url_for('comms.dashboard'))
+    return _render({
+        'page': 'inbox', 'nav': _nav_urls(), 'me': {'id': me.id, 'name': me.full_name or me.username},
+        'conversations': chat.conversations_for(me.id),
+        'urls': {'self': url_for('comms.inbox'), 'start': url_for('comms.inbox_start'),
+                 'users': url_for('comms.inbox_users'), 'upload': url_for('comms.upload_attachment'),
+                 'thread': url_for('comms.inbox_thread', conv_id=0)[:-1]},
+    })
+
+
+@comms_bp.route('/inbox/users')
+@login_required
+def inbox_users():
+    """Search staff users to start a conversation with (branch-scoped, never self)."""
+    from models import User
+    from utils.branch_scope import scope_query, is_central, viewing_branch_id
+    me = _me()
+    if me is None:
+        return jsonify([])
+    q = (request.args.get('q') or '').strip()
+    base = User.query.filter(User.is_active.is_(True), User.id != me.id)
+    if not is_central():
+        bid = viewing_branch_id()
+        if bid not in (None, -1):
+            base = base.filter(User.branch_id == bid)
+    if q:
+        like = like_term(q)
+        base = base.filter(db.or_(User.full_name.ilike(like, escape='\\'),
+                                  User.username.ilike(like, escape='\\')))
+    rows = base.order_by(User.full_name, User.username).limit(20).all()
+    return jsonify([{'id': u.id, 'name': u.full_name or u.username,
+                     'label': f'{u.full_name or u.username} ({u.role})'} for u in rows])
+
+
+@comms_bp.route('/inbox/start', methods=['POST'])
+@login_required
+def inbox_start():
+    """Start (or reuse) a direct chat, or create a group. Returns the thread url."""
+    from utils import chat
+    from utils.branch_scope import branch_for_new
+    me = _me()
+    if me is None:
+        return _err('Messaging is for staff accounts.', url_for('comms.dashboard'))
+    ids = request.form.getlist('user_ids', type=int)
+    if not ids:
+        return _err('Pick at least one person.', url_for('comms.inbox'))
+    if len(ids) == 1:
+        conv = chat.get_or_create_direct(me.id, ids[0], branch_id=branch_for_new())
+    else:
+        conv = chat.create_group(me.id, ids, request.form.get('title'), branch_id=branch_for_new())
+    if not conv:
+        return _err('Could not start that conversation.', url_for('comms.inbox'))
+    return _ok('Conversation ready.', url_for('comms.inbox_thread', conv_id=conv.id))
+
+
+@comms_bp.route('/inbox/<int:conv_id>')
+@login_required
+def inbox_thread(conv_id):
+    """A conversation's messages (marks it read for the viewer)."""
+    from utils import chat
+    from models import Conversation, ChatMessage
+    me = _me()
+    if me is None or not chat.is_member(conv_id, me.id):
+        return _err('You are not part of that conversation.', url_for('comms.inbox'))
+    conv = db.get_or_404(Conversation, conv_id)
+    msgs = ChatMessage.query.filter_by(conversation_id=conv_id).order_by(ChatMessage.created_at).all()
+    chat.mark_read(conv_id, me.id)
+    rows = [{'id': m.id, 'body': m.body or '', 'mine': m.sender_id == me.id,
+             'sender': chat._display_name(m.sender) if m.sender else '—',
+             'at': m.created_at.strftime('%d %b %H:%M') if m.created_at else '',
+             'attachment': _attachment_dict(m.attachment_id)} for m in msgs]
+    return _render({
+        'page': 'inbox', 'nav': _nav_urls(), 'me': {'id': me.id, 'name': me.full_name or me.username},
+        'conversations': chat.conversations_for(me.id),
+        'active': {'id': conv.id, 'title': chat.conversation_title(conv, me.id),
+                   'kind': conv.kind, 'messages': rows,
+                   'send_url': url_for('comms.inbox_send', conv_id=conv.id)},
+        'urls': {'self': url_for('comms.inbox'), 'start': url_for('comms.inbox_start'),
+                 'users': url_for('comms.inbox_users'), 'upload': url_for('comms.upload_attachment'),
+                 'thread': url_for('comms.inbox_thread', conv_id=0)[:-1]},
+    })
+
+
+@comms_bp.route('/inbox/<int:conv_id>/send', methods=['POST'])
+@login_required
+def inbox_send(conv_id):
+    from utils import chat
+    me = _me()
+    if me is None or not chat.is_member(conv_id, me.id):
+        return _err('You are not part of that conversation.', url_for('comms.inbox'))
+    m = chat.post_message(conv_id, me.id, request.form.get('body'),
+                          attachment_id=request.form.get('attachment_id', type=int) or None)
+    if not m:
+        return _err('Message cannot be empty.', url_for('comms.inbox_thread', conv_id=conv_id))
+    return _ok('Sent.', url_for('comms.inbox_thread', conv_id=conv_id))
+
+
+@comms_bp.route('/inbox/unread-count')
+@login_required
+def inbox_unread():
+    from utils import chat
+    me = _me()
+    return jsonify({'unread': chat.total_unread(me.id) if me else 0})
 
 
 # ============================================================================
@@ -922,6 +1044,12 @@ def _report_data(frm, to):
     pending = by_status.get('Pending', 0)
     attempted = sent + failed
     delivery_rate = round(sent / attempted * 100, 1) if attempted else None
+    # Read receipts (currently in-app; email opens land here in future).
+    read = (scope_query(db.session.query(func.count(MessageRecipient.id))
+                        .join(Message, MessageRecipient.message_id == Message.id), Message)
+            .filter(Message.created_at >= start, Message.created_at <= end,
+                    MessageRecipient.read_at.isnot(None)).scalar() or 0)
+    read_rate = round(read / sent * 100, 1) if sent else None
 
     scheduled = mq.filter(Message.status == 'Scheduled').count()
     drafts = mq.filter(Message.status == 'Draft').count()
@@ -934,6 +1062,7 @@ def _report_data(frm, to):
         'recipients': sum(c['recipients'] for c in channel_rows),
         'sent': sent, 'failed': failed, 'pending': pending,
         'delivery_rate': delivery_rate, 'scheduled': scheduled, 'drafts': drafts,
+        'read': int(read), 'read_rate': read_rate,
         'announcements': int(announcements),
     }
 
@@ -1015,6 +1144,7 @@ def message_detail(message_id):
                      'phone': dest, 'email': r.email or '',
                      'intl': '' if is_email else comms.normalise_phone(r.phone),
                      'status': r.status, 'error': r.error or '', 'body': r.body,
+                     'read': r.read_at is not None,
                      'sent_url': url_for('comms.mark_sent', message_id=msg.id, rid=r.id)})
     from utils import sms_gateway, mailer
     gw = sms_gateway.get_config()
@@ -1039,6 +1169,7 @@ def message_detail(message_id):
         'gateway_label': channel_label,
         'failed_count': msg.recipients.filter(MessageRecipient.status == 'Failed').count(),
         'pending_count': msg.recipients.filter(MessageRecipient.status != 'Sent').count(),
+        'read_count': msg.recipients.filter(MessageRecipient.read_at.isnot(None)).count(),
         'urls': {'export': url_for('comms.export_recipients', message_id=msg.id),
                  'compose': url_for('comms.compose'),
                  'cancel_schedule': url_for('comms.cancel_schedule', message_id=msg.id),

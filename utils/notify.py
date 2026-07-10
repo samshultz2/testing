@@ -113,10 +113,24 @@ def unread_count(user_id, role):
     return _scope(user_id, role).filter(Notification.is_read.is_(False)).count()
 
 
+def _stamp_campaign_read(notification):
+    """If this bell came from an in-app campaign, mark its campaign recipient read
+    (read-receipt). Best-effort."""
+    rid = getattr(notification, 'origin_recipient_id', None)
+    if not rid:
+        return
+    from models import MessageRecipient
+    from models.models import local_now
+    rec = db.session.get(MessageRecipient, rid)
+    if rec and rec.read_at is None:
+        rec.read_at = local_now()
+
+
 def mark_read(user_id, role, notification_id):
     n = _scope(user_id, role).filter(Notification.id == notification_id).first()
     if n and not n.is_read:
         n.is_read = True
+        _stamp_campaign_read(n)
         db.session.commit()
     return n is not None
 
@@ -125,6 +139,7 @@ def mark_all_read(user_id, role):
     rows = _scope(user_id, role).filter(Notification.is_read.is_(False)).all()
     for n in rows:
         n.is_read = True
+        _stamp_campaign_read(n)
     if rows:
         db.session.commit()
     return len(rows)
