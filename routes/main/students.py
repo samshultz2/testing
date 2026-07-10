@@ -46,6 +46,7 @@ def add_student():
             # Stamp the student with the creator's (or chosen) branch.
             from utils.branch_scope import branch_for_new
             student.branch_id = branch_for_new(request.form.get('branch_id', type=int))
+            _apply_optional_student_fields(student, request.form)
 
             db.session.add(student)
             db.session.flush()
@@ -262,6 +263,7 @@ def edit_student(student_id):
                 student.waec_subjects = ', '.join(form.getlist('waec_subjects[]')) or None
             if complete or 'jamb_subjects[]' in form:
                 student.jamb_subjects = ', '.join(form.getlist('jamb_subjects[]')) or None
+            _apply_optional_student_fields(student, form, has)
 
             # Update contacts only when the contacts section was submitted
             if not (complete or 'phone_number[]' in form):
@@ -329,6 +331,13 @@ def edit_student(student_id):
             'home_address': student.home_address or '', 'hobbies': student.hobbies or '',
             'waec_subjects': student.waec_subject_list or [],
             'jamb_subjects': student.jamb_subject_list or [],
+            'house': student.house or '', 'boarding_status': student.boarding_status or '',
+            'nin': student.nin or '', 'jamb_reg_number': student.jamb_reg_number or '',
+            'jamb_profile_code': student.jamb_profile_code or '',
+            'blood_group': student.blood_group or '', 'genotype': student.genotype or '',
+            'allergies': student.allergies or '', 'medical_conditions': student.medical_conditions or '',
+            'disabilities': student.disabilities or '', 'medications': student.medications or '',
+            'medical_notes': student.medical_notes or '', 'emergency_medical': student.emergency_medical or '',
         },
         'contacts': contacts or [_blank_contact()],
         'options': _student_form_options(),

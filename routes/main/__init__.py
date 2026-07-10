@@ -1020,10 +1020,19 @@ def _student_view_payload(student):
             'date_of_birth': _fmt_date(student.date_of_birth), 'age': student.age,
             'religion': student.religion, 'home_address': student.home_address,
             'hobbies': student.hobbies, 'stream': student.stream,
+            'house': student.house, 'boarding_status': student.boarding_status,
             'waec_subjects': student.waec_subject_list or [],
             'jamb_subjects': student.jamb_subject_list or [],
             'is_graduated': bool(student.is_graduated),
         },
+        'identity': ({'nin': student.nin, 'jamb_reg_number': student.jamb_reg_number,
+                      'jamb_profile_code': student.jamb_profile_code}
+                     if student.has_identity else None),
+        'medical': ({'blood_group': student.blood_group, 'genotype': student.genotype,
+                     'allergies': student.allergies, 'medical_conditions': student.medical_conditions,
+                     'disabilities': student.disabilities, 'medications': student.medications,
+                     'medical_notes': student.medical_notes, 'emergency_medical': student.emergency_medical}
+                    if student.has_medical else None),
         'contacts': [{'name': c.name, 'is_primary': bool(c.is_primary),
                       'phone_number': c.phone_number, 'relationship': c.relationship} for c in contacts],
         'enrollments': [{'term': e.class_arm_assignment.term.name,
@@ -1068,6 +1077,29 @@ def _student_view_payload(student):
 
 
 
+
+
+# Optional pastoral / identity / medical fields, shared by add + edit so the two
+# code paths can never drift. Plain-text fields are stripped; identity numbers
+# stay searchable; medical free-text lands in encrypted columns.
+_OPTIONAL_STUDENT_FIELDS = (
+    'house', 'boarding_status', 'nin', 'jamb_reg_number', 'jamb_profile_code',
+    'blood_group', 'genotype', 'allergies', 'medical_conditions', 'disabilities',
+    'medications', 'medical_notes', 'emergency_medical',
+)
+
+
+def _apply_optional_student_fields(student, form, has=None):
+    """Copy the optional identity/medical/pastoral fields from a form onto a
+    student. ``has(key)`` decides whether a given field is present in this POST
+    (so a partial edit never blanks fields it didn't submit); default: always."""
+    from utils.security import strip_tags
+    if has is None:
+        has = lambda k: True   # noqa: E731
+    for f in _OPTIONAL_STUDENT_FIELDS:
+        if has(f):
+            val = (form.get(f) or '').strip()
+            setattr(student, f, strip_tags(val) or None)
 
 
 def _manageable_student_ids(ids):

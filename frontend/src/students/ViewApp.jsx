@@ -88,6 +88,39 @@ export default function ViewApp({ initial }) {
         </div>
       </div>
 
+      {(d.identity || s.house || s.boarding_status) && (
+        <div className="card mb-3">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-card" /> Identity &amp; Pastoral</h3></div>
+          <div className="card-body">
+            <div className="info-grid">
+              {d.identity && d.identity.nin && <Info label="NIN">{d.identity.nin}</Info>}
+              {d.identity && d.identity.jamb_reg_number && <Info label="JAMB Reg. Number">{d.identity.jamb_reg_number}</Info>}
+              {d.identity && d.identity.jamb_profile_code && <Info label="JAMB Profile Code">{d.identity.jamb_profile_code}</Info>}
+              {s.house && <Info label="House">{s.house}</Info>}
+              {s.boarding_status && <Info label="Boarding">{s.boarding_status}</Info>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {d.medical && (
+        <div className="card mb-3">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-notes-medical" /> Medical Information</h3></div>
+          <div className="card-body">
+            <div className="info-grid">
+              {d.medical.blood_group && <Info label="Blood Group"><span className="badge badge-danger">{d.medical.blood_group}</span></Info>}
+              {d.medical.genotype && <Info label="Genotype"><span className="badge badge-warning">{d.medical.genotype}</span></Info>}
+              {d.medical.allergies && <Info label="Allergies">{d.medical.allergies}</Info>}
+              {d.medical.medical_conditions && <Info label="Conditions">{d.medical.medical_conditions}</Info>}
+              {d.medical.disabilities && <Info label="Disabilities">{d.medical.disabilities}</Info>}
+              {d.medical.medications && <Info label="Medications">{d.medical.medications}</Info>}
+              {d.medical.medical_notes && <Info label="Notes">{d.medical.medical_notes}</Info>}
+              {d.medical.emergency_medical && <Info label="Emergency Instructions">{d.medical.emergency_medical}</Info>}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card mb-3">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-phone" /> Contacts</h3></div>
         <div className="card-body">

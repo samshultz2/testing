@@ -20,6 +20,28 @@ class Student(db.Model):
     home_address = db.Column(EncryptedString())   # encrypted at rest (never searched)
     hobbies = db.Column(db.Text)
     photo_url = db.Column(db.String(255))
+
+    # Optional pastoral fields (school-configurable; never required).
+    house = db.Column(db.String(40))                    # boarding/sports house
+    boarding_status = db.Column(db.String(10))          # 'Day' | 'Boarding'
+
+    # Optional identity records. NIN/JAMB numbers stay plain so they remain
+    # searchable (a registrar looks students up by them); they are not secrets in
+    # the way a password is.
+    nin = db.Column(db.String(20), index=True)
+    jamb_reg_number = db.Column(db.String(30), index=True)
+    jamb_profile_code = db.Column(db.String(30))
+
+    # Optional medical record. Structured fields stay plain (shown on ID cards /
+    # needed fast in an emergency); the free-text notes are encrypted at rest.
+    blood_group = db.Column(db.String(6))
+    genotype = db.Column(db.String(6))                  # AA/AS/SS/AC…
+    allergies = db.Column(db.Text)
+    medical_conditions = db.Column(db.Text)
+    disabilities = db.Column(db.Text)
+    medications = db.Column(db.Text)
+    medical_notes = db.Column(EncryptedString())        # sensitive free text
+    emergency_medical = db.Column(EncryptedString())    # emergency instructions
     # Optional external-exam enrolment (comma-separated subject names).
     # Used to auto-populate the WAEC / JAMB result-entry subject fields.
     waec_subjects = db.Column(db.Text)
@@ -68,6 +90,18 @@ class Student(db.Model):
     def jamb_subject_list(self):
         """Subjects the student is enrolled to sit for JAMB."""
         return [s.strip() for s in (self.jamb_subjects or '').split(',') if s.strip()]
+
+    @property
+    def has_medical(self):
+        """True if any medical field is populated (so the profile can hide the
+        section entirely for schools that don't use it)."""
+        return any([self.blood_group, self.genotype, self.allergies,
+                    self.medical_conditions, self.disabilities, self.medications,
+                    self.medical_notes, self.emergency_medical])
+
+    @property
+    def has_identity(self):
+        return any([self.nin, self.jamb_reg_number, self.jamb_profile_code])
 
     @property
     def age(self):

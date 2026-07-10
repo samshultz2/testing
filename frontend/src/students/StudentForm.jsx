@@ -49,6 +49,11 @@ export default function StudentForm({ data }) {
     gender: stu.gender || '', date_of_birth: stu.date_of_birth || '', religion: stu.religion || '',
     stream: stu.stream || '', jamb_target: stu.jamb_target === 0 ? '0' : (stu.jamb_target || ''),
     home_address: stu.home_address || '', hobbies: stu.hobbies || '',
+    house: stu.house || '', boarding_status: stu.boarding_status || '',
+    nin: stu.nin || '', jamb_reg_number: stu.jamb_reg_number || '', jamb_profile_code: stu.jamb_profile_code || '',
+    blood_group: stu.blood_group || '', genotype: stu.genotype || '', allergies: stu.allergies || '',
+    medical_conditions: stu.medical_conditions || '', disabilities: stu.disabilities || '',
+    medications: stu.medications || '', medical_notes: stu.medical_notes || '', emergency_medical: stu.emergency_medical || '',
   }, { signature: draftSig });
   // Contacts stay on plain state (useDraft serialises objects, not arrays).
   const [contacts, setContacts] = useState(() =>
@@ -126,6 +131,11 @@ export default function StudentForm({ data }) {
       surname: f.surname.trim(), first_name: f.first_name.trim(), middle_name: f.middle_name.trim(),
       gender: f.gender, date_of_birth: f.date_of_birth, religion: f.religion, stream: f.stream,
       jamb_target: f.jamb_target, home_address: f.home_address, hobbies: f.hobbies,
+      house: f.house, boarding_status: f.boarding_status,
+      nin: f.nin, jamb_reg_number: f.jamb_reg_number, jamb_profile_code: f.jamb_profile_code,
+      blood_group: f.blood_group, genotype: f.genotype, allergies: f.allergies,
+      medical_conditions: f.medical_conditions, disabilities: f.disabilities,
+      medications: f.medications, medical_notes: f.medical_notes, emergency_medical: f.emergency_medical,
       'contact_name[]': send.map((c) => c.name.trim()),
       'phone_number[]': send.map((c) => c.phone_number.trim()),
       'email[]': send.map((c) => (c.email || '').trim()),
@@ -235,6 +245,36 @@ export default function StudentForm({ data }) {
           )}
         </FormCard>
       )}
+
+      <FormCard icon="fa-id-card" title="Identity &amp; Pastoral" note="(optional)" collapsible
+                defaultOpen={isEdit && !!(stu.nin || stu.jamb_reg_number || stu.house || stu.boarding_status)}>
+        <div className="sf-row">
+          <TextField label="NIN" value={f.nin} onChange={(v) => set('nin', v)} placeholder="National Identification Number" autoComplete="off" />
+          <SelectField label="Boarding status" value={f.boarding_status} onChange={(v) => set('boarding_status', v)}
+                       placeholder="—" options={['Day', 'Boarding']} />
+        </div>
+        <div className="sf-row">
+          <TextField label="JAMB Reg. Number" value={f.jamb_reg_number} onChange={(v) => set('jamb_reg_number', v)} placeholder="JAMB registration number" autoComplete="off" />
+          <TextField label="JAMB Profile Code" value={f.jamb_profile_code} onChange={(v) => set('jamb_profile_code', v)} placeholder="JAMB profile code" autoComplete="off" />
+        </div>
+        <TextField label="House" value={f.house} onChange={(v) => set('house', v)} placeholder="e.g. Red House / Zik House" autoComplete="off" />
+      </FormCard>
+
+      <FormCard icon="fa-notes-medical" title="Medical Information" note="(optional, confidential)" collapsible
+                defaultOpen={isEdit && !!(stu.blood_group || stu.allergies || stu.medical_conditions || stu.medical_notes)}>
+        <div className="sf-row">
+          <SelectField label="Blood group" value={f.blood_group} onChange={(v) => set('blood_group', v)}
+                       placeholder="—" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} />
+          <SelectField label="Genotype" value={f.genotype} onChange={(v) => set('genotype', v)}
+                       placeholder="—" options={['AA', 'AS', 'SS', 'AC', 'SC']} />
+        </div>
+        <TextField label="Allergies" value={f.allergies} onChange={(v) => set('allergies', v)} placeholder="e.g. Penicillin, peanuts" />
+        <TextField label="Existing conditions" value={f.medical_conditions} onChange={(v) => set('medical_conditions', v)} placeholder="e.g. Asthma" />
+        <TextField label="Disabilities" value={f.disabilities} onChange={(v) => set('disabilities', v)} placeholder="Any disabilities to note" />
+        <TextField label="Current medications" value={f.medications} onChange={(v) => set('medications', v)} placeholder="Regular medications" />
+        <TextAreaField label="Medical notes" value={f.medical_notes} onChange={(v) => set('medical_notes', v)} placeholder="Confidential notes (encrypted at rest)" />
+        <TextAreaField label="Emergency medical instructions" value={f.emergency_medical} onChange={(v) => set('emergency_medical', v)} placeholder="What to do in an emergency" />
+      </FormCard>
 
       <FormCard icon="fa-file-signature" title="External Exam Subjects" note="(optional)" collapsible defaultOpen={isEdit && (waec.size > 0 || jamb.size > 0)}>
         <p className="text-muted text-sm mb-3">
