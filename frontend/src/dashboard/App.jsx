@@ -142,6 +142,10 @@ export default function App({ data: initialData }) {
         </div>
       )}
 
+      {/* Needs attention — the operational action list, surfaced high on the
+          page so leaders see what needs doing before the statistics. */}
+      {has('insights') && !emptySchool && <Insights items={d.insights || []} />}
+
       {/* Student KPIs */}
       {has('kpi') && !emptySchool && (
         <div className="kpi-row">
@@ -320,6 +324,56 @@ export default function App({ data: initialData }) {
         </Widget>
       )}
     </>
+  );
+}
+
+const SEV = {
+  high: { color: '#e74a3b', label: 'Urgent' },
+  medium: { color: '#f6c23e', label: 'Soon' },
+  low: { color: '#4e73df', label: 'FYI' },
+};
+
+// The Needs-Attention panel: a prioritized, deep-linked action list. Items are
+// already sorted + permission-filtered server-side; an empty list reads as a
+// reassuring "all clear" rather than disappearing silently.
+function Insights({ items }) {
+  if (!items.length) {
+    return (
+      <div className="card insights-card" style={{ marginBottom: '1.1rem' }}>
+        <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
+          <i aria-hidden="true" className="fas fa-circle-check" style={{ color: 'var(--success)', fontSize: '1.2rem' }} />
+          <div><strong>All clear</strong><div className="text-muted text-sm">Nothing needs your attention right now.</div></div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="card insights-card" style={{ marginBottom: '1.1rem' }}>
+      <div className="card-header">
+        <h3><i aria-hidden="true" className="fas fa-bell" /> Needs attention <span className="badge badge-danger" style={{ marginLeft: 6 }}>{items.length}</span></h3>
+      </div>
+      <ul className="card-body" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' }}>
+        {items.map((it) => {
+          const sev = SEV[it.severity] || SEV.low;
+          return (
+            <li key={it.key}>
+              <a href={it.url} className="insight-row"
+                 style={{ display: 'flex', alignItems: 'center', gap: '.7rem', padding: '.65rem .9rem',
+                          borderLeft: '4px solid ' + sev.color, textDecoration: 'none', color: 'inherit',
+                          borderBottom: '1px solid var(--border-color)' }}>
+                <i aria-hidden="true" className={'fas ' + it.icon} style={{ color: sev.color, width: 18, textAlign: 'center' }} />
+                <span style={{ flex: 1 }}>
+                  <strong>{it.title}</strong>
+                  {it.detail && <div className="text-muted text-sm">{it.detail}</div>}
+                </span>
+                <span className="badge" style={{ background: sev.color + '22', color: sev.color, fontWeight: 600 }}>{sev.label}</span>
+                <i aria-hidden="true" className="fas fa-chevron-right text-muted" />
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

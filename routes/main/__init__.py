@@ -39,6 +39,7 @@ main_bp = Blueprint('main', __name__)
 
 # Selectable dashboard widgets: (key, label, category, default-on).
 DASHBOARD_WIDGETS = [
+    ('insights', 'Needs attention — prioritized alerts', 'Overview', True),
     ('kpi', 'Student KPIs', 'Students', True),
     ('charts', 'Gender / Stream / Age charts', 'Students', True),
     ('class_religion', 'Class enrolment & Religion', 'Students', True),
@@ -63,13 +64,18 @@ WIDGET_MODULE = {
     'exams': 'external_exams', 'finance': 'finance', 'sales': 'sales',
     'hr': 'hr', 'cbt': 'cbt', 'library': 'library',
 }
+# The Needs-Attention panel spans modules; its individual items self-filter by
+# module permission, so the widget itself is available to every signed-in user.
+_CROSS_MODULE_WIDGETS = {'insights'}
 
 
 def permitted_widgets():
-    """Widget keys the current user is allowed to see (by module permission)."""
+    """Widget keys the current user is allowed to see (by module permission).
+    Cross-module widgets (e.g. the Needs-Attention panel) are always permitted;
+    their contents self-filter per contributing module."""
     from utils.access_control import can_access_module
-    return {k for k in WIDGET_MODULE
-            if can_access_module(WIDGET_MODULE[k])}
+    return ({k for k in WIDGET_MODULE if can_access_module(WIDGET_MODULE[k])}
+            | set(_CROSS_MODULE_WIDGETS))
 
 
 def enabled_widgets():
@@ -275,6 +281,7 @@ def dashboard_payload():
         cbt_stat=_dash_cbt() if 'cbt' in enabled else None,
         library_stat=_dash_library() if 'library' in enabled else None,
         teacher_classes=teacher_classes,
+        insights=_dash_insights(active_term, tscope) if 'insights' in enabled else [],
         can_results=can_access_module('results'),
         quick_actions=_quick_actions(),
         home_focus=_home_focus(),
@@ -374,6 +381,163 @@ def _dash_library():
         return {'books': books, 'on_loan': active}
     except Exception:
         return None
+
+
+def _dash_cached(key, ttl, fn):
+    """Memoize an expensive dashboard metric per-tenant via AnalyticsCache. The
+    key is namespaced by branch context so a branch view never reads another
+    branch's numbers. Any cache failure degrades to computing directly."""
+    from models import AnalyticsCache
+    scope = session.get('view_branch_id') or session.get('branch_id') or 'all'
+    ck = f'dash:{key}:b{scope}'
+    try:
+        hit = AnalyticsCache.get(ck)
+        if hit is not None:
+            return hit
+    except Exception:
+        pass
+    val = fn()
+    try:
+        AnalyticsCache.set(ck, val, ttl)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return val
+
+
+_SEVERITY_RANK = {'high': 0, 'medium': 1, 'low': 2}
+
+
+def _dash_insights(active_term, tscope):
+    """The Needs-Attention panel: a prioritized, permission-scoped list of items
+    that call for action, each deep-linking to the module that resolves it.
+    Every source is best-effort — a failing or absent module simply drops its
+    item instead of breaking the panel. Student-based signals respect teacher
+    scope; the expensive fee scan is cached briefly."""
+    from utils.access_control import can_access_module
+    items = []
+
+    def add(key, severity, icon, title, detail, url):
+        items.append({'key': key, 'severity': severity, 'icon': icon,
+                      'title': title, 'detail': detail, 'url': url})
+
+    # Attendance — open interventions needing follow-up.
+    if can_access_module('attendance'):
+        try:
+            from models.models_attendance_intervention import AttendanceIntervention
+            from utils.branch_scope import scope_query
+            q = scope_query(
+                AttendanceIntervention.query
+                .join(Student, AttendanceIntervention.student_id == Student.id)
+                .filter(AttendanceIntervention.status.in_(['Open', 'In progress', 'Escalated'])),
+                Student)
+            if tscope is not None:
+                sids = set(tscope[1])
+                n = q.filter(AttendanceIntervention.student_id.in_(sids)).count() if sids else 0
+            else:
+                n = q.count()
+            if n:
+                add('interventions', 'high', 'fa-triangle-exclamation',
+                    f'{n} attendance intervention{"s" if n != 1 else ""} open',
+                    'Students flagged for low attendance need follow-up.',
+                    url_for('attendance.attendance_app', tab='interventions'))
+        except Exception:
+            pass
+
+    # Finance — outstanding fees (defaulters). Cached: the scan touches every
+    # active enrolment, so recomputing it on every dashboard load would be waste.
+    if can_access_module('finance') and active_term and tscope is None:
+        try:
+            from utils.finance import defaulters_summary
+            summ = _dash_cached(f'defaulters:t{active_term.id}', 300,
+                                lambda: defaulters_summary(active_term.id))
+        except Exception:
+            summ = None
+        try:
+            if summ and summ.get('count'):
+                bal = summ.get('balance') or 0
+                add('defaulters', 'high', 'fa-coins',
+                    f'{summ["count"]} student{"s" if summ["count"] != 1 else ""} owe fees',
+                    f'₦{bal:,.0f} outstanding this term.',
+                    url_for('finance.defaulters', term_id=active_term.id))
+        except Exception:
+            pass
+
+    # Library — overdue loans.
+    if can_access_module('library'):
+        try:
+            from utils.library_notify import _overdue_total
+            n = _overdue_total(date.today())
+            if n:
+                add('library_overdue', 'medium', 'fa-book',
+                    f'{n} library book{"s" if n != 1 else ""} overdue',
+                    'Borrowed past the due date — send reminders or follow up.',
+                    url_for('library.loans') + '?status=Overdue')
+        except Exception:
+            pass
+
+    # Admissions — applicants awaiting a decision.
+    if can_access_module('admissions'):
+        try:
+            from models.models_admissions import Applicant
+            from utils.branch_scope import scope_query
+            n = scope_query(Applicant.query.filter(
+                Applicant.status.in_(['Applied', 'Screening'])), Applicant).count()
+            if n:
+                add('admissions', 'medium', 'fa-user-plus',
+                    f'{n} admission{"s" if n != 1 else ""} awaiting decision',
+                    'Applicants in screening need review.',
+                    url_for('admissions.applicants') + '?status=Screening')
+        except Exception:
+            pass
+
+    # HR — leave approvals pending + leave starting this week.
+    if can_access_module('hr'):
+        try:
+            from models.models_hr import LeaveRecord, StaffMember
+            from utils.branch_scope import scope_query
+            pending = scope_query(LeaveRecord.query.join(
+                StaffMember, LeaveRecord.staff_id == StaffMember.id)
+                .filter(LeaveRecord.status == 'Pending'), StaffMember).count()
+            if pending:
+                add('leave_pending', 'medium', 'fa-plane-departure',
+                    f'{pending} leave request{"s" if pending != 1 else ""} pending',
+                    'Staff leave awaiting your approval.',
+                    url_for('hr.leave_list'))
+            soon = date.today() + timedelta(days=7)
+            upcoming = scope_query(LeaveRecord.query.join(
+                StaffMember, LeaveRecord.staff_id == StaffMember.id)
+                .filter(LeaveRecord.status == 'Approved',
+                        LeaveRecord.start_date >= date.today(),
+                        LeaveRecord.start_date <= soon), StaffMember).count()
+            if upcoming:
+                add('leave_upcoming', 'low', 'fa-calendar-day',
+                    f'{upcoming} staff on leave within a week',
+                    'Plan cover for upcoming approved leave.',
+                    url_for('hr.leave_list'))
+        except Exception:
+            pass
+
+    # Students — incomplete profiles (no DOB or no parent contact on file).
+    if can_access_module('students'):
+        try:
+            base = _student_scope(Student.query.filter_by(is_active=True), tscope)
+            with_contact = db.session.query(ParentContact.student_id).distinct().subquery()
+            n = base.filter(db.or_(
+                Student.date_of_birth.is_(None),
+                ~Student.id.in_(db.session.query(with_contact.c.student_id)))).count()
+            if n:
+                add('incomplete', 'low', 'fa-user-pen',
+                    f'{n} student profile{"s" if n != 1 else ""} incomplete',
+                    'Missing date of birth or a parent contact.',
+                    url_for('main.students_list'))
+        except Exception:
+            pass
+
+    items.sort(key=lambda it: _SEVERITY_RANK.get(it['severity'], 3))
+    return items
 
 
 def _teacher_scope():

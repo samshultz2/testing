@@ -116,6 +116,56 @@ def charges_map(term_id):
     return out
 
 
+def defaulters_summary(term_id, class_id=None):
+    """Aggregate fee defaulters for a term as {count, balance} — the same math as
+    the Defaulters page, branch-scoped, but summarised (no per-student rows) so
+    the dashboard can surface "N students owe ₦X" cheaply. Payments/discounts are
+    restricted to the branch-scoped enrolment set, so no cross-branch leakage."""
+    from utils.branch_scope import scope_query
+    if not term_id:
+        return {'count': 0, 'balance': 0.0}
+    enr_q = scope_query(
+        StudentEnrollment.query
+        .join(ClassArmAssignment,
+              StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .filter(StudentEnrollment.is_active == True,
+                ClassArmAssignment.term_id == term_id),
+        ClassArmAssignment)
+    if class_id:
+        enr_q = enr_q.filter(ClassArmAssignment.class_id == class_id)
+    enrollments = enr_q.all()
+    if not enrollments:
+        return {'count': 0, 'balance': 0.0}
+    student_ids = [e.student_id for e in enrollments]
+    paid_map = dict(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
+                    .filter(FeePayment.term_id == term_id,
+                            FeePayment.student_id.in_(student_ids))
+                    .group_by(FeePayment.student_id).all())
+    try:
+        disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
+                        .filter(FeeDiscount.term_id == term_id,
+                                FeeDiscount.student_id.in_(student_ids))
+                        .group_by(FeeDiscount.student_id).all())
+    except Exception:
+        disc_map = {}
+    extra_map = charges_map(term_id)
+    total_cache = {}
+    count = 0
+    balance = 0.0
+    for e in enrollments:
+        asg = e.class_arm_assignment
+        key = (asg.class_id, asg.arm_id)
+        if key not in total_cache:
+            total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
+        payable = max(total_cache[key] + (extra_map.get(e.student_id) or 0.0)
+                      - (disc_map.get(e.student_id) or 0.0), 0)
+        bal = payable - (paid_map.get(e.student_id) or 0.0)
+        if bal > 0.005:
+            count += 1
+            balance += bal
+    return {'count': count, 'balance': round(balance, 2)}
+
+
 def next_receipt_no():
     """
     Monotonic receipt number like RCP-000123.
