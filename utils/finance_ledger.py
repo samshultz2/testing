@@ -258,13 +258,16 @@ def ensure_tables(bind=None):
     from models import (db, FinanceTransaction, AdditionalCharge, InstallmentPlan,
                         RecipientGroup, AnnouncementAck, CommAttachment,
                         Conversation, ConversationMember, ChatMessage,
-                        BookReservation, ReadingListItem, StaffEvent)
+                        BookReservation, ReadingListItem, StaffEvent,
+                        StaffDocument, TrainingRecord, PerformanceReview)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
               Conversation.__table__, ConversationMember.__table__,
               ChatMessage.__table__, BookReservation.__table__,
-              ReadingListItem.__table__, StaffEvent.__table__]
+              ReadingListItem.__table__, StaffEvent.__table__,
+              StaffDocument.__table__, TrainingRecord.__table__,
+              PerformanceReview.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

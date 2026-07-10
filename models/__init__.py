@@ -27,7 +27,7 @@ from .models_comms import MessageTemplate, Message, MessageRecipient, Announceme
 from .models_chat import Conversation, ConversationMember, ChatMessage
 from .models_hr import (Department, StaffMember, StaffEvent, LeaveRecord, PayrollRun, Payslip,
                         SalaryHistory, StaffAttendance, PayrollDeductionType,
-                        PayslipDeduction)
+                        PayslipDeduction, StaffDocument, TrainingRecord, PerformanceReview)
 from .models_admissions import Applicant
 from .models_library import Book, BookLoan, BookReservation, ReadingListItem
 from .models_events import SchoolEvent
@@ -65,6 +65,7 @@ __all__ = [
     'Conversation', 'ConversationMember', 'ChatMessage',
     'Department', 'StaffMember', 'StaffEvent', 'LeaveRecord', 'PayrollRun', 'Payslip',
     'SalaryHistory', 'StaffAttendance', 'PayrollDeductionType', 'PayslipDeduction',
+    'StaffDocument', 'TrainingRecord', 'PerformanceReview',
     'Applicant',
     'Book', 'BookLoan', 'BookReservation', 'ReadingListItem',
     'SchoolEvent',

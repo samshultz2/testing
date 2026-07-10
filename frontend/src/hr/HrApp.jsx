@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { submitJson } from '../lib/forms';
+import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, SectionTabs, Empty } from '../components/ui';
@@ -361,6 +361,11 @@ function StaffDetail({ d, notify }) {
       </div>
 
       <LifecycleTimeline d={d} act={act} />
+      <div className="hr-2col">
+        <DocumentsSection d={d} act={act} notify={notify} />
+        <TrainingSection d={d} act={act} notify={notify} />
+      </div>
+      <ReviewsSection d={d} act={act} notify={notify} />
       <SalarySection d={d} act={act} />
       <LeaveSection d={d} act={act} notify={notify} />
       {d.payslips.length > 0 && (
@@ -439,6 +444,153 @@ function LifecycleTimeline({ d, act }) {
                   {t.detail && <div className="text-muted text-sm">{t.detail}</div>}</div></li>))}
           </ul>
         ) : <p className="text-muted mb-0">No timeline events yet. Employment, promotions, transfers, salary changes and approved leave appear here.</p>}
+      </div></div>
+  );
+}
+
+// ---- Documents -------------------------------------------------------------
+function DocumentsSection({ d, act, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ title: '', doc_type: (d.doc_types || ['Other'])[0], expires_on: '' });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef();
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.title.trim()) { notify('error', 'Give the document a title.'); return; }
+    if (!file) { notify('error', 'Choose a file to upload.'); return; }
+    setBusy(true);
+    const r = await postFile(d.urls.upload_document, file, f);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); setF({ title: '', doc_type: (d.doc_types || ['Other'])[0], expires_on: '' }); setFile(null); if (fileRef.current) fileRef.current.value = ''; nav.refresh(); }
+    else notify('error', r.error || 'Upload failed.');
+  };
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-folder-open" /> Documents</h3></div>
+      <div className="card-body">
+        <form onSubmit={submit} className="lc-form">
+          <div className="form-group mb-0" style={{ flex: 2 }}><label className="form-label">Title</label><input type="text" className="form-control" placeholder="e.g. Appointment letter 2024" value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
+          <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.doc_type} onChange={(e) => set('doc_type', e.target.value)}>{(d.doc_types || []).map((t) => <option key={t}>{t}</option>)}</select></div>
+          <div className="form-group mb-0"><label className="form-label">Expires (optional)</label><input type="date" className="form-control" value={f.expires_on} onChange={(e) => set('expires_on', e.target.value)} /></div>
+          <div className="form-group mb-0"><label className="form-label">File</label><input ref={fileRef} type="file" className="form-control" onChange={(e) => setFile(e.target.files && e.target.files[0])} /></div>
+          <button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-upload" /> Upload</button>
+        </form>
+        {(d.documents || []).length ? (
+          <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Title</th><th>Type</th><th>Expires</th><th /></tr></thead>
+            <tbody>{d.documents.map((doc) => (
+              <tr key={doc.id}><td data-label="Title">{doc.download_url ? <a href={doc.download_url} data-native>{doc.title}</a> : doc.title}{doc.name && <div className="text-muted text-sm">{doc.name}{doc.size ? ` · ${doc.size}` : ''}</div>}</td>
+                <td data-label="Type"><span className="badge badge-secondary">{doc.doc_type}</span></td>
+                <td data-label="Expires">{doc.expires_on ? <span className={doc.is_expired ? 'text-danger' : ''}>{doc.expires_on}{doc.is_expired ? ' (expired)' : ''}</span> : '—'}</td>
+                <td className="actions"><button className="btn btn-danger btn-sm" onClick={() => act(doc.delete_url, {}, `Delete “${doc.title}”?`)}><i aria-hidden="true" className="fas fa-trash" /></button></td></tr>))}</tbody>
+          </table></div>
+        ) : <p className="text-muted mb-0">No documents on file yet.</p>}
+      </div></div>
+  );
+}
+
+// ---- Training / professional development ------------------------------------
+function TrainingSection({ d, act, notify }) {
+  const nav = useNav();
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ title: '', kind: (d.training_kinds || ['Training'])[0], provider: '', start_date: '', end_date: '', hours: '', note: '' });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.title.trim()) { notify('error', 'Enter the programme title.'); return; }
+    setBusy(true);
+    const r = file ? await postFile(d.urls.add_training, file, f) : await submitJson(d.urls.add_training, f);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); setF({ title: '', kind: (d.training_kinds || ['Training'])[0], provider: '', start_date: '', end_date: '', hours: '', note: '' }); setFile(null); setOpen(false); nav.refresh(); }
+    else notify('error', r.error || 'Could not add.');
+  };
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> Training &amp; development</h3>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
+      <div className="card-body">
+        {open && (
+          <form onSubmit={submit} className="lc-form" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            <div className="form-row">
+              <div className="form-group mb-0" style={{ flex: 2 }}><label className="form-label">Programme</label><input type="text" className="form-control" value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">Kind</label><select className="form-control" value={f.kind} onChange={(e) => set('kind', e.target.value)}>{(d.training_kinds || []).map((k) => <option key={k}>{k}</option>)}</select></div>
+              <div className="form-group mb-0"><label className="form-label">Provider</label><input type="text" className="form-control" value={f.provider} onChange={(e) => set('provider', e.target.value)} /></div>
+            </div>
+            <div className="form-row">
+              <div className="form-group mb-0"><label className="form-label">From</label><input type="date" className="form-control" value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">To</label><input type="date" className="form-control" value={f.end_date} onChange={(e) => set('end_date', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">Hours</label><input type="number" className="form-control" min="0" step="0.5" value={f.hours} onChange={(e) => set('hours', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">Certificate (optional)</label><input type="file" className="form-control" onChange={(e) => setFile(e.target.files && e.target.files[0])} /></div>
+            </div>
+            <div><button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button></div>
+          </form>
+        )}
+        {(d.training || []).length ? (
+          <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Programme</th><th>Kind</th><th>Dates</th><th className="text-right">Hrs</th><th /></tr></thead>
+            <tbody>{d.training.map((t) => (
+              <tr key={t.id}><td data-label="Programme"><strong>{t.title}</strong>{t.provider && <div className="text-muted text-sm">{t.provider}</div>}{t.certificate_url && <a href={t.certificate_url} data-native className="text-sm"><i aria-hidden="true" className="fas fa-certificate" /> Certificate</a>}</td>
+                <td data-label="Kind"><span className="badge badge-secondary">{t.kind}</span></td>
+                <td data-label="Dates">{t.dates || '—'}</td><td data-label="Hrs" className="text-right">{t.hours || '—'}</td>
+                <td className="actions"><button className="btn btn-danger btn-sm" onClick={() => act(t.delete_url, {}, `Remove “${t.title}”?`)}><i aria-hidden="true" className="fas fa-trash" /></button></td></tr>))}</tbody>
+          </table></div>
+        ) : <p className="text-muted mb-0">No training recorded yet.</p>}
+      </div></div>
+  );
+}
+
+// ---- Performance reviews ----------------------------------------------------
+function ReviewsSection({ d, act, notify }) {
+  const nav = useNav();
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ period: '', review_date: d.today, reviewer: '', score: '', rating: '', strengths: '', improvements: '', comments: '' });
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.period.trim()) { notify('error', 'Enter the review period.'); return; }
+    const r = await submitJson(d.urls.add_review, f);
+    if (r.ok) { notify('success', r.message); setF({ period: '', review_date: d.today, reviewer: '', score: '', rating: '', strengths: '', improvements: '', comments: '' }); setOpen(false); nav.refresh(); }
+    else notify('error', r.error || 'Could not save.');
+  };
+  const ratingBadge = (r) => 'badge ' + (r === 'Excellent' ? 'badge-success' : r === 'Good' ? 'badge-info' : r === 'Poor' ? 'badge-danger' : 'badge-warning');
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-star-half-stroke" /> Performance reviews</h3>
+      {d.is_admin && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Add review</button>}</div>
+      <div className="card-body">
+        {open && d.is_admin && (
+          <form onSubmit={submit} className="lc-form" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            <div className="form-row">
+              <div className="form-group mb-0"><label className="form-label">Period</label><input type="text" className="form-control" placeholder="e.g. 2024/2025" value={f.period} onChange={(e) => set('period', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">Date</label><input type="date" className="form-control" value={f.review_date} onChange={(e) => set('review_date', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">Reviewer</label><input type="text" className="form-control" value={f.reviewer} onChange={(e) => set('reviewer', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">Score</label><input type="number" className="form-control" min="0" max="100" value={f.score} onChange={(e) => set('score', e.target.value)} /></div>
+              <div className="form-group mb-0"><label className="form-label">Rating</label><select className="form-control" value={f.rating} onChange={(e) => set('rating', e.target.value)}><option value="">—</option>{['Excellent', 'Good', 'Fair', 'Poor'].map((x) => <option key={x}>{x}</option>)}</select></div>
+            </div>
+            <div className="form-row">
+              <div className="form-group mb-0" style={{ flex: 1 }}><label className="form-label">Strengths</label><input type="text" className="form-control" value={f.strengths} onChange={(e) => set('strengths', e.target.value)} /></div>
+              <div className="form-group mb-0" style={{ flex: 1 }}><label className="form-label">Areas to improve</label><input type="text" className="form-control" value={f.improvements} onChange={(e) => set('improvements', e.target.value)} /></div>
+            </div>
+            <div className="form-group mb-0"><label className="form-label">Comments</label><textarea className="form-control" rows="2" value={f.comments} onChange={(e) => set('comments', e.target.value)} /></div>
+            <div><button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save review</button></div>
+          </form>
+        )}
+        {(d.reviews || []).length ? d.reviews.map((r) => (
+          <div key={r.id} className="review-item">
+            <div className="d-flex justify-between align-center flex-wrap gap-1">
+              <div><strong>{r.period}</strong>{r.review_date && <span className="text-muted text-sm"> · {r.review_date}</span>}{r.reviewer && <span className="text-muted text-sm"> · by {r.reviewer}</span>}</div>
+              <div className="d-flex gap-1 align-center">
+                {r.score != null && <span className="badge badge-primary">{r.score}</span>}
+                {r.rating && <span className={ratingBadge(r.rating)}>{r.rating}</span>}
+                {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => act(r.delete_url, {}, `Delete the ${r.period} review?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+              </div>
+            </div>
+            {r.strengths && <div className="text-sm mt-1"><strong>Strengths:</strong> {r.strengths}</div>}
+            {r.improvements && <div className="text-sm"><strong>Improve:</strong> {r.improvements}</div>}
+            {r.comments && <div className="text-muted text-sm mt-1">{r.comments}</div>}
+          </div>
+        )) : <p className="text-muted mb-0">No performance reviews yet.</p>}
       </div></div>
   );
 }

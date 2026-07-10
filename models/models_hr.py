@@ -316,6 +316,80 @@ class SalaryHistory(db.Model):
         return f'<SalaryHistory staff{self.staff_id} {self.previous_salary}->{self.new_salary}>'
 
 
+class StaffDocument(db.Model):
+    """A file in a staff member's HR file — appointment letter, contract,
+    certificate, ID, promotion letter, etc. The bytes live as a CommAttachment
+    (shared upload storage); this row adds the HR-specific metadata."""
+    __tablename__ = 'staff_documents'
+
+    DOC_TYPES = ['Appointment letter', 'Employment contract', 'Certificate',
+                 'Identification', 'Promotion letter', 'Query/Warning', 'Other']
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False, index=True)
+    attachment_id = db.Column(db.Integer, db.ForeignKey('comm_attachments.id'))
+    title = db.Column(db.String(150), nullable=False)
+    doc_type = db.Column(db.String(30), default='Other')
+    expires_on = db.Column(db.Date)              # optional (e.g. licence, permit)
+    uploaded_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    staff = db.relationship('StaffMember', backref=db.backref(
+        'documents', lazy='dynamic', cascade='all, delete-orphan'))
+    attachment = db.relationship('CommAttachment')
+
+    @property
+    def is_expired(self):
+        from datetime import date
+        return bool(self.expires_on and self.expires_on < date.today())
+
+
+class TrainingRecord(db.Model):
+    """A professional-development activity a staff member attended — training,
+    workshop, seminar or certification — with an optional certificate file."""
+    __tablename__ = 'staff_training'
+
+    KINDS = ['Training', 'Workshop', 'Seminar', 'Certification', 'Conference']
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False, index=True)
+    title = db.Column(db.String(150), nullable=False)
+    kind = db.Column(db.String(20), default='Training')
+    provider = db.Column(db.String(120))
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    hours = db.Column(db.Float, default=0)
+    certificate_id = db.Column(db.Integer, db.ForeignKey('comm_attachments.id'))
+    note = db.Column(db.String(255))
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    staff = db.relationship('StaffMember', backref=db.backref(
+        'training', lazy='dynamic', cascade='all, delete-orphan'))
+    certificate = db.relationship('CommAttachment')
+
+
+class PerformanceReview(db.Model):
+    """A periodic appraisal / evaluation of a staff member."""
+    __tablename__ = 'staff_reviews'
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False, index=True)
+    period = db.Column(db.String(40))             # e.g. '2024/2025', 'Term 1 2025'
+    review_date = db.Column(db.Date)
+    reviewer = db.Column(db.String(120))
+    score = db.Column(db.Float)                   # 0–100 (or any school scale)
+    rating = db.Column(db.String(30))             # Excellent/Good/Fair/Poor …
+    strengths = db.Column(db.Text)
+    improvements = db.Column(db.Text)
+    comments = db.Column(db.Text)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    staff = db.relationship('StaffMember', backref=db.backref(
+        'reviews', lazy='dynamic', cascade='all, delete-orphan'))
+
+
 class StaffAttendance(db.Model):
     """Daily staff attendance with auto lateness / absence deductions."""
     __tablename__ = 'staff_attendance'

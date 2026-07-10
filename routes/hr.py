@@ -250,6 +250,7 @@ def add_staff():
 def staff_detail(staff_id):
     s = db.get_or_404(StaffMember, staff_id)
     from utils.branch_scope import can_access_branch
+    from models import StaffDocument, TrainingRecord, PerformanceReview
     if not can_access_branch(s.branch_id):
         return _err('That staff member belongs to another branch.', url_for('hr.staff_list'))
     leaves = s.leave_records.order_by(LeaveRecord.start_date.desc()).all()
@@ -303,6 +304,13 @@ def staff_detail(staff_id):
         'leave_balances': hr.leave_balances(s.id, today.year),
         'timeline': hr.build_timeline(s),
         'can_transfer': _branches_for_transfer(s),
+        'doc_types': StaffDocument.DOC_TYPES, 'training_kinds': TrainingRecord.KINDS,
+        'documents': [_doc_row(x) for x in
+                      s.documents.order_by(StaffDocument.created_at.desc()).all()],
+        'training': [_training_row(x) for x in
+                     s.training.order_by(TrainingRecord.created_at.desc()).all()],
+        'reviews': [_review_row(x) for x in
+                    s.reviews.order_by(PerformanceReview.created_at.desc()).all()],
         'salary_history': [{'effective': (h.effective_date or h.created_at).strftime('%d %b %Y'),
                             'previous_salary': h.previous_salary or 0, 'new_salary': h.new_salary or 0,
                             'change': h.change, 'reason': h.reason or '—'} for h in salary_history],
@@ -319,6 +327,9 @@ def staff_detail(staff_id):
                  'transfer': url_for('hr.transfer_staff', staff_id=s.id),
                  'confirm': url_for('hr.confirm_staff', staff_id=s.id),
                  'add_note': url_for('hr.add_staff_note', staff_id=s.id),
+                 'upload_document': url_for('hr.upload_document', staff_id=s.id),
+                 'add_training': url_for('hr.add_training', staff_id=s.id),
+                 'add_review': url_for('hr.add_review', staff_id=s.id),
                  'add_leave': url_for('hr.add_leave'), 'list': url_for('hr.staff_list')},
     })
 
@@ -456,6 +467,160 @@ def add_staff_note(staff_id):
                     created_by=_current_user())
     db.session.commit()
     return _ok('Note added to the timeline.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+# ---- Documents / training / performance (attached to a profile) -----------
+
+def _doc_row(doc):
+    return {'id': doc.id, 'title': doc.title, 'doc_type': doc.doc_type or 'Other',
+            'name': doc.attachment.original_name if doc.attachment else '',
+            'size': doc.attachment.human_size if doc.attachment else '',
+            'expires_on': doc.expires_on.strftime('%d %b %Y') if doc.expires_on else '',
+            'is_expired': doc.is_expired,
+            'download_url': (url_for('comms.download_attachment', att_id=doc.attachment_id)
+                             if doc.attachment_id else None),
+            'delete_url': url_for('hr.delete_document', staff_id=doc.staff_id, doc_id=doc.id)}
+
+
+def _training_row(t):
+    span = ' – '.join(x.strftime('%d %b %Y') for x in [t.start_date, t.end_date] if x)
+    return {'id': t.id, 'title': t.title, 'kind': t.kind or 'Training', 'provider': t.provider or '',
+            'dates': span, 'hours': t.hours or 0, 'note': t.note or '',
+            'certificate_url': (url_for('comms.download_attachment', att_id=t.certificate_id)
+                                if t.certificate_id else None),
+            'delete_url': url_for('hr.delete_training', staff_id=t.staff_id, train_id=t.id)}
+
+
+def _review_row(r):
+    return {'id': r.id, 'period': r.period or '', 'reviewer': r.reviewer or '',
+            'review_date': r.review_date.strftime('%d %b %Y') if r.review_date else '',
+            'score': r.score, 'rating': r.rating or '', 'strengths': r.strengths or '',
+            'improvements': r.improvements or '', 'comments': r.comments or '',
+            'delete_url': url_for('hr.delete_review', staff_id=r.staff_id, review_id=r.id)}
+
+
+@hr_bp.route('/staff/<int:staff_id>/documents', methods=['POST'])
+@login_required
+def upload_document(staff_id):
+    s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)
+    title = (request.form.get('title') or '').strip()
+    if not title:
+        return _err('Give the document a title.', url_for('hr.staff_detail', staff_id=staff_id))
+    from utils import comm_attachments as CA
+    from models import StaffDocument
+    try:
+        att = CA.save(request.files.get('file'), created_by=_current_user())
+    except ValueError as e:
+        return _err(str(e), url_for('hr.staff_detail', staff_id=staff_id))
+    doc = StaffDocument(staff_id=s.id, attachment_id=att.id, title=title,
+                        doc_type=request.form.get('doc_type') or 'Other',
+                        expires_on=_d(request.form.get('expires_on')),
+                        uploaded_by=_current_user())
+    db.session.add(doc)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.document_add', detail=title, target=s)
+    return _ok('Document uploaded.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/documents/<int:doc_id>/delete', methods=['POST'])
+@login_required
+def delete_document(staff_id, doc_id):
+    from models import StaffDocument, CommAttachment
+    doc = db.get_or_404(StaffDocument, doc_id)
+    if doc.staff_id != staff_id:
+        return ('', 404)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(doc.staff.branch_id)
+    from utils import comm_attachments as CA
+    att = db.session.get(CommAttachment, doc.attachment_id) if doc.attachment_id else None
+    db.session.delete(doc)
+    db.session.commit()
+    if att:
+        CA.delete(att)      # removes file + row
+    return _ok('Document removed.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/training', methods=['POST'])
+@login_required
+def add_training(staff_id):
+    s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)
+    title = (request.form.get('title') or '').strip()
+    if not title:
+        return _err('Enter the programme title.', url_for('hr.staff_detail', staff_id=staff_id))
+    from models import TrainingRecord
+    cert_id = None
+    if request.files.get('file') and request.files['file'].filename:
+        from utils import comm_attachments as CA
+        try:
+            cert_id = CA.save(request.files['file'], created_by=_current_user()).id
+        except ValueError as e:
+            return _err(str(e), url_for('hr.staff_detail', staff_id=staff_id))
+    db.session.add(TrainingRecord(
+        staff_id=s.id, title=title, kind=request.form.get('kind') or 'Training',
+        provider=(request.form.get('provider') or '').strip() or None,
+        start_date=_d(request.form.get('start_date')), end_date=_d(request.form.get('end_date')),
+        hours=request.form.get('hours', type=float) or 0, certificate_id=cert_id,
+        note=(request.form.get('note') or '').strip() or None, created_by=_current_user()))
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.training_add', detail=title, target=s)
+    return _ok('Training record added.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/training/<int:train_id>/delete', methods=['POST'])
+@login_required
+def delete_training(staff_id, train_id):
+    from models import TrainingRecord
+    t = db.get_or_404(TrainingRecord, train_id)
+    if t.staff_id != staff_id:
+        return ('', 404)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(t.staff.branch_id)
+    db.session.delete(t)
+    db.session.commit()
+    return _ok('Training record removed.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/reviews', methods=['POST'])
+@admin_required
+def add_review(staff_id):
+    s = db.get_or_404(StaffMember, staff_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(s.branch_id)
+    period = (request.form.get('period') or '').strip()
+    if not period:
+        return _err('Enter the review period.', url_for('hr.staff_detail', staff_id=staff_id))
+    from models import PerformanceReview
+    db.session.add(PerformanceReview(
+        staff_id=s.id, period=period, review_date=_d(request.form.get('review_date')) or date.today(),
+        reviewer=(request.form.get('reviewer') or _current_user()).strip() or None,
+        score=request.form.get('score', type=float), rating=request.form.get('rating') or None,
+        strengths=(request.form.get('strengths') or '').strip() or None,
+        improvements=(request.form.get('improvements') or '').strip() or None,
+        comments=(request.form.get('comments') or '').strip() or None, created_by=_current_user()))
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.review_add', detail=period, target=s)
+    return _ok('Performance review saved.', url_for('hr.staff_detail', staff_id=staff_id))
+
+
+@hr_bp.route('/staff/<int:staff_id>/reviews/<int:review_id>/delete', methods=['POST'])
+@admin_required
+def delete_review(staff_id, review_id):
+    from models import PerformanceReview
+    r = db.get_or_404(PerformanceReview, review_id)
+    if r.staff_id != staff_id:
+        return ('', 404)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(r.staff.branch_id)
+    db.session.delete(r)
+    db.session.commit()
+    return _ok('Review removed.', url_for('hr.staff_detail', staff_id=staff_id))
 
 
 @hr_bp.route('/staff/<int:staff_id>/delete', methods=['POST'])
