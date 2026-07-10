@@ -163,6 +163,27 @@ export default function ViewApp({ initial }) {
         </div>
       </div>
 
+      {d.attendance && (
+        <div className="card mb-3">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calendar-check" /> Attendance Summary</h3>
+            {d.attendance.url && <a href={d.attendance.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-line" /> Full profile</a>}</div>
+          <div className="card-body">
+            <div className="info-grid">
+              <Info label="Overall">
+                <span className={'badge ' + (d.attendance.warning ? 'badge-danger' : 'badge-success')}>{d.attendance.percentage}%</span>
+                {d.attendance.warning && d.attendance.threshold != null &&
+                  <span className="text-muted" style={{ marginLeft: 6, fontSize: '.8rem' }}>below {d.attendance.threshold}%</span>}
+              </Info>
+              {d.attendance.latest_term && <Info label={d.attendance.latest_term}>{d.attendance.latest_percentage}%</Info>}
+              <Info label="Present days">{d.attendance.present_days}</Info>
+              <Info label="Late days">{d.attendance.late_days}</Info>
+              <Info label="Absent days">{d.attendance.absent_days}</Info>
+              <Info label="Terms tracked">{d.attendance.terms}</Info>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card mb-3">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC</h3>
           <a href={(d.waec || {}).add_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
@@ -186,6 +207,28 @@ export default function ViewApp({ initial }) {
           ) : <p className="text-muted">No JAMB results</p>}
         </div>
       </div>
+
+      {d.communications && d.communications.count > 0 && (
+        <div className="card mb-3">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-comments" /> Communication History ({d.communications.count})</h3></div>
+          <div className="card-body" style={{ padding: 0 }}>
+            <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+              <table className="data-table">
+                <thead><tr><th>Date</th><th>Message</th><th>Channel</th><th>Status</th></tr></thead>
+                <tbody>{d.communications.items.map((m, i) => (
+                  <tr key={i}>
+                    <td>{m.date || '—'}</td>
+                    <td><strong>{m.title}</strong>{m.snippet && <div className="text-muted" style={{ fontSize: '.82rem' }}>{m.snippet}</div>}</td>
+                    <td>{m.channel && <span className="badge badge-info">{m.channel}</span>}</td>
+                    <td><span className={'badge ' + (m.status === 'Sent' ? 'badge-success' : m.status === 'Failed' ? 'badge-danger' : 'badge-warning')}>{m.status}</span>
+                      {m.read && <span className="badge badge-secondary" title="Read" style={{ marginLeft: 4 }}><i aria-hidden="true" className="fas fa-check-double" /></span>}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Welfare title="Discipline" icon="fa-gavel" count={(d.discipline || []).length}>
         <DisciplineForm categories={d.discipline_categories || []} today={d.today} disabled={busy}

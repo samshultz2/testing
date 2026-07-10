@@ -1026,6 +1026,65 @@ def _fmt_date(d):
     return d.strftime('%d %b %Y') if d else None
 
 
+def _student_attendance_summary(sid):
+    """Compact attendance snapshot for the profile page: overall %, present /
+    absent / late days, low-attendance warning, latest term, and a deep link to
+    the full attendance profile. Returns None when the student has no attendance
+    data or the attendance module can't be reached (never breaks the profile)."""
+    try:
+        from utils.attendance_profile import build_student_profile
+        prof = build_student_profile(sid)
+    except Exception:
+        return None
+    if not prof or not prof.get('terms'):
+        return None
+    overall = prof.get('overall') or {}
+    latest = (prof.get('terms') or [None])[0]
+    return {
+        'percentage': overall.get('percentage', 0),
+        'present_days': overall.get('full_days', 0),
+        'late_days': overall.get('late_days', 0),
+        'absent_days': overall.get('absent_days', 0),
+        'terms': overall.get('terms', 0),
+        'threshold': prof.get('threshold'),
+        'warning': bool(prof.get('warning')),
+        'latest_term': (latest or {}).get('term') if latest else None,
+        'latest_percentage': (latest or {}).get('percentage') if latest else None,
+        'url': url_for('attendance.attendance_app', tab='student', student_id=sid),
+    }
+
+
+def _student_comms_history(sid, limit=8):
+    """Recent messages addressed to this student's parents (per-recipient), so
+    the profile shows what the school has communicated. Read-only; returns an
+    empty history if the comms module isn't present. Body is trimmed to a
+    snippet — the full campaign lives in Communication."""
+    try:
+        from models.models_comms import Message, MessageRecipient
+    except Exception:
+        return {'count': 0, 'items': []}
+    try:
+        q = (db.session.query(MessageRecipient, Message)
+             .join(Message, MessageRecipient.message_id == Message.id)
+             .filter(MessageRecipient.student_id == sid)
+             .order_by(MessageRecipient.created_at.desc()))
+        total = q.count()
+        rows = q.limit(limit).all()
+    except Exception:
+        return {'count': 0, 'items': []}
+    items = []
+    for rec, msg in rows:
+        body = (rec.body or msg.body or '').strip()
+        items.append({
+            'title': msg.title or (msg.audience_label or 'Message'),
+            'channel': msg.channel, 'status': rec.status,
+            'snippet': (body[:120] + '…') if len(body) > 120 else body,
+            'date': _fmt_date(rec.created_at.date() if rec.created_at else None),
+            'sent': bool(rec.sent_at), 'read': bool(rec.read_at),
+        })
+    return {'count': total, 'items': items}
+
+
 def _student_view_payload(student):
     """Everything the student detail page shows, JSON-serialisable."""
     enrollments = student.enrollments.join(ClassArmAssignment).order_by(
@@ -1080,10 +1139,13 @@ def _student_view_payload(student):
                     'treatment': v.treatment, 'parent_notified': bool(v.parent_notified),
                     'attended_by': v.attended_by,
                     'delete_url': url_for('welfare.delete_clinic', visit_id=v.id)} for v in clinic],
+        'attendance': _student_attendance_summary(sid),
+        'communications': _student_comms_history(sid),
         'today': date.today().isoformat(),
         'can_manage': can_manage,
         'urls': {
             'list': url_for('main.students_list'),
+            'self': url_for('main.view_student', student_id=sid),
             'edit': url_for('main.edit_student', student_id=sid),
             'graduate': url_for('promotion.unmark_graduate', student_id=sid) if student.is_graduated
                         else url_for('promotion.mark_graduate', student_id=sid),
