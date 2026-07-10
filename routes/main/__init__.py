@@ -748,6 +748,8 @@ def _students_query():
     religion = request.args.get('religion', '')
     stream = request.args.get('stream', '')
     subject = request.args.get('subject', '')
+    house = request.args.get('house', '')
+    boarding = request.args.get('boarding', '')
     class_id = request.args.get('class_id', '', type=int) or None
     arm_id = request.args.get('arm_id', '', type=int) or None
     sort_by = request.args.get('sort', 'surname')
@@ -774,15 +776,32 @@ def _students_query():
 
     if search:
         search_term = like_term(search)
+        # Broaden search beyond name/ID: a registrar routinely looks a student up
+        # by a parent's phone/name/email or by NIN / JAMB registration. Parent
+        # contacts live in a child table, matched via a subquery so the OR stays a
+        # single scoped query (home address stays out — it's encrypted at rest).
+        parent_q = (db.session.query(ParentContact.student_id)
+                    .filter(db.or_(
+                        ParentContact.name.ilike(search_term, escape='\\'),
+                        ParentContact.phone_number.ilike(search_term, escape='\\'),
+                        ParentContact.email.ilike(search_term, escape='\\'))))
         query = query.filter(db.or_(
             Student.first_name.ilike(search_term, escape='\\'), Student.surname.ilike(search_term, escape='\\'),
-            Student.middle_name.ilike(search_term, escape='\\'), Student.student_id.ilike(search_term, escape='\\')))
+            Student.middle_name.ilike(search_term, escape='\\'), Student.student_id.ilike(search_term, escape='\\'),
+            Student.nin.ilike(search_term, escape='\\'),
+            Student.jamb_reg_number.ilike(search_term, escape='\\'),
+            Student.jamb_profile_code.ilike(search_term, escape='\\'),
+            Student.id.in_(parent_q)))
     if gender:
         query = query.filter(Student.gender == gender)
     if religion:
         query = query.filter(Student.religion == religion)
     if stream:
         query = query.filter(Student.stream == stream)
+    if house:
+        query = query.filter(Student.house == house)
+    if boarding:
+        query = query.filter(Student.boarding_status == boarding)
 
     # WAEC-subject filter (SSS3 only), via a subquery so it composes with the joins.
     if subject:
@@ -888,6 +907,12 @@ def _students_payload():
     } for s in pg.items]
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
+    # Distinct pastoral houses in use (branch-scoped), so the House filter only
+    # offers values that actually exist — empty for schools that don't use houses.
+    from utils.branch_scope import scope_query as _scope_q
+    houses = sorted({h for (h,) in _scope_q(
+        db.session.query(Student.house).filter(Student.house.isnot(None),
+                                               Student.house != ''), Student).distinct().all() if h})
     return {
         'students': students,
         'page': pg.page, 'pages': pg.pages or 1, 'total': pg.total,
@@ -896,6 +921,7 @@ def _students_payload():
             'search': request.args.get('search', ''), 'gender': request.args.get('gender', ''),
             'religion': request.args.get('religion', ''), 'stream': request.args.get('stream', ''),
             'subject': request.args.get('subject', ''),
+            'house': request.args.get('house', ''), 'boarding': request.args.get('boarding', ''),
             'class_id': request.args.get('class_id', '', type=int) or None,
             'arm_id': request.args.get('arm_id', '', type=int) or None,
             'sort': request.args.get('sort', 'surname'), 'order': request.args.get('order', 'asc'),
@@ -906,6 +932,7 @@ def _students_payload():
             'religions': list(RELIGIONS),
             'streams': list(STREAMS),
             'subjects': list(WAEC_SUBJECTS),
+            'houses': houses,
         },
         'can_manage': can_manage,
         'can_add': can_add,

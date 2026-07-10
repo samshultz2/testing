@@ -4,6 +4,8 @@ import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
 import { confirm, Empty, Pagination } from '../components/ui';
+import { recentSearches, rememberSearch, clearSearches, recentViewed,
+         savedFilters, saveFilter, deleteFilter } from '../lib/studprefs';
 
 const SORTS = [
   ['surname|asc', 'Name A–Z'], ['surname|desc', 'Name Z–A'],
@@ -28,11 +30,12 @@ function startState(applied, page) {
   const base = {
     gender: applied.gender || '', religion: applied.religion || '', stream: applied.stream || '',
     subject: applied.subject || '', class_id: applied.class_id || '', arm_id: applied.arm_id || '',
+    house: applied.house || '', boarding: applied.boarding || '',
     sort: applied.sort || 'surname', order: applied.order || 'asc', search: applied.search || '',
     page: page || 1,
   };
   const urlHasFilters = !!(applied.gender || applied.religion || applied.stream || applied.subject
-    || applied.class_id || applied.arm_id || applied.search);
+    || applied.class_id || applied.arm_id || applied.house || applied.boarding || applied.search);
   if (!urlHasFilters && cameFromStudentPage()) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(FILTER_KEY) || 'null');
@@ -69,6 +72,10 @@ export default function App({ initial }) {
   const [bulkGender, setBulkGender] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
   const [menuFor, setMenuFor] = useState(null);   // which student card's ⋯ menu is open
+  const [saved, setSaved] = useState(() => savedFilters());
+  const [recentQ, setRecentQ] = useState(() => recentSearches());
+  const viewed = useRef(recentViewed()).current;   // recently-viewed snapshot (page load)
+  const [showSaved, setShowSaved] = useState(false);
   // Close the open row menu on any outside click (deferred so the opening click
   // doesn't immediately close it).
   useEffect(() => {
@@ -108,9 +115,12 @@ export default function App({ initial }) {
     return () => window.removeEventListener('pageshow', onShow);
   }, [query, load]);
 
-  // Debounced search → query.
+  // Debounced search → query. Once a term settles, remember it for quick reuse.
   useEffect(() => {
-    const t = setTimeout(() => setQuery((q) => (q.search === search ? q : { ...q, search, page: 1 })), 350);
+    const t = setTimeout(() => {
+      setQuery((q) => (q.search === search ? q : { ...q, search, page: 1 }));
+      if (search.trim().length >= 2) { rememberSearch(search); setRecentQ(recentSearches()); }
+    }, 500);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -124,12 +134,25 @@ export default function App({ initial }) {
   const setFilter = (k, v) => setQuery((q) => ({ ...q, [k]: v, page: 1 }));
   const goPage = (p) => setQuery((q) => ({ ...q, page: p }));
   const hasFilters = !!(search || query.gender || query.religion || query.stream
-    || query.subject || query.class_id || query.arm_id);
+    || query.subject || query.class_id || query.arm_id || query.house || query.boarding);
   const resetFilters = () => {
     setSearch('');
     setQuery({ gender: '', religion: '', stream: '', subject: '', class_id: '', arm_id: '',
-               sort: 'surname', order: 'asc', search: '', page: 1 });
+               house: '', boarding: '', sort: 'surname', order: 'asc', search: '', page: 1 });
   };
+  // Apply a saved filter set: restore its query and mirror the search box.
+  const applySaved = (f) => {
+    const q = { ...query, ...f.query, page: 1 };
+    setSearch(q.search || '');
+    setQuery(q);
+  };
+  const doSaveFilter = async () => {
+    const name = (window.prompt('Save this filter set as…') || '').trim();
+    if (!name) return;
+    setSaved(saveFilter(name, { ...query, search }));
+    setShowSaved(true);
+  };
+  const removeSaved = (name) => setSaved(deleteFilter(name));
 
   const allOnPage = students.length && students.every((s) => selected.has(s.id));
   const toggleSel = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -189,8 +212,12 @@ export default function App({ initial }) {
       <div className="card"><div className="card-body">
         <div className="stu-filters">
           <Field label="Search" full>
-            <input className="form-control" type="text" placeholder="Name or Student ID…"
+            <input className="form-control" type="search" list="stu-recent-searches"
+                   placeholder="Name, ID, parent phone/name, NIN or JAMB reg…"
                    value={search} onChange={(e) => setSearch(e.target.value)} />
+            <datalist id="stu-recent-searches">
+              {recentQ.map((t) => <option key={t} value={t} />)}
+            </datalist>
           </Field>
           <Field label="Class">
             <select className="form-control" value={query.class_id} onChange={(e) => setFilter('class_id', e.target.value)}>
@@ -221,6 +248,17 @@ export default function App({ initial }) {
               {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
+          {(filters.houses || []).length > 0 && <Field label="House">
+            <select className="form-control" value={query.house} onChange={(e) => setFilter('house', e.target.value)}>
+              <option value="">All</option>
+              {filters.houses.map((h) => <option key={h} value={h}>{h}</option>)}
+            </select>
+          </Field>}
+          <Field label="Boarding">
+            <select className="form-control" value={query.boarding} onChange={(e) => setFilter('boarding', e.target.value)}>
+              <option value="">All</option><option>Day</option><option>Boarding</option>
+            </select>
+          </Field>
           {canSss3 && <Field label="WAEC subject (SSS3)">
             <select className="form-control" value={query.subject} onChange={(e) => setFilter('subject', e.target.value)}>
               <option value="">All</option>
@@ -234,14 +272,50 @@ export default function App({ initial }) {
             </select>
           </Field>
         </div>
-        {hasFilters && (
-          <div style={{ marginTop: '.5rem' }}>
+        <div style={{ marginTop: '.5rem', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          {hasFilters && (
             <button type="button" className="btn btn-light btn-sm" onClick={resetFilters}>
               <i aria-hidden="true" className="fas fa-xmark" /> Clear filters
             </button>
+          )}
+          {hasFilters && (
+            <button type="button" className="btn btn-light btn-sm" onClick={doSaveFilter} title="Save the current search + filters for one-click reuse">
+              <i aria-hidden="true" className="fas fa-bookmark" /> Save filter
+            </button>
+          )}
+          {saved.length > 0 && (
+            <button type="button" className="btn btn-light btn-sm" aria-expanded={showSaved} onClick={() => setShowSaved((v) => !v)}>
+              <i aria-hidden="true" className="fas fa-star" /> Saved ({saved.length})
+            </button>
+          )}
+        </div>
+        {showSaved && saved.length > 0 && (
+          <div className="stu-chips" style={{ marginTop: '.5rem', display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+            {saved.map((f) => (
+              <span key={f.name} className="badge badge-info" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                <button type="button" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, font: 'inherit' }}
+                        onClick={() => applySaved(f)}>{f.name}</button>
+                <button type="button" aria-label={'Delete saved filter ' + f.name} title="Delete"
+                        style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}
+                        onClick={() => removeSaved(f.name)}>×</button>
+              </span>
+            ))}
           </div>
         )}
       </div></div>
+
+      {viewed.length > 0 && (
+        <div className="card mb-2"><div className="card-body" style={{ paddingTop: '.6rem', paddingBottom: '.6rem' }}>
+          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="text-muted" style={{ fontSize: '.85rem' }}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recently viewed:</span>
+            {viewed.slice(0, 8).map((v) => (
+              <a key={v.id} href={v.url} className="badge badge-secondary" style={{ textDecoration: 'none' }}>
+                {v.name} <span className="text-muted">· {v.student_id}</span>
+              </a>
+            ))}
+          </div>
+        </div></div>
+      )}
 
       <div className="stu-bulkbar">
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', margin: 0 }}>

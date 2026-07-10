@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import { confirm } from '../components/ui';
+import { rememberViewed } from '../lib/studprefs';
 
 function Info({ label, children }) {
   return (
@@ -20,6 +21,13 @@ export default function ViewApp({ initial }) {
   const s = d.student || {};
   const urls = d.urls || {};
   const canManage = !!d.can_manage;
+
+  // Record this profile in the "recently viewed" list the students list offers
+  // as quick links. Keyed by id so re-opening just bumps it to the top.
+  useEffect(() => {
+    if (s.id) rememberViewed({ id: s.id, name: s.full_name, student_id: s.student_id,
+                               url: (urls.self || window.location.pathname) });
+  }, [s.id]);
 
   const refresh = async () => {
     try { setData(await apiGet(`/api/students/${s.id}`)); } catch (e) { /* keep */ }
