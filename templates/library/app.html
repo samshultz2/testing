@@ -17,6 +17,13 @@
 .kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
 .kpi .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
 .kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+a.kpi{transition:box-shadow .12s ease,transform .12s ease}
+a.kpi:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px)}
+.cm-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:992px){.cm-grid.split{grid-template-columns:1.1fr .9fr}}
+.borrower-toggle{display:inline-flex;gap:.25rem;background:var(--gray-100);border-radius:var(--radius-full);padding:.2rem;margin-bottom:.75rem}
+.borrower-toggle button{border:none;background:none;cursor:pointer;padding:.4rem .9rem;border-radius:var(--radius-full);font-size:.82rem;font-weight:600;color:var(--text-secondary)}
+.borrower-toggle button.on{background:var(--bg-card);color:var(--primary);box-shadow:var(--shadow-sm)}
 .widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1rem}
 .widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
 .widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;gap:.45rem;align-items:center}

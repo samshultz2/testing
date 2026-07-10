@@ -195,7 +195,22 @@ _ADDED_COLUMNS = {
     'announcements': {'needs_ack': 'BOOLEAN', 'attachment_id': 'INTEGER'},
     'messages': {'attachment_id': 'INTEGER'},
     'notifications': {'origin_recipient_id': 'INTEGER'},
+    'library_books': {
+        'subtitle': 'VARCHAR(200)', 'barcode': 'VARCHAR(40)', 'subject': 'VARCHAR(80)',
+        'keywords': 'VARCHAR(255)', 'edition': 'VARCHAR(40)', 'publication_year': 'INTEGER',
+        'language': 'VARCHAR(40)', 'description': 'TEXT', 'rack': 'VARCHAR(40)',
+        'condition': 'VARCHAR(20)', 'reference_only': 'BOOLEAN', 'price': 'FLOAT',
+        'status': 'VARCHAR(15)', 'lost_count': 'INTEGER', 'damaged_count': 'INTEGER',
+    },
+    'library_loans': {
+        'borrower_type': 'VARCHAR(10)', 'staff_id': 'INTEGER', 'renew_count': 'INTEGER',
+        'fine_waived': 'BOOLEAN', 'fine_posted': 'BOOLEAN', 'replacement_cost': 'FLOAT',
+    },
 }
+
+# Columns whose NOT NULL constraint must be relaxed on existing databases (a
+# borrower can now be a staff member, so a loan's student_id may be NULL).
+_DROP_NOT_NULL = {'library_loans': ['student_id']}
 
 
 def _ensure_columns(engine):
@@ -213,6 +228,16 @@ def _ensure_columns(engine):
                         conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
                 except Exception:
                     pass                   # racy/duplicate add — safe to ignore
+    # Relax NOT NULL where a column became optional (Postgres only; SQLite can't
+    # ALTER a constraint but fresh SQLite DBs already match the model).
+    if engine.dialect.name == 'postgresql':
+        for table, columns in _DROP_NOT_NULL.items():
+            for col in columns:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text(f'ALTER TABLE {table} ALTER COLUMN {col} DROP NOT NULL'))
+                except Exception:
+                    pass
 
 
 def ensure_tables(bind=None):
