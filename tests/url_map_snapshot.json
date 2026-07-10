@@ -1008,6 +1008,13 @@
 ]
 ],
 [
+"comms.download_attachment",
+"/communication/attachments/<int:att_id>",
+[
+"GET"
+]
+],
+[
 "comms.duplicate_template",
 "/communication/templates/<int:template_id>/duplicate",
 [
@@ -1143,6 +1150,13 @@
 [
 "comms.toggle_favorite",
 "/communication/templates/<int:template_id>/favorite",
+[
+"POST"
+]
+],
+[
+"comms.upload_attachment",
+"/communication/attachments",
 [
 "POST"
 ]

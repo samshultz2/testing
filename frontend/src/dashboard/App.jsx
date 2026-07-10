@@ -130,6 +130,7 @@ export default function App({ data: initialData }) {
               <div key={i} style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeft: '4px solid ' + color, borderRadius: 'var(--radius-md)', padding: '.7rem .9rem' }}>
                 <i aria-hidden="true" className={'fas ' + icon} style={{ color, marginTop: '.2rem' }} />
                 <div style={{ flex: 1 }}><strong>{a.title}</strong>{a.body && <div className="text-muted text-sm">{a.body}</div>}
+                  {a.attachment && <div style={{ marginTop: '.3rem' }}><a href={a.attachment.url} className="text-sm"><i aria-hidden="true" className="fas fa-paperclip" /> {a.attachment.name}</a></div>}
                   {a.needs_ack && ((a.acked || ackedIds.has(a.id))
                     ? <div className="text-sm" style={{ color: 'var(--success)', marginTop: '.35rem' }}><i aria-hidden="true" className="fas fa-circle-check" /> Acknowledged</div>
                     : <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '.4rem' }} onClick={() => ackAnn(a)}><i aria-hidden="true" className="fas fa-check" /> Acknowledge</button>)}

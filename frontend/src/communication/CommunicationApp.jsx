@@ -19,6 +19,40 @@ function Tabs({ d }) {
   return <SectionTabs tabs={TABS} urls={d.nav} active={TAB_FOR[d.page] || d.page} go={nav.go} />;
 }
 
+// Multipart upload of a single file to a comms attachment endpoint.
+async function uploadAttachment(url, file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(url, { method: 'POST', credentials: 'same-origin',
+    headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': csrfToken() }, body: fd });
+  try { return await res.json(); } catch (_) { return { ok: false, error: 'Upload failed.' }; }
+}
+
+// A file input + attached-file chip. Calls back with the attachment (or null).
+function AttachField({ url, value, onChange, notify }) {
+  const ref = useRef();
+  const pick = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = await uploadAttachment(url, f);
+    if (r.ok) onChange(r.attachment); else notify && notify('error', r.error || 'Upload failed.');
+    if (ref.current) ref.current.value = '';
+  };
+  return (
+    <div className="attach-field">
+      {value ? (
+        <span className="attach-chip"><i aria-hidden="true" className="fas fa-paperclip" /> {value.name}{value.size ? ` · ${value.size}` : ''}
+          <button type="button" onClick={() => onChange(null)} aria-label="Remove attachment">×</button></span>
+      ) : (
+        <>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => ref.current && ref.current.click()}><i aria-hidden="true" className="fas fa-paperclip" /> Attach file</button>
+          <input ref={ref} type="file" style={{ display: 'none' }} onChange={pick} />
+        </>
+      )}
+    </div>
+  );
+}
+
 const channelBadge = (ch) => 'badge ' + (ch === 'WhatsApp' ? 'badge-success' : ch === 'Email' ? 'badge-warning' : 'badge-info');
 const statusBadge = (s) => 'badge ' + (s === 'Sent' || s === 'Posted' ? 'badge-success' : s === 'Failed' ? 'badge-danger' : s === 'Scheduled' ? 'badge-info' : 'badge-warning');
 
@@ -121,15 +155,17 @@ function Announcements({ d, notify }) {
   const nav = useNav();
   const blank = { title: '', body: '', category: 'Info', audience: 'All', starts_on: '', ends_on: '', is_pinned: false, needs_ack: false };
   const [f, setF] = useState(blank);
+  const [att, setAtt] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const submit = async (e) => {
     e.preventDefault();
     if (!f.title.trim()) { notify('error', 'Title is required.'); return; }
     setBusy(true);
-    const r = await submitJson(d.add_url, { ...f, is_pinned: f.is_pinned ? 'on' : '', needs_ack: f.needs_ack ? 'on' : '' });
+    const r = await submitJson(d.add_url, { ...f, is_pinned: f.is_pinned ? 'on' : '', needs_ack: f.needs_ack ? 'on' : '',
+      attachment_id: att ? att.id : '' });
     setBusy(false);
-    if (r.ok) { setF(blank); nav.refresh(); }
+    if (r.ok) { setF(blank); setAtt(null); nav.refresh(); }
     else notify('error', r.error || 'Could not post.');
   };
   const del = async (url) => {
@@ -160,6 +196,8 @@ function Announcements({ d, notify }) {
             <div className="form-group" style={{ alignSelf: 'center' }}><label className="form-check"><input type="checkbox" checked={f.is_pinned} onChange={(e) => set('is_pinned', e.target.checked)} /> Pin to top</label></div>
             <div className="form-group" style={{ alignSelf: 'center' }}><label className="form-check" title="Staff must click Acknowledge to confirm they've read it"><input type="checkbox" checked={f.needs_ack} onChange={(e) => set('needs_ack', e.target.checked)} /> Require acknowledgement</label></div>
           </div>
+          <div className="form-group"><label className="form-label">Attachment</label>
+            <AttachField url={d.upload_url} value={att} onChange={setAtt} notify={notify} /></div>
           <button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-bullhorn" /> Post</button>
         </form></div></div>
 
@@ -176,6 +214,7 @@ function Announcements({ d, notify }) {
                 <button className="btn btn-danger btn-sm" onClick={() => del(a.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
               </div>
               {a.body && <div className="text-secondary text-sm mt-1">{a.body}</div>}
+              {a.attachment && <div className="mt-1"><a href={a.attachment.url} className="attach-link" data-native><i aria-hidden="true" className="fas fa-paperclip" /> {a.attachment.name}{a.attachment.size ? ` · ${a.attachment.size}` : ''}</a></div>}
               <div className="text-muted text-sm mt-1">{a.created_at} by {a.created_by}
                 {(a.starts_on || a.ends_on) && ` · ${a.starts_on || '…'} – ${a.ends_on || '…'}`}</div>
             </div>
@@ -531,6 +570,7 @@ function MessageDetail({ d, notify }) {
           <div className="text-sm"><strong>{m.sent_count}</strong> / {m.recipient_count} sent{d.failed_count ? <> · <span className="text-danger">{d.failed_count} failed</span></> : ''}{d.pending_count && m.status !== 'Sent' ? ` · ${d.pending_count} pending` : ''} · {d.segments} SMS segment(s)</div>
         </div>
         <div className="msg-body">{m.body}</div>
+        {m.attachment && <div className="mt-2"><a href={m.attachment.url} className="attach-link" data-native><i aria-hidden="true" className="fas fa-paperclip" /> {m.attachment.name}{m.attachment.size ? ` · ${m.attachment.size}` : ''}</a></div>}
         <div className="d-flex gap-2 flex-wrap mt-3 align-center">
           {m.status === 'Scheduled' && <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.cancel_schedule, 'Cancel the scheduled send?')}><i aria-hidden="true" className="fas fa-clock" /> Cancel schedule</button>}
           {d.gateway_ready && d.pending_count > 0 && <button className="btn btn-primary btn-sm" onClick={() => action(d.urls.send_gateway, `Send ${d.pending_count} pending message(s) now via ${d.gateway_label}?`)}><i aria-hidden="true" className="fas fa-tower-broadcast" /> Send all via {d.gateway_label} ({d.pending_count})</button>}
@@ -706,6 +746,7 @@ function Compose({ d, notify }) {
   const [body, setBody] = useState(d.pre_body || '');
   const [schedule, setSchedule] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
+  const [att, setAtt] = useState(null);   // email attachment
   const [preview, setPreview] = useState({ reachable: '—', no_phone: 0, sample: 'Your message preview appears here…' });
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef();
@@ -787,7 +828,8 @@ function Compose({ d, notify }) {
     if (!body.trim()) { notify('error', 'Message body cannot be empty.'); return; }
     setBusy(true);
     const fields = { term_id: termId, title, channel, body,
-      schedule: schedule ? 'on' : '', scheduled_at: scheduledAt, ...buildSpec() };
+      schedule: schedule ? 'on' : '', scheduled_at: scheduledAt,
+      attachment_id: (isEmail && att) ? att.id : '', ...buildSpec() };
     const r = await submitJson(d.urls.submit, fields);
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not create campaign.');
@@ -900,6 +942,9 @@ function Compose({ d, notify }) {
                   <textarea ref={bodyRef} className="form-control" rows="6" required placeholder="Type your message. Tap a tag above to personalise it." value={body} onChange={(e) => setBody(e.target.value)} />
                   <div className="seg-info"><span>{charCount} character{charCount === 1 ? '' : 's'}</span><span>{isInapp ? 'In-app notice' : (isEmail ? 'Email body' : `${segs} SMS segment${segs === 1 ? '' : 's'}`)}</span></div>
                 </div>
+                {isEmail && (
+                  <div className="form-group mb-0 mt-2"><label className="form-label">Attachment</label>
+                    <AttachField url={d.urls.upload} value={att} onChange={setAtt} notify={notify} /></div>)}
               </div></div>
           </div>
 

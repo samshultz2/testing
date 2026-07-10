@@ -176,9 +176,18 @@ def dispatch_campaign_email(msg):
     from models import MessageRecipient
     from utils import mailer
     subject = msg.title or 'Message from your school'
+    # Resolve an attached file once for the whole campaign.
+    attachments = None
+    if getattr(msg, 'attachment_id', None):
+        from utils import comm_attachments as CA
+        from models import CommAttachment, db as _db
+        att = _db.session.get(CommAttachment, msg.attachment_id)
+        path = CA.fs_path(att) if att else None
+        if path:
+            attachments = [(path, att.original_name, att.content_type)]
     sent = failed = 0
     for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
-        if r.email and mailer.send_email(r.email, subject, r.body):
+        if r.email and mailer.send_email(r.email, subject, r.body, attachments=attachments):
             r.status, r.sent_at, r.error = 'Sent', datetime.now(), None
             sent += 1
         else:
@@ -438,7 +447,7 @@ def campaign_context(target, term):
 def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None,
                    audience_label=None, class_id=None, arm_id=None, student_ids=None,
                    created_by='system', status='Draft', scheduled_at=None,
-                   branch_id=None, spec=None):
+                   branch_id=None, spec=None, attachment_id=None):
     """The single campaign builder used by every entry point (the composer UI and
     automated triggers alike). Resolves recipients, keeps only those reachable on
     the chosen channel, persists the Message + one personalised MessageRecipient
@@ -478,6 +487,7 @@ def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None
                   branch_id=(branch_id if branch_id is not None else branch_for_new()),
                   created_by=created_by, recipient_count=len(reachable),
                   status=status, scheduled_at=scheduled_at,
+                  attachment_id=(attachment_id if channel_is_email(channel) else None),
                   sent_count=(len(reachable) if inapp else 0))
     db.session.add(msg)
     db.session.flush()

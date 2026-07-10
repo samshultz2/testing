@@ -9,6 +9,31 @@ delivery status, so schools keep a full, auditable communication history.
 from models.models import db, local_now
 
 
+class CommAttachment(db.Model):
+    """An uploaded file attached to an announcement or an email campaign. Stored on
+    disk under the tenant's upload folder; only metadata lives here."""
+    __tablename__ = 'comm_attachments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    stored_name = db.Column(db.String(80), nullable=False)     # on-disk filename
+    original_name = db.Column(db.String(200), nullable=False)  # what the user sees
+    content_type = db.Column(db.String(100))
+    size = db.Column(db.Integer, default=0)                    # bytes
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    @property
+    def human_size(self):
+        n = self.size or 0
+        for unit in ('B', 'KB', 'MB', 'GB'):
+            if n < 1024 or unit == 'GB':
+                return f'{n:.0f} {unit}' if unit == 'B' else f'{n:.1f} {unit}'
+            n /= 1024.0
+
+    def __repr__(self):
+        return f'<CommAttachment {self.original_name!r}>'
+
+
 class Announcement(db.Model):
     """An in-app school notice shown on the dashboard."""
     __tablename__ = 'announcements'
@@ -20,6 +45,7 @@ class Announcement(db.Model):
     category = db.Column(db.String(20), default='Info')   # Info/Important/Event
     is_pinned = db.Column(db.Boolean, default=False)
     needs_ack = db.Column(db.Boolean, default=False)   # require staff to acknowledge
+    attachment_id = db.Column(db.Integer, db.ForeignKey('comm_attachments.id'))
     starts_on = db.Column(db.Date)
     ends_on = db.Column(db.Date)
     created_by = db.Column(db.String(100))
@@ -139,6 +165,7 @@ class Message(db.Model):
     sent_count = db.Column(db.Integer, default=0)
     status = db.Column(db.String(15), default='Draft')   # Draft/Scheduled/Sending/Sent
     scheduled_at = db.Column(db.DateTime)                 # when to auto-send (gateway)
+    attachment_id = db.Column(db.Integer, db.ForeignKey('comm_attachments.id'))  # email only
 
     term = db.relationship('Term')
     recipients = db.relationship('MessageRecipient', backref='message',

@@ -158,7 +158,7 @@ def test_dispatch_campaign_email_uses_mailer(app, monkeypatch):
     from utils import comms, mailer
     sent = []
     monkeypatch.setattr(mailer, 'send_email',
-                        lambda to, subject, body, html=None: (sent.append((to, subject)) or True))
+                        lambda to, subject, body, html=None, attachments=None: (sent.append((to, subject)) or True))
     with app.app_context():
         m = Message(title='Fee reminder', body='hi', channel='Email',
                     status='Sending', recipient_count=1)

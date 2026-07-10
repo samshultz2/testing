@@ -37,11 +37,13 @@ def _recipients(to):
     return out
 
 
-def send_email(to, subject, body, html=None):
+def send_email(to, subject, body, html=None, attachments=None):
     """Send an email to one or many recipients.
 
     ``to`` may be a string or a list. ``body`` is the plain-text part; pass
-    ``html`` for an HTML alternative. Returns True on success, never raises.
+    ``html`` for an HTML alternative. ``attachments`` is an optional list of
+    ``(path, filename, mimetype)`` tuples (mimetype may be None). Returns True on
+    success, never raises.
     """
     recipients = _recipients(to)
     if not is_configured() or not recipients:
@@ -55,6 +57,15 @@ def send_email(to, subject, body, html=None):
         msg.set_content(body or '')
         if html:
             msg.add_alternative(html, subtype='html')
+        for path, filename, mimetype in (attachments or []):
+            try:
+                with open(path, 'rb') as fh:
+                    data = fh.read()
+                maintype, _, subtype = (mimetype or 'application/octet-stream').partition('/')
+                msg.add_attachment(data, maintype=maintype or 'application',
+                                   subtype=subtype or 'octet-stream', filename=filename)
+            except OSError:
+                _log.warning('Skipping missing email attachment: %s', path)
         with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT, timeout=20) as s:
             if Config.SMTP_USE_TLS:
                 s.starttls(context=ssl.create_default_context())

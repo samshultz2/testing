@@ -245,7 +245,8 @@ def dashboard_payload():
         announcements=[{'id': a.id, 'title': a.title, 'body': a.body, 'category': a.category,
                         'is_pinned': bool(a.is_pinned), 'needs_ack': bool(a.needs_ack),
                         'acked': a.id in _acked_ann_ids,
-                        'ack_url': url_for('comms.ack_announcement', ann_id=a.id)}
+                        'ack_url': url_for('comms.ack_announcement', ann_id=a.id),
+                        'attachment': _ann_attachment(a.attachment_id)}
                        for a in announcements],
         recent_students=[_ser_student_brief(s) for s in recent_students],
         active_enrollments=active_enrollments,
@@ -706,6 +707,18 @@ def _dash_recent_activity():
     if is_admin() and is_central():
         return AuditLog.query.order_by(AuditLog.created_at.desc()).limit(6).all()
     return []
+
+
+def _ann_attachment(att_id):
+    """Attachment metadata (name + download url) for a dashboard announcement."""
+    if not att_id:
+        return None
+    from models import CommAttachment
+    att = db.session.get(CommAttachment, att_id)
+    if not att:
+        return None
+    return {'name': att.original_name, 'size': att.human_size,
+            'url': url_for('comms.download_attachment', att_id=att.id)}
 
 
 def _dash_announcements():

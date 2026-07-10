@@ -171,12 +171,14 @@ def announcements():
                    'category': a.category or 'Info', 'audience': a.audience or 'All',
                    'is_pinned': bool(a.is_pinned), 'is_active': bool(a.is_active),
                    'needs_ack': bool(a.needs_ack), 'ack_count': ack_counts.get(a.id, 0),
+                   'attachment': _attachment_dict(a.attachment_id),
                    'created_at': a.created_at.strftime('%d %b %Y') if a.created_at else '',
                    'created_by': a.created_by or '',
                    'starts_on': a.starts_on.strftime('%d %b') if a.starts_on else '',
                    'ends_on': a.ends_on.strftime('%d %b') if a.ends_on else '',
                    'delete_url': url_for('comms.delete_announcement', ann_id=a.id)} for a in items],
         'add_url': url_for('comms.add_announcement'),
+        'upload_url': url_for('comms.upload_attachment'),
     })
 
 
@@ -208,6 +210,9 @@ def _read_announcement(a):
     a.needs_ack = bool(request.form.get('needs_ack'))
     a.starts_on = _date(request.form.get('starts_on'))
     a.ends_on = _date(request.form.get('ends_on'))
+    att_id = request.form.get('attachment_id', type=int)
+    if att_id is not None:               # empty = clear, a value = set
+        a.attachment_id = att_id or None
 
 
 def _date(v):
@@ -402,6 +407,51 @@ def toggle_favorite(template_id):
 
 
 # ============================================================================
+# ATTACHMENTS (announcements + email campaigns)
+# ============================================================================
+
+@comms_bp.route('/attachments', methods=['POST'])
+@login_required
+def upload_attachment():
+    """Store an uploaded file and return its metadata for the composer / announcement
+    form to reference by id."""
+    from utils import comm_attachments as CA
+    try:
+        att = CA.save(request.files.get('file'), created_by=_current_user())
+    except ValueError as e:
+        return _err(str(e), url_for('comms.compose'))
+    from utils.audit import log_action
+    log_action('communication.attachment_upload', target=att, detail=att.original_name)
+    return jsonify({'ok': True, 'attachment': CA.as_dict(
+        att, download_url=url_for('comms.download_attachment', att_id=att.id))})
+
+
+@comms_bp.route('/attachments/<int:att_id>')
+@login_required
+def download_attachment(att_id):
+    """Stream an attachment from the tenant's upload folder."""
+    from flask import send_file
+    from utils import comm_attachments as CA
+    from models import CommAttachment
+    att = db.get_or_404(CommAttachment, att_id)
+    path = CA.fs_path(att)
+    if not path:
+        return ('File not found.', 404)
+    return send_file(path, as_attachment=True, download_name=att.original_name,
+                     mimetype=att.content_type or 'application/octet-stream')
+
+
+def _attachment_dict(att_id):
+    """Serialise a referenced attachment (or None) for a payload."""
+    if not att_id:
+        return None
+    from utils import comm_attachments as CA
+    from models import CommAttachment
+    att = db.session.get(CommAttachment, att_id)
+    return CA.as_dict(att, download_url=url_for('comms.download_attachment', att_id=att.id)) if att else None
+
+
+# ============================================================================
 # COMPOSE / SEND
 # ============================================================================
 
@@ -447,10 +497,12 @@ def compose():
 
         from utils.branch_scope import branch_for_new
         label = _spec_label(spec, classes, arms, len(reachable))
+        att_id = request.form.get('attachment_id', type=int) or None
         msg = comms.build_campaign(
             body, channel=channel, spec=spec, term=term, title=title,
             audience_label=label, created_by=_current_user(),
-            status=status, scheduled_at=scheduled_at, branch_id=branch_for_new())
+            status=status, scheduled_at=scheduled_at, branch_id=branch_for_new(),
+            attachment_id=att_id)
         if comms.channel_is_inapp(channel):
             note = f'In-app notification sent to {len(reachable)} staff member(s).'
         elif status == 'Scheduled':
@@ -511,7 +563,7 @@ def compose():
         'groups': _saved_groups(),
         'urls': {'submit': url_for('comms.compose'), 'preview': url_for('comms.compose_preview'),
                  'search': url_for('comms.students_search'), 'settings': url_for('comms.settings'),
-                 'save_group': url_for('comms.save_group')},
+                 'save_group': url_for('comms.save_group'), 'upload': url_for('comms.upload_attachment')},
     })
 
 
@@ -980,7 +1032,8 @@ def message_detail(message_id):
                 'scheduled_at': msg.scheduled_at.strftime('%d %b, %I:%M %p') if msg.scheduled_at else '',
                 'created_at': msg.created_at.strftime('%d %b %Y, %I:%M %p') if msg.created_at else '',
                 'created_by': msg.created_by or '', 'sent_count': msg.sent_count or 0,
-                'recipient_count': msg.recipient_count or 0},
+                'recipient_count': msg.recipient_count or 0,
+                'attachment': _attachment_dict(msg.attachment_id)},
         'rows': rows, 'segments': comms.sms_segments(msg.body),
         'gateway_ready': channel_ready,
         'gateway_label': channel_label,
