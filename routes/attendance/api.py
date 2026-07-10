@@ -185,6 +185,8 @@ def api_mark():
                 att.afternoon_present = en.id in pm_ids
                 att.marked_by = 'React'
             db.session.commit()
+            from utils.calculations import _invalidate_analytics_for_week
+            _invalidate_analytics_for_week(week.id)
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
@@ -322,6 +324,8 @@ def api_week_mark():
             rec.marked_by = 'React'
             saved += 1
         db.session.commit()
+        from utils.calculations import _invalidate_analytics_for_week
+        _invalidate_analytics_for_week(week.id)
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -374,6 +378,8 @@ def api_copy_previous():
                     marked_by='React'))
             copied += 1
         db.session.commit()
+        from utils.calculations import _invalidate_analytics_for_week
+        _invalidate_analytics_for_week(week.id)
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -571,6 +577,25 @@ def api_student_profile(student_id):
     data = build_student_profile(student_id, focus_term_id=request.args.get('term_id', type=int))
     if not data:
         return jsonify({'error': 'not found'}), 404
+    return jsonify(data)
+
+
+@attendance_bp.route('/api/analytics')
+@login_required
+def api_analytics():
+    """Attendance analytics for a term over the classes the viewer may see."""
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    req_term = request.args.get('term_id', type=int)
+    term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
+    if not term:
+        return jsonify({'error': 'no term'}), 400
+    accessible = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
+    from utils.branch_scope import is_central
+    from utils import attendance_analytics as AA
+    data = AA.build(term, accessible, is_central=is_central(),
+                    use_cache=(request.args.get('nocache') != '1'))
     return jsonify(data)
 
 

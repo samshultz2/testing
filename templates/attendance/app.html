@@ -121,6 +121,19 @@
 @media print {
   .att-tabs, .no-print, .att-tabs-status { display: none !important; }
 }
+
+/* ---- analytics dashboard ---- */
+.att-inline-field { font-size: 13px; color: var(--text-muted, #6b7280); }
+.att-bars { display: flex; flex-direction: column; gap: 6px; }
+.att-bar-row { display: grid; grid-template-columns: minmax(90px, 30%) 1fr 46px; gap: 8px; align-items: center; }
+.att-bar-lbl { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-bar-track { background: var(--gray-100, #f1f5f9); border-radius: 6px; height: 16px; overflow: hidden; }
+.att-bar-fill { height: 100%; border-radius: 6px; min-width: 2px; }
+.att-bar-val { font-size: 13px; font-weight: 600; text-align: right; }
+.att-heat { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.att-heat-cell { border-radius: 8px; padding: 12px 4px; text-align: center; background: var(--gray-100, #f1f5f9); }
+.att-heat-day { font-size: 12px; font-weight: 600; }
+.att-heat-pct { font-size: 15px; font-weight: 700; margin-top: 2px; }
 </style>
 {% endblock %}
 

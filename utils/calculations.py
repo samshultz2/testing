@@ -440,11 +440,24 @@ def mark_attendance_bulk(enrollment_ids, target_date, week_id, session_type, pre
                     marked_by=marked_by
                 )
             db.session.add(attendance)
-        
+
         count += 1
-    
+
     db.session.commit()
+    _invalidate_analytics_for_week(week_id)
     return count
+
+
+def _invalidate_analytics_for_week(week_id):
+    """Best-effort: drop cached attendance analytics for a week's term after a
+    write, so insight screens reflect the new marks. Never breaks the save."""
+    try:
+        wk = db.session.get(Week, week_id)
+        if wk:
+            from utils.attendance_analytics import invalidate_term
+            invalidate_term(wk.term_id)
+    except Exception:
+        pass
 
 
 def mark_all_present(enrollment_ids, target_date, week_id, session_type='both', marked_by='Admin'):
@@ -475,10 +488,11 @@ def mark_all_present(enrollment_ids, target_date, week_id, session_type='both', 
                 marked_by=marked_by
             )
             db.session.add(attendance)
-        
+
         count += 1
-    
+
     db.session.commit()
+    _invalidate_analytics_for_week(week_id)
     return count
 
 

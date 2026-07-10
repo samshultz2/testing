@@ -301,6 +301,13 @@
 ]
 ],
 [
+"attendance.api_analytics",
+"/attendance/api/analytics",
+[
+"GET"
+]
+],
+[
 "attendance.api_check_attendance",
 "/attendance/api/check-attendance",
 [
