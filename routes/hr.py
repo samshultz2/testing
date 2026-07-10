@@ -1043,7 +1043,150 @@ def attendance():
                   'deduction': (r['att'].deduction if r['att'] else 0) or 0} for r in rows],
         'save_url': url_for('hr.save_attendance'), 'self_url': url_for('hr.attendance'),
         'settings_url': url_for('hr.settings'),
+        'qr_url': url_for('hr.checkin_qr'), 'checkin_url': url_for('hr.checkin'),
     })
+
+
+def _current_staff():
+    """The StaffMember linked to the logged-in user (or None)."""
+    from utils.access_control import get_current_user
+    u = get_current_user()
+    if not u:
+        return None
+    return StaffMember.query.filter_by(user_id=u.id, is_active=True).first()
+
+
+def _today_att_dict(staff_id):
+    a = StaffAttendance.query.filter_by(staff_id=staff_id, date=date.today()).first()
+    if not a:
+        return None
+    return {'status': a.status, 'clock_in': a.clock_in or '', 'note': a.note or '',
+            'minutes_late': a.minutes_late or 0, 'deduction': a.deduction or 0}
+
+
+@hr_bp.route('/checkin')
+@login_required
+def checkin():
+    """Self-service check-in screen for the logged-in staff member. A ?c= code
+    (from the QR) is validated client-side by posting to checkin_self."""
+    staff = _current_staff()
+    s = hr.get_settings()
+    return _render({
+        'page': 'checkin', 'nav': _nav_urls(),
+        'staff': ({'id': staff.id, 'name': staff.full_name, 'staff_id': staff.staff_id}
+                  if staff else None),
+        'today_label': date.today().strftime('%A, %d %b %Y'),
+        'today': _today_att_dict(staff.id) if staff else None,
+        'geo': {'enabled': bool(s['geo_enabled']), 'radius': s['geo_radius']},
+        'prefill_code': request.args.get('c') or '',
+        'settings': {'late_time': s['late_time']},
+        'urls': {'self': url_for('hr.checkin_self'), 'qr': url_for('hr.checkin_qr')},
+    })
+
+
+@hr_bp.route('/checkin/self', methods=['POST'])
+@login_required
+def checkin_self():
+    """Record the logged-in staff member's attendance via QR code or GPS."""
+    staff = _current_staff()
+    if not staff:
+        return _err('Your login is not linked to a staff record. Ask an administrator.',
+                    url_for('hr.checkin'))
+    from utils.branch_scope import require_branch_access
+    require_branch_access(staff.branch_id)
+    method = request.form.get('method') or 'qr'
+    if method == 'qr':
+        if not hr.verify_day_code(request.form.get('code')):
+            return _err('That QR code is invalid or has expired. Scan today\'s code.',
+                        url_for('hr.checkin'))
+    elif method == 'gps':
+        lat = request.form.get('lat', type=float)
+        lng = request.form.get('lng', type=float)
+        inside = hr.within_geofence(lat, lng)
+        if inside is None:
+            return _err('GPS check-in is not configured. Ask an administrator to set the campus location.',
+                        url_for('hr.checkin'))
+        if not inside:
+            return _err('You appear to be outside the school premises.', url_for('hr.checkin'))
+    else:
+        return _err('Unknown check-in method.', url_for('hr.checkin'))
+    rec, status = hr.mark_attendance_now(staff.id, method=method)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.checkin', detail=f'{method} · {status}', target=staff)
+    msg = f'Checked in at {rec.clock_in} — marked {status}.'
+    if status == 'Late' and rec.deduction:
+        msg += f' ({rec.minutes_late} min late)'
+    return _ok(msg, url_for('hr.checkin'))
+
+
+@hr_bp.route('/attendance/qr')
+@admin_required
+def checkin_qr():
+    """Admin display of today's rotating QR code for staff to scan and check in."""
+    from flask import request as _rq
+    code = hr.day_code()
+    checkin_url = url_for('hr.checkin', c=code, _external=True)
+    return _render({
+        'page': 'checkin_qr', 'nav': _nav_urls(),
+        'qr': hr.qr_svg_data_uri(checkin_url), 'url': checkin_url,
+        'today_label': date.today().strftime('%A, %d %b %Y'),
+        'urls': {'attendance': url_for('hr.attendance')},
+    })
+
+
+@hr_bp.route('/api/attendance/punch', methods=['POST'])
+def device_punch():
+    """Biometric / access-control device endpoint. Authenticated by a shared token
+    (HR settings), not a user session. Accepts JSON or form:
+    {token, staff_id | staff_code, time?(ISO)}. Records attendance for the day."""
+    from models import SchoolSettings
+    token = SchoolSettings.get('hr_device_token', None)
+    data = request.get_json(silent=True) or request.form
+    if not token or (data.get('token') or '') != token:
+        return jsonify({'ok': False, 'error': 'Unauthorised device.'}), 401
+    staff = None
+    if data.get('staff_id'):
+        staff = db.session.get(StaffMember, _int(data.get('staff_id')))
+    if not staff and data.get('staff_code'):
+        staff = StaffMember.query.filter_by(staff_id=str(data.get('staff_code')).strip()).first()
+    if not staff or not staff.is_active:
+        return jsonify({'ok': False, 'error': 'Staff not found.'}), 404
+    when = None
+    if data.get('time'):
+        try:
+            when = datetime.fromisoformat(str(data.get('time')))
+        except (ValueError, TypeError):
+            when = None
+    rec, status = hr.mark_attendance_now(staff.id, method='device', when=when)
+    db.session.commit()
+    return jsonify({'ok': True, 'staff': staff.full_name, 'status': status, 'clock_in': rec.clock_in})
+
+
+@hr_bp.route('/settings/device-token', methods=['POST'])
+@admin_required
+def regenerate_device_token():
+    import secrets
+    from models import SchoolSettings
+    if request.form.get('action') == 'clear':
+        SchoolSettings.set('hr_device_token', '', 'string', 'Biometric device API token')
+        db.session.commit()
+        return _ok('Device token cleared. Devices can no longer post attendance.',
+                   url_for('hr.settings'))
+    token = secrets.token_urlsafe(24)
+    SchoolSettings.set('hr_device_token', token, 'string', 'Biometric device API token')
+    db.session.commit()
+    if _wants_json():
+        return jsonify({'ok': True, 'token': token,
+                        'punch_url': url_for('hr.device_punch', _external=True)})
+    return _ok('New device token generated.', url_for('hr.settings'))
+
+
+def _int(v):
+    try:
+        return int(v)
+    except (ValueError, TypeError):
+        return 0
 
 
 @hr_bp.route('/attendance/save', methods=['POST'])
@@ -1268,9 +1411,13 @@ def notify_staff():
 def settings():
     from models import PayrollDeductionType
     deductions = PayrollDeductionType.query.order_by(PayrollDeductionType.name).all()
+    from models import SchoolSettings as _SS
     return _render({
         'page': 'settings', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'settings': hr.get_settings(),
+        'device_token': (_SS.get('hr_device_token', '') or '') if _is_admin() else '',
+        'punch_url': url_for('hr.device_punch', _external=True),
+        'device_token_url': url_for('hr.regenerate_device_token'),
         'leave_types': hr.LEAVE_TYPES, 'leave_allowances': hr.leave_allowances(),
         'deductions': [{'id': d.id, 'name': d.name, 'kind': d.kind, 'value': d.value or 0,
                         'is_active': bool(d.is_active),

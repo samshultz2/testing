@@ -55,6 +55,9 @@ BLUEPRINT_MODULE = {
 _ALWAYS_ALLOWED_ENDPOINTS = {
     'main.dashboard', 'main.global_search', 'main.set_view_branch', 'main.set_theme',
     'main.dashboard_customize', 'auth.logout', 'auth.change_password',
+    # Self-service staff attendance: any staff member may check themselves in,
+    # even without HR-module access (they only touch their own record).
+    'hr.checkin', 'hr.checkin_self',
 }
 
 # Default module set when a non-admin user has no explicit allowed_modules.
@@ -371,7 +374,7 @@ def enforce_module_access():
 
 # Unsafe methods a read-only user may still call (managing their own account).
 _READONLY_WRITE_OK = {'auth.login', 'auth.logout', 'auth.change_password',
-                      'main.set_theme', 'main.dashboard_customize'}
+                      'main.set_theme', 'main.dashboard_customize', 'hr.checkin_self'}
 _SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS'}
 
 

@@ -17,10 +17,22 @@ BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 # ---- Settings (lateness / absence rules) -----------------------------------
 
 def get_settings():
+    def _f(key, default=0):
+        v = SchoolSettings.get(key, None)
+        try:
+            return float(v) if v not in (None, '') else default
+        except (ValueError, TypeError):
+            return default
     return {
         'late_time': SchoolSettings.get('hr_late_time', '07:30'),
         'late_rate': float(SchoolSettings.get('hr_late_rate', 10) or 0),
         'absence_deduction': float(SchoolSettings.get('hr_absence_deduction', 0) or 0),
+        # Self-service attendance (QR / GPS / device)
+        'geo_lat': _f('hr_geo_lat', None), 'geo_lng': _f('hr_geo_lng', None),
+        'geo_radius': int(_f('hr_geo_radius', 200) or 200),
+        'geo_enabled': (SchoolSettings.get('hr_geo_lat', None) not in (None, '')
+                        and SchoolSettings.get('hr_geo_lng', None) not in (None, '')),
+        'has_device_token': bool(SchoolSettings.get('hr_device_token', None)),
     }
 
 
@@ -31,6 +43,92 @@ def save_settings(form):
                        'string', 'Lateness deduction per minute')
     SchoolSettings.set('hr_absence_deduction', form.get('absence_deduction') or '0',
                        'string', 'Deduction per day absent')
+    # Geofence for GPS check-in (blank lat/lng disables it).
+    for key, field in (('hr_geo_lat', 'geo_lat'), ('hr_geo_lng', 'geo_lng'),
+                       ('hr_geo_radius', 'geo_radius')):
+        if field in form:
+            SchoolSettings.set(key, (form.get(field) or '').strip(), 'string',
+                               'Staff GPS check-in geofence')
+
+
+# ---- Self-service attendance (QR / GPS / biometric device) ------------------
+
+def _checkin_serializer():
+    from itsdangerous import URLSafeTimedSerializer
+    from flask import current_app
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='hr-checkin')
+
+
+def day_code():
+    """A short-lived signed token valid for today's QR self check-in."""
+    import datetime as _dt
+    return _checkin_serializer().dumps({'d': _dt.date.today().isoformat()})
+
+
+def verify_day_code(code):
+    """True if ``code`` is a valid, unexpired (≤1 day) token minted for today."""
+    import datetime as _dt
+    from itsdangerous import BadSignature, SignatureExpired
+    try:
+        data = _checkin_serializer().loads(code or '', max_age=86400)
+    except (BadSignature, SignatureExpired, Exception):
+        return False
+    return data.get('d') == _dt.date.today().isoformat()
+
+
+def qr_svg_data_uri(text):
+    """A QR code for ``text`` as an inline SVG data URI (no Pillow needed)."""
+    import io, base64
+    import qrcode
+    import qrcode.image.svg as svg
+    img = qrcode.make(text, image_factory=svg.SvgPathImage, box_size=10, border=2)
+    buf = io.BytesIO(); img.save(buf)
+    b64 = base64.b64encode(buf.getvalue()).decode('ascii')
+    return 'data:image/svg+xml;base64,' + b64
+
+
+def haversine_m(lat1, lng1, lat2, lng2):
+    """Great-circle distance between two points in metres."""
+    import math
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def within_geofence(lat, lng, settings=None):
+    s = settings or get_settings()
+    if not s.get('geo_enabled') or lat is None or lng is None:
+        return None      # geofence not configured / no coords → caller decides
+    try:
+        dist = haversine_m(float(lat), float(lng), s['geo_lat'], s['geo_lng'])
+    except (ValueError, TypeError):
+        return False
+    return dist <= (s['geo_radius'] or 200)
+
+
+def mark_attendance_now(staff_id, method='self', when=None, note=None):
+    """Upsert today's StaffAttendance for a staff member from a live check-in,
+    deriving Present/Late (and any lateness deduction) from the clock-in time."""
+    import datetime as _dt
+    from models import StaffAttendance
+    settings = get_settings()
+    now = when or _dt.datetime.now()
+    day = now.date()
+    clock_in = now.strftime('%H:%M')
+    st, mins, ded = compute_attendance('Present', clock_in, settings)
+    rec = StaffAttendance.query.filter_by(staff_id=staff_id, date=day).first()
+    if not rec:
+        rec = StaffAttendance(staff_id=staff_id, date=day)
+        db.session.add(rec)
+    rec.status = st
+    rec.clock_in = clock_in
+    rec.minutes_late = mins
+    rec.deduction = ded
+    rec.note = note or f'{method} check-in'
+    return rec, st
 
 
 # ---- Leave allowances + balances -------------------------------------------

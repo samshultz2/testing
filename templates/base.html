@@ -445,8 +445,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('hr.attendance') }}" class="nav-link {% if request.endpoint == 'hr.attendance' %}active{% endif %}">
+                        <a href="{{ url_for('hr.attendance') }}" class="nav-link {% if request.endpoint in ['hr.attendance','hr.checkin_qr'] %}active{% endif %}">
                             <i class="fas fa-user-clock"></i><span>Staff Attendance</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.checkin') }}" class="nav-link {% if request.endpoint == 'hr.checkin' %}active{% endif %}">
+                            <i class="fas fa-location-crosshairs"></i><span>Check In</span>
                         </a>
                     </li>
                     <li class="nav-item">

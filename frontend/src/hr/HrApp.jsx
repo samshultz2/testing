@@ -10,7 +10,8 @@ const TABS = [
   ['payroll', 'fa-money-check-dollar', 'Payroll'], ['departments', 'fa-sitemap', 'Departments'],
   ['reports', 'fa-chart-line', 'Reports'], ['settings', 'fa-gear', 'Settings'],
 ];
-const TAB_FOR = { staff_form: 'staff', staff_detail: 'staff', payroll_detail: 'payroll' };
+const TAB_FOR = { staff_form: 'staff', staff_detail: 'staff', payroll_detail: 'payroll',
+  checkin: 'attendance', checkin_qr: 'attendance' };
 
 function Tabs({ d }) {
   const nav = useNav();
@@ -1059,7 +1060,12 @@ function Attendance({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1>Staff Attendance</h1></div>
+      <div className="page-header"><h1>Staff Attendance</h1>
+        <div className="page-header-actions">
+          <a href={d.checkin_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-location-crosshairs" /> Self check-in</a>
+          <a href={d.qr_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-qrcode" /> Show QR</a>
+        </div>
+      </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <form className="filter-form">
@@ -1099,6 +1105,36 @@ function Attendance({ d, notify }) {
       </form>
       <p className="text-muted text-sm mt-2"><i aria-hidden="true" className="fas fa-circle-info" /> Lateness deductions are calculated from the clock-in time vs the resumption time set in <a href={d.settings_url}>Settings</a>, and flow into that month's payroll automatically.</p>
     </>
+  );
+}
+
+// ---- Biometric / access-control device token -------------------------------
+function DeviceTokenCard({ d, notify }) {
+  const nav = useNav();
+  const [token, setToken] = useState(d.device_token || '');
+  const [busy, setBusy] = useState(false);
+  const gen = async (action) => {
+    if (action === 'clear' && !await confirm('Clear the device token? Existing devices will stop posting attendance.')) return;
+    setBusy(true);
+    const r = await submitJson(d.device_token_url, action ? { action } : {});
+    setBusy(false);
+    if (r.ok) { if (r.token) setToken(r.token); else setToken(''); notify('success', r.message || 'Done.'); nav.refresh(); }
+    else notify('error', r.error || 'Could not update the token.');
+  };
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-fingerprint" /> Biometric / device API</h3></div>
+      <div className="card-body">
+        <p className="text-muted text-sm" style={{ marginTop: 0 }}>Let a biometric or access-control device post staff punches to the system. Configure the device to <code>POST</code> JSON <code>{'{ token, staff_code, time }'}</code> to:</p>
+        <div className="form-group"><input type="text" className="form-control" readOnly value={d.punch_url} onFocus={(e) => e.target.select()} /></div>
+        <div className="form-group"><label className="form-label">Device token</label>
+          <div className="d-flex gap-2 align-center flex-wrap">
+            <input type="text" className="form-control" readOnly value={token || '— not set —'} onFocus={(e) => token && e.target.select()} style={{ flex: 1, minWidth: 220, fontFamily: 'monospace' }} />
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => gen(null)}><i aria-hidden="true" className="fas fa-rotate" /> {token ? 'Regenerate' : 'Generate'}</button>
+            {token && <button type="button" className="btn btn-danger" disabled={busy} onClick={() => gen('clear')}><i aria-hidden="true" className="fas fa-trash" /> Clear</button>}
+          </div>
+          <span className="form-hint d-block">Keep this secret. Regenerating invalidates the old token immediately.</span>
+        </div>
+      </div></div>
   );
 }
 
@@ -1144,9 +1180,18 @@ function Settings({ d, notify }) {
               <div className="form-group"><label className="form-label">Lateness rate (₦ per minute)</label><input type="number" className="form-control" min="0" step="1" value={s.late_rate} onChange={(e) => set('late_rate', e.target.value)} /><span className="form-hint d-block">e.g. 10 → ₦10 for every minute after the resumption time.</span></div>
               <div className="form-group"><label className="form-label">Absence deduction (₦ per day)</label><input type="number" className="form-control" min="0" step="100" value={s.absence_deduction} onChange={(e) => set('absence_deduction', e.target.value)} /><span className="form-hint d-block">Flat amount deducted for each day marked absent (0 to disable).</span></div>
             </div>
+            <h4 style={{ margin: '.5rem 0' }}><i aria-hidden="true" className="fas fa-location-crosshairs" /> GPS check-in geofence</h4>
+            <p className="text-muted text-sm" style={{ marginTop: 0 }}>Set the campus location to let staff check in with their phone's GPS. Leave latitude/longitude blank to disable.</p>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Latitude</label><input type="number" step="any" className="form-control" placeholder="e.g. 6.5244" value={s.geo_lat != null ? s.geo_lat : ''} onChange={(e) => set('geo_lat', e.target.value)} /></div>
+              <div className="form-group"><label className="form-label">Longitude</label><input type="number" step="any" className="form-control" placeholder="e.g. 3.3792" value={s.geo_lng != null ? s.geo_lng : ''} onChange={(e) => set('geo_lng', e.target.value)} /></div>
+              <div className="form-group"><label className="form-label">Radius (metres)</label><input type="number" min="20" step="10" className="form-control" value={s.geo_radius != null ? s.geo_radius : 200} onChange={(e) => set('geo_radius', e.target.value)} /></div>
+            </div>
             <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Settings</button>
           </fieldset>
         </form></div></div>
+
+      {d.is_admin && <DeviceTokenCard d={d} notify={notify} />}
 
       <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-bill-trend-up" /> Recurring Deductions</h3></div>
         <div className="card-body">
@@ -1306,9 +1351,85 @@ function Reports({ d }) {
   );
 }
 
+// ---- Self-service check-in (QR / GPS) --------------------------------------
+function CheckIn({ d, notify }) {
+  const nav = useNav();
+  const [busy, setBusy] = useState(false);
+  const [today, setToday] = useState(d.today);
+  const post = async (fields) => {
+    setBusy(true);
+    const r = await submitJson(d.urls.self, fields);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); nav.refresh(); }
+    else notify('error', r.error || 'Check-in failed.');
+  };
+  // Auto-submit a scanned QR code once, on mount.
+  useEffect(() => {
+    if (d.prefill_code && d.staff && !d.today) post({ method: 'qr', code: d.prefill_code });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const gpsCheckin = () => {
+    if (!navigator.geolocation) { notify('error', 'This device has no location support.'); return; }
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setBusy(false); post({ method: 'gps', lat: pos.coords.latitude, lng: pos.coords.longitude }); },
+      () => { setBusy(false); notify('error', 'Could not read your location. Allow location access and retry.'); },
+      { enableHighAccuracy: true, timeout: 10000 });
+  };
+  const statusChip = (s) => 'badge ' + (s === 'Present' ? 'badge-success' : s === 'Late' ? 'badge-warning' : 'badge-secondary');
+  return (
+    <>
+      <div className="page-header"><h1>Check In</h1></div>
+      <Tabs d={d} />
+      {!d.staff ? (
+        <div className="card"><div className="card-body">
+          <Empty icon="fa-id-badge" title="No staff record linked"><p>Your login isn’t linked to a staff profile. Ask an administrator to link it before you can check in.</p></Empty>
+        </div></div>
+      ) : (
+        <div className="card" style={{ maxWidth: 520 }}><div className="card-body text-center">
+          <div className="avatar" style={{ margin: '0 auto .75rem' }}>{(d.staff.name || '').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</div>
+          <h2 style={{ margin: '0 0 .25rem' }}>{d.staff.name}</h2>
+          <div className="text-muted mb-2">{d.staff.staff_id} · {d.today_label}</div>
+          {d.today ? (
+            <div className="mb-3"><span className={statusChip(d.today.status)}>{d.today.status}</span>
+              {d.today.clock_in && <span className="text-muted"> at {d.today.clock_in}</span>}
+              <div className="text-muted text-sm mt-1">You’ve already checked in today.</div></div>
+          ) : (
+            <p className="text-muted">Resumption time is {d.settings.late_time}. Check in below.</p>
+          )}
+          <div className="d-flex gap-2 justify-center flex-wrap">
+            {d.geo.enabled && <button className="btn btn-primary" disabled={busy} onClick={gpsCheckin}><i aria-hidden="true" className="fas fa-location-crosshairs" /> Check in with location</button>}
+            <a href={d.urls.qr} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-qrcode" /> Scan QR instead</a>
+          </div>
+          {d.prefill_code && !d.today && <button className="btn btn-primary mt-2" disabled={busy} onClick={() => post({ method: 'qr', code: d.prefill_code })}><i aria-hidden="true" className="fas fa-check" /> Confirm QR check-in</button>}
+          {!d.geo.enabled && <p className="form-hint mt-2">GPS check-in isn’t configured — an administrator can enable it in HR Settings.</p>}
+        </div></div>
+      )}
+    </>
+  );
+}
+
+function CheckInQR({ d }) {
+  return (
+    <>
+      <div className="page-header"><h1>Attendance QR</h1>
+        <div className="page-header-actions"><a href={d.urls.attendance} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Attendance</a></div>
+      </div>
+      <Tabs d={d} />
+      <div className="card" style={{ maxWidth: 460 }}><div className="card-body text-center">
+        <h3 style={{ marginTop: 0 }}>Staff check-in</h3>
+        <p className="text-muted">{d.today_label} · today only</p>
+        <img src={d.qr} alt="Attendance QR code" style={{ width: '100%', maxWidth: 300, height: 'auto', margin: '0 auto' }} />
+        <p className="text-muted text-sm mt-2">Staff scan this with their phone (while signed in) to check in. The code changes each day.</p>
+        <a href={d.url} className="text-sm" data-native>{d.url}</a>
+      </div></div>
+    </>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, staff: Staff, staff_form: StaffForm, staff_detail: StaffDetail,
   departments: Departments, leave: Leave, payroll: Payroll, payroll_detail: PayrollDetail,
-  attendance: Attendance, reports: Reports, settings: Settings };
+  attendance: Attendance, checkin: CheckIn, checkin_qr: CheckInQR, reports: Reports, settings: Settings };
 
 export default function HrApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
