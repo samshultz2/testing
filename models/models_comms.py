@@ -100,6 +100,7 @@ class MessageTemplate(db.Model):
     category = db.Column(db.String(40))          # Fees, Attendance, General, Event…
     body = db.Column(db.Text, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
+    is_favorite = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=local_now)
 
     def __repr__(self):

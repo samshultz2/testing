@@ -282,16 +282,36 @@ def contacts():
 @comms_bp.route('/templates')
 @login_required
 def templates_list():
-    tpls = MessageTemplate.query.order_by(MessageTemplate.is_active.desc(),
-                                          MessageTemplate.category, MessageTemplate.name).all()
+    q = (request.args.get('q') or '').strip()
+    category = (request.args.get('category') or '').strip()
+    base = MessageTemplate.query
+    if q:
+        like = like_term(q)
+        base = base.filter(db.or_(MessageTemplate.name.ilike(like, escape='\\'),
+                                  MessageTemplate.body.ilike(like, escape='\\'),
+                                  MessageTemplate.category.ilike(like, escape='\\')))
+    if category:
+        base = base.filter(MessageTemplate.category == category)
+    # Favourites first, then active, then by category / name.
+    tpls = base.order_by(MessageTemplate.is_favorite.desc(),
+                         MessageTemplate.is_active.desc(),
+                         MessageTemplate.category, MessageTemplate.name).all()
+    categories = sorted({c[0] for c in MessageTemplate.query
+                         .with_entities(MessageTemplate.category).distinct().all() if c[0]})
     return _render({
         'page': 'templates', 'nav': _nav_urls(), 'placeholders': comms.PLACEHOLDERS,
+        'categories': categories,
+        'sel': {'q': q, 'category': category},
         'templates': [{'id': t.id, 'name': t.name, 'body': t.body,
                        'category': t.category or '', 'is_active': bool(t.is_active),
+                       'is_favorite': bool(t.is_favorite),
                        'use_url': url_for('comms.compose', tpl=t.id),
                        'edit_url': url_for('comms.edit_template', template_id=t.id),
+                       'duplicate_url': url_for('comms.duplicate_template', template_id=t.id),
+                       'favorite_url': url_for('comms.toggle_favorite', template_id=t.id),
                        'delete_url': url_for('comms.delete_template', template_id=t.id)} for t in tpls],
         'add_url': url_for('comms.add_template'),
+        'self_url': url_for('comms.templates_list'),
     })
 
 
@@ -327,6 +347,27 @@ def delete_template(template_id):
     db.session.delete(t)
     db.session.commit()
     return _ok('Template deleted.', url_for('comms.templates_list'))
+
+
+@comms_bp.route('/templates/<int:template_id>/duplicate', methods=['POST'])
+@login_required
+def duplicate_template(template_id):
+    t = db.get_or_404(MessageTemplate, template_id)
+    copy = MessageTemplate(name=f'{t.name} (copy)', body=t.body, category=t.category,
+                           is_active=t.is_active, is_favorite=False)
+    db.session.add(copy)
+    db.session.commit()
+    return _ok(f'Duplicated "{t.name}".', url_for('comms.templates_list'))
+
+
+@comms_bp.route('/templates/<int:template_id>/favorite', methods=['POST'])
+@login_required
+def toggle_favorite(template_id):
+    t = db.get_or_404(MessageTemplate, template_id)
+    t.is_favorite = not bool(t.is_favorite)
+    db.session.commit()
+    return _ok('Favourite updated.' if t.is_favorite else 'Removed from favourites.',
+               url_for('comms.templates_list'))
 
 
 # ============================================================================
@@ -1030,7 +1071,7 @@ def send_gateway(message_id):
 @comms_bp.route('/settings')
 @login_required
 def settings():
-    from utils import sms_gateway
+    from utils import sms_gateway, automations
     cfg = sms_gateway.get_config()
     configured = sms_gateway.is_configured(cfg)
     balance_ok, balance = (sms_gateway.get_balance(cfg) if configured else (False, ''))
@@ -1042,8 +1083,20 @@ def settings():
         'providers': [{'key': k, 'label': v} for k, v in sms_gateway.PROVIDERS.items()],
         'configured': configured, 'balance_ok': balance_ok, 'balance': balance,
         'provider_label': sms_gateway.provider_label(cfg),
-        'urls': {'save': url_for('comms.save_settings'), 'test': url_for('comms.test_sms')},
+        'automations': automations.all_states(),
+        'urls': {'save': url_for('comms.save_settings'), 'test': url_for('comms.test_sms'),
+                 'save_automations': url_for('comms.save_automations')},
     })
+
+
+@comms_bp.route('/settings/automations', methods=['POST'])
+@admin_required
+def save_automations():
+    """Persist the per-automation on/off toggles (unchecked box = disabled)."""
+    from utils import automations
+    for key in automations.KEYS:
+        automations.set_enabled(key, request.form.get(key) == 'on')
+    return _ok('Automation settings saved.', url_for('comms.settings'))
 
 
 @comms_bp.route('/settings/save', methods=['POST'])

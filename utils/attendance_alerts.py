@@ -33,6 +33,9 @@ def check_absence_alerts(enrollment_ids, threshold=None):
     has an unread attendance alert, so admins aren't spammed daily. Returns the
     number of alerts created."""
     from config import Config
+    from utils import automations
+    if not automations.is_enabled('attendance_alert'):
+        return 0
     if threshold is None:
         threshold = int(getattr(Config, 'ABSENCE_ALERT_DAYS', 3) or 0)
     if threshold <= 0 or not enrollment_ids:

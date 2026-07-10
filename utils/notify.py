@@ -49,6 +49,9 @@ def notify_student_change(action, *, student=None, detail='', url=None):
     ``student`` instance is given, a "Name (ID)" label is derived for the body.
     Best-effort like all notifications — never breaks the triggering action.
     """
+    from utils import automations
+    if not automations.is_enabled('student_change'):
+        return None
     title = _STUDENT_CHANGE_TITLES.get(action, 'Student change')
     if student is not None and not detail:
         name = getattr(student, 'full_name', '') or ''

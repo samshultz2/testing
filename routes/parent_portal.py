@@ -235,9 +235,11 @@ def _record_online_payment(student_id, term_id, amount, reference):
     db.session.commit()
     try:
         from utils.notify import notify_admins
-        notify_admins(f'Online payment: ₦{amount:,.0f}',
-                      f'{student.full_name} paid ₦{amount:,.0f} online (ref {reference}).',
-                      category='success')
+        from utils import automations
+        if automations.is_enabled('payment_success'):
+            notify_admins(f'Online payment: ₦{amount:,.0f}',
+                          f'{student.full_name} paid ₦{amount:,.0f} online (ref {reference}).',
+                          category='success')
     except Exception:
         pass
     return pay
@@ -318,8 +320,9 @@ def pay_callback():
     res = payments.verify(reference)
     if not (res.get('ok') and res.get('success')):
         if not res.get('ok'):        # a real verification failure (not a user abandon)
-            from utils import finance_notify
-            finance_notify.payment_verification_failed(reference, res.get('error') or '')
+            from utils import finance_notify, automations
+            if automations.is_enabled('payment_failed'):
+                finance_notify.payment_verification_failed(reference, res.get('error') or '')
         flash(res.get('error') or 'Payment was not completed.', 'error')
         return redirect(url_for('parent.home', term_id=pending.get('term_id')))
 

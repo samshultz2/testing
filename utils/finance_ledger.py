@@ -191,6 +191,7 @@ def _reverse_by_origin(connection, origin_type, origin_id):
 _ADDED_COLUMNS = {
     'parent_contacts': {'email': 'VARCHAR(120)'},
     'message_recipients': {'email': 'VARCHAR(120)'},
+    'message_templates': {'is_favorite': 'BOOLEAN'},
 }
 
 

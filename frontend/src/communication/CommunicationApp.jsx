@@ -185,10 +185,20 @@ function Announcements({ d, notify }) {
 // ---- Templates -------------------------------------------------------------
 function Templates({ d, notify }) {
   const nav = useNav();
+  const sel = d.sel || {};
   const [f, setF] = useState({ name: '', category: '', body: '' });
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState(sel.q || '');
+  const qRef = useRef();
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const reload = (extra) => navParams(nav.go, d.self_url, { q, category: sel.category || '', ...extra });
+  useEffect(() => {
+    if ((sel.q || '') === q) return undefined;
+    clearTimeout(qRef.current); qRef.current = setTimeout(() => reload({}), 400);
+    return () => clearTimeout(qRef.current);
+    /* eslint-disable-next-line */
+  }, [q]);
   const add = async (e) => {
     e.preventDefault();
     if (!f.name.trim() || !f.body.trim()) { notify('error', 'Template name and body are required.'); return; }
@@ -201,6 +211,10 @@ function Templates({ d, notify }) {
     if (!await confirm(`Delete template ${name}?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
+  };
+  const act = async (url, err) => {
+    const r = await submitJson(url, {});
+    if (r.ok) nav.refresh(); else notify('error', r.error || err);
   };
   return (
     <>
@@ -221,22 +235,33 @@ function Templates({ d, notify }) {
           <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Template</button>
         </form></div></div>
 
-      <div className="card"><div className="card-header"><h3>Templates ({d.templates.length})</h3></div>
+      <div className="card"><div className="card-header d-flex justify-between align-center flex-wrap gap-2">
+        <h3>Templates ({d.templates.length})</h3>
+        <div className="d-flex gap-2 align-center flex-wrap">
+          <div className="hf-search" style={{ minWidth: 200 }}><i aria-hidden="true" className="fas fa-magnifying-glass" />
+            <input type="search" placeholder="Search templates…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search templates" /></div>
+          <select className="form-control" style={{ maxWidth: 180 }} value={sel.category || ''} onChange={(e) => reload({ category: e.target.value })} aria-label="Category">
+            <option value="">All categories</option>{(d.categories || []).map((c) => <option key={c} value={c}>{c}</option>)}</select>
+        </div></div>
         <div className="card-body">
           {d.templates.length ? d.templates.map((t) => (
             <div className="tpl-card" key={t.id}>
               <div className="d-flex justify-between align-center flex-wrap gap-1">
-                <div><strong>{t.name}</strong> {t.category && <span className="badge badge-secondary">{t.category}</span>} {!t.is_active && <span className="badge badge-warning">Inactive</span>}</div>
+                <div>
+                  <button className="tpl-star" title={t.is_favorite ? 'Unfavourite' : 'Favourite'} onClick={() => act(t.favorite_url, 'Could not update.')}>
+                    <i aria-hidden="true" className={(t.is_favorite ? 'fas' : 'far') + ' fa-star' + (t.is_favorite ? ' on' : '')} /></button>
+                  {' '}<strong>{t.name}</strong> {t.category && <span className="badge badge-secondary">{t.category}</span>} {!t.is_active && <span className="badge badge-warning">Inactive</span>}</div>
                 <div className="d-flex gap-1">
                   <a href={t.use_url} className="btn btn-primary btn-sm" title="Use"><i aria-hidden="true" className="fas fa-paper-plane" /></a>
                   <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === t.id ? null : t.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
+                  <button className="btn btn-secondary btn-sm" title="Duplicate" onClick={() => act(t.duplicate_url, 'Could not duplicate.')}><i aria-hidden="true" className="fas fa-copy" /></button>
                   <button className="btn btn-danger btn-sm" onClick={() => del(t.delete_url, t.name)}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div>
               </div>
               <div className="body">{t.body}</div>
               {editing === t.id && <EditTemplate t={t} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />}
             </div>
-          )) : <Empty icon="fa-file-lines" title="No templates"><p>Create reusable messages with placeholders.</p></Empty>}
+          )) : <Empty icon="fa-file-lines" title="No templates"><p>Create reusable messages with placeholders, or adjust your search.</p></Empty>}
         </div></div>
     </>
   );
@@ -555,9 +580,17 @@ function Settings({ d, notify }) {
     const r = await submitJson(d.urls.test, { phone });
     if (r.ok) notify('success', r.message); else notify('error', r.error || 'Test failed.');
   };
+  const [autos, setAutos] = useState(d.automations || []);
+  const toggleAuto = (key) => setAutos((a) => a.map((x) => (x.key === key ? { ...x, enabled: !x.enabled } : x)));
+  const saveAutos = async () => {
+    const fields = {};
+    autos.forEach((a) => { if (a.enabled) fields[a.key] = 'on'; });
+    const r = await submitJson(d.urls.save_automations, fields);
+    if (r.ok) notify('success', r.message); else notify('error', r.error || 'Could not save.');
+  };
   return (
     <>
-      <div className="page-header"><h1>SMS Gateway</h1></div>
+      <div className="page-header"><h1>Communication Settings</h1></div>
       <Tabs d={d} />
       {d.configured ? (
         <div className="status-banner ok"><i aria-hidden="true" className="fas fa-circle-check" /><div><strong>SMS sending is active</strong> via {d.provider_label}. Campaigns can now be sent automatically from the server.
@@ -600,6 +633,22 @@ function Settings({ d, notify }) {
             </form>
           ) : <p className="text-muted mb-0">Save a configured provider above to enable the test.</p>}
         </div></div>
+
+      {d.automations && (
+        <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-robot" /> Automated notifications</h3></div>
+          <div className="card-body">
+            {!d.is_admin && <p className="text-muted text-sm">Only administrators can change automations.</p>}
+            <p className="text-muted text-sm">Turn each automatic notification on or off. Disabled ones simply don't fire — everything else keeps working.</p>
+            <div className="auto-list">
+              {autos.map((a) => (
+                <label className={'auto-row' + (a.enabled ? '' : ' off')} key={a.key}>
+                  <input type="checkbox" checked={a.enabled} disabled={!d.is_admin} onChange={() => toggleAuto(a.key)} />
+                  <span className="auto-body"><span className="auto-title">{a.label} <span className="badge badge-secondary">{a.category}</span></span>
+                    <span className="auto-desc text-muted text-sm">{a.description}</span></span>
+                </label>))}
+            </div>
+            {d.is_admin && <button type="button" className="btn btn-primary mt-2" onClick={saveAutos}><i aria-hidden="true" className="fas fa-save" /> Save automations</button>}
+          </div></div>)}
 
       <div className="card mt-3"><div className="card-body">
         <h4 style={{ marginTop: 0 }}><i aria-hidden="true" className="fas fa-circle-question" /> How it works</h4>

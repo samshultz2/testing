@@ -138,7 +138,9 @@ def publish(term_id):
     # Optionally notify parents: queue a *Draft* SMS campaign for staff to review
     # and send (never auto-dispatched). Falls back to the compose page if there
     # are no reachable parents.
-    if term.results_published and request.form.get('notify') == 'on':
+    from utils import automations
+    if (term.results_published and request.form.get('notify') == 'on'
+            and automations.is_enabled('results_published')):
         from flask import session
         from utils import comms
         from models import MessageTemplate
