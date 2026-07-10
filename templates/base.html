@@ -362,8 +362,33 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('comms.announcements') }}" class="nav-link {% if request.endpoint == 'comms.announcements' %}active{% endif %}">
+                            <i class="fas fa-bullhorn"></i><span>Announcements</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.inbox') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('comms.inbox') %}active{% endif %}">
+                            <i class="fas fa-inbox"></i><span>Inbox</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.messages_list') }}" class="nav-link {% if request.endpoint in ['comms.messages_list','comms.message_detail'] %}active{% endif %}">
+                            <i class="fas fa-clock-rotate-left"></i><span>History</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.templates_list') }}" class="nav-link {% if request.endpoint == 'comms.templates_list' %}active{% endif %}">
+                            <i class="fas fa-file-lines"></i><span>Templates</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('comms.contacts') }}" class="nav-link {% if request.endpoint == 'comms.contacts' %}active{% endif %}">
                             <i class="fas fa-address-book"></i><span>Contacts</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.reports') }}" class="nav-link {% if request.endpoint == 'comms.reports' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i><span>Reports</span>
                         </a>
                     </li>
 
@@ -383,6 +408,26 @@
                     <li class="nav-item">
                         <a href="{{ url_for('library.loans') }}" class="nav-link {% if request.endpoint in ['library.loans','library.issue'] %}active{% endif %}">
                             <i class="fas fa-hand-holding"></i><span>Loans</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.reservations') }}" class="nav-link {% if request.endpoint == 'library.reservations' %}active{% endif %}">
+                            <i class="fas fa-bookmark"></i><span>Reservations</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.reading_lists') }}" class="nav-link {% if request.endpoint == 'library.reading_lists' %}active{% endif %}">
+                            <i class="fas fa-list-check"></i><span>Reading Lists</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.borrowers') }}" class="nav-link {% if request.endpoint in ['library.borrowers','library.borrower_history'] %}active{% endif %}">
+                            <i class="fas fa-user-group"></i><span>Borrowers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.reports') }}" class="nav-link {% if request.endpoint == 'library.reports' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i><span>Reports</span>
                         </a>
                     </li>
 
@@ -412,6 +457,16 @@
                     <li class="nav-item">
                         <a href="{{ url_for('hr.payroll_list') }}" class="nav-link {% if request.endpoint in ['hr.payroll_list','hr.payroll_detail'] %}active{% endif %}">
                             <i class="fas fa-money-check-dollar"></i><span>Payroll</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.departments') }}" class="nav-link {% if request.endpoint == 'hr.departments' %}active{% endif %}">
+                            <i class="fas fa-sitemap"></i><span>Departments</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.reports') }}" class="nav-link {% if request.endpoint == 'hr.reports' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i><span>HR Reports</span>
                         </a>
                     </li>
 
