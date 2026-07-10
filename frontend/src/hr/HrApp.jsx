@@ -8,10 +8,11 @@ const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['staff', 'fa-users', 'Staff'],
   ['attendance', 'fa-user-clock', 'Attendance'], ['leave', 'fa-plane-departure', 'Leave'],
   ['payroll', 'fa-money-check-dollar', 'Payroll'], ['departments', 'fa-sitemap', 'Departments'],
+  ['recruitment', 'fa-user-plus', 'Recruitment'],
   ['reports', 'fa-chart-line', 'Reports'], ['settings', 'fa-gear', 'Settings'],
 ];
 const TAB_FOR = { staff_form: 'staff', staff_detail: 'staff', payroll_detail: 'payroll',
-  checkin: 'attendance', checkin_qr: 'attendance' };
+  checkin: 'attendance', checkin_qr: 'attendance', vacancy: 'recruitment' };
 
 function Tabs({ d }) {
   const nav = useNav();
@@ -1427,9 +1428,197 @@ function CheckInQR({ d }) {
   );
 }
 
+// ---- Recruitment: vacancies list -------------------------------------------
+const vacBadge = (s) => 'badge ' + (s === 'Open' ? 'badge-success' : s === 'Filled' ? 'badge-info' : 'badge-secondary');
+const appBadge = (s) => 'badge ' + ({ Applied: 'badge-secondary', Shortlisted: 'badge-info', Interview: 'badge-warning', Offered: 'badge-primary', Hired: 'badge-success', Rejected: 'badge-danger' }[s] || 'badge-secondary');
+
+function Recruitment({ d, notify }) {
+  const nav = useNav();
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ title: '', department_id: '', staff_type: (d.staff_types || ['Teaching'])[0], employment_type: (d.employment_types || ['Full-time'])[0], positions: 1, closing_date: '', description: '', requirements: '' });
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const add = async (e) => {
+    e.preventDefault();
+    if (!f.title.trim()) { notify('error', 'Enter a job title.'); return; }
+    const r = await submitJson(d.add_url, f);
+    if (r.ok) { notify('success', r.message); nav.go(r.redirect); } else notify('error', r.error || 'Could not post.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>Recruitment</h1>
+        <div className="page-header-actions">{d.is_admin && <button className="btn btn-primary" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Post Vacancy</button>}</div>
+      </div>
+      <Tabs d={d} />
+      {open && d.is_admin && (
+        <div className="card mb-3"><div className="card-header"><h3>New vacancy</h3></div><div className="card-body">
+          <form onSubmit={add}>
+            <div className="form-row">
+              <div className="form-group" style={{ flex: 2 }}><label className="form-label">Job title <span className="required">*</span></label><input type="text" className="form-control" value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
+              <div className="form-group"><label className="form-label">Department</label><select className="form-control" value={f.department_id} onChange={(e) => set('department_id', e.target.value)}><option value="">—</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">Openings</label><input type="number" className="form-control" min="1" value={f.positions} onChange={(e) => set('positions', e.target.value)} /></div>
+            </div>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Type</label><select className="form-control" value={f.staff_type} onChange={(e) => set('staff_type', e.target.value)}>{d.staff_types.map((t) => <option key={t}>{t}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">Employment</label><select className="form-control" value={f.employment_type} onChange={(e) => set('employment_type', e.target.value)}>{d.employment_types.map((t) => <option key={t}>{t}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">Closing date</label><input type="date" className="form-control" value={f.closing_date} onChange={(e) => set('closing_date', e.target.value)} /></div>
+            </div>
+            <div className="form-group"><label className="form-label">Description</label><textarea className="form-control" rows="2" value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Requirements</label><textarea className="form-control" rows="2" value={f.requirements} onChange={(e) => set('requirements', e.target.value)} /></div>
+            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-bullhorn" /> Post</button>
+          </form>
+        </div></div>
+      )}
+      <div className="card mb-3"><div className="card-body"><div className="filter-form">
+        <div className="form-group"><label className="form-label">Status</label>
+          <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.self_url, { status: e.target.value })}>
+            <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+      </div></div></div>
+      <div className="card"><div className="card-header"><h3>{d.vacancies.length} vacancy(ies)</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.vacancies.length ? (
+            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+              <thead><tr><th>Title</th><th>Dept</th><th>Openings</th><th className="text-right">Applicants</th><th>Status</th><th /></tr></thead>
+              <tbody>{d.vacancies.map((v) => (
+                <tr key={v.id}><td data-label="Title"><a href={v.url}><strong>{v.title}</strong></a><div className="text-muted text-sm">{v.staff_type} · {v.employment_type}</div></td>
+                  <td data-label="Dept">{v.department || '—'}</td><td data-label="Openings">{v.positions}</td>
+                  <td data-label="Applicants" className="text-right">{v.applicants}{v.shortlisted ? <span className="text-muted text-sm"> ({v.shortlisted} short)</span> : ''}</td>
+                  <td data-label="Status"><span className={vacBadge(v.status)}>{v.status}</span></td>
+                  <td className="actions"><a href={v.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
+            </table></div>
+          ) : <Empty icon="fa-user-plus" title="No vacancies"><p>Post an opening to start receiving applications.</p></Empty>}
+        </div></div>
+    </>
+  );
+}
+
+// ---- Recruitment: vacancy detail + pipeline --------------------------------
+function Vacancy({ d, notify }) {
+  const nav = useNav();
+  const v = d.vacancy;
+  const [addOpen, setAddOpen] = useState(false);
+  const [af, setAf] = useState({ first_name: '', surname: '', email: '', phone: '', qualification: '', experience_years: '', cover_note: '' });
+  const [file, setFile] = useState(null);
+  const [intvFor, setIntvFor] = useState(null);
+  const setA = (k, val) => setAf((x) => ({ ...x, [k]: val }));
+  const act = async (url, fields, confirmMsg, follow) => {
+    if (confirmMsg && !await confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
+    else notify('error', r.error || 'Action failed.');
+  };
+  const addApp = async (e) => {
+    e.preventDefault();
+    if (!af.first_name.trim() || !af.surname.trim()) { notify('error', 'Enter the candidate name.'); return; }
+    const r = file ? await postFile(d.urls.add_application, file, af) : await submitJson(d.urls.add_application, af);
+    if (r.ok) { notify('success', r.message); setAf({ first_name: '', surname: '', email: '', phone: '', qualification: '', experience_years: '', cover_note: '' }); setFile(null); setAddOpen(false); nav.refresh(); }
+    else notify('error', r.error || 'Could not add.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>{v.title}</h1>
+        <div className="page-header-actions"><a href={d.urls.back} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Vacancies</a>
+          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this vacancy and its applications?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}</div>
+      </div>
+      <Tabs d={d} />
+      <div className="card mb-3"><div className="card-body">
+        <div className="d-flex gap-2 flex-wrap align-center mb-2">
+          <span className={vacBadge(v.status)}>{v.status}</span>
+          <span className="badge badge-secondary">{v.staff_type}</span>
+          <span className="badge badge-secondary">{v.employment_type}</span>
+          <span className="text-muted">{v.department || 'No department'} · {v.hired}/{v.positions} filled{v.posted ? ` · posted ${v.posted}` : ''}</span>
+        </div>
+        {v.description && <p className="mb-1">{v.description}</p>}
+        {v.requirements && <p className="text-muted text-sm mb-0"><strong>Requirements:</strong> {v.requirements}</p>}
+        {d.is_admin && (
+          <div className="d-flex gap-1 mt-2 flex-wrap">
+            {d.statuses.filter((s) => s !== v.status).map((s) => (
+              <button key={s} className="btn btn-secondary btn-sm" onClick={() => act(d.urls.edit, { title: v.title, department_id: v.department_id, staff_type: v.staff_type, employment_type: v.employment_type, positions: v.positions, closing_date: v.closing_date, description: v.description, requirements: v.requirements, status: s })}>Mark {s}</button>))}
+          </div>)}
+      </div></div>
+
+      <div className="d-flex justify-between align-center mb-2">
+        <h3 style={{ margin: 0 }}>Applications ({d.applications.length})</h3>
+        <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(!addOpen)}><i aria-hidden="true" className="fas fa-plus" /> Add applicant</button>
+      </div>
+      {addOpen && (
+        <div className="card mb-3"><div className="card-body"><form onSubmit={addApp}>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">First name <span className="required">*</span></label><input type="text" className="form-control" value={af.first_name} onChange={(e) => setA('first_name', e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Surname <span className="required">*</span></label><input type="text" className="form-control" value={af.surname} onChange={(e) => setA('surname', e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Phone</label><input type="text" className="form-control" value={af.phone} onChange={(e) => setA('phone', e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Email</label><input type="email" className="form-control" value={af.email} onChange={(e) => setA('email', e.target.value)} /></div>
+          </div>
+          <div className="form-row">
+            <div className="form-group" style={{ flex: 2 }}><label className="form-label">Qualification</label><input type="text" className="form-control" value={af.qualification} onChange={(e) => setA('qualification', e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Experience (yrs)</label><input type="number" className="form-control" min="0" value={af.experience_years} onChange={(e) => setA('experience_years', e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">CV / résumé</label><input type="file" className="form-control" onChange={(e) => setFile(e.target.files && e.target.files[0])} /></div>
+          </div>
+          <div className="form-group"><label className="form-label">Cover note</label><textarea className="form-control" rows="2" value={af.cover_note} onChange={(e) => setA('cover_note', e.target.value)} /></div>
+          <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
+        </form></div></div>
+      )}
+
+      {d.applications.length ? d.applications.map((a) => (
+        <div key={a.id} className="card mb-2"><div className="card-body">
+          <div className="d-flex justify-between align-center flex-wrap gap-1">
+            <div><strong>{a.name}</strong> <span className={appBadge(a.status)}>{a.status}</span>
+              <div className="text-muted text-sm">{[a.qualification, a.experience_years != null ? `${a.experience_years} yr(s)` : '', a.phone, a.email].filter(Boolean).join(' · ')}</div></div>
+            <div className="d-flex gap-1 flex-wrap">
+              {a.resume_url && <a href={a.resume_url} data-native className="btn btn-secondary btn-sm" title="CV"><i aria-hidden="true" className="fas fa-file-lines" /></a>}
+              {a.staff_url && <a href={a.staff_url} className="btn btn-success btn-sm"><i aria-hidden="true" className="fas fa-id-badge" /> Staff</a>}
+              {a.status !== 'Hired' && a.status !== 'Rejected' && <>
+                {a.status === 'Applied' && <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Shortlisted' })}>Shortlist</button>}
+                <button className="btn btn-secondary btn-sm" onClick={() => setIntvFor(intvFor === a.id ? null : a.id)}><i aria-hidden="true" className="fas fa-calendar-day" /> Interview</button>
+                {d.is_admin && <button className="btn btn-primary btn-sm" onClick={() => act(a.hire_url, {}, `Hire ${a.name} and add them to staff?`, true)}><i aria-hidden="true" className="fas fa-user-check" /> Hire</button>}
+                <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Rejected' }, `Reject ${a.name}?`)}>Reject</button>
+              </>}
+              {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => act(a.delete_url, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
+            </div>
+          </div>
+          {a.cover_note && <p className="text-muted text-sm mt-1 mb-0">{a.cover_note}</p>}
+          {a.interviews.length > 0 && (
+            <div className="mt-2">{a.interviews.map((iv) => (
+              <div key={iv.id} className="d-flex justify-between align-center flex-wrap gap-1" style={{ borderTop: '1px solid var(--border-light)', paddingTop: '.4rem', marginTop: '.4rem' }}>
+                <span className="text-sm"><i aria-hidden="true" className="fas fa-calendar-day" /> {iv.when || 'TBD'} · {iv.mode}{iv.location ? ` · ${iv.location}` : ''}{iv.interviewer ? ` · ${iv.interviewer}` : ''}</span>
+                <span className="d-flex gap-1 align-center">
+                  <span className={'badge ' + (iv.outcome === 'Passed' ? 'badge-success' : iv.outcome === 'Failed' ? 'badge-danger' : 'badge-warning')}>{iv.outcome}</span>
+                  {iv.outcome === 'Pending' && <>
+                    <button className="btn btn-success btn-sm" onClick={() => act(iv.outcome_url, { outcome: 'Passed' })}><i aria-hidden="true" className="fas fa-check" /></button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => act(iv.outcome_url, { outcome: 'Failed' })}><i aria-hidden="true" className="fas fa-xmark" /></button>
+                  </>}
+                </span>
+              </div>))}</div>
+          )}
+          {intvFor === a.id && <InterviewForm d={d} url={a.interview_url} onDone={() => { setIntvFor(null); nav.refresh(); }} notify={notify} />}
+        </div></div>
+      )) : <div className="card"><div className="card-body"><Empty icon="fa-users" title="No applications yet"><p>Add candidates above as they apply.</p></Empty></div></div>}
+    </>
+  );
+}
+
+function InterviewForm({ d, url, onDone, notify }) {
+  const [f, setF] = useState({ scheduled_at: '', mode: (d.interview_modes || ['In-person'])[0], location: '', interviewer: '', notes: '' });
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    const r = await submitJson(url, f);
+    if (r.ok) { notify('success', r.message); onDone(); } else notify('error', r.error || 'Could not schedule.');
+  };
+  return (
+    <form onSubmit={submit} className="lc-form mt-2">
+      <div className="form-group mb-0"><label className="form-label">When</label><input type="datetime-local" className="form-control" value={f.scheduled_at} onChange={(e) => set('scheduled_at', e.target.value)} /></div>
+      <div className="form-group mb-0"><label className="form-label">Mode</label><select className="form-control" value={f.mode} onChange={(e) => set('mode', e.target.value)}>{(d.interview_modes || []).map((m) => <option key={m}>{m}</option>)}</select></div>
+      <div className="form-group mb-0"><label className="form-label">Location / link</label><input type="text" className="form-control" value={f.location} onChange={(e) => set('location', e.target.value)} /></div>
+      <div className="form-group mb-0"><label className="form-label">Interviewer</label><input type="text" className="form-control" value={f.interviewer} onChange={(e) => set('interviewer', e.target.value)} /></div>
+      <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-calendar-plus" /> Schedule</button>
+    </form>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, staff: Staff, staff_form: StaffForm, staff_detail: StaffDetail,
   departments: Departments, leave: Leave, payroll: Payroll, payroll_detail: PayrollDetail,
-  attendance: Attendance, checkin: CheckIn, checkin_qr: CheckInQR, reports: Reports, settings: Settings };
+  attendance: Attendance, checkin: CheckIn, checkin_qr: CheckInQR,
+  recruitment: Recruitment, vacancy: Vacancy, reports: Reports, settings: Settings };
 
 export default function HrApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

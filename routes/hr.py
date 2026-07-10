@@ -14,6 +14,7 @@ from models import (
     SalaryHistory, StaffAttendance,
 )
 from utils.access_control import login_required, admin_required
+from utils.branch_scope import require_branch_access
 from utils import hr
 
 hr_bp = Blueprint('hr', __name__, url_prefix='/hr')
@@ -76,6 +77,7 @@ def _nav_urls():
     return {'dashboard': url_for('hr.dashboard'), 'staff': url_for('hr.staff_list'),
             'attendance': url_for('hr.attendance'), 'leave': url_for('hr.leave_list'),
             'payroll': url_for('hr.payroll_list'), 'departments': url_for('hr.departments'),
+            'recruitment': url_for('hr.recruitment'),
             'reports': url_for('hr.reports'), 'settings': url_for('hr.settings')}
 
 
@@ -430,7 +432,7 @@ def transfer_staff(staff_id):
         return _err('Choose a destination branch.', url_for('hr.staff_detail', staff_id=staff_id))
     if target.id == s.branch_id:
         return _err('The staff member is already at that branch.',
-                    url_for('hr.staff_detail', staff_id=staff_id), info=True)
+                    url_for('hr.staff_detail', staff_id=staff_id))
     old_branch = db.session.get(Branch, s.branch_id) if s.branch_id else None
     old = old_branch.name if old_branch else 'Unassigned'
     eff = _d(request.form.get('effective_date')) or date.today()
@@ -1384,7 +1386,7 @@ def notify_staff():
         query = query.filter_by(status=request.form.get('status'))
     staff_ids = [s.id for s in query.all()]
     if not staff_ids:
-        return _err('No staff match the current filter.', url_for('hr.staff_list'), info=True)
+        return _err('No staff match the current filter.', url_for('hr.staff_list'))
     body = (request.form.get('body') or '').strip()
     if not body:
         return _err('Enter a message to send.', url_for('hr.staff_list'))
@@ -1397,9 +1399,284 @@ def notify_staff():
         created_by=_current_user())
     if not msg:
         return _err(f'None of those staff have {"an email" if channel == "Email" else "a phone number"} on file.',
-                    url_for('hr.staff_list'), info=True)
+                    url_for('hr.staff_list'))
     return _ok(f'Drafted a {channel} to {msg.recipient_count} staff — review and send.',
                url_for('comms.message_detail', message_id=msg.id))
+
+
+# ============================================================================
+# RECRUITMENT / ATS
+# ============================================================================
+
+from models import JobVacancy as JobVacancy_, JobApplication as JobApplication_, Interview as Interview_
+
+
+def _vacancy_row(v, dept_map):
+    counts = dict(db.session.query(JobApplication_.status, func.count(JobApplication_.id))
+                  .filter(JobApplication_.vacancy_id == v.id)
+                  .group_by(JobApplication_.status).all())
+    return {'id': v.id, 'title': v.title, 'department': dept_map.get(v.department_id, ''),
+            'staff_type': v.staff_type, 'employment_type': v.employment_type,
+            'positions': v.positions or 1, 'status': v.status,
+            'applicants': sum(counts.values()), 'hired': counts.get('Hired', 0),
+            'shortlisted': counts.get('Shortlisted', 0) + counts.get('Interview', 0),
+            'closing': v.closing_date.strftime('%d %b %Y') if v.closing_date else '',
+            'url': url_for('hr.vacancy_detail', vac_id=v.id)}
+
+
+@hr_bp.route('/recruitment')
+@login_required
+def recruitment():
+    from utils.branch_scope import scope_query
+    status = request.args.get('status') or ''
+    q = scope_query(JobVacancy_.query, JobVacancy_)
+    if status:
+        q = q.filter(JobVacancy_.status == status)
+    vacs = q.order_by(JobVacancy_.created_at.desc()).all()
+    dept_map = {d.id: d.name for d in Department.query.all()}
+    depts = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    return _render({
+        'page': 'recruitment', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'status': status, 'statuses': JobVacancy_.STATUSES,
+        'vacancies': [_vacancy_row(v, dept_map) for v in vacs],
+        'departments': [{'id': d.id, 'name': d.name} for d in depts],
+        'staff_types': hr.STAFF_TYPES, 'employment_types': hr.EMPLOYMENT_TYPES,
+        'self_url': url_for('hr.recruitment'), 'add_url': url_for('hr.vacancy_add'),
+    })
+
+
+def _read_vacancy(v):
+    v.title = (request.form.get('title') or '').strip()
+    v.department_id = request.form.get('department_id', type=int) or None
+    v.staff_type = request.form.get('staff_type') or 'Teaching'
+    v.employment_type = request.form.get('employment_type') or 'Full-time'
+    v.positions = request.form.get('positions', type=int) or 1
+    v.description = (request.form.get('description') or '').strip() or None
+    v.requirements = (request.form.get('requirements') or '').strip() or None
+    v.closing_date = _d(request.form.get('closing_date'))
+    if request.form.get('status') in JobVacancy_.STATUSES:
+        v.status = request.form.get('status')
+
+
+@hr_bp.route('/recruitment/add', methods=['POST'])
+@admin_required
+def vacancy_add():
+    if not (request.form.get('title') or '').strip():
+        return _err('Enter a job title.', url_for('hr.recruitment'))
+    v = JobVacancy_(status='Open', created_by=_current_user())
+    _read_vacancy(v)
+    from utils.branch_scope import branch_for_new
+    v.branch_id = branch_for_new(request.form.get('branch_id', type=int))
+    db.session.add(v)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.vacancy_add', detail=v.title, target=v)
+    return _ok(f'Vacancy "{v.title}" posted.', url_for('hr.vacancy_detail', vac_id=v.id))
+
+
+def _application_row(a):
+    return {'id': a.id, 'name': a.full_name, 'email': a.email or '', 'phone': a.phone or '',
+            'qualification': a.qualification or '', 'experience_years': a.experience_years,
+            'status': a.status, 'rating': a.rating, 'cover_note': a.cover_note or '',
+            'applied': a.applied_date.strftime('%d %b %Y') if a.applied_date else '',
+            'hired_staff_id': a.hired_staff_id,
+            'resume_url': (url_for('comms.download_attachment', att_id=a.resume_id)
+                           if a.resume_id else None),
+            'staff_url': (url_for('hr.staff_detail', staff_id=a.hired_staff_id)
+                          if a.hired_staff_id else None),
+            'interviews': [{'id': i.id,
+                            'when': i.scheduled_at.strftime('%d %b %Y %H:%M') if i.scheduled_at else '',
+                            'mode': i.mode, 'location': i.location or '', 'interviewer': i.interviewer or '',
+                            'outcome': i.outcome, 'notes': i.notes or '',
+                            'outcome_url': url_for('hr.interview_outcome', intv_id=i.id)}
+                           for i in a.interviews.order_by(Interview_.scheduled_at).all()],
+            'status_url': url_for('hr.application_status', app_id=a.id),
+            'interview_url': url_for('hr.interview_schedule', app_id=a.id),
+            'hire_url': url_for('hr.hire_applicant', app_id=a.id),
+            'delete_url': url_for('hr.application_delete', app_id=a.id)}
+
+
+@hr_bp.route('/recruitment/<int:vac_id>')
+@login_required
+def vacancy_detail(vac_id):
+    v = db.get_or_404(JobVacancy_, vac_id)
+    require_branch_access(v.branch_id)
+    apps = v.applications.order_by(JobApplication_.created_at.desc()).all()
+    dept_map = {d.id: d.name for d in Department.query.all()}
+    depts = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    return _render({
+        'page': 'vacancy', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'vacancy': {'id': v.id, 'title': v.title, 'department': dept_map.get(v.department_id, ''),
+                    'department_id': v.department_id or '', 'staff_type': v.staff_type,
+                    'employment_type': v.employment_type, 'positions': v.positions or 1,
+                    'description': v.description or '', 'requirements': v.requirements or '',
+                    'status': v.status, 'posted': v.posted_date.strftime('%d %b %Y') if v.posted_date else '',
+                    'closing_date': v.closing_date.isoformat() if v.closing_date else '',
+                    'hired': sum(1 for a in apps if a.status == 'Hired')},
+        'applications': [_application_row(a) for a in apps],
+        'app_statuses': JobApplication_.STATUSES, 'interview_modes': Interview_.MODES,
+        'interview_outcomes': Interview_.OUTCOMES,
+        'departments': [{'id': d.id, 'name': d.name} for d in depts],
+        'staff_types': hr.STAFF_TYPES, 'employment_types': hr.EMPLOYMENT_TYPES, 'statuses': JobVacancy_.STATUSES,
+        'urls': {'edit': url_for('hr.vacancy_edit', vac_id=v.id),
+                 'delete': url_for('hr.vacancy_delete', vac_id=v.id),
+                 'add_application': url_for('hr.application_add', vac_id=v.id),
+                 'back': url_for('hr.recruitment')},
+    })
+
+
+@hr_bp.route('/recruitment/<int:vac_id>/edit', methods=['POST'])
+@admin_required
+def vacancy_edit(vac_id):
+    v = db.get_or_404(JobVacancy_, vac_id)
+    require_branch_access(v.branch_id)
+    _read_vacancy(v)
+    db.session.commit()
+    return _ok('Vacancy updated.', url_for('hr.vacancy_detail', vac_id=v.id))
+
+
+@hr_bp.route('/recruitment/<int:vac_id>/delete', methods=['POST'])
+@admin_required
+def vacancy_delete(vac_id):
+    v = db.get_or_404(JobVacancy_, vac_id)
+    require_branch_access(v.branch_id)
+    db.session.delete(v)
+    db.session.commit()
+    return _ok('Vacancy removed.', url_for('hr.recruitment'))
+
+
+@hr_bp.route('/recruitment/<int:vac_id>/applications/add', methods=['POST'])
+@login_required
+def application_add(vac_id):
+    v = db.get_or_404(JobVacancy_, vac_id)
+    require_branch_access(v.branch_id)
+    if not (request.form.get('first_name') and request.form.get('surname')):
+        return _err('Enter the candidate\'s first name and surname.',
+                    url_for('hr.vacancy_detail', vac_id=vac_id))
+    resume_id = None
+    if request.files.get('file') and request.files['file'].filename:
+        from utils import comm_attachments as CA
+        try:
+            resume_id = CA.save(request.files['file'], created_by=_current_user()).id
+        except ValueError as e:
+            return _err(str(e), url_for('hr.vacancy_detail', vac_id=vac_id))
+    a = JobApplication_(
+        vacancy_id=v.id, first_name=(request.form.get('first_name') or '').strip(),
+        surname=(request.form.get('surname') or '').strip(),
+        email=(request.form.get('email') or '').strip() or None,
+        phone=(request.form.get('phone') or '').strip() or None,
+        gender=request.form.get('gender') or None,
+        qualification=(request.form.get('qualification') or '').strip() or None,
+        experience_years=request.form.get('experience_years', type=int),
+        cover_note=(request.form.get('cover_note') or '').strip() or None,
+        resume_id=resume_id, status='Applied')
+    db.session.add(a)
+    db.session.commit()
+    return _ok(f'Application from {a.full_name} recorded.', url_for('hr.vacancy_detail', vac_id=vac_id))
+
+
+@hr_bp.route('/applications/<int:app_id>/status', methods=['POST'])
+@login_required
+def application_status(app_id):
+    a = db.get_or_404(JobApplication_, app_id)
+    require_branch_access(a.vacancy.branch_id)
+    new = request.form.get('status')
+    if new not in JobApplication_.STATUSES:
+        return _err('Invalid status.', url_for('hr.vacancy_detail', vac_id=a.vacancy_id))
+    a.status = new
+    if request.form.get('rating', type=int):
+        a.rating = request.form.get('rating', type=int)
+    db.session.commit()
+    return _ok(f'Moved {a.full_name} to {new}.', url_for('hr.vacancy_detail', vac_id=a.vacancy_id))
+
+
+@hr_bp.route('/applications/<int:app_id>/delete', methods=['POST'])
+@admin_required
+def application_delete(app_id):
+    a = db.get_or_404(JobApplication_, app_id)
+    require_branch_access(a.vacancy.branch_id)
+    vid = a.vacancy_id
+    db.session.delete(a)
+    db.session.commit()
+    return _ok('Application removed.', url_for('hr.vacancy_detail', vac_id=vid))
+
+
+@hr_bp.route('/applications/<int:app_id>/interview', methods=['POST'])
+@login_required
+def interview_schedule(app_id):
+    a = db.get_or_404(JobApplication_, app_id)
+    require_branch_access(a.vacancy.branch_id)
+    when = None
+    raw = request.form.get('scheduled_at')
+    if raw:
+        for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M'):
+            try:
+                when = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                continue
+    db.session.add(Interview_(
+        application_id=a.id, scheduled_at=when,
+        mode=request.form.get('mode') or 'In-person',
+        location=(request.form.get('location') or '').strip() or None,
+        interviewer=(request.form.get('interviewer') or _current_user()).strip() or None,
+        notes=(request.form.get('notes') or '').strip() or None,
+        outcome='Pending', created_by=_current_user()))
+    # Advance the pipeline to the Interview stage.
+    if a.status in ('Applied', 'Shortlisted'):
+        a.status = 'Interview'
+    db.session.commit()
+    return _ok('Interview scheduled.', url_for('hr.vacancy_detail', vac_id=a.vacancy_id))
+
+
+@hr_bp.route('/interviews/<int:intv_id>/outcome', methods=['POST'])
+@login_required
+def interview_outcome(intv_id):
+    i = db.get_or_404(Interview_, intv_id)
+    require_branch_access(i.application.vacancy.branch_id)
+    outcome = request.form.get('outcome')
+    if outcome not in Interview_.OUTCOMES:
+        return _err('Invalid outcome.', url_for('hr.vacancy_detail', vac_id=i.application.vacancy_id))
+    i.outcome = outcome
+    if request.form.get('notes'):
+        i.notes = (request.form.get('notes') or '').strip() or i.notes
+    db.session.commit()
+    return _ok(f'Interview marked {outcome}.', url_for('hr.vacancy_detail', vac_id=i.application.vacancy_id))
+
+
+@hr_bp.route('/applications/<int:app_id>/hire', methods=['POST'])
+@admin_required
+def hire_applicant(app_id):
+    """Convert a candidate into a StaffMember (the HR record of truth) and close
+    out the pipeline. Idempotent — a candidate already hired isn't re-created."""
+    a = db.get_or_404(JobApplication_, app_id)
+    v = a.vacancy
+    require_branch_access(v.branch_id)
+    if a.hired_staff_id:
+        return _err('This candidate has already been hired.',
+                    url_for('hr.vacancy_detail', vac_id=v.id))
+    s = StaffMember(staff_id=StaffMember.generate_staff_id(), branch_id=v.branch_id,
+                    first_name=a.first_name, surname=a.surname, gender=a.gender,
+                    phone=a.phone, email=a.email, qualification=a.qualification,
+                    prior_experience_years=a.experience_years,
+                    department_id=v.department_id, staff_type=v.staff_type,
+                    employment_type=v.employment_type, designation=v.title,
+                    date_employed=date.today(), status='Active')
+    db.session.add(s)
+    db.session.flush()
+    a.status = 'Hired'
+    a.hired_staff_id = s.id
+    hr.record_event(s, 'employment', 'Hired', detail=f'Recruited for "{v.title}"',
+                    effective_date=date.today(), created_by=_current_user())
+    # Mark the vacancy Filled once every opening is taken.
+    hired = v.applications.filter_by(status='Hired').count()
+    if hired >= (v.positions or 1):
+        v.status = 'Filled'
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('hr.hire', detail=f'{s.full_name} <- {v.title}', target=s)
+    return _ok(f'{s.full_name} hired and added to staff ({s.staff_id}).',
+               url_for('hr.staff_detail', staff_id=s.id))
 
 
 # ============================================================================

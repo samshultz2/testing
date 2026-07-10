@@ -470,6 +470,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('hr.recruitment') }}" class="nav-link {% if request.endpoint in ['hr.recruitment','hr.vacancy_detail'] %}active{% endif %}">
+                            <i class="fas fa-user-plus"></i><span>Recruitment</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('hr.reports') }}" class="nav-link {% if request.endpoint == 'hr.reports' %}active{% endif %}">
                             <i class="fas fa-chart-line"></i><span>HR Reports</span>
                         </a>
