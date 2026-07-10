@@ -531,11 +531,18 @@ export default function CommunicationApp({ data }) {
 // ---- Compose (kept at the bottom; the most complex screen) ------------------
 function Compose({ d, notify }) {
   const nav = useNav();
+  const canStaff = !!d.is_admin;
+  const [to, setTo] = useState('parents');       // parents | staff
   const [audience, setAudience] = useState(d.pre_audience || 'all');
   const [termId, setTermId] = useState(d.term_id);
   const [classId, setClassId] = useState(d.pre_class || '');
   const [armId, setArmId] = useState('');
   const [picked, setPicked] = useState([]);   // [{id,label}]
+  const [excluded, setExcluded] = useState([]);   // [{id,label}] students to drop
+  const [gender, setGender] = useState('');
+  const [stream, setStream] = useState('');
+  const [staffScope, setStaffScope] = useState('all');
+  const [deptId, setDeptId] = useState('');
   const [title, setTitle] = useState('');
   const [channel, setChannel] = useState(d.pre_channel || d.channels[0]);
   const [tpl, setTpl] = useState(d.pre_tpl || '');
@@ -548,13 +555,30 @@ function Compose({ d, notify }) {
   const ptRef = useRef();
 
   const isEmail = String(channel).toLowerCase() === 'email';
+  // The recipient selection as a flat spec — shared by preview and submit.
+  const buildSpec = () => {
+    const sp = { to };
+    if (to === 'staff') {
+      sp.staff_scope = staffScope;
+      if (staffScope === 'department' && deptId) sp.department_id = deptId;
+    } else {
+      sp.audience = audience;
+      if (classId) sp.class_id = classId;
+      if (armId) sp.arm_id = armId;
+      if (audience === 'students') sp.student_ids = picked.map((p) => p.id);
+      if (gender) sp.gender = gender;
+      if (stream) sp.stream = stream;
+    }
+    if (excluded.length) sp.exclude_ids = excluded.map((x) => x.id);
+    return sp;
+  };
   const runPreview = async () => {
     const body2 = new URLSearchParams();
-    body2.set('term_id', termId); body2.set('audience', audience); body2.set('body', body);
-    body2.set('channel', channel);
-    if (classId) body2.set('class_id', classId);
-    if (armId) body2.set('arm_id', armId);
-    picked.forEach((p) => body2.append('student_ids', p.id));
+    body2.set('term_id', termId); body2.set('body', body); body2.set('channel', channel);
+    Object.entries(buildSpec()).forEach(([k, v]) => {
+      if (Array.isArray(v)) v.forEach((x) => body2.append(k, x));
+      else if (v !== '' && v != null) body2.set(k, v);
+    });
     try {
       const res = await fetch(d.urls.preview, { method: 'POST', credentials: 'same-origin',
         headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': csrfToken(), 'Content-Type': 'application/x-www-form-urlencoded' }, body: body2 });
@@ -564,7 +588,8 @@ function Compose({ d, notify }) {
     } catch (_) { /* ignore */ }
   };
   const schedulePreview = () => { clearTimeout(ptRef.current); ptRef.current = setTimeout(runPreview, 400); };
-  useEffect(() => { schedulePreview(); /* eslint-disable-next-line */ }, [audience, termId, classId, armId, picked, body, channel]);
+  useEffect(() => { schedulePreview(); /* eslint-disable-next-line */ },
+    [to, audience, termId, classId, armId, picked, excluded, gender, stream, staffScope, deptId, body, channel]);
 
   const insertPh = (ph) => {
     const el = bodyRef.current; const s = el ? el.selectionStart : body.length; const e = el ? el.selectionEnd : body.length;
@@ -574,14 +599,35 @@ function Compose({ d, notify }) {
   };
   const onTpl = (id) => { setTpl(id); const t = d.templates.find((x) => String(x.id) === String(id)); if (t) setBody(t.body); };
 
+  // Saved recipient groups: reload a spec into the builder, or save the current one.
+  const [groups, setGroups] = useState(d.groups || []);
+  const applySpec = (sp) => {
+    sp = sp || {};
+    setTo(sp.to || 'parents');
+    setAudience(sp.audience || 'all');
+    setClassId(sp.class_id || '');
+    setArmId(sp.arm_id || '');
+    setGender(sp.gender || '');
+    setStream(sp.stream || '');
+    setStaffScope(sp.staff_scope || 'all');
+    setDeptId(sp.department_id || '');
+    setPicked((sp.student_ids || []).map((id) => ({ id, label: `#${id}` })));
+    setExcluded((sp.exclude_ids || []).map((id) => ({ id, label: `#${id}` })));
+  };
+  const saveGroup = async () => {
+    const name = window.prompt('Name this recipient group (e.g. "SS3 Science parents"):');
+    if (!name || !name.trim()) return;
+    const r = await submitJson(d.urls.save_group, { name: name.trim(), overwrite: 'on', ...buildSpec() });
+    if (r.ok) { notify('success', r.message); if (!groups.some((g) => g.name === name.trim())) setGroups((gs) => [...gs, { id: `tmp-${Date.now()}`, name: name.trim(), spec: buildSpec() }]); }
+    else notify('error', r.error || 'Could not save group.');
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!body.trim()) { notify('error', 'Message body cannot be empty.'); return; }
     setBusy(true);
-    const fields = { term_id: termId, audience, title, channel, body,
-      class_id: classId || '', arm_id: armId || '',
-      student_ids: picked.map((p) => p.id),
-      schedule: schedule ? 'on' : '', scheduled_at: scheduledAt };
+    const fields = { term_id: termId, title, channel, body,
+      schedule: schedule ? 'on' : '', scheduled_at: scheduledAt, ...buildSpec() };
     const r = await submitJson(d.urls.submit, fields);
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not create campaign.');
@@ -601,31 +647,81 @@ function Compose({ d, notify }) {
       <form onSubmit={submit}>
         <div className="compose-grid">
           <div>
-            <div className="card mb-3"><div className="card-header"><h3>1 · Audience</h3></div>
+            <div className="card mb-3"><div className="card-header"><h3>1 · Recipients</h3></div>
               <div className="card-body">
-                <div className="form-group"><label className="form-label">Term</label>
-                  <select className="form-control" value={termId} onChange={(e) => setTermId(e.target.value)}>
-                    {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
-                <div className="aud-cards">{audCards.map(([a, ic, t]) => (
-                  <div className={'aud-card' + (audience === a ? ' sel' : '')} key={a} onClick={() => setAudience(a)}>
-                    <i aria-hidden="true" className={'fas ' + ic} /><div className="t">{t}</div></div>))}
+                <div className="rc-groups mb-3">
+                  <select className="form-control" defaultValue="" onChange={(e) => { const g = groups.find((x) => String(x.id) === e.target.value); if (g) applySpec(g.spec); e.target.value = ''; }}>
+                    <option value="">{groups.length ? 'Load a saved group…' : 'No saved groups yet'}</option>
+                    {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={saveGroup} title="Save the current selection as a reusable group"><i aria-hidden="true" className="fas fa-bookmark" /> Save</button>
                 </div>
-                {(audience === 'class' || audience === 'defaulters') && (
-                  <div className="form-row mt-3">
-                    <div className="form-group"><label className="form-label">Class</label>
-                      <select className="form-control" value={classId} onChange={(e) => setClassId(e.target.value)}>
-                        <option value="">All classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                    {audience === 'class' && (
-                      <div className="form-group"><label className="form-label">Arm</label>
-                        <select className="form-control" value={armId} onChange={(e) => setArmId(e.target.value)}>
-                          <option value="">All arms</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>)}
+                {canStaff && (
+                  <div className="seg-toggle mb-3" role="tablist">
+                    {[['parents', 'fa-users', 'Parents'], ['staff', 'fa-user-tie', 'Staff']].map(([v, ic, lab]) => (
+                      <button type="button" key={v} role="tab" aria-selected={to === v}
+                        className={'seg-btn' + (to === v ? ' on' : '')} onClick={() => setTo(v)}>
+                        <i aria-hidden="true" className={'fas ' + ic} /> {lab}</button>))}
                   </div>)}
-                {audience === 'students' && (
-                  <div className="mt-3">
-                    <StudentPicker url={d.urls.search} onAdd={(o) => setPicked((p) => (p.some((x) => x.id === o.id) ? p : [...p, o]))} />
-                    <div>{picked.map((p) => (
-                      <span className="chip" key={p.id}>{p.label} <button type="button" onClick={() => setPicked((s) => s.filter((x) => x.id !== p.id))}>×</button></span>))}</div>
-                  </div>)}
+
+                {to === 'staff' ? (
+                  <>
+                    <div className="form-group"><label className="form-label">Staff group</label>
+                      <select className="form-control" value={staffScope} onChange={(e) => setStaffScope(e.target.value)}>
+                        <option value="all">All staff</option>
+                        <option value="teaching">Teaching staff</option>
+                        <option value="non-teaching">Non-teaching staff</option>
+                        <option value="department">By department</option>
+                      </select></div>
+                    {staffScope === 'department' && (
+                      <div className="form-group"><label className="form-label">Department</label>
+                        <select className="form-control" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+                          <option value="">All departments</option>
+                          {(d.departments || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>)}
+                    <p className="form-hint">Messages go straight to each staff member ({isEmail ? 'email' : 'phone'}).</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="form-group"><label className="form-label">Term</label>
+                      <select className="form-control" value={termId} onChange={(e) => setTermId(e.target.value)}>
+                        {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
+                    <div className="aud-cards">{audCards.map(([a, ic, t]) => (
+                      <div className={'aud-card' + (audience === a ? ' sel' : '')} key={a} onClick={() => setAudience(a)}>
+                        <i aria-hidden="true" className={'fas ' + ic} /><div className="t">{t}</div></div>))}
+                    </div>
+                    {(audience === 'class' || audience === 'defaulters') && (
+                      <div className="form-row mt-3">
+                        <div className="form-group"><label className="form-label">Class</label>
+                          <select className="form-control" value={classId} onChange={(e) => setClassId(e.target.value)}>
+                            <option value="">All classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                        {audience === 'class' && (
+                          <div className="form-group"><label className="form-label">Arm</label>
+                            <select className="form-control" value={armId} onChange={(e) => setArmId(e.target.value)}>
+                              <option value="">All arms</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>)}
+                      </div>)}
+                    {audience === 'students' && (
+                      <div className="mt-3">
+                        <StudentPicker url={d.urls.search} label="Add students" onAdd={(o) => setPicked((p) => (p.some((x) => x.id === o.id) ? p : [...p, o]))} />
+                        <div>{picked.map((p) => (
+                          <span className="chip" key={p.id}>{p.label} <button type="button" onClick={() => setPicked((s) => s.filter((x) => x.id !== p.id))}>×</button></span>))}</div>
+                      </div>)}
+
+                    <details className="rc-more mt-3">
+                      <summary>Refine &amp; exclude</summary>
+                      <div className="form-row mt-2">
+                        <div className="form-group"><label className="form-label">Gender</label>
+                          <select className="form-control" value={gender} onChange={(e) => setGender(e.target.value)}>
+                            <option value="">Any</option>{(d.genders || []).map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+                        <div className="form-group"><label className="form-label">Stream</label>
+                          <select className="form-control" value={stream} onChange={(e) => setStream(e.target.value)}>
+                            <option value="">Any</option>{(d.streams || []).map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
+                      </div>
+                      <StudentPicker url={d.urls.search} label="Exclude students" onAdd={(o) => setExcluded((p) => (p.some((x) => x.id === o.id) ? p : [...p, o]))} />
+                      <div>{excluded.map((p) => (
+                        <span className="chip chip-danger" key={p.id}>− {p.label} <button type="button" onClick={() => setExcluded((s) => s.filter((x) => x.id !== p.id))}>×</button></span>))}</div>
+                    </details>
+                  </>
+                )}
               </div></div>
 
             <div className="card"><div className="card-header"><h3>2 · Message</h3></div>
@@ -677,7 +773,7 @@ function Compose({ d, notify }) {
 }
 
 // Student type-ahead that returns the picked {id,label} to the caller.
-function StudentPicker({ url, onAdd }) {
+function StudentPicker({ url, onAdd, label = 'Add students' }) {
   const [text, setText] = useState('');
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
@@ -693,7 +789,7 @@ function StudentPicker({ url, onAdd }) {
   const pick = (o) => { onAdd({ id: o.id, label: o.label || o.name }); setText(''); setList([]); setOpen(false); };
   return (
     <div className="form-group ac-wrap">
-      <label className="form-label">Add students</label>
+      <label className="form-label">{label}</label>
       <input type="text" className="form-control" placeholder="Search name or ID…" autoComplete="off"
              value={text} onChange={(e) => onInput(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
       {open && <div className="ac-list">{list.map((o) => <div key={o.id} onMouseDown={() => pick(o)}>{o.label || `${o.name} (${o.sid})`}</div>)}</div>}

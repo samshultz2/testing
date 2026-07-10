@@ -212,13 +212,16 @@ def _ensure_columns(engine):
 
 
 def ensure_tables(bind=None):
-    """Create the finance tables (ledger, additional charges, installment plans)
-    if they don't exist yet, and add any post-baseline nullable columns. Idempotent
+    """Create newer tables that post-date the schema baseline (the finance ledger,
+    additional charges, installment plans, and saved recipient groups) if they
+    don't exist yet, and add any post-baseline nullable columns. Idempotent
     (checkfirst). Needed because production runs with SKIP_CREATE_ALL=1 — Alembic
     owns the schema and never auto-creates these newer tables/columns — and because
     existing tenant databases predate them."""
-    from models import db, FinanceTransaction, AdditionalCharge, InstallmentPlan
-    tables = [FinanceTransaction.__table__, AdditionalCharge.__table__, InstallmentPlan.__table__]
+    from models import (db, FinanceTransaction, AdditionalCharge, InstallmentPlan,
+                        RecipientGroup)
+    tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
+              InstallmentPlan.__table__, RecipientGroup.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

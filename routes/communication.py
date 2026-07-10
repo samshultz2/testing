@@ -342,25 +342,24 @@ def compose():
     templates = MessageTemplate.query.filter_by(is_active=True).order_by(MessageTemplate.name).all()
 
     if request.method == 'POST':
-        audience = request.form.get('audience') or 'all'
         body = strip_tags(request.form.get('body'))
         channel = request.form.get('channel') or 'SMS'
         title = strip_tags(request.form.get('title'))
-        class_id = request.form.get('class_id', type=int)
-        arm_id = request.form.get('arm_id', type=int)
-        student_ids = request.form.getlist('student_ids', type=int)
+        spec = _recipient_spec(request.form)
 
         if not body:
             return _err('Message body cannot be empty.', url_for('comms.compose'))
+        if spec['to'] == 'staff' and not _is_admin():
+            return _err('Only administrators can message staff.', url_for('comms.compose'))
 
         # How many are reachable on this channel (phone for SMS/WhatsApp, email for
         # Email) — decides the count in the label and whether there's anyone to send.
-        targets = comms.resolve_audience(audience, term, class_id=class_id,
-                                         arm_id=arm_id, student_ids=student_ids)
+        targets = comms.resolve_recipients(spec, term)
         reachable = comms.reachable_targets(targets, channel)
         if not reachable:
             miss = 'an email address' if comms.channel_is_email(channel) else 'a phone number'
-            return _err(f'No recipients with {miss} matched that audience.',
+            who = 'staff' if spec['to'] == 'staff' else 'recipients'
+            return _err(f'No {who} with {miss} matched that selection.',
                         url_for('comms.compose'))
 
         # Optional scheduling (auto-send via the matching gateway at a future time).
@@ -374,11 +373,10 @@ def compose():
                 status = 'Scheduled'
 
         from utils.branch_scope import branch_for_new
-        label = _audience_label(audience, classes, arms, class_id, arm_id, len(reachable))
+        label = _spec_label(spec, classes, arms, len(reachable))
         msg = comms.build_campaign(
-            body, channel=channel, audience=audience, term=term, title=title,
-            audience_label=label, class_id=class_id, arm_id=arm_id,
-            student_ids=student_ids, created_by=_current_user(),
+            body, channel=channel, spec=spec, term=term, title=title,
+            audience_label=label, created_by=_current_user(),
             status=status, scheduled_at=scheduled_at, branch_id=branch_for_new())
         if status == 'Scheduled':
             note = (f'Campaign scheduled for {scheduled_at.strftime("%d %b %Y, %I:%M %p")} '
@@ -411,13 +409,19 @@ def compose():
             pre_tpl, pre_body = t.id, t.body
 
     from utils import sms_gateway, mailer
+    from models import Department
     gw = sms_gateway.get_config()
+    departments = (Department.query.filter_by(is_active=True).order_by(Department.name).all()
+                   if _is_admin() else [])
     return _render({
-        'page': 'compose', 'nav': _nav_urls(),
+        'page': 'compose', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'term_id': term.id if term else '',
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'classes': [{'id': c.id, 'name': c.name} for c in classes],
         'arms': [{'id': a.id, 'name': a.name} for a in arms],
+        'departments': [{'id': d.id, 'name': d.name} for d in departments],
+        'streams': ['Science', 'Arts', 'Commercial'],
+        'genders': ['Male', 'Female'],
         'templates': [{'id': t.id, 'name': t.name, 'category': t.category or '', 'body': t.body}
                       for t in templates],
         'channels': CHANNELS, 'placeholders': comms.PLACEHOLDERS, 'cov': comms.coverage_stats(),
@@ -427,8 +431,10 @@ def compose():
         'pre_channel': (request.args.get('channel') if request.args.get('channel') in CHANNELS else ''),
         'pre_audience': pre_audience, 'pre_class': pre_class or '',
         'pre_tpl': pre_tpl or '', 'pre_body': pre_body,
+        'groups': _saved_groups(),
         'urls': {'submit': url_for('comms.compose'), 'preview': url_for('comms.compose_preview'),
-                 'search': url_for('comms.students_search'), 'settings': url_for('comms.settings')},
+                 'search': url_for('comms.students_search'), 'settings': url_for('comms.settings'),
+                 'save_group': url_for('comms.save_group')},
     })
 
 
@@ -437,43 +443,77 @@ def _current_user():
     return session.get('username') or session.get('user') or 'Admin'
 
 
-def _audience_label(audience, classes, arms, class_id, arm_id, count):
+def _recipient_spec(form):
+    """Parse the composer's recipient controls into a spec dict for
+    comms.resolve_recipients (parents-or-staff + filters + exclusions)."""
+    to = (form.get('to') or 'parents').lower()
+    if to == 'staff':
+        return {
+            'to': 'staff',
+            'staff_scope': (form.get('staff_scope') or 'all'),
+            'department_id': form.get('department_id', type=int),
+            'exclude_ids': form.getlist('exclude_ids', type=int),
+        }
+    return {
+        'to': 'parents',
+        'audience': form.get('audience') or 'all',
+        'class_id': form.get('class_id', type=int),
+        'arm_id': form.get('arm_id', type=int),
+        'student_ids': form.getlist('student_ids', type=int),
+        'gender': (form.get('gender') or '').strip(),
+        'stream': (form.get('stream') or '').strip(),
+        'exclude_ids': form.getlist('exclude_ids', type=int),
+    }
+
+
+def _spec_label(spec, classes, arms, count):
+    """Human label for a recipient spec (shown as the campaign's audience label)."""
+    if spec.get('to') == 'staff':
+        scope = (spec.get('staff_scope') or 'all')
+        base = {'teaching': 'Teaching staff', 'non-teaching': 'Non-teaching staff',
+                'department': 'Department staff'}.get(scope, 'All staff')
+        return f'{base} ({count})'
+    audience = spec.get('audience') or 'all'
+    suffix = []
+    if spec.get('gender'):
+        suffix.append(spec['gender'])
+    if spec.get('stream'):
+        suffix.append(spec['stream'])
+    extra = (' · ' + ', '.join(suffix)) if suffix else ''
     if audience == 'all':
-        return f'All parents ({count})'
+        return f'All parents{extra} ({count})'
     if audience == 'defaulters':
         base = 'Fee defaulters'
-        if class_id:
-            cls = next((c for c in classes if c.id == class_id), None)
-            if cls:
-                base += f' · {cls.name}'
-        return f'{base} ({count})'
+        cls = next((c for c in classes if c.id == spec.get('class_id')), None)
+        if cls:
+            base += f' · {cls.name}'
+        return f'{base}{extra} ({count})'
     if audience in ('class', 'arm'):
-        cls = next((c for c in classes if c.id == class_id), None)
-        arm = next((a for a in arms if a.id == arm_id), None)
+        cls = next((c for c in classes if c.id == spec.get('class_id')), None)
+        arm = next((a for a in arms if a.id == spec.get('arm_id')), None)
         name = ' '.join(p for p in [cls.name if cls else '', arm.name if arm else ''] if p)
-        return f'{name or "Class"} ({count})'
-    return f'Selected students ({count})'
+        return f'{name or "Class"}{extra} ({count})'
+    return f'Selected students{extra} ({count})'
 
 
 @comms_bp.route('/compose/preview', methods=['POST'])
 @login_required
 def compose_preview():
     """JSON: recipient counts (channel-aware) + a personalised sample for the
-    chosen audience."""
+    chosen recipient selection."""
     term = _term_from(request.form.get('term_id', type=int))
-    audience = request.form.get('audience') or 'all'
     channel = request.form.get('channel') or 'SMS'
     body = request.form.get('body') or ''
-    targets = comms.resolve_audience(audience, term,
-        class_id=request.form.get('class_id', type=int),
-        arm_id=request.form.get('arm_id', type=int),
-        student_ids=request.form.getlist('student_ids', type=int))
+    spec = _recipient_spec(request.form)
+    if spec['to'] == 'staff' and not _is_admin():
+        return jsonify({'total': 0, 'reachable': 0, 'no_phone': 0, 'unreachable': 0,
+                        'by_email': comms.channel_is_email(channel), 'sample': '',
+                        'denied': True})
+    targets = comms.resolve_recipients(spec, term)
     reachable = comms.reachable_targets(targets, channel)
     sample = ''
     if reachable:
-        t = reachable[0]
-        ctx = comms.build_context(t['student'], term, t['parent_name'], t['balance'])
-        sample = comms.render(body, ctx)
+        sample = comms.render(body, comms.campaign_context(reachable[0], term))
     return jsonify({'total': len(targets), 'reachable': len(reachable),
                     'no_phone': len(targets) - len(reachable),
                     'unreachable': len(targets) - len(reachable),
@@ -494,6 +534,65 @@ def students_search():
             .order_by(Student.surname).limit(15).all())
     return jsonify([{'id': s.id, 'name': s.full_name, 'sid': s.student_id,
                      'label': f'{s.full_name} ({s.student_id})'} for s in rows])
+
+
+# ============================================================================
+# SAVED RECIPIENT GROUPS
+# ============================================================================
+
+# The composer only persists these spec keys — never free-form data — so a saved
+# group can't smuggle anything unexpected back into resolve_recipients.
+_SPEC_KEYS = ('to', 'audience', 'class_id', 'arm_id', 'student_ids', 'gender',
+              'stream', 'staff_scope', 'department_id', 'exclude_ids')
+
+
+def _clean_spec(form):
+    spec = _recipient_spec(form)
+    return {k: v for k, v in spec.items() if k in _SPEC_KEYS and v not in (None, '', [])}
+
+
+def _saved_groups():
+    from models import RecipientGroup
+    from utils.branch_scope import scope_query
+    rows = (scope_query(RecipientGroup.query, RecipientGroup)
+            .order_by(RecipientGroup.name).all())
+    return [{'id': g.id, 'name': g.name, 'spec': g.spec_dict(),
+             'delete_url': url_for('comms.delete_group', group_id=g.id)} for g in rows]
+
+
+@comms_bp.route('/groups/save', methods=['POST'])
+@login_required
+def save_group():
+    import json
+    from models import RecipientGroup
+    from utils.branch_scope import branch_for_new
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        return _err('Give the group a name.', url_for('comms.compose'))
+    spec = _clean_spec(request.form)
+    if spec.get('to') == 'staff' and not _is_admin():
+        return _err('Only administrators can save staff groups.', url_for('comms.compose'))
+    g = (RecipientGroup.query.filter_by(name=name).first()
+         if request.form.get('overwrite') else None)
+    if g is None:
+        g = RecipientGroup(name=name, branch_id=branch_for_new(), created_by=_current_user())
+        db.session.add(g)
+    g.spec = json.dumps(spec)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('communication.group_saved', target=g, detail=name)
+    return _ok(f'Saved recipient group "{name}".', url_for('comms.compose'))
+
+
+@comms_bp.route('/groups/<int:group_id>/delete', methods=['POST'])
+@login_required
+def delete_group(group_id):
+    from models import RecipientGroup
+    g = db.get_or_404(RecipientGroup, group_id)
+    require_branch_access(g.branch_id)
+    db.session.delete(g)
+    db.session.commit()
+    return _ok('Recipient group deleted.', url_for('comms.compose'))
 
 
 @comms_bp.route('/messages/<int:message_id>/cancel-schedule', methods=['POST'])

@@ -119,3 +119,96 @@ def test_dashboard_exposes_pipeline_stats(app):
     for key in ('sent_today', 'scheduled', 'drafts', 'failed', 'success_rate'):
         assert key in html
     assert '"compose_email"' in html and '"compose_sms"' in html
+
+
+# --- Phase 2: unified recipient engine --------------------------------------
+def _staff(app, sid, *, phone='08120000000', email=None, staff_type='Teaching', dept=None):
+    from models import StaffMember
+    with app.app_context():
+        s = StaffMember.query.filter_by(staff_id=sid).first()
+        if not s:
+            s = StaffMember(staff_id=sid, first_name='St', surname=sid, phone=phone,
+                            email=email, staff_type=staff_type, department_id=dept,
+                            is_active=True)
+            db.session.add(s)
+            db.session.commit()
+        return s.id
+
+
+def test_resolve_recipients_staff(app):
+    from utils import comms
+    _staff(app, 'RCSTAFF1', phone='08120000101', email='t@ex.com', staff_type='Teaching')
+    _staff(app, 'RCSTAFF2', phone='08120000102', staff_type='Non-teaching')
+    with app.test_request_context('/'):
+        from flask import session
+        session['role'] = 'admin'; session['scope'] = 'central'
+        allt = comms.resolve_recipients({'to': 'staff', 'staff_scope': 'all'})
+        names = {t['name'] for t in allt}
+        assert any('RCSTAFF1' in n for n in names) and any('RCSTAFF2' in n for n in names)
+        teach = comms.resolve_recipients({'to': 'staff', 'staff_scope': 'teaching'})
+        assert all(t['staff'].staff_type == 'Teaching' for t in teach)
+        # Every staff target exposes phone/email for channel-aware reach.
+        assert all('phone' in t and 'email' in t for t in allt)
+
+
+def test_resolve_recipients_parent_filters_and_exclude(app):
+    from utils import comms
+    from models import Student
+    _student_with(app, 'RCP_M', phone='08120000201', email=None)
+    _student_with(app, 'RCP_F', phone='08120000202', email=None)
+    with app.app_context():
+        m = Student.query.filter_by(student_id='RCP_M').first(); m.gender = 'Male'
+        f = Student.query.filter_by(student_id='RCP_F').first(); f.gender = 'Female'
+        db.session.commit()
+        mid, fid = m.id, f.id
+    with app.test_request_context('/'):
+        from flask import session
+        session['role'] = 'admin'; session['scope'] = 'central'
+        males = comms.resolve_recipients({'to': 'parents', 'audience': 'all', 'gender': 'Male'})
+        ids = {t['student'].id for t in males}
+        assert mid in ids and fid not in ids
+        # excluding the male student removes him
+        excl = comms.resolve_recipients({'to': 'parents', 'audience': 'all', 'gender': 'Male',
+                                         'exclude_ids': [mid]})
+        assert mid not in {t['student'].id for t in excl}
+
+
+def test_compose_staff_campaign_as_admin(app):
+    _staff(app, 'RCSTAFF3', phone='08120000103', email='s3@ex.com')
+    client = _admin(app)
+    tok = _ptoken(client)
+    r = client.post('/communication/compose', headers={'X-Requested-With': 'fetch'},
+                    data={'to': 'staff', 'staff_scope': 'all', 'channel': 'SMS',
+                          'title': 'Staff notice', 'body': 'Dear {name}, meeting at 4pm.',
+                          '_csrf_token': tok}).get_json()
+    assert r['ok']
+    with app.app_context():
+        m = Message.query.filter_by(title='Staff notice').first()
+        assert m is not None and m.recipients.count() >= 1
+        # staff recipients carry no student_id
+        assert m.recipients.first().student_id is None
+
+
+# --- Phase 2: saved recipient groups ----------------------------------------
+def test_save_and_reload_recipient_group(app):
+    from models import RecipientGroup
+    client = _admin(app)
+    tok = _ptoken(client)
+    r = client.post('/communication/groups/save', headers={'X-Requested-With': 'fetch'},
+                    data={'name': 'Owing SS3', 'to': 'parents', 'audience': 'defaulters',
+                          'gender': 'Male', '_csrf_token': tok}).get_json()
+    assert r['ok']
+    with app.app_context():
+        g = RecipientGroup.query.filter_by(name='Owing SS3').first()
+        assert g is not None
+        spec = g.spec_dict()
+        assert spec['audience'] == 'defaulters' and spec['gender'] == 'Male'
+        gid = g.id
+    # the compose page exposes saved groups
+    html = client.get('/communication/compose').get_data(as_text=True)
+    assert 'Owing SS3' in html and '"groups"' in html
+    d = client.post(f'/communication/groups/{gid}/delete', headers={'X-Requested-With': 'fetch'},
+                    data={'_csrf_token': tok}).get_json()
+    assert d['ok']
+    with app.app_context():
+        assert RecipientGroup.query.get(gid) is None

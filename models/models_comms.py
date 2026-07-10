@@ -68,6 +68,29 @@ class Notification(db.Model):
         return f'<Notification {self.title!r}>'
 
 
+class RecipientGroup(db.Model):
+    """A saved recipient selection (a comms recipient spec) that a user can reload
+    in the composer instead of rebuilding the same audience each time."""
+    __tablename__ = 'recipient_groups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    spec = db.Column(db.Text, nullable=False)        # JSON recipient spec
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))   # owning branch
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    def spec_dict(self):
+        import json
+        try:
+            return json.loads(self.spec or '{}')
+        except (ValueError, TypeError):
+            return {}
+
+    def __repr__(self):
+        return f'<RecipientGroup {self.name!r}>'
+
+
 class MessageTemplate(db.Model):
     """A reusable message body with {placeholders}."""
     __tablename__ = 'message_templates'

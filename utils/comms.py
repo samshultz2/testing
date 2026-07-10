@@ -9,7 +9,7 @@ from models import (
     db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, SchoolSettings,
 )
 
-PLACEHOLDERS = ['{student}', '{first_name}', '{surname}', '{class}', '{arm}',
+PLACEHOLDERS = ['{name}', '{student}', '{first_name}', '{surname}', '{class}', '{arm}',
                 '{term}', '{balance}', '{parent}', '{school}']
 
 SMS_SEGMENT = 160
@@ -60,6 +60,7 @@ def build_context(student, term, parent_name='Parent', balance=None):
     if balance is not None:
         bal = '₦{:,.2f}'.format(balance)
     return {
+        '{name}': parent_name or 'Parent',
         '{student}': student.full_name,
         '{first_name}': student.first_name or student.full_name,
         '{surname}': student.surname or '',
@@ -68,6 +69,20 @@ def build_context(student, term, parent_name='Parent', balance=None):
         '{term}': term.full_name if term else '',
         '{balance}': bal,
         '{parent}': parent_name or 'Parent',
+        '{school}': school_name(),
+    }
+
+
+def build_staff_context(staff):
+    """Placeholder values for a staff recipient (no student-specific fields)."""
+    name = staff.display_name or staff.full_name
+    return {
+        '{name}': name,
+        '{student}': '',
+        '{first_name}': staff.first_name or name,
+        '{surname}': staff.surname or '',
+        '{class}': '', '{arm}': '', '{term}': '', '{balance}': '',
+        '{parent}': name,
         '{school}': school_name(),
     }
 
@@ -325,6 +340,73 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
     return out
 
 
+# --- unified recipient engine (Phase 2) -------------------------------------
+# A recipient "spec" is a plain dict, so it round-trips cleanly through form
+# fields and saved groups. It targets either parents (of students) or staff, with
+# optional filters and exclusions layered on top of the base audience.
+STAFF_SCOPES = ['all', 'teaching', 'non-teaching', 'department']
+
+
+def resolve_recipients(spec, term=None):
+    """Resolve a recipient spec into a list of targets (the same shape used by
+    :func:`build_campaign`). ``spec['to']`` selects 'parents' (default) or 'staff'.
+
+    Parents accept the legacy audience (all/class/arm/students/defaulters) plus
+    optional ``gender`` / ``stream`` filters and an ``exclude_ids`` list of student
+    ids. Staff accept a ``staff_scope`` (all/teaching/non-teaching/department) and
+    optional ``department_id`` / ``exclude_ids`` (staff ids). Kept branch-scoped.
+    """
+    spec = spec or {}
+    if (spec.get('to') or 'parents').lower() == 'staff':
+        return _resolve_staff(spec)
+    return _resolve_parents(spec, term)
+
+
+def _resolve_parents(spec, term):
+    targets = resolve_audience(
+        spec.get('audience') or 'all', term,
+        class_id=spec.get('class_id'), arm_id=spec.get('arm_id'),
+        student_ids=spec.get('student_ids') or [])
+    gender = (spec.get('gender') or '').strip()
+    stream = (spec.get('stream') or '').strip()
+    exclude = {int(x) for x in (spec.get('exclude_ids') or []) if str(x).strip()}
+    out = []
+    for t in targets:
+        s = t['student']
+        if gender and (s.gender or '') != gender:
+            continue
+        if stream and (s.stream or '') != stream:
+            continue
+        if s.id in exclude:
+            continue
+        out.append(t)
+    return out
+
+
+def _resolve_staff(spec):
+    from models import StaffMember
+    from utils.branch_scope import scope_query
+    q = scope_query(StaffMember.query.filter(StaffMember.is_active.is_(True)), StaffMember)
+    scope = (spec.get('staff_scope') or 'all').lower()
+    if scope == 'teaching':
+        q = q.filter(StaffMember.staff_type == 'Teaching')
+    elif scope in ('non-teaching', 'nonteaching'):
+        q = q.filter(StaffMember.staff_type == 'Non-teaching')
+    elif scope == 'department' and spec.get('department_id'):
+        q = q.filter(StaffMember.department_id == int(spec['department_id']))
+    exclude = {int(x) for x in (spec.get('exclude_ids') or []) if str(x).strip()}
+    out = []
+    for st in q.order_by(StaffMember.surname, StaffMember.first_name).all():
+        if st.id in exclude:
+            continue
+        name = st.display_name or st.full_name
+        out.append({
+            'student': None, 'staff': st, 'name': name, 'parent_name': name,
+            'phone': st.phone or '', 'email': st.email or '', 'balance': None,
+        })
+    return out
+
+
 def channel_is_email(channel):
     return (channel or '').lower() == 'email'
 
@@ -336,16 +418,27 @@ def reachable_targets(targets, channel):
     return [t for t in targets if (t.get('email') if by_email else t.get('phone'))]
 
 
+def campaign_context(target, term):
+    """Personalisation context for a target, staff- or parent-aware."""
+    if target.get('staff') is not None:
+        return build_staff_context(target['staff'])
+    return build_context(target['student'], term,
+                         target.get('parent_name') or target.get('name'),
+                         target.get('balance'))
+
+
 def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None,
                    audience_label=None, class_id=None, arm_id=None, student_ids=None,
                    created_by='system', status='Draft', scheduled_at=None,
-                   branch_id=None):
+                   branch_id=None, spec=None):
     """The single campaign builder used by every entry point (the composer UI and
-    automated triggers alike). Resolves the audience, keeps only recipients
-    reachable on the chosen channel, persists the Message + one personalised
-    MessageRecipient each, and returns the Message — or None when the body is empty
-    or nobody is reachable.
+    automated triggers alike). Resolves recipients, keeps only those reachable on
+    the chosen channel, persists the Message + one personalised MessageRecipient
+    each, and returns the Message — or None when the body is empty or nobody is
+    reachable.
 
+    Pass ``spec`` (a recipient dict, see :func:`resolve_recipients`) for the full
+    parents/staff + filters engine; omit it to use the legacy ``audience`` args.
     Reachability is channel-aware (phone for SMS/WhatsApp, email for Email). A
     'Draft'/'Scheduled' status controls whether the scheduler may auto-send it.
     """
@@ -355,15 +448,19 @@ def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None
     body = (body or '').strip()
     if not body:
         return None
-    targets = resolve_audience(audience, term, class_id=class_id, arm_id=arm_id,
-                               student_ids=student_ids or [])
+    if spec is not None:
+        targets = resolve_recipients(spec, term)
+        audience = spec.get('audience') or (spec.get('to') or 'parents')
+    else:
+        targets = resolve_audience(audience, term, class_id=class_id, arm_id=arm_id,
+                                   student_ids=student_ids or [])
     reachable = reachable_targets(targets, channel)
     if not reachable:
         return None
 
-    label = audience_label or title or f'{audience.title()} ({len(reachable)})'
+    label = audience_label or title or f'{str(audience).title()} ({len(reachable)})'
     msg = Message(title=title or label, body=body, channel=channel,
-                  audience=audience, audience_label=label,
+                  audience=str(audience), audience_label=label,
                   term_id=term.id if term else None,
                   branch_id=(branch_id if branch_id is not None else branch_for_new()),
                   created_by=created_by, recipient_count=len(reachable),
@@ -371,10 +468,12 @@ def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None
     db.session.add(msg)
     db.session.flush()
     for t in reachable:
-        ctx = build_context(t['student'], term, t['parent_name'], t['balance'])
+        ctx = campaign_context(t, term)
         db.session.add(MessageRecipient(
-            message_id=msg.id, student_id=t['student'].id,
-            parent_name=t['parent_name'], phone=t['phone'], email=t.get('email') or None,
+            message_id=msg.id,
+            student_id=(t['student'].id if t.get('student') is not None else None),
+            parent_name=(t.get('parent_name') or t.get('name')),
+            phone=t['phone'], email=t.get('email') or None,
             body=render(body, ctx)))
     db.session.commit()
     return msg

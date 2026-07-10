@@ -980,6 +980,13 @@
 ]
 ],
 [
+"comms.delete_group",
+"/communication/groups/<int:group_id>/delete",
+[
+"POST"
+]
+],
+[
 "comms.delete_message",
 "/communication/messages/<int:message_id>/delete",
 [
@@ -1045,6 +1052,13 @@
 [
 "comms.process_scheduled",
 "/communication/process-scheduled",
+[
+"POST"
+]
+],
+[
+"comms.save_group",
+"/communication/groups/save",
 [
 "POST"
 ]
