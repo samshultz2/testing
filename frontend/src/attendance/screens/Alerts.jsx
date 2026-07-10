@@ -71,7 +71,9 @@ export default function Alerts() {
                   <tbody>
                     {d.alerts.map((a) => (
                       <tr key={a.student_id + '|' + a.class_name}>
-                        <td className="att-grid-name">{a.student_name}</td>
+                        <td className="att-grid-name">{a.id
+                          ? <a href={`/attendance/app?student_id=${a.id}#/student`}>{a.student_name}</a>
+                          : a.student_name}</td>
                         <td>{a.class_name}</td>
                         <td>{a.present}/{a.total}</td>
                         <td>{a.percentage}%</td>

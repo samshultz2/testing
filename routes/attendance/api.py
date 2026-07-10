@@ -518,6 +518,7 @@ def api_report_alerts():
             pct = round((present / total_times_opened) * 100, 2)
             if pct < threshold:
                 alerts.append({
+                    'id': e.student.id,
                     'student_id': e.student.student_id,
                     'student_name': e.student.full_name,
                     'class_name': class_by_id[e.class_arm_assignment_id].display_name,
@@ -534,3 +535,72 @@ def api_report_alerts():
         'total_times_opened': total_times_opened,
         'alerts': alerts,
     })
+
+
+# ============================================================================
+# STUDENT ATTENDANCE PROFILE (the definitive per-student attendance page)
+# ============================================================================
+
+def _can_view_student(student):
+    """A viewer may open a student's attendance profile if they're an admin, or
+    the student sits in a class the viewer may view (and shares their branch)."""
+    from utils.access_control import is_admin
+    if is_admin():
+        return True
+    from utils.branch_scope import can_access_branch
+    if not can_access_branch(student.branch_id):
+        return False
+    for e in StudentEnrollment.query.filter_by(student_id=student.id).all():
+        if can_view_attendance(e.class_arm_assignment_id):
+            return True
+    return False
+
+
+@attendance_bp.route('/api/student/<int:student_id>')
+@login_required
+def api_student_profile(student_id):
+    """Cross-term attendance profile for one student (JSON, read-only)."""
+    if not can_access_module('attendance'):
+        return jsonify({'error': 'forbidden'}), 403
+    student = db.session.get(Student, student_id)
+    if not student:
+        return jsonify({'error': 'not found'}), 404
+    if not _can_view_student(student):
+        return jsonify({'error': 'forbidden'}), 403
+    from utils.attendance_profile import build_student_profile
+    data = build_student_profile(student_id, focus_term_id=request.args.get('term_id', type=int))
+    if not data:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify(data)
+
+
+@attendance_bp.route('/api/student-search')
+@login_required
+def api_student_search():
+    """Type-ahead search for students the viewer may open a profile for."""
+    if not can_access_module('attendance'):
+        return jsonify([])
+    from utils.access_control import is_admin
+    from utils.search import like_term
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    like = like_term(q)
+    query = Student.query.filter(Student.is_active == True,  # noqa: E712
+                                 db.or_(Student.first_name.ilike(like, escape='\\'),
+                                        Student.surname.ilike(like, escape='\\'),
+                                        Student.student_id.ilike(like, escape='\\')))
+    if not is_admin():
+        # Restrict to students in classes the viewer may view.
+        accessible = filter_classes_for_user(ClassArmAssignment.query.all(), form_only=True)
+        caa_ids = [c.id for c in accessible]
+        sub = (db.session.query(StudentEnrollment.student_id)
+               .filter(StudentEnrollment.class_arm_assignment_id.in_(caa_ids or [-1])))
+        query = query.filter(Student.id.in_(sub))
+    else:
+        from utils.branch_scope import scope_query
+        query = scope_query(query, Student)
+    rows = query.order_by(Student.surname, Student.first_name).limit(15).all()
+    return jsonify([{'id': s.id, 'label': f'{s.full_name} ({s.student_id})',
+                     'url': url_for('attendance.attendance_app') + f'?student_id={s.id}#/student'}
+                    for s in rows])

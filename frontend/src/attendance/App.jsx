@@ -9,6 +9,7 @@ import DailySummary from './screens/DailySummary';
 import WeeklyReport from './screens/WeeklyReport';
 import TermlyReport from './screens/TermlyReport';
 import Alerts from './screens/Alerts';
+import StudentProfile from './screens/StudentProfile';
 
 const Ctx = createContext(null);
 export const useCtx = () => useContext(Ctx);
@@ -21,7 +22,8 @@ const INIT = (() => {
     termId: p.get('term_id') ? Number(p.get('term_id')) : null,
     assignmentId: p.get('assignment_id') || '',
     date: p.get('date') || '',
-    tab: p.get('tab') || '',
+    tab: p.get('tab') || (p.get('student_id') ? 'student' : ''),
+    studentId: p.get('student_id') || '',
   };
 })();
 
@@ -31,6 +33,7 @@ const TABS = [
   { path: 'daily', label: 'Daily summary', icon: 'fa-list-check', el: DailySummary },
   { path: 'weekly', label: 'Weekly report', icon: 'fa-calendar-week', el: WeeklyReport },
   { path: 'termly', label: 'Termly report', icon: 'fa-calendar-days', el: TermlyReport },
+  { path: 'student', label: 'Student profile', icon: 'fa-user', el: StudentProfile, insight: true },
   { path: 'alerts', label: 'Alerts', icon: 'fa-bell', el: Alerts },
 ];
 
@@ -88,7 +91,7 @@ export default function App() {
   const selectedTerm = termId != null ? String(termId) : (data.term ? String(data.term.id) : '');
 
   return (
-    <Ctx.Provider value={{ ...data, online, sync, initial: { assignmentId: INIT.assignmentId, date: INIT.date } }}>
+    <Ctx.Provider value={{ ...data, online, sync, initial: { assignmentId: INIT.assignmentId, date: INIT.date, studentId: INIT.studentId } }}>
       <nav className="att-tabs" role="tablist" aria-label="Attendance sections">
         {tabs.map((t) => (
           <a key={t.path} href={'#/' + t.path} role="tab" aria-selected={t.path === active.path}
