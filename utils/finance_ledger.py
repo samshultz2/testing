@@ -185,15 +185,43 @@ def _reverse_by_origin(connection, origin_type, origin_id):
                 description='Reversal (source deleted)', reversal_of_id=row.id)
 
 
+# Nullable columns added after the schema baseline. ``create_all`` never adds a
+# column to an existing table, so bring older tenant DBs up to date in place with
+# a tiny, dialect-portable ADD COLUMN (no defaults/constraints beyond the type).
+_ADDED_COLUMNS = {
+    'parent_contacts': {'email': 'VARCHAR(120)'},
+    'message_recipients': {'email': 'VARCHAR(120)'},
+}
+
+
+def _ensure_columns(engine):
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    for table, cols in _ADDED_COLUMNS.items():
+        try:
+            existing = {c['name'] for c in insp.get_columns(table)}
+        except Exception:
+            continue                       # table not present on this DB — skip
+        for name, ddl in cols.items():
+            if name not in existing:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
+                except Exception:
+                    pass                   # racy/duplicate add — safe to ignore
+
+
 def ensure_tables(bind=None):
     """Create the finance tables (ledger, additional charges, installment plans)
-    if they don't exist yet. Idempotent (checkfirst). Needed because production
-    runs with SKIP_CREATE_ALL=1 — Alembic owns the schema and never auto-creates
-    these newer tables — and because existing tenant databases predate them."""
+    if they don't exist yet, and add any post-baseline nullable columns. Idempotent
+    (checkfirst). Needed because production runs with SKIP_CREATE_ALL=1 — Alembic
+    owns the schema and never auto-creates these newer tables/columns — and because
+    existing tenant databases predate them."""
     from models import db, FinanceTransaction, AdditionalCharge, InstallmentPlan
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__, InstallmentPlan.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
+    _ensure_columns(engine)
 
 
 _HOOKS_REGISTERED = False

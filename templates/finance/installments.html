@@ -39,6 +39,30 @@
       {% for c in classes %}<option value="{{ c.id }}" {{ 'selected' if c.id|string == class_id|string }}>{{ c.name }} only</option>{% endfor %}</select></div>
   </form>
 
+  {% if term_id %}
+  <div class="in-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+    <span style="font-size:12px;color:var(--text-secondary,#889);margin-right:2px">Follow up on students owing:</span>
+    <form method="post" action="{{ url_for('finance.draft_reminders') }}"
+          title="Draft a fee reminder to defaulters' parents for review in Communication"
+          onsubmit="return confirm('Draft fee reminders to the parents of students who are owing? Nothing is sent until you review and send it in Communication.');"
+          style="display:flex;gap:6px;align-items:center">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="term_id" value="{{ term_id }}">
+      <input type="hidden" name="class_id" value="{{ class_id }}">
+      <select name="channel" title="Delivery channel" style="padding:6px 8px;border:1px solid var(--border,#d7dde5);border-radius:7px;background:var(--surface,#fff);color:inherit;font-size:12px">
+        <option value="SMS">SMS</option>
+        <option value="Email">Email</option>
+      </select>
+      <button type="submit" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-paper-plane"></i> Message parents</button>
+    </form>
+    <form method="post" action="{{ url_for('finance.notify_overdue') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="term_id" value="{{ term_id }}">
+      <button type="submit" class="btn btn-secondary btn-sm" title="Send an in-app alert to admins about students behind"><i aria-hidden="true" class="fas fa-bell"></i> Alert admins</button>
+    </form>
+  </div>
+  {% endif %}
+
   <div class="card2"><h3>Schedule <span style="font-weight:400;color:var(--text-secondary,#889);font-size:12px">— each row is a % of the student's payable, due by a date</span></h3><div class="bd">
     <form method="post" action="{{ url_for('finance.installments_save') }}" id="schForm">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -65,21 +89,7 @@
   </div></div>
 
   {% if roster %}
-  <div class="card2"><h3>Student progress ({{ roster|length }})
-    <span style="margin-left:auto;display:flex;gap:8px">
-    <form method="post" action="{{ url_for('finance.draft_reminders') }}"
-          title="Draft an SMS fee reminder to defaulters' parents for review in Communication"
-          onsubmit="return confirm('Draft SMS fee reminders to the parents of students who are owing? Nothing is sent until you review and send it in Communication.');">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="term_id" value="{{ term_id }}">
-      <input type="hidden" name="class_id" value="{{ class_id }}">
-      <button type="submit" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-comment-sms"></i> Text parents</button>
-    </form>
-    <form method="post" action="{{ url_for('finance.notify_overdue') }}">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="term_id" value="{{ term_id }}">
-      <button type="submit" class="btn btn-secondary btn-sm" title="Send an in-app alert to admins about students behind"><i aria-hidden="true" class="fas fa-bell"></i> Alert admins</button>
-    </form></span></h3><div class="bd" style="padding:0;overflow-x:auto">
+  <div class="card2"><h3>Student progress ({{ roster|length }})</h3><div class="bd" style="padding:0;overflow-x:auto">
     <table class="ro"><thead><tr><th>Student</th><th>ID</th><th class="num">Payable</th><th class="num">Paid</th><th class="num">Expected by now</th><th class="num">Behind</th><th>Next due</th><th>Status</th></tr></thead>
       <tbody>
         {% for r in roster %}

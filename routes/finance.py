@@ -1742,15 +1742,18 @@ def draft_reminders():
     from utils import finance_notify
     term_id = request.form.get('term_id', type=int) or _active_term_id()
     class_id = request.form.get('class_id', type=int) or None
+    channel = 'Email' if (request.form.get('channel') or '').lower() == 'email' else 'SMS'
     term = db.session.get(Term, term_id) if term_id else None
     if not term:
         return _err('Pick a term first.', url_for('finance.installments'))
-    msg = finance_notify.draft_parent_reminders(term, class_id=class_id, created_by=_who())
+    msg = finance_notify.draft_parent_reminders(term, channel=channel,
+                                                class_id=class_id, created_by=_who())
     if not msg:
-        return _ok('No defaulters with a parent phone number — nothing to draft.',
+        reach = 'email address' if channel == 'Email' else 'phone number'
+        return _ok(f'No defaulters with a parent {reach} — nothing to draft.',
                    url_for('finance.installments', term_id=term_id, class_id=class_id or ''))
     from utils.audit import log_action
     log_action('finance.fee_reminders_drafted',
-               detail=f'term {term_id}: {msg.recipient_count} parent(s)')
-    return _ok(f'Drafted reminders for {msg.recipient_count} parent(s) — review and send.',
+               detail=f'term {term_id} via {channel}: {msg.recipient_count} parent(s)')
+    return _ok(f'Drafted {channel} reminders for {msg.recipient_count} parent(s) — review and send.',
                url_for('comms.message_detail', message_id=msg.id))

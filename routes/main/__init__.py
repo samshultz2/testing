@@ -943,7 +943,7 @@ def _student_form_options(with_enrolment=False):
 
 
 def _blank_contact():
-    return {'name': '', 'phone_number': '', 'relationship': 'Father'}
+    return {'name': '', 'phone_number': '', 'email': '', 'relationship': 'Father'}
 
 
 

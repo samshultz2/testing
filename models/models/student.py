@@ -114,6 +114,7 @@ class ParentContact(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     phone_number = db.Column(db.String(15), nullable=False)
+    email = db.Column(db.String(120))        # optional — enables email reminders
     relationship = db.Column(db.String(20))  # Father, Mother, Guardian, etc.
     name = db.Column(db.String(100))
     is_primary = db.Column(db.Boolean, default=False)

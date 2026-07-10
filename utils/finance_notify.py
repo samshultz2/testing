@@ -54,19 +54,22 @@ DEFAULT_REMINDER_BODY = (
     "{student} ({class}) for {term}. Kindly arrange payment. Thank you — {school}.")
 
 
-def draft_parent_reminders(term, *, class_id=None, body=None, created_by='system'):
-    """Queue an SMS reminder to every fee defaulter's parent for a term as a
-    *Draft* campaign for a human to review and send from the Communication module.
+def draft_parent_reminders(term, *, channel='SMS', class_id=None, body=None,
+                           created_by='system'):
+    """Queue a fee reminder to every defaulter's parent for a term as a *Draft*
+    campaign for a human to review and send from the Communication module.
 
+    ``channel`` picks the delivery method (SMS by default, or Email — optional).
     Reuses the comms audience/personalisation engine (branch- and form-teacher
     scoped, {balance}/{student}/… placeholders) and never auto-dispatches, so an
     admin always confirms before parents are messaged. Returns the Message, or
-    None when nobody with a phone number is owing."""
+    None when nobody is reachable on that channel."""
     from utils import comms
+    channel = 'Email' if (channel or '').lower() == 'email' else 'SMS'
     return comms.create_draft_campaign(
         (body or DEFAULT_REMINDER_BODY), audience='defaulters', term=term,
         title=(f'Fee reminders — {term.full_name}' if term else 'Fee reminders'),
-        channel='SMS', class_id=class_id, created_by=created_by)
+        channel=channel, class_id=class_id, created_by=created_by)
 
 
 def payment_verification_failed(reference, detail=''):

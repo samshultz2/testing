@@ -119,6 +119,7 @@ class MessageRecipient(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     parent_name = db.Column(db.String(100))
     phone = db.Column(db.String(20))
+    email = db.Column(db.String(120))               # destination for Email-channel sends
     body = db.Column(db.Text)                       # personalised message
     status = db.Column(db.String(15), default='Pending')  # Pending / Sent / Failed
     sent_at = db.Column(db.DateTime)

@@ -54,12 +54,14 @@ def add_student():
             phone_numbers = request.form.getlist('phone_number[]')
             relationships = request.form.getlist('relationship[]')
             contact_names = request.form.getlist('contact_name[]')
+            contact_emails = request.form.getlist('email[]')
 
             for i, phone in enumerate(phone_numbers):
                 if phone.strip():
                     contact = ParentContact(
                         student_id=student.id,
                         phone_number=phone.strip(),
+                        email=(contact_emails[i].strip() if i < len(contact_emails) and contact_emails[i].strip() else None),
                         relationship=relationships[i] if i < len(relationships) else 'Guardian',
                         name=contact_names[i] if i < len(contact_names) else None,
                         is_primary=(i == 0)
@@ -276,12 +278,14 @@ def edit_student(student_id):
             phone_numbers = request.form.getlist('phone_number[]')
             relationships = request.form.getlist('relationship[]')
             contact_names = request.form.getlist('contact_name[]')
+            contact_emails = request.form.getlist('email[]')
 
             for i, phone in enumerate(phone_numbers):
                 if phone.strip():
                     contact = ParentContact(
                         student_id=student.id,
                         phone_number=phone.strip(),
+                        email=(contact_emails[i].strip() if i < len(contact_emails) and contact_emails[i].strip() else None),
                         relationship=relationships[i] if i < len(relationships) else 'Guardian',
                         name=contact_names[i] if i < len(contact_names) else None,
                         is_primary=(i == 0)
@@ -311,7 +315,7 @@ def edit_student(student_id):
         request.form.get('return_to') or request.args.get('return_to') or request.referrer, '')
     view_url = url_for('main.view_student', student_id=student.id)
     contacts = [{'name': c.name or '', 'phone_number': c.phone_number or '',
-                 'relationship': c.relationship or 'Father'}
+                 'email': c.email or '', 'relationship': c.relationship or 'Father'}
                 for c in student.parent_contacts.all()]
     payload = {
         'mode': 'edit',

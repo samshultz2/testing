@@ -150,6 +150,55 @@ def dispatch_campaign_async(app, message_id, cfg=None):
     threading.Thread(target=_run, daemon=True).start()
 
 
+def dispatch_campaign_email(msg):
+    """Send every pending recipient of an Email-channel campaign via SMTP.
+
+    Mirrors :func:`dispatch_campaign` (per-recipient commit so an interruption
+    never resends) but delivers over email. The campaign title is the subject and
+    each recipient's personalised body is the plain-text content. Requires a
+    configured mailer. Returns (sent, failed)."""
+    from datetime import datetime
+    from models import MessageRecipient
+    from utils import mailer
+    subject = msg.title or 'Message from your school'
+    sent = failed = 0
+    for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
+        if r.email and mailer.send_email(r.email, subject, r.body):
+            r.status, r.sent_at, r.error = 'Sent', datetime.now(), None
+            sent += 1
+        else:
+            r.status = 'Failed'
+            r.error = 'No email address' if not r.email else 'Email delivery failed'
+            failed += 1
+        db.session.commit()
+    msg.sent_count = msg.recipients.filter_by(status='Sent').count()
+    db.session.commit()
+    return sent, failed
+
+
+def dispatch_campaign_email_async(app, message_id):
+    """Send an email campaign in a background thread so the request returns at once.
+    The campaign should already be claimed ('Sending'). Marks it 'Sent' when done."""
+    import threading
+
+    def _run():
+        with app.app_context():
+            from models import db as _db, Message
+            try:
+                msg = _db.session.get(Message, message_id)
+                if msg is None:
+                    return
+                dispatch_campaign_email(msg)
+                msg.status = 'Sent'
+                _db.session.commit()
+            except Exception:
+                _db.session.rollback()
+                app.logger.exception('Background email dispatch failed for message %s',
+                                     message_id)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _claim_message(message_id, from_status='Scheduled'):
     """Atomically flip a campaign's status to 'Sending'. Returns True if THIS
     caller won the claim — guards against the worker and a manual send racing."""
@@ -270,6 +319,7 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
             'student': s,
             'parent_name': (c.name if c and c.name else 'Parent'),
             'phone': (c.phone_number if c else ''),
+            'email': ((getattr(c, 'email', '') or '') if c else ''),
             'balance': balances.get(s.id),
         })
     return out
@@ -282,9 +332,10 @@ def create_draft_campaign(body, *, audience='all', term=None, title=None,
     per reachable parent in ``audience``.
 
     A Draft is never auto-dispatched (only 'Scheduled' campaigns are), so this is
-    safe to call from automated triggers: it queues an SMS for a human to review
-    and send. Returns the Message, or None when the body is empty or no recipient
-    has a phone number.
+    safe to call from automated triggers: it queues messages for a human to review
+    and send. Reachability depends on the channel — a phone number for SMS/WhatsApp,
+    an email address for Email. Returns the Message, or None when the body is empty
+    or no recipient is reachable on that channel.
     """
     from models import Message, MessageRecipient
     from utils.branch_scope import branch_for_new
@@ -294,7 +345,8 @@ def create_draft_campaign(body, *, audience='all', term=None, title=None,
         return None
     targets = resolve_audience(audience, term, class_id=class_id, arm_id=arm_id,
                                student_ids=student_ids or [])
-    reachable = [t for t in targets if t['phone']]
+    by_email = (channel or '').lower() == 'email'
+    reachable = [t for t in targets if (t.get('email') if by_email else t['phone'])]
     if not reachable:
         return None
 
@@ -310,7 +362,7 @@ def create_draft_campaign(body, *, audience='all', term=None, title=None,
         ctx = build_context(t['student'], term, t['parent_name'], t['balance'])
         db.session.add(MessageRecipient(
             message_id=msg.id, student_id=t['student'].id,
-            parent_name=t['parent_name'], phone=t['phone'],
+            parent_name=t['parent_name'], phone=t['phone'], email=t.get('email') or None,
             body=render(body, ctx)))
     db.session.commit()
     return msg

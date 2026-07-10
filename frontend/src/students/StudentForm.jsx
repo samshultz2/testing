@@ -52,8 +52,8 @@ export default function StudentForm({ data }) {
   }, { signature: draftSig });
   // Contacts stay on plain state (useDraft serialises objects, not arrays).
   const [contacts, setContacts] = useState(() =>
-    (data.contacts && data.contacts.length ? data.contacts : [{ name: '', phone_number: '', relationship: 'Father' }])
-      .map((c) => ({ name: c.name || '', phone_number: c.phone_number || '', relationship: c.relationship || 'Father' })));
+    (data.contacts && data.contacts.length ? data.contacts : [{ name: '', phone_number: '', email: '', relationship: 'Father' }])
+      .map((c) => ({ name: c.name || '', phone_number: c.phone_number || '', email: c.email || '', relationship: c.relationship || 'Father' })));
   const [waec, setWaec] = useState(() => new Set(stu.waec_subjects || []));
   const [jamb, setJamb] = useState(() => new Set(stu.jamb_subjects || []));
   const [enrolId, setEnrolId] = useState(enrolment && enrolment.default_id ? String(enrolment.default_id) : '');
@@ -94,7 +94,7 @@ export default function StudentForm({ data }) {
   const setContact = (i, k, v) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
   // Smarter default: 1st contact = Father, 2nd = Mother, then Guardian.
   const addContact = () => setContacts((cs) =>
-    [...cs, { name: '', phone_number: '', relationship: REL_SEQUENCE[cs.length] || 'Guardian' }]);
+    [...cs, { name: '', phone_number: '', email: '', relationship: REL_SEQUENCE[cs.length] || 'Guardian' }]);
   const removeContact = (i) => setContacts((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
 
   const validate = () => {
@@ -128,6 +128,7 @@ export default function StudentForm({ data }) {
       jamb_target: f.jamb_target, home_address: f.home_address, hobbies: f.hobbies,
       'contact_name[]': send.map((c) => c.name.trim()),
       'phone_number[]': send.map((c) => c.phone_number.trim()),
+      'email[]': send.map((c) => (c.email || '').trim()),
       'relationship[]': send.map((c) => c.relationship),
       'waec_subjects[]': [...waec],
       'jamb_subjects[]': [...jamb],
@@ -206,6 +207,8 @@ export default function StudentForm({ data }) {
             <TextField label="Name" value={c.name} onChange={(v) => setContact(i, 'name', v)} placeholder="e.g., Mr. John" autoComplete="off" />
             <TextField label="Phone" required value={c.phone_number} onChange={(v) => setContact(i, 'phone_number', v)}
                        type="tel" placeholder="08012345678" error={contactErrors[i]} autoComplete="off" />
+            <TextField label="Email (optional)" value={c.email} onChange={(v) => setContact(i, 'email', v)}
+                       type="email" placeholder="parent@example.com" autoComplete="off" />
             <SelectField label="Relationship" value={c.relationship} onChange={(v) => setContact(i, 'relationship', v)} options={relationships} />
             <button type="button" className="btn btn-danger btn-sm sf-remove" aria-label={`Remove contact ${i + 1}`}
                     disabled={contacts.length === 1} onClick={() => removeContact(i)}>

@@ -494,15 +494,22 @@ def message_detail(message_id):
     msg = db.get_or_404(Message, message_id)
     require_branch_access(msg.branch_id)
     recips = msg.recipients.order_by(MessageRecipient.parent_name).all()
+    is_email = (msg.channel or '').lower() == 'email'
     rows = []
     for r in recips:
+        # For email campaigns the destination is the address; reuse the existing
+        # "phone" column so the React table shows it without a bundle change.
+        dest = (r.email or '') if is_email else r.phone
         rows.append({'id': r.id, 'parent_name': r.parent_name,
                      'student_name': r.student.full_name if r.student else '—',
-                     'phone': r.phone, 'intl': comms.normalise_phone(r.phone),
+                     'phone': dest, 'email': r.email or '',
+                     'intl': '' if is_email else comms.normalise_phone(r.phone),
                      'status': r.status, 'error': r.error or '', 'body': r.body,
                      'sent_url': url_for('comms.mark_sent', message_id=msg.id, rid=r.id)})
-    from utils import sms_gateway
+    from utils import sms_gateway, mailer
     gw = sms_gateway.get_config()
+    channel_ready = mailer.is_configured() if is_email else sms_gateway.is_configured(gw)
+    channel_label = 'Email' if is_email else sms_gateway.provider_label(gw)
     return _render({
         'page': 'message_detail', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'msg': {'id': msg.id, 'title': msg.title or 'Campaign', 'channel': msg.channel,
@@ -512,8 +519,8 @@ def message_detail(message_id):
                 'created_by': msg.created_by or '', 'sent_count': msg.sent_count or 0,
                 'recipient_count': msg.recipient_count or 0},
         'rows': rows, 'segments': comms.sms_segments(msg.body),
-        'gateway_ready': sms_gateway.is_configured(gw),
-        'gateway_label': sms_gateway.provider_label(gw),
+        'gateway_ready': channel_ready,
+        'gateway_label': channel_label,
         'failed_count': msg.recipients.filter(MessageRecipient.status == 'Failed').count(),
         'pending_count': msg.recipients.filter(MessageRecipient.status != 'Sent').count(),
         'urls': {'export': url_for('comms.export_recipients', message_id=msg.id),
@@ -595,28 +602,41 @@ def delete_message(message_id):
 @comms_bp.route('/messages/<int:message_id>/send-gateway', methods=['POST'])
 @login_required
 def send_gateway(message_id):
-    """Dispatch all pending recipients through the configured SMS gateway."""
-    from utils import sms_gateway
+    """Dispatch all pending recipients through the configured gateway — the SMS
+    provider for SMS/WhatsApp campaigns, or SMTP for Email campaigns."""
+    from utils import sms_gateway, mailer
+    from flask import current_app
     msg = db.get_or_404(Message, message_id)
     require_branch_access(msg.branch_id)
-    cfg = sms_gateway.get_config()
-    if not sms_gateway.is_configured(cfg):
-        return _err('No SMS gateway is configured. Add your provider key in Settings.',
-                    url_for('comms.message_detail', message_id=message_id))
+    is_email = (msg.channel or '').lower() == 'email'
+
+    if is_email:
+        if not mailer.is_configured():
+            return _err('Email is not configured. Set your SMTP details before sending email.',
+                        url_for('comms.message_detail', message_id=message_id))
+    else:
+        cfg = sms_gateway.get_config()
+        if not sms_gateway.is_configured(cfg):
+            return _err('No SMS gateway is configured. Add your provider key in Settings.',
+                        url_for('comms.message_detail', message_id=message_id))
 
     # Claim a scheduled campaign so this manual send can't race the worker.
     if msg.status in ('Scheduled', 'Sending') and not comms._claim_message(msg.id, msg.status):
         return _err('This campaign is already being sent.',
                     url_for('comms.message_detail', message_id=message_id))
 
-    # Send in the background: each gateway call can take seconds, so sending a
+    # Send in the background: each gateway/SMTP call can take seconds, so sending a
     # whole batch inline would tie up this web worker for minutes.
-    from flask import current_app
     pending = msg.recipients.filter(MessageRecipient.status != 'Sent').count()
     msg.status = 'Sending'
     db.session.commit()
-    comms.dispatch_campaign_async(current_app._get_current_object(), msg.id, cfg)
-    return _ok(f'Sending {pending} message(s) via {sms_gateway.provider_label(cfg)} in the '
+    if is_email:
+        comms.dispatch_campaign_email_async(current_app._get_current_object(), msg.id)
+        via = 'email'
+    else:
+        comms.dispatch_campaign_async(current_app._get_current_object(), msg.id, cfg)
+        via = sms_gateway.provider_label(cfg)
+    return _ok(f'Sending {pending} message(s) via {via} in the '
                'background. Refresh this page to see delivery progress.',
                url_for('comms.message_detail', message_id=message_id))
 

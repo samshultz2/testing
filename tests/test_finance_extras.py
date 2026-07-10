@@ -112,7 +112,99 @@ def test_draft_reminders_with_no_defaulters(app):
     if not tid:
         return
     tok = _csrf(c)
-    r = c.post('/finance/reminders/draft',
-               data={'_csrf_token': tok, 'term_id': tid},
-               follow_redirects=False)
-    assert r.status_code in (200, 302, 303)
+    for channel in ('SMS', 'Email'):
+        r = c.post('/finance/reminders/draft',
+                   data={'_csrf_token': tok, 'term_id': tid, 'channel': channel},
+                   follow_redirects=False)
+        assert r.status_code in (200, 302, 303)
+
+
+def test_installments_offers_channel_choice(app):
+    from models import Term
+    c = _admin(app)
+    with app.app_context():
+        t = Term.query.first()
+        tid = t.id if t else None
+    if not tid:
+        return
+    body = c.get(f'/finance/installments?term_id={tid}').get_data(as_text=True)
+    assert 'name="channel"' in body and 'Message parents' in body
+
+
+# --- parent email storage + email dispatch ----------------------------------
+def test_parent_contact_and_recipient_store_email(app):
+    from models import Student, ParentContact, Message, MessageRecipient
+    with app.app_context():
+        # inactive so it stays out of shared-DB audience/ordering in other tests
+        s = Student(student_id='EMAILP01', first_name='Em', surname='Ail',
+                    gender='Male', is_active=False)
+        db.session.add(s)
+        db.session.flush()
+        db.session.add(ParentContact(student_id=s.id, phone_number='08011112222',
+                                     email='par@example.com', name='Par', is_primary=True))
+        m = Message(title='Fees', body='hi', channel='Email', status='Draft',
+                    recipient_count=1)
+        db.session.add(m)
+        db.session.flush()
+        db.session.add(MessageRecipient(message_id=m.id, parent_name='Par',
+                                        email='par@example.com', body='Dear Par'))
+        db.session.commit()
+        assert ParentContact.query.filter_by(student_id=s.id).first().email == 'par@example.com'
+        assert MessageRecipient.query.filter_by(message_id=m.id).first().email == 'par@example.com'
+
+
+def test_dispatch_campaign_email_uses_mailer(app, monkeypatch):
+    from models import Message, MessageRecipient
+    from utils import comms, mailer
+    sent = []
+    monkeypatch.setattr(mailer, 'send_email',
+                        lambda to, subject, body, html=None: (sent.append((to, subject)) or True))
+    with app.app_context():
+        m = Message(title='Fee reminder', body='hi', channel='Email',
+                    status='Sending', recipient_count=1)
+        db.session.add(m)
+        db.session.flush()
+        db.session.add(MessageRecipient(message_id=m.id, parent_name='P',
+                                        email='a@b.com', body='Dear P', status='Pending'))
+        db.session.commit()
+        s, f = comms.dispatch_campaign_email(m)
+        assert (s, f) == (1, 0)
+        assert sent and sent[0][0] == 'a@b.com'
+        assert MessageRecipient.query.filter_by(message_id=m.id).first().status == 'Sent'
+
+
+def test_dispatch_email_fails_without_address(app, monkeypatch):
+    from models import Message, MessageRecipient
+    from utils import comms, mailer
+    monkeypatch.setattr(mailer, 'send_email', lambda *a, **k: True)
+    with app.app_context():
+        m = Message(title='Fee reminder', body='hi', channel='Email',
+                    status='Sending', recipient_count=1)
+        db.session.add(m)
+        db.session.flush()
+        db.session.add(MessageRecipient(message_id=m.id, parent_name='P',
+                                        email=None, body='x', status='Pending'))
+        db.session.commit()
+        s, f = comms.dispatch_campaign_email(m)
+        assert (s, f) == (0, 1)
+
+
+def test_email_campaign_send_refused_without_smtp(app):
+    """An Email campaign renders and its send is refused (not crashed) when SMTP
+    is unconfigured — the default in tests."""
+    from models import Message
+    c = app.test_client()
+    with c.session_transaction() as sess:
+        sess['logged_in'] = True
+        sess['role'] = 'super_admin'
+        sess['_csrf_token'] = 'a' * 64
+    with app.app_context():
+        m = Message(title='Fees', body='hi', channel='Email', status='Draft',
+                    recipient_count=0)
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+    assert c.get(f'/communication/messages/{mid}').status_code == 200
+    r = c.post(f'/communication/messages/{mid}/send-gateway',
+               data={'_csrf_token': 'a' * 64}, follow_redirects=False)
+    assert r.status_code in (302, 303)
