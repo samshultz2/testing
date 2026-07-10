@@ -48,6 +48,7 @@ def _is_admin():
 def _nav_urls():
     return {'dashboard': url_for('comms.dashboard'), 'compose': url_for('comms.compose'),
             'announcements': url_for('comms.announcements'), 'messages': url_for('comms.messages_list'),
+            'reports': url_for('comms.reports'),
             'templates': url_for('comms.templates_list'), 'contacts': url_for('comms.contacts'),
             'settings': url_for('comms.settings')}
 
@@ -616,24 +617,257 @@ def process_scheduled():
 
 
 # ============================================================================
-# CAMPAIGN HISTORY + DETAIL
+# COMMUNICATION HISTORY — one searchable timeline (campaigns + announcements)
 # ============================================================================
+
+HISTORY_TYPES = ['SMS', 'WhatsApp', 'Email', 'Announcement']
+HISTORY_STATUSES = ['Draft', 'Scheduled', 'Sending', 'Sent']
+_HISTORY_PAGE_SIZE = 25
+_HISTORY_CAP = 2000            # per-source scan bound (schools are modest volume)
+
+
+def _history_filters():
+    a = request.args
+    return {
+        'type': a.get('type') or '',
+        'status': a.get('status') or '',
+        'sender': a.get('sender') or '',
+        'q': (a.get('q') or '').strip(),
+        'from': _date(a.get('from')),
+        'to': _date(a.get('to')),
+        'page': max(a.get('page', type=int) or 1, 1),
+    }
+
+
+def _history_ids(f):
+    """Lightweight (kind, id, created_at) rows for both sources under the filters —
+    merged + sorted so we only hydrate the current page."""
+    end = None
+    if f['to']:
+        end = datetime.combine(f['to'], datetime.max.time())
+    start = datetime.combine(f['from'], datetime.min.time()) if f['from'] else None
+    rows = []
+
+    include_campaigns = (not f['type']) or f['type'] in ('SMS', 'WhatsApp', 'Email')
+    if include_campaigns:
+        mq = scope_query(db.session.query(Message.id, Message.created_at), Message)
+        if f['type'] in ('SMS', 'WhatsApp', 'Email'):
+            mq = mq.filter(Message.channel == f['type'])
+        if f['status']:
+            mq = mq.filter(Message.status == f['status'])
+        if f['sender']:
+            mq = mq.filter(Message.created_by == f['sender'])
+        if start:
+            mq = mq.filter(Message.created_at >= start)
+        if end:
+            mq = mq.filter(Message.created_at <= end)
+        if f['q']:
+            like = like_term(f['q'])
+            mq = mq.filter(db.or_(Message.title.ilike(like, escape='\\'),
+                                  Message.body.ilike(like, escape='\\'),
+                                  Message.audience_label.ilike(like, escape='\\')))
+        rows += [('campaign', i, c) for i, c in
+                 mq.order_by(Message.created_at.desc()).limit(_HISTORY_CAP).all()]
+
+    # Announcements are school-wide (no branch/status/channel); include them only
+    # when the type filter allows and no campaign-only status is selected.
+    include_ann = (f['type'] in ('', 'Announcement')) and not f['status']
+    if include_ann:
+        aq = db.session.query(Announcement.id, Announcement.created_at)
+        if f['sender']:
+            aq = aq.filter(Announcement.created_by == f['sender'])
+        if start:
+            aq = aq.filter(Announcement.created_at >= start)
+        if end:
+            aq = aq.filter(Announcement.created_at <= end)
+        if f['q']:
+            like = like_term(f['q'])
+            aq = aq.filter(db.or_(Announcement.title.ilike(like, escape='\\'),
+                                  Announcement.body.ilike(like, escape='\\')))
+        rows += [('announcement', i, c) for i, c in
+                 aq.order_by(Announcement.created_at.desc()).limit(_HISTORY_CAP).all()]
+
+    rows.sort(key=lambda r: (r[2] or datetime.min), reverse=True)
+    return rows
+
+
+def _history_item_campaign(m):
+    return {'kind': 'campaign', 'id': m.id, 'type': m.channel,
+            'date': m.created_at.strftime('%d %b %Y') if m.created_at else '',
+            'title': m.title or 'Message', 'status': m.status,
+            'scheduled_at': m.scheduled_at.strftime('%d %b %H:%M') if m.scheduled_at else '',
+            'audience_label': m.audience_label or '', 'by': m.created_by or '',
+            'recipient_count': m.recipient_count or 0, 'sent_count': m.sent_count or 0,
+            'url': url_for('comms.message_detail', message_id=m.id)}
+
+
+def _history_item_announcement(a):
+    return {'kind': 'announcement', 'id': a.id, 'type': 'Announcement',
+            'date': a.created_at.strftime('%d %b %Y') if a.created_at else '',
+            'title': a.title or 'Announcement', 'status': 'Posted',
+            'scheduled_at': '', 'audience_label': a.audience or 'All',
+            'by': a.created_by or '', 'recipient_count': '', 'sent_count': '',
+            'url': url_for('comms.announcements')}
+
 
 @comms_bp.route('/messages')
 @login_required
 def messages_list():
-    msgs = scope_query(Message.query, Message).order_by(Message.created_at.desc()).all()
+    f = _history_filters()
+    ids = _history_ids(f)
+    total = len(ids)
+    pages = max((total + _HISTORY_PAGE_SIZE - 1) // _HISTORY_PAGE_SIZE, 1)
+    page = min(f['page'], pages)
+    window = ids[(page - 1) * _HISTORY_PAGE_SIZE: page * _HISTORY_PAGE_SIZE]
+
+    camp_ids = [i for k, i, _ in window if k == 'campaign']
+    ann_ids = [i for k, i, _ in window if k == 'announcement']
+    camps = {m.id: m for m in Message.query.filter(Message.id.in_(camp_ids)).all()} if camp_ids else {}
+    anns = {a.id: a for a in Announcement.query.filter(Announcement.id.in_(ann_ids)).all()} if ann_ids else {}
+    items = []
+    for kind, i, _c in window:
+        if kind == 'campaign' and i in camps:
+            items.append(_history_item_campaign(camps[i]))
+        elif kind == 'announcement' and i in anns:
+            items.append(_history_item_announcement(anns[i]))
+
+    # Sender options (distinct authors across both sources, branch-scoped campaigns).
+    senders = set(x[0] for x in scope_query(
+        db.session.query(Message.created_by).filter(Message.created_by.isnot(None)), Message).distinct().all())
+    senders |= set(x[0] for x in db.session.query(Announcement.created_by)
+                   .filter(Announcement.created_by.isnot(None)).distinct().all())
+
     return _render({
         'page': 'messages', 'nav': _nav_urls(), 'is_admin': _is_admin(),
-        'messages': [{'id': m.id, 'date': m.created_at.strftime('%d %b %Y') if m.created_at else '',
-                      'title': m.title or 'Message', 'status': m.status,
-                      'scheduled_at': m.scheduled_at.strftime('%d %b %H:%M') if m.scheduled_at else '',
-                      'audience_label': m.audience_label, 'channel': m.channel,
-                      'recipient_count': m.recipient_count or 0, 'sent_count': m.sent_count or 0,
-                      'url': url_for('comms.message_detail', message_id=m.id)} for m in msgs],
-        'urls': {'compose': url_for('comms.compose'),
+        'items': items, 'total': total, 'page_no': page, 'pages': pages,
+        'has_prev': page > 1, 'has_next': page < pages,
+        'types': HISTORY_TYPES, 'statuses': HISTORY_STATUSES,
+        'senders': sorted(s for s in senders if s),
+        'sel': {'type': f['type'], 'status': f['status'], 'sender': f['sender'],
+                'q': f['q'], 'from': request.args.get('from', ''), 'to': request.args.get('to', ''),
+                'page': page},
+        'urls': {'compose': url_for('comms.compose'), 'self': url_for('comms.messages_list'),
+                 'reports': url_for('comms.reports'),
                  'process_scheduled': url_for('comms.process_scheduled')},
     })
+
+
+# ============================================================================
+# REPORTS — usage & delivery analytics over a date range
+# ============================================================================
+
+def _report_range():
+    """(from_date, to_date) for reports — defaults to the last 30 days."""
+    import datetime as _dt
+    to = _date(request.args.get('to')) or _dt.date.today()
+    frm = _date(request.args.get('from')) or (to - _dt.timedelta(days=30))
+    return frm, to
+
+
+def _report_data(frm, to):
+    """Usage + delivery aggregates for campaigns created in [frm, to]."""
+    start = datetime.combine(frm, datetime.min.time())
+    end = datetime.combine(to, datetime.max.time())
+    mq = scope_query(Message.query, Message).filter(
+        Message.created_at >= start, Message.created_at <= end)
+
+    by_channel = {}
+    total_campaigns = 0
+    for m in mq.all():
+        total_campaigns += 1
+        c = by_channel.setdefault(m.channel or 'Other',
+                                  {'channel': m.channel or 'Other', 'campaigns': 0,
+                                   'recipients': 0, 'sent': 0})
+        c['campaigns'] += 1
+        c['recipients'] += m.recipient_count or 0
+        c['sent'] += m.sent_count or 0
+    channel_rows = sorted(by_channel.values(), key=lambda r: -r['campaigns'])
+
+    # Recipient-level delivery, scoped by the owning campaign + date window.
+    rq = (scope_query(db.session.query(MessageRecipient.status, func.count(MessageRecipient.id))
+                      .join(Message, MessageRecipient.message_id == Message.id), Message)
+          .filter(Message.created_at >= start, Message.created_at <= end)
+          .group_by(MessageRecipient.status))
+    by_status = {s: n for s, n in rq.all()}
+    sent = by_status.get('Sent', 0)
+    failed = by_status.get('Failed', 0)
+    pending = by_status.get('Pending', 0)
+    attempted = sent + failed
+    delivery_rate = round(sent / attempted * 100, 1) if attempted else None
+
+    scheduled = mq.filter(Message.status == 'Scheduled').count()
+    drafts = mq.filter(Message.status == 'Draft').count()
+    announcements = (db.session.query(func.count(Announcement.id))
+                     .filter(Announcement.created_at >= start,
+                             Announcement.created_at <= end).scalar() or 0)
+    return {
+        'from': frm.strftime('%Y-%m-%d'), 'to': to.strftime('%Y-%m-%d'),
+        'total_campaigns': total_campaigns, 'by_channel': channel_rows,
+        'recipients': sum(c['recipients'] for c in channel_rows),
+        'sent': sent, 'failed': failed, 'pending': pending,
+        'delivery_rate': delivery_rate, 'scheduled': scheduled, 'drafts': drafts,
+        'announcements': int(announcements),
+    }
+
+
+@comms_bp.route('/reports')
+@login_required
+def reports():
+    frm, to = _report_range()
+    data = _report_data(frm, to)
+    return _render({
+        'page': 'reports', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'data': data, 'sel': {'from': data['from'], 'to': data['to']},
+        'urls': {'self': url_for('comms.reports'),
+                 'export_csv': url_for('comms.reports_export', format='csv'),
+                 'export_xlsx': url_for('comms.reports_export', format='xlsx'),
+                 'history': url_for('comms.messages_list')},
+    })
+
+
+@comms_bp.route('/reports/export')
+@login_required
+def reports_export():
+    frm, to = _report_range()
+    d = _report_data(frm, to)
+    from utils.audit import log_action
+    log_action('data.export_comm_report', detail=f'{d["from"]}..{d["to"]}')
+    headers = ['Channel', 'Campaigns', 'Recipients', 'Sent']
+    summary = [
+        ['Report period', f'{d["from"]} to {d["to"]}'],
+        ['Total campaigns', d['total_campaigns']],
+        ['Total recipients', d['recipients']],
+        ['Delivered (sent)', d['sent']],
+        ['Failed', d['failed']],
+        ['Pending', d['pending']],
+        ['Delivery rate', ('%s%%' % d['delivery_rate']) if d['delivery_rate'] is not None else 'n/a'],
+        ['Scheduled', d['scheduled']],
+        ['Drafts', d['drafts']],
+        ['Announcements', d['announcements']],
+    ]
+    if request.args.get('format') == 'xlsx':
+        from openpyxl import Workbook
+        from utils.web_exports import xlsx_response
+        wb = Workbook()
+        ws = wb.active; ws.title = 'Summary'
+        for row in summary:
+            ws.append(row)
+        ws2 = wb.create_sheet('By channel')
+        ws2.append(headers)
+        for c in d['by_channel']:
+            ws2.append([c['channel'], c['campaigns'], c['recipients'], c['sent']])
+        return xlsx_response(wb, f'comm_report_{d["from"]}_{d["to"]}.xlsx')
+    out = io.StringIO()
+    w = csv.writer(out)
+    for row in summary:
+        w.writerow(row)
+    w.writerow([])
+    w.writerow(headers)
+    for c in d['by_channel']:
+        w.writerow([c['channel'], c['campaigns'], c['recipients'], c['sent']])
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition':
+                             f'attachment; filename=comm_report_{d["from"]}_{d["to"]}.csv'})
 
 
 @comms_bp.route('/messages/<int:message_id>')

@@ -7,6 +7,7 @@ import { confirm, Banner, SectionShell, SectionTabs, Empty, Autocomplete } from 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['compose', 'fa-paper-plane', 'Compose'],
   ['announcements', 'fa-bullhorn', 'Announcements'], ['messages', 'fa-clock-rotate-left', 'History'],
+  ['reports', 'fa-chart-line', 'Reports'],
   ['templates', 'fa-file-lines', 'Templates'], ['contacts', 'fa-address-book', 'Contacts'],
   ['settings', 'fa-gear', 'Settings'],
 ];
@@ -19,7 +20,7 @@ function Tabs({ d }) {
 }
 
 const channelBadge = (ch) => 'badge ' + (ch === 'WhatsApp' ? 'badge-success' : ch === 'Email' ? 'badge-warning' : 'badge-info');
-const statusBadge = (s) => 'badge ' + (s === 'Sent' ? 'badge-success' : s === 'Failed' ? 'badge-danger' : s === 'Scheduled' ? 'badge-info' : 'badge-warning');
+const statusBadge = (s) => 'badge ' + (s === 'Sent' || s === 'Posted' ? 'badge-success' : s === 'Failed' ? 'badge-danger' : s === 'Scheduled' ? 'badge-info' : 'badge-warning');
 
 // ---- Dashboard -------------------------------------------------------------
 function Dashboard({ d }) {
@@ -317,37 +318,141 @@ function Contacts({ d }) {
   );
 }
 
-// ---- Message history -------------------------------------------------------
+// ---- Communication history (unified timeline) ------------------------------
 function Messages({ d, notify }) {
   const nav = useNav();
+  const s = d.sel || {};
+  const [type, setType] = useState(s.type || '');
+  const [status, setStatus] = useState(s.status || '');
+  const [sender, setSender] = useState(s.sender || '');
+  const [q, setQ] = useState(s.q || '');
+  const [from, setFrom] = useState(s.from || '');
+  const [to, setTo] = useState(s.to || '');
+  const qRef = useRef();
+
+  const go = (extra) => navParams(nav.go, d.urls.self,
+    { type, status, sender, q, from, to, page: 1, ...extra });
+  // debounce free-text search
+  useEffect(() => {
+    if ((s.q || '') === q) return undefined;
+    clearTimeout(qRef.current); qRef.current = setTimeout(() => go({}), 450);
+    return () => clearTimeout(qRef.current);
+    /* eslint-disable-next-line */
+  }, [q]);
+  const reset = () => navParams(nav.go, d.urls.self, {});
   const processDue = async () => {
     const r = await submitJson(d.urls.process_scheduled, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Failed.');
   };
+
   return (
     <>
-      <div className="page-header"><h1>Message History</h1>
+      <div className="page-header"><h1>Communication History</h1>
         <div className="page-header-actions">
+          <a href={d.urls.reports} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-line" /> Reports</a>
           {d.is_admin && <button className="btn btn-secondary" title="Send any scheduled campaigns that are now due" onClick={processDue}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Process due</button>}
           <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>
         </div>
       </div>
       <Tabs d={d} />
+
+      <div className="hist-filters card mb-3"><div className="card-body">
+        <div className="hf-grid">
+          <div className="hf-search"><i aria-hidden="true" className="fas fa-magnifying-glass" />
+            <input type="search" placeholder="Search title, message or audience…" value={q}
+              onChange={(e) => setQ(e.target.value)} aria-label="Search history" /></div>
+          <select className="form-control" value={type} onChange={(e) => { setType(e.target.value); go({ type: e.target.value }); }} aria-label="Type">
+            <option value="">All types</option>{d.types.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+          <select className="form-control" value={status} onChange={(e) => { setStatus(e.target.value); go({ status: e.target.value }); }} aria-label="Status">
+            <option value="">Any status</option>{d.statuses.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+          <select className="form-control" value={sender} onChange={(e) => { setSender(e.target.value); go({ sender: e.target.value }); }} aria-label="Sender">
+            <option value="">Any sender</option>{d.senders.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+          <input type="date" className="form-control" value={from} onChange={(e) => { setFrom(e.target.value); go({ from: e.target.value }); }} aria-label="From" />
+          <input type="date" className="form-control" value={to} onChange={(e) => { setTo(e.target.value); go({ to: e.target.value }); }} aria-label="To" />
+          <button type="button" className="btn btn-link btn-sm" onClick={reset}>Reset</button>
+        </div>
+      </div></div>
+
       <div className="card"><div className="card-body" style={{ padding: 0 }}>
-        {d.messages.length ? (
+        {d.items.length ? (
           <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-            <thead><tr><th>Date</th><th>Title</th><th>Audience</th><th>Channel</th><th className="text-right">Recipients</th><th className="text-right">Sent</th><th /></tr></thead>
-            <tbody>{d.messages.map((m) => (
-              <tr key={m.id}><td data-label="Date">{m.date}</td>
+            <thead><tr><th>Date</th><th>Title</th><th>Type</th><th>Audience</th><th>By</th><th>Status</th><th className="text-right">Sent</th><th /></tr></thead>
+            <tbody>{d.items.map((m) => (
+              <tr key={m.kind + m.id}><td data-label="Date">{m.date}</td>
                 <td data-label="Title"><a href={m.url}><strong>{m.title}</strong></a>{m.status === 'Scheduled' && m.scheduled_at && <> <span className="badge badge-warning"><i aria-hidden="true" className="fas fa-clock" /> {m.scheduled_at}</span></>}</td>
+                <td data-label="Type"><span className={channelBadge(m.type)}>{m.type}</span></td>
                 <td data-label="Audience" className="text-muted text-sm">{m.audience_label}</td>
-                <td data-label="Channel"><span className={channelBadge(m.channel)}>{m.channel}</span></td>
-                <td data-label="Recipients" className="text-right">{m.recipient_count}</td>
-                <td data-label="Sent" className="text-right">{m.sent_count}</td>
+                <td data-label="By" className="text-muted text-sm">{m.by}</td>
+                <td data-label="Status"><span className={statusBadge(m.status)}>{m.status}</span></td>
+                <td data-label="Sent" className="text-right">{m.recipient_count === '' ? '—' : `${m.sent_count}/${m.recipient_count}`}</td>
                 <td className="actions"><a href={m.url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}
             </tbody></table></div>
-        ) : <Empty icon="fa-paper-plane" title="No messages yet"><p>Compose your first parent broadcast.</p><a href={d.urls.compose} className="btn btn-primary mt-2">Compose</a></Empty>}
+        ) : <Empty icon="fa-inbox" title="Nothing matches these filters"><p>Try a broader search or reset the filters.</p></Empty>}
       </div></div>
+
+      {d.pages > 1 && (
+        <div className="hist-pager">
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!d.has_prev} onClick={() => go({ page: d.page_no - 1 })}><i aria-hidden="true" className="fas fa-chevron-left" /> Prev</button>
+          <span className="text-muted text-sm">Page {d.page_no} of {d.pages} · {d.total} item{d.total === 1 ? '' : 's'}</span>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!d.has_next} onClick={() => go({ page: d.page_no + 1 })}>Next <i aria-hidden="true" className="fas fa-chevron-right" /></button>
+        </div>)}
+    </>
+  );
+}
+
+// ---- Reports ---------------------------------------------------------------
+function Reports({ d }) {
+  const nav = useNav();
+  const s = d.sel || {};
+  const r = d.data || {};
+  const [from, setFrom] = useState(s.from || '');
+  const [to, setTo] = useState(s.to || '');
+  const apply = () => navParams(nav.go, d.urls.self, { from, to });
+  const exp = (fmt) => `${fmt === 'xlsx' ? d.urls.export_xlsx : d.urls.export_csv}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const tiles = [
+    ['blue', 'fa-paper-plane', r.total_campaigns, 'Campaigns'],
+    ['teal', 'fa-users', r.recipients, 'Recipients'],
+    ['green', 'fa-circle-check', r.sent, 'Delivered'],
+    ['red', 'fa-triangle-exclamation', r.failed, 'Failed'],
+    ['green', 'fa-percent', r.delivery_rate == null ? '—' : r.delivery_rate + '%', 'Delivery rate'],
+    ['amber', 'fa-clock', r.scheduled, 'Scheduled'],
+    ['blue', 'fa-file-pen', r.drafts, 'Drafts'],
+    ['amber', 'fa-bullhorn', r.announcements, 'Announcements'],
+  ];
+  return (
+    <>
+      <div className="page-header"><h1>Communication Reports</h1>
+        <div className="page-header-actions">
+          <a href={exp('csv')} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
+          <a href={exp('xlsx')} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+        </div>
+      </div>
+      <Tabs d={d} />
+      <div className="card mb-3"><div className="card-body">
+        <div className="d-flex gap-2 align-center flex-wrap">
+          <label className="text-sm text-muted">From</label>
+          <input type="date" className="form-control" style={{ maxWidth: 170 }} value={from} onChange={(e) => setFrom(e.target.value)} />
+          <label className="text-sm text-muted">To</label>
+          <input type="date" className="form-control" style={{ maxWidth: 170 }} value={to} onChange={(e) => setTo(e.target.value)} />
+          <button type="button" className="btn btn-primary btn-sm" onClick={apply}><i aria-hidden="true" className="fas fa-filter" /> Apply</button>
+          <span className="text-muted text-sm">{r.from} → {r.to}</span>
+        </div>
+      </div></div>
+      <div className="kpi-row">{tiles.map(([c, ic, v, l]) => (
+        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
+          <div><div className="v">{v == null ? 0 : v}</div><div className="l">{l}</div></div></div>))}
+      </div>
+      <div className="card"><div className="card-header"><h3>By channel</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {(r.by_channel || []).length ? (
+            <div className="table-container"><table className="data-table">
+              <thead><tr><th>Channel</th><th className="text-right">Campaigns</th><th className="text-right">Recipients</th><th className="text-right">Sent</th></tr></thead>
+              <tbody>{r.by_channel.map((c) => (
+                <tr key={c.channel}><td><span className={channelBadge(c.channel)}>{c.channel}</span></td>
+                  <td className="text-right">{c.campaigns}</td><td className="text-right">{c.recipients}</td><td className="text-right">{c.sent}</td></tr>))}
+              </tbody></table></div>
+          ) : <Empty icon="fa-chart-line" title="No activity in this period" />}
+        </div></div>
     </>
   );
 }
@@ -511,7 +616,7 @@ function Settings({ d, notify }) {
 
 const SCREENS = { dashboard: Dashboard, compose: Compose, announcements: Announcements,
   templates: Templates, contacts: Contacts, messages: Messages, message_detail: MessageDetail,
-  settings: Settings };
+  reports: Reports, settings: Settings };
 
 export default function CommunicationApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

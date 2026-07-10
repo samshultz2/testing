@@ -86,6 +86,13 @@ a.kpi:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px)}
 .rc-more[open]>summary::before{content:"\f146"}
 .rc-groups{display:flex;gap:.5rem;align-items:center}
 .rc-groups select{flex:1}
+/* history filters + pager */
+.hf-grid{display:grid;grid-template-columns:1fr;gap:.6rem;align-items:center}
+@media(min-width:720px){.hf-grid{grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 1fr auto}}
+.hf-search{position:relative;display:flex;align-items:center}
+.hf-search i{position:absolute;left:.7rem;color:var(--text-muted);font-size:.8rem;pointer-events:none}
+.hf-search input{width:100%;padding:.5rem .7rem .5rem 2rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--bg-card);color:inherit;font-size:.88rem}
+.hist-pager{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-top:1rem;flex-wrap:wrap}
 .ac-wrap{position:relative}
 .ac-list{position:absolute;z-index:30;left:0;right:0;top:100%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);box-shadow:var(--shadow-md);max-height:220px;overflow:auto}
 .ac-list div{padding:.5rem .75rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid var(--border-light)}
