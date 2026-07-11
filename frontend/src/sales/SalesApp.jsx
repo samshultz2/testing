@@ -1131,7 +1131,7 @@ function PurchaseDetail({ d, notify }) {
     if (!items.length) { notify('error', 'Enter quantities to receive.'); return; }
     act(u.receive, { invoice_number: invoice, items });
   };
-  const canApprove = po.status === 'Draft' || po.status === 'Pending Approval';
+  const canApprove = (po.status === 'Draft' || po.status === 'Pending Approval') && d.can_approve !== false;
   const canReceive = ['Approved', 'Ordered', 'Partially Received'].includes(po.status);
   return (
     <>
@@ -1381,7 +1381,7 @@ function AuditDetail({ d, notify }) {
       <div className="card"><div className="card-header"><h3>Items ({d.items.length})</h3>
         {open && <span style={{ display: 'flex', gap: '.4rem' }}>
           <button type="button" className="btn btn-secondary btn-sm" onClick={save}><i aria-hidden="true" className="fas fa-floppy-disk" /> Save</button>
-          <button type="button" className="btn btn-success btn-sm" onClick={complete}><i aria-hidden="true" className="fas fa-check-double" /> Sign off</button>
+          {d.can_signoff !== false && <button type="button" className="btn btn-success btn-sm" onClick={complete}><i aria-hidden="true" className="fas fa-check-double" /> Sign off</button>}
           <button type="button" className="btn btn-danger btn-sm" onClick={cancel}><i aria-hidden="true" className="fas fa-ban" /> Cancel</button>
         </span>}</div>
         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>

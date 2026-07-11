@@ -105,12 +105,23 @@ MODULE_SUBSECTIONS = {
     'timetable': {
         'generate': 'Generate Timetable',
     },
+    'sales': {
+        'pos': 'Point of Sale',
+        'catalogue': 'Products & Catalogue',
+        'inventory': 'Stock Control & Counts',
+        'purchasing': 'Suppliers & Purchasing',
+        'reports': 'Reports & Analytics',
+        # Sensitive actions granted explicitly (see CAPABILITY_SUBSECTIONS).
+        'approve_po': 'Approve purchase orders',
+        'signoff_count': 'Sign off stock counts',
+    },
 }
 
 # Some sub-sections are standalone CAPABILITIES (an explicit action grant), not
 # slices of a module: granting one must NOT unlock the whole module, and the
 # capability is required explicitly (broad module access does not imply it).
-CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate'}
+CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
+                          'sales.approve_po', 'sales.signoff_count'}
 
 # Capabilities only certain managers may grant. key -> who may set it.
 # 'central' => only a central admin may grant/revoke this capability.
@@ -164,6 +175,19 @@ _SUBSECTION_ENDPOINTS = {
                      'process_scheduled', 'messages_list', 'message_detail', 'mark_sent',
                      'mark_all_sent', 'export_recipients', 'delete_message', 'send_gateway'},
         'settings': {'settings', 'save_settings', 'test_sms'},
+    },
+    'sales': {
+        'pos': {'new_sale', 'api_students', 'check_promo', 'receipt'},
+        'catalogue': {'products', 'add_product', 'edit_product', 'product_isbn_lookup',
+                      'generate_barcodes', 'product_labels'},
+        'inventory': {'restock', 'adjust_stock', 'movements', 'audits', 'new_audit',
+                      'audit_detail', 'save_audit', 'complete_audit', 'cancel_audit',
+                      'audit_export'},
+        'purchasing': {'suppliers', 'add_supplier', 'edit_supplier', 'supplier_detail',
+                       'pay_supplier', 'purchases', 'new_purchase', 'purchase_detail',
+                       'approve_purchase', 'cancel_purchase', 'receive_purchase'},
+        'reports': {'history', 'history_export', 'analytics', 'reports', 'reports_export',
+                    'promos', 'add_promo', 'toggle_promo'},
     },
 }
 
@@ -268,6 +292,30 @@ def can_generate_timetable():
     if current_manage_scope() == 'branch':
         return True
     return has_capability('timetable.generate')
+
+
+def can_approve_purchase():
+    """Who may approve/cancel a purchase order (a financial commitment): a central
+    admin, a branch manager (principal/HOD), or a user explicitly granted the
+    'sales.approve_po' capability."""
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return True
+    if current_manage_scope() == 'branch':
+        return True
+    return has_capability('sales.approve_po')
+
+
+def can_sign_off_count():
+    """Who may finalise a stock count (writing variances to stock + the finance
+    ledger): a central admin, a branch manager, or a user explicitly granted the
+    'sales.signoff_count' capability."""
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return True
+    if current_manage_scope() == 'branch':
+        return True
+    return has_capability('sales.signoff_count')
 
 
 def restrict_grant_perms(new_perms, target_user):

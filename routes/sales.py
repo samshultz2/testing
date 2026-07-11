@@ -15,7 +15,8 @@ from models import (db, Product, Sale, SaleItem, StockMovement, Student,
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS)
-from utils.access_control import login_required, filter_classes_for_user
+from utils.access_control import (login_required, filter_classes_for_user,
+                                  can_approve_purchase, can_sign_off_count)
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
 from utils.helpers import get_active_term, parse_date
@@ -1193,6 +1194,7 @@ def purchase_detail(po_id):
         'po': {**_po_row(po), 'invoice_number': po.invoice_number, 'notes': po.notes,
                'created_by': po.created_by, 'approved_by': po.approved_by,
                'supplier_id': po.supplier_id, 'is_open': po.is_open},
+        'can_approve': can_approve_purchase(),
         'items': [{'id': i.id, 'description': i.description, 'quantity': i.quantity,
                    'unit_cost': i.unit_cost or 0, 'quantity_received': i.quantity_received or 0,
                    'outstanding': i.outstanding_qty, 'line_total': i.line_total} for i in items],
@@ -1210,6 +1212,9 @@ def approve_purchase(po_id):
     po = db.get_or_404(PurchaseOrder, po_id)
     if not can_access_branch(po.branch_id):
         return _err('That order belongs to another branch.', url_for('sales.purchases'))
+    if not can_approve_purchase():
+        return _err('You are not authorised to approve purchase orders.',
+                    url_for('sales.purchase_detail', po_id=po.id))
     if po.status not in ('Draft', 'Pending Approval'):
         return _err('This order can no longer be approved.', url_for('sales.purchase_detail', po_id=po.id))
     from datetime import datetime as _dt
@@ -1432,7 +1437,7 @@ def _audit_detail_payload(a):
         'note': a.note or '', 'started_by': a.started_by or '',
         'approved_by': a.approved_by or '',
         'variance_value': round(a.variance_value or 0, 2),
-        'net_preview': net,
+        'net_preview': net, 'can_signoff': can_sign_off_count(),
         'items': [{
             'id': i.id, 'product': i.product_name,
             'category': (i.product.category if i.product else '') or '',
@@ -1506,6 +1511,9 @@ def complete_audit(audit_id):
     a = db.get_or_404(StockAudit, audit_id)
     if not can_access_branch(a.branch_id):
         return _err('That count belongs to another branch.', url_for('sales.audits'))
+    if not can_sign_off_count():
+        return _err('You are not authorised to sign off stock counts.',
+                    url_for('sales.audit_detail', audit_id=a.id))
     if not a.is_open:
         return _err('This count is already closed.', url_for('sales.audit_detail', audit_id=a.id))
     # Absorb any counts submitted alongside the sign-off.
