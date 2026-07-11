@@ -4363,6 +4363,13 @@
 ]
 ],
 [
+"sales.analytics",
+"/sales/analytics",
+[
+"GET"
+]
+],
+[
 "sales.api_students",
 "/sales/api/students",
 [

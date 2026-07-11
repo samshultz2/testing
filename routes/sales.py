@@ -14,7 +14,7 @@ from models.models_sales import PRODUCT_CATEGORIES, SALE_METHODS
 from utils.access_control import login_required, filter_classes_for_user
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, parse_date
 from utils.search import like_term
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
@@ -80,7 +80,7 @@ def dashboard():
                        'stock_qty': p.stock_qty, 'reorder_level': p.reorder_level} for p in low_stock],
         'recent': [_sale_row(s) for s in recent],
         'urls': {'new_sale': url_for('sales.new_sale'), 'products': url_for('sales.products'),
-                 'history': url_for('sales.history')},
+                 'history': url_for('sales.history'), 'analytics': url_for('sales.analytics')},
     })
 
 
@@ -299,6 +299,154 @@ def history():
         'sales': [_sale_row(s, with_when_year=True) for s in rows],
         'urls': {'dashboard': url_for('sales.dashboard')},
     })
+
+
+@sales_bp.route('/analytics')
+@login_required
+def analytics():
+    """Sales analytics for management: revenue / units / profit over a date
+    range, broken down by category, product, payment method and cashier, with a
+    daily/weekly trend — plus a product drill-down showing how many students in
+    each class/arm bought a chosen product. Branch-scoped."""
+    from datetime import timedelta
+    from collections import defaultdict
+
+    to_d = parse_date(request.args.get('to')) or timeutil.today()
+    from_d = parse_date(request.args.get('from')) or (to_d - timedelta(days=29))
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    product_id = request.args.get('product_id', type=int)
+
+    sales = (scope_query(Sale.query, Sale)
+             .filter(func.date(Sale.created_at) >= from_d,
+                     func.date(Sale.created_at) <= to_d).all())
+    sale_ids = [s.id for s in sales]
+    items = []
+    if sale_ids:
+        items = (db.session.query(SaleItem, Product)
+                 .outerjoin(Product, SaleItem.product_id == Product.id)
+                 .filter(SaleItem.sale_id.in_(sale_ids)).all())
+
+    revenue = sum(s.total or 0 for s in sales)
+    units = sum((it.quantity or 0) for it, _ in items)
+    cogs = sum((it.quantity or 0) * ((p.cost_price or 0) if p else 0) for it, p in items)
+    count = len(sales)
+
+    cat = defaultdict(lambda: {'units': 0, 'revenue': 0.0})
+    prod = defaultdict(lambda: {'units': 0, 'revenue': 0.0, 'name': ''})
+    for it, p in items:
+        c = (p.category if p else None) or 'Other'
+        cat[c]['units'] += it.quantity or 0
+        cat[c]['revenue'] += it.line_total or 0
+        key = it.product_id or f'desc:{it.description}'
+        prod[key]['units'] += it.quantity or 0
+        prod[key]['revenue'] += it.line_total or 0
+        prod[key]['name'] = (p.name if p else None) or it.description or 'Unknown'
+
+    method = defaultdict(lambda: {'count': 0, 'revenue': 0.0})
+    cashier = defaultdict(lambda: {'count': 0, 'revenue': 0.0})
+    trend_map = defaultdict(float)
+    for s in sales:
+        method[s.payment_method or 'Cash']['count'] += 1
+        method[s.payment_method or 'Cash']['revenue'] += s.total or 0
+        cashier[s.sold_by or 'Unknown']['count'] += 1
+        cashier[s.sold_by or 'Unknown']['revenue'] += s.total or 0
+        if s.created_at:
+            trend_map[s.created_at.date()] += s.total or 0
+
+    # Trend: daily, or weekly buckets when the range is long, so the chart stays
+    # readable.
+    span = (to_d - from_d).days + 1
+    trend = []
+    if span > 62:
+        wk_start = from_d
+        while wk_start <= to_d:
+            wk_end = min(wk_start + timedelta(days=6), to_d)
+            rv = sum(v for dd, v in trend_map.items() if wk_start <= dd <= wk_end)
+            trend.append({'label': wk_start.strftime('%d %b'), 'revenue': round(rv, 2)})
+            wk_start += timedelta(days=7)
+    else:
+        dcur = from_d
+        while dcur <= to_d:
+            trend.append({'label': dcur.strftime('%d %b'), 'revenue': round(trend_map.get(dcur, 0.0), 2)})
+            dcur += timedelta(days=1)
+
+    def _pack(dmap, label_key='label'):
+        out = [{label_key: k, **v} for k, v in dmap.items()]
+        out.sort(key=lambda x: x.get('revenue', 0), reverse=True)
+        for r in out:
+            r['revenue'] = round(r['revenue'], 2)
+        return out
+
+    top_products = sorted(prod.values(), key=lambda x: x['revenue'], reverse=True)[:10]
+    for r in top_products:
+        r['revenue'] = round(r['revenue'], 2)
+
+    drill = _product_drilldown(sale_ids, product_id) if product_id else None
+    products_list = [{'id': p.id, 'name': p.name} for p in scope_query(
+        Product.query, Product).order_by(Product.name).all()]
+
+    return _render({
+        'page': 'analytics',
+        'from': from_d.isoformat(), 'to': to_d.isoformat(),
+        'summary': {'revenue': round(revenue, 2), 'count': count, 'units': units,
+                    'profit': round(revenue - cogs, 2),
+                    'avg_sale': round(revenue / count, 2) if count else 0.0},
+        'by_category': _pack(cat), 'top_products': top_products,
+        'by_method': _pack(method), 'by_cashier': _pack(cashier),
+        'trend': trend,
+        'products': products_list, 'product_id': product_id, 'drill': drill,
+        'self_url': url_for('sales.analytics'),
+        'urls': {'dashboard': url_for('sales.dashboard'), 'history': url_for('sales.history')},
+    })
+
+
+def _product_drilldown(sale_ids, product_id):
+    """For a chosen product, how many students in each class/arm bought it (and
+    units/revenue), using each buyer's current active enrolment for attribution.
+    Non-student buyers (staff/parent/walk-in) are summarised separately."""
+    from collections import defaultdict
+    if not sale_ids:
+        return {'product_id': product_id, 'rows': [], 'total_units': 0,
+                'total_students': 0, 'non_student_units': 0}
+    rows = (db.session.query(SaleItem, Sale)
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .filter(SaleItem.sale_id.in_(sale_ids),
+                    SaleItem.product_id == product_id).all())
+    active_term = get_active_term()
+    student_ids = [sale.student_id for _it, sale in rows if sale.student_id]
+    placement = {}
+    if student_ids and active_term:
+        enr = (db.session.query(StudentEnrollment.student_id, SchoolClass.name,
+                                ClassArm.name, ClassArm.is_default)
+               .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+               .join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id)
+               .join(ClassArm, ClassArmAssignment.arm_id == ClassArm.id)
+               .filter(StudentEnrollment.student_id.in_(student_ids),
+                       StudentEnrollment.is_active == True,
+                       ClassArmAssignment.term_id == active_term.id).all())
+        for sid, cname, aname, adef in enr:
+            placement[sid] = (cname, '' if adef else (aname or ''))
+    by_class = defaultdict(lambda: {'students': set(), 'units': 0, 'revenue': 0.0})
+    total_units = 0
+    total_students = set()
+    non_student_units = 0
+    for it, sale in rows:
+        total_units += it.quantity or 0
+        if sale.student_id and sale.student_id in placement:
+            cname, aname = placement[sale.student_id]
+            key = f'{cname} {aname}'.strip()
+            by_class[key]['students'].add(sale.student_id)
+            by_class[key]['units'] += it.quantity or 0
+            by_class[key]['revenue'] += it.line_total or 0
+            total_students.add(sale.student_id)
+        else:
+            non_student_units += it.quantity or 0
+    out = [{'label': k, 'students': len(v['students']), 'units': v['units'],
+            'revenue': round(v['revenue'], 2)} for k, v in by_class.items()]
+    out.sort(key=lambda x: x['units'], reverse=True)
+    return {'product_id': product_id, 'rows': out, 'total_units': total_units,
+            'total_students': len(total_students), 'non_student_units': non_student_units}
 
 
 @sales_bp.route('/receipt/<int:sale_id>')

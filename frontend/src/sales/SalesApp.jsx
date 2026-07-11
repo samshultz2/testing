@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { submitJson } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
-import { useSection, NavCtx, useNav } from '../lib/section';
+import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { Banner, PageHeader, Empty, SectionShell, Table } from '../components/ui';
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
@@ -15,6 +15,7 @@ function Dashboard({ d }) {
       <PageHeader icon="fa-cart-shopping" title="Sales & Inventory" actions={<>
         <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>
         <a href={u.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
+        {u.analytics && <a href={u.analytics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
       </>} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '.75rem', marginBottom: '1rem' }}>
@@ -337,7 +338,125 @@ function History({ d }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History };
+// ---- Analytics -------------------------------------------------------------
+// Horizontal bar list: each row a labelled bar sized to the max, plus a value.
+function BarList({ rows, labelKey = 'label', valueKey = 'revenue', fmt = naira, color = '#4e73df', sub }) {
+  if (!rows.length) return <p className="text-muted text-sm" style={{ margin: '.5rem 0' }}>No data for this range.</p>;
+  const max = Math.max(1, ...rows.map((r) => Number(r[valueKey]) || 0));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '.45rem' }}>
+      {rows.map((r, i) => (
+        <div key={i}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem', marginBottom: 2 }}>
+            <span>{r[labelKey]}{sub ? <span className="text-muted"> · {sub(r)}</span> : null}</span>
+            <strong>{fmt(r[valueKey])}</strong>
+          </div>
+          <span aria-hidden="true" style={{ display: 'block', height: 6, background: 'var(--border-color)', borderRadius: 3, overflow: 'hidden' }}>
+            <span style={{ display: 'block', height: '100%', width: ((Number(r[valueKey]) || 0) / max * 100) + '%', background: color }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrendBars({ rows }) {
+  if (!rows.length) return <p className="text-muted text-sm">No sales in this range.</p>;
+  const max = Math.max(1, ...rows.map((r) => r.revenue));
+  return (
+    <div role="img" aria-label={'Sales trend: ' + rows.map((r) => `${r.label} ${Math.round(r.revenue)}`).join(', ')}
+         style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120, overflowX: 'auto', paddingTop: 8 }}>
+      {rows.map((r, i) => (
+        <div key={i} title={`${r.label}: ${naira(r.revenue)}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 16, flex: 1 }}>
+          <span style={{ width: '70%', minWidth: 8, height: Math.max(2, (r.revenue / max) * 100) + '%', background: '#11998e', borderRadius: '3px 3px 0 0' }} />
+          <span className="text-muted" style={{ fontSize: '.6rem', marginTop: 2, whiteSpace: 'nowrap', transform: 'rotate(0)' }}>{rows.length <= 16 ? r.label.split(' ')[0] : ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Analytics({ d }) {
+  const nav = useNav();
+  const [from, setFrom] = useState(d.from || '');
+  const [to, setTo] = useState(d.to || '');
+  const s = d.summary || {};
+  const apply = (extra = {}) => navParams(nav.go, d.self_url, { from, to, product_id: d.product_id || '', ...extra });
+  const pickProduct = (pid) => navParams(nav.go, d.self_url, { from, to, product_id: pid });
+
+  const KPIS = [
+    [naira(s.revenue), 'Revenue'], [naira(s.profit), 'Gross profit'],
+    [s.count, 'Sales'], [s.units, 'Units sold'], [naira(s.avg_sale), 'Avg sale'],
+  ];
+  return (
+    <>
+      <PageHeader icon="fa-chart-pie" title="Sales Analytics" actions={
+        <a href={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>} />
+
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="form-group" style={{ margin: 0 }}><label className="form-label">From</label>
+          <input type="date" className="form-control" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+        <div className="form-group" style={{ margin: 0 }}><label className="form-label">To</label>
+          <input type="date" className="form-control" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <button type="button" className="btn btn-primary" onClick={() => apply()}><i aria-hidden="true" className="fas fa-filter" /> Apply</button>
+      </div></div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+        {KPIS.map(([v, l]) => (
+          <div className="card" key={l}><div className="card-body">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{v}</div>
+            <div className="text-muted text-sm">{l}</div></div></div>
+        ))}
+      </div>
+
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Sales trend</h3></div>
+        <div className="card-body"><TrendBars rows={d.trend || []} /></div></div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+        <div className="card"><div className="card-header"><h3>Top products</h3></div><div className="card-body">
+          <BarList rows={d.top_products || []} labelKey="name" color="#4e73df" sub={(r) => `${r.units} units`} /></div></div>
+        <div className="card"><div className="card-header"><h3>By category</h3></div><div className="card-body">
+          <BarList rows={d.by_category || []} color="#11998e" sub={(r) => `${r.units} units`} /></div></div>
+        <div className="card"><div className="card-header"><h3>By payment method</h3></div><div className="card-body">
+          <BarList rows={d.by_method || []} color="#f6c23e" sub={(r) => `${r.count} sales`} /></div></div>
+        <div className="card"><div className="card-header"><h3>By cashier</h3></div><div className="card-body">
+          <BarList rows={d.by_cashier || []} color="#667eea" sub={(r) => `${r.count} sales`} /></div></div>
+      </div>
+
+      <div className="card mb-3">
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-magnifying-glass-chart" /> Who bought a product</h3></div>
+        <div className="card-body">
+          <div className="form-group">
+            <label className="form-label">Product</label>
+            <select className="form-control" value={d.product_id || ''} onChange={(e) => pickProduct(e.target.value)}>
+              <option value="">Select a product to see buyers by class…</option>
+              {(d.products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          {d.drill && (
+            <>
+              <div className="text-muted text-sm" style={{ margin: '.25rem 0 .75rem' }}>
+                <strong>{d.drill.total_students}</strong> student(s) bought this · <strong>{d.drill.total_units}</strong> units total
+                {d.drill.non_student_units ? ` · ${d.drill.non_student_units} units to staff / walk-in` : ''}
+              </div>
+              {d.drill.rows.length ? (
+                <table className="data-table">
+                  <thead><tr><th>Class / Arm</th><th className="text-right">Students</th><th className="text-right">Units</th><th className="text-right">Revenue</th></tr></thead>
+                  <tbody>{d.drill.rows.map((r, i) => (
+                    <tr key={i}><td>{r.label}</td><td className="text-right">{r.students}</td>
+                      <td className="text-right">{r.units}</td><td className="text-right">{naira(r.revenue)}</td></tr>
+                  ))}</tbody>
+                </table>
+              ) : <EmptyState icon="fa-users" title="No student buyers in this range" />}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History, analytics: Analytics };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
