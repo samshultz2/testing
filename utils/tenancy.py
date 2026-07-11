@@ -62,6 +62,9 @@ class Tenant(_ControlBase):
     card_exp = Column(String(7))                   # MM/YYYY, for display only
     auto_renew_last_attempt = Column(DateTime)     # guards one attempt per day
     auto_renew_last_error = Column(String(300))    # surfaced on the billing page
+    # Platform-admin annotations (internal, never shown to the school).
+    notes = Column(Text)                           # free-text operator notes
+    tags = Column(String(200))                     # comma-separated labels
 
     def __repr__(self):
         return f'<Tenant {self.subdomain} {self.status}>'
@@ -157,6 +160,8 @@ _ADDED_COLUMNS = {
     'card_exp': 'VARCHAR(7)',
     'auto_renew_last_attempt': 'TIMESTAMP',
     'auto_renew_last_error': 'VARCHAR(300)',
+    'notes': 'TEXT',
+    'tags': 'VARCHAR(200)',
 }
 
 
@@ -219,6 +224,37 @@ def list_tenants():
     init_control_plane()
     with _session() as s:
         rows = s.query(Tenant).order_by(Tenant.created_at).all()
+        for r in rows:
+            s.expunge(r)
+        return rows
+
+
+def set_meta(subdomain, *, notes=None, tags=None):
+    """Store platform-admin annotations (internal notes / tags) on a tenant."""
+    init_control_plane()
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            raise ValueError(f'No such tenant: {subdomain}')
+        if notes is not None:
+            t.notes = notes.strip() or None
+        if tags is not None:
+            # normalise "a, b ,c" -> "a, b, c"
+            parts = [p.strip() for p in tags.split(',') if p.strip()]
+            t.tags = ', '.join(parts) or None
+        s.commit()
+        s.expunge(t)
+        return t
+
+
+def recent_payments(subdomain, limit=10):
+    """Recent credited payment references for a tenant (control-plane record),
+    newest first — a lightweight billing timeline for the profile page."""
+    init_control_plane()
+    with _session() as s:
+        rows = (s.query(ProcessedPayment)
+                .filter_by(subdomain=(subdomain or '').strip().lower())
+                .order_by(ProcessedPayment.at.desc()).limit(limit).all())
         for r in rows:
             s.expunge(r)
         return rows

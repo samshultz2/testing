@@ -28,7 +28,10 @@
 
   <div class="toolbar">
     <label class="search"><i class="fas fa-magnifying-glass"></i>
-      <input id="q" type="search" placeholder="Search schools by name or subdomain…" autocomplete="off"></label>
+      <input id="q" type="search" placeholder="Search schools by name, subdomain or email…" autocomplete="off"></label>
+  </div>
+  <div id="recent" class="recent-tenants" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px">
+    <span class="muted" style="font-size:12.5px"><i class="fas fa-clock-rotate-left"></i> Recent:</span>
   </div>
 
   <div class="panel">
@@ -40,10 +43,10 @@
         </tr></thead>
         <tbody>
         {% for r in rows %}
-          <tr data-name="{{ r.name|lower }}" data-sub="{{ r.subdomain }}">
+          <tr data-name="{{ r.name|lower }}" data-sub="{{ r.subdomain }}" data-email="{{ (r.admin_email or '')|lower }}">
             <td>{% if not r.owner %}<input type="checkbox" name="subdomains" value="{{ r.subdomain }}" form="bulkform">{% endif %}</td>
-            <td><span class="school"><span class="ic">{{ r.name[0]|upper }}</span>
-              <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></span></td>
+            <td><a class="school" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}" title="Open profile"><span class="ic">{{ r.name[0]|upper }}</span>
+              <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></a></td>
             <td>
               {% if r.owner %}<span class="pill p-owner"><i class="fas fa-crown"></i> Owner · free</span>
               {% elif r.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
@@ -104,11 +107,26 @@
     q.addEventListener('input',function(){
       var v=q.value.trim().toLowerCase(), shown=0;
       rows.forEach(function(tr){
-        var hit=!v || tr.getAttribute('data-name').indexOf(v)>-1 || tr.getAttribute('data-sub').indexOf(v)>-1;
+        var hit=!v || tr.getAttribute('data-name').indexOf(v)>-1 || tr.getAttribute('data-sub').indexOf(v)>-1
+                || tr.getAttribute('data-email').indexOf(v)>-1;
         tr.style.display=hit?'':'none'; if(hit) shown++;
       });
       nomatch.style.display=shown?'none':'table-row';
     });
+    // recently-viewed tenant chips (from the profile page)
+    try {
+      var box=document.getElementById('recent'),
+          list=JSON.parse(localStorage.getItem('platform:recentTenants')||'[]');
+      if(list.length){
+        list.slice(0,8).forEach(function(x){
+          var a=document.createElement('a');
+          a.href='/platform/tenant/'+encodeURIComponent(x.sub);
+          a.className='btn sm'; a.textContent=x.name||x.sub;
+          box.appendChild(a);
+        });
+        box.style.display='flex';
+      }
+    } catch(e){}
   })();
 </script>
 {% endblock %}

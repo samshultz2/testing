@@ -3797,6 +3797,13 @@
 ]
 ],
 [
+"platform.save_notes",
+"/platform/tenant/<subdomain>/notes",
+[
+"POST"
+]
+],
+[
 "platform.schools",
 "/platform/schools",
 [
@@ -3815,6 +3822,13 @@
 "/platform/<subdomain>/suspend",
 [
 "POST"
+]
+],
+[
+"platform.tenant_profile",
+"/platform/tenant/<subdomain>",
+[
+"GET"
 ]
 ],
 [

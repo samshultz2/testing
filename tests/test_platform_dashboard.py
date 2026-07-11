@@ -155,3 +155,48 @@ def test_bulk_suspend_and_delete(mt):
                  'confirm_delete': 'yes', '_csrf_token': tok})
     assert tenancy.get_tenant('gamma') is None and tenancy.get_tenant('delta') is None
     assert not os.path.exists(gamma_db)
+
+
+def test_tenant_profile_loads(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    r = c.get('/platform/tenant/alpha', headers=H)
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Alpha' in body
+    for sec in ('General information', 'Live usage', 'Subscription', 'Quick actions',
+                'Internal notes'):
+        assert sec in body
+
+
+def test_tenant_notes_and_tags_persist(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/tenant/alpha/notes', headers=H,
+           data={'notes': 'Priority customer — three campuses.',
+                 'tags': 'priority,  multi-branch ', '_csrf_token': tok})
+    t = tenancy.get_tenant('alpha')
+    assert t.notes == 'Priority customer — three campuses.'
+    assert t.tags == 'priority, multi-branch'          # normalised
+    body = c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)
+    assert 'Priority customer' in body and 'multi-branch' in body
+
+
+def test_tenant_profile_404_for_unknown(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    r = c.get('/platform/tenant/nosuchschool', headers={'Host': 'edusyncra.test'})
+    assert r.status_code == 404
+
+
+def test_tenant_usage_counts_are_read(mt):
+    app, tenancy = mt
+    from utils.platform_stats import tenant_usage
+    t = tenancy.get_tenant('alpha')
+    usage = tenant_usage(t.database_url, use_cache=False)
+    # a freshly provisioned school has 0 students but the query must succeed (int, not None)
+    assert usage['students'] == 0 and usage['branches'] is not None

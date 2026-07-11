@@ -207,10 +207,48 @@ def pricing():
         updated_at=stored.get('updated_at'), updated_by=stored.get('updated_by'))
 
 
+@platform_bp.route('/tenant/<subdomain>')
+@platform_admin_required
+def tenant_profile(subdomain):
+    """One school's full profile: general info, subscription/billing, live usage,
+    recent payments, internal notes/tags, and one-click actions."""
+    t = tenancy.get_tenant(subdomain)
+    if t is None:
+        abort(404)
+    st = billing.status(t)
+    from utils.platform_stats import tenant_usage
+    usage = tenant_usage(t.database_url) if t.status == 'active' else {}
+    payments = tenancy.recent_payments(subdomain)
+    tag_list = [x.strip() for x in (t.tags or '').split(',') if x.strip()]
+    return render_template('platform/tenant.html', active='schools', t=t, st=st,
+                           row=_row(t), usage=usage, payments=payments, tags=tag_list,
+                           portal_url=_portal_url(t),
+                           plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+
+
+def _portal_url(t):
+    base = current_app.config.get('TENANT_BASE_DOMAIN', '')
+    return f'https://{t.subdomain}.{base}/' if base else '#'
+
+
+@platform_bp.route('/tenant/<subdomain>/notes', methods=['POST'])
+@platform_admin_required
+def save_notes(subdomain):
+    t = tenancy.get_tenant(subdomain)
+    if t is None:
+        abort(404)
+    tenancy.set_meta(subdomain, notes=request.form.get('notes', ''),
+                     tags=request.form.get('tags', ''))
+    flash('Notes and tags saved.', 'success')
+    return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
+
+
 def _back(default='platform.schools'):
-    """Return to the page the action was triggered from (Schools or
-    Subscriptions), falling back to the schools list."""
+    """Return to the page the action was triggered from (a tenant profile,
+    Schools or Subscriptions), falling back to the schools list."""
     ref = request.referrer or ''
+    if '/platform/tenant/' in ref:
+        return redirect(ref)
     for ep in ('platform.subscriptions', 'platform.schools', 'platform.dashboard'):
         if url_for(ep) in ref:
             return redirect(ref)
@@ -290,4 +328,4 @@ def delete(subdomain):
         return _back()
     provisioning.drop_tenant(subdomain, forget=True)   # drop DB + remove registry row
     flash(f'{t.name} and its database were deleted.', 'success')
-    return _back()
+    return redirect(url_for('platform.schools'))       # the profile no longer exists
