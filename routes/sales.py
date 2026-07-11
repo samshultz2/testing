@@ -10,7 +10,7 @@ from sqlalchemy import func
 
 from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
-                    Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment)
+                    Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS)
@@ -146,7 +146,8 @@ def dashboard():
         'urls': {'new_sale': url_for('sales.new_sale'), 'products': url_for('sales.products'),
                  'history': url_for('sales.history'), 'analytics': url_for('sales.analytics'),
                  'movements': url_for('sales.movements'), 'suppliers': url_for('sales.suppliers'),
-                 'purchases': url_for('sales.purchases'), 'reports': url_for('sales.reports')},
+                 'purchases': url_for('sales.purchases'), 'reports': url_for('sales.reports'),
+                 'promos': url_for('sales.promos')},
     })
 
 
@@ -190,6 +191,40 @@ def _apply_product_fields(p, form, is_new=False):
         p.is_active = form.get('is_active') in ('on', 'true', '1', 'yes')
     if is_new and p.opening_stock is None:
         p.opening_stock = p.stock_qty or 0
+
+
+@sales_bp.route('/api/isbn-lookup')
+@login_required
+def product_isbn_lookup():
+    """Auto-fill a bookshop product from an ISBN (typed or scanned), and flag any
+    existing product with the same barcode/name so stock can be topped up instead
+    of duplicated — the same flow as the library catalogue."""
+    from utils.isbn_lookup import lookup_isbn, normalise_isbn
+    raw = request.args.get('isbn') or ''
+    isbn = normalise_isbn(raw)
+    if not isbn:
+        return jsonify({'error': 'Enter a 10- or 13-digit ISBN.'}), 400
+    meta = lookup_isbn(isbn)
+    product = None
+    if meta:
+        bits = []
+        if meta.get('author'):
+            bits.append(f"by {meta['author']}")
+        if meta.get('publisher'):
+            bits.append(meta['publisher'])
+        if meta.get('publication_year'):
+            bits.append(str(meta['publication_year']))
+        product = {'name': meta.get('title') or '', 'barcode': isbn,
+                   'brand': meta.get('publisher') or '', 'category': 'Textbooks',
+                   'description': ' · '.join(bits)}
+    conds = [Product.barcode == isbn]
+    if meta and meta.get('title'):
+        conds.append(func.lower(Product.name) == meta['title'].strip().lower())
+    matches = scope_query(Product.query.filter_by(is_active=True), Product).filter(
+        db.or_(*conds)).all()
+    existing = [{'id': p.id, 'name': p.name, 'stock_qty': p.stock_qty or 0,
+                 'restock_url': url_for('sales.restock', product_id=p.id)} for p in matches]
+    return jsonify({'found': bool(meta), 'isbn': isbn, 'product': product or {}, 'existing': existing})
 
 
 def _product_dict(p):
@@ -240,6 +275,7 @@ def products():
         'in_reasons': STOCK_IN_REASONS, 'out_reasons': STOCK_OUT_REASONS,
         'products': [_product_dict(p) for p in rows],
         'add_url': url_for('sales.add_product'),
+        'isbn_lookup_url': url_for('sales.product_isbn_lookup'),
         'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard'),
                  'movements': url_for('sales.movements')},
     })
@@ -423,16 +459,46 @@ def new_sale():
         if not lines:
             return _err('Add at least one item with a quantity.', url_for('sales.new_sale'))
 
+        # Discount: an optional promo code plus/or a manual amount, capped at the
+        # subtotal. A bad promo code fails the sale so the cashier notices.
+        subtotal = round(total, 2)
+        discount = 0.0
+        discount_code = None
+        used_promo = None
+        code = (request.form.get('promo_code') or '').strip()
+        if code:
+            promo = scope_query(PromoCode.query.filter(
+                func.upper(PromoCode.code) == code.upper()), PromoCode).first()
+            if not promo:
+                return _err('Unknown promo code.', url_for('sales.new_sale'))
+            ok, reason = promo.usable(subtotal, timeutil.today())
+            if not ok:
+                return _err(reason, url_for('sales.new_sale'))
+            if promo.category and not any(p.category == promo.category for p, _, _, _ in lines):
+                return _err(f'That code only applies to {promo.category} purchases.',
+                            url_for('sales.new_sale'))
+            discount += promo.discount_for(subtotal)
+            discount_code = promo.code
+            used_promo = promo
+        manual = request.form.get('discount_amount', type=float) or 0
+        if manual > 0:
+            discount += manual
+        discount = round(min(discount, subtotal), 2)
+        total = round(subtotal - discount, 2)
+
         sale = Sale(
             branch_id=branch_for_new(),
             student_id=student_id,
             customer_name=(request.form.get('customer_name') or '').strip() or None,
             customer_type=customer_type,
             payment_method=request.form.get('payment_method') or 'Cash',
-            total=round(total, 2),
-            amount_paid=request.form.get('amount_paid', type=float) or round(total, 2),
+            subtotal=subtotal, discount=discount, discount_code=discount_code,
+            total=total,
+            amount_paid=request.form.get('amount_paid', type=float) or total,
             sold_by=session.get('user') or session.get('username') or 'Bursar',
             notes=(request.form.get('notes') or '').strip() or None)
+        if used_promo is not None:
+            used_promo.used_count = (used_promo.used_count or 0) + 1
         # Stamp the revenue bucket (Bookshop / Uniform / …) from the line items so
         # the finance ledger categorises this sale when its after_insert fires —
         # the SaleItem rows don't exist in the DB yet at that point.
@@ -472,6 +538,7 @@ def new_sale():
         # buyer is chosen by class (+ optional arm) then searched on demand.
         'classes': classes, 'arms': arms,
         'student_search_url': url_for('sales.api_students'),
+        'promo_check_url': url_for('sales.check_promo'),
         'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
     })
 
@@ -1142,6 +1209,80 @@ def receive_purchase(po_id):
     po.status = 'Received' if fully else 'Partially Received'
     db.session.commit()
     return _ok(f'Goods received for {po.po_number}.', url_for('sales.purchase_detail', po_id=po.id))
+
+
+# ---------------------------------------------------------------------------
+# Discounts & promo codes
+# ---------------------------------------------------------------------------
+
+@sales_bp.route('/api/promo')
+@login_required
+def check_promo():
+    """Validate a promo code against a subtotal and preview the discount."""
+    code = (request.args.get('code') or '').strip()
+    subtotal = request.args.get('subtotal', type=float) or 0
+    if not code:
+        return jsonify({'ok': False, 'error': 'Enter a code.'})
+    promo = scope_query(PromoCode.query.filter(
+        func.upper(PromoCode.code) == code.upper()), PromoCode).first()
+    if not promo:
+        return jsonify({'ok': False, 'error': 'Unknown code.'})
+    ok, reason = promo.usable(subtotal, timeutil.today())
+    if not ok:
+        return jsonify({'ok': False, 'error': reason})
+    return jsonify({'ok': True, 'code': promo.code, 'discount': promo.discount_for(subtotal),
+                    'description': promo.description or '', 'category': promo.category or ''})
+
+
+@sales_bp.route('/promos')
+@login_required
+def promos():
+    rows = scope_query(PromoCode.query, PromoCode).order_by(PromoCode.created_at.desc()).all()
+    return _render({
+        'page': 'promos',
+        'promos': [{'id': p.id, 'code': p.code, 'description': p.description,
+                    'kind': p.kind, 'value': p.value or 0, 'min_purchase': p.min_purchase or 0,
+                    'category': p.category, 'expires_on': p.expires_on.isoformat() if p.expires_on else '',
+                    'usage_limit': p.usage_limit, 'used_count': p.used_count or 0,
+                    'is_active': bool(p.is_active),
+                    'toggle_url': url_for('sales.toggle_promo', promo_id=p.id)} for p in rows],
+        'categories': PRODUCT_CATEGORIES, 'add_url': url_for('sales.add_promo'),
+        'urls': {'dashboard': url_for('sales.dashboard')},
+    })
+
+
+@sales_bp.route('/promos/add', methods=['POST'])
+@login_required
+def add_promo():
+    from utils.security import strip_tags
+    code = (request.form.get('code') or '').strip().upper()
+    if not code:
+        return _err('A code is required.', url_for('sales.promos'))
+    if scope_query(PromoCode.query.filter(func.upper(PromoCode.code) == code), PromoCode).first():
+        return _err('That code already exists.', url_for('sales.promos'))
+    kind = request.form.get('kind') if request.form.get('kind') in ('percent', 'fixed') else 'percent'
+    db.session.add(PromoCode(
+        branch_id=branch_for_new(), code=code,
+        description=strip_tags(request.form.get('description') or '').strip() or None,
+        kind=kind, value=request.form.get('value', type=float) or 0,
+        min_purchase=request.form.get('min_purchase', type=float) or 0,
+        category=(request.form.get('category') or '').strip() or None,
+        expires_on=parse_date(request.form.get('expires_on')),
+        usage_limit=request.form.get('usage_limit', type=int),
+        created_by=session.get('user') or session.get('username') or 'Admin'))
+    db.session.commit()
+    return _ok(f'Promo code "{code}" added.', url_for('sales.promos'))
+
+
+@sales_bp.route('/promos/<int:promo_id>/toggle', methods=['POST'])
+@login_required
+def toggle_promo(promo_id):
+    p = db.get_or_404(PromoCode, promo_id)
+    if not can_access_branch(p.branch_id):
+        return _err('That code belongs to another branch.', url_for('sales.promos'))
+    p.is_active = not p.is_active
+    db.session.commit()
+    return _ok(f'{p.code} {"activated" if p.is_active else "deactivated"}.', url_for('sales.promos'))
 
 
 # ---------------------------------------------------------------------------

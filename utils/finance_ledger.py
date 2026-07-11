@@ -238,7 +238,8 @@ _ADDED_COLUMNS = {
         'vat_rate': 'FLOAT', 'preferred_supplier': 'VARCHAR(120)',
         'storage_location': 'VARCHAR(80)', 'expiry_date': 'DATE', 'warranty_period': 'VARCHAR(40)',
     },
-    'sales': {'customer_type': 'VARCHAR(20)'},
+    'sales': {'customer_type': 'VARCHAR(20)', 'subtotal': 'FLOAT',
+              'discount': 'FLOAT', 'discount_code': 'VARCHAR(30)'},
 }
 
 # Columns whose NOT NULL constraint must be relaxed on existing databases (a
@@ -287,7 +288,8 @@ def ensure_tables(bind=None):
                         StaffDocument, TrainingRecord, PerformanceReview,
                         JobVacancy, JobApplication, Interview,
                         AttendanceIntervention, InterventionNote, StockMovement,
-                        Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment)
+                        Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment,
+                        PromoCode)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
@@ -299,7 +301,7 @@ def ensure_tables(bind=None):
               JobApplication.__table__, Interview.__table__,
               AttendanceIntervention.__table__, InterventionNote.__table__,
               StockMovement.__table__, Supplier.__table__, PurchaseOrder.__table__,
-              PurchaseOrderItem.__table__, SupplierPayment.__table__]
+              PurchaseOrderItem.__table__, SupplierPayment.__table__, PromoCode.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

@@ -32,6 +32,7 @@ function Dashboard({ d }) {
         {u.suppliers && <a href={u.suppliers} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-truck-field" /> Suppliers</a>}
         {u.analytics && <a href={u.analytics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
         {u.reports && <a href={u.reports} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-lines" /> Reports</a>}
+        {u.promos && <a href={u.promos} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-tags" /> Promos</a>}
       </>} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -132,6 +133,52 @@ function ProductForm({ d, product, onClose, onSaved }) {
   const [err, setErr] = useState(null);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
 
+  // ── ISBN / barcode auto-fill (for books sold in the shop) ─────────────────
+  const [looking, setLooking] = useState(false);
+  const [lookMsg, setLookMsg] = useState(null);
+  const [dupes, setDupes] = useState([]);
+  const fileRef = useRef(null);
+  const scanSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+  const applyMeta = (m) => setF((s) => {
+    const next = { ...s };
+    ['name', 'brand', 'description'].forEach((k) => { if (m[k] && !String(next[k] || '').trim()) next[k] = m[k]; });
+    if (m.category && (!next.category || next.category === (d.categories[0] || 'Other'))) next.category = m.category;
+    next.barcode = m.barcode || s.barcode;
+    return next;
+  });
+  const doLookup = async (isbnArg) => {
+    const isbn = (isbnArg != null ? isbnArg : f.barcode) || '';
+    if (!isbn.trim()) { setLookMsg({ tone: 'warn', text: 'Enter or scan an ISBN/barcode.' }); return; }
+    setLooking(true); setLookMsg(null); setDupes([]);
+    try {
+      const res = await apiGet(`${d.isbn_lookup_url}?isbn=${encodeURIComponent(isbn)}`);
+      setDupes(res.existing || []);
+      if (res.found) { applyMeta(res.product); setLookMsg({ tone: 'success', text: 'Details filled in — set your prices and save.' }); }
+      else { set('barcode', res.isbn || isbn); setLookMsg({ tone: 'warn', text: 'No catalogue match — fill the details manually.' }); }
+    } catch (e2) { setLookMsg({ tone: 'error', text: 'Lookup failed — type the details instead.' }); }
+    finally { setLooking(false); }
+  };
+  const onScanFile = async (e) => {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    if (!scanSupported) { setLookMsg({ tone: 'warn', text: 'Scanning isn’t supported here — type the ISBN.' }); return; }
+    setLookMsg({ tone: 'info', text: 'Reading barcode…' });
+    try {
+      const bitmap = await createImageBitmap(file);
+      // eslint-disable-next-line no-undef
+      const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128'] });
+      const codes = await detector.detect(bitmap);
+      if (codes && codes.length) { set('barcode', codes[0].rawValue); doLookup(codes[0].rawValue); }
+      else setLookMsg({ tone: 'warn', text: 'Couldn’t read a barcode — try a clearer photo.' });
+    } catch (e2) { setLookMsg({ tone: 'error', text: 'Could not read the image.' }); }
+  };
+  const restockDupe = async (dp) => {
+    const n = Number(window.prompt(`Add how many units to "${dp.name}"?`, '1'));
+    if (!n || n <= 0) return;
+    const r = await submitJson(dp.restock_url, { qty: n });
+    if (r.ok) { onSaved(); onClose(); } else setErr(r.error || 'Could not add stock.');
+  };
+
   const save = async () => {
     if (!f.name.trim()) { setErr('Product name is required.'); return; }
     setBusy(true); setErr(null);
@@ -148,6 +195,36 @@ function ProductForm({ d, product, onClose, onSaved }) {
            footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
              <Button variant="primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button></>}>
       {err && <div className="alert alert-danger" role="alert">{err}</div>}
+
+      {!editing && d.isbn_lookup_url && (
+        <div style={{ border: '1px solid var(--primary)', borderRadius: 'var(--radius-md)', padding: '.6rem .75rem', marginBottom: '.8rem' }}>
+          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <label className="form-group" style={{ margin: 0, flex: 1, minWidth: 180 }}>
+              <span className="form-label"><i aria-hidden="true" className="fas fa-barcode" /> Book? Add by ISBN / barcode</span>
+              <input type="text" className="form-control" placeholder="Type or scan the ISBN" value={f.barcode}
+                     onChange={(e) => set('barcode', e.target.value)}
+                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doLookup(); } }} />
+            </label>
+            <button type="button" className="btn btn-primary" onClick={() => doLookup()} disabled={looking}>{looking ? 'Looking…' : 'Look up'}</button>
+            <button type="button" className="btn btn-secondary" onClick={() => fileRef.current && fileRef.current.click()} title={scanSupported ? 'Photo of the barcode' : 'Not supported here'}><i aria-hidden="true" className="fas fa-camera" /> Scan</button>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onScanFile} />
+          </div>
+          {lookMsg && <div className={'alert alert-' + ({ success: 'success', error: 'danger', warn: 'warning', info: 'info' }[lookMsg.tone] || 'info')} role="status" style={{ margin: '.5rem 0 0' }}>{lookMsg.text}</div>}
+          {dupes.length > 0 && (
+            <div className="alert alert-warning" role="status" style={{ margin: '.5rem 0 0' }}>
+              <strong>Already stocked?</strong>
+              {dupes.map((p) => (
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', alignItems: 'center', marginTop: '.4rem', flexWrap: 'wrap' }}>
+                  <span>{p.name} <span className="text-muted text-sm">({p.stock_qty} in stock)</span></span>
+                  <button type="button" className="btn btn-sm btn-primary" onClick={() => restockDupe(p)}><i aria-hidden="true" className="fas fa-plus" /> Add stock to this</button>
+                </div>
+              ))}
+              <div className="text-muted text-sm" style={{ marginTop: '.3rem' }}>Or fill the form to add it as a new product.</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <h4 className="text-muted text-sm" style={{ margin: '0 0 .4rem' }}>Basics</h4>
       <div style={grid}>
         <Field label="Name *" wide><input type="text" className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} required /></Field>
@@ -501,8 +578,9 @@ function BuyerPicker({ d, pay, setP }) {
 function NewSale({ d, notify }) {
   const nav = useNav();
   const [qty, setQty] = useState({});       // product_id -> qty
-  const [pay, setPay] = useState({ student_id: '', customer_name: '', customer_type: 'Student', payment_method: d.methods[0] || 'Cash', amount_paid: '' });
+  const [pay, setPay] = useState({ student_id: '', customer_name: '', customer_type: 'Student', payment_method: d.methods[0] || 'Cash', amount_paid: '', promo_code: '', discount_amount: '' });
   const [busy, setBusy] = useState(false);
+  const [promoInfo, setPromoInfo] = useState(null);
   const setP = (k, v) => setPay((s) => ({ ...s, [k]: v }));
   // Price a product for the current buyer type, honouring tier prices.
   const priceOf = (p) => {
@@ -510,7 +588,23 @@ function NewSale({ d, notify }) {
     const tier = bt === 'student' ? p.student_price : bt === 'staff' ? p.staff_price : bt === 'parent' ? p.parent_price : null;
     return tier && tier > 0 ? tier : (p.unit_price || 0);
   };
-  const total = d.products.reduce((t, p) => t + priceOf(p) * (Number(qty[p.id]) || 0), 0);
+  const subtotal = d.products.reduce((t, p) => t + priceOf(p) * (Number(qty[p.id]) || 0), 0);
+  const manual = Math.max(Number(pay.discount_amount) || 0, 0);
+  const promoDisc = promoInfo && promoInfo.ok ? (promoInfo.discount || 0) : 0;
+  const discount = Math.min(subtotal, promoDisc + manual);
+  const total = Math.max(0, subtotal - discount);
+
+  const applyPromo = async () => {
+    const code = (pay.promo_code || '').trim();
+    if (!code) { setPromoInfo(null); return; }
+    try {
+      const res = await apiGet(`${d.promo_check_url}?code=${encodeURIComponent(code)}&subtotal=${subtotal}`);
+      setPromoInfo(res);
+      if (!res.ok) notify('error', res.error || 'Invalid promo code.');
+    } catch (e) { setPromoInfo({ ok: false, error: 'Could not check code.' }); }
+  };
+  // Re-price a % promo when the cart changes.
+  useEffect(() => { if (promoInfo && promoInfo.ok && (pay.promo_code || '').trim()) applyPromo(); }, [subtotal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e) => {
     e.preventDefault();
@@ -518,7 +612,8 @@ function NewSale({ d, notify }) {
     d.products.forEach((p) => { const n = Number(qty[p.id]) || 0; if (n > 0) { ids.push(p.id); qs.push(n); } });
     if (!ids.length) { notify('error', 'Add at least one item with a quantity.'); return; }
     setBusy(true);
-    const r = await submitJson(d.submit_url, { product_id: ids, quantity: qs, ...pay });
+    const r = await submitJson(d.submit_url, { product_id: ids, quantity: qs, ...pay,
+      promo_code: promoInfo && promoInfo.ok ? pay.promo_code : '' });
     setBusy(false);
     if (r.ok) nav.go(r.redirect);
     else notify('error', r.error || 'Could not record the sale.');
@@ -555,6 +650,26 @@ function NewSale({ d, notify }) {
               <div className="form-group"><label className="form-label">Method</label>
                 <select className="form-control" value={pay.payment_method} onChange={(e) => setP('payment_method', e.target.value)}>
                   {d.methods.map((m) => <option key={m}>{m}</option>)}</select></div>
+
+              {d.promo_check_url && <div className="form-group"><label className="form-label">Promo code</label>
+                <div style={{ display: 'flex', gap: '.4rem' }}>
+                  <input type="text" className="form-control" placeholder="Optional" value={pay.promo_code}
+                         onChange={(e) => { setP('promo_code', e.target.value); setPromoInfo(null); }}
+                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyPromo(); } }} />
+                  <button type="button" className="btn btn-secondary" onClick={applyPromo}>Apply</button>
+                </div>
+                {promoInfo && promoInfo.ok && <div className="text-sm" style={{ color: 'var(--success)', marginTop: 4 }}><i aria-hidden="true" className="fas fa-check" /> {promoInfo.code} — {promoInfo.description || 'discount applied'}</div>}
+              </div>}
+              <div className="form-group"><label className="form-label">Manual discount (₦)</label>
+                <input type="number" step="0.01" min="0" className="form-control" placeholder="0" value={pay.discount_amount} onChange={(e) => setP('discount_amount', e.target.value)} /></div>
+
+              {discount > 0 && (
+                <div style={{ background: 'var(--bg-muted, rgba(0,0,0,.03))', borderRadius: 'var(--radius-md)', padding: '.6rem .8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="text-muted">Subtotal</span><span>{naira(subtotal)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--success)' }}><span>Discount</span><span>−{naira(discount)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, marginTop: 2 }}><span>Total</span><span>{naira(total)}</span></div>
+                </div>
+              )}
               <div className="form-group"><label className="form-label">Amount paid (blank = exact)</label>
                 <input type="number" step="0.01" className="form-control" value={pay.amount_paid} onChange={(e) => setP('amount_paid', e.target.value)} /></div>
             </div>
@@ -1101,9 +1216,57 @@ function Reports({ d }) {
   );
 }
 
+// ---- Promo codes -----------------------------------------------------------
+function Promos({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ code: '', description: '', kind: 'percent', value: '',
+    min_purchase: '', category: '', expires_on: '', usage_limit: '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const add = async () => {
+    if (!f.code.trim()) { notify('error', 'Enter a code.'); return; }
+    const r = await submitJson(d.add_url, f);
+    if (r.ok) { setF({ code: '', description: '', kind: 'percent', value: '', min_purchase: '', category: '', expires_on: '', usage_limit: '' }); nav.refresh(); }
+    else notify('error', r.error || 'Could not add code.');
+  };
+  const toggle = async (p) => { const r = await submitJson(p.toggle_url, {}); if (r.ok) nav.refresh(); else notify('error', r.error || 'Failed.'); };
+  return (
+    <>
+      <PageHeader icon="fa-tags" title="Discounts & Promo Codes" actions={
+        <a href={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>} />
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> New promo code</h3></div>
+        <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.6rem', alignItems: 'flex-end' }}>
+          <Field label="Code *"><input className="form-control" value={f.code} onChange={(e) => set('code', e.target.value.toUpperCase())} /></Field>
+          <Field label="Type"><select className="form-control" value={f.kind} onChange={(e) => set('kind', e.target.value)}><option value="percent">Percent %</option><option value="fixed">Fixed ₦</option></select></Field>
+          <Field label={f.kind === 'percent' ? 'Percent' : 'Amount (₦)'}><input type="number" className="form-control" value={f.value} onChange={(e) => set('value', e.target.value)} /></Field>
+          <Field label="Min purchase (₦)"><input type="number" className="form-control" value={f.min_purchase} onChange={(e) => set('min_purchase', e.target.value)} /></Field>
+          <Field label="Category (optional)"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}><option value="">Any</option>{(d.categories || []).map((c) => <option key={c}>{c}</option>)}</select></Field>
+          <Field label="Expires"><input type="date" className="form-control" value={f.expires_on} onChange={(e) => set('expires_on', e.target.value)} /></Field>
+          <Field label="Usage limit"><input type="number" className="form-control" placeholder="∞" value={f.usage_limit} onChange={(e) => set('usage_limit', e.target.value)} /></Field>
+          <Field label="Description"><input className="form-control" value={f.description} onChange={(e) => set('description', e.target.value)} /></Field>
+          <button type="button" className="btn btn-primary" onClick={add}>Add</button>
+        </div></div>
+      <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        {d.promos.length ? (
+          <table className="data-table"><thead><tr><th>Code</th><th>Discount</th><th>Rules</th><th className="text-right">Used</th><th>Status</th><th /></tr></thead>
+            <tbody>{d.promos.map((p) => (
+              <tr key={p.id}>
+                <td><strong>{p.code}</strong>{p.description && <div className="text-muted text-sm">{p.description}</div>}</td>
+                <td>{p.kind === 'percent' ? `${p.value}%` : naira(p.value)}</td>
+                <td className="text-muted text-sm">{p.min_purchase > 0 ? `min ${naira(p.min_purchase)} · ` : ''}{p.category || 'any category'}{p.expires_on ? ` · till ${p.expires_on}` : ''}{p.usage_limit != null ? ` · limit ${p.usage_limit}` : ''}</td>
+                <td className="text-right">{p.used_count}</td>
+                <td><span className={'badge ' + (p.is_active ? 'badge-success' : 'badge-secondary')}>{p.is_active ? 'Active' : 'Off'}</span></td>
+                <td><button type="button" className="btn btn-sm btn-light" onClick={() => toggle(p)}>{p.is_active ? 'Deactivate' : 'Activate'}</button></td>
+              </tr>
+            ))}</tbody></table>
+        ) : <EmptyState icon="fa-tags" title="No promo codes yet">Create one above.</EmptyState>}
+      </div></div>
+    </>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History,
   analytics: Analytics, movements: Movements, suppliers: Suppliers, supplier_detail: SupplierDetail,
-  purchases: Purchases, purchase_detail: PurchaseDetail, reports: Reports };
+  purchases: Purchases, purchase_detail: PurchaseDetail, reports: Reports, promos: Promos };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

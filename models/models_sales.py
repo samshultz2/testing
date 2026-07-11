@@ -113,7 +113,10 @@ class Sale(db.Model):
     customer_name = db.Column(db.String(120))
     customer_type = db.Column(db.String(20))   # Student/Staff/Parent/Visitor/Walk-in
     payment_method = db.Column(db.String(20), default='Cash')
-    total = db.Column(db.Float, default=0)
+    subtotal = db.Column(db.Float, default=0)          # before discount
+    discount = db.Column(db.Float, default=0)          # discount applied
+    discount_code = db.Column(db.String(30))           # promo code used, if any
+    total = db.Column(db.Float, default=0)             # payable after discount
     amount_paid = db.Column(db.Float, default=0)
     sold_by = db.Column(db.String(100))
     notes = db.Column(db.String(200))
@@ -293,3 +296,49 @@ class SupplierPayment(db.Model):
 
     def __repr__(self):
         return f'<SupplierPayment {self.supplier_id} {self.amount}>'
+
+
+class PromoCode(db.Model):
+    """A discount voucher applied at checkout — percentage or fixed amount, with
+    optional minimum spend, expiry, usage cap and a category restriction."""
+    __tablename__ = 'promo_codes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    code = db.Column(db.String(30), nullable=False, index=True)
+    description = db.Column(db.String(120))
+    kind = db.Column(db.String(10), default='percent')     # 'percent' | 'fixed'
+    value = db.Column(db.Float, default=0)                  # 10 (=10%) or 500 (=₦500)
+    min_purchase = db.Column(db.Float, default=0)
+    category = db.Column(db.String(40))                     # limit to one category (optional)
+    expires_on = db.Column(db.Date)
+    usage_limit = db.Column(db.Integer)                    # None = unlimited
+    used_count = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    branch = db.relationship('Branch')
+
+    def discount_for(self, subtotal):
+        """The discount this code yields on a subtotal, capped at the subtotal."""
+        if self.kind == 'percent':
+            d = (subtotal or 0) * (self.value or 0) / 100.0
+        else:
+            d = self.value or 0
+        return round(min(max(d, 0), subtotal or 0), 2)
+
+    def usable(self, subtotal, today):
+        """(ok, reason) — whether the code may be applied to this subtotal now."""
+        if not self.is_active:
+            return False, 'This code is inactive.'
+        if self.expires_on and self.expires_on < today:
+            return False, 'This code has expired.'
+        if self.usage_limit is not None and (self.used_count or 0) >= self.usage_limit:
+            return False, 'This code has reached its usage limit.'
+        if (self.min_purchase or 0) > (subtotal or 0):
+            return False, f'Spend at least {self.min_purchase:g} to use this code.'
+        return True, ''
+
+    def __repr__(self):
+        return f'<PromoCode {self.code}>'
