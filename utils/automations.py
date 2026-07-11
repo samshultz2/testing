@@ -48,6 +48,14 @@ REGISTRY = [
     ('library_due_soon', 'Library due-soon alerts',
      "Once a day, alert admins about library books due within the next two days.",
      'Library', False),
+    ('stock_low', 'Low-stock alerts',
+     "Once a day, bell admins and Sales & Inventory staff about products at or "
+     "below their reorder level (or out of stock).",
+     'Sales', False),
+    ('stock_expiry', 'Stock expiry alerts',
+     "Once a day, bell admins and Sales & Inventory staff about products expiring "
+     "within 30 days (or already expired).",
+     'Sales', False),
 ]
 
 _DEFAULTS = {k: d for k, _l, _desc, _cat, d in REGISTRY}

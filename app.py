@@ -91,6 +91,16 @@ def _tick_one(app):
                 app.logger.exception('library reminder job failed')
             SchoolSettings.set('last_library_reminder_date', today, 'string',
                                'Last date the daily library-reminder job ran')
+        # Daily stock alerts (low-stock + expiry), opt-in via the automation
+        # center; a DB-shared marker fires them once per day across all workers.
+        if SchoolSettings.get('last_stock_alert_date') != today:
+            try:
+                from utils.stock_notify import run_stock_alerts
+                run_stock_alerts(app)
+            except Exception:
+                app.logger.exception('stock alert job failed')
+            SchoolSettings.set('last_stock_alert_date', today, 'string',
+                               'Last date the daily stock-alert job ran')
     finally:
         if is_pg:
             db.session.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': _SCHED_LOCK_KEY})
