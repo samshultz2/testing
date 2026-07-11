@@ -68,21 +68,77 @@ def _sale_row(s, with_when_year=False):
 @sales_bp.route('/')
 @login_required
 def dashboard():
+    from datetime import timedelta
+    from collections import defaultdict
     today = timeutil.today()
-    todays = scope_query(Sale.query, Sale).filter(
-        func.date(Sale.created_at) == today).all()
-    today_total = sum(s.total or 0 for s in todays)
+    week_start = today - timedelta(days=6)
+    month_start = today - timedelta(days=29)
+
+    # One 30-day pass powers today/week/month totals + the breakdowns/trend.
+    month_sales = (scope_query(Sale.query, Sale)
+                   .filter(func.date(Sale.created_at) >= month_start).all())
+    today_total = week_total = month_total = 0.0
+    today_count = 0
+    by_method = defaultdict(float); by_cashier = defaultdict(float); trend_map = defaultdict(float)
+    for s in month_sales:
+        amt = s.total or 0
+        month_total += amt
+        d = s.created_at.date() if s.created_at else today
+        if d >= week_start:
+            week_total += amt
+        if d == today:
+            today_total += amt; today_count += 1
+        by_method[s.payment_method or 'Cash'] += amt
+        by_cashier[s.sold_by or 'Unknown'] += amt
+        trend_map[d] += amt
+
+    sale_ids = [s.id for s in month_sales]
+    by_category = defaultdict(float); prod = defaultdict(lambda: {'revenue': 0.0, 'units': 0, 'name': ''})
+    cogs = 0.0
+    if sale_ids:
+        for it, p in (db.session.query(SaleItem, Product)
+                      .outerjoin(Product, SaleItem.product_id == Product.id)
+                      .filter(SaleItem.sale_id.in_(sale_ids)).all()):
+            by_category[(p.category if p else None) or 'Other'] += it.line_total or 0
+            key = it.product_id or f'd:{it.description}'
+            prod[key]['revenue'] += it.line_total or 0
+            prod[key]['units'] += it.quantity or 0
+            prod[key]['name'] = (p.name if p else None) or it.description or 'Unknown'
+            cogs += (it.quantity or 0) * ((p.cost_price or 0) if p else 0)
+
     products = scope_query(Product.query.filter_by(is_active=True), Product).all()
     low_stock = [p for p in products if p.low_stock]
     out_stock = [p for p in products if p.out_of_stock]
     inv_value = round(sum(p.stock_value for p in products), 2)
-    recent = (scope_query(Sale.query, Sale)
-              .order_by(Sale.created_at.desc()).limit(8).all())
+    awaiting = scope_query(PurchaseOrder.query, PurchaseOrder).filter(
+        PurchaseOrder.status.in_(['Approved', 'Ordered', 'Partially Received'])).count()
+    payables = 0.0
+    for s in scope_query(Supplier.query, Supplier).all():
+        payables += _supplier_stats(s.id)['outstanding']
+    recent = (scope_query(Sale.query, Sale).order_by(Sale.created_at.desc()).limit(8).all())
+
+    def _pack(dmap):
+        return sorted([{'label': k, 'revenue': round(v, 2)} for k, v in dmap.items()],
+                      key=lambda x: x['revenue'], reverse=True)[:6]
+    trend = []
+    dcur = month_start
+    while dcur <= today:
+        trend.append({'label': dcur.strftime('%d %b'), 'revenue': round(trend_map.get(dcur, 0.0), 2)})
+        dcur += timedelta(days=1)
+    top_products = sorted(prod.values(), key=lambda x: x['revenue'], reverse=True)[:6]
+    for r in top_products:
+        r['revenue'] = round(r['revenue'], 2)
+
     return _render({
         'page': 'dashboard',
-        'today_total': today_total, 'today_count': len(todays),
+        'today_total': today_total, 'today_count': today_count,
+        'week_total': round(week_total, 2), 'month_total': round(month_total, 2),
+        'month_profit': round(month_total - cogs, 2),
         'product_count': len(products), 'inventory_value': inv_value,
-        'out_of_stock_count': len(out_stock),
+        'out_of_stock_count': len(out_stock), 'awaiting_delivery': awaiting,
+        'supplier_payables': round(payables, 2),
+        'by_method': _pack(by_method), 'by_cashier': _pack(by_cashier),
+        'by_category': _pack(by_category), 'top_products': top_products, 'trend': trend,
         'low_stock': [{'name': p.name, 'category': p.category,
                        'stock_qty': p.stock_qty, 'reorder_level': p.reorder_level} for p in low_stock],
         'recent': [_sale_row(s) for s in recent],

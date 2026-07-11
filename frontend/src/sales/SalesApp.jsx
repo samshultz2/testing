@@ -7,6 +7,18 @@ import { Banner, PageHeader, Empty, SectionShell, Table, Modal, Button } from '.
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
 
+// A compact metric tile; optionally a link and danger-coloured when non-zero.
+function Tile({ n, label, danger, href }) {
+  const body = (
+    <div className="card-body">
+      <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: danger ? '#e74a3b' : 'inherit' }}>{n}</div>
+      <div className="text-muted text-sm">{label}</div>
+    </div>
+  );
+  return href ? <a className="card" href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{body}</a>
+    : <div className="card">{body}</div>;
+}
+
 // ---- Dashboard -------------------------------------------------------------
 function Dashboard({ d }) {
   const u = d.urls;
@@ -22,20 +34,38 @@ function Dashboard({ d }) {
       </>} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
-        {[[naira(d.today_total), 'Sold today'], [d.today_count, 'Sales today'],
-          [d.product_count, 'Products'],
+        {[[naira(d.today_total), 'Sold today'],
+          [d.week_total != null ? naira(d.week_total) : '—', 'This week'],
+          [d.month_total != null ? naira(d.month_total) : '—', 'This month'],
+          [d.month_profit != null ? naira(d.month_profit) : '—', 'Profit (30d)'],
           [d.inventory_value != null ? naira(d.inventory_value) : '—', 'Inventory value']].map(([v, l]) => (
           <div className="card" key={l}><div className="card-body">
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{v}</div>
             <div className="text-muted text-sm">{l}</div></div></div>
         ))}
-        <div className="card"><div className="card-body">
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: d.low_stock.length ? '#e74a3b' : 'inherit' }}>{d.low_stock.length}</div>
-          <div className="text-muted text-sm">Low stock</div></div></div>
-        <div className="card"><div className="card-body">
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: d.out_of_stock_count ? '#e74a3b' : 'inherit' }}>{d.out_of_stock_count || 0}</div>
-          <div className="text-muted text-sm">Out of stock</div></div></div>
+        <Tile n={d.low_stock.length} label="Low stock" danger={d.low_stock.length} href={u.products + '?stock=low'} />
+        <Tile n={d.out_of_stock_count || 0} label="Out of stock" danger={d.out_of_stock_count} href={u.products + '?stock=out'} />
+        {u.purchases && <Tile n={d.awaiting_delivery || 0} label="Awaiting delivery" href={u.purchases} />}
       </div>
+
+      {(d.trend || []).length > 0 && (
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Sales trend (30 days)</h3>
+          {u.analytics && <a href={u.analytics} className="btn btn-sm btn-secondary">Analytics</a>}</div>
+          <div className="card-body"><TrendBars rows={d.trend} /></div></div>
+      )}
+
+      {(d.top_products || []).length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>Top products (30d)</h3></div><div className="card-body">
+            <BarList rows={d.top_products} labelKey="name" color="#4e73df" sub={(r) => `${r.units} units`} /></div></div>
+          <div className="card"><div className="card-header"><h3>By category</h3></div><div className="card-body">
+            <BarList rows={d.by_category || []} color="#11998e" /></div></div>
+          <div className="card"><div className="card-header"><h3>By payment method</h3></div><div className="card-body">
+            <BarList rows={d.by_method || []} color="#f6c23e" /></div></div>
+          <div className="card"><div className="card-header"><h3>By cashier</h3></div><div className="card-body">
+            <BarList rows={d.by_cashier || []} color="#667eea" /></div></div>
+        </div>
+      )}
 
       {d.low_stock.length > 0 && (
         <div className="card mb-3" style={{ borderColor: '#f6c23e' }}>
