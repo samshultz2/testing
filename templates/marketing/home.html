@@ -3,20 +3,83 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ content.brand }} — School management, simplified</title>
-<meta name="description" content="{{ content.hero_subtitle }}">
+{% set _home = 'https://' ~ base_domain ~ '/' %}
+{% set _desc = content.get('meta_description') or content.hero_subtitle %}
+<title>{{ content.brand }} — All-in-one school management for Nigerian schools</title>
+<meta name="description" content="{{ _desc }}">
+<meta name="keywords" content="school management system, Nigeria, students, results, WAEC, JAMB, school fees, payroll, attendance, report cards, multi-branch, parent portal">
+<meta name="theme-color" content="#0d6a4e">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="{{ _home }}">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ content.brand }}">
+<meta property="og:title" content="{{ content.brand }} — All-in-one school management">
+<meta property="og:description" content="{{ _desc }}">
+<meta property="og:url" content="{{ _home }}">
+<meta property="og:locale" content="en_NG">
+<meta property="og:image" content="{{ url_for('static', filename='icons/icon-512.png', _external=True) }}">
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ content.brand }} — All-in-one school management">
+<meta name="twitter:description" content="{{ _desc }}">
+<meta name="twitter:image" content="{{ url_for('static', filename='icons/icon-512.png', _external=True) }}">
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+<noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
+<script type="application/ld+json" nonce="{{ csp_nonce }}">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "name": {{ content.brand | tojson }},
+      "url": {{ _home | tojson }},
+      "logo": {{ url_for('static', filename='icons/icon-512.png', _external=True) | tojson }},
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "sales",
+        "email": {{ (content.contact.email if content.contact else 'hello@' ~ base_domain) | tojson }}
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": {{ content.brand | tojson }},
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "description": {{ _desc | tojson }},
+      "offers": {
+        "@type": "Offer",
+        "price": {{ (content.price_naira or 0) | tojson }},
+        "priceCurrency": "NGN"
+      }
+    }{% if content.faqs %},
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {% for q in content.faqs %}{
+          "@type": "Question",
+          "name": {{ q.q | tojson }},
+          "acceptedAnswer": { "@type": "Answer", "text": {{ q.a | tojson }} }
+        }{{ "," if not loop.last }}{% endfor %}
+      ]
+    }{% endif %}
+  ]
+}
+</script>
 </head>
 <body>
+<a class="skip-link" href="#top">Skip to content</a>
 <header class="nav" id="nav"><div class="wrap nav-in">
   <a class="brand" href="#top"><span class="mark">✦</span> {{ content.brand }}</a>
-  <nav class="nav-links">
+  <nav class="nav-links" aria-label="Primary">
     <a href="#features">Features</a><a href="#benefits">Why us</a>
-    <a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
+    <a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#contact">Contact</a>
   </nav>
   <div class="nav-right">
     <form class="nav-signin" id="schoolForm" title="Go to your school">
@@ -32,11 +95,12 @@
   <!-- HERO -->
   <section class="hero"><div class="wrap">
     <span class="pill"><span class="dot"></span> {{ content.trial_note }}</span>
+    {% if content.hero_kicker %}<p class="hero-kicker">{{ content.hero_kicker }}</p>{% endif %}
     <h1>{{ content.hero_title }}</h1>
     <p class="sub">{{ content.hero_subtitle }}</p>
     <div class="hero-cta">
       <a class="btn btn-primary btn-lg" href="{{ register_url }}">{{ content.hero_cta }} <i class="fas fa-arrow-right"></i></a>
-      <a class="btn btn-ghost btn-lg" href="#benefits"><i class="fas fa-play"></i> See how it works</a>
+      <a class="btn btn-ghost btn-lg" href="#contact"><i class="fas fa-calendar-check"></i> Book a demo</a>
     </div>
     <p class="micro">No card required · Set up in under 5 minutes</p>
 
@@ -115,6 +179,22 @@
     </div>
   </div></section>
 
+  <!-- SECURITY / TRUST -->
+  {% if content.security %}
+  <section id="security"><div class="wrap">
+    <div class="sec-head reveal"><span class="eyebrow">Secure &amp; trusted</span>
+      <h2>Your school’s data, protected</h2>
+      {% if content.nigeria_note %}<p>{{ content.nigeria_note }}</p>{% endif %}</div>
+    <div class="grid-4">
+      {% set sic = ['fa-database','fa-shield-halved','fa-user-lock','fa-cloud'] %}
+      {% for s in content.security %}
+      <div class="sec-card reveal"><div class="ic-sm"><i class="fas {{ sic[loop.index0 % sic|length] }}"></i></div>
+        <h4>{{ s.title }}</h4><p>{{ s.body }}</p></div>
+      {% endfor %}
+    </div>
+  </div></section>
+  {% endif %}
+
   <!-- HOW IT WORKS -->
   <section id="how"><div class="wrap">
     <div class="sec-head reveal"><span class="eyebrow">Get started today</span>
@@ -178,6 +258,20 @@
     {% endfor %}
   </div></section>
 
+  <!-- CONTACT -->
+  {% set ct = content.contact or {} %}
+  <section id="contact" style="background:var(--surface);border-block:1px solid var(--line)"><div class="wrap">
+    <div class="sec-head reveal"><span class="eyebrow">Talk to us</span>
+      <h2>Questions? We’re here to help</h2>
+      <p>Book a demo or reach out — we’ll help you get your school set up.</p></div>
+    <div class="contact-row reveal">
+      {% if ct.email %}<a class="contact-card" href="mailto:{{ ct.email }}"><span class="ic-sm"><i class="fas fa-envelope"></i></span><span><strong>Email</strong><span class="cval">{{ ct.email }}</span></span></a>{% endif %}
+      {% if ct.phone %}<a class="contact-card" href="tel:{{ ct.phone | replace(' ', '') }}"><span class="ic-sm"><i class="fas fa-phone"></i></span><span><strong>Call</strong><span class="cval">{{ ct.phone }}</span></span></a>{% endif %}
+      {% if ct.whatsapp %}<a class="contact-card" href="https://wa.me/{{ ct.whatsapp }}" rel="noopener" target="_blank"><span class="ic-sm"><i class="fab fa-whatsapp"></i></span><span><strong>WhatsApp</strong><span class="cval">Chat with us</span></span></a>{% endif %}
+      <a class="contact-card primary" href="{{ register_url }}"><span class="ic-sm"><i class="fas fa-rocket"></i></span><span><strong>Start free trial</strong><span class="cval">Set up in minutes</span></span></a>
+    </div>
+  </div></section>
+
   <!-- FINAL CTA -->
   <div class="wrap"><div class="cta-band reveal">
     <h2>Ready to simplify your school?</h2>
@@ -186,9 +280,38 @@
   </div></div>
 </main>
 
-<footer><div class="wrap row">
-  <div class="brand"><span class="mark">✦</span> {{ content.brand }}</div>
-  <div>{{ content.footer }}</div>
+<footer><div class="wrap">
+  <div class="foot-grid">
+    <div class="foot-brand">
+      <div class="brand"><span class="mark">✦</span> {{ content.brand }}</div>
+      <p class="foot-tag">All-in-one school management for nurseries, primary &amp; secondary schools — and school groups.</p>
+      <div class="foot-social">
+        {% if ct.email %}<a href="mailto:{{ ct.email }}" aria-label="Email us"><i class="fas fa-envelope"></i></a>{% endif %}
+        {% if ct.whatsapp %}<a href="https://wa.me/{{ ct.whatsapp }}" rel="noopener" target="_blank" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>{% endif %}
+        {% if ct.phone %}<a href="tel:{{ ct.phone | replace(' ', '') }}" aria-label="Call us"><i class="fas fa-phone"></i></a>{% endif %}
+      </div>
+    </div>
+    <nav class="foot-col" aria-label="Product">
+      <h4>Product</h4>
+      <a href="#features">Features</a><a href="#pricing">Pricing</a>
+      <a href="#benefits">Why us</a><a href="#faq">FAQ</a>
+    </nav>
+    <nav class="foot-col" aria-label="Company">
+      <h4>Company</h4>
+      <a href="#contact">Contact</a><a href="{{ register_url }}">Start free trial</a>
+      <a href="#security">Security</a>
+    </nav>
+    <nav class="foot-col" aria-label="Legal">
+      <h4>Legal</h4>
+      <a href="{{ url_for('marketing.legal', slug='privacy') }}">Privacy Policy</a>
+      <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms of Service</a>
+      <a href="{{ url_for('marketing.legal', slug='cookies') }}">Cookie Policy</a>
+    </nav>
+  </div>
+  <div class="foot-bottom">
+    <span>{{ content.footer }}</span>
+    <span>© {{ now_year }} {{ content.brand }}. All rights reserved.</span>
+  </div>
 </div></footer>
 
 <script nonce="{{ csp_nonce }}">
@@ -202,11 +325,18 @@
     var s = (document.getElementById('sub').value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g,'');
     if (s) location.href = 'https://' + s + '.' + BASE_DOMAIN + '/';
   });
-  // scroll reveal
-  var io = new IntersectionObserver(function(es){
-    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-  }, {threshold:.12});
-  document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+  // scroll reveal (skipped entirely when the visitor prefers reduced motion —
+  // the CSS then shows everything immediately)
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var els = document.querySelectorAll('.reveal');
+  if (reduce || !('IntersectionObserver' in window)) {
+    els.forEach(function(el){ el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, {threshold:.12});
+    els.forEach(function(el){ io.observe(el); });
+  }
 </script>
 </body>
 </html>

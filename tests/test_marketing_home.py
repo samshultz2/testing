@@ -95,6 +95,34 @@ def test_subdomain_availability_check(mt):
     assert r['available'] is True
 
 
+def test_homepage_has_seo_and_new_sections(mt):
+    app, _ = mt
+    c = app.test_client()
+    body = c.get('/', headers={'Host': 'www.posyhub.test'}).get_data(as_text=True)
+    # SEO / social / structured data
+    assert 'application/ld+json' in body
+    assert 'og:title' in body and 'twitter:card' in body
+    assert 'rel="canonical"' in body
+    assert '"@type": "FAQPage"' in body
+    # new sections
+    assert 'Skip to content' in body                 # a11y skip link
+    assert 'id="contact"' in body and 'id="security"' in body
+    assert 'Privacy Policy' in body and 'Terms of Service' in body   # footer legal
+
+
+def test_legal_pages_render(mt):
+    app, _ = mt
+    c = app.test_client()
+    H = {'Host': 'www.posyhub.test'}
+    for slug, title in [('privacy', 'Privacy Policy'), ('terms', 'Terms of Service'),
+                        ('cookies', 'Cookie Policy')]:
+        r = c.get(f'/legal/{slug}', headers=H)
+        assert r.status_code == 200
+        assert title in r.get_data(as_text=True)
+    # unknown slug redirects home
+    assert c.get('/legal/nope', headers=H).status_code in (301, 302)
+
+
 def test_line_editor_round_trips():
     from utils.site_content import parse_pairs, format_pairs
     text = 'Title A | Body A\nTitle B | Body B'

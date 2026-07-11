@@ -3397,6 +3397,13 @@
 ]
 ],
 [
+"marketing.legal",
+"/legal/<slug>",
+[
+"GET"
+]
+],
+[
 "mock_jamb.add_result",
 "/mock-jamb/exam/<int:exam_id>/results/add",
 [

@@ -54,19 +54,56 @@ DEFAULTS = {
          'body': 'We set up your private portal and admin login automatically, '
                  'then you’re in.'},
     ],
+    'hero_kicker': 'For nurseries, primary & secondary schools — and school groups',
+    'nigeria_note': 'Built for Nigerian schools — WAEC, JAMB, NECO and term-based '
+                    'report cards out of the box — and adaptable to other systems.',
+    'security': [
+        {'title': 'Isolated per-school database',
+         'body': 'Your records live in their own database — never mixed with '
+                 'another school’s.'},
+        {'title': 'Encrypted, automatic backups',
+         'body': 'Data is encrypted at rest and backed up daily, so nothing is '
+                 'ever lost.'},
+        {'title': 'Role-based access & audit logs',
+         'body': 'Every user sees only what they should, and sensitive actions '
+                 'are logged.'},
+        {'title': 'Secure cloud hosting',
+         'body': 'Runs on secure cloud infrastructure with 99.9% uptime — '
+                 'available anywhere, on any device.'},
+    ],
+    'contact': {
+        'email': 'hello@edusyncra.site',
+        'phone': '+234 800 000 0000',
+        'whatsapp': '2348000000000',      # digits only, for wa.me links
+    },
     'faqs': [
         {'q': 'Is there a free trial?',
          'a': 'Yes — every new school gets 3 days free, no card required. After '
               'that you subscribe to keep your portal active.'},
-        {'q': 'Is my data separate from other schools?',
-         'a': 'Completely. Each school gets its own database on its own '
-              'subdomain — nothing is shared.'},
-        {'q': 'Do I need branches?',
-         'a': 'No. The app works for a single school with no branches, and '
-              'scales up to many campuses with per-branch admins.'},
-        {'q': 'How do I pay?',
-         'a': 'Securely online from your portal’s billing page once your '
-              'trial starts. You can also be granted time by the platform team.'},
+        {'q': 'How long does setup take?',
+         'a': 'Minutes. You register, confirm your email, and your private portal '
+              'and admin login are provisioned automatically — no installs.'},
+        {'q': 'Is training provided?',
+         'a': 'The app is designed to need little or no training, and our team '
+              'helps you get started. Guided workflows walk you through each step.'},
+        {'q': 'Can we import our existing student data?',
+         'a': 'Yes. Students and other records can be imported from spreadsheets, '
+              'so you don’t start from scratch.'},
+        {'q': 'Does it support multiple branches?',
+         'a': 'Yes. Run many campuses with per-branch admins, or a single school '
+              'with no branches at all — it scales with you.'},
+        {'q': 'Can parents and students access the system?',
+         'a': 'Yes — parents and students get their own portals for results, '
+              'attendance and fee status, on any device.'},
+        {'q': 'Is my data secure and separate from other schools?',
+         'a': 'Completely. Each school gets its own encrypted database on its own '
+              'subdomain, with daily backups and role-based access — nothing is shared.'},
+        {'q': 'What payment methods are supported?',
+         'a': 'Secure online payment (card and bank transfer) from your portal’s '
+              'billing page once your trial starts.'},
+        {'q': 'Can we cancel anytime?',
+         'a': 'Yes. There’s no lock-in — you can stop whenever you like and your '
+              'data stays yours.'},
     ],
     'testimonials': [
         {'name': 'Mrs. Adeyemi, Principal', 'quote': 'Result processing that took '

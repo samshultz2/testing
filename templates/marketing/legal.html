@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} — {{ content.brand }}</title>
+<meta name="description" content="{{ title }} for {{ content.brand }} — a plain-language summary.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://{{ base_domain }}{{ request.path }}">
+<meta name="theme-color" content="#0d6a4e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="nav" id="nav"><div class="wrap nav-in">
+  <a class="brand" href="{{ url_for('marketing.home') }}"><span class="mark">✦</span> {{ content.brand }}</a>
+  <div class="nav-right">
+    <a class="btn btn-primary" href="{{ register_url }}">{{ content.hero_cta }}</a>
+  </div>
+</div></header>
+
+<main id="main"><div class="legal">
+  <a href="{{ url_for('marketing.home') }}" style="color:var(--primary);font-size:14px"><i class="fas fa-arrow-left"></i> Back to home</a>
+  <h1>{{ title }}</h1>
+  <p class="muted">{{ content.brand }} · Last updated {{ now_year or '' }}</p>
+  <div class="summary-note"><i class="fas fa-circle-info"></i> This is a plain-language summary of our practices, not a substitute for a formal policy. For the complete document or any question, contact us at
+    <a href="mailto:{{ (content.contact.email if content.contact else 'hello@' ~ base_domain) }}">{{ content.contact.email if content.contact else 'hello@' ~ base_domain }}</a>.</div>
+  {% for heading, body in sections %}
+  <section><h2>{{ heading }}</h2><p>{{ body }}</p></section>
+  {% endfor %}
+</div></main>
+
+<footer><div class="wrap"><div class="foot-bottom" style="border-top:0;margin-top:0">
+  <span>{{ content.footer }}</span>
+  <span>© {{ now_year or '' }} {{ content.brand }}. All rights reserved.</span>
+</div></div></footer>
+</body>
+</html>
