@@ -4,11 +4,46 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
+// Recently-accessed classes, shared across every results screen (localStorage),
+// so a teacher resumes any class they've touched this term with one click
+// instead of re-picking term + class each time.
+const RECENT_KEY = 'results:recentClasses';
+function readRecent() {
+  try { const a = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function pushRecent(termId, asgId, label) {
+  if (!asgId || !label) return;
+  try {
+    const list = readRecent().filter((r) => String(r.id) !== String(asgId));
+    list.unshift({ id: String(asgId), term: String(termId || ''), label });
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 6)));
+  } catch (e) { /* storage unavailable */ }
+}
+// Record the current class and render a one-click "Recent" strip. `onPick`
+// receives (termId, assignmentId).
+function useRecordRecent(termId, asgId, label) {
+  React.useEffect(() => { if (asgId && label) pushRecent(termId, asgId, label); }, [asgId, label]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+function RecentClasses({ currentId, onPick }) {
+  const shown = readRecent().filter((r) => String(r.id) !== String(currentId || ''));
+  if (!shown.length) return null;
+  return (
+    <div className="recent-classes" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '.6rem' }}>
+      <span className="text-muted text-sm"><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent:</span>
+      {shown.map((r) => <button type="button" key={r.id} className="btn btn-sm btn-light" onClick={() => onPick(r.term, r.id)}>{r.label}</button>)}
+    </div>
+  );
+}
+
 // Shared term + class (assignment) filter bar used by the score-workflow pages.
 function ClassFilter({ d, extraTerm = false }) {
   const nav = useNav();
   const go = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, assignment_id: d.assignment_id, ...extra });
+  const curLabel = (d.assignments.find((a) => String(a.id) === String(d.assignment_id)) || {}).display_name;
+  useRecordRecent(d.term_id, d.assignment_id, curLabel);
   return (
+    <>
+      <RecentClasses currentId={d.assignment_id} onPick={(term, asg) => go({ term_id: term, assignment_id: asg })} />
     <div className="card mb-3"><div className="card-body"><form className="filter-form" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
       <div className="form-group"><label className="form-label">Term</label>
         <select className="form-control" value={d.term_id} onChange={(e) => go({ term_id: e.target.value, assignment_id: '' })}>
@@ -18,6 +53,7 @@ function ClassFilter({ d, extraTerm = false }) {
         <select className="form-control" value={d.assignment_id} onChange={(e) => go({ assignment_id: e.target.value })}>
           <option value="">Select class…</option>{d.assignments.map((a) => <option key={a.id} value={a.id}>{a.display_name}</option>)}</select></div>
     </form></div></div>
+    </>
   );
 }
 
@@ -342,6 +378,7 @@ function Scores({ d, notify }) {
   const toggleAll = (on) => { const m = {}; if (on) d.students_data.forEach((s) => { m[s.id] = true; }); setSelected(m); };
   const applyFill = () => { if (!selectedIds.length) return; setScores((m) => { const n = { ...m }; selectedIds.forEach((id) => { n[id] = fillValue; }); return n; }); };
   const set = (params) => navParams(nav.go, d.self_url, { term_id: d.term_id, assignment_id: d.assignment_id, class_subject_id: d.class_subject_id, assessment_type_id: d.assessment_type_id, ...params });
+  useRecordRecent(d.term_id, d.assignment_id, (d.assignments.find((a) => String(a.id) === String(d.assignment_id)) || {}).display_name);
   // Remember the last term+class so returning to score entry doesn't re-ask for
   // them; restore once on a fresh visit when nothing is selected yet.
   React.useEffect(() => {
@@ -391,6 +428,7 @@ function Scores({ d, notify }) {
           <a href={d.urls.import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Import Excel</a>
         </div>
       </div>
+      <RecentClasses currentId={d.assignment_id} onPick={(term, asg) => set({ term_id: term, assignment_id: asg, class_subject_id: '', assessment_type_id: '' })} />
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
         <div className="form-group"><label className="form-label">Term</label>
           <select className="form-control" value={d.term_id} onChange={(e) => set({ term_id: e.target.value, assignment_id: '', class_subject_id: '', assessment_type_id: '' })}>
