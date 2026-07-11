@@ -4398,6 +4398,13 @@
 ]
 ],
 [
+"sales.history_export",
+"/sales/history/export",
+[
+"GET"
+]
+],
+[
 "sales.new_sale",
 "/sales/new",
 [

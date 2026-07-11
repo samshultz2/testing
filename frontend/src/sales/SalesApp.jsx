@@ -324,15 +324,107 @@ function NewSale({ d, notify }) {
 }
 
 // ---- History ---------------------------------------------------------------
+function HistoryRow({ r }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <tr>
+        <td>
+          <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit' }}>
+            <i aria-hidden="true" className={'fas fa-chevron-' + (open ? 'down' : 'right')} style={{ marginRight: 6 }} />
+            <a href={r.receipt_url}>{r.receipt_no}</a>
+          </button>
+        </td>
+        <td>{r.buyer}{r.class_arm && <span className="text-muted text-sm"> · {r.class_arm}</span>}</td>
+        <td><span className="badge badge-secondary">{r.buyer_type}</span></td>
+        <td>{r.cashier}</td>
+        <td>{r.payment_method}</td>
+        <td className="text-right">{r.item_count}</td>
+        <td className="text-right"><strong>{naira(r.total)}</strong>{r.balance > 0 && <div className="text-sm" style={{ color: '#e74a3b' }}>owes {naira(r.balance)}</div>}</td>
+        <td className="text-muted text-sm">{r.when}</td>
+      </tr>
+      {open && (
+        <tr><td colSpan={8} style={{ background: 'var(--bg-muted, rgba(0,0,0,.02))', padding: 0 }}>
+          <table className="data-table" style={{ margin: 0 }}>
+            <thead><tr><th>Item</th><th className="text-right">Qty</th><th className="text-right">Unit</th><th className="text-right">Line total</th></tr></thead>
+            <tbody>{r.items.map((it, i) => (
+              <tr key={i}><td>{it.name}</td><td className="text-right">{it.quantity}</td>
+                <td className="text-right">{naira(it.unit_price)}</td><td className="text-right">{naira(it.line_total)}</td></tr>
+            ))}</tbody>
+          </table>
+        </td></tr>
+      )}
+    </>
+  );
+}
+
 function History({ d }) {
+  const nav = useNav();
+  const a = d.applied || {};
+  const o = d.options || {};
+  const [f, setF] = useState({ from: a.from || '', to: a.to || '', method: a.method || '',
+    cashier: a.cashier || '', buyer_type: a.buyer_type || '', product_id: a.product_id || '',
+    category: a.category || '', q: a.q || '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const apply = () => navParams(nav.go, d.self_url, f);
+  const reset = () => { const empty = { from: '', to: '', method: '', cashier: '', buyer_type: '', product_id: '', category: '', q: '' }; setF(empty); navParams(nav.go, d.self_url, empty); };
+  const exportUrl = (fmt) => {
+    const p = new URLSearchParams(); Object.entries(f).forEach(([k, v]) => { if (v) p.set(k, v); });
+    p.set('format', fmt); return `${d.export_url}?${p.toString()}`;
+  };
+  const s = d.summary || {};
+
   return (
     <>
       <div className="page-header">
         <h1><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Sales History</h1>
-        <span className="badge badge-success">{naira(d.total)}</span>
+        <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+          <a className="btn btn-secondary btn-sm" href={exportUrl('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
+          <a className="btn btn-secondary btn-sm" href={exportUrl('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()}><i aria-hidden="true" className="fas fa-print" /> Print</button>
+        </div>
       </div>
-      <div className="card"><div className="card-body" style={{ padding: 0 }}>
-        {d.sales.length ? <SalesTable rows={d.sales} withItems paged /> : <EmptyState icon="fa-receipt" title="No sales yet" />}
+
+      <div className="card mb-3"><div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem', alignItems: 'flex-end' }}>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">From</span>
+          <input type="date" className="form-control" value={f.from} onChange={(e) => set('from', e.target.value)} /></label>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">To</span>
+          <input type="date" className="form-control" value={f.to} onChange={(e) => set('to', e.target.value)} /></label>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Buyer type</span>
+          <select className="form-control" value={f.buyer_type} onChange={(e) => set('buyer_type', e.target.value)}>
+            <option value="">All buyers</option><option value="student">Students</option><option value="other">Staff / Walk-in</option></select></label>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Method</span>
+          <select className="form-control" value={f.method} onChange={(e) => set('method', e.target.value)}>
+            <option value="">All methods</option>{(o.methods || []).map((m) => <option key={m}>{m}</option>)}</select></label>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Cashier</span>
+          <select className="form-control" value={f.cashier} onChange={(e) => set('cashier', e.target.value)}>
+            <option value="">All cashiers</option>{(o.cashiers || []).map((cn) => <option key={cn}>{cn}</option>)}</select></label>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Category</span>
+          <select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>
+            <option value="">All categories</option>{(o.categories || []).map((cn) => <option key={cn}>{cn}</option>)}</select></label>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Product</span>
+          <select className="form-control" value={f.product_id} onChange={(e) => set('product_id', e.target.value)}>
+            <option value="">All products</option>{(o.products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Search</span>
+          <input type="search" className="form-control" placeholder="Receipt or name" value={f.q} onChange={(e) => set('q', e.target.value)} /></label>
+        <div style={{ display: 'flex', gap: '.4rem' }}>
+          <button type="button" className="btn btn-primary" onClick={apply}><i aria-hidden="true" className="fas fa-filter" /> Apply</button>
+          <button type="button" className="btn btn-light" onClick={reset}>Clear</button>
+        </div>
+      </div></div>
+
+      <div className="text-muted text-sm" style={{ marginBottom: '.6rem' }}>
+        <strong>{s.count || 0}</strong> sale(s) · <strong>{naira(s.revenue || 0)}</strong> · {s.units || 0} unit(s)
+      </div>
+
+      <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        {d.sales.length ? (
+          <table className="data-table">
+            <thead><tr><th>Receipt</th><th>Buyer</th><th>Type</th><th>Cashier</th><th>Method</th><th className="text-right">Items</th><th className="text-right">Total</th><th>When</th></tr></thead>
+            <tbody>{d.sales.map((r) => <HistoryRow key={r.id} r={r} />)}</tbody>
+          </table>
+        ) : <EmptyState icon="fa-receipt" title="No sales match these filters" />}
       </div></div>
     </>
   );

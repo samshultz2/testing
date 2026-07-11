@@ -16,6 +16,7 @@ from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
 from utils.helpers import get_active_term, parse_date
 from utils.search import like_term
+from utils.web_exports import xlsx_response
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
 
@@ -288,17 +289,148 @@ def api_students():
          'student_id': s.student_id} for s in rows]})
 
 
+def _history_context(limit=500):
+    """Filtered, detailed sales history shared by the page and the export. Reads
+    from/to, method, cashier, buyer_type, product_id, category and a text query
+    from request.args; returns (rows, summary, options, applied)."""
+    from datetime import timedelta
+    from collections import defaultdict
+    a = request.args
+    to_d = parse_date(a.get('to'))
+    from_d = parse_date(a.get('from'))
+    method = (a.get('method') or '').strip()
+    cashier = (a.get('cashier') or '').strip()
+    buyer_type = (a.get('buyer_type') or '').strip()   # 'student' | 'other'
+    product_id = a.get('product_id', type=int)
+    category = (a.get('category') or '').strip()
+    q = (a.get('q') or '').strip()
+
+    query = scope_query(Sale.query, Sale)
+    if from_d:
+        query = query.filter(func.date(Sale.created_at) >= from_d)
+    if to_d:
+        query = query.filter(func.date(Sale.created_at) <= to_d)
+    if method:
+        query = query.filter(Sale.payment_method == method)
+    if cashier:
+        query = query.filter(Sale.sold_by == cashier)
+    if buyer_type == 'student':
+        query = query.filter(Sale.student_id.isnot(None))
+    elif buyer_type == 'other':
+        query = query.filter(Sale.student_id.is_(None))
+    if q:
+        term = like_term(q)
+        query = query.filter(db.or_(Sale.receipt_no.ilike(term, escape='\\'),
+                                    Sale.customer_name.ilike(term, escape='\\')))
+    # Product / category filters compose via a SaleItem subquery.
+    if product_id or category:
+        sub = db.session.query(SaleItem.sale_id)
+        if category:
+            sub = sub.join(Product, SaleItem.product_id == Product.id).filter(Product.category == category)
+        if product_id:
+            sub = sub.filter(SaleItem.product_id == product_id)
+        query = query.filter(Sale.id.in_(sub))
+
+    sales = query.order_by(Sale.created_at.desc()).limit(limit).all()
+    sale_ids = [s.id for s in sales]
+
+    # Batch line items + buyer placements (no N+1).
+    items_by_sale = defaultdict(list)
+    if sale_ids:
+        for it in SaleItem.query.filter(SaleItem.sale_id.in_(sale_ids)).all():
+            items_by_sale[it.sale_id].append(it)
+    placement = {}
+    active_term = get_active_term()
+    stud_ids = [s.student_id for s in sales if s.student_id]
+    if stud_ids and active_term:
+        enr = (db.session.query(StudentEnrollment.student_id, SchoolClass.name,
+                                ClassArm.name, ClassArm.is_default)
+               .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+               .join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id)
+               .join(ClassArm, ClassArmAssignment.arm_id == ClassArm.id)
+               .filter(StudentEnrollment.student_id.in_(stud_ids),
+                       StudentEnrollment.is_active == True,
+                       ClassArmAssignment.term_id == active_term.id).all())
+        for sid, cname, aname, adef in enr:
+            placement[sid] = f'{cname}{"" if adef else " " + (aname or "")}'.strip()
+
+    rows = []
+    for s in sales:
+        its = items_by_sale.get(s.id, [])
+        paid = s.amount_paid if s.amount_paid is not None else (s.total or 0)
+        rows.append({
+            'id': s.id, 'receipt_no': s.receipt_no, 'buyer': s.buyer,
+            'buyer_type': 'Student' if s.student_id else 'Staff / Walk-in',
+            'class_arm': placement.get(s.student_id, '') if s.student_id else '',
+            'cashier': s.sold_by or '', 'payment_method': s.payment_method or 'Cash',
+            'total': round(s.total or 0, 2), 'amount_paid': round(paid, 2),
+            'balance': round((s.total or 0) - paid, 2),
+            'item_count': len(its),
+            'items': [{'name': it.description or '', 'quantity': it.quantity or 0,
+                       'unit_price': round(it.unit_price or 0, 2),
+                       'line_total': round(it.line_total or 0, 2)} for it in its],
+            'when': s.created_at.strftime('%d %b %Y %H:%M') if s.created_at else '',
+            'receipt_url': url_for('sales.receipt', sale_id=s.id),
+        })
+    summary = {'count': len(rows), 'revenue': round(sum(r['total'] for r in rows), 2),
+               'units': sum(sum(i['quantity'] for i in r['items']) for r in rows)}
+    cashiers = sorted({r[0] for r in scope_query(
+        db.session.query(Sale.sold_by).distinct(), Sale).all() if r[0]})
+    options = {'methods': SALE_METHODS, 'categories': list(PRODUCT_CATEGORIES),
+               'cashiers': cashiers,
+               'products': [{'id': p.id, 'name': p.name} for p in scope_query(
+                   Product.query, Product).order_by(Product.name).all()]}
+    applied = {'from': a.get('from', ''), 'to': a.get('to', ''), 'method': method,
+               'cashier': cashier, 'buyer_type': buyer_type,
+               'product_id': product_id or '', 'category': category, 'q': q}
+    return rows, summary, options, applied
+
+
 @sales_bp.route('/history')
 @login_required
 def history():
-    rows = (scope_query(Sale.query, Sale)
-            .order_by(Sale.created_at.desc()).limit(300).all())
-    total = sum(s.total or 0 for s in rows)
+    rows, summary, options, applied = _history_context()
     return _render({
-        'page': 'history', 'total': total,
-        'sales': [_sale_row(s, with_when_year=True) for s in rows],
-        'urls': {'dashboard': url_for('sales.dashboard')},
+        'page': 'history', 'total': summary['revenue'], 'summary': summary,
+        'sales': rows, 'options': options, 'applied': applied,
+        'self_url': url_for('sales.history'),
+        'export_url': url_for('sales.history_export'),
+        'urls': {'dashboard': url_for('sales.dashboard'),
+                 'analytics': url_for('sales.analytics')},
     })
+
+
+@sales_bp.route('/history/export')
+@login_required
+def history_export():
+    """Export the filtered sales history as CSV or Excel (one row per sale)."""
+    fmt = (request.args.get('format') or 'csv').lower()
+    rows, _summary, _opts, _applied = _history_context(limit=5000)
+    headers = ['Receipt', 'Date', 'Buyer', 'Type', 'Class/Arm', 'Cashier',
+               'Method', 'Items', 'Total', 'Paid', 'Balance']
+
+    def _record(r):
+        return [r['receipt_no'], r['when'], r['buyer'], r['buyer_type'], r['class_arm'],
+                r['cashier'], r['payment_method'], r['item_count'],
+                r['total'], r['amount_paid'], r['balance']]
+
+    if fmt in ('excel', 'xlsx'):
+        from openpyxl import Workbook
+        wb = Workbook(); ws = wb.active; ws.title = 'Sales'
+        ws.append(headers)
+        for r in rows:
+            ws.append(_record(r))
+        return xlsx_response(wb, 'sales_history.xlsx')
+    # CSV (default)
+    import csv
+    import io
+    from flask import Response
+    out = io.StringIO(); w = csv.writer(out)
+    w.writerow(headers)
+    for r in rows:
+        w.writerow(_record(r))
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=sales_history.csv'})
 
 
 @sales_bp.route('/analytics')
