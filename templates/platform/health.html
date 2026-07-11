@@ -1,0 +1,43 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Platform health{% endblock %}
+{% block heading %}Platform health{% endblock %}
+{% block subheading %}Live reachability and configuration checks for the platform.{% endblock %}
+
+{% block head %}
+<style>
+  .hstatus{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:14px;padding:6px 14px;border-radius:99px;margin-bottom:16px}
+  .hstatus.ok{background:var(--ok-soft);color:var(--ok)} .hstatus.warn{background:var(--warn-soft);color:var(--warn)}
+  .hstatus.bad{background:var(--bad-soft);color:var(--bad)}
+  .hcheck{display:flex;align-items:center;gap:14px;padding:14px 18px}
+  .hcheck + .hcheck{border-top:1px solid var(--line-2)}
+  .hcheck .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+  .hcheck .nm{font-weight:600}
+  .hcheck .dt{margin-left:auto;color:var(--faint);font-size:13.5px}
+  .hbadge{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 9px;border-radius:99px}
+  .hbadge.ok{background:var(--ok-soft);color:var(--ok)} .hbadge.warn{background:var(--warn-soft);color:var(--warn)}
+  .hbadge.bad{background:var(--bad-soft);color:var(--bad)}
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="hstatus {{ overall }}">
+    <i class="fas {{ 'fa-circle-check' if overall=='ok' else 'fa-triangle-exclamation' if overall=='warn' else 'fa-circle-xmark' }}"></i>
+    {{ 'All systems operational' if overall=='ok' else 'Attention needed' if overall=='warn' else 'Critical issue' }}
+  </div>
+
+  <div class="panel">
+    {% for c in checks %}
+    <div class="hcheck">
+      <span class="dot {{ c.status }}"></span>
+      <span class="nm">{{ c.name }}</span>
+      <span class="dt">{{ c.detail }}</span>
+      <span class="hbadge {{ c.status }}">{{ {'ok':'OK','warn':'Check','bad':'Down'}[c.status] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-top:12px">
+    <i class="fas fa-circle-info"></i> Gateway and email show configuration status — no external calls are made from this page.
+    <a href="{{ url_for('platform.health') }}">Re-run checks</a>.
+  </p>
+{% endblock %}

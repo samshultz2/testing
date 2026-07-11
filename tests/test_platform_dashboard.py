@@ -272,3 +272,13 @@ def test_bulk_grant_days(mt):
                  '_csrf_token': tok})
     assert billing.is_active(tenancy.get_tenant('alpha'))
     assert billing.is_active(tenancy.get_tenant('beta'))
+
+
+def test_health_page(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    r = c.get('/platform/health', headers={'Host': 'edusyncra.test'})
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Control plane database' in body and 'Tenant databases' in body
+    assert 'Payment gateway' in body and 'Email (SMTP)' in body

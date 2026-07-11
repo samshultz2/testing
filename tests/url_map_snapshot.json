@@ -3788,6 +3788,13 @@
 ]
 ],
 [
+"platform.health",
+"/platform/health",
+[
+"GET"
+]
+],
+[
 "platform.homepage",
 "/platform/homepage",
 [

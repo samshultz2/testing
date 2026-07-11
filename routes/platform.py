@@ -308,6 +308,17 @@ def save_notes(subdomain):
     return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
 
 
+@platform_bp.route('/health')
+@platform_admin_required
+def health():
+    """Operational health: control-plane + tenant DB reachability, scheduler,
+    and gateway/email configuration (no external calls)."""
+    from utils import platform_health
+    rows = platform_health.health_checks(current_app)
+    return render_template('platform/health.html', active='health',
+                           checks=rows, overall=platform_health.overall(rows))
+
+
 @platform_bp.route('/audit')
 @platform_admin_required
 def audit():
