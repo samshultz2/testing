@@ -147,6 +147,7 @@ def _compute(term_id, assignment_id):
 
     # Historical: same class-arm's previous term average (one lookup).
     prev_avg = _previous_term_average(term_id, asg)
+    trends = _class_trends(term_id, asg)
 
     return {
         'summary': {
@@ -167,7 +168,57 @@ def _compute(term_id, assignment_id):
         'subjects': subjects_by_difficulty,
         'top_students': [{'name': s['name'], 'average': s['average']} for s in ranked[:10]],
         'intervention': intervention,
+        'trends': trends,
     }
+
+
+def _class_trends(term_id, asg):
+    """Class average and per-subject averages across every term of the session,
+    for this class-arm — the multi-term performance trend. Bounded (a session
+    has ~3 terms) and served from the same cache."""
+    from models import (db, Term, ClassArmAssignment, StudentEnrollment,
+                        TermSummary, ClassSubject, Subject, StudentScore)
+    term = db.session.get(Term, term_id)
+    if not term or not term.session_id:
+        return {'term_names': [], 'averages': [], 'subjects': []}
+    terms = Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all()
+    term_names, averages = [], []
+    subj_series = {}                         # subject name -> {term_name: avg}
+    for t in terms:
+        term_names.append(t.name)
+        a = ClassArmAssignment.query.filter_by(
+            class_id=asg.class_id, arm_id=asg.arm_id, term_id=t.id).first()
+        if not a:
+            averages.append(None)
+            continue
+        sids = [e.student_id for e in StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=a.id, is_active=True).all()]
+        avgs = [ts.average_score for ts in TermSummary.query.filter(
+            TermSummary.term_id == t.id, TermSummary.student_id.in_(sids)).all()
+            if ts.average_score] if sids else []
+        averages.append(round(sum(avgs) / len(avgs), 2) if avgs else None)
+        css = (ClassSubject.query.filter_by(term_id=t.id, class_id=asg.class_id, is_active=True)
+               .filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == asg.arm_id))
+               .join(Subject).all())
+        name_by_cs = {cs.id: cs.subject.name for cs in css}
+        cs_ids = list(name_by_cs)
+        totals = {}
+        if sids and cs_ids:
+            for sc in StudentScore.query.filter(
+                    StudentScore.student_id.in_(sids),
+                    StudentScore.class_subject_id.in_(cs_ids)).all():
+                if sc.score is None:
+                    continue
+                totals[(sc.student_id, sc.class_subject_id)] = \
+                    totals.get((sc.student_id, sc.class_subject_id), 0) + sc.score
+        per_cs = {}
+        for (sid, csid), tot in totals.items():
+            per_cs.setdefault(csid, []).append(tot)
+        for csid, arr in per_cs.items():
+            subj_series.setdefault(name_by_cs[csid], {})[t.name] = round(sum(arr) / len(arr), 2)
+    subjects = [{'name': nm, 'values': [per.get(tn) for tn in term_names]}
+                for nm, per in sorted(subj_series.items())]
+    return {'term_names': term_names, 'averages': averages, 'subjects': subjects}
 
 
 def _previous_term_average(term_id, asg):
@@ -197,4 +248,5 @@ def _previous_term_average(term_id, asg):
 
 def _empty():
     return {'summary': {}, 'grade_distribution': [], 'subjects': [],
-            'top_students': [], 'intervention': []}
+            'top_students': [], 'intervention': [],
+            'trends': {'term_names': [], 'averages': [], 'subjects': []}}

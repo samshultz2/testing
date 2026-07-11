@@ -375,6 +375,50 @@ def report_card_pdf(student_id):
     return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=name)
 
 
+@subjects_bp.route('/report-cards/pdf')
+@login_required
+@result_card_required
+def report_cards_pdf_batch():
+    """Download every report card for a class+term as one PDF (one per page).
+    Reuses the single-card renderer, so batch pages match the individual PDFs."""
+    from flask import send_file
+    from utils.report_card import build_report_card, active_traits, RATING_LABELS
+    from utils.report_pdf import batch_report_cards_pdf
+    from sqlalchemy.orm import joinedload
+    term_id = request.args.get('term_id', type=int)
+    assignment_id = request.args.get('assignment_id', type=int)
+    if not term_id or not assignment_id:
+        flash('Select a term and class first.', 'error')
+        return redirect(url_for('subjects.print_all_report_cards', term_id=term_id or ''))
+    if not can_access_class(assignment_id):
+        flash('You do not have access to that class.', 'error')
+        return redirect(url_for('subjects.print_all_report_cards'))
+    term = db.session.get(Term, term_id)
+    asg = db.session.get(ClassArmAssignment, assignment_id)
+    if not term or not asg:
+        flash('Select a term and class first.', 'error')
+        return redirect(url_for('subjects.print_all_report_cards'))
+    enrollments = (StudentEnrollment.query
+                   .options(joinedload(StudentEnrollment.student))
+                   .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                   .join(Student).order_by(Student.surname, Student.first_name).all())
+    cards = []
+    for e in enrollments:
+        _, rc = build_report_card(e.student_id, term_id)
+        if rc:
+            cards.append((e.student, rc, term))
+    if not cards:
+        flash('No results to export for this class yet.', 'error')
+        return redirect(url_for('subjects.print_all_report_cards', term_id=term_id, assignment_id=assignment_id))
+    buf = batch_report_cards_pdf(cards, SchoolSettings.get('school_name', 'School'),
+                                 active_traits(), RATING_LABELS,
+                                 title=f'{asg.display_name} — {term.full_name}')
+    from utils.audit import log_action
+    log_action('results.report_cards_pdf', detail=f'{asg.display_name} {term.name}: {len(cards)} card(s)')
+    name = f"{asg.display_name.replace(' ', '_')}_{term.name.replace(' ', '_')}_report_cards.pdf"
+    return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=name)
+
+
 @subjects_bp.route('/broadsheet/export')
 @login_required
 def export_broadsheet():

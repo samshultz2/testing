@@ -28,7 +28,10 @@
 <div class="page-header no-print">
     <h1>Print All Report Cards</h1>
     {% if all_reports %}
-    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print All ({{ all_reports|length }})</button>
+    <div class="page-header-actions">
+      <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print All ({{ all_reports|length }})</button>
+      <a href="{{ url_for('subjects.report_cards_pdf_batch', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-success"><i class="fas fa-file-pdf"></i> Download all as PDF</a>
+    </div>
     {% endif %}
 </div>
 

@@ -858,6 +858,32 @@ function Analytics({ d, notify }) {
               ) : <div style={{ padding: '1rem' }} className="text-muted">No students below the pass mark. 🎉</div>}
             </div></div>
         </div>
+
+        {a.trends && a.trends.term_names.length > 1 && (
+          <div className="card mt-3"><div className="card-header"><h3>Performance trend across terms</h3></div>
+            <div className="card-body">
+              <div style={{ marginBottom: '.8rem' }}>
+                <div className="text-muted text-sm mb-1">Class average</div>
+                {a.trends.term_names.map((tn, i) => (
+                  <Bar key={tn} label={tn} value={a.trends.averages[i] == null ? 0 : a.trends.averages[i]} max={100} />
+                ))}
+              </div>
+              {a.trends.subjects.length > 0 && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table"><thead><tr><th>Subject</th>{a.trends.term_names.map((tn) => <th key={tn} className="text-right">{tn}</th>)}</tr></thead>
+                    <tbody>{a.trends.subjects.map((sub) => (
+                      <tr key={sub.name}><td>{sub.name}</td>
+                        {sub.values.map((v, i) => {
+                          const prev = i > 0 ? sub.values[i - 1] : null;
+                          const up = v != null && prev != null && v > prev;
+                          const down = v != null && prev != null && v < prev;
+                          return <td key={i} className="text-right">{v == null ? '—' : v}{up && <span style={{ color: 'var(--success)' }}> ▲</span>}{down && <span style={{ color: '#e74a3b' }}> ▼</span>}</td>;
+                        })}</tr>
+                    ))}</tbody></table>
+                </div>
+              )}
+            </div></div>
+        )}
       </>)}
     </>
   );

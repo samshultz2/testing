@@ -69,3 +69,31 @@ def test_print_all_report_cards_renders(app):
     c = _admin(app)
     r = c.get(f"/subjects/report-cards/print-all?term_id={ids['term']}&assignment_id={ids['asg']}")
     assert r.status_code == 200
+
+
+def test_report_cards_batch_pdf(app):
+    ids = _setup(app)
+    sid = _student(app, ids, 'PERF_PDF')
+    _seed_score(app, sid, ids, 72)
+    c = _admin(app)
+    r = c.get(f"/subjects/report-cards/pdf?term_id={ids['term']}&assignment_id={ids['asg']}")
+    assert r.status_code == 200
+    assert r.mimetype == 'application/pdf'
+    assert r.get_data()[:5] == b'%PDF-'
+
+
+def test_single_and_batch_pdf_share_layout(app):
+    """The refactor keeps the single-card renderer working identically."""
+    from utils.report_pdf import report_card_pdf, batch_report_cards_pdf
+    from utils.report_card import build_report_card, active_traits, RATING_LABELS
+    from models import Student, Term
+    ids = _setup(app)
+    sid = _student(app, ids, 'PERF_ONE')
+    _seed_score(app, sid, ids, 55)
+    with app.app_context():
+        _, rc = build_report_card(sid, ids['term'])
+        student = db.session.get(Student, sid)
+        term = db.session.get(Term, ids['term'])
+        one = report_card_pdf(student, rc, term, 'School', active_traits(), RATING_LABELS).read()
+        many = batch_report_cards_pdf([(student, rc, term)], 'School', active_traits(), RATING_LABELS).read()
+    assert one[:5] == b'%PDF-' and many[:5] == b'%PDF-'

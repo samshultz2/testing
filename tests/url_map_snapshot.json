@@ -5121,6 +5121,13 @@
 ]
 ],
 [
+"subjects.report_cards_pdf_batch",
+"/subjects/report-cards/pdf",
+[
+"GET"
+]
+],
+[
 "subjects.save_scores",
 "/subjects/scores/save",
 [

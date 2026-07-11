@@ -12,7 +12,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
-                                Spacer)
+                                Spacer, PageBreak)
 
 _PRIMARY = colors.HexColor('#0d6a4e')
 _LIGHT = colors.HexColor('#e8f5f1')
@@ -55,13 +55,10 @@ def _styles():
     return _S
 
 
-def report_card_pdf(student, report_data, term, school_name,
+def _card_flowables(student, report_data, term, school_name,
                     affective_traits, rating_labels):
-    _styles()
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
-                            leftMargin=12 * mm, rightMargin=12 * mm,
-                            title=f'Report — {student.full_name}')
+    """The flowables for one student's report sheet — shared by the single-card
+    and whole-class batch renderers so both stay pixel-identical."""
     e = []
     from utils.school import logo_flowable, logo_header_flowable
     logo = logo_flowable(max_h_mm=16, max_w_mm=28)
@@ -152,6 +149,44 @@ def report_card_pdf(student, report_data, term, school_name,
         if ts.principal_comment:
             e.append(Paragraph(f"<b>Principal:</b> {_esc(ts.principal_comment)}", _S['cell']))
 
-    doc.build(e)
+    return e
+
+
+def report_card_pdf(student, report_data, term, school_name,
+                    affective_traits, rating_labels):
+    """A single student's report sheet as a one-PDF buffer."""
+    _styles()
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=12 * mm, rightMargin=12 * mm,
+                            title=f'Report — {student.full_name}')
+    doc.build(_card_flowables(student, report_data, term, school_name,
+                              affective_traits, rating_labels))
+    buf.seek(0)
+    return buf
+
+
+def batch_report_cards_pdf(cards, school_name, affective_traits, rating_labels, *, title='Report Cards'):
+    """A whole class's report sheets in one PDF, one student per page.
+
+    ``cards`` is an iterable of (student, report_data, term). Reuses the exact
+    single-card layout so batch output matches the individual downloads."""
+    _styles()
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=12 * mm, rightMargin=12 * mm, title=title)
+    flow = []
+    first = True
+    for (student, report_data, term) in cards:
+        if not report_data:
+            continue
+        if not first:
+            flow.append(PageBreak())
+        first = False
+        flow.extend(_card_flowables(student, report_data, term, school_name,
+                                    affective_traits, rating_labels))
+    if not flow:
+        flow.append(Paragraph('No results to export.', _S['sub']))
+    doc.build(flow)
     buf.seek(0)
     return buf

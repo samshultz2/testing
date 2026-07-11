@@ -45,6 +45,19 @@ def test_analytics_summary_and_intervention(app):
     assert not any(st['id'] == hi for st in a['intervention'])
 
 
+def test_analytics_includes_term_trends(app):
+    ids = _setup(app)
+    sid = _student(app, ids, 'AN_TREND')
+    _seed(app, sid, ids, 70)
+    with app.app_context():
+        a = ra.class_analytics(ids['term'], ids['asg'], use_cache=False)
+        tr = a['trends']
+        assert 'term_names' in tr and 'averages' in tr and 'subjects' in tr
+        # the current term appears in the series
+        term_name = __import__('models').Term.query.get(ids['term']).name
+        assert term_name in tr['term_names']
+
+
 def test_analytics_route_renders_json(app):
     ids = _setup(app)
     sid = _student(app, ids, 'AN_ROUTE')
