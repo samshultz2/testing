@@ -97,7 +97,13 @@
    weight cells (a real table, not the wide bold roster boxes). */
 .tt-sheet table.grid-tt th.sn-col,
 .tt-sheet table.grid-tt td.sn-col{width:2.6em;text-align:center;font-weight:700}
+/* size each column to its own content (not an equal share of 100%), so long
+   names get the room and short columns like "Number" stay tight; wrap only
+   when the whole row can't fit the page width. */
+.tt-sheet table.grid-tt.listtable{width:auto;max-width:100%;table-layout:auto}
 .tt-sheet table.grid-tt.listtable td.roster-cell{min-width:0;text-align:left;font-weight:400}
+.tt-sheet table.grid-tt.listtable th,
+.tt-sheet table.grid-tt.listtable td{white-space:normal;overflow-wrap:break-word}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
