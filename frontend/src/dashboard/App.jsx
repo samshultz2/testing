@@ -28,6 +28,8 @@ export default function App({ data: initialData }) {
   const urls = d.urls || {};
   const t = chartTheme();
   const [customizing, setCustomizing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState(() => new Date());
   const [ackedIds, setAckedIds] = useState(new Set());
   const ackAnn = async (a) => {
     try {
@@ -37,11 +39,17 @@ export default function App({ data: initialData }) {
     } catch (_) { /* ignore */ }
   };
 
-  // Re-fetch widget data in place after customising — no full page reload.
+  // Re-fetch widget data in place — after customising or on demand — with a
+  // visible loading state, so leaders can pull fresh numbers without a full
+  // page reload. Cached metrics (defaulters, branch comparison) refresh on
+  // their own TTL; everything else is recomputed live.
   const refresh = async () => {
-    try { setData(await apiGet('/api/dashboard/data')); }
+    setRefreshing(true);
+    try { setData(await apiGet('/api/dashboard/data')); setUpdatedAt(new Date()); }
     catch (e) { setToast({ tone: 'warn', text: 'Couldn’t refresh the dashboard — showing the last loaded data.' }); }
+    finally { setRefreshing(false); }
   };
+  const updatedLabel = updatedAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
   const doughnut = (extra) => ({
     responsive: true, maintainAspectRatio: false,
@@ -79,8 +87,15 @@ export default function App({ data: initialData }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
           {d.active_term && <div className="term-chip"><i aria-hidden="true" className="fas fa-calendar-day" /> {d.active_term.name}</div>}
+          <button type="button" onClick={refresh} disabled={refreshing} className="btn btn-secondary btn-sm"
+                  title={'Refresh dashboard — last updated ' + updatedLabel} aria-label={'Refresh dashboard, last updated ' + updatedLabel}>
+            <i aria-hidden="true" className={'fas fa-rotate' + (refreshing ? ' fa-spin' : '')} /> {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
           <button type="button" onClick={() => setCustomizing(true)} className="btn btn-secondary btn-sm" title="Choose widgets"><i aria-hidden="true" className="fas fa-sliders" /> Customize</button>
         </div>
+      </div>
+      <div aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
+        {refreshing ? 'Refreshing dashboard' : 'Dashboard updated ' + updatedLabel}
       </div>
 
       {customizing && <Customize catalog={d.widget_catalog} onSaved={refresh} onClose={() => setCustomizing(false)} />}
@@ -205,19 +220,19 @@ export default function App({ data: initialData }) {
         <div className="dash-grid c3">
           <Widget icon="fa-venus-mars" title="Gender">
             <ChartBox>
-              <Chart type="doughnut" options={doughnut()} data={{ labels: ['Male', 'Female'],
+              <Chart type="doughnut" options={doughnut()} ariaLabel={`Gender split: ${d.male_students || 0} male, ${d.female_students || 0} female`} data={{ labels: ['Male', 'Female'],
                 datasets: [{ data: [d.male_students, d.female_students], backgroundColor: ['#4e73df', '#e74a3b'], borderWidth: 0 }] }} />
             </ChartBox>
           </Widget>
           <Widget icon="fa-route" title="Streams">
             <ChartBox>
-              <Chart type="doughnut" options={doughnut()} data={{ labels: Object.keys(d.stream_dist || {}),
+              <Chart type="doughnut" options={doughnut()} ariaLabel={'Students by stream: ' + (Object.entries(d.stream_dist || {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'no data')} data={{ labels: Object.keys(d.stream_dist || {}),
                 datasets: [{ data: Object.values(d.stream_dist || {}), backgroundColor: ['#11998e', '#667eea', '#f6c23e', '#cbd5e1'], borderWidth: 0 }] }} />
             </ChartBox>
           </Widget>
           <Widget icon="fa-birthday-cake" title="Age groups">
             <ChartBox>
-              <Chart type="bar" options={barOpts} data={{ labels: ['0-10', '11-13', '14-16', '17-19', '20+'],
+              <Chart type="bar" options={barOpts} ariaLabel={'Students by age group: ' + ['0-10', '11-13', '14-16', '17-19', '20+'].map((k) => `${k}: ${(d.age_distribution || {})[k] || 0}`).join(', ')} data={{ labels: ['0-10', '11-13', '14-16', '17-19', '20+'],
                 datasets: [{ data: ['0-10', '11-13', '14-16', '17-19', '20+'].map((k) => (d.age_distribution || {})[k] || 0), backgroundColor: '#4e73df', borderRadius: 6 }] }} />
             </ChartBox>
           </Widget>
@@ -231,7 +246,9 @@ export default function App({ data: initialData }) {
                   action={<a href={urls.weekly_summary} className="btn btn-secondary btn-sm">Details</a>}>
             <ChartBox>
               {(d.attendance_trend || []).length ? (
-                <Chart type="line" options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                <Chart type="line"
+                  ariaLabel={'Attendance trend by week: ' + d.attendance_trend.map((x) => `${x.label} ${x.pct}%`).join(', ')}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
                   scales: { y: { beginAtZero: true, max: 100, grid: { color: t.grid } }, x: { grid: { display: false } } } }}
                   data={{ labels: d.attendance_trend.map((x) => x.label),
                     datasets: [{ data: d.attendance_trend.map((x) => x.pct), borderColor: '#11998e', backgroundColor: 'rgba(17,153,142,.12)', fill: true, tension: .35, pointRadius: 4, pointBackgroundColor: '#11998e', borderWidth: 3 }] }} />
@@ -261,7 +278,9 @@ export default function App({ data: initialData }) {
                   action={<a href={urls.classes_list} className="btn btn-secondary btn-sm">Manage</a>}>
             <ChartBox height="240px">
               {(d.class_stats || []).length ? (
-                <Chart type="bar" options={{ responsive: true, maintainAspectRatio: false,
+                <Chart type="bar"
+                  ariaLabel={'Class enrollment by gender: ' + d.class_stats.map((c) => `${c.name} ${c.total}`).join(', ')}
+                  options={{ responsive: true, maintainAspectRatio: false,
                   plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
                   scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: t.grid } } } }}
                   data={{ labels: d.class_stats.map((c) => c.name), datasets: [

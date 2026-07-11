@@ -11,7 +11,7 @@ export const chartTheme = () => {
 
 // Thin React wrapper over the globally-loaded Chart.js (vendored umd build).
 // Data is static per page load, so the chart is built once on mount.
-export default function Chart({ type, data, options }) {
+export default function Chart({ type, data, options, ariaLabel }) {
   const ref = useRef(null);
   useEffect(() => {
     if (!ref.current || !window.Chart) return undefined;
@@ -19,5 +19,7 @@ export default function Chart({ type, data, options }) {
     const chart = new window.Chart(ref.current, { type, data, options: options || {} });
     return () => chart.destroy();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return <canvas ref={ref} />;
+  // The canvas is opaque to assistive tech; role="img" + a text summary give
+  // screen readers the gist. Fall back to the type when no label is supplied.
+  return <canvas ref={ref} role="img" aria-label={ariaLabel || (type + ' chart')} />;
 }
