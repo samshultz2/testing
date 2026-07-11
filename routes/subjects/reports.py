@@ -47,14 +47,26 @@ def broadsheet():
             (ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected_assignment.arm_id)
         ).join(Subject).order_by(Subject.name).all()
         
-        # Get enrolled students
-        enrollments = StudentEnrollment.query.filter_by(
-            class_arm_assignment_id=assignment_id,
-            is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
-        
+        # Get enrolled students (eager-load the student to avoid a lazy load each)
+        from sqlalchemy.orm import joinedload
+        enrollments = (StudentEnrollment.query
+                       .options(joinedload(StudentEnrollment.student))
+                       .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                       .join(Student).order_by(Student.surname, Student.first_name).all())
+
         pass_mark = SchoolSettings.get('pass_mark', 50)
-        
+
+        # Every score for the whole class in one query, indexed by (student,
+        # class-subject, assessment) — replaces a query per student × subject.
+        cs_ids = [cs.id for cs in class_subjects]
+        sids = [e.student_id for e in enrollments]
+        score_map = {}
+        if cs_ids and sids:
+            for s in StudentScore.query.filter(
+                    StudentScore.student_id.in_(sids),
+                    StudentScore.class_subject_id.in_(cs_ids)).all():
+                score_map[(s.student_id, s.class_subject_id, s.assessment_type_id)] = s.score
+
         for enrollment in enrollments:
             student_row = {
                 'student': enrollment.student,
@@ -64,21 +76,13 @@ def broadsheet():
                 'subjects_passed': 0,
                 'subjects_failed': 0
             }
-            
+
             for cs in class_subjects:
                 subject_data = {'assessments': {}, 'total': 0}
-                
-                # Get all scores for this student-subject
-                scores = StudentScore.query.filter_by(
-                    student_id=enrollment.student_id,
-                    class_subject_id=cs.id
-                ).all()
-                
-                scores_dict = {s.assessment_type_id: s.score for s in scores}
-                
+
                 subject_total = 0
                 for at in assessment_types:
-                    score = scores_dict.get(at.id)
+                    score = score_map.get((enrollment.student_id, cs.id, at.id))
                     subject_data['assessments'][at.id] = score
                     if score:
                         subject_total += score

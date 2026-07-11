@@ -76,23 +76,21 @@ def scores_entry():
     # Get students and existing scores
     students_data = []
     if selected_assignment and selected_class_subject and selected_assessment:
-        enrollments = StudentEnrollment.query.filter_by(
-            class_arm_assignment_id=assignment_id,
-            is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
-        
+        from sqlalchemy.orm import joinedload
+        enrollments = (StudentEnrollment.query
+                       .options(joinedload(StudentEnrollment.student))
+                       .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                       .join(Student).order_by(Student.surname, Student.first_name).all())
+        # One query for every existing score in this class-subject + assessment,
+        # indexed by student, instead of a lookup per student (removes the N+1).
+        existing = {s.student_id: s.score for s in StudentScore.query.filter_by(
+            class_subject_id=class_subject_id,
+            assessment_type_id=assessment_type_id).all()}
         for enrollment in enrollments:
-            # Get existing score
-            existing_score = StudentScore.query.filter_by(
-                student_id=enrollment.student_id,
-                class_subject_id=class_subject_id,
-                assessment_type_id=assessment_type_id
-            ).first()
-            
             students_data.append({
                 'enrollment': enrollment,
                 'student': enrollment.student,
-                'score': existing_score.score if existing_score else None
+                'score': existing.get(enrollment.student_id),
             })
     
     # Get max score (check for override)
