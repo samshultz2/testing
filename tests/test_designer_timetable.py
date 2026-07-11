@@ -104,6 +104,15 @@ def test_designer_has_custom_list_table_mode(auth_client):
     assert 'listRows:el(' in html
 
 
+def test_designer_offers_extra_themes(auth_client):
+    """The added design themes are selectable and have matching CSS."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    for t in ('forest', 'royal', 'slate', 'midnight', 'coral', 'emerald',
+              'burgundy', 'sky', 'amber', 'plum', 'graphite'):
+        assert f'value="{t}"' in html, f'missing theme option {t}'
+        assert f'data-theme="{t}"' in html, f'missing theme CSS {t}'
+
+
 def test_save_requires_a_name(auth_client):
     r = auth_client.post('/timetable/designer/save',
                          json={'layout': 'saturday', 'data': {}},
