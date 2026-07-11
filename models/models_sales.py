@@ -69,6 +69,9 @@ class Product(db.Model):
     storage_location = db.Column(db.String(80))
     expiry_date = db.Column(db.Date)
     warranty_period = db.Column(db.String(40))
+    # When set, stock is received and issued in tracked batches/lots (each with
+    # its own expiry), and sales draw down first-expiry-first-out.
+    batch_tracked = db.Column(db.Boolean, default=False)
 
     branch = db.relationship('Branch')
 
@@ -188,6 +191,41 @@ class StockMovement(db.Model):
 
     def __repr__(self):
         return f'<StockMovement {self.direction} {self.quantity} {self.reason}>'
+
+
+class StockBatch(db.Model):
+    """A received lot of a batch-tracked product: its own quantity-on-hand,
+    unit cost and expiry. Sales/issues consume batches first-expiry-first-out so
+    stock is traceable to a lot and perishables leave in the right order. A lot
+    of one serialised unit carries its serial number here too."""
+    __tablename__ = 'stock_batches'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    product_id = db.Column(db.Integer, db.ForeignKey('sales_products.id'), nullable=False, index=True)
+    batch_no = db.Column(db.String(60))
+    serial_number = db.Column(db.String(80))
+    quantity = db.Column(db.Integer, default=0)         # remaining on hand
+    original_qty = db.Column(db.Integer, default=0)     # as received
+    unit_cost = db.Column(db.Float)
+    expiry_date = db.Column(db.Date, index=True)
+    supplier = db.Column(db.String(120))
+    reference = db.Column(db.String(60))                # PO / receipt the lot came in on
+    note = db.Column(db.String(200))
+    received_on = db.Column(db.Date, default=lambda: local_now().date())
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    product = db.relationship('Product')
+
+    @property
+    def is_empty(self):
+        return (self.quantity or 0) <= 0
+
+    def is_expired(self, today):
+        return bool(self.expiry_date and self.expiry_date < today)
+
+    def __repr__(self):
+        return f'<StockBatch {self.batch_no or self.id} x{self.quantity}>'
 
 
 PO_STATUSES = ['Draft', 'Pending Approval', 'Approved', 'Ordered',

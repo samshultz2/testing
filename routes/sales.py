@@ -11,7 +11,7 @@ from sqlalchemy import func
 from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
-                    StockAudit, StockAuditItem, FixedAsset)
+                    StockAudit, StockAuditItem, FixedAsset, StockBatch)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS,
@@ -189,6 +189,8 @@ def _apply_product_fields(p, form, is_new=False):
             setattr(p, f, (v or 0) if f in _PRODUCT_REQUIRED_NUM else v)
     if 'taxable' in form:
         p.taxable = form.get('taxable') in ('on', 'true', '1', 'yes')
+    if 'batch_tracked' in form:
+        p.batch_tracked = form.get('batch_tracked') in ('on', 'true', '1', 'yes')
     if 'expiry_date' in form:
         p.expiry_date = parse_date(form.get('expiry_date'))
     if 'is_active' in form:
@@ -247,6 +249,7 @@ def _product_dict(p):
         'storage_location': p.storage_location,
         'expiry_date': p.expiry_date.isoformat() if p.expiry_date else '',
         'warranty_period': p.warranty_period, 'is_active': bool(p.is_active),
+        'batch_tracked': bool(p.batch_tracked),
         'low_stock': bool(p.low_stock), 'out_of_stock': bool(p.out_of_stock),
         'stock_value': p.stock_value, 'margin_pct': p.margin_pct,
         'restock_url': url_for('sales.restock', product_id=p.id),
@@ -285,7 +288,8 @@ def products():
         'generate_barcodes_url': url_for('sales.generate_barcodes'),
         'asset_categories': FIXED_ASSET_CATEGORIES,
         'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard'),
-                 'movements': url_for('sales.movements'), 'assets': url_for('sales.assets')},
+                 'movements': url_for('sales.movements'), 'assets': url_for('sales.assets'),
+                 'batches': url_for('sales.batches')},
     })
 
 
@@ -377,14 +381,46 @@ def product_labels():
                            back_url=url_for('sales.products'))
 
 
+def _consume_batches(product, quantity):
+    """Draw ``quantity`` units out of a batch-tracked product's lots, earliest
+    expiry first (FEFO), then earliest received. Best-effort: if the lots don't
+    cover the quantity (data drift), consume what's there and stop."""
+    import datetime as _dt
+    batches = [b for b in StockBatch.query.filter_by(product_id=product.id).all()
+               if (b.quantity or 0) > 0]
+    batches.sort(key=lambda b: (b.expiry_date or _dt.date.max,
+                                b.received_on or _dt.date.max, b.id))
+    remaining = quantity
+    for b in batches:
+        if remaining <= 0:
+            break
+        take = min(b.quantity or 0, remaining)
+        b.quantity = (b.quantity or 0) - take
+        remaining -= take
+
+
 def _record_movement(product, direction, quantity, reason, *, unit_cost=None,
-                     reference=None, note=None, sale_id=None, apply=True):
+                     reference=None, note=None, sale_id=None, apply=True,
+                     batch_no=None, expiry_date=None, serial_number=None, supplier=None):
     """Write one stock-ledger row and (by default) apply the change to the
     product's on-hand quantity. Pass apply=False when the caller has already
-    adjusted stock (e.g. the sale loop). Returns the StockMovement."""
+    adjusted stock (e.g. the sale loop). For batch-tracked products a stock-in
+    opens a new lot and a stock-out draws down lots FEFO. Returns the
+    StockMovement."""
     quantity = abs(int(quantity or 0))
     if apply:
         product.stock_qty = (product.stock_qty or 0) + (quantity if direction == 'in' else -quantity)
+    if getattr(product, 'batch_tracked', False) and quantity:
+        if direction == 'in':
+            db.session.add(StockBatch(
+                branch_id=product.branch_id, product_id=product.id,
+                batch_no=batch_no or None, serial_number=serial_number or None,
+                quantity=quantity, original_qty=quantity,
+                unit_cost=unit_cost if unit_cost is not None else product.cost_price,
+                expiry_date=expiry_date or product.expiry_date, supplier=supplier,
+                reference=reference, note=note))
+        else:
+            _consume_batches(product, quantity)
     mv = StockMovement(
         branch_id=product.branch_id, product_id=product.id, direction=direction,
         reason=reason, quantity=quantity, qty_after=product.stock_qty,
@@ -405,7 +441,10 @@ def restock(product_id):
         return _err('Enter a quantity to add.', url_for('sales.products'))
     _record_movement(p, 'in', qty, request.form.get('reason') or 'Stock In (Purchase/GRN)',
                      unit_cost=request.form.get('unit_cost', type=float),
-                     reference=(request.form.get('reference') or '').strip() or None)
+                     reference=(request.form.get('reference') or '').strip() or None,
+                     batch_no=(request.form.get('batch_no') or '').strip() or None,
+                     expiry_date=parse_date(request.form.get('expiry_date')),
+                     serial_number=(request.form.get('serial_number') or '').strip() or None)
     db.session.commit()
     return _ok(f'Added {qty} to {p.name} (now {p.stock_qty}).', url_for('sales.products'))
 
@@ -494,7 +533,57 @@ def movements():
         'applied': {'product_id': product_id or '', 'direction': direction,
                     'reason': reason, 'from': a.get('from', ''), 'to': a.get('to', '')},
         'self_url': url_for('sales.movements'),
-        'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
+        'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products'),
+                 'batches': url_for('sales.batches')},
+    })
+
+
+@sales_bp.route('/batches')
+@login_required
+def batches():
+    """Live view of stock lots for batch-tracked products — remaining quantity
+    and expiry per lot, filterable by product and hiding empty lots by default."""
+    a = request.args
+    product_id = a.get('product_id', type=int)
+    show_empty = a.get('empty') in ('1', 'true', 'yes')
+    query = scope_query(StockBatch.query, StockBatch)
+    if product_id:
+        query = query.filter(StockBatch.product_id == product_id)
+    if not show_empty:
+        query = query.filter(StockBatch.quantity > 0)
+    rows = query.all()
+    today = timeutil.today()
+    rows.sort(key=lambda b: (b.expiry_date or today.replace(year=today.year + 50),
+                             b.received_on or today, b.id))
+    name_by_id = {p.id: p.name for p in scope_query(Product.query, Product).all()}
+
+    def _status(b):
+        if b.is_empty:
+            return 'empty'
+        if b.is_expired(today):
+            return 'expired'
+        from datetime import timedelta
+        if b.expiry_date and b.expiry_date <= today + timedelta(days=30):
+            return 'expiring'
+        return 'ok'
+    tracked = scope_query(Product.query.filter_by(is_active=True, batch_tracked=True), Product)\
+        .order_by(Product.name).all()
+    return _render({
+        'page': 'batches',
+        'batches': [{'id': b.id, 'product': name_by_id.get(b.product_id, '—'),
+                     'product_id': b.product_id, 'batch_no': b.batch_no or '',
+                     'serial_number': b.serial_number or '',
+                     'quantity': b.quantity or 0, 'original_qty': b.original_qty or 0,
+                     'unit_cost': b.unit_cost or 0,
+                     'expiry_date': b.expiry_date.isoformat() if b.expiry_date else '',
+                     'supplier': b.supplier or '', 'reference': b.reference or '',
+                     'received_on': b.received_on.isoformat() if b.received_on else '',
+                     'status': _status(b)} for b in rows],
+        'options': {'products': [{'id': p.id, 'name': p.name} for p in tracked]},
+        'applied': {'product_id': product_id or '', 'empty': show_empty},
+        'self_url': url_for('sales.batches'),
+        'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products'),
+                 'movements': url_for('sales.movements')},
     })
 
 
@@ -1280,7 +1369,8 @@ def receive_purchase(po_id):
             p = db.session.get(Product, it.product_id)
             if p:
                 _record_movement(p, 'in', take, 'Stock In (Purchase/GRN)',
-                                 unit_cost=it.unit_cost, reference=po.po_number)
+                                 unit_cost=it.unit_cost, reference=po.po_number,
+                                 batch_no=po.po_number, supplier=(po.supplier.company_name if po.supplier else None))
                 if it.unit_cost:
                     p.cost_price = it.unit_cost      # keep valuation current
     if not received_any:

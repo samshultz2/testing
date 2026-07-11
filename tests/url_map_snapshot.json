@@ -4461,6 +4461,13 @@
 ]
 ],
 [
+"sales.batches",
+"/sales/batches",
+[
+"GET"
+]
+],
+[
 "sales.cancel_audit",
 "/sales/audits/<int:audit_id>/cancel",
 [

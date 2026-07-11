@@ -39,14 +39,14 @@ from .models_scratchcard import ScratchCard, ResultCheckLog
 from .models_branch import Branch
 from .models_sales import (Product, Sale, SaleItem, StockMovement, Supplier,
                            PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
-                           StockAudit, StockAuditItem, FixedAsset)
+                           StockAudit, StockAuditItem, FixedAsset, StockBatch)
 from .models_welfare import DisciplineRecord, ClinicVisit
 
 __all__ = [
     'db', 'local_now', 'init_db',
     'Branch', 'Product', 'Sale', 'SaleItem', 'StockMovement',
     'Supplier', 'PurchaseOrder', 'PurchaseOrderItem', 'SupplierPayment', 'PromoCode',
-    'StockAudit', 'StockAuditItem', 'FixedAsset',
+    'StockAudit', 'StockAuditItem', 'FixedAsset', 'StockBatch',
     'DisciplineRecord', 'ClinicVisit',
     'ScratchCard', 'ResultCheckLog', 'CBTLoginEvent', 'CBTDeviceSession',
     'Student', 'ParentContact',

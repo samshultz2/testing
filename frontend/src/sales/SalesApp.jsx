@@ -129,7 +129,7 @@ function ProductForm({ d, product, onClose, onSaved }) {
     description: '', image_url: '', cost_price: '', unit_price: '', discount_price: '',
     wholesale_price: '', student_price: '', staff_price: '', parent_price: '', stock_qty: '0',
     reorder_level: '0', max_stock: '', reorder_qty: '', vat_rate: '', taxable: false,
-    expiry_date: '', is_active: true, ...(product || {}) };
+    expiry_date: '', is_active: true, batch_tracked: false, ...(product || {}) };
   const [f, setF] = useState(init);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -184,7 +184,7 @@ function ProductForm({ d, product, onClose, onSaved }) {
   const save = async () => {
     if (!f.name.trim()) { setErr('Product name is required.'); return; }
     setBusy(true); setErr(null);
-    const payload = { ...f, taxable: f.taxable ? 'on' : '', is_active: f.is_active ? 'on' : '' };
+    const payload = { ...f, taxable: f.taxable ? 'on' : '', is_active: f.is_active ? 'on' : '', batch_tracked: f.batch_tracked ? 'on' : '' };
     if (editing) delete payload.stock_qty;   // stock changes go through Restock / adjustments
     const r = await submitJson(editing ? product.edit_url : d.add_url, payload);
     setBusy(false);
@@ -258,6 +258,7 @@ function ProductForm({ d, product, onClose, onSaved }) {
       <h4 className="text-muted text-sm" style={{ margin: '.9rem 0 .4rem' }}>Tax & other</h4>
       <div style={grid}>
         <Field label="Taxable"><label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38 }}><input type="checkbox" checked={f.taxable} onChange={(e) => set('taxable', e.target.checked)} /> VAT applies</label></Field>
+        <Field label="Batch/lot tracking"><label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38 }}><input type="checkbox" checked={f.batch_tracked} onChange={(e) => set('batch_tracked', e.target.checked)} /> Track lots + FEFO</label></Field>
         <Field label="VAT rate (%)"><Num v={f.vat_rate} on={(v) => set('vat_rate', v)} step="0.1" /></Field>
         <Field label="Preferred supplier"><input type="text" className="form-control" value={f.preferred_supplier} onChange={(e) => set('preferred_supplier', e.target.value)} /></Field>
         <Field label="Expiry date"><input type="date" className="form-control" value={f.expiry_date || ''} onChange={(e) => set('expiry_date', e.target.value)} /></Field>
@@ -404,10 +405,10 @@ function Products({ d, notify }) {
     else notify('error', r.error || 'Could not assign barcodes.');
   };
 
-  const restock = async (p, qty) => {
+  const restock = async (p, qty, extra = {}) => {
     if (!qty) return;
     setBusy(true);
-    const r = await submitJson(p.restock_url, { qty });
+    const r = await submitJson(p.restock_url, { qty, ...extra });
     setBusy(false);
     if (r.ok) nav.refresh();
     else notify('error', r.error || 'Could not restock.');
@@ -427,6 +428,7 @@ function Products({ d, notify }) {
       <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={<>
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>
         {d.urls.movements && <a href={d.urls.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
+        {d.urls.batches && <a href={d.urls.batches} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-layer-group" /> Batches</a>}
         {d.labels_url && <button type="button" className="btn btn-secondary" onClick={openLabels}><i aria-hidden="true" className="fas fa-tags" /> Print labels</button>}
         {d.generate_barcodes_url && <button type="button" className="btn btn-secondary" onClick={genBarcodes} title="Give products without a barcode a scannable internal code"><i aria-hidden="true" className="fas fa-barcode" /> Barcodes</button>}
         <a href={d.urls.new_sale} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-cart-plus" /> New Sale</a>
@@ -500,6 +502,7 @@ function ConvertAssetModal({ d, product, onClose, onSaved, notify }) {
 
 function ProductRow({ p, onRestock, onEdit, onAdjust, onConvert, busy }) {
   const [qty, setQty] = useState('');
+  const [batch, setBatch] = useState({ batch_no: '', expiry_date: '' });
   const badge = p.out_of_stock ? <span className="badge badge-danger">Out</span>
     : p.low_stock ? <span className="badge badge-warning">Low</span> : null;
   return (
@@ -509,13 +512,18 @@ function ProductRow({ p, onRestock, onEdit, onAdjust, onConvert, busy }) {
       <td data-label="Price" className="text-right">{naira(p.unit_price)}</td>
       <td data-label="Stock" className="text-right"><strong style={p.low_stock ? { color: '#e74a3b' } : undefined}>{p.stock_qty}</strong> {badge}</td>
       <td data-label="Restock">
-        <form onSubmit={(e) => { e.preventDefault(); onRestock(p, Number(qty) || 0); }} style={{ display: 'flex', gap: '.3rem' }}>
+        <form onSubmit={(e) => { e.preventDefault(); onRestock(p, Number(qty) || 0, p.batch_tracked ? batch : {}); setQty(''); }} style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap' }}>
           <input type="number" className="form-control" style={{ width: 80 }} placeholder="+qty" value={qty} onChange={(e) => setQty(e.target.value)} />
+          {p.batch_tracked && <>
+            <input className="form-control" style={{ width: 90 }} placeholder="Batch no" value={batch.batch_no} onChange={(e) => setBatch((s) => ({ ...s, batch_no: e.target.value }))} />
+            <input type="date" className="form-control" style={{ width: 140 }} title="Expiry" value={batch.expiry_date} onChange={(e) => setBatch((s) => ({ ...s, expiry_date: e.target.value }))} />
+          </>}
           <button className="btn btn-sm btn-secondary" disabled={busy}>Add</button>
         </form>
       </td>
       <td data-label="">
         <div style={{ display: 'flex', gap: '.3rem' }}>
+          {p.batch_tracked && <span className="badge badge-info" title="Batch/lot tracked">lot</span>}
           <button type="button" className="btn btn-sm btn-light" onClick={onAdjust} title="Record a stock movement or count"><i aria-hidden="true" className="fas fa-right-left" /> Adjust</button>
           {onConvert && p.stock_qty > 0 && <button type="button" className="btn btn-sm btn-light" onClick={onConvert} title="Convert units into a fixed asset"><i aria-hidden="true" className="fas fa-building-columns" /></button>}
           <button type="button" className="btn btn-sm btn-light" onClick={onEdit}><i aria-hidden="true" className="fas fa-pen" /> Edit</button>
@@ -1570,10 +1578,55 @@ function DisposeModal({ asset, onClose, onSaved, notify }) {
   );
 }
 
+// ---- Stock batches / lots --------------------------------------------------
+function Batches({ d }) {
+  const nav = useNav();
+  const a = d.applied || {};
+  const [productId, setProductId] = useState(a.product_id || '');
+  const [empty, setEmpty] = useState(!!a.empty);
+  const apply = (pid, emp) => navParams(nav.go, d.self_url, { product_id: pid, empty: emp ? '1' : '' });
+  const badge = (st) => {
+    if (st === 'expired') return <span className="badge badge-danger">Expired</span>;
+    if (st === 'expiring') return <span className="badge badge-warning">Expiring</span>;
+    if (st === 'empty') return <span className="badge badge-secondary">Empty</span>;
+    return <span className="badge badge-success">OK</span>;
+  };
+  return (
+    <>
+      <PageHeader icon="fa-layer-group" title="Stock Batches / Lots" actions={<>
+        <a href={d.urls.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>
+        <a href={d.urls.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
+      </>} />
+      <div className="alert alert-info"><i aria-hidden="true" className="fas fa-circle-info" /> Batch-tracked products receive stock in lots and sell first-expiry-first-out. Turn tracking on for a product in its edit form.</div>
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <select className="form-control" style={{ maxWidth: 240 }} value={productId} onChange={(e) => { setProductId(e.target.value); apply(e.target.value, empty); }}>
+          <option value="">All batch-tracked products</option>{(d.options.products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <label className="text-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={empty} onChange={(e) => { setEmpty(e.target.checked); apply(productId, e.target.checked); }} /> Show emptied lots</label>
+      </div></div>
+      <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        {d.batches.length ? (
+          <table className="data-table"><thead><tr><th>Product</th><th>Batch / Serial</th><th className="text-right">Remaining</th><th>Expiry</th><th>Received</th><th>Ref</th><th>Status</th></tr></thead>
+            <tbody>{d.batches.map((b) => (
+              <tr key={b.id}>
+                <td>{b.product}</td>
+                <td>{b.batch_no || '—'}{b.serial_number && <div className="text-muted text-sm">SN {b.serial_number}</div>}</td>
+                <td className="text-right"><strong>{b.quantity}</strong>{b.original_qty > 0 && <span className="text-muted text-sm"> / {b.original_qty}</span>}</td>
+                <td className={b.status === 'expired' ? 'text-danger' : b.status === 'expiring' ? 'text-warning' : ''}>{b.expiry_date || '—'}</td>
+                <td className="text-muted text-sm">{b.received_on || '—'}{b.supplier && <div>{b.supplier}</div>}</td>
+                <td className="text-muted text-sm">{b.reference || '—'}</td>
+                <td>{badge(b.status)}</td>
+              </tr>
+            ))}</tbody></table>
+        ) : <EmptyState icon="fa-layer-group" title="No stock lots yet">Receive stock for a batch-tracked product to open its first lot.</EmptyState>}
+      </div></div>
+    </>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History,
   analytics: Analytics, movements: Movements, suppliers: Suppliers, supplier_detail: SupplierDetail,
   purchases: Purchases, purchase_detail: PurchaseDetail, reports: Reports, promos: Promos,
-  audits: Audits, audit_detail: AuditDetail, assets: Assets };
+  audits: Audits, audit_detail: AuditDetail, assets: Assets, batches: Batches };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
