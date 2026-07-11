@@ -34,6 +34,7 @@ function Dashboard({ d }) {
         {u.reports && <a href={u.reports} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-lines" /> Reports</a>}
         {u.promos && <a href={u.promos} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-tags" /> Promos</a>}
         {u.audits && <a href={u.audits} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-clipboard-check" /> Stock Count</a>}
+        {u.assets && <a href={u.assets} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-building-columns" /> Assets</a>}
       </>} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -388,6 +389,7 @@ function Products({ d, notify }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);   // product being edited, or {} for add
   const [adjusting, setAdjusting] = useState(null);   // product being adjusted
+  const [converting, setConverting] = useState(null);   // product being converted to an asset
 
   const openLabels = () => {
     const p = new URLSearchParams();
@@ -448,7 +450,7 @@ function Products({ d, notify }) {
             <div className="table-container">
               <table className="data-table table-stack no-mobile-scroll">
                 <thead><tr><th>Name</th><th>Category</th><th className="text-right">Price</th><th className="text-right">Stock</th><th>Restock</th><th /></tr></thead>
-                <tbody>{shown.map((p) => <ProductRow key={p.id} p={p} onRestock={restock} onEdit={() => setEditing(p)} onAdjust={() => setAdjusting(p)} busy={busy} />)}</tbody>
+                <tbody>{shown.map((p) => <ProductRow key={p.id} p={p} onRestock={restock} onEdit={() => setEditing(p)} onAdjust={() => setAdjusting(p)} onConvert={d.urls.assets ? () => setConverting(p) : null} busy={busy} />)}</tbody>
               </table>
             </div>
           ) : <EmptyState icon="fa-boxes-stacked" title="No products match" />}
@@ -459,11 +461,44 @@ function Products({ d, notify }) {
                                onClose={() => setEditing(null)} onSaved={() => nav.refresh()} />}
       {adjusting && <AdjustModal d={d} product={adjusting}
                                  onClose={() => setAdjusting(null)} onSaved={() => nav.refresh()} />}
+      {converting && <ConvertAssetModal d={d} product={converting} notify={notify}
+                                        onClose={() => setConverting(null)}
+                                        onSaved={(r) => { setConverting(null); if (r.redirect) nav.go(r.redirect); else nav.refresh(); }} />}
     </>
   );
 }
 
-function ProductRow({ p, onRestock, onEdit, onAdjust, busy }) {
+function ConvertAssetModal({ d, product, onClose, onSaved, notify }) {
+  const [f, setF] = useState({ quantity: 1, name: product.name, category: 'ICT Equipment',
+    asset_tag: '', serial_number: '', custodian: '', useful_life_years: '', salvage_value: '',
+    acquisition_cost: '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    if (!(Number(f.quantity) > 0)) { notify('error', 'Enter a quantity.'); return; }
+    const r = await submitJson(product.convert_url, f);
+    if (r.ok) onSaved(r); else notify('error', r.error || 'Could not convert.');
+  };
+  return (
+    <Modal title={`Convert "${product.name}" to a fixed asset`} icon="fa-building-columns" size="lg" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button>
+             <Button variant="primary" onClick={save}>Convert</Button></>}>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Draws units out of stock ({product.stock_qty} on hand) and registers them in the asset register. No profit/loss impact — inventory value becomes asset value.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="Units to convert *"><input type="number" min="1" max={product.stock_qty} className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} /></Field>
+        <Field label="Asset name"><input className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} /></Field>
+        <Field label="Category"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{(d.asset_categories || []).map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Asset tag"><input className="form-control" value={f.asset_tag} onChange={(e) => set('asset_tag', e.target.value)} placeholder="e.g. ICT-001" /></Field>
+        <Field label="Serial number"><input className="form-control" value={f.serial_number} onChange={(e) => set('serial_number', e.target.value)} /></Field>
+        <Field label="Custodian"><input className="form-control" value={f.custodian} onChange={(e) => set('custodian', e.target.value)} /></Field>
+        <Field label="Acquisition cost (₦)"><input type="number" className="form-control" value={f.acquisition_cost} onChange={(e) => set('acquisition_cost', e.target.value)} placeholder={`stock cost ×${f.quantity}`} /></Field>
+        <Field label="Useful life (yrs)"><input type="number" className="form-control" value={f.useful_life_years} onChange={(e) => set('useful_life_years', e.target.value)} placeholder="for depreciation" /></Field>
+        <Field label="Salvage value (₦)"><input type="number" className="form-control" value={f.salvage_value} onChange={(e) => set('salvage_value', e.target.value)} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
+function ProductRow({ p, onRestock, onEdit, onAdjust, onConvert, busy }) {
   const [qty, setQty] = useState('');
   const badge = p.out_of_stock ? <span className="badge badge-danger">Out</span>
     : p.low_stock ? <span className="badge badge-warning">Low</span> : null;
@@ -482,6 +517,7 @@ function ProductRow({ p, onRestock, onEdit, onAdjust, busy }) {
       <td data-label="">
         <div style={{ display: 'flex', gap: '.3rem' }}>
           <button type="button" className="btn btn-sm btn-light" onClick={onAdjust} title="Record a stock movement or count"><i aria-hidden="true" className="fas fa-right-left" /> Adjust</button>
+          {onConvert && p.stock_qty > 0 && <button type="button" className="btn btn-sm btn-light" onClick={onConvert} title="Convert units into a fixed asset"><i aria-hidden="true" className="fas fa-building-columns" /></button>}
           <button type="button" className="btn btn-sm btn-light" onClick={onEdit}><i aria-hidden="true" className="fas fa-pen" /> Edit</button>
         </div>
       </td>
@@ -1410,10 +1446,134 @@ function AuditDetail({ d, notify }) {
   );
 }
 
+// ---- Fixed assets ----------------------------------------------------------
+function Assets({ d, notify }) {
+  const nav = useNav();
+  const s = d.summary || {};
+  const [q, setQ] = useState(d.q || '');
+  const [cat, setCat] = useState(d.category || '');
+  const [status, setStatus] = useState(d.status || '');
+  const [editing, setEditing] = useState(null);   // asset being edited, or {} for add
+  const [disposing, setDisposing] = useState(null);
+  const shown = d.assets.filter((a) => {
+    if (q && !(`${a.name} ${a.asset_tag} ${a.serial_number}`.toLowerCase().includes(q.toLowerCase()))) return false;
+    if (cat && a.category !== cat) return false;
+    if (status && a.status !== status) return false;
+    return true;
+  });
+  const badge = (st) => {
+    const tone = st === 'In Use' ? 'badge-success' : st === 'Disposed' ? 'badge-secondary'
+      : st === 'Under Repair' ? 'badge-warning' : st === 'Lost' ? 'badge-danger' : 'badge-info';
+    return <span className={'badge ' + tone}>{st}</span>;
+  };
+  return (
+    <>
+      <PageHeader icon="fa-building-columns" title="Fixed Assets" actions={<>
+        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Register asset</button>
+        <a className="btn btn-secondary" href={d.export_url}><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
+        <a href={d.urls.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
+      </>} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+        <Tile n={s.count || 0} label="Active assets" />
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_cost || 0)}</div><div className="text-muted text-sm">Acquisition cost</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_book || 0)}</div><div className="text-muted text-sm">Net book value</div></div></div>
+        <Tile n={s.disposed || 0} label="Disposed" />
+      </div>
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <input type="search" className="form-control" placeholder="Search name / tag / serial" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
+        <select className="form-control" value={cat} onChange={(e) => setCat(e.target.value)} style={{ maxWidth: 200 }}><option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 160 }}><option value="">All statuses</option>{d.statuses.map((st) => <option key={st}>{st}</option>)}</select>
+      </div></div>
+      <div className="card"><div className="card-header"><h3>Assets ({shown.length})</h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          {shown.length ? (
+            <table className="data-table"><thead><tr><th>Asset</th><th>Category</th><th className="text-right">Cost</th><th className="text-right">Book value</th><th>Custodian</th><th>Status</th><th /></tr></thead>
+              <tbody>{shown.map((a) => (
+                <tr key={a.id}>
+                  <td><strong>{a.name}</strong>{a.asset_tag && <span className="text-muted text-sm"> · {a.asset_tag}</span>}{a.from_product && <span className="badge badge-light" title="Converted from inventory" style={{ marginLeft: 4 }}>stock</span>}{a.serial_number && <div className="text-muted text-sm">SN {a.serial_number}</div>}</td>
+                  <td>{a.category}</td>
+                  <td className="text-right">{naira(a.acquisition_cost)}</td>
+                  <td className="text-right">{naira(a.book_value)}{a.annual_depreciation > 0 && <div className="text-muted text-sm">−{naira(a.annual_depreciation)}/yr</div>}</td>
+                  <td className="text-muted text-sm">{a.custodian || '—'}{a.location && <div>{a.location}</div>}</td>
+                  <td>{badge(a.status)}</td>
+                  <td><div style={{ display: 'flex', gap: '.3rem' }}>
+                    <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)}><i aria-hidden="true" className="fas fa-pen" /></button>
+                    {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
+                  </div></td>
+                </tr>
+              ))}</tbody></table>
+          ) : <EmptyState icon="fa-building-columns" title="No assets registered">Register one, or convert stock from the Products screen.</EmptyState>}
+        </div></div>
+      {editing && <AssetForm d={d} asset={editing.id ? editing : null} notify={notify}
+                             onClose={() => setEditing(null)} onSaved={() => { setEditing(null); nav.refresh(); }} />}
+      {disposing && <DisposeModal asset={disposing} notify={notify}
+                                  onClose={() => setDisposing(null)} onSaved={() => { setDisposing(null); nav.refresh(); }} />}
+    </>
+  );
+}
+
+function AssetForm({ d, asset, onClose, onSaved, notify }) {
+  const [f, setF] = useState(() => ({
+    name: asset?.name || '', asset_tag: asset?.asset_tag || '',
+    category: asset?.category || (d.categories[0] || 'Other'),
+    serial_number: asset?.serial_number || '', acquisition_cost: asset?.acquisition_cost ?? '',
+    acquisition_date: asset?.acquisition_date || '', supplier: asset?.supplier || '',
+    location: asset?.location || '', custodian: asset?.custodian || '',
+    status: asset?.status || 'In Use', useful_life_years: asset?.useful_life_years ?? '',
+    salvage_value: asset?.salvage_value ?? '',
+  }));
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    if (!f.name.trim()) { notify('error', 'Asset name is required.'); return; }
+    const r = await submitJson(asset ? asset.edit_url : d.add_url, f);
+    if (r.ok) onSaved(); else notify('error', r.error || 'Could not save.');
+  };
+  return (
+    <Modal title={asset ? 'Edit asset' : 'Register asset'} icon="fa-building-columns" size="lg" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="Name *"><input className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} /></Field>
+        <Field label="Asset tag"><input className="form-control" value={f.asset_tag} onChange={(e) => set('asset_tag', e.target.value)} /></Field>
+        <Field label="Category"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Serial number"><input className="form-control" value={f.serial_number} onChange={(e) => set('serial_number', e.target.value)} /></Field>
+        <Field label="Acquisition cost (₦)"><input type="number" className="form-control" value={f.acquisition_cost} onChange={(e) => set('acquisition_cost', e.target.value)} /></Field>
+        <Field label="Acquired on"><input type="date" className="form-control" value={f.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
+        <Field label="Supplier"><input className="form-control" value={f.supplier} onChange={(e) => set('supplier', e.target.value)} /></Field>
+        <Field label="Location"><input className="form-control" value={f.location} onChange={(e) => set('location', e.target.value)} /></Field>
+        <Field label="Custodian"><input className="form-control" value={f.custodian} onChange={(e) => set('custodian', e.target.value)} /></Field>
+        <Field label="Status"><select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.filter((x) => x !== 'Disposed').map((st) => <option key={st}>{st}</option>)}</select></Field>
+        <Field label="Useful life (yrs)"><input type="number" className="form-control" value={f.useful_life_years} onChange={(e) => set('useful_life_years', e.target.value)} placeholder="for depreciation" /></Field>
+        <Field label="Salvage value (₦)"><input type="number" className="form-control" value={f.salvage_value} onChange={(e) => set('salvage_value', e.target.value)} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
+function DisposeModal({ asset, onClose, onSaved, notify }) {
+  const [f, setF] = useState({ disposed_on: '', disposal_amount: '', method: 'Cash', disposal_note: '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    const r = await submitJson(asset.dispose_url, f);
+    if (r.ok) onSaved(); else notify('error', r.error || 'Could not dispose.');
+  };
+  return (
+    <Modal title={`Dispose "${asset.name}"`} icon="fa-box-archive" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" onClick={save}>Dispose</Button></>}>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Current book value: <strong>{naira(asset.book_value)}</strong>. Any proceeds are posted to Finance as disposal income.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="Disposed on"><input type="date" className="form-control" value={f.disposed_on} onChange={(e) => set('disposed_on', e.target.value)} /></Field>
+        <Field label="Proceeds (₦)"><input type="number" className="form-control" value={f.disposal_amount} onChange={(e) => set('disposal_amount', e.target.value)} /></Field>
+        <Field label="Method"><select className="form-control" value={f.method} onChange={(e) => set('method', e.target.value)}><option>Cash</option><option>Transfer</option><option>POS</option></select></Field>
+        <Field label="Note" wide><input className="form-control" value={f.disposal_note} onChange={(e) => set('disposal_note', e.target.value)} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History,
   analytics: Analytics, movements: Movements, suppliers: Suppliers, supplier_detail: SupplierDetail,
   purchases: Purchases, purchase_detail: PurchaseDetail, reports: Reports, promos: Promos,
-  audits: Audits, audit_detail: AuditDetail };
+  audits: Audits, audit_detail: AuditDetail, assets: Assets };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

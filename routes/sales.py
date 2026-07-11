@@ -11,10 +11,11 @@ from sqlalchemy import func
 from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
-                    StockAudit, StockAuditItem)
+                    StockAudit, StockAuditItem, FixedAsset)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
-                                 PO_STATUSES, PURCHASE_METHODS)
+                                 PO_STATUSES, PURCHASE_METHODS,
+                                 FIXED_ASSET_CATEGORIES, FIXED_ASSET_STATUSES)
 from utils.access_control import (login_required, filter_classes_for_user,
                                   can_approve_purchase, can_sign_off_count)
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
@@ -149,7 +150,8 @@ def dashboard():
                  'history': url_for('sales.history'), 'analytics': url_for('sales.analytics'),
                  'movements': url_for('sales.movements'), 'suppliers': url_for('sales.suppliers'),
                  'purchases': url_for('sales.purchases'), 'reports': url_for('sales.reports'),
-                 'promos': url_for('sales.promos'), 'audits': url_for('sales.audits')},
+                 'promos': url_for('sales.promos'), 'audits': url_for('sales.audits'),
+                 'assets': url_for('sales.assets')},
     })
 
 
@@ -250,6 +252,7 @@ def _product_dict(p):
         'restock_url': url_for('sales.restock', product_id=p.id),
         'edit_url': url_for('sales.edit_product', product_id=p.id),
         'adjust_url': url_for('sales.adjust_stock', product_id=p.id),
+        'convert_url': url_for('sales.convert_to_asset', product_id=p.id),
     }
 
 
@@ -280,8 +283,9 @@ def products():
         'isbn_lookup_url': url_for('sales.product_isbn_lookup'),
         'labels_url': url_for('sales.product_labels'),
         'generate_barcodes_url': url_for('sales.generate_barcodes'),
+        'asset_categories': FIXED_ASSET_CATEGORIES,
         'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard'),
-                 'movements': url_for('sales.movements')},
+                 'movements': url_for('sales.movements'), 'assets': url_for('sales.assets')},
     })
 
 
@@ -1599,6 +1603,209 @@ def audit_export(audit_id):
                    '' if i.variance_qty is None else i.variance_qty,
                    i.unit_cost or 0, i.variance_value, i.note or ''])
     return xlsx_response(wb, f'{a.reference}_count.xlsx')
+
+
+# ---------------------------------------------------------------------------
+# Fixed assets (register + conversion from inventory)
+# ---------------------------------------------------------------------------
+
+def _asset_dict(a):
+    return {
+        'id': a.id, 'name': a.name, 'asset_tag': a.asset_tag or '',
+        'category': a.category, 'description': a.description or '',
+        'serial_number': a.serial_number or '',
+        'acquisition_cost': a.acquisition_cost or 0,
+        'acquisition_date': a.acquisition_date.isoformat() if a.acquisition_date else '',
+        'supplier': a.supplier or '', 'location': a.location or '',
+        'custodian': a.custodian or '', 'status': a.status,
+        'useful_life_years': a.useful_life_years, 'salvage_value': a.salvage_value or 0,
+        'quantity': a.quantity or 1,
+        'annual_depreciation': a.annual_depreciation,
+        'accumulated_depreciation': a.accumulated_depreciation,
+        'book_value': a.book_value, 'is_disposed': a.is_disposed,
+        'disposed_on': a.disposed_on.isoformat() if a.disposed_on else '',
+        'disposal_amount': a.disposal_amount,
+        'from_product': bool(a.source_product_id),
+        'edit_url': url_for('sales.edit_asset', asset_id=a.id),
+        'dispose_url': url_for('sales.dispose_asset', asset_id=a.id),
+    }
+
+
+def _apply_asset_fields(a, form):
+    from utils.security import strip_tags
+    a.name = strip_tags(form.get('name') or '').strip() or a.name
+    a.asset_tag = (form.get('asset_tag') or '').strip() or None
+    cat = (form.get('category') or '').strip()
+    if cat:
+        a.category = cat
+    a.description = strip_tags(form.get('description') or '').strip() or None
+    a.serial_number = (form.get('serial_number') or '').strip() or None
+    if form.get('acquisition_cost') is not None:
+        a.acquisition_cost = form.get('acquisition_cost', type=float) or 0
+    d = parse_date(form.get('acquisition_date'))
+    if d:
+        a.acquisition_date = d
+    a.supplier = (form.get('supplier') or '').strip() or None
+    a.location = (form.get('location') or '').strip() or None
+    a.custodian = (form.get('custodian') or '').strip() or None
+    st = (form.get('status') or '').strip()
+    if st in FIXED_ASSET_STATUSES:
+        a.status = st
+    a.useful_life_years = form.get('useful_life_years', type=int)
+    a.salvage_value = form.get('salvage_value', type=float) or 0
+
+
+@sales_bp.route('/assets')
+@login_required
+def assets():
+    q = (request.args.get('q') or '').strip()
+    category = (request.args.get('category') or '').strip()
+    status = (request.args.get('status') or '').strip()
+    query = scope_query(FixedAsset.query, FixedAsset)
+    if q:
+        query = query.filter(db.or_(FixedAsset.name.ilike(like_term(q), escape='\\'),
+                                    FixedAsset.asset_tag.ilike(like_term(q), escape='\\'),
+                                    FixedAsset.serial_number.ilike(like_term(q), escape='\\')))
+    if category:
+        query = query.filter(FixedAsset.category == category)
+    if status:
+        query = query.filter(FixedAsset.status == status)
+    rows = query.order_by(FixedAsset.created_at.desc()).all()
+    live = [a for a in rows if not a.is_disposed]
+    from collections import defaultdict
+    by_cat = defaultdict(lambda: {'count': 0, 'cost': 0.0, 'book': 0.0})
+    for a in live:
+        b = by_cat[a.category or 'Other']
+        b['count'] += 1; b['cost'] += a.acquisition_cost or 0; b['book'] += a.book_value
+    summary = {
+        'count': len(live),
+        'total_cost': round(sum(a.acquisition_cost or 0 for a in live), 2),
+        'total_book': round(sum(a.book_value for a in live), 2),
+        'disposed': sum(1 for a in rows if a.is_disposed),
+        'by_category': sorted(
+            [{'category': k, **{kk: round(vv, 2) if isinstance(vv, float) else vv
+                                for kk, vv in v.items()}} for k, v in by_cat.items()],
+            key=lambda r: -r['cost']),
+    }
+    return _render({
+        'page': 'assets', 'assets': [_asset_dict(a) for a in rows], 'summary': summary,
+        'q': q, 'category': category, 'status': status,
+        'categories': FIXED_ASSET_CATEGORIES, 'statuses': FIXED_ASSET_STATUSES,
+        'add_url': url_for('sales.add_asset'),
+        'export_url': url_for('sales.assets_export'),
+        'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
+    })
+
+
+@sales_bp.route('/assets/add', methods=['POST'])
+@login_required
+def add_asset():
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        return _err('Asset name is required.', url_for('sales.assets'))
+    a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=1,
+                   acquisition_date=timeutil.today(),
+                   created_by=session.get('user') or session.get('username') or 'Admin')
+    _apply_asset_fields(a, request.form)
+    db.session.add(a)
+    db.session.commit()
+    return _ok(f'Registered "{a.name}".', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/<int:asset_id>/edit', methods=['POST'])
+@login_required
+def edit_asset(asset_id):
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    _apply_asset_fields(a, request.form)
+    db.session.commit()
+    return _ok('Asset updated.', url_for('sales.assets'))
+
+
+@sales_bp.route('/products/<int:product_id>/convert-asset', methods=['POST'])
+@login_required
+def convert_to_asset(product_id):
+    """Convert on-hand units of a product into a tracked fixed asset. The units
+    are drawn out of stock (ledgered as a movement); inventory value simply
+    becomes fixed-asset value, so there's no profit-and-loss impact."""
+    p = db.get_or_404(Product, product_id)
+    if not can_access_branch(p.branch_id):
+        return _err('That product belongs to another branch.', url_for('sales.products'))
+    qty = request.form.get('quantity', type=int) or 1
+    if qty <= 0:
+        return _err('Enter how many units to convert.', url_for('sales.products'))
+    if qty > (p.stock_qty or 0):
+        return _err(f'Only {p.stock_qty} in stock.', url_for('sales.products'))
+    cost = request.form.get('acquisition_cost', type=float)
+    if cost is None:
+        cost = round((p.cost_price or 0) * qty, 2)      # default to stock cost
+    a = FixedAsset(
+        branch_id=p.branch_id,
+        name=(request.form.get('name') or '').strip() or p.name,
+        asset_tag=(request.form.get('asset_tag') or '').strip() or None,
+        category=(request.form.get('category') or '').strip() or 'Other',
+        serial_number=(request.form.get('serial_number') or '').strip() or None,
+        acquisition_cost=cost, acquisition_date=timeutil.today(),
+        supplier=p.preferred_supplier, location=p.storage_location,
+        custodian=(request.form.get('custodian') or '').strip() or None,
+        status='In Use', quantity=qty, source_product_id=p.id,
+        useful_life_years=request.form.get('useful_life_years', type=int),
+        salvage_value=request.form.get('salvage_value', type=float) or 0,
+        created_by=session.get('user') or session.get('username') or 'Admin')
+    p.stock_qty = (p.stock_qty or 0) - qty
+    _record_movement(p, 'out', qty, 'Converted to Fixed Asset',
+                     note=f'Fixed asset: {a.name}', apply=False)
+    db.session.add(a)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('sales.asset_convert', detail=f'{a.name} x{qty}', target=a)
+    return _ok(f'Converted {qty} × {p.name} into fixed asset "{a.name}".',
+               url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/<int:asset_id>/dispose', methods=['POST'])
+@login_required
+def dispose_asset(asset_id):
+    """Retire an asset. Any sale proceeds are posted to the finance ledger as
+    'Asset Disposal' income (idempotent per asset)."""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    if a.is_disposed:
+        return _err('That asset is already disposed.', url_for('sales.assets'))
+    a.status = 'Disposed'
+    a.disposed_on = parse_date(request.form.get('disposed_on')) or timeutil.today()
+    a.disposal_amount = request.form.get('disposal_amount', type=float) or 0
+    a.disposal_note = (request.form.get('disposal_note') or '').strip() or None
+    db.session.commit()
+    if a.disposal_amount and a.disposal_amount > 0:
+        from utils import finance_ledger as _fl
+        _fl.post(_fl.REVENUE, a.disposal_amount, source_module='assets',
+                 category='Asset Disposal', branch_id=a.branch_id,
+                 method=(request.form.get('method') or 'Cash'),
+                 origin_type='asset_disposal', origin_id=a.id,
+                 reference=a.asset_tag or a.name, description=f'Disposal of {a.name}',
+                 created_by=session.get('user') or session.get('username') or 'Admin')
+        db.session.commit()
+    return _ok(f'"{a.name}" marked disposed.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/export')
+@login_required
+def assets_export():
+    rows = scope_query(FixedAsset.query, FixedAsset).order_by(FixedAsset.category, FixedAsset.name).all()
+    from openpyxl import Workbook
+    wb = Workbook(); ws = wb.active; ws.title = 'Fixed Assets'
+    ws.append(['Tag', 'Name', 'Category', 'Serial', 'Acquired', 'Cost', 'Life (yrs)',
+               'Accum. Depr.', 'Book Value', 'Custodian', 'Location', 'Status'])
+    for a in rows:
+        ws.append([a.asset_tag or '', a.name, a.category, a.serial_number or '',
+                   a.acquisition_date.isoformat() if a.acquisition_date else '',
+                   a.acquisition_cost or 0, a.useful_life_years or '',
+                   a.accumulated_depreciation, a.book_value,
+                   a.custodian or '', a.location or '', a.status])
+    return xlsx_response(wb, 'fixed_assets.xlsx')
 
 
 # ---------------------------------------------------------------------------

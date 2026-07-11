@@ -25,7 +25,7 @@ STOCK_IN_REASONS = ['Stock In (Purchase/GRN)', 'Customer Return', 'Transfer In',
 STOCK_OUT_REASONS = ['Issue / Stock Out', 'Classroom Use', 'Laboratory Use',
                      'Office Use', 'Hostel Use', 'Kitchen Use', 'Damage', 'Theft',
                      'Donation', 'Expired', 'Supplier Return', 'Transfer Out',
-                     'Correction (Decrease)', 'Loss']
+                     'Correction (Decrease)', 'Loss', 'Converted to Fixed Asset']
 UNITS = ['Piece', 'Pack', 'Ream', 'Dozen', 'Box', 'Carton', 'Set', 'Pair',
          'Bottle', 'Litre', 'Kg', 'Roll']
 
@@ -369,6 +369,87 @@ class StockAuditItem(db.Model):
 
     def __repr__(self):
         return f'<StockAuditItem {self.product_name} {self.counted_qty}/{self.system_qty}>'
+
+
+FIXED_ASSET_CATEGORIES = ['ICT Equipment', 'Furniture & Fittings', 'Laboratory Equipment',
+                          'Vehicles', 'Machinery', 'Buildings', 'Sports Equipment',
+                          'Kitchen Equipment', 'Musical Instruments', 'Books & Library',
+                          'Other']
+FIXED_ASSET_STATUSES = ['In Use', 'In Store', 'Under Repair', 'Disposed', 'Lost']
+
+
+class FixedAsset(db.Model):
+    """A capital item the school owns and tracks over its life — lab equipment,
+    ICT gear, furniture, vehicles. Either registered directly or converted from
+    an inventory product (which draws the units out of stock). Carries a
+    straight-line depreciation schedule so the register shows current book
+    value, and records disposal (with proceeds posted to the finance ledger)."""
+    __tablename__ = 'fixed_assets'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    name = db.Column(db.String(150), nullable=False)
+    asset_tag = db.Column(db.String(40), index=True)
+    category = db.Column(db.String(40), default='Other')
+    description = db.Column(db.Text)
+    serial_number = db.Column(db.String(80))
+    acquisition_cost = db.Column(db.Float, default=0)
+    acquisition_date = db.Column(db.Date)
+    supplier = db.Column(db.String(120))
+    location = db.Column(db.String(80))
+    custodian = db.Column(db.String(120))
+    status = db.Column(db.String(20), default='In Use')
+    # Straight-line depreciation inputs (life in years, residual value).
+    useful_life_years = db.Column(db.Integer)
+    salvage_value = db.Column(db.Float, default=0)
+    # Provenance + disposal.
+    source_product_id = db.Column(db.Integer, db.ForeignKey('sales_products.id'))
+    quantity = db.Column(db.Integer, default=1)
+    disposed_on = db.Column(db.Date)
+    disposal_amount = db.Column(db.Float)
+    disposal_note = db.Column(db.String(200))
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    branch = db.relationship('Branch')
+    source_product = db.relationship('Product')
+
+    @property
+    def is_disposed(self):
+        return self.status == 'Disposed'
+
+    @property
+    def age_years(self):
+        if not self.acquisition_date:
+            return 0.0
+        end = self.disposed_on or local_now().date()
+        return max((end - self.acquisition_date).days / 365.25, 0.0)
+
+    @property
+    def annual_depreciation(self):
+        life = self.useful_life_years or 0
+        if life <= 0:
+            return 0.0
+        base = (self.acquisition_cost or 0) - (self.salvage_value or 0)
+        return round(max(base, 0) / life, 2)
+
+    @property
+    def accumulated_depreciation(self):
+        base = (self.acquisition_cost or 0) - (self.salvage_value or 0)
+        if base <= 0 or not self.annual_depreciation:
+            return 0.0
+        return round(min(self.annual_depreciation * self.age_years, base), 2)
+
+    @property
+    def book_value(self):
+        """Current carrying value: cost − accumulated depreciation (0 once
+        disposed)."""
+        if self.is_disposed:
+            return 0.0
+        return round((self.acquisition_cost or 0) - self.accumulated_depreciation, 2)
+
+    def __repr__(self):
+        return f'<FixedAsset {self.asset_tag or self.name}>'
 
 
 class PromoCode(db.Model):
