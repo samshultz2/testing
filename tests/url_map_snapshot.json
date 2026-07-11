@@ -2880,6 +2880,13 @@
 ]
 ],
 [
+"library.add_copies",
+"/library/books/<int:book_id>/add-copies",
+[
+"POST"
+]
+],
+[
 "library.barcode_lookup",
 "/library/barcode-lookup",
 [
@@ -2948,6 +2955,13 @@
 "/library/import",
 [
 "POST"
+]
+],
+[
+"library.isbn_lookup",
+"/library/api/isbn-lookup",
+[
+"GET"
 ]
 ],
 [

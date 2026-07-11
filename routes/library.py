@@ -61,6 +61,7 @@ def _urls():
         'reading_lists': 'reading_lists', 'reading_list_add': 'reading_list_add',
         'book_search': 'book_search', 'student_search': 'student_search',
         'staff_search': 'staff_search', 'barcode_lookup': 'barcode_lookup',
+        'isbn_lookup': 'isbn_lookup',
         'remind_overdue': 'remind_overdue'}.items()}
 
 
@@ -261,6 +262,56 @@ def add_book():
         db.session.commit()
         return _ok(f'Added "{b.title}".', url_for('library.books'))
     return _render(_book_payload(None))
+
+
+@library_bp.route('/api/isbn-lookup')
+@login_required
+def isbn_lookup():
+    """Auto-fill a book from its ISBN (typed, or scanned from a barcode photo on
+    the client). Returns the fetched metadata plus any existing copies of the
+    same book in this branch, so the librarian can add copies to an existing
+    title instead of creating a duplicate."""
+    from utils.isbn_lookup import lookup_isbn, normalise_isbn
+    from utils.branch_scope import scope_query
+    raw = request.args.get('isbn') or ''
+    isbn = normalise_isbn(raw)
+    if not isbn:
+        return jsonify({'error': 'Enter a 10- or 13-digit ISBN.'}), 400
+    meta = lookup_isbn(isbn)
+
+    # Look for existing copies: exact ISBN, or (fallback) same title — school
+    # stock is often many copies of one title, so offer to top up rather than
+    # duplicate. Title match is only used when the lookup gave us a title.
+    matches = scope_query(Book.query.filter_by(is_active=True), Book).filter(
+        Book.isbn == isbn).all()
+    seen = {b.id for b in matches}
+    if meta and meta.get('title'):
+        title = meta['title'].strip().lower()
+        for b in scope_query(Book.query.filter_by(is_active=True), Book).filter(
+                func.lower(Book.title) == title).all():
+            if b.id not in seen:
+                matches.append(b); seen.add(b.id)
+    existing = [{'id': b.id, 'title': b.title, 'author': b.author,
+                 'isbn': b.isbn, 'copies_total': b.copies_total or 0,
+                 'copies_available': b.copies_available or 0,
+                 'add_copies_url': url_for('library.add_copies', book_id=b.id)} for b in matches]
+    return jsonify({'found': bool(meta), 'isbn': isbn, 'book': meta or {}, 'existing': existing})
+
+
+@library_bp.route('/books/<int:book_id>/add-copies', methods=['POST'])
+@login_required
+def add_copies(book_id):
+    """Top up an existing title's stock — the "same book, more copies" path."""
+    b = db.get_or_404(Book, book_id)
+    require_branch_access(b.branch_id)
+    count = request.form.get('count', type=int) or 0
+    if count <= 0:
+        return _err('Enter how many copies to add.', url_for('library.books'))
+    b.copies_total = (b.copies_total or 0) + count
+    b.copies_available = (b.copies_available or 0) + count
+    db.session.commit()
+    return _ok(f'Added {count} cop{"ies" if count != 1 else "y"} to "{b.title}" '
+               f'(now {b.copies_total}).', url_for('library.books'))
 
 
 @library_bp.route('/books/<int:book_id>/edit', methods=['GET', 'POST'])

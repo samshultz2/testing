@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { submitJson, postFile } from '../lib/forms';
+import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table, Modal } from '../components/ui';
@@ -226,6 +227,66 @@ function BookForm({ d, notify }) {
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
 
+  // ── ISBN / barcode auto-fill ──────────────────────────────────────────────
+  const [looking, setLooking] = useState(false);
+  const [lookMsg, setLookMsg] = useState(null);
+  const [dupes, setDupes] = useState([]);
+  const fileRef = useRef(null);
+
+  const applyMeta = (m) => setF((s) => {
+    const next = { ...s };
+    // Fill from the catalogue result, keeping anything the user already typed.
+    ['title', 'subtitle', 'author', 'publisher', 'subject', 'keywords', 'description', 'language'].forEach((k) => {
+      if (m[k] && !String(next[k] || '').trim()) next[k] = m[k];
+    });
+    if (m.publication_year && !next.publication_year) next.publication_year = m.publication_year;
+    if (m.isbn) next.isbn = m.isbn;
+    return next;
+  });
+
+  const doLookup = async (isbnArg) => {
+    const isbn = (isbnArg != null ? isbnArg : f.isbn) || '';
+    if (!isbn.trim()) { setLookMsg({ tone: 'warn', text: 'Enter or scan an ISBN first.' }); return; }
+    setLooking(true); setLookMsg(null); setDupes([]);
+    try {
+      const res = await apiGet(`${d.urls.isbn_lookup}?isbn=${encodeURIComponent(isbn)}`);
+      setDupes(res.existing || []);
+      if (res.found) { applyMeta(res.book); setLookMsg({ tone: 'success', text: `Found via ${res.book.source}. Details filled in — review and save.` }); }
+      else { set('isbn', res.isbn || isbn); setLookMsg({ tone: 'warn', text: 'No catalogue match — fill the details manually.' }); }
+    } catch (e2) {
+      setLookMsg({ tone: 'error', text: 'Lookup failed. Check the connection or type the details.' });
+    } finally { setLooking(false); }
+  };
+
+  // Scan a barcode from a photo the user takes/uploads, using the browser's
+  // native BarcodeDetector (no external library). A book's barcode is its
+  // ISBN-13, so a hit feeds straight into the lookup.
+  const scanSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+  const onScanFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!scanSupported) { setLookMsg({ tone: 'warn', text: 'Barcode scanning isn’t supported here — type the ISBN instead.' }); return; }
+    setLookMsg({ tone: 'info', text: 'Reading barcode…' });
+    try {
+      const bitmap = await createImageBitmap(file);
+      // eslint-disable-next-line no-undef
+      const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128'] });
+      const codes = await detector.detect(bitmap);
+      if (codes && codes.length) { const code = codes[0].rawValue; set('isbn', code); doLookup(code); }
+      else setLookMsg({ tone: 'warn', text: 'Couldn’t read a barcode — try a clearer photo or type the ISBN.' });
+    } catch (e2) {
+      setLookMsg({ tone: 'error', text: 'Could not read the image. Type the ISBN instead.' });
+    }
+  };
+
+  const addCopies = async (dupe) => {
+    const n = Number(window.prompt(`How many copies of "${dupe.title}" to add?`, '1'));
+    if (!n || n <= 0) return;
+    const r = await submitJson(dupe.add_copies_url, { count: n });
+    if (r.ok) nav.go(d.urls.books); else notify('error', r.error || 'Could not add copies.');
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!f.title.trim()) { notify('error', 'Title is required.'); return; }
@@ -239,6 +300,46 @@ function BookForm({ d, notify }) {
   return (
     <>
       <PageHeader title={editing ? 'Edit Book' : 'Add Book'} />
+
+      {!editing && (
+        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-barcode" /> Quick add by ISBN / barcode</h3></div>
+          <div className="card-body">
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div className="form-group" style={{ flex: 1, minWidth: 200, margin: 0 }}>
+                <label className="form-label">ISBN</label>
+                <input type="text" className="form-control" placeholder="Type or scan the 10/13-digit ISBN"
+                       value={f.isbn} onChange={(e) => set('isbn', e.target.value)}
+                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doLookup(); } }} />
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => doLookup()} disabled={looking}>
+                <i aria-hidden="true" className="fas fa-magnifying-glass" /> {looking ? 'Looking…' : 'Look up'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => fileRef.current && fileRef.current.click()}
+                      title={scanSupported ? 'Take or upload a photo of the barcode' : 'Scanning not supported on this device'}>
+                <i aria-hidden="true" className="fas fa-camera" /> Scan barcode
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onScanFile} />
+            </div>
+            {lookMsg && <div className={'alert mt-2 alert-' + ({ success: 'success', error: 'danger', warn: 'warning', info: 'info' }[lookMsg.tone] || 'info')} role="status" style={{ marginBottom: 0, marginTop: '.6rem' }}>{lookMsg.text}</div>}
+            {dupes.length > 0 && (
+              <div className="alert alert-warning" role="status" style={{ marginTop: '.6rem', marginBottom: 0 }}>
+                <strong><i aria-hidden="true" className="fas fa-circle-info" /> This title may already be in your catalogue.</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', marginTop: '.5rem' }}>
+                  {dupes.map((b) => (
+                    <div key={b.id} style={{ display: 'flex', gap: '.5rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                      <span>{b.title}{b.author ? ` · ${b.author}` : ''} <span className="text-muted text-sm">({b.copies_available}/{b.copies_total} available)</span></span>
+                      <button type="button" className="btn btn-sm btn-primary" onClick={() => addCopies(b)}><i aria-hidden="true" className="fas fa-plus" /> Add copies to this one</button>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-muted text-sm" style={{ marginTop: '.4rem' }}>Or just fill the form below to add it as a separate entry.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="card"><div className="card-body">
         <form onSubmit={submit}>
           <div className="form-row">
