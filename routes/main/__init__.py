@@ -40,6 +40,7 @@ main_bp = Blueprint('main', __name__)
 # Selectable dashboard widgets: (key, label, category, default-on).
 DASHBOARD_WIDGETS = [
     ('insights', 'Needs attention — prioritized alerts', 'Overview', True),
+    ('branches', 'Branch performance comparison', 'Overview', True),
     ('kpi', 'Student KPIs', 'Students', True),
     ('charts', 'Gender / Stream / Age charts', 'Students', True),
     ('class_religion', 'Class enrolment & Religion', 'Students', True),
@@ -67,6 +68,8 @@ WIDGET_MODULE = {
 # The Needs-Attention panel spans modules; its individual items self-filter by
 # module permission, so the widget itself is available to every signed-in user.
 _CROSS_MODULE_WIDGETS = {'insights'}
+# Central-only widgets: shown solely to users who see across every branch.
+_CENTRAL_WIDGETS = {'branches'}
 
 
 def permitted_widgets():
@@ -74,8 +77,12 @@ def permitted_widgets():
     Cross-module widgets (e.g. the Needs-Attention panel) are always permitted;
     their contents self-filter per contributing module."""
     from utils.access_control import can_access_module
-    return ({k for k in WIDGET_MODULE if can_access_module(WIDGET_MODULE[k])}
+    from utils.branch_scope import is_central
+    perm = ({k for k in WIDGET_MODULE if can_access_module(WIDGET_MODULE[k])}
             | set(_CROSS_MODULE_WIDGETS))
+    if is_central():
+        perm |= set(_CENTRAL_WIDGETS)
+    return perm
 
 
 def enabled_widgets():
@@ -282,6 +289,7 @@ def dashboard_payload():
         library_stat=_dash_library() if 'library' in enabled else None,
         teacher_classes=teacher_classes,
         insights=_dash_insights(active_term, tscope) if 'insights' in enabled else [],
+        branch_comparison=_dash_branch_comparison(active_term) if 'branches' in enabled else None,
         can_results=can_access_module('results'),
         quick_actions=_quick_actions(),
         home_focus=_home_focus(),
@@ -543,6 +551,65 @@ def _dash_insights(active_term, tscope):
 
     items.sort(key=lambda it: _SEVERITY_RANK.get(it['severity'], 3))
     return items
+
+
+def _dash_branch_comparison(active_term):
+    """Per-branch scorecard for central users with more than one branch — the
+    answer to "which branch is performing best?". Compares active students,
+    term attendance %, and term fees collected. None for single-branch/branch-
+    scoped users. Cached (cross-branch, so keyed globally + term)."""
+    from utils.branch_scope import is_central
+    if not is_central():
+        return None
+    from models import Branch
+    branches = Branch.query.filter_by(is_active=True).order_by(Branch.name).all()
+    if len(branches) < 2:
+        return None   # nothing to compare
+
+    def compute():
+        from sqlalchemy import func, case
+        from models import FeePayment
+        ids = [b.id for b in branches]
+        # Active, non-graduate students per branch.
+        stu = dict(db.session.query(Student.branch_id, func.count(Student.id))
+                   .filter(Student.is_active == True,
+                           db.or_(Student.is_graduated.is_(False), Student.is_graduated.is_(None)),
+                           Student.branch_id.in_(ids))
+                   .group_by(Student.branch_id).all())
+        fees = {}
+        att = {}
+        if active_term:
+            fees = dict(db.session.query(FeePayment.branch_id, func.sum(FeePayment.amount))
+                        .filter(FeePayment.term_id == active_term.id,
+                                FeePayment.branch_id.in_(ids))
+                        .group_by(FeePayment.branch_id).all())
+            # Term attendance % per branch: present marks / (records * 2).
+            weeks = [w.id for w in Week.query.filter_by(term_id=active_term.id).all()]
+            if weeks:
+                rows = (db.session.query(
+                            ClassArmAssignment.branch_id,
+                            func.count(Attendance.id),
+                            func.sum(case((Attendance.morning_present, 1), else_=0)),
+                            func.sum(case((Attendance.afternoon_present, 1), else_=0)))
+                        .join(StudentEnrollment, Attendance.enrollment_id == StudentEnrollment.id)
+                        .join(ClassArmAssignment,
+                              StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                        .filter(Attendance.week_id.in_(weeks),
+                                ClassArmAssignment.branch_id.in_(ids))
+                        .group_by(ClassArmAssignment.branch_id).all())
+                for bid, cnt, am, pm in rows:
+                    total = (cnt or 0) * 2
+                    att[bid] = round(((am or 0) + (pm or 0)) / total * 100, 1) if total else 0.0
+        out = []
+        for b in branches:
+            out.append({'id': b.id, 'name': b.name,
+                        'students': int(stu.get(b.id, 0)),
+                        'attendance': float(att.get(b.id, 0.0)),
+                        'fees': float(fees.get(b.id, 0.0) or 0.0)})
+        return out
+
+    tkey = active_term.id if active_term else 'none'
+    return _dash_cached(f'branchcmp:t{tkey}', 300, compute)
 
 
 def _teacher_scope():

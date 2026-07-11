@@ -186,6 +186,11 @@ export default function App({ data: initialData }) {
         </div>
       )}
 
+      {/* Branch performance comparison — central users with >1 branch only */}
+      {has('branches') && (d.branch_comparison || []).length > 1 && (
+        <BranchComparison rows={d.branch_comparison} />
+      )}
+
       {/* Exam snapshots */}
       {has('exams') && !emptySchool && (
         <div className="dash-grid c3">
@@ -389,6 +394,58 @@ function Insights({ items }) {
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+// Branch scorecard for central users: compares students, term attendance and
+// term fees across branches, with an inline bar so the leading branch is
+// obvious at a glance. Sorted by student headcount.
+function BranchComparison({ rows }) {
+  const sorted = [...rows].sort((a, b) => b.students - a.students);
+  const maxStudents = Math.max(1, ...sorted.map((r) => r.students));
+  const maxFees = Math.max(1, ...sorted.map((r) => r.fees));
+  const best = sorted.reduce((m, r) => (r.attendance > (m ? m.attendance : -1) ? r : m), null);
+  return (
+    <div className="widget" style={{ marginBottom: '1.1rem' }}>
+      <div className="wh">
+        <h3><i className="fas fa-code-branch" aria-hidden="true" /> Branch performance</h3>
+      </div>
+      <div className="wb" style={{ padding: 0, overflowX: 'auto' }}>
+        <table className="data-table" style={{ margin: 0 }}>
+          <thead>
+            <tr><th>Branch</th><th>Students</th><th>Attendance</th><th style={{ textAlign: 'right' }}>Fees (term)</th></tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => (
+              <tr key={r.id}>
+                <td>
+                  <strong>{r.name}</strong>
+                  {best && r.id === best.id && best.attendance > 0 &&
+                    <span className="badge badge-success" style={{ marginLeft: 6 }} title="Highest attendance">Top attendance</span>}
+                </td>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ minWidth: 34 }}>{r.students}</span>
+                    <span aria-hidden="true" style={{ flex: 1, minWidth: 40, height: 6, background: 'var(--border-color)', borderRadius: 3, overflow: 'hidden' }}>
+                      <span style={{ display: 'block', height: '100%', width: (r.students / maxStudents * 100) + '%', background: '#4e73df' }} />
+                    </span>
+                  </div>
+                </td>
+                <td><span className={'badge ' + (r.attendance >= 75 ? 'badge-success' : r.attendance > 0 ? 'badge-warning' : 'badge-secondary')}>{r.attendance ? r.attendance + '%' : '—'}</span></td>
+                <td style={{ textAlign: 'right' }} title={naira(r.fees)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                    <span aria-hidden="true" style={{ width: 48, height: 6, background: 'var(--border-color)', borderRadius: 3, overflow: 'hidden' }}>
+                      <span style={{ display: 'block', height: '100%', width: (r.fees / maxFees * 100) + '%', background: '#11998e', float: 'right' }} />
+                    </span>
+                    <span>{nairaShort(r.fees)}</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
