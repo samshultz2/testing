@@ -132,7 +132,8 @@ def broadsheet():
                  'affective': url_for('subjects.affective', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'comments': url_for('subjects.comments', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'export': url_for('subjects.export_broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
-                 'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or '')},
+                 'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'analytics': url_for('subjects.analytics_dashboard', term_id=term_id or '', assignment_id=assignment_id or '')},
     })
 
 
@@ -152,6 +153,44 @@ def compute_summaries():
                detail=f'term {term_id}, class {asg.class_id}: {count} student(s)')
     return _ok(f'Computed results and positions for {count} student(s).',
                url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))
+
+
+@subjects_bp.route('/analytics')
+@login_required
+def analytics_dashboard():
+    """Academic analytics for a class in a term — grade distribution, subject
+    difficulty, pass/fail rate, intervention list and a term-on-term trend.
+    Computed from entered scores (cached; ?refresh=1 forces recomputation)."""
+    term_id = request.args.get('term_id', type=int)
+    assignment_id = request.args.get('assignment_id', type=int)
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    if assignment_id and not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.analytics_dashboard'))
+    terms = Term.query.order_by(Term.id.desc()).all()
+    assignments = (filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    data = None
+    if term_id and assignment_id:
+        from utils.results_analytics import class_analytics
+        data = class_analytics(term_id, assignment_id,
+                               use_cache=(request.args.get('refresh') != '1'))
+    return _render({
+        'page': 'analytics', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'has_selection': bool(term_id and assignment_id),
+        'analytics': data,
+        'self_url': url_for('subjects.analytics_dashboard'),
+        'refresh_url': url_for('subjects.analytics_dashboard', term_id=term_id or '',
+                               assignment_id=assignment_id or '', refresh=1),
+        'report_card_base': url_for('subjects.student_report_card', student_id=0)[:-1],
+        'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or '')},
+    })
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])

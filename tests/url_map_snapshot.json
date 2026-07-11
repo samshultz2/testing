@@ -4981,6 +4981,13 @@
 ]
 ],
 [
+"subjects.analytics_dashboard",
+"/subjects/analytics",
+[
+"GET"
+]
+],
+[
 "subjects.api_class_subjects",
 "/subjects/api/class-subjects/<int:term_id>/<int:class_id>",
 [

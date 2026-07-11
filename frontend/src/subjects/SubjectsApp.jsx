@@ -638,6 +638,7 @@ function Broadsheet({ d, notify }) {
               <a href={d.urls.bulk_entry} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-pen-to-square" /> Bulk Entry</a>
               <a href={d.urls.affective} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-star-half-stroke" /> Behaviour</a>
               <a href={d.urls.comments} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-comment-dots" /> Comments</a>
+              {d.urls.analytics && <a href={d.urls.analytics} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-column" /> Analytics</a>}
               <a href={d.urls.export} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-download" /> Export</a>
               <span className="badge badge-info">{d.rows.length} Students</span>
             </div>
@@ -766,10 +767,106 @@ function Comments({ d, notify }) {
   );
 }
 
+// ---- Academic analytics ----------------------------------------------------
+function Bar({ label, value, max, pct, tone }) {
+  const w = max > 0 ? Math.round((value / max) * 100) : 0;
+  const colour = tone || 'var(--primary, #4e73df)';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '.2rem 0' }}>
+      <span style={{ width: 120, flexShrink: 0, fontSize: 'var(--text-sm)' }} className="text-truncate" title={label}>{label}</span>
+      <div style={{ flex: 1, background: 'var(--gray-100, #eef0f4)', borderRadius: 6, height: 18, overflow: 'hidden' }}>
+        <div style={{ width: `${w}%`, background: colour, height: '100%' }} /></div>
+      <span style={{ width: 64, textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{pct != null ? `${value}%` : value}</span>
+    </div>
+  );
+}
+
+function AStat({ value, label, tone }) {
+  return <div className="card"><div className="card-body">
+    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: tone }}>{value}</div>
+    <div className="text-muted text-sm">{label}</div></div></div>;
+}
+
+function Analytics({ d, notify }) {
+  const nav = useNav();
+  const a = d.analytics;
+  const s = (a && a.summary) || {};
+  const refresh = async () => { nav.go(d.refresh_url); notify('success', 'Recomputing…'); };
+  const gradeMax = a ? Math.max(1, ...a.grade_distribution.map((g) => g.count)) : 1;
+  const cardLink = (id) => `${d.report_card_base}${id}?term_id=${d.term_id}`;
+  return (
+    <>
+      <div className="page-header"><h1>Academic Analytics</h1>
+        <div className="page-header-actions">
+          {d.has_selection && <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><i aria-hidden="true" className="fas fa-rotate" /> Refresh</button>}
+          {d.assignment_id && <a href={d.urls.broadsheet} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}
+          {d.assignment_id && <a href={d.urls.scores} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-pen" /> Enter scores</a>}
+        </div>
+      </div>
+      <ClassFilter d={d} />
+      {!d.has_selection ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="Select a class"><p>Pick a term and class to see grade distribution, subject difficulty and students needing attention.</p></Empty></div></div>
+      ) : !a || !s.assessed ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="No scores yet"><p>Enter some scores for this class to unlock analytics.</p></Empty></div></div>
+      ) : (<>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+          <AStat value={s.class_average} label="Class average" />
+          <AStat value={`${s.pass_rate}%`} label="Pass rate" tone={s.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+          <AStat value={s.highest} label="Highest average" tone="var(--success)" />
+          <AStat value={s.lowest} label="Lowest average" tone="#e74a3b" />
+          <AStat value={`${s.completion}%`} label="Entry completion" />
+          {s.trend != null && <AStat value={`${s.trend > 0 ? '+' : ''}${s.trend}`} label="vs last term" tone={s.trend >= 0 ? 'var(--success)' : '#e74a3b'} />}
+        </div>
+        <div className="text-muted text-sm mb-2">
+          {s.assessed} of {s.students} students assessed · pass mark {s.pass_mark}
+          {s.top_student && <> · top: <strong>{s.top_student}</strong></>}
+          {a.cached === false && <> · <span className="badge badge-secondary">fresh</span></>}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>Grade distribution</h3></div>
+            <div className="card-body">
+              {a.grade_distribution.map((g) => <Bar key={g.grade} label={`Grade ${g.grade}`} value={g.count} max={gradeMax} />)}
+            </div></div>
+
+          <div className="card"><div className="card-header"><h3>Subject difficulty (hardest first)</h3></div>
+            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+              <table className="data-table"><thead><tr><th>Subject</th><th className="text-right">Avg</th><th className="text-right">Pass %</th></tr></thead>
+                <tbody>{a.subjects.map((sub) => (
+                  <tr key={sub.id}><td>{sub.name}</td>
+                    <td className="text-right"><strong>{sub.assessed ? sub.average : '—'}</strong></td>
+                    <td className="text-right"><span className={'badge ' + (sub.pass_rate >= 50 ? 'badge-success' : 'badge-danger')}>{sub.assessed ? sub.pass_rate + '%' : '—'}</span></td></tr>
+                ))}</tbody></table>
+            </div></div>
+
+          <div className="card"><div className="card-header"><h3>Top students</h3></div>
+            <div className="card-body">
+              <ol style={{ margin: 0, paddingLeft: '1.2rem' }}>
+                {a.top_students.map((t, i) => <li key={i} style={{ margin: '.15rem 0' }}>{t.name} <span className="text-muted">— {t.average}</span></li>)}
+              </ol></div></div>
+
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Needs attention ({a.intervention.length})</h3></div>
+            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+              {a.intervention.length ? (
+                <table className="data-table"><thead><tr><th>Student</th><th className="text-right">Avg</th><th className="text-right">Failing</th><th /></tr></thead>
+                  <tbody>{a.intervention.map((st) => (
+                    <tr key={st.id}><td>{st.name}</td>
+                      <td className="text-right" style={{ color: '#e74a3b', fontWeight: 600 }}>{st.average}</td>
+                      <td className="text-right">{st.failed}</td>
+                      <td className="text-right"><a href={cardLink(st.id)} className="btn btn-sm btn-light" data-native><i aria-hidden="true" className="fas fa-id-card" /></a></td></tr>
+                  ))}</tbody></table>
+              ) : <div style={{ padding: '1rem' }} className="text-muted">No students below the pass mark. 🎉</div>}
+            </div></div>
+        </div>
+      </>)}
+    </>
+  );
+}
+
 const SCREENS = { list: List, add: SubjectForm, edit: SubjectForm, bulk_add: BulkAdd,
   class_subjects: ClassSubjects, assign: Assign, edit_class_subject: EditClassSubject,
   scores: Scores, workflow: Workflow, bulk_entry: BulkEntry, broadsheet: Broadsheet,
-  affective: Affective, comments: Comments };
+  affective: Affective, comments: Comments, analytics: Analytics };
 
 export default function SubjectsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
