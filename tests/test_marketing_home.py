@@ -49,6 +49,16 @@ def test_platform_host_serves_marketing_home(mt):
     assert '50,000' in body                          # price derived from config
 
 
+def test_bare_apex_serves_marketing_when_no_apex_tenant(mt):
+    # With APEX_TENANT unset (the default), the bare apex edusyncra.site is the
+    # marketing homepage — every school lives on its own <slug>.<domain>.
+    app, _ = mt
+    assert not app.config.get('APEX_TENANT')
+    r = app.test_client().get('/', headers={'Host': 'posyhub.test'})
+    assert r.status_code == 200
+    assert 'Run your whole school' in r.get_data(as_text=True)
+
+
 def test_real_school_host_is_not_marketing(mt):
     app, _ = mt
     c = app.test_client()
