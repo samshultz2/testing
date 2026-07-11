@@ -536,6 +536,43 @@ a.exec:hover .go{opacity:1}
 </div>
 
 {% endif %}
+
+<!-- Unified subject scorecard: WAEC pass + JAMB mean + teacher, worst-first -->
+{% if subject_scorecard %}
+<div id="sec-subjects" class="section-title scroll-mt"><i class="fas fa-clipboard-list"></i> Subject Performance Scorecard &mdash; {{ selected_year }}</div>
+<p class="text-muted text-sm" style="margin:0 0 .5rem;">
+    WAEC pass rate and JAMB mean for each subject in one view, with the SSS3 teacher who owns it. Weakest first.
+    {% if scorecard_summary.weak %}<span class="pill" style="background:rgba(220,38,38,.12);color:#dc2626;">{{ scorecard_summary.weak }} needing action</span>{% endif %}
+    {% if scorecard_summary.watch %}<span class="pill" style="background:rgba(217,119,6,.14);color:#d97706;">{{ scorecard_summary.watch }} to watch</span>{% endif %}
+    {% if scorecard_summary.strong %}<span class="pill" style="background:rgba(22,163,74,.14);color:#16a34a;">{{ scorecard_summary.strong }} strong</span>{% endif %}
+</p>
+<div class="card" style="padding:0;overflow-x:auto;">
+<table class="cmp-table">
+    <thead><tr><th>Subject</th><th>Status</th><th>WAEC pass</th><th>WAEC A1</th><th>JAMB mean</th><th>JAMB ≥50</th><th>Teacher(s)</th></tr></thead>
+    <tbody>
+    {% for r in subject_scorecard %}
+    <tr class="{{ 'top' if r.flag == 'weak' }}">
+        <td class="lead">{{ r.subject }}
+            {% if r.waec_entries or r.jamb_count %}<span class="text-muted text-sm">({{ r.waec_entries }}W / {{ r.jamb_count }}J)</span>{% endif %}</td>
+        <td>{% if r.flag == 'weak' %}<span class="delta down">Action</span>
+            {% elif r.flag == 'watch' %}<span class="pill" style="background:rgba(217,119,6,.14);color:#d97706;">Watch</span>
+            {% elif r.flag == 'strong' %}<span class="delta up">Strong</span>
+            {% else %}<span class="delta flat">OK</span>{% endif %}</td>
+        <td>{% if r.waec_pass_rate is not none %}{{ r.waec_pass_rate }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if r.waec_a1_rate is not none %}{{ r.waec_a1_rate }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if r.jamb_mean is not none %}{{ r.jamb_mean }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if r.jamb_above_50_pct is not none %}{{ r.jamb_above_50_pct }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td class="text-sm">{% if r.teachers %}{{ r.teachers|join(', ') }}{% else %}<span class="text-muted">Unassigned</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% if not scorecard_summary.with_teacher %}
+<p class="text-muted text-sm" style="margin:.4rem 0 0;"><i class="fas fa-circle-info"></i> Assign subject teachers to the SSS3 class (in the active term) to attribute each subject to a teacher.</p>
+{% endif %}
+{% endif %}
+
 <!-- Subject-level JAMB performance (captured but previously unused) -->
 {% if jamb_subjects %}
 <div class="section-title"><i class="fas fa-list-ol"></i> JAMB subject performance <span class="tag jamb">JAMB</span></div>

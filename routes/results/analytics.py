@@ -429,8 +429,14 @@ def analytics_hub():
         urls={'readiness': url_for('results.readiness_funnel'),
               'at_risk': url_for('results.api_at_risk')})
 
+    from utils import exam_subjects
+    scorecard = exam_subjects.subject_scorecard(
+        waec_stats, jamb_stats, sss3_subject_teachers()) if year else []
+
     return render_template('results/analytics_hub.html',
         insights=insights,
+        subject_scorecard=scorecard,
+        scorecard_summary=exam_subjects.scorecard_summary(scorecard),
         branch_compare=branch_comparison(year) if year else [],
         year_compare=year_comparison(year, compare_year, bid) if year else None,
         compare_year=compare_year,

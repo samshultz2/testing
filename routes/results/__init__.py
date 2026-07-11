@@ -213,6 +213,29 @@ def branch_comparison(year):
     return exam_compare.rank_branches(rows) if len(rows) >= 2 else []
 
 
+def sss3_subject_teachers():
+    """``{subject_name: [teacher_name, ...]}`` for the SSS3 class in the active
+    term — the teachers who own each WAEC/JAMB exam subject. Empty when the class
+    or term isn't set up. One query."""
+    from models import ClassSubject, Subject
+    from utils.helpers import get_sss3_class
+    cls = get_sss3_class()
+    term = get_active_term()
+    if not cls or not term:
+        return {}
+    out = {}
+    rows = (db.session.query(Subject.name, ClassSubject.teacher_name)
+            .join(ClassSubject, ClassSubject.subject_id == Subject.id)
+            .filter(ClassSubject.class_id == cls.id,
+                    ClassSubject.term_id == term.id,
+                    ClassSubject.is_active == True).all())
+    for subject_name, teacher in rows:
+        name = (teacher or '').strip()
+        if name:
+            out.setdefault(subject_name, set()).add(name)
+    return {k: sorted(v) for k, v in out.items()}
+
+
 def year_comparison(year, compare_year, branch_id):
     """A/B headline comparison of ``year`` vs ``compare_year`` for the branch in
     scope, with per-metric deltas. Returns None when the pair is invalid."""
