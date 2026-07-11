@@ -46,6 +46,18 @@ a.exec:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color
 a.exec:hover .go{opacity:1}
 .exec.tone-red .ev{color:#dc2626}.exec.tone-amber .ev{color:#d97706}.exec.tone-green .ev{color:#16a34a}.exec.tone-blue .ev{color:#4f46e5}
 .scroll-mt{scroll-margin-top:80px}
+.cmp-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.cmp-table th,.cmp-table td{padding:.5rem .6rem;border-bottom:1px solid var(--border-light);text-align:right}
+.cmp-table th:first-child,.cmp-table td:first-child{text-align:left}
+.cmp-table thead th{background:var(--gray-50);font-weight:700;white-space:nowrap}
+.cmp-table td.lead{font-weight:700}
+.cmp-table tr.top td{background:rgba(22,163,74,.08)}
+.delta{display:inline-block;min-width:52px;padding:.1rem .4rem;border-radius:var(--radius-full);font-weight:700;font-size:.75rem}
+.delta.up{background:rgba(22,163,74,.14);color:#16a34a}
+.delta.down{background:rgba(220,38,38,.12);color:#dc2626}
+.delta.flat{background:var(--gray-100);color:var(--text-muted)}
+.rankdot{display:inline-flex;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--gray-100);color:var(--text-muted);font-size:.72rem;font-weight:700;align-items:center;justify-content:center;margin-right:.4rem}
+.cmp-table tr.top .rankdot{background:#16a34a;color:#fff}
 @media print{
     .no-print{display:none !important}
     .two-col{grid-template-columns:1fr 1fr !important}
@@ -64,9 +76,16 @@ a.exec:hover .go{opacity:1}
     <div class="page-header-actions no-print">
         <form method="GET" class="d-flex gap-2 align-center">
             <label class="form-label mb-0">Year</label>
-            <select name="year" class="form-control" style="max-width:140px;" data-autosubmit>
+            <select name="year" class="form-control" style="max-width:130px;" data-autosubmit>
                 {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
             </select>
+            {% if years|length > 1 %}
+            <label class="form-label mb-0">vs</label>
+            <select name="compare" class="form-control" style="max-width:130px;" data-autosubmit title="Compare with another year">
+                <option value="">— compare —</option>
+                {% for y in years %}{% if y != selected_year %}<option value="{{ y }}" {% if y == compare_year %}selected{% endif %}>{{ y }}</option>{% endif %}{% endfor %}
+            </select>
+            {% endif %}
         </form>
         <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm" title="Cohort admission-readiness funnel"><i class="fas fa-graduation-cap"></i> Readiness</a>
         <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
@@ -161,6 +180,55 @@ a.exec:hover .go{opacity:1}
             </div>
             {% endfor %}
         </div>
+    </div>
+</div>
+{% endif %}
+
+{% if year_compare %}
+<div id="sec-compare-year" class="card scroll-mt" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-code-compare"></i> Cohort comparison &mdash; {{ year_compare.year }} vs {{ year_compare.compare_year }}</h3></div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="cmp-table">
+            <thead><tr><th>Metric</th><th>{{ year_compare.year }}</th><th>{{ year_compare.compare_year }}</th><th>Change</th></tr></thead>
+            <tbody>
+            {% for m in year_compare.metrics %}
+            <tr>
+                <td>{{ m.label }}</td>
+                <td class="lead">{% if m.a is not none %}{{ m.a }}{{ m.suffix }}{% else %}—{% endif %}</td>
+                <td>{% if m.b is not none %}{{ m.b }}{{ m.suffix }}{% else %}—{% endif %}</td>
+                <td>{% if m.delta is none %}<span class="delta flat">n/a</span>
+                    {% elif m.improved %}<span class="delta up"><i class="fas fa-arrow-up"></i> {{ '%+g'|format(m.delta) }}{{ m.suffix }}</span>
+                    {% elif m.improved == false %}<span class="delta down"><i class="fas fa-arrow-down"></i> {{ '%+g'|format(m.delta) }}{{ m.suffix }}</span>
+                    {% else %}<span class="delta flat">no change</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if branch_compare %}
+<div id="sec-compare-branch" class="card scroll-mt" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-code-branch"></i> Branch comparison &mdash; {{ selected_year }}</h3>
+        <span class="text-muted text-sm">Ranked by JAMB mean · switch branch from the header to drill in</span></div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="cmp-table">
+            <thead><tr><th>Branch</th><th>JAMB candidates</th><th>JAMB mean</th><th>≥200</th><th>WAEC students</th><th>WAEC pass</th><th>Distinction</th></tr></thead>
+            <tbody>
+            {% for r in branch_compare %}
+            <tr class="{{ 'top' if loop.first }}">
+                <td><span class="rankdot">{{ loop.index }}</span><a href="{{ url_for('main.set_view_branch', branch_id=r.id) }}" title="View this branch">{{ r.label }}</a></td>
+                <td>{{ r.metrics.jamb_candidates }}</td>
+                <td class="lead">{% if r.metrics.jamb_mean is not none %}{{ r.metrics.jamb_mean }}{% else %}—{% endif %}</td>
+                <td>{% if r.metrics.above_200_pct is not none %}{{ r.metrics.above_200_pct }}%{% else %}—{% endif %}</td>
+                <td>{{ r.metrics.waec_students }}</td>
+                <td>{% if r.metrics.waec_pass_rate is not none %}{{ r.metrics.waec_pass_rate }}%{% else %}—{% endif %}</td>
+                <td>{% if r.metrics.waec_distinction_rate is not none %}{{ r.metrics.waec_distinction_rate }}%{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 {% endif %}

@@ -245,6 +245,7 @@ def analytics_hub():
     year = request.args.get('year', type=int)
     if not year and years:
         year = years[0]
+    compare_year = request.args.get('compare', type=int)
 
     from utils.branch_scope import viewing_branch_id
     bid = viewing_branch_id()
@@ -430,6 +431,9 @@ def analytics_hub():
 
     return render_template('results/analytics_hub.html',
         insights=insights,
+        branch_compare=branch_comparison(year) if year else [],
+        year_compare=year_comparison(year, compare_year, bid) if year else None,
+        compare_year=compare_year,
         years=years,
         selected_year=year,
         jamb_subjects=exam_trends.jamb_subject_breakdown(bid, year),

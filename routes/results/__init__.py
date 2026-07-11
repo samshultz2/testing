@@ -193,6 +193,42 @@ def bust_school_stats(year=None, branch_id=None):
         db.session.rollback()
 
 
+# --------------------------------------------------------------------------- #
+# Comparative analytics (branch-vs-branch, cohort-vs-cohort)
+# --------------------------------------------------------------------------- #
+def branch_comparison(year):
+    """Per-branch headline metrics for ``year``, ranked by JAMB mean. Only built
+    when viewing all branches and at least two branches have data — otherwise
+    there is nothing to compare. Uses the cached per-branch stat wrappers."""
+    from models.models_branch import Branch
+    from utils import exam_compare
+    if viewing_branch_id() is not None:          # a single branch is in scope
+        return []
+    rows = []
+    for b in Branch.query.filter_by(is_active=True).order_by(Branch.name).all():
+        m = exam_compare.headline_metrics(jamb_school_stats(year, b.id),
+                                          waec_school_stats(year, b.id))
+        if m['has_data']:
+            rows.append({'id': b.id, 'label': b.name, 'metrics': m})
+    return exam_compare.rank_branches(rows) if len(rows) >= 2 else []
+
+
+def year_comparison(year, compare_year, branch_id):
+    """A/B headline comparison of ``year`` vs ``compare_year`` for the branch in
+    scope, with per-metric deltas. Returns None when the pair is invalid."""
+    from utils import exam_compare
+    if not compare_year or compare_year == year:
+        return None
+    a = exam_compare.headline_metrics(jamb_school_stats(year, branch_id),
+                                      waec_school_stats(year, branch_id))
+    b = exam_compare.headline_metrics(jamb_school_stats(compare_year, branch_id),
+                                      waec_school_stats(compare_year, branch_id))
+    if not (a['has_data'] and b['has_data']):
+        return None
+    return {'year': year, 'compare_year': compare_year,
+            'metrics': exam_compare.compare_years(a, b)}
+
+
 def _mock_jamb_trend(branch_id):
     """School-level Mock JAMB progression for the active session (branch-scoped):
     one point per mock exam, in order. Drives the Mock JAMB trend chart and shows
