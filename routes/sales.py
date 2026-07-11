@@ -9,9 +9,11 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 
 from models import (db, Product, Sale, SaleItem, StockMovement, Student,
-                    StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm)
+                    StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
+                    Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
-                                 UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS)
+                                 UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
+                                 PO_STATUSES, PURCHASE_METHODS)
 from utils.access_control import login_required, filter_classes_for_user
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
@@ -86,7 +88,8 @@ def dashboard():
         'recent': [_sale_row(s) for s in recent],
         'urls': {'new_sale': url_for('sales.new_sale'), 'products': url_for('sales.products'),
                  'history': url_for('sales.history'), 'analytics': url_for('sales.analytics'),
-                 'movements': url_for('sales.movements')},
+                 'movements': url_for('sales.movements'), 'suppliers': url_for('sales.suppliers'),
+                 'purchases': url_for('sales.purchases')},
     })
 
 
@@ -767,6 +770,321 @@ def _product_drilldown(sale_ids, product_id):
     out.sort(key=lambda x: x['units'], reverse=True)
     return {'product_id': product_id, 'rows': out, 'total_units': total_units,
             'total_students': len(total_students), 'non_student_units': non_student_units}
+
+
+# ---------------------------------------------------------------------------
+# Suppliers
+# ---------------------------------------------------------------------------
+
+_SUPPLIER_FIELDS = ('company_name', 'contact_person', 'phone', 'email', 'address',
+                    'tax_id', 'bank_details', 'products_supplied', 'notes')
+
+
+def _supplier_dict(s):
+    return {'id': s.id, 'company_name': s.company_name, 'contact_person': s.contact_person,
+            'phone': s.phone, 'email': s.email, 'address': s.address, 'tax_id': s.tax_id,
+            'bank_details': s.bank_details, 'products_supplied': s.products_supplied,
+            'notes': s.notes,
+            'edit_url': url_for('sales.edit_supplier', supplier_id=s.id),
+            'url': url_for('sales.supplier_detail', supplier_id=s.id)}
+
+
+def _supplier_stats(supplier_id):
+    pos = scope_query(PurchaseOrder.query.filter_by(supplier_id=supplier_id), PurchaseOrder).all()
+    received = round(sum(po.received_value for po in pos), 2)
+    ordered = round(sum(po.total or 0 for po in pos if po.status != 'Cancelled'), 2)
+    paid = round(sum(sp.amount or 0 for sp in scope_query(
+        SupplierPayment.query.filter_by(supplier_id=supplier_id), SupplierPayment).all()), 2)
+    return {'orders': len(pos), 'ordered_value': ordered, 'received_value': received,
+            'paid': paid, 'outstanding': round(received - paid, 2)}
+
+
+@sales_bp.route('/suppliers')
+@login_required
+def suppliers():
+    rows = scope_query(Supplier.query.filter_by(is_active=True), Supplier).order_by(
+        Supplier.company_name).all()
+    return _render({
+        'page': 'suppliers',
+        'suppliers': [{**_supplier_dict(s), **_supplier_stats(s.id)} for s in rows],
+        'add_url': url_for('sales.add_supplier'),
+        'urls': {'dashboard': url_for('sales.dashboard'), 'purchases': url_for('sales.purchases')},
+    })
+
+
+def _apply_supplier_fields(s, form):
+    from utils.security import strip_tags
+    for f in _SUPPLIER_FIELDS:
+        if f in form:
+            setattr(s, f, strip_tags(form.get(f) or '').strip() or None)
+
+
+@sales_bp.route('/suppliers/add', methods=['POST'])
+@login_required
+def add_supplier():
+    name = (request.form.get('company_name') or '').strip()
+    if not name:
+        return _err('Company name is required.', url_for('sales.suppliers'))
+    s = Supplier(branch_id=branch_for_new())
+    _apply_supplier_fields(s, request.form)
+    db.session.add(s)
+    db.session.commit()
+    return _ok(f'Added supplier "{s.company_name}".', url_for('sales.suppliers'))
+
+
+@sales_bp.route('/suppliers/<int:supplier_id>/edit', methods=['POST'])
+@login_required
+def edit_supplier(supplier_id):
+    s = db.get_or_404(Supplier, supplier_id)
+    if not can_access_branch(s.branch_id):
+        return _err('That supplier belongs to another branch.', url_for('sales.suppliers'))
+    _apply_supplier_fields(s, request.form)
+    db.session.commit()
+    return _ok('Supplier updated.', url_for('sales.suppliers'))
+
+
+@sales_bp.route('/suppliers/<int:supplier_id>')
+@login_required
+def supplier_detail(supplier_id):
+    s = db.get_or_404(Supplier, supplier_id)
+    if not can_access_branch(s.branch_id):
+        flash('That supplier belongs to another branch.', 'error')
+        return redirect(url_for('sales.suppliers'))
+    pos = (scope_query(PurchaseOrder.query.filter_by(supplier_id=supplier_id), PurchaseOrder)
+           .order_by(PurchaseOrder.created_at.desc()).all())
+    pays = (scope_query(SupplierPayment.query.filter_by(supplier_id=supplier_id), SupplierPayment)
+            .order_by(SupplierPayment.created_at.desc()).all())
+    return _render({
+        'page': 'supplier_detail', 'supplier': _supplier_dict(s),
+        'stats': _supplier_stats(supplier_id),
+        'orders': [_po_row(po) for po in pos],
+        'payments': [{'id': p.id, 'amount': p.amount or 0, 'method': p.method,
+                      'reference': p.reference, 'note': p.note, 'by': p.paid_by,
+                      'when': p.created_at.strftime('%d %b %Y') if p.created_at else ''} for p in pays],
+        'pay_url': url_for('sales.pay_supplier', supplier_id=supplier_id),
+        'methods': PURCHASE_METHODS,
+        'urls': {'suppliers': url_for('sales.suppliers'), 'purchases': url_for('sales.purchases')},
+    })
+
+
+@sales_bp.route('/suppliers/<int:supplier_id>/pay', methods=['POST'])
+@login_required
+def pay_supplier(supplier_id):
+    s = db.get_or_404(Supplier, supplier_id)
+    if not can_access_branch(s.branch_id):
+        return _err('That supplier belongs to another branch.', url_for('sales.suppliers'))
+    amount = request.form.get('amount', type=float) or 0
+    if amount <= 0:
+        return _err('Enter a payment amount.', url_for('sales.supplier_detail', supplier_id=supplier_id))
+    db.session.add(SupplierPayment(
+        branch_id=s.branch_id, supplier_id=supplier_id,
+        po_id=request.form.get('po_id', type=int) or None,
+        amount=round(amount, 2), method=request.form.get('method') or 'Cash',
+        reference=(request.form.get('reference') or '').strip() or None,
+        note=(request.form.get('note') or '').strip() or None,
+        paid_by=session.get('user') or session.get('username') or 'Bursar'))
+    db.session.commit()
+    return _ok(f'Recorded payment of {amount:g}.',
+               url_for('sales.supplier_detail', supplier_id=supplier_id))
+
+
+# ---------------------------------------------------------------------------
+# Purchase orders
+# ---------------------------------------------------------------------------
+
+def _po_row(po):
+    return {'id': po.id, 'po_number': po.po_number, 'supplier': po.supplier.company_name if po.supplier else '—',
+            'status': po.status, 'total': po.total or 0, 'received_value': po.received_value,
+            'expected_date': po.expected_date.isoformat() if po.expected_date else '',
+            'created_at': po.created_at.strftime('%d %b %Y') if po.created_at else '',
+            'url': url_for('sales.purchase_detail', po_id=po.id)}
+
+
+@sales_bp.route('/purchases')
+@login_required
+def purchases():
+    status = (request.args.get('status') or '').strip()
+    supplier_id = request.args.get('supplier_id', type=int)
+    query = scope_query(PurchaseOrder.query, PurchaseOrder)
+    if status:
+        query = query.filter(PurchaseOrder.status == status)
+    if supplier_id:
+        query = query.filter(PurchaseOrder.supplier_id == supplier_id)
+    rows = query.order_by(PurchaseOrder.created_at.desc()).limit(300).all()
+    sups = scope_query(Supplier.query.filter_by(is_active=True), Supplier).order_by(Supplier.company_name).all()
+    awaiting = [po for po in scope_query(PurchaseOrder.query, PurchaseOrder).filter(
+        PurchaseOrder.status.in_(['Approved', 'Ordered', 'Partially Received'])).all()]
+    return _render({
+        'page': 'purchases',
+        'orders': [_po_row(po) for po in rows],
+        'statuses': PO_STATUSES,
+        'applied': {'status': status, 'supplier_id': supplier_id or ''},
+        'awaiting_delivery': len(awaiting),
+        'suppliers': [{'id': s.id, 'company_name': s.company_name} for s in sups],
+        'products': [{'id': p.id, 'name': p.name, 'cost_price': p.cost_price or 0}
+                     for p in scope_query(Product.query.filter_by(is_active=True), Product).order_by(Product.name).all()],
+        'new_url': url_for('sales.new_purchase'), 'self_url': url_for('sales.purchases'),
+        'urls': {'dashboard': url_for('sales.dashboard'), 'suppliers': url_for('sales.suppliers')},
+    })
+
+
+@sales_bp.route('/purchases/new', methods=['POST'])
+@login_required
+def new_purchase():
+    data = request.get_json(silent=True) or request.form
+    supplier_id = data.get('supplier_id')
+    try:
+        supplier_id = int(supplier_id)
+    except (TypeError, ValueError):
+        return _err('Choose a supplier.', url_for('sales.purchases'))
+    supplier = db.session.get(Supplier, supplier_id)
+    if not supplier or not can_access_branch(supplier.branch_id):
+        return _err('Unknown supplier.', url_for('sales.purchases'))
+    items = data.get('items') or []
+    if isinstance(items, str):
+        import json as _json
+        try:
+            items = _json.loads(items)
+        except ValueError:
+            items = []
+    clean = []
+    for it in items:
+        qty = int(it.get('quantity') or 0)
+        cost = float(it.get('unit_cost') or 0)
+        pid = it.get('product_id') or None
+        desc = (it.get('description') or '').strip()
+        if pid:
+            p = db.session.get(Product, int(pid))
+            if p:
+                desc = desc or p.name
+        if qty > 0 and desc:
+            clean.append({'product_id': int(pid) if pid else None, 'description': desc,
+                          'quantity': qty, 'unit_cost': cost})
+    if not clean:
+        return _err('Add at least one item.', url_for('sales.purchases'))
+    submit = (data.get('submit') or 'draft')
+    po = PurchaseOrder(
+        branch_id=branch_for_new(), supplier_id=supplier_id,
+        status='Pending Approval' if submit == 'submit' else 'Draft',
+        expected_date=parse_date(data.get('expected_date')),
+        invoice_number=(data.get('invoice_number') or '').strip() or None,
+        notes=(data.get('notes') or '').strip() or None,
+        total=round(sum(i['quantity'] * i['unit_cost'] for i in clean), 2),
+        created_by=session.get('user') or session.get('username') or 'Bursar')
+    db.session.add(po)
+    db.session.flush()
+    po.po_number = f'PO{po.id:05d}'
+    for i in clean:
+        db.session.add(PurchaseOrderItem(po_id=po.id, product_id=i['product_id'],
+                                         description=i['description'], quantity=i['quantity'],
+                                         unit_cost=i['unit_cost']))
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('sales.purchase_order', detail=f'{po.po_number} · {po.total:g}', target=po)
+    return _ok(f'Purchase order {po.po_number} created.',
+               url_for('sales.purchase_detail', po_id=po.id))
+
+
+@sales_bp.route('/purchases/<int:po_id>')
+@login_required
+def purchase_detail(po_id):
+    po = db.get_or_404(PurchaseOrder, po_id)
+    if not can_access_branch(po.branch_id):
+        flash('That order belongs to another branch.', 'error')
+        return redirect(url_for('sales.purchases'))
+    items = po.items.all()
+    return _render({
+        'page': 'purchase_detail',
+        'po': {**_po_row(po), 'invoice_number': po.invoice_number, 'notes': po.notes,
+               'created_by': po.created_by, 'approved_by': po.approved_by,
+               'supplier_id': po.supplier_id, 'is_open': po.is_open},
+        'items': [{'id': i.id, 'description': i.description, 'quantity': i.quantity,
+                   'unit_cost': i.unit_cost or 0, 'quantity_received': i.quantity_received or 0,
+                   'outstanding': i.outstanding_qty, 'line_total': i.line_total} for i in items],
+        'urls': {'purchases': url_for('sales.purchases'),
+                 'supplier': url_for('sales.supplier_detail', supplier_id=po.supplier_id),
+                 'approve': url_for('sales.approve_purchase', po_id=po.id),
+                 'receive': url_for('sales.receive_purchase', po_id=po.id),
+                 'cancel': url_for('sales.cancel_purchase', po_id=po.id)},
+    })
+
+
+@sales_bp.route('/purchases/<int:po_id>/approve', methods=['POST'])
+@login_required
+def approve_purchase(po_id):
+    po = db.get_or_404(PurchaseOrder, po_id)
+    if not can_access_branch(po.branch_id):
+        return _err('That order belongs to another branch.', url_for('sales.purchases'))
+    if po.status not in ('Draft', 'Pending Approval'):
+        return _err('This order can no longer be approved.', url_for('sales.purchase_detail', po_id=po.id))
+    from datetime import datetime as _dt
+    po.status = 'Approved'
+    po.approved_by = session.get('user') or session.get('username') or 'Admin'
+    po.approved_at = _dt.now()
+    db.session.commit()
+    return _ok(f'{po.po_number} approved.', url_for('sales.purchase_detail', po_id=po.id))
+
+
+@sales_bp.route('/purchases/<int:po_id>/cancel', methods=['POST'])
+@login_required
+def cancel_purchase(po_id):
+    po = db.get_or_404(PurchaseOrder, po_id)
+    if not can_access_branch(po.branch_id):
+        return _err('That order belongs to another branch.', url_for('sales.purchases'))
+    if po.status == 'Received':
+        return _err('A fully received order cannot be cancelled.', url_for('sales.purchase_detail', po_id=po.id))
+    po.status = 'Cancelled'
+    db.session.commit()
+    return _ok(f'{po.po_number} cancelled.', url_for('sales.purchase_detail', po_id=po.id))
+
+
+@sales_bp.route('/purchases/<int:po_id>/receive', methods=['POST'])
+@login_required
+def receive_purchase(po_id):
+    """Goods Received: record received quantities, add them to stock (ledgered)
+    and advance the order status. Receiving is blocked until the PO is approved."""
+    po = db.get_or_404(PurchaseOrder, po_id)
+    if not can_access_branch(po.branch_id):
+        return _err('That order belongs to another branch.', url_for('sales.purchases'))
+    if po.status in ('Draft', 'Pending Approval'):
+        return _err('Approve the order before receiving goods.', url_for('sales.purchase_detail', po_id=po.id))
+    if po.status in ('Received', 'Cancelled'):
+        return _err('This order is closed.', url_for('sales.purchase_detail', po_id=po.id))
+    data = request.get_json(silent=True) or request.form
+    recv = data.get('items') or []
+    if isinstance(recv, str):
+        import json as _json
+        try:
+            recv = _json.loads(recv)
+        except ValueError:
+            recv = []
+    by_id = {int(r['item_id']): int(r.get('receive_qty') or 0) for r in recv if r.get('item_id')}
+    invoice = (data.get('invoice_number') or '').strip() or None
+    if invoice:
+        po.invoice_number = invoice
+    received_any = False
+    for it in po.items.all():
+        take = by_id.get(it.id, 0)
+        if take <= 0:
+            continue
+        take = min(take, it.outstanding_qty)
+        if take <= 0:
+            continue
+        it.quantity_received = (it.quantity_received or 0) + take
+        received_any = True
+        if it.product_id:
+            p = db.session.get(Product, it.product_id)
+            if p:
+                _record_movement(p, 'in', take, 'Stock In (Purchase/GRN)',
+                                 unit_cost=it.unit_cost, reference=po.po_number)
+                if it.unit_cost:
+                    p.cost_price = it.unit_cost      # keep valuation current
+    if not received_any:
+        return _err('Enter quantities to receive.', url_for('sales.purchase_detail', po_id=po.id))
+    fully = all(i.outstanding_qty == 0 for i in po.items.all())
+    po.status = 'Received' if fully else 'Partially Received'
+    db.session.commit()
+    return _ok(f'Goods received for {po.po_number}.', url_for('sales.purchase_detail', po_id=po.id))
 
 
 @sales_bp.route('/receipt/<int:sale_id>')

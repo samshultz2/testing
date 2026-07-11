@@ -185,3 +185,111 @@ class StockMovement(db.Model):
 
     def __repr__(self):
         return f'<StockMovement {self.direction} {self.quantity} {self.reason}>'
+
+
+PO_STATUSES = ['Draft', 'Pending Approval', 'Approved', 'Ordered',
+               'Partially Received', 'Received', 'Cancelled']
+PURCHASE_METHODS = ['Cash', 'Bank Transfer', 'POS', 'Credit']
+
+
+class Supplier(db.Model):
+    __tablename__ = 'suppliers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    company_name = db.Column(db.String(150), nullable=False)
+    contact_person = db.Column(db.String(100))
+    phone = db.Column(db.String(30))
+    email = db.Column(db.String(120))
+    address = db.Column(db.String(200))
+    tax_id = db.Column(db.String(40))
+    bank_details = db.Column(db.String(200))
+    products_supplied = db.Column(db.String(255))
+    notes = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    branch = db.relationship('Branch')
+
+    def __repr__(self):
+        return f'<Supplier {self.company_name}>'
+
+
+class PurchaseOrder(db.Model):
+    __tablename__ = 'purchase_orders'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
+    po_number = db.Column(db.String(20))
+    status = db.Column(db.String(20), default='Draft')
+    expected_date = db.Column(db.Date)
+    invoice_number = db.Column(db.String(40))
+    notes = db.Column(db.Text)
+    total = db.Column(db.Float, default=0)
+    created_by = db.Column(db.String(100))
+    approved_by = db.Column(db.String(100))
+    approved_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    supplier = db.relationship('Supplier')
+    branch = db.relationship('Branch')
+    items = db.relationship('PurchaseOrderItem', backref='po', lazy='dynamic',
+                            cascade='all, delete-orphan')
+
+    @property
+    def received_value(self):
+        return round(sum(i.received_value for i in self.items), 2)
+
+    @property
+    def is_open(self):
+        return self.status not in ('Received', 'Cancelled')
+
+    def __repr__(self):
+        return f'<PurchaseOrder {self.po_number} {self.status}>'
+
+
+class PurchaseOrderItem(db.Model):
+    __tablename__ = 'purchase_order_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    po_id = db.Column(db.Integer, db.ForeignKey('purchase_orders.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('sales_products.id'))
+    description = db.Column(db.String(150))
+    quantity = db.Column(db.Integer, default=0)
+    unit_cost = db.Column(db.Float, default=0)
+    quantity_received = db.Column(db.Integer, default=0)
+
+    product = db.relationship('Product')
+
+    @property
+    def line_total(self):
+        return round((self.quantity or 0) * (self.unit_cost or 0), 2)
+
+    @property
+    def received_value(self):
+        return round((self.quantity_received or 0) * (self.unit_cost or 0), 2)
+
+    @property
+    def outstanding_qty(self):
+        return max((self.quantity or 0) - (self.quantity_received or 0), 0)
+
+
+class SupplierPayment(db.Model):
+    __tablename__ = 'supplier_payments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
+    po_id = db.Column(db.Integer, db.ForeignKey('purchase_orders.id'))
+    amount = db.Column(db.Float, default=0)
+    method = db.Column(db.String(20), default='Cash')
+    reference = db.Column(db.String(60))
+    note = db.Column(db.String(200))
+    paid_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    supplier = db.relationship('Supplier')
+
+    def __repr__(self):
+        return f'<SupplierPayment {self.supplier_id} {self.amount}>'

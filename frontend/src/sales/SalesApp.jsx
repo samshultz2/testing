@@ -16,6 +16,8 @@ function Dashboard({ d }) {
         <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>
         <a href={u.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
         {u.movements && <a href={u.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
+        {u.purchases && <a href={u.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-invoice" /> Purchases</a>}
+        {u.suppliers && <a href={u.suppliers} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-truck-field" /> Suppliers</a>}
         {u.analytics && <a href={u.analytics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
       </>} />
 
@@ -761,7 +763,251 @@ function Analytics({ d }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History, analytics: Analytics, movements: Movements };
+// ---- Suppliers -------------------------------------------------------------
+function SupplierForm({ supplier, addUrl, onClose, onSaved }) {
+  const editing = !!supplier;
+  const [f, setF] = useState({ company_name: '', contact_person: '', phone: '', email: '',
+    address: '', tax_id: '', bank_details: '', products_supplied: '', notes: '', ...(supplier || {}) });
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    if (!f.company_name.trim()) { setErr('Company name is required.'); return; }
+    setBusy(true); setErr(null);
+    const r = await submitJson(editing ? supplier.edit_url : addUrl, f);
+    setBusy(false);
+    if (r.ok) { onSaved(); onClose(); } else setErr(r.error || 'Could not save supplier.');
+  };
+  const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '.6rem' };
+  return (
+    <Modal title={editing ? 'Edit supplier' : 'Add supplier'} icon="fa-truck-field" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+             <Button variant="primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button></>}>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      <div style={grid}>
+        <Field label="Company name *" wide><input className="form-control" value={f.company_name} onChange={(e) => set('company_name', e.target.value)} /></Field>
+        <Field label="Contact person"><input className="form-control" value={f.contact_person} onChange={(e) => set('contact_person', e.target.value)} /></Field>
+        <Field label="Phone"><input className="form-control" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></Field>
+        <Field label="Email"><input className="form-control" value={f.email} onChange={(e) => set('email', e.target.value)} /></Field>
+        <Field label="Tax ID"><input className="form-control" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></Field>
+        <Field label="Address" wide><input className="form-control" value={f.address} onChange={(e) => set('address', e.target.value)} /></Field>
+        <Field label="Bank details" wide><input className="form-control" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></Field>
+        <Field label="Products supplied" wide><input className="form-control" value={f.products_supplied} onChange={(e) => set('products_supplied', e.target.value)} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
+function Suppliers({ d }) {
+  const nav = useNav();
+  const [editing, setEditing] = useState(null);
+  return (
+    <>
+      <PageHeader icon="fa-truck-field" title="Suppliers" actions={<>
+        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add supplier</button>
+        <a href={d.urls.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-invoice" /> Purchases</a>
+      </>} />
+      <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        {d.suppliers.length ? (
+          <table className="data-table"><thead><tr><th>Supplier</th><th>Contact</th><th className="text-right">Orders</th><th className="text-right">Received</th><th className="text-right">Paid</th><th className="text-right">Outstanding</th><th /></tr></thead>
+            <tbody>{d.suppliers.map((s) => (
+              <tr key={s.id}>
+                <td><a href={s.url}>{s.company_name}</a>{s.phone && <div className="text-muted text-sm">{s.phone}</div>}</td>
+                <td>{s.contact_person || '—'}</td>
+                <td className="text-right">{s.orders}</td>
+                <td className="text-right">{naira(s.received_value)}</td>
+                <td className="text-right">{naira(s.paid)}</td>
+                <td className="text-right"><strong style={s.outstanding > 0 ? { color: '#e74a3b' } : undefined}>{naira(s.outstanding)}</strong></td>
+                <td><button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(s)}><i aria-hidden="true" className="fas fa-pen" /></button></td>
+              </tr>
+            ))}</tbody></table>
+        ) : <EmptyState icon="fa-truck-field" title="No suppliers yet">Add your first supplier.</EmptyState>}
+      </div></div>
+      {editing && <SupplierForm supplier={editing.id ? editing : null} addUrl={d.add_url}
+                                onClose={() => setEditing(null)} onSaved={() => nav.refresh()} />}
+    </>
+  );
+}
+
+function SupplierDetail({ d, notify }) {
+  const nav = useNav();
+  const s = d.supplier; const st = d.stats || {};
+  const [pay, setPay] = useState({ amount: '', method: (d.methods || ['Cash'])[0], reference: '', note: '' });
+  const setP = (k, v) => setPay((x) => ({ ...x, [k]: v }));
+  const doPay = async () => {
+    if (!(Number(pay.amount) > 0)) { notify('error', 'Enter an amount.'); return; }
+    const r = await submitJson(d.pay_url, pay);
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not record payment.');
+  };
+  const tiles = [[st.orders, 'Orders'], [naira(st.received_value), 'Received value'],
+    [naira(st.paid), 'Paid'], [naira(st.outstanding), 'Outstanding']];
+  return (
+    <>
+      <PageHeader icon="fa-truck-field" title={s.company_name} actions={
+        <a href={d.urls.suppliers} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Suppliers</a>} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.6rem', marginBottom: '1rem' }}>
+        {tiles.map(([v, l]) => <div className="card" key={l}><div className="card-body"><div style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>{v}</div><div className="text-muted text-sm">{l}</div></div></div>)}
+      </div>
+      <div className="card mb-3"><div className="card-header"><h3>Record payment</h3></div>
+        <div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <input type="number" className="form-control" style={{ maxWidth: 140 }} placeholder="Amount" value={pay.amount} onChange={(e) => setP('amount', e.target.value)} />
+          <select className="form-control" style={{ maxWidth: 150 }} value={pay.method} onChange={(e) => setP('method', e.target.value)}>{(d.methods || []).map((m) => <option key={m}>{m}</option>)}</select>
+          <input type="text" className="form-control" style={{ maxWidth: 160 }} placeholder="Reference" value={pay.reference} onChange={(e) => setP('reference', e.target.value)} />
+          <button type="button" className="btn btn-primary" onClick={doPay}><i aria-hidden="true" className="fas fa-money-bill" /> Pay</button>
+        </div></div>
+      <div className="card mb-3"><div className="card-header"><h3>Purchase orders</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.orders.length ? <table className="data-table"><thead><tr><th>PO</th><th>Status</th><th className="text-right">Total</th><th>When</th></tr></thead>
+            <tbody>{d.orders.map((po) => <tr key={po.id}><td><a href={po.url}>{po.po_number}</a></td><td>{po.status}</td><td className="text-right">{naira(po.total)}</td><td className="text-muted text-sm">{po.created_at}</td></tr>)}</tbody></table>
+            : <EmptyState icon="fa-file-invoice" title="No purchase orders" />}
+        </div></div>
+      <div className="card"><div className="card-header"><h3>Payments</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {d.payments.length ? <table className="data-table"><thead><tr><th>When</th><th>Method</th><th>Ref</th><th className="text-right">Amount</th></tr></thead>
+            <tbody>{d.payments.map((p) => <tr key={p.id}><td className="text-muted text-sm">{p.when}</td><td>{p.method}</td><td>{p.reference || '—'}</td><td className="text-right">{naira(p.amount)}</td></tr>)}</tbody></table>
+            : <EmptyState icon="fa-money-bill" title="No payments yet" />}
+        </div></div>
+    </>
+  );
+}
+
+// ---- Purchase orders -------------------------------------------------------
+function PurchaseForm({ d, onClose, onSaved }) {
+  const [supplierId, setSupplierId] = useState('');
+  const [expected, setExpected] = useState('');
+  const [notes, setNotes] = useState('');
+  const [rows, setRows] = useState([{ product_id: '', description: '', quantity: '', unit_cost: '' }]);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
+  const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => {
+    if (j !== i) return r;
+    const nr = { ...r, [k]: v };
+    if (k === 'product_id' && v) { const p = (d.products || []).find((x) => String(x.id) === String(v)); if (p) { nr.description = p.name; if (!nr.unit_cost) nr.unit_cost = p.cost_price; } }
+    return nr;
+  }));
+  const total = rows.reduce((t, r) => t + (Number(r.quantity) || 0) * (Number(r.unit_cost) || 0), 0);
+  const submit = async (mode) => {
+    if (!supplierId) { setErr('Choose a supplier.'); return; }
+    const items = rows.filter((r) => (Number(r.quantity) || 0) > 0 && (r.description || r.product_id));
+    if (!items.length) { setErr('Add at least one item.'); return; }
+    setBusy(true); setErr(null);
+    const r = await submitJson(d.new_url, { supplier_id: supplierId, expected_date: expected, notes, submit: mode, items });
+    setBusy(false);
+    if (r.ok) { onSaved(r); onClose(); } else setErr(r.error || 'Could not create order.');
+  };
+  return (
+    <Modal title="New purchase order" icon="fa-file-invoice" size="lg" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+             <Button variant="light" onClick={() => submit('draft')} disabled={busy}>Save draft</Button>
+             <Button variant="primary" onClick={() => submit('submit')} disabled={busy}>Submit for approval</Button></>}>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '.6rem', marginBottom: '.8rem' }}>
+        <Field label="Supplier *"><select className="form-control" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}><option value="">Select…</option>{(d.suppliers || []).map((s) => <option key={s.id} value={s.id}>{s.company_name}</option>)}</select></Field>
+        <Field label="Expected delivery"><input type="date" className="form-control" value={expected} onChange={(e) => setExpected(e.target.value)} /></Field>
+        <Field label="Notes" wide><input className="form-control" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+      </div>
+      <table className="data-table"><thead><tr><th>Product</th><th>Description</th><th style={{ width: 80 }}>Qty</th><th style={{ width: 110 }}>Unit cost</th><th /></tr></thead>
+        <tbody>{rows.map((r, i) => (
+          <tr key={i}>
+            <td><select className="form-control" value={r.product_id} onChange={(e) => setRow(i, 'product_id', e.target.value)}><option value="">— New / free —</option>{(d.products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+            <td><input className="form-control" value={r.description} onChange={(e) => setRow(i, 'description', e.target.value)} /></td>
+            <td><input type="number" min="1" className="form-control" value={r.quantity} onChange={(e) => setRow(i, 'quantity', e.target.value)} /></td>
+            <td><input type="number" step="0.01" className="form-control" value={r.unit_cost} onChange={(e) => setRow(i, 'unit_cost', e.target.value)} /></td>
+            <td>{rows.length > 1 && <button type="button" className="btn btn-sm btn-light" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>×</button>}</td>
+          </tr>
+        ))}</tbody></table>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '.5rem' }}>
+        <button type="button" className="btn btn-sm btn-light" onClick={() => setRows((rs) => [...rs, { product_id: '', description: '', quantity: '', unit_cost: '' }])}><i aria-hidden="true" className="fas fa-plus" /> Add line</button>
+        <strong>Total: {naira(total)}</strong>
+      </div>
+    </Modal>
+  );
+}
+
+function Purchases({ d }) {
+  const nav = useNav();
+  const [creating, setCreating] = useState(false);
+  const [status, setStatus] = useState((d.applied || {}).status || '');
+  const apply = (st) => { setStatus(st); navParams(nav.go, d.self_url, { status: st, supplier_id: (d.applied || {}).supplier_id || '' }); };
+  return (
+    <>
+      <PageHeader icon="fa-file-invoice" title="Purchase Orders" actions={<>
+        <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}><i aria-hidden="true" className="fas fa-plus" /> New PO</button>
+        <a href={d.urls.suppliers} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-truck-field" /> Suppliers</a>
+      </>} />
+      {d.awaiting_delivery > 0 && <div className="alert alert-info"><i aria-hidden="true" className="fas fa-truck" /> {d.awaiting_delivery} order(s) awaiting delivery.</div>}
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-end' }}>
+        <select className="form-control" style={{ maxWidth: 220 }} value={status} onChange={(e) => apply(e.target.value)}>
+          <option value="">All statuses</option>{(d.statuses || []).map((st) => <option key={st}>{st}</option>)}</select>
+      </div></div>
+      <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        {d.orders.length ? <table className="data-table"><thead><tr><th>PO</th><th>Supplier</th><th>Status</th><th className="text-right">Total</th><th>Expected</th><th>Created</th></tr></thead>
+          <tbody>{d.orders.map((po) => <tr key={po.id}><td><a href={po.url}>{po.po_number}</a></td><td>{po.supplier}</td><td><StatusBadge s={po.status} /></td><td className="text-right">{naira(po.total)}</td><td className="text-muted text-sm">{po.expected_date || '—'}</td><td className="text-muted text-sm">{po.created_at}</td></tr>)}</tbody></table>
+          : <EmptyState icon="fa-file-invoice" title="No purchase orders" />}
+      </div></div>
+      {creating && <PurchaseForm d={d} onClose={() => setCreating(false)} onSaved={(r) => { if (r.redirect) nav.go(r.redirect); else nav.refresh(); }} />}
+    </>
+  );
+}
+
+function StatusBadge({ s }) {
+  const tone = s === 'Received' ? 'badge-success' : s === 'Cancelled' ? 'badge-danger'
+    : s === 'Partially Received' ? 'badge-info' : s === 'Approved' || s === 'Ordered' ? 'badge-primary' : 'badge-warning';
+  return <span className={'badge ' + tone}>{s}</span>;
+}
+
+function PurchaseDetail({ d, notify }) {
+  const nav = useNav();
+  const po = d.po; const u = d.urls;
+  const [recv, setRecv] = useState({});
+  const [invoice, setInvoice] = useState(po.invoice_number || '');
+  const act = async (url, body) => { const r = await submitJson(url, body || {}); if (r.ok) nav.refresh(); else notify('error', r.error || 'Action failed.'); };
+  const doReceive = () => {
+    const items = d.items.filter((it) => Number(recv[it.id]) > 0).map((it) => ({ item_id: it.id, receive_qty: Number(recv[it.id]) }));
+    if (!items.length) { notify('error', 'Enter quantities to receive.'); return; }
+    act(u.receive, { invoice_number: invoice, items });
+  };
+  const canApprove = po.status === 'Draft' || po.status === 'Pending Approval';
+  const canReceive = ['Approved', 'Ordered', 'Partially Received'].includes(po.status);
+  return (
+    <>
+      <PageHeader icon="fa-file-invoice" title={po.po_number} actions={<>
+        <a href={u.supplier} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-truck-field" /> Supplier</a>
+        <a href={u.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> All POs</a>
+      </>} />
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <StatusBadge s={po.status} />
+        <span className="text-muted text-sm">Supplier: <strong>{po.supplier}</strong></span>
+        <span className="text-muted text-sm">Total: <strong>{naira(po.total)}</strong></span>
+        {po.expected_date && <span className="text-muted text-sm">Expected: {po.expected_date}</span>}
+        {po.approved_by && <span className="text-muted text-sm">Approved by {po.approved_by}</span>}
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem' }}>
+          {canApprove && <button type="button" className="btn btn-success btn-sm" onClick={() => act(u.approve)}><i aria-hidden="true" className="fas fa-check" /> Approve</button>}
+          {po.is_open && <button type="button" className="btn btn-danger btn-sm" onClick={() => act(u.cancel)}><i aria-hidden="true" className="fas fa-ban" /> Cancel</button>}
+        </span>
+      </div></div>
+      <div className="card"><div className="card-header"><h3>Items</h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="data-table"><thead><tr><th>Item</th><th className="text-right">Ordered</th><th className="text-right">Received</th><th className="text-right">Outstanding</th><th className="text-right">Unit cost</th>{canReceive && <th style={{ width: 110 }}>Receive</th>}</tr></thead>
+            <tbody>{d.items.map((it) => (
+              <tr key={it.id}>
+                <td>{it.description}</td><td className="text-right">{it.quantity}</td>
+                <td className="text-right">{it.quantity_received}</td><td className="text-right">{it.outstanding}</td>
+                <td className="text-right">{naira(it.unit_cost)}</td>
+                {canReceive && <td>{it.outstanding > 0 ? <input type="number" min="0" max={it.outstanding} className="form-control" value={recv[it.id] || ''} onChange={(e) => setRecv((s) => ({ ...s, [it.id]: e.target.value }))} /> : <span className="text-muted text-sm">done</span>}</td>}
+              </tr>
+            ))}</tbody></table>
+        </div>
+        {canReceive && <div className="card-body" style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <label className="form-group" style={{ margin: 0 }}><span className="form-label">Invoice no. (optional)</span><input className="form-control" value={invoice} onChange={(e) => setInvoice(e.target.value)} /></label>
+          <button type="button" className="btn btn-primary" onClick={doReceive}><i aria-hidden="true" className="fas fa-truck-ramp-box" /> Receive goods</button>
+        </div>}
+      </div>
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History,
+  analytics: Analytics, movements: Movements, suppliers: Suppliers, supplier_detail: SupplierDetail,
+  purchases: Purchases, purchase_detail: PurchaseDetail };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
