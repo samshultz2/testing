@@ -86,6 +86,24 @@ def test_designer_page_has_day_demarcation_and_editable_grid(auth_client):
     assert 'class="roster-cell col-sep" contenteditable="true"' in html
 
 
+def test_designer_has_custom_list_table_mode(auth_client):
+    """The auto-numbered custom table: layout option, S/N column, paste box +
+    AI prompt, and the CSV paste handler."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    # the new layout choice and its render path (S/N column, listtable table)
+    assert 'value="list_table"' in html
+    assert 'sn-col' in html and 'blankgrid listtable' in html
+    assert "isListTable()" in html
+    # CSV paste keeps working here: dedicated paste box, handler and AI prompt
+    assert 'id="listPasteBox"' in html
+    assert 'function listPaste()' in html
+    assert 'id="tt-list-prompt"' in html
+    assert 'data-call="listPaste"' in html
+    # row-count control + persistence of the row count
+    assert 'id="listRows"' in html
+    assert 'listRows:el(' in html
+
+
 def test_save_requires_a_name(auth_client):
     r = auth_client.post('/timetable/designer/save',
                          json={'layout': 'saturday', 'data': {}},

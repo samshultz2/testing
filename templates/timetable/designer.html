@@ -93,6 +93,11 @@
 .tt-sheet table.grid-tt.cols td.day-col,
 .tt-sheet table.grid-tt.blankgrid th.col-sep,
 .tt-sheet table.grid-tt.blankgrid td.col-sep{border-left:3px solid currentColor}
+/* auto-numbered custom table: narrow centred S/N column, left-aligned normal-
+   weight cells (a real table, not the wide bold roster boxes). */
+.tt-sheet table.grid-tt th.sn-col,
+.tt-sheet table.grid-tt td.sn-col{width:2.6em;text-align:center;font-weight:700}
+.tt-sheet table.grid-tt.listtable td.roster-cell{min-width:0;text-align:left;font-weight:400}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
@@ -208,6 +213,7 @@
                     <option value="holiday">Holiday lesson timetable</option>
                     <option value="exam">Examination timetable</option>
                     <option value="grid">Blank custom grid</option>
+                    <option value="list_table">Custom list / table (auto-numbered rows)</option>
                     <option value="roster_week">Sweeping roster — weekly (one group sweeps all week)</option>
                     <option value="roster_day">Sweeping roster — daily (one group sweeps that day)</option>
                 </select>
@@ -335,7 +341,11 @@ Output only the rows — no headings, totals or extra text, no code block.</pre>
                     <label class="form-label">Students per week / day (one name per box)</label>
                     <input id="rosterCount" type="number" min="1" max="10" value="5" class="form-control">
                 </div>
-                <div class="form-group" style="grid-column:span 2">
+                <div class="form-group" id="listRowsWrap" style="display:none">
+                    <label class="form-label">Number of rows</label>
+                    <input id="listRows" type="number" min="1" max="200" value="10" class="form-control">
+                </div>
+                <div class="form-group" id="gridRowsWrap" style="grid-column:span 2">
                     <label class="form-label" id="gridRowsLabel">Row labels — one per line (e.g. period times)</label>
                     <textarea id="gridRows" class="form-control" rows="4">8:00 - 9:00
 9:00 - 10:00
@@ -345,6 +355,25 @@ Break
 12:00 - 1:00</textarea>
                 </div>
             </div>
+
+            <!-- Custom list/table: paste a whole table (headers + rows) at once -->
+            <details class="bulk-box" id="listPasteBox" style="display:none">
+                <summary><i class="fas fa-table"></i> Fastest: paste the whole table</summary>
+                <p class="sess-hint" style="margin-top:.5rem">
+                    <b>First line</b> = the column headers. <b>Each next line</b> = one row (the rows are numbered for you).
+                    Separate cells with a comma, a | or a tab — copy straight from Excel/Sheets. Don’t include the S/N column.
+                </p>
+                <textarea id="listPasteText" rows="6" placeholder="Name, Subject, Branch, Number&#10;Comfort Airhunmwunde, Agric Science, Upper 2, 1&#10;Bartholomew Ajayi, Chemistry, Jemila, 2&#10;Nwachukwu Norbert, Chemistry, Jemila, 2"></textarea>
+                <button class="btn btn-primary btn-sm" data-call="listPaste"><i class="fas fa-bolt"></i> Build table from paste</button>
+                <div style="margin-top:.6rem">
+                    <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo of the list, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
+                    <pre id="tt-list-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0">Read this list/table and output it as comma-separated rows, one row per line:
+- First line: the column headers (e.g. Name, Subject, Branch, Number).
+- Each next line: the values for one row, in the same order.
+Do not include a serial-number/S-N column. Output only the rows — no totals or extra text, no code block.</pre>
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-list-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
+                </div>
+            </details>
         </div>
     </div>
 </div>
@@ -402,6 +431,8 @@ var LAYOUTS = {
     exam:     {title:'Examination Timetable', mode:'list',
                fields:['date','time','dur','subject','venue','teacher'],
                hint:'Each exam is one row, listed by date and time. A blank “Invigilator’s Signature” column is added on the printout.'},
+    list_table:{title:'Custom Table', mode:'list_table', fields:[],
+               hint:'Set the column headers, then type into each auto-numbered row — for a staff list, a duty list, any table.'},
 };
 var FIELD = {
     week:   {label:'Week'},
@@ -439,7 +470,8 @@ var rosterCells = {};   // "rowIndex:colIndex" -> typed text (persists across re
 function el(id){ return document.getElementById(id); }
 function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
 function isRoster(){ return !!ROSTER_PRESETS[el('layout').value]; }
-function isBlankGrid(){ return el('layout').value==='grid' || isRoster(); }
+function isListTable(){ return el('layout').value==='list_table'; }
+function isBlankGrid(){ var v=el('layout').value; return v==='grid' || v==='list_table' || isRoster(); }
 function layout(){
     var v=el('layout').value;
     if(ROSTER_PRESETS[v]) return {title:ROSTER_PRESETS[v].title, mode:'grid', fields:[]};
@@ -671,6 +703,26 @@ function gridPaste(){
     else alert('Nothing added — check the grid format.');
 }
 
+// Custom table paste: first line = the column headers, each next line = a row.
+// Fills the auto-numbered grid (the S/N column is added automatically).
+function listPaste(){
+    var lines = (el('listPasteText').value || '').split('\n').filter(function(s){ return s.trim(); });
+    if(lines.length < 1){ alert('Paste at least a header line, then one row per line.'); return; }
+    var headers = splitCells(lines[0]).map(function(s){ return s.trim(); }).filter(Boolean);
+    if(headers.length) el('gridCols').value = headers.join(', ');
+    rosterCells = {};
+    var dataLines = lines.slice(1);
+    dataLines.forEach(function(line, ri){
+        splitCells(line).forEach(function(v, ci){
+            v = (v || '').trim();
+            if(v) rosterCells[ri + ':' + ci] = v;
+        });
+    });
+    el('listRows').value = Math.max(1, dataLines.length);
+    el('listPasteText').value = '';
+    renderSheet();
+}
+
 document.addEventListener('input', function(e){
     var card=e.target.closest && e.target.closest('#rowBody .sess-card');
     if(card){
@@ -680,7 +732,7 @@ document.addEventListener('input', function(e){
                 var di=card.querySelector('[data-f="day"]'); if(di) di.value=auto; } }
             if(f==='week') renderManageSaturdays(); }
         renderSheet();
-    } else if(['title','subtitle','school','gridCols','gridRows'].indexOf(e.target.id)>=0){
+    } else if(['title','subtitle','school','gridCols','gridRows','listRows'].indexOf(e.target.id)>=0){
         renderSheet();
     }
 });
@@ -872,6 +924,20 @@ function renderListSheet(){
 function renderBlankGridSheet(){
     var roster=isRoster();
     var cols=(el('gridCols').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    // Auto-numbered custom table: a leading S/N column + N editable rows.
+    if(isListTable()){
+        var n=Math.max(1, Math.min(200, parseInt(el('listRows').value,10)||10));
+        var lthead='<tr><th class="sn-col">S/N</th>'+cols.map(function(c){return '<th class="col-sep">'+esc(c)+'</th>';}).join('')+'</tr>';
+        var lbody='';
+        for(var ri=0; ri<n; ri++){
+            lbody+='<tr><th class="sn-col">'+(ri+1)+'</th>'+cols.map(function(c,ci){
+                var k=ri+':'+ci;
+                return '<td class="roster-cell col-sep" contenteditable="true" data-rc="'+k+'" data-ph="">'+esc(rosterCells[k]||'')+'</td>';
+            }).join('')+'</tr>';
+        }
+        el('pBody').innerHTML='<table class="grid-tt blankgrid listtable"><thead>'+lthead+'</thead><tbody>'+lbody+'</tbody></table>';
+        return;
+    }
     var rws=(el('gridRows').value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
     var corner = roster ? (el('layout').value==='roster_week' ? 'Week' : 'Day') : '';
     var thead='<tr><th>'+esc(corner)+'</th>'+cols.map(function(c){return '<th class="col-sep">'+esc(c)+'</th>';}).join('')+'</tr>';
@@ -960,7 +1026,7 @@ var URL_LOAD = "{{ url_for('timetable.designer_load', design_id=0) }}".slice(0,-
 var URL_DEL  = "{{ url_for('timetable.designer_delete', design_id=0) }}".slice(0,-1);
 var INITIAL_SAVED = {{ saved_designs|tojson }};
 var LAYOUT_LABEL={saturday:'Saturday classes',holiday:'Holiday lessons',exam:'Examination',
-                  grid:'Blank grid',roster_week:'Weekly roster',roster_day:'Daily roster'};
+                  grid:'Blank grid',list_table:'Custom table',roster_week:'Weekly roster',roster_day:'Daily roster'};
 function labelForLayout(k){ return LAYOUT_LABEL[k]||k||''; }
 
 function collectState(){
@@ -968,8 +1034,8 @@ function collectState(){
         school:el('school').value, title:el('title').value,
         titleTouched:!!el('title').dataset.touched, subtitle:el('subtitle').value,
         orient:el('orient').value, gridCols:el('gridCols').value, gridRows:el('gridRows').value,
-        rosterCount:el('rosterCount').value, rows:rows, rosterCells:rosterCells,
-        saturday:saturdayPlan };
+        rosterCount:el('rosterCount').value, listRows:el('listRows').value,
+        rows:rows, rosterCells:rosterCells, saturday:saturdayPlan };
 }
 function applyState(s){
     if(!s) return;
@@ -981,6 +1047,7 @@ function applyState(s){
     if(s.gridCols!=null) el('gridCols').value=s.gridCols;
     if(s.gridRows!=null) el('gridRows').value=s.gridRows;
     if(s.rosterCount!=null) el('rosterCount').value=s.rosterCount;
+    if(s.listRows!=null) el('listRows').value=s.listRows;
     rows=Array.isArray(s.rows)?s.rows.map(function(r){ return Object.assign(blankRow(), r); }):[];
     rosterCells=s.rosterCells||{};
     saturdayPlan=(s.saturday && typeof s.saturday==='object')?s.saturday:{first:'',free:{}};
@@ -1095,8 +1162,14 @@ function syncLayoutUI(){
     el('rowEditor').style.display = blank?'none':'block';
     // For rosters, swap the free-text "Column headers" box for a "students per row"
     // count (the columns are numbered name-boxes, one student each).
+    var listTable = isListTable();
     el('gridColsWrap').style.display = isRoster() ? 'none' : '';
     el('rosterCountWrap').style.display = isRoster() ? '' : 'none';
+    // the auto-numbered table uses a row-count + its own paste box; it has no
+    // manual row-label list.
+    el('listRowsWrap').style.display = listTable ? '' : 'none';
+    el('gridRowsWrap').style.display = listTable ? 'none' : '';
+    el('listPasteBox').style.display = listTable ? 'block' : 'none';
     // grid paste & the orientation choice only apply to the day×period layouts
     el('gridPasteBox').style.display = isGridMode ? 'block':'none';
     el('orientWrap').style.display = isGridMode ? 'block':'none';
@@ -1111,6 +1184,8 @@ function syncLayoutUI(){
         tip.style.display = 'block';
         tip.innerHTML = isRoster()
             ? '<i class="fas fa-hand-pointer"></i> Click any box and type <b>one student\'s name per box</b>. Set how many per week/day with “Students per week / day” above. What you type prints and exports.'
+            : listTable
+            ? '<i class="fas fa-hand-pointer"></i> Type into each auto-numbered row. Edit the <b>column headers</b> and set the <b>number of rows</b> above — or paste the whole table at once (button below). What you type prints and exports.'
             : '<i class="fas fa-hand-pointer"></i> Click any box and type to build <b>any</b> timetable. Edit the <b>column headers</b> and <b>row labels</b> above to add/rename columns and rows. What you type prints and exports; leave a box blank to fill it by hand.';
     } else {
         tip.style.display = 'none';
@@ -1125,6 +1200,12 @@ function onLayoutChange(){
         el('gridRows').value=ROSTER_PRESETS[v].rows;
         el('gridCols').value=rosterCols();
         rosterCells={};
+    }
+    // Entering the custom table drops in sensible starter headers ONLY when the
+    // headers still look like the day-grid default — so re-entering a table you
+    // customised never wipes your headers or typed cells.
+    if(v==='list_table' && /\bMonday\b/.test(el('gridCols').value)){
+        el('gridCols').value='Name, Subject, Branch, Number';
     }
     syncLayoutUI();
     if(!el('title').dataset.touched){ el('title').value=''; }
