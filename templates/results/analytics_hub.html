@@ -36,6 +36,16 @@
 .ins.warn{border-left-color:#f59e0b}.ins.warn .ic{background:#f59e0b}
 .ins.good{border-left-color:#16a34a}.ins.good .ic{background:#16a34a}
 .ins.info{border-left-color:#6366f1}.ins.info .ic{background:#6366f1}
+.exec-band{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-bottom:1rem}
+@media(min-width:768px){.exec-band{grid-template-columns:repeat(5,1fr)}}
+.exec{position:relative;display:block;text-align:left;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem .9rem;color:inherit;text-decoration:none;transition:transform .12s,box-shadow .12s}
+a.exec:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--primary)}
+.exec .ev{font-size:1.5rem;font-weight:800;line-height:1.05}
+.exec .el{font-size:.72rem;color:var(--text-muted);margin-top:.15rem;display:flex;align-items:center;gap:.35rem}
+.exec .go{position:absolute;top:.6rem;right:.7rem;font-size:.7rem;color:var(--text-muted);opacity:0}
+a.exec:hover .go{opacity:1}
+.exec.tone-red .ev{color:#dc2626}.exec.tone-amber .ev{color:#d97706}.exec.tone-green .ev{color:#16a34a}.exec.tone-blue .ev{color:#4f46e5}
+.scroll-mt{scroll-margin-top:80px}
 @media print{
     .no-print{display:none !important}
     .two-col{grid-template-columns:1fr 1fr !important}
@@ -72,6 +82,64 @@
     </div>
 </div>
 
+<script nonce="{{ csp_nonce }}">
+// Remembered year filter — restore the last year viewed and persist changes,
+// so returning to the hub reopens where you left off (per-browser).
+(function(){
+    var KEY='exam_hub_year', years={{ years|tojson }}.map(String);
+    var params=new URLSearchParams(location.search);
+    try{
+        if(!params.has('year')){
+            var saved=localStorage.getItem(KEY);
+            if(saved && years.indexOf(saved)!==-1 && saved!=='{{ selected_year }}'){
+                params.set('year',saved);
+                location.replace(location.pathname+'?'+params.toString());
+                return;
+            }
+        } else { localStorage.setItem(KEY, params.get('year')); }
+        var sel=document.querySelector('select[name="year"]');
+        if(sel){ sel.addEventListener('change',function(){ try{localStorage.setItem(KEY,sel.value);}catch(e){} }); }
+    }catch(e){}
+})();
+</script>
+
+{% if years and selected_year %}
+{% set uni_pct = cutoff.eligible_200_pct if cutoff else None %}
+{% set corr_r = correlation.correlation_coefficient if (correlation and not correlation.error) else None %}
+<div class="exec-band">
+    <a class="exec scroll-mt tone-{{ 'green' if jamb_stats and jamb_stats.mean_score >= 200 else 'amber' if jamb_stats and jamb_stats.mean_score >= 150 else 'red' if jamb_stats else 'blue' }}"
+       href="#sec-jamb" title="Jump to JAMB performance">
+        <div class="ev">{{ jamb_stats.mean_score if jamb_stats else '—' }}</div>
+        <div class="el"><i class="fas fa-gauge-high"></i> JAMB mean score</div>
+        <span class="go"><i class="fas fa-arrow-down"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'green' if uni_pct is not none and uni_pct >= 65 else 'amber' if uni_pct is not none and uni_pct >= 40 else 'red' if uni_pct is not none else 'blue' }}"
+       href="{{ url_for('results.readiness_funnel') }}" title="Open the admission-readiness funnel">
+        <div class="ev">{{ uni_pct ~ '%' if uni_pct is not none else '—' }}</div>
+        <div class="el"><i class="fas fa-graduation-cap"></i> University-ready (≥200)</div>
+        <span class="go"><i class="fas fa-arrow-right"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'green' if waec_stats and waec_stats.overall_pass_rate >= 75 else 'amber' if waec_stats and waec_stats.overall_pass_rate >= 60 else 'red' if waec_stats else 'blue' }}"
+       href="#sec-waec" title="Jump to WAEC performance">
+        <div class="ev">{{ waec_stats.overall_pass_rate ~ '%' if waec_stats else '—' }}</div>
+        <div class="el"><i class="fas fa-book"></i> WAEC pass rate</div>
+        <span class="go"><i class="fas fa-arrow-down"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'red' if at_risk|length else 'green' }}"
+       href="#sec-atrisk" title="Jump to the at-risk register">
+        <div class="ev">{{ at_risk|length }}</div>
+        <div class="el"><i class="fas fa-user-clock"></i> At-risk students</div>
+        <span class="go"><i class="fas fa-arrow-up"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'green' if corr_r is not none and corr_r >= 0.5 else 'amber' if corr_r is not none and corr_r >= 0.3 else 'red' if corr_r is not none else 'blue' }}"
+       href="#sec-corr" title="Jump to WAEC↔JAMB correlation">
+        <div class="ev">{{ corr_r if corr_r is not none else '—' }}</div>
+        <div class="el"><i class="fas fa-link"></i> WAEC↔JAMB link</div>
+        <span class="go"><i class="fas fa-arrow-down"></i></span>
+    </a>
+</div>
+{% endif %}
+
 {% if insights %}
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-lightbulb"></i> Executive Summary &mdash; Smart Insights</h3>
@@ -95,7 +163,7 @@
 </div>
 {% endif %}
 
-<div class="card no-print" style="margin-bottom:1rem;">
+<div id="sec-atrisk" class="card no-print scroll-mt" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-triangle-exclamation"></i> At-Risk Register {% if at_risk %}<span class="badge badge-danger">{{ at_risk|length }}</span>{% endif %}</h3></div>
     <div class="card-body" style="padding:0;">
         {% if at_risk %}
@@ -127,7 +195,7 @@
 
 <!-- ============ JAMB ============ -->
 {% if jamb_stats %}
-<div class="section-title"><span class="tag jamb">JAMB</span> Performance Overview &mdash; {{ selected_year }}</div>
+<div id="sec-jamb" class="section-title scroll-mt"><span class="tag jamb">JAMB</span> Performance Overview &mdash; {{ selected_year }}</div>
 <div class="kpi-grid mb-2">
     <div class="kpi lead"><div class="v">{{ jamb_stats.mean_score }}</div><div class="l">Mean Score</div></div>
     <div class="kpi"><div class="v">{{ jamb_stats.total_students }}</div><div class="l">Candidates</div></div>
@@ -188,7 +256,7 @@
 
 <!-- ============ WAEC ============ -->
 {% if waec_stats %}
-<div class="section-title"><span class="tag waec">WAEC</span> Performance Overview &mdash; {{ selected_year }}</div>
+<div id="sec-waec" class="section-title scroll-mt"><span class="tag waec">WAEC</span> Performance Overview &mdash; {{ selected_year }}</div>
 <div class="kpi-grid mb-3">
     <div class="kpi lead"><div class="v">{{ waec_stats.overall_pass_rate }}%</div><div class="l">Pass Rate (credit+)</div></div>
     <div class="kpi"><div class="v">{{ waec_stats.unique_students }}</div><div class="l">Students</div></div>
@@ -280,7 +348,7 @@
 {% endif %}
 
 <!-- ============ CORRELATION ============ -->
-<div class="section-title"><i class="fas fa-link"></i> WAEC ↔ JAMB Correlation</div>
+<div id="sec-corr" class="section-title scroll-mt"><i class="fas fa-link"></i> WAEC ↔ JAMB Correlation</div>
 <div class="card mb-3"><div class="card-body">
     {% if correlation and not correlation.error %}
     <div class="insight"><i class="fas fa-lightbulb"></i><span>{{ correlation.interpretation }}</span></div>

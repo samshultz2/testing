@@ -127,3 +127,9 @@ def test_analytics_hub_renders_smart_insights(app):
     c = _admin(app)
     html = c.get(f'/results/analytics?year={yr}').get_data(as_text=True)
     assert 'Smart Insights' in html
+    # executive KPI band with click-through anchors + remembered-filter script
+    assert 'exec-band' in html
+    assert 'id="sec-atrisk"' in html and 'href="#sec-jamb"' in html
+    assert 'exam_hub_year' in html
+    # the university-ready card deep-links to the readiness funnel
+    assert '/results/admission-readiness' in html
