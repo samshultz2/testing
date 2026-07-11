@@ -39,6 +39,12 @@ def platform_admin_required(f):
     return wrapper
 
 
+def _audit(action, *, subdomain=None, detail=None):
+    """Record a platform-admin action to the control-plane audit trail."""
+    tenancy.log_platform(action, subdomain=subdomain, detail=detail,
+                         actor=session.get('username') or 'admin')
+
+
 def _row(t):
     st = billing.status(t)
     au = st['access_until']
@@ -146,6 +152,7 @@ def homepage():
         content['testimonials'] = site_content.parse_pairs(
             request.form.get('testimonials'), ('name', 'quote'))
         site_content.save_homepage(content)
+        _audit('homepage', detail='homepage content updated')
         flash('Homepage updated — changes are live.', 'success')
         return redirect(url_for('platform.homepage'))
 
@@ -197,6 +204,7 @@ def pricing():
             'updated_at': _dt.datetime.utcnow().isoformat() + 'Z',
             'updated_by': session.get('username') or 'admin',
         })
+        _audit('pricing', detail='subscription tiers updated')
         flash('Pricing updated — changes are live.', 'success')
         return redirect(url_for('platform.pricing'))
 
@@ -239,8 +247,22 @@ def save_notes(subdomain):
         abort(404)
     tenancy.set_meta(subdomain, notes=request.form.get('notes', ''),
                      tags=request.form.get('tags', ''))
+    _audit('notes', subdomain=subdomain, detail='notes/tags updated')
     flash('Notes and tags saved.', 'success')
     return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
+
+
+@platform_bp.route('/audit')
+@platform_admin_required
+def audit():
+    """Searchable log of every platform-admin action against the control plane."""
+    action = (request.args.get('action') or '').strip() or None
+    sub = (request.args.get('subdomain') or '').strip() or None
+    q = (request.args.get('q') or '').strip() or None
+    rows = tenancy.list_platform_audit(action=action, subdomain=sub, q=q)
+    return render_template('platform/audit.html', active='audit',
+                           rows=rows, actions=tenancy.audit_actions(),
+                           f={'action': action or '', 'subdomain': sub or '', 'q': q or ''})
 
 
 def _back(default='platform.schools'):
@@ -266,6 +288,7 @@ def grant(subdomain):
         return _back()
     days = request.form.get('days', type=int) or current_app.config.get('TENANT_PLAN_DAYS')
     billing.record_payment(subdomain, days=days)
+    _audit('grant', subdomain=subdomain, detail=f'{days} day(s)')
     flash(f'Granted {days} day(s) to {t.name}.', 'success')
     return _back()
 
@@ -278,9 +301,11 @@ def suspend(subdomain):
         abort(404)
     if t.status == 'suspended':
         tenancy.set_status(subdomain, 'active')
+        _audit('reactivate', subdomain=subdomain, detail=t.name)
         flash(f'{t.name} reactivated.', 'success')
     else:
         tenancy.set_status(subdomain, 'suspended', error='suspended by platform admin')
+        _audit('suspend', subdomain=subdomain, detail=t.name)
         flash(f'{t.name} suspended — its portal is now unreachable.', 'success')
     return _back()
 
@@ -313,6 +338,7 @@ def bulk():
         elif action == 'delete':
             provisioning.drop_tenant(sub, forget=True)
             done += 1
+    _audit(f'bulk_{action}', detail=f'{done} school(s)')
     flash(f'{(action or "").title()} applied to {done} school(s).', 'success')
     return _back()
 
@@ -327,5 +353,6 @@ def delete(subdomain):
         flash('Type the subdomain to confirm deletion.', 'error')
         return _back()
     provisioning.drop_tenant(subdomain, forget=True)   # drop DB + remove registry row
+    _audit('delete', subdomain=subdomain, detail=t.name)
     flash(f'{t.name} and its database were deleted.', 'success')
     return redirect(url_for('platform.schools'))       # the profile no longer exists

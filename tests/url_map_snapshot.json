@@ -3753,6 +3753,13 @@
 ]
 ],
 [
+"platform.audit",
+"/platform/audit",
+[
+"GET"
+]
+],
+[
 "platform.bulk",
 "/platform/bulk",
 [

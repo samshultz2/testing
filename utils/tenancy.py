@@ -108,6 +108,20 @@ class ProcessedPayment(_ControlBase):
     at = Column(DateTime, default=_dt.datetime.utcnow)
 
 
+class PlatformAudit(_ControlBase):
+    """A record of a platform-admin action against the control plane — grants,
+    suspensions, deletions, note edits, pricing/homepage changes. Control-plane
+    level (spans all schools), so it lives here rather than any one tenant DB."""
+    __tablename__ = 'platform_audit'
+
+    id = Column(Integer, primary_key=True)
+    at = Column(DateTime, default=_dt.datetime.utcnow, index=True)
+    actor = Column(String(120))                    # platform admin username
+    action = Column(String(60), nullable=False)    # e.g. 'grant', 'suspend', 'delete'
+    subdomain = Column(String(63))                 # affected school, if any
+    detail = Column(String(300))
+
+
 # --- control-plane engine (lazy, cached) ------------------------------------
 _engine = None
 _Session = None
@@ -258,6 +272,48 @@ def recent_payments(subdomain, limit=10):
         for r in rows:
             s.expunge(r)
         return rows
+
+
+def log_platform(action, *, subdomain=None, detail=None, actor=None):
+    """Append a platform-admin action to the control-plane audit trail.
+    Best-effort — auditing must never break the action it records."""
+    try:
+        init_control_plane()
+        with _session() as s:
+            s.add(PlatformAudit(action=action, subdomain=subdomain,
+                                detail=(detail or None), actor=(actor or None)))
+            s.commit()
+    except Exception:
+        pass
+
+
+def list_platform_audit(*, limit=300, action=None, subdomain=None, q=None):
+    """Recent platform-audit rows, newest first, with optional filters."""
+    init_control_plane()
+    with _session() as s:
+        query = s.query(PlatformAudit)
+        if action:
+            query = query.filter(PlatformAudit.action == action)
+        if subdomain:
+            query = query.filter(PlatformAudit.subdomain == subdomain)
+        if q:
+            like = f'%{q.strip().lower()}%'
+            from sqlalchemy import func, or_
+            query = query.filter(or_(
+                func.lower(PlatformAudit.subdomain).like(like),
+                func.lower(PlatformAudit.detail).like(like),
+                func.lower(PlatformAudit.actor).like(like)))
+        rows = query.order_by(PlatformAudit.at.desc()).limit(limit).all()
+        for r in rows:
+            s.expunge(r)
+        return rows
+
+
+def audit_actions():
+    """Distinct action names present in the audit log (for the filter dropdown)."""
+    init_control_plane()
+    with _session() as s:
+        return sorted({r[0] for r in s.query(PlatformAudit.action).distinct().all() if r[0]})
 
 
 def set_status(subdomain, status, *, error=None, database_url=None, activated=False):

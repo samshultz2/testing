@@ -200,3 +200,23 @@ def test_tenant_usage_counts_are_read(mt):
     usage = tenant_usage(t.database_url, use_cache=False)
     # a freshly provisioned school has 0 students but the query must succeed (int, not None)
     assert usage['students'] == 0 and usage['branches'] is not None
+
+
+def test_audit_log_records_actions(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/alpha/grant', headers=H, data={'days': '15', '_csrf_token': tok})
+    c.post('/platform/alpha/suspend', headers=H, data={'_csrf_token': tok})
+    # audit page shows both, newest first, and links the school
+    body = c.get('/platform/audit', headers=H).get_data(as_text=True)
+    assert 'grant' in body and 'suspend' in body and 'alpha' in body
+    # filter by action
+    only = c.get('/platform/audit?action=grant', headers=H).get_data(as_text=True)
+    assert 'grant' in only
+    # the model recorded the actor + detail
+    rows = tenancy.list_platform_audit(subdomain='alpha')
+    assert any(r.action == 'grant' and '15' in (r.detail or '') for r in rows)
+    assert all(r.actor for r in rows)
