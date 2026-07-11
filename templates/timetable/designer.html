@@ -82,6 +82,18 @@
 /* bigger again when rendering the downloadable image/PDF */
 .tt-sheet.exporting{font-size:22px}
 
+/* Clear visual demarcation between days (prints & exports too). currentColor
+   adapts to each theme (dark line on light sheets, light line on dark ones). */
+/* days-as-rows: a thick rule above every day after the first (each day is its
+   own <tbody class="day">). */
+.tt-sheet table.grid-tt tbody.day + tbody.day > tr:first-child > th,
+.tt-sheet table.grid-tt tbody.day + tbody.day > tr:first-child > td{border-top:3px solid currentColor}
+/* days-as-columns & the blank grid: a thick rule to the left of each day/column. */
+.tt-sheet table.grid-tt.cols th.day-col,
+.tt-sheet table.grid-tt.cols td.day-col,
+.tt-sheet table.grid-tt.blankgrid th.col-sep,
+.tt-sheet table.grid-tt.blankgrid td.col-sep{border-left:3px solid currentColor}
+
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
 .tt-sheet[data-theme="classic"] th,.tt-sheet[data-theme="classic"] td{border:1px solid #222}
@@ -723,9 +735,12 @@ function renderGridModeSheet(){
     var thead='<tr><th>Day</th>'+(anyGroup?'<th>Class / Stream</th>':'')
             + periods.map(function(p){ return '<th>'+esc(p.label)+'</th>'; }).join('')+'</tr>';
 
+    // Each day becomes its own <tbody class="day"> so a thick rule can separate
+    // one day's block from the next (see the CSS above) — on screen and export.
     var body='';
     order.forEach(function(key){
         var d=dmap[key];
+        var dh='';
         // dates with only a banner (e.g. Mock Examination) get no empty group row
         var groups = anyGroup ? d.groups.slice() : [''];
         var totalRows = groups.length + d.banners.length;
@@ -740,28 +755,29 @@ function renderGridModeSheet(){
             mergeOf[p.k] = (groups.length>1 && vals[0] && vals.every(function(v){ return v===vals[0]; })) ? vals[0] : null;
         });
         groups.forEach(function(g, gi){
-            body+='<tr>';
-            if(first){ body+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
-            if(anyGroup) body+='<td class="grp-cell">'+esc(g||'—')+'</td>';
+            dh+='<tr>';
+            if(first){ dh+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
+            if(anyGroup) dh+='<td class="grp-cell">'+esc(g||'—')+'</td>';
             periods.forEach(function(p){
                 if(mergeOf[p.k]!==null){
-                    if(gi===0) body+='<td class="cell merged" rowspan="'+groups.length+'">'+mergeOf[p.k]+'</td>';
+                    if(gi===0) dh+='<td class="cell merged" rowspan="'+groups.length+'">'+mergeOf[p.k]+'</td>';
                     return;   // other group rows skip this column
                 }
-                body+='<td class="cell">'+cellInner(d.cells[g+'§'+p.k]||[])+'</td>';
+                dh+='<td class="cell">'+cellInner(d.cells[g+'§'+p.k]||[])+'</td>';
             });
-            body+='</tr>';
+            dh+='</tr>';
         });
         d.banners.forEach(function(b){
-            body+='<tr>';
-            if(first){ body+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
-            body+='<td class="cell banner" colspan="'+spanAll+'">'
+            dh+='<tr>';
+            if(first){ dh+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
+            dh+='<td class="cell banner" colspan="'+spanAll+'">'
                 + (b.subject?'<span class="c-subj">'+esc(b.subject)+'</span>':'')
                 + (b.teacher?'<span class="c-tchr">'+esc(b.teacher)+'</span>':'')
                 + '</td></tr>';
         });
+        body+='<tbody class="day">'+dh+'</tbody>';
     });
-    el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+    el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead>'+body+'</table>';
 }
 
 // A small, harmonious palette assigned consistently per group (first-seen
@@ -817,7 +833,7 @@ function renderGridColumnsSheet(){
 
     var thead='<tr><th>Time</th>'+dayList.map(function(dk){ var d=dseen[dk];
         var lbl=esc(d.day||'—'); if(d.date) lbl+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>';
-        return '<th>'+lbl+'</th>'; }).join('')+'</tr>';
+        return '<th class="day-col">'+lbl+'</th>'; }).join('')+'</tr>';
     var body='';
     periods.forEach(function(p){
         body+='<tr><th class="time-cell">'+esc(p.label)+'</th>';
@@ -826,7 +842,7 @@ function renderGridColumnsSheet(){
         } else {
             dayList.forEach(function(dk){
                 var arr=(cells[p.k] && cells[p.k][dk]) || [];
-                body+='<td class="cell">'+(arr.length?('<div class="g-row">'+arr.map(groupBlock).join('')+'</div>'):'')+'</td>';
+                body+='<td class="cell day-col">'+(arr.length?('<div class="g-row">'+arr.map(groupBlock).join('')+'</div>'):'')+'</td>';
             });
         }
         body+='</tr>';
@@ -858,18 +874,19 @@ function renderBlankGridSheet(){
     var cols=(el('gridCols').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
     var rws=(el('gridRows').value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
     var corner = roster ? (el('layout').value==='roster_week' ? 'Week' : 'Day') : '';
-    var thead='<tr><th>'+esc(corner)+'</th>'+cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr>';
+    var thead='<tr><th>'+esc(corner)+'</th>'+cols.map(function(c){return '<th class="col-sep">'+esc(c)+'</th>';}).join('')+'</tr>';
     var body=rws.map(function(rl,ri){
         return '<tr><th>'+esc(rl)+'</th>'+cols.map(function(c,ci){
-            // Roster cells are fillable — ONE student's name per box. They persist in
-            // rosterCells and are captured by the PDF/image export. A blank grid stays
-            // empty (printed and filled by hand) as before.
-            if(roster){ var k=ri+':'+ci;
-                return '<td class="roster-cell" contenteditable="true" data-rc="'+k+'" data-ph="Name">'+esc(rosterCells[k]||'')+'</td>'; }
-            return '<td class="empty"></td>';
+            // Every cell is fillable — type straight into the grid to build ANY
+            // timetable (subjects, names, notes …). Cells persist in rosterCells
+            // and are captured by the PDF/image export. Leave a cell blank to
+            // print it empty and fill by hand. Rosters show a "Name" placeholder.
+            var k=ri+':'+ci;
+            return '<td class="roster-cell col-sep" contenteditable="true" data-rc="'+k+'" data-ph="'+(roster?'Name':'')+'">'
+                 + esc(rosterCells[k]||'')+'</td>';
         }).join('')+'</tr>';
     }).join('');
-    el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+    el('pBody').innerHTML='<table class="grid-tt blankgrid"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 
 // ---------- Saturday plan: first-Saturday date + lesson-free cascade ----------
@@ -1088,7 +1105,16 @@ function syncLayoutUI(){
     el('gridRowsLabel').textContent = isRoster()
         ? 'Row labels — one per line (e.g. Week 1, Week 2 … or Monday, Tuesday …)'
         : 'Row labels — one per line (e.g. period times)';
-    el('rosterTip').style.display = isRoster() ? 'block' : 'none';
+    // The fill tip applies to every editable grid (rosters + the blank grid).
+    var tip = el('rosterTip');
+    if(isBlankGrid()){
+        tip.style.display = 'block';
+        tip.innerHTML = isRoster()
+            ? '<i class="fas fa-hand-pointer"></i> Click any box and type <b>one student\'s name per box</b>. Set how many per week/day with “Students per week / day” above. What you type prints and exports.'
+            : '<i class="fas fa-hand-pointer"></i> Click any box and type to build <b>any</b> timetable. Edit the <b>column headers</b> and <b>row labels</b> above to add/rename columns and rows. What you type prints and exports; leave a box blank to fill it by hand.';
+    } else {
+        tip.style.display = 'none';
+    }
 }
 function onLayoutChange(){
     var v=el('layout').value;
@@ -1137,9 +1163,15 @@ function exportName(){
 }
 function openExport(){
     var sheet = el('sheet');
+    var modal = el('exportModal');
+    // Move the modal to <body> so its position:fixed is relative to the viewport
+    // and not a transformed/scrolled ancestor — otherwise on mobile it opens
+    // off-screen and you have to hunt for it. Also lock background scrolling.
+    if(modal.parentNode !== document.body) document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
     el('exportImg').style.display = 'none';
     el('exportSpinner').style.display = 'block';
-    el('exportModal').style.display = 'flex';
+    modal.style.display = 'flex';
     sheet.classList.add('exporting');           // size to A4 landscape, fill it
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
     html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
@@ -1157,7 +1189,7 @@ function openExport(){
             el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
         });
 }
-function closeExport(){ el('exportModal').style.display = 'none'; }
+function closeExport(){ el('exportModal').style.display = 'none'; document.body.style.overflow = ''; }
 function downloadImage(){
     if(!_exportCanvas) return;
     var a = document.createElement('a');

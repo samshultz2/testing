@@ -69,6 +69,23 @@ def test_save_list_load_update_delete(auth_client):
     assert all(d['id'] != did for d in c.get('/timetable/designer/saved').get_json())
 
 
+def test_designer_page_has_day_demarcation_and_editable_grid(auth_client):
+    """The designer sheet must render with day separators, editable blank-grid
+    cells, and the viewport-anchored export modal."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    # (1) export modal is reparented to <body> and locks scroll so it can't open
+    # off-screen behind a transformed ancestor on mobile
+    assert 'document.body.appendChild(modal)' in html
+    assert "document.body.style.overflow = 'hidden'" in html
+    # (2) thick visual demarcation between days (rows) and columns
+    assert 'tbody.day + tbody.day' in html
+    assert 'tbody class="day"' in html
+    assert 'day-col' in html and 'blankgrid' in html
+    # (3) the blank grid's cells are editable (contenteditable + persisted data-rc)
+    assert 'grid-tt blankgrid' in html
+    assert 'class="roster-cell col-sep" contenteditable="true"' in html
+
+
 def test_save_requires_a_name(auth_client):
     r = auth_client.post('/timetable/designer/save',
                          json={'layout': 'saturday', 'data': {}},
