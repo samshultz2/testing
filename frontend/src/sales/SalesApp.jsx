@@ -384,9 +384,23 @@ function Products({ d, notify }) {
   const [q, setQ] = useState(d.q || '');
   const [cat, setCat] = useState(d.category || '');
   const [stock, setStock] = useState(d.stock || '');
+  const [copies, setCopies] = useState(1);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);   // product being edited, or {} for add
   const [adjusting, setAdjusting] = useState(null);   // product being adjusted
+
+  const openLabels = () => {
+    const p = new URLSearchParams();
+    if (cat) p.set('category', cat);
+    if (stock) p.set('stock', stock);
+    p.set('copies', String(copies || 1));
+    window.open(`${d.labels_url}?${p.toString()}`, '_blank', 'noopener');
+  };
+  const genBarcodes = async () => {
+    const r = await submitJson(d.generate_barcodes_url, cat ? { category: cat } : {});
+    if (r.ok) { notify('success', r.message || 'Barcodes assigned.'); nav.refresh(); }
+    else notify('error', r.error || 'Could not assign barcodes.');
+  };
 
   const restock = async (p, qty) => {
     if (!qty) return;
@@ -411,6 +425,8 @@ function Products({ d, notify }) {
       <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={<>
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>
         {d.urls.movements && <a href={d.urls.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
+        {d.labels_url && <button type="button" className="btn btn-secondary" onClick={openLabels}><i aria-hidden="true" className="fas fa-tags" /> Print labels</button>}
+        {d.generate_barcodes_url && <button type="button" className="btn btn-secondary" onClick={genBarcodes} title="Give products without a barcode a scannable internal code"><i aria-hidden="true" className="fas fa-barcode" /> Barcodes</button>}
         <a href={d.urls.new_sale} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-cart-plus" /> New Sale</a>
       </>} />
 
@@ -420,6 +436,8 @@ function Products({ d, notify }) {
           <option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
         <select className="form-control" value={stock} onChange={(e) => setStock(e.target.value)} style={{ maxWidth: 160 }}>
           <option value="">All stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>
+        {d.labels_url && <label className="text-muted text-sm" style={{ display: 'flex', alignItems: 'center', gap: '.3rem' }}>Label copies
+          <input type="number" min="1" max="50" className="form-control" style={{ width: 70 }} value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} /></label>}
         <span className="text-muted text-sm" style={{ marginLeft: 'auto' }}>Inventory value: <strong>{naira(invValue)}</strong></span>
       </div></div>
 

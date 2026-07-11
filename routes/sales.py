@@ -277,6 +277,8 @@ def products():
         'products': [_product_dict(p) for p in rows],
         'add_url': url_for('sales.add_product'),
         'isbn_lookup_url': url_for('sales.product_isbn_lookup'),
+        'labels_url': url_for('sales.product_labels'),
+        'generate_barcodes_url': url_for('sales.generate_barcodes'),
         'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard'),
                  'movements': url_for('sales.movements')},
     })
@@ -304,6 +306,70 @@ def edit_product(product_id):
     _apply_product_fields(p, request.form)
     db.session.commit()
     return _ok('Product updated.', url_for('sales.products'))
+
+
+def _internal_barcode(p):
+    """A stable internal code for a product that has no scannable barcode of its
+    own, so a printed label still scans back to it (matched by the barcode field
+    in search)."""
+    return f'PB{p.id:06d}'
+
+
+@sales_bp.route('/products/generate-barcodes', methods=['POST'])
+@login_required
+def generate_barcodes():
+    """Assign an internal barcode to every in-scope product that lacks one, so
+    labels can be printed and scanned. Optionally limited to a category or a set
+    of ids. Existing barcodes are never overwritten."""
+    ids = request.form.getlist('ids', type=int)
+    category = (request.form.get('category') or '').strip()
+    q = scope_query(Product.query.filter_by(is_active=True), Product)
+    if ids:
+        q = q.filter(Product.id.in_(ids))
+    if category:
+        q = q.filter(Product.category == category)
+    assigned = 0
+    for p in q.all():
+        if not (p.barcode or '').strip():
+            p.barcode = _internal_barcode(p)
+            assigned += 1
+    db.session.commit()
+    return _ok(f'Assigned {assigned} barcode(s).', url_for('sales.products'))
+
+
+@sales_bp.route('/products/labels')
+@login_required
+def product_labels():
+    """A printable sheet of product labels (name, price, Code 128 barcode).
+    Filter by ids / category / stock and set how many copies of each label."""
+    from utils.barcode_svg import code128_svg, encodable
+    ids = request.args.getlist('ids', type=int)
+    category = (request.args.get('category') or '').strip()
+    stock = (request.args.get('stock') or '').strip()
+    copies = max(1, min(request.args.get('copies', type=int) or 1, 50))
+    price_tier = (request.args.get('tier') or '').strip() or None
+    q = scope_query(Product.query.filter_by(is_active=True), Product)
+    if ids:
+        q = q.filter(Product.id.in_(ids))
+    if category:
+        q = q.filter(Product.category == category)
+    rows = q.order_by(Product.category, Product.name).all()
+    if stock == 'low':
+        rows = [p for p in rows if p.low_stock]
+    elif stock == 'out':
+        rows = [p for p in rows if p.out_of_stock]
+
+    labels = []
+    for p in rows:
+        code = (p.barcode or '').strip() or _internal_barcode(p)
+        svg = code128_svg(code, height=44) if encodable(code) else None
+        price = p.price_for(price_tier) if price_tier else (p.unit_price or 0)
+        labels.append({'name': p.name, 'code': code, 'svg': svg,
+                       'price': price, 'sku': p.sku or ''})
+    # Each label repeated `copies` times, flattened in catalogue order.
+    labels = [lab for lab in labels for _ in range(copies)]
+    return render_template('sales/labels.html', labels=labels, copies=copies,
+                           back_url=url_for('sales.products'))
 
 
 def _record_movement(product, direction, quantity, reason, *, unit_cost=None,

@@ -4489,6 +4489,13 @@
 ]
 ],
 [
+"sales.generate_barcodes",
+"/sales/products/generate-barcodes",
+[
+"POST"
+]
+],
+[
 "sales.history",
 "/sales/history",
 [
@@ -4541,6 +4548,13 @@
 [
 "sales.product_isbn_lookup",
 "/sales/api/isbn-lookup",
+[
+"GET"
+]
+],
+[
+"sales.product_labels",
+"/sales/products/labels",
 [
 "GET"
 ]
