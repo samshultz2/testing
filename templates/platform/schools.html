@@ -31,6 +31,7 @@
       <input id="q" type="search" placeholder="Search schools by name, subdomain or email…" autocomplete="off"></label>
     {% if segment %}<a class="btn sm" href="{{ url_for('platform.schools') }}" title="Clear filter">
       <i class="fas fa-filter"></i> {{ segment|replace('_',' ')|capitalize }} · clear ✕</a>{% endif %}
+    <a class="btn sm" href="{{ url_for('platform.schools_export', filter=segment) }}"><i class="fas fa-file-csv"></i> Export CSV</a>
   </div>
   <div id="recent" class="recent-tenants" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px">
     <span class="muted" style="font-size:12.5px"><i class="fas fa-clock-rotate-left"></i> Recent:</span>
@@ -91,8 +92,11 @@
     <select name="action" class="field" required>
       <option value="suspend">Suspend</option>
       <option value="reactivate">Reactivate</option>
+      <option value="grant">Grant days</option>
       <option value="delete">Delete (database + all data)</option>
     </select>
+    <input class="field" name="days" type="number" min="1" value="{{ plan_days }}" style="width:64px" title="days (for Grant days)">
+
     <label style="font-size:12.5px;color:var(--bad);display:flex;align-items:center;gap:6px;">
       <input type="checkbox" name="confirm_delete" value="yes"> confirm delete
     </label>

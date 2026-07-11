@@ -3818,6 +3818,13 @@
 ]
 ],
 [
+"platform.schools_export",
+"/platform/schools/export",
+[
+"GET"
+]
+],
+[
 "platform.subscriptions",
 "/platform/subscriptions",
 [

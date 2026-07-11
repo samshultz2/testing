@@ -245,3 +245,30 @@ def test_schools_filter_segment(mt):
     paying = c.get('/platform/schools?filter=paying', headers=H).get_data(as_text=True)
     assert 'Alpha' in paying and 'Beta' not in paying     # only the paying school
     assert 'clear' in paying.lower()                       # active-segment chip
+
+
+def test_schools_csv_export(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    r = c.get('/platform/schools/export', headers=H)
+    assert r.status_code == 200 and 'text/csv' in r.content_type
+    body = r.get_data(as_text=True)
+    assert 'Subdomain' in body and 'alpha' in body and 'beta' in body
+    # filtered export
+    r2 = c.get('/platform/schools/export?filter=trial', headers=H)
+    assert 'attachment; filename=tenants_trial.csv' in (r2.headers.get('Content-Disposition') or '')
+
+
+def test_bulk_grant_days(mt):
+    app, tenancy = mt
+    from utils import billing
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/bulk', headers=H,
+           data={'subdomains': ['alpha', 'beta'], 'action': 'grant', 'days': '20',
+                 '_csrf_token': tok})
+    assert billing.is_active(tenancy.get_tenant('alpha'))
+    assert billing.is_active(tenancy.get_tenant('beta'))

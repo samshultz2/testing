@@ -141,6 +141,39 @@ def schools():
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 
+@platform_bp.route('/schools/export')
+@platform_admin_required
+def schools_export():
+    """Download the tenant directory as CSV (honours the ?filter= segment)."""
+    import csv
+    import io
+    from flask import Response
+    rows, _summary, _price = _rows_and_summary()
+    seg = (request.args.get('filter') or '').strip()
+    _SEGMENTS = {
+        'paying': lambda r: r['bucket'] == 'paying', 'trial': lambda r: r['bucket'] == 'trial',
+        'unpaid': lambda r: r['bucket'] == 'unpaid', 'suspended': lambda r: r['status'] == 'suspended',
+        'ending_soon': lambda r: r['ending_soon'], 'customers': lambda r: not r['owner'],
+    }
+    if seg in _SEGMENTS:
+        rows = [r for r in rows if _SEGMENTS[seg](r)]
+    rows.sort(key=lambda r: (r['owner'] is False, r['name'].lower()))
+    # Tags come from the registry rows, not _row(); index them once.
+    tags = {t.subdomain: (t.tags or '') for t in tenancy.list_tenants()}
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(['Name', 'Subdomain', 'Admin email', 'Status', 'Plan', 'Segment',
+                'Days left', 'Access until', 'Paid until', 'Registered', 'Tags'])
+    for r in rows:
+        w.writerow([r['name'], r['subdomain'], r['admin_email'], r['status'], r['plan'],
+                    r['bucket'], r['days_left'] if r['days_left'] is not None else '',
+                    r['access_until'], r['paid_until'], r['created'], tags.get(r['subdomain'], '')])
+    _audit('export', detail=f'tenant directory ({len(rows)} rows{", " + seg if seg else ""})')
+    fname = f'tenants{"_" + seg if seg else ""}.csv'
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={fname}'})
+
+
 @platform_bp.route('/subscriptions')
 @platform_admin_required
 def subscriptions():
@@ -357,6 +390,10 @@ def bulk():
             done += 1
         elif action == 'reactivate':
             tenancy.set_status(sub, 'active')
+            done += 1
+        elif action == 'grant':
+            days = request.form.get('days', type=int) or current_app.config.get('TENANT_PLAN_DAYS')
+            billing.record_payment(sub, days=days)
             done += 1
         elif action == 'delete':
             provisioning.drop_tenant(sub, forget=True)
