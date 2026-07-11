@@ -300,6 +300,74 @@ def cohort_readiness(students, session_id=None, calibration=None):
 
 
 # --------------------------------------------------------------------------- #
+# Cohort JAMB outlook (projected mean ± uncertainty, confidence, distribution)
+# --------------------------------------------------------------------------- #
+# JAMB score bands used by the outlook distribution (below the common floor, the
+# 180-199 near-miss band, the admissible band, and the competitive band).
+JAMB_OUTLOOK_BANDS = [
+    ('below_180', 'Below 180', lambda s: s < 180),
+    ('180_199', '180–199', lambda s: 180 <= s < 200),
+    ('200_249', '200–249', lambda s: 200 <= s < 250),
+    ('250_plus', '250+', lambda s: s >= 250),
+]
+
+
+def cohort_jamb_outlook(students, session_id=None, calibration=None, mae=None):
+    """Aggregate the cohort's projected JAMB into an executive outlook.
+
+    Reuses the batched projection (:func:`_batch_projected_jamb`) — which prefers
+    an actual JAMB score, else the calibrated Mock JAMB prediction — and rolls it
+    up into:
+
+      * ``projected_mean`` with an uncertainty band (± the historically measured
+        mock→real MAE, when known), so the forecast is stated with its error;
+      * a ``confidence`` breakdown (high ≥80 / medium 40–79 / low <40) from each
+        prediction's confidence level, so leaders know how much to trust it;
+      * the predicted-score ``bands`` distribution.
+
+    ``calibration`` is the bias dict (from :func:`get_jamb_bias`) applied to the
+    projections; ``mae`` is the mean absolute error half-width for the band.
+    """
+    students = list(students)
+    jmap = _batch_projected_jamb([s.id for s in students], session_id, calibration)
+    projected = [d for d in jmap.values() if d.get('score') is not None]
+    n = len(projected)
+    empty_conf = {'high': 0, 'medium': 0, 'low': 0}
+    if not n:
+        return {'assessed': 0, 'projected_mean': None, 'band_low': None,
+                'band_high': None, 'mae': mae, 'confidence': empty_conf,
+                'confidence_pct': dict(empty_conf), 'mean_confidence': None,
+                'bands': [{'key': k, 'label': lbl, 'count': 0, 'pct': 0.0}
+                          for k, lbl, _ in JAMB_OUTLOOK_BANDS]}
+
+    scores = [d['score'] for d in projected]
+    mean = round(sum(scores) / n, 1)
+    confs = [d.get('confidence') or 0 for d in projected]
+
+    conf = dict(empty_conf)
+    for c in confs:
+        conf['high' if c >= 80 else 'medium' if c >= 40 else 'low'] += 1
+    pct = lambda x: round(x / n * 100, 1)
+
+    bands = [{'key': k, 'label': lbl, 'count': sum(1 for s in scores if test(s)),
+              'pct': pct(sum(1 for s in scores if test(s)))}
+             for k, lbl, test in JAMB_OUTLOOK_BANDS]
+
+    half = round(mae) if mae else None
+    return {
+        'assessed': n,
+        'projected_mean': mean,
+        'mae': mae,
+        'band_low': max(0, round(mean - half)) if half else None,
+        'band_high': min(400, round(mean + half)) if half else None,
+        'confidence': conf,
+        'confidence_pct': {k: pct(v) for k, v in conf.items()},
+        'mean_confidence': round(sum(confs) / n),
+        'bands': bands,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Batched projections (one set of bulk queries for a whole cohort)
 # --------------------------------------------------------------------------- #
 def _batch_projected_jamb(ids, session_id, calibration=None):

@@ -45,6 +45,47 @@
     </div>
 </div>
 
+{# Aggregate JAMB outlook: projected mean with its measured uncertainty, how #}
+{# much to trust it (confidence), and where the cohort is projected to land. #}
+{% if outlook and outlook.assessed %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-crystal-ball"></i> Cohort JAMB Outlook <span class="text-muted text-sm">({{ outlook.assessed }} students projected)</span></h3></div>
+    <div class="card-body">
+        <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;">
+            <div style="text-align:center;min-width:180px;">
+                <div style="font-size:2.6rem;font-weight:800;line-height:1;">{{ outlook.projected_mean }}</div>
+                <div class="text-muted text-sm">Projected JAMB mean
+                    {% if outlook.band_low is not none %}<br><strong>{{ outlook.band_low }}–{{ outlook.band_high }}</strong> likely range (±{{ outlook.mae|round(0,'floor')|int }})
+                    {% else %}<br><span class="text-muted">range needs more mock→real history</span>{% endif %}
+                </div>
+            </div>
+            <div style="flex:1;min-width:260px;">
+                <div class="text-sm" style="font-weight:600;margin-bottom:.3rem;">Predicted score distribution</div>
+                {% for b in outlook.bands %}
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem;">
+                    <span class="text-sm" style="width:64px;">{{ b.label }}</span>
+                    <div style="flex:1;background:var(--gray-100);border-radius:6px;height:14px;overflow:hidden;">
+                        <div style="height:100%;width:{{ b.pct }}%;background:{{ '#dc2626' if b.key=='below_180' else '#ea580c' if b.key=='180_199' else '#16a34a' if b.key=='200_249' else '#7c3aed' }};"></div>
+                    </div>
+                    <span class="text-sm" style="width:78px;text-align:right;">{{ b.count }} ({{ b.pct }}%)</span>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="min-width:200px;">
+                <div class="text-sm" style="font-weight:600;margin-bottom:.3rem;">Forecast confidence <span class="text-muted">(avg {{ outlook.mean_confidence }}%)</span></div>
+                {% for key, label, tone in [('high','High','#16a34a'),('medium','Medium','#ca8a04'),('low','Low','#dc2626')] %}
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.2rem;">
+                    <span class="badge" style="background:{{ tone }};color:#fff;min-width:70px;">{{ label }}</span>
+                    <span class="text-sm">{{ outlook.confidence[key] }} student(s) · {{ outlook.confidence_pct[key] }}%</span>
+                </div>
+                {% endfor %}
+                <p class="text-muted" style="font-size:.72rem;margin:.4rem 0 0;">Confidence rises with each mock sitting; low-confidence forecasts need more mocks.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# Cohort forecast straight from the mocks — the predictions that matter before #}
 {# real JAMB (2nd term) and WAEC (3rd term) exist. #}
 {% if cohort and cohort.assessed %}

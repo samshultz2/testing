@@ -26,13 +26,20 @@ def predictions_dashboard():
     # Forecast the whole cohort straight from the mocks (Mock WAEC -> WAEC,
     # Mock JAMB -> JAMB) — most students have no real WAEC/JAMB yet.
     session = get_active_session()
+    bias = exam_insights.get_jamb_bias()
     cohort = exam_insights.cohort_readiness(
-        students, session.id if session else None,
-        calibration=exam_insights.get_jamb_bias())
+        students, session.id if session else None, calibration=bias)
+
+    # Aggregate JAMB outlook: projected mean ± the measured error, plus a
+    # confidence breakdown and the predicted-score distribution.
+    outlook = exam_insights.cohort_jamb_outlook(
+        students, session.id if session else None, calibration=bias,
+        mae=(calibration.get('jamb') or {}).get('mae'))
 
     return render_template('results/predictions_dashboard.html',
         correlation_data=correlation_data,
         calibration=calibration,
+        outlook=outlook,
         cohort=cohort,
         waec_model_url=url_for('results.waec_model_config'),
         focus_url=url_for('results.focus_areas'),
