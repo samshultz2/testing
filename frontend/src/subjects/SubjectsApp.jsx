@@ -308,7 +308,35 @@ function Scores({ d, notify }) {
   // at once (e.g. everyone who scored 5 in 1st CA).
   const [selected, setSelected] = useState({});
   const [fillValue, setFillValue] = useState('');
-  React.useEffect(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); setScores(m); setSelected({}); }, [d.students_data]);
+  // Baseline of saved scores, so we can tell what's unsaved (dirty tracking).
+  const baseline = React.useRef({});
+  React.useEffect(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); setScores(m); setSelected({}); baseline.current = { ...m }; }, [d.students_data]);
+  // Live completeness + validity for the summary bar and per-cell highlighting.
+  const isInvalid = (raw) => { if (raw === '' || raw == null) return false; const n = Number(raw); return !Number.isFinite(n) || n < 0 || n > d.max_score; };
+  const stats = React.useMemo(() => {
+    let entered = 0, invalid = 0;
+    d.students_data.forEach((s) => { const raw = scores[s.id]; if (raw === '' || raw == null) return; entered += 1; if (isInvalid(raw)) invalid += 1; });
+    return { entered, invalid, missing: d.students_data.length - entered, total: d.students_data.length };
+  }, [scores, d.students_data, d.max_score]);
+  const dirty = React.useMemo(() => d.students_data.some((s) => String(scores[s.id] ?? '') !== String(baseline.current[s.id] ?? '')), [scores, d.students_data]);
+  // Warn on full-page unload while there are unsaved score edits.
+  React.useEffect(() => {
+    if (!dirty) return undefined;
+    const h = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [dirty]);
+  // Paste a column of scores straight from Excel/Sheets: fills consecutive
+  // students from the focused row down. A single value pastes normally.
+  const onPaste = (startIndex) => (e) => {
+    const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    if (!/[\n\t]/.test(text)) return;                    // single cell → default paste
+    e.preventDefault();
+    const values = text.replace(/\r/g, '').split('\n').map((line) => line.split('\t')[0].trim());
+    if (values.length && values[values.length - 1] === '') values.pop();
+    setScores((m) => { const n = { ...m }; values.forEach((v, k) => { const st = d.students_data[startIndex + k]; if (st) n[st.id] = v; }); return n; });
+    notify('success', `Pasted ${Math.min(values.length, d.students_data.length - startIndex)} score(s).`);
+  };
   const selectedIds = d.students_data.filter((s) => selected[s.id]).map((s) => s.id);
   const allSelected = d.students_data.length > 0 && d.students_data.every((s) => selected[s.id]);
   const toggleAll = (on) => { const m = {}; if (on) d.students_data.forEach((s) => { m[s.id] = true; }); setSelected(m); };
@@ -382,7 +410,13 @@ function Scores({ d, notify }) {
         <div className="card">
           <div className="card-header"><h3>{d.selected_subject} - {d.selected_assessment}</h3><span className="badge badge-primary">Max: {d.max_score}</span></div>
           <div className="card-body"><form onSubmit={save}>
-            <p className="text-muted text-sm mb-2"><i aria-hidden="true" className="fas fa-keyboard" /> Type a score and press <kbd>Enter</kbd> (or <kbd>↓</kbd>/<kbd>↑</kbd>) to jump to the next student — no mouse needed.</p>
+            <p className="text-muted text-sm mb-2"><i aria-hidden="true" className="fas fa-keyboard" /> Type a score and press <kbd>Enter</kbd> (or <kbd>↓</kbd>/<kbd>↑</kbd>) to jump to the next student. You can also <strong>paste a column of scores</strong> from Excel into any cell.</p>
+            <div className="score-summary" role="status" aria-live="polite" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '.6rem' }}>
+              <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> {stats.entered} entered</span>
+              <span className={'badge ' + (stats.missing ? 'badge-warning' : 'badge-secondary')}>{stats.missing} missing</span>
+              {stats.invalid > 0 && <span className="badge badge-danger"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> {stats.invalid} out of range (0–{d.max_score})</span>}
+              {dirty && <span className="badge badge-info"><i aria-hidden="true" className="fas fa-pen" /> Unsaved changes</span>}
+            </div>
             <div className="bulk-fill" style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap', padding: '.6rem .75rem', marginBottom: '.75rem', background: 'var(--surface-2, #f4f6f9)', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10 }}>
               <span className="text-sm" style={{ fontWeight: 600 }}><i aria-hidden="true" className="fas fa-people-group" /> Tick students, then set them all at once:</span>
               <input type="number" className="form-control" style={{ width: 110 }} min="0" max={d.max_score} step="0.5"
@@ -403,8 +437,10 @@ function Scores({ d, notify }) {
                              onChange={(e) => setSelected((m) => ({ ...m, [s.id]: e.target.checked }))} /></td>
                   <td>{i + 1}</td><td>{s.full_name}</td>
                   <td><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></td>
-                  <td><input type="number" className="form-control score-input" style={{ width: 100 }} min="0" max={d.max_score} step="0.5"
-                             value={scores[s.id] ?? ''} onKeyDown={onScoreKey}
+                  <td><input type="number" className={'form-control score-input' + (isInvalid(scores[s.id]) ? ' is-invalid' : '')}
+                             style={{ width: 100, ...(isInvalid(scores[s.id]) ? { borderColor: '#e74a3b', background: '#fff5f5' } : {}) }}
+                             min="0" max={d.max_score} step="0.5" aria-invalid={isInvalid(scores[s.id]) ? 'true' : undefined}
+                             value={scores[s.id] ?? ''} onKeyDown={onScoreKey} onPaste={onPaste(i)}
                              onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td></tr>))}</tbody>
             </table></div>
             <div className="page-header-actions mt-3">
