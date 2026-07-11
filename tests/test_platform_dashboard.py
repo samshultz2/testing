@@ -282,3 +282,67 @@ def test_health_page(mt):
     body = r.get_data(as_text=True)
     assert 'Control plane database' in body and 'Tenant databases' in body
     assert 'Payment gateway' in body and 'Email (SMTP)' in body
+
+
+def test_platform_analytics(mt):
+    app, tenancy = mt
+    from utils import platform_analytics
+    c = _login_owner(app)
+    r = c.get('/platform/analytics', headers={'Host': 'edusyncra.test'})
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'New schools' in body and 'Churn events' in body and 'Cumulative schools' in body
+    data = platform_analytics.monthly_trends(12, use_cache=False)
+    assert len(data['labels']) == 12 and len(data['signups']) == 12
+    # 3 schools were registered this run -> they land in the current month + cumulative
+    assert data['cumulative'][-1] >= 3
+
+
+def _make_owner_admin(app, tenancy, username, password):
+    """Create a non-super 'admin' user in the owner school's DB."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from models import User
+    eng = create_engine(tenancy.get_tenant('owner').database_url)
+    S = sessionmaker(bind=eng)
+    with S() as s:
+        if not s.query(User).filter_by(username=username).first():
+            u = User(username=username, full_name=username, role='admin',
+                     scope='central', must_change_password=False)
+            u.set_password(password); s.add(u); s.commit()
+    eng.dispose()
+
+
+def test_platform_roles_caps_logic(mt):
+    app, _ = mt
+    from utils import platform_roles
+    with app.test_request_context():
+        assert platform_roles.caps_for('anyone', is_super=True) == set(platform_roles.CAP_KEYS)
+        platform_roles.save_team({'bob': ['view_revenue']})
+        assert platform_roles.caps_for('bob', is_super=False) == {'view_revenue'}
+        assert platform_roles.caps_for('alice', is_super=False) == set(platform_roles.CAP_KEYS)  # unlisted = full
+        platform_roles.save_team({})   # reset
+
+
+def test_team_page_super_admin_only(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    assert c.get('/platform/team', headers={'Host': 'edusyncra.test'}).status_code == 200
+
+
+def test_restricted_admin_is_capability_gated(mt):
+    app, tenancy = mt
+    from utils import platform_roles
+    _make_owner_admin(app, tenancy, 'limited', 'Zebra!Mango42Q')
+    with app.test_request_context():
+        platform_roles.save_team({'limited': ['view_revenue']})   # revenue only
+    c = app.test_client()
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/login', headers=H).get_data(as_text=True)).group(1)
+    c.post('/login', headers=H, data={'username': 'limited', 'password': 'Zebra!Mango42Q', '_csrf_token': tok})
+    assert c.get('/platform/subscriptions', headers=H).status_code == 200   # granted
+    assert c.get('/platform/pricing', headers=H).status_code == 403         # not granted
+    assert c.get('/platform/analytics', headers=H).status_code == 403       # not granted
+    with app.test_request_context():
+        platform_roles.save_team({})   # reset for other tests

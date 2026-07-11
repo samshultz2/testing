@@ -1,0 +1,58 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Analytics{% endblock %}
+{% block heading %}Growth &amp; subscriptions{% endblock %}
+{% block subheading %}The last 12 months, from your platform history.{% endblock %}
+
+{% block head %}
+<style>
+  .chartcard{margin-bottom:16px}
+  .chartcard h3{font-size:15px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+  .chartcard .cap{color:var(--faint);font-size:12.5px;margin-bottom:10px}
+  .bars{display:flex;align-items:flex-end;gap:6px;height:150px;padding-top:8px}
+  .bars .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+  .bars .bar{width:70%;max-width:34px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,var(--accent),var(--accent-2));min-height:2px;transition:height .3s}
+  .bars .bar.pay{background:linear-gradient(180deg,#3b82f6,#60a5fa)}
+  .bars .bar.churn{background:linear-gradient(180deg,#e67e22,#f0a55f)}
+  .bars .bar.cum{background:linear-gradient(180deg,#8b5cf6,#a78bfa)}
+  .bars .v{font-size:11px;font-weight:700;color:var(--soft)}
+  .bars .m{font-size:10px;color:var(--faint);white-space:nowrap}
+  .mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:16px}
+</style>
+{% endblock %}
+
+{% macro chart(title, icon, cap, series, cls) %}
+  {% set mx = series|max %}
+  <div class="panel chartcard" style="padding:16px 18px">
+    <h3><i class="fas {{ icon }}"></i> {{ title }}</h3>
+    <div class="cap">{{ cap }}</div>
+    <div class="bars" role="img" aria-label="{{ title }} by month">
+      {% for i in range(d.labels|length) %}
+      <div class="col">
+        <span class="v">{{ series[i] if series[i] else '' }}</span>
+        <div class="bar {{ cls }}" style="height:{{ (100 * series[i] / mx)|round(0,'ceil')|int if mx else 0 }}%"></div>
+        <span class="m">{{ d.labels[i][2:] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endmacro %}
+
+{% block content %}
+  <div class="mini">
+    <div class="kpi"><div class="lab">New (12 mo)</div><div class="num">{{ d.totals.signups }}</div></div>
+    <div class="kpi"><div class="lab">New this month</div><div class="num">{{ d.totals.signups_last }}</div></div>
+    <div class="kpi"><div class="lab">Payments (12 mo)</div><div class="num">{{ d.totals.payments }}</div></div>
+    <div class="kpi"><div class="lab">Churn events (12 mo)</div><div class="num">{{ d.totals.churn }}</div></div>
+    <div class="kpi"><div class="lab">Schools now</div><div class="num">{{ d.cumulative[-1] if d.cumulative else 0 }}</div></div>
+  </div>
+
+  {{ chart('New schools', 'fa-calendar-plus', 'Registrations per month', d.signups, '') }}
+  {{ chart('Cumulative schools', 'fa-arrow-trend-up', 'Total schools at each month-end', d.cumulative, 'cum') }}
+  {{ chart('Payments / renewals', 'fa-money-bill-trend-up', 'Credited payments per month', d.payments, 'pay') }}
+  {{ chart('Churn events', 'fa-user-slash', 'Suspensions + deletions per month', d.churn, 'churn') }}
+
+  <p class="muted" style="font-size:12.5px">
+    <i class="fas fa-circle-info"></i> Built from registrations, credited payments and audited suspend/delete actions.
+    Payment and churn history begins accumulating from now onward.
+  </p>
+{% endblock %}

@@ -25,18 +25,53 @@ def _dt_min():
     return _dt.datetime.min
 
 
+def _platform_gate():
+    """Shared access check: must be an admin logged in on the owner school's
+    host. Returns a response to short-circuit with, or None to proceed."""
+    if not current_app.config.get('MULTI_TENANT'):
+        abort(404)
+    t = current_tenant()
+    if t is None or not billing.is_owner(t):
+        abort(404)                           # only on the owner school's host
+    if not session.get('logged_in') or not is_admin():
+        return redirect(url_for('auth.login'))
+    return None
+
+
 def platform_admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if not current_app.config.get('MULTI_TENANT'):
-            abort(404)
-        t = current_tenant()
-        if t is None or not billing.is_owner(t):
-            abort(404)                       # only on the owner school's host
-        if not session.get('logged_in') or not is_admin():
-            return redirect(url_for('auth.login'))
-        return f(*args, **kwargs)
+        gated = _platform_gate()
+        return gated if gated is not None else f(*args, **kwargs)
     return wrapper
+
+
+def platform_requires(cap):
+    """Like platform_admin_required, but also requires a specific capability
+    (super_admin always passes; unrestricted admins pass; see utils.platform_roles)."""
+    def deco(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            gated = _platform_gate()
+            if gated is not None:
+                return gated
+            from utils import platform_roles
+            if not platform_roles.can(cap):
+                if request.method not in ('GET', 'HEAD'):
+                    flash('You do not have permission for that platform action.', 'error')
+                    return _back()
+                abort(403)
+            return f(*args, **kwargs)
+        return wrapper
+    return deco
+
+
+@platform_bp.context_processor
+def _inject_platform_caps():
+    """Expose platform_can() to platform templates so the nav hides what a
+    limited admin can't reach."""
+    from utils import platform_roles
+    return {'platform_can': platform_roles.can}
 
 
 def _audit(action, *, subdomain=None, detail=None):
@@ -142,7 +177,7 @@ def schools():
 
 
 @platform_bp.route('/schools/export')
-@platform_admin_required
+@platform_requires('export_reports')
 def schools_export():
     """Download the tenant directory as CSV (honours the ?filter= segment)."""
     import csv
@@ -175,7 +210,7 @@ def schools_export():
 
 
 @platform_bp.route('/subscriptions')
-@platform_admin_required
+@platform_requires('view_revenue')
 def subscriptions():
     """Billing & subscriptions: revenue, who's paying / on trial / lapsed."""
     rows, summary, price = _rows_and_summary()
@@ -189,7 +224,7 @@ def subscriptions():
 
 
 @platform_bp.route('/homepage', methods=['GET', 'POST'])
-@platform_admin_required
+@platform_requires('manage_settings')
 def homepage():
     """Edit the public marketing homepage content (stored in the control plane).
     Lets the marketing/sales team change copy, pricing and FAQ live — no deploy."""
@@ -224,7 +259,7 @@ def homepage():
 
 
 @platform_bp.route('/pricing', methods=['GET', 'POST'])
-@platform_admin_required
+@platform_requires('manage_plans')
 def pricing():
     """Edit the subscription tiers (price, duration, label, badge, on/off).
     Stored in the control plane, so changes are live everywhere — homepage,
@@ -296,7 +331,7 @@ def _portal_url(t):
 
 
 @platform_bp.route('/tenant/<subdomain>/notes', methods=['POST'])
-@platform_admin_required
+@platform_requires('manage_tenants')
 def save_notes(subdomain):
     t = tenancy.get_tenant(subdomain)
     if t is None:
@@ -306,6 +341,44 @@ def save_notes(subdomain):
     _audit('notes', subdomain=subdomain, detail='notes/tags updated')
     flash('Notes and tags saved.', 'success')
     return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
+
+
+@platform_bp.route('/team', methods=['GET', 'POST'])
+@platform_admin_required
+def team():
+    """Assign granular platform capabilities to admin users (super-admin only).
+    An admin not listed here keeps full access, so existing setups are unchanged."""
+    if session.get('role') != 'super_admin':
+        abort(403)
+    from utils import platform_roles
+    from models import User
+    admins = (User.query.filter(User.role.in_(('admin',)), User.is_active == True)
+              .order_by(User.username).all())
+    if request.method == 'POST':
+        team_map = {}
+        for u in admins:
+            # A ticked "full access" (or no restriction saved) leaves them off the map.
+            if request.form.get(f'restrict_{u.username}') == 'on':
+                caps = [c for c, _ in platform_roles.CAPS
+                        if request.form.get(f'cap_{u.username}_{c}') == 'on']
+                team_map[u.username] = caps
+        platform_roles.save_team(team_map)
+        _audit('team', detail=f'{len(team_map)} restricted admin(s)')
+        flash('Platform roles saved.', 'success')
+        return redirect(url_for('platform.team'))
+    current = platform_roles.get_team()
+    return render_template('platform/team.html', active='team',
+                           admins=admins, caps=platform_roles.CAPS, current=current)
+
+
+@platform_bp.route('/analytics')
+@platform_requires('view_analytics')
+def analytics():
+    """Growth & subscription trends over the last 12 months (from control-plane
+    history: signups, payments/renewals, churn events, cumulative schools)."""
+    from utils import platform_analytics
+    data = platform_analytics.monthly_trends(12)
+    return render_template('platform/analytics.html', active='analytics', d=data)
 
 
 @platform_bp.route('/health')
@@ -345,7 +418,7 @@ def _back(default='platform.schools'):
 
 
 @platform_bp.route('/<subdomain>/grant', methods=['POST'])
-@platform_admin_required
+@platform_requires('manage_billing')
 def grant(subdomain):
     t = tenancy.get_tenant(subdomain)
     if t is None:
@@ -361,7 +434,7 @@ def grant(subdomain):
 
 
 @platform_bp.route('/<subdomain>/suspend', methods=['POST'])
-@platform_admin_required
+@platform_requires('manage_tenants')
 def suspend(subdomain):
     t = tenancy.get_tenant(subdomain)
     if t is None or billing.is_owner(t):
@@ -378,7 +451,7 @@ def suspend(subdomain):
 
 
 @platform_bp.route('/bulk', methods=['POST'])
-@platform_admin_required
+@platform_requires('manage_tenants')
 def bulk():
     """Apply one action to several schools at once (suspend / reactivate /
     delete). The owner school is always skipped."""
@@ -415,7 +488,7 @@ def bulk():
 
 
 @platform_bp.route('/<subdomain>/delete', methods=['POST'])
-@platform_admin_required
+@platform_requires('manage_tenants')
 def delete(subdomain):
     t = tenancy.get_tenant(subdomain)
     if t is None or billing.is_owner(t):

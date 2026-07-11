@@ -1,0 +1,57 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Team &amp; roles{% endblock %}
+{% block heading %}Team &amp; roles{% endblock %}
+{% block subheading %}Limit what each platform admin can do. Super-admins always have full access.{% endblock %}
+
+{% block head %}
+<style>
+  .adminrow{padding:16px 18px} .adminrow + .adminrow{border-top:1px solid var(--line-2)}
+  .adminhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .caps{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px 18px;margin-top:12px;padding-left:34px}
+  .caps.off{opacity:.4;pointer-events:none}
+  .caps label{display:flex;gap:8px;align-items:center;font-size:13.5px}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--soft)}
+</style>
+{% endblock %}
+
+{% block content %}
+{% if admins %}
+<form method="post">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="panel">
+    {% for u in admins %}
+    {% set restricted = u.username in current %}
+    <div class="adminrow">
+      <div class="adminhead">
+        <span class="school"><span class="ic">{{ (u.full_name or u.username)[0]|upper }}</span>
+          <span><b>{{ u.full_name or u.username }}</b><br><span class="sub">{{ u.username }}</span></span></span>
+        <label class="toggle" style="margin-left:auto">
+          <input type="checkbox" name="restrict_{{ u.username }}" data-user="{{ u.username }}" {{ 'checked' if restricted }}>
+          Limit this admin
+        </label>
+      </div>
+      <div class="caps {{ '' if restricted else 'off' }}" id="caps-{{ u.username }}">
+        {% for key, label in caps %}
+        <label><input type="checkbox" name="cap_{{ u.username }}_{{ key }}" {{ 'checked' if key in current.get(u.username, []) }}> {{ label }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="margin-top:14px"><button class="btn primary"><i class="fas fa-floppy-disk"></i> Save roles</button></div>
+</form>
+{% else %}
+  <div class="panel"><div class="empty"><i class="fas fa-user-shield"></i> No non-super admin accounts on the owner school yet. Add staff admins there to assign platform roles.</div></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  document.querySelectorAll('input[data-user]').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      var box=document.getElementById('caps-'+cb.getAttribute('data-user'));
+      if(box) box.classList.toggle('off', !cb.checked);
+    });
+  });
+</script>
+{% endblock %}

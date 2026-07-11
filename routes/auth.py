@@ -86,6 +86,7 @@ def _complete_login(user, dest=None):
     session['logged_in'] = True
     session['user_id'] = user.id
     session['user'] = user.full_name or user.username
+    session['username'] = user.username
     session['role'] = user.role
     session['tv'] = user.token_version        # server-side session revocation
     from utils.tenant_runtime import bind_session_to_current_tenant

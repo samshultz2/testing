@@ -132,15 +132,19 @@
       <nav>
         <a href="{{ url_for('platform.dashboard') }}" class="{{ 'on' if active=='overview' }}"><i class="fas fa-gauge-high"></i> Overview</a>
         <a href="{{ url_for('platform.schools') }}" class="{{ 'on' if active=='schools' }}"><i class="fas fa-school"></i> Schools</a>
-        <a href="{{ url_for('platform.subscriptions') }}" class="{{ 'on' if active=='subscriptions' }}"><i class="fas fa-credit-card"></i> Subscriptions</a>
-        <a href="{{ url_for('platform.pricing') }}" class="{{ 'on' if active=='pricing' }}"><i class="fas fa-tags"></i> Pricing</a>
+        {% if platform_can('view_revenue') %}<a href="{{ url_for('platform.subscriptions') }}" class="{{ 'on' if active=='subscriptions' }}"><i class="fas fa-credit-card"></i> Subscriptions</a>{% endif %}
+        {% if platform_can('manage_plans') %}<a href="{{ url_for('platform.pricing') }}" class="{{ 'on' if active=='pricing' }}"><i class="fas fa-tags"></i> Pricing</a>{% endif %}
+        {% if platform_can('view_analytics') %}<a href="{{ url_for('platform.analytics') }}" class="{{ 'on' if active=='analytics' }}"><i class="fas fa-chart-line"></i> Analytics</a>{% endif %}
         <a href="{{ url_for('platform.audit') }}" class="{{ 'on' if active=='audit' }}"><i class="fas fa-clock-rotate-left"></i> Audit log</a>
         <a href="{{ url_for('platform.health') }}" class="{{ 'on' if active=='health' }}"><i class="fas fa-heart-pulse"></i> Health</a>
+        {% if session.get('role') == 'super_admin' %}<a href="{{ url_for('platform.team') }}" class="{{ 'on' if active=='team' }}"><i class="fas fa-user-shield"></i> Team &amp; roles</a>{% endif %}
       </nav>
+      {% if platform_can('manage_settings') %}
       <div class="grp">Website</div>
       <nav>
         <a href="{{ url_for('platform.homepage') }}" class="{{ 'on' if active=='homepage' }}"><i class="fas fa-pen-ruler"></i> Homepage</a>
       </nav>
+      {% endif %}
       <div class="foot">
         <a href="/" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> View my school</a>
         <a href="{{ url_for('auth.logout') }}"><i class="fas fa-right-from-bracket"></i> Sign out</a>
