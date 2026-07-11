@@ -65,8 +65,13 @@
         <tr><th colspan="2">Income</th></tr>
         {% for r in s.income_statement.income %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">No income</td><td></td></tr>{% endfor %}
         <tr class="total"><td>Total Income</td><td class="num">₦{{ '{:,.0f}'.format(s.income_statement.total_income) }}</td></tr>
-        <tr><th colspan="2" style="padding-top:12px">Expenses</th></tr>
-        {% for r in s.income_statement.expense %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">No expenses</td><td></td></tr>{% endfor %}
+        {% if s.income_statement.cogs %}
+        <tr><td>Cost of Goods Sold</td><td class="num">₦{{ '{:,.0f}'.format(s.income_statement.cogs) }}</td></tr>
+        <tr class="total"><td>Gross Profit</td>
+          <td class="num net {{ 'pos' if s.income_statement.gross_profit >= 0 else 'neg' }}">₦{{ '{:,.0f}'.format(s.income_statement.gross_profit) }}</td></tr>
+        {% endif %}
+        <tr><th colspan="2" style="padding-top:12px">{{ 'Operating Expenses' if s.income_statement.cogs else 'Expenses' }}</th></tr>
+        {% for r in (s.income_statement.operating_expense if s.income_statement.cogs else s.income_statement.expense) %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">No expenses</td><td></td></tr>{% endfor %}
         <tr class="total"><td>Total Expenses</td><td class="num">₦{{ '{:,.0f}'.format(s.income_statement.total_expense) }}</td></tr>
         <tr class="total"><td>Net {{ 'Surplus' if s.income_statement.net >= 0 else 'Deficit' }}</td>
           <td class="num net {{ 'pos' if s.income_statement.net >= 0 else 'neg' }}">₦{{ '{:,.0f}'.format(s.income_statement.net) }}</td></tr>

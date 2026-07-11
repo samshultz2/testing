@@ -1467,16 +1467,20 @@ def accounting_export():
         tb.append([a['code'], a['name'], a['type'], a['debit'], a['credit']])
     tb.append(['', 'TOTAL', '', s['trial_balance']['total_debit'], s['trial_balance']['total_credit']])
 
+    inc = s['income_statement']
     pl = wb.create_sheet('Income Statement')
     pl.append(['Income', 'Amount'])
-    for r in s['income_statement']['income']:
+    for r in inc['income']:
         pl.append([r['name'], r['amount']])
-    pl.append(['Total Income', s['income_statement']['total_income']])
-    pl.append([]); pl.append(['Expenses', 'Amount'])
-    for r in s['income_statement']['expense']:
+    pl.append(['Total Income', inc['total_income']])
+    if inc.get('cogs'):
+        pl.append([]); pl.append(['Cost of Goods Sold', inc['cogs']])
+        pl.append(['Gross Profit', inc['gross_profit']])
+    pl.append([]); pl.append(['Operating Expenses', 'Amount'])
+    for r in inc.get('operating_expense', inc['expense']):
         pl.append([r['name'], r['amount']])
-    pl.append(['Total Expenses', s['income_statement']['total_expense']])
-    pl.append([]); pl.append(['Net Surplus / (Deficit)', s['income_statement']['net']])
+    pl.append(['Total Expenses', inc['total_expense']])
+    pl.append([]); pl.append(['Net Surplus / (Deficit)', inc['net']])
 
     bs = wb.create_sheet('Balance Sheet')
     bs.append(['Assets', 'Amount'])

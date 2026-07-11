@@ -118,8 +118,18 @@ def income_statement(filters):
     expense.sort(key=lambda r: -r['amount'])
     ti = round(sum(r['amount'] for r in income), 2)
     te = round(sum(r['amount'] for r in expense), 2)
+    # Split cost of goods out of operating expenses so the statement can show a
+    # gross-profit subtotal (Revenue − COGS) the way a real P&L does. COGS still
+    # counts in total_expense/net — this is an additional breakdown, not a change
+    # to the bottom line.
+    from utils.finance_ledger import COGS_CATEGORY
+    cogs = round(sum(r['amount'] for r in expense if r['name'] == COGS_CATEGORY), 2)
+    opex = [r for r in expense if r['name'] != COGS_CATEGORY]
     return {'income': income, 'expense': expense, 'total_income': ti,
-            'total_expense': te, 'net': round(ti - te, 2)}
+            'total_expense': te, 'net': round(ti - te, 2),
+            'cogs': cogs, 'gross_profit': round(ti - cogs, 2),
+            'operating_expense': [r for r in opex],
+            'total_operating_expense': round(te - cogs, 2)}
 
 
 def balance_sheet(filters):

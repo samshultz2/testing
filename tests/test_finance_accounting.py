@@ -43,6 +43,27 @@ def test_journal_mapping_for_isolated_expense(app):
         assert pl['total_expense'] == 900 and pl['total_income'] == 0 and pl['net'] == -900
 
 
+def test_income_statement_breaks_out_cogs(app):
+    """A COGS ledger entry becomes its own line and a Gross Profit subtotal,
+    while still counting in total_expense / net (accounting stays connected)."""
+    from utils import finance_ledger as L, finance_accounting as A
+    with app.app_context():
+        L.post(L.REVENUE, 1000, source_module='sales', category='Bookshop',
+               method='Cash', branch_id=Branch.get_default().id,
+               origin_type='test_sale', origin_id=99001)
+        L.post(L.EXPENSE, 300, source_module='cogs', category=L.COGS_CATEGORY,
+               method='Cash', branch_id=Branch.get_default().id,
+               origin_type='test_cogs', origin_id=99001)
+        db.session.commit()
+        f = {'origin_type': None}
+        pl = A.income_statement({'source_module': None})
+        # gross profit excludes COGS from the top line; net still includes it
+        assert pl['cogs'] >= 300
+        assert abs(pl['gross_profit'] - (pl['total_income'] - pl['cogs'])) < 0.5
+        assert abs(pl['net'] - (pl['total_income'] - pl['total_expense'])) < 0.5
+        assert L.COGS_CATEGORY not in {r['name'] for r in pl['operating_expense']}
+
+
 def test_accounting_page_renders_for_admin(app):
     c = app.test_client()
     with c.session_transaction() as s:
