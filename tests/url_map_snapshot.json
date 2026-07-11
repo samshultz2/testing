@@ -4363,6 +4363,13 @@
 ]
 ],
 [
+"sales.adjust_stock",
+"/sales/products/<int:product_id>/adjust",
+[
+"POST"
+]
+],
+[
 "sales.analytics",
 "/sales/analytics",
 [
@@ -4400,6 +4407,13 @@
 [
 "sales.history_export",
 "/sales/history/export",
+[
+"GET"
+]
+],
+[
+"sales.movements",
+"/sales/movements",
 [
 "GET"
 ]

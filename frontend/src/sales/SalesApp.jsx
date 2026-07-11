@@ -15,12 +15,14 @@ function Dashboard({ d }) {
       <PageHeader icon="fa-cart-shopping" title="Sales & Inventory" actions={<>
         <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>
         <a href={u.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
+        {u.movements && <a href={u.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
         {u.analytics && <a href={u.analytics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
       </>} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '.75rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
         {[[naira(d.today_total), 'Sold today'], [d.today_count, 'Sales today'],
-          [d.product_count, 'Products']].map(([v, l]) => (
+          [d.product_count, 'Products'],
+          [d.inventory_value != null ? naira(d.inventory_value) : '—', 'Inventory value']].map(([v, l]) => (
           <div className="card" key={l}><div className="card-body">
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{v}</div>
             <div className="text-muted text-sm">{l}</div></div></div>
@@ -28,6 +30,9 @@ function Dashboard({ d }) {
         <div className="card"><div className="card-body">
           <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: d.low_stock.length ? '#e74a3b' : 'inherit' }}>{d.low_stock.length}</div>
           <div className="text-muted text-sm">Low stock</div></div></div>
+        <div className="card"><div className="card-body">
+          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: d.out_of_stock_count ? '#e74a3b' : 'inherit' }}>{d.out_of_stock_count || 0}</div>
+          <div className="text-muted text-sm">Out of stock</div></div></div>
       </div>
 
       {d.low_stock.length > 0 && (
@@ -151,6 +156,116 @@ function ProductForm({ d, product, onClose, onSaved }) {
   );
 }
 
+// ---- Stock adjustment (movement / physical count) --------------------------
+function AdjustModal({ d, product, onClose, onSaved }) {
+  const [mode, setMode] = useState('move');       // 'move' | 'count'
+  const [direction, setDirection] = useState('in');
+  const inReasons = d.in_reasons || [];
+  const outReasons = d.out_reasons || [];
+  const [reason, setReason] = useState(inReasons[0] || '');
+  const [quantity, setQuantity] = useState('');
+  const [counted, setCounted] = useState(String(product.stock_qty ?? 0));
+  const [note, setNote] = useState('');
+  const [reference, setReference] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const setDir = (dir) => { setDirection(dir); setReason((dir === 'in' ? inReasons : outReasons)[0] || ''); };
+  const save = async () => {
+    setBusy(true); setErr(null);
+    const payload = mode === 'count'
+      ? { mode: 'count', counted, note, reference }
+      : { mode: 'move', direction, reason, quantity, note, reference };
+    const r = await submitJson(product.adjust_url, payload);
+    setBusy(false);
+    if (r.ok) { onSaved(); onClose(); } else setErr(r.error || 'Could not record the movement.');
+  };
+
+  return (
+    <Modal title={`Adjust stock · ${product.name}`} icon="fa-arrow-right-arrow-left" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+             <Button variant="primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Record'}</Button></>}>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>On hand: <strong>{product.stock_qty}</strong></p>
+      <div className="btn-group" style={{ display: 'flex', gap: '.4rem', marginBottom: '.8rem' }}>
+        <button type="button" className={'btn btn-sm ' + (mode === 'move' ? 'btn-primary' : 'btn-secondary')} onClick={() => setMode('move')}>Add / remove</button>
+        <button type="button" className={'btn btn-sm ' + (mode === 'count' ? 'btn-primary' : 'btn-secondary')} onClick={() => setMode('count')}>Set exact count</button>
+      </div>
+      {mode === 'move' ? (
+        <div style={{ display: 'grid', gap: '.6rem' }}>
+          <div className="btn-group" style={{ display: 'flex', gap: '.4rem' }}>
+            <button type="button" className={'btn btn-sm ' + (direction === 'in' ? 'btn-success' : 'btn-secondary')} onClick={() => setDir('in')}><i aria-hidden="true" className="fas fa-arrow-down" /> Stock in</button>
+            <button type="button" className={'btn btn-sm ' + (direction === 'out' ? 'btn-warning' : 'btn-secondary')} onClick={() => setDir('out')}><i aria-hidden="true" className="fas fa-arrow-up" /> Stock out</button>
+          </div>
+          <label className="form-group" style={{ margin: 0 }}><span className="form-label">Reason</span>
+            <select className="form-control" value={reason} onChange={(e) => setReason(e.target.value)}>
+              {(direction === 'in' ? inReasons : outReasons).map((r) => <option key={r}>{r}</option>)}</select></label>
+          <label className="form-group" style={{ margin: 0 }}><span className="form-label">Quantity</span>
+            <input type="number" min="1" className="form-control" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
+        </div>
+      ) : (
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Counted quantity</span>
+          <input type="number" min="0" className="form-control" value={counted} onChange={(e) => setCounted(e.target.value)} />
+          <span className="text-muted text-sm">The difference is logged as a stock-count correction.</span></label>
+      )}
+      <label className="form-group" style={{ margin: '.6rem 0 0' }}><span className="form-label">Reference (optional)</span>
+        <input type="text" className="form-control" placeholder="Invoice / PO / note ref" value={reference} onChange={(e) => setReference(e.target.value)} /></label>
+      <label className="form-group" style={{ margin: '.6rem 0 0' }}><span className="form-label">Note (optional)</span>
+        <input type="text" className="form-control" value={note} onChange={(e) => setNote(e.target.value)} /></label>
+    </Modal>
+  );
+}
+
+// ---- Movements ledger ------------------------------------------------------
+function Movements({ d }) {
+  const nav = useNav();
+  const a = d.applied || {};
+  const o = d.options || {};
+  const [f, setF] = useState({ product_id: a.product_id || '', direction: a.direction || '',
+    reason: a.reason || '', from: a.from || '', to: a.to || '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const apply = () => navParams(nav.go, d.self_url, f);
+  const s = d.summary || {};
+  return (
+    <>
+      <PageHeader icon="fa-right-left" title="Inventory Movements" actions={
+        <a href={d.urls.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>} />
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <select className="form-control" style={{ maxWidth: 200 }} value={f.product_id} onChange={(e) => set('product_id', e.target.value)}>
+          <option value="">All products</option>{(o.products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <select className="form-control" style={{ maxWidth: 140 }} value={f.direction} onChange={(e) => set('direction', e.target.value)}>
+          <option value="">In & out</option><option value="in">Stock in</option><option value="out">Stock out</option></select>
+        <select className="form-control" style={{ maxWidth: 200 }} value={f.reason} onChange={(e) => set('reason', e.target.value)}>
+          <option value="">All reasons</option>{(o.reasons || []).map((r) => <option key={r}>{r}</option>)}</select>
+        <input type="date" className="form-control" style={{ maxWidth: 150 }} value={f.from} onChange={(e) => set('from', e.target.value)} />
+        <input type="date" className="form-control" style={{ maxWidth: 150 }} value={f.to} onChange={(e) => set('to', e.target.value)} />
+        <button type="button" className="btn btn-primary" onClick={apply}><i aria-hidden="true" className="fas fa-filter" /> Apply</button>
+      </div></div>
+      <div className="text-muted text-sm" style={{ marginBottom: '.6rem' }}>
+        <strong>{s.count || 0}</strong> movement(s) · <span style={{ color: 'var(--success)' }}>+{s.total_in || 0} in</span> · <span style={{ color: '#e74a3b' }}>−{s.total_out || 0} out</span>
+      </div>
+      <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        {d.movements.length ? (
+          <table className="data-table">
+            <thead><tr><th>When</th><th>Product</th><th>Movement</th><th className="text-right">Qty</th><th className="text-right">After</th><th>Ref</th><th>By</th></tr></thead>
+            <tbody>{d.movements.map((m) => (
+              <tr key={m.id}>
+                <td className="text-muted text-sm">{m.when}</td>
+                <td>{m.product}</td>
+                <td><span className={'badge ' + (m.direction === 'in' ? 'badge-success' : 'badge-warning')}>{m.direction === 'in' ? '▼ in' : '▲ out'}</span> {m.reason}{m.note && <div className="text-muted text-sm">{m.note}</div>}</td>
+                <td className="text-right">{m.direction === 'in' ? '+' : '−'}{m.quantity}</td>
+                <td className="text-right">{m.qty_after}</td>
+                <td className="text-muted text-sm">{m.reference || '—'}</td>
+                <td className="text-muted text-sm">{m.by}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        ) : <EmptyState icon="fa-right-left" title="No movements match these filters" />}
+      </div></div>
+    </>
+  );
+}
+
 // ---- Products --------------------------------------------------------------
 function Products({ d, notify }) {
   const nav = useNav();
@@ -159,6 +274,7 @@ function Products({ d, notify }) {
   const [stock, setStock] = useState(d.stock || '');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);   // product being edited, or {} for add
+  const [adjusting, setAdjusting] = useState(null);   // product being adjusted
 
   const restock = async (p, qty) => {
     if (!qty) return;
@@ -182,6 +298,7 @@ function Products({ d, notify }) {
     <>
       <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={<>
         <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>
+        {d.urls.movements && <a href={d.urls.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
         <a href={d.urls.new_sale} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-cart-plus" /> New Sale</a>
       </>} />
 
@@ -201,7 +318,7 @@ function Products({ d, notify }) {
             <div className="table-container">
               <table className="data-table table-stack no-mobile-scroll">
                 <thead><tr><th>Name</th><th>Category</th><th className="text-right">Price</th><th className="text-right">Stock</th><th>Restock</th><th /></tr></thead>
-                <tbody>{shown.map((p) => <ProductRow key={p.id} p={p} onRestock={restock} onEdit={() => setEditing(p)} busy={busy} />)}</tbody>
+                <tbody>{shown.map((p) => <ProductRow key={p.id} p={p} onRestock={restock} onEdit={() => setEditing(p)} onAdjust={() => setAdjusting(p)} busy={busy} />)}</tbody>
               </table>
             </div>
           ) : <EmptyState icon="fa-boxes-stacked" title="No products match" />}
@@ -210,11 +327,13 @@ function Products({ d, notify }) {
 
       {editing && <ProductForm d={d} product={editing.id ? editing : null}
                                onClose={() => setEditing(null)} onSaved={() => nav.refresh()} />}
+      {adjusting && <AdjustModal d={d} product={adjusting}
+                                 onClose={() => setAdjusting(null)} onSaved={() => nav.refresh()} />}
     </>
   );
 }
 
-function ProductRow({ p, onRestock, onEdit, busy }) {
+function ProductRow({ p, onRestock, onEdit, onAdjust, busy }) {
   const [qty, setQty] = useState('');
   const badge = p.out_of_stock ? <span className="badge badge-danger">Out</span>
     : p.low_stock ? <span className="badge badge-warning">Low</span> : null;
@@ -231,7 +350,10 @@ function ProductRow({ p, onRestock, onEdit, busy }) {
         </form>
       </td>
       <td data-label="">
-        <button type="button" className="btn btn-sm btn-light" onClick={onEdit}><i aria-hidden="true" className="fas fa-pen" /> Edit</button>
+        <div style={{ display: 'flex', gap: '.3rem' }}>
+          <button type="button" className="btn btn-sm btn-light" onClick={onAdjust} title="Record a stock movement or count"><i aria-hidden="true" className="fas fa-right-left" /> Adjust</button>
+          <button type="button" className="btn btn-sm btn-light" onClick={onEdit}><i aria-hidden="true" className="fas fa-pen" /> Edit</button>
+        </div>
       </td>
     </tr>
   );
@@ -639,7 +761,7 @@ function Analytics({ d }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History, analytics: Analytics };
+const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History, analytics: Analytics, movements: Movements };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

@@ -8,9 +8,10 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify)
 from sqlalchemy import func
 
-from models import (db, Product, Sale, SaleItem, Student, StudentEnrollment,
-                    ClassArmAssignment, SchoolClass, ClassArm)
-from models.models_sales import PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES, UNITS
+from models import (db, Product, Sale, SaleItem, StockMovement, Student,
+                    StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm)
+from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
+                                 UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS)
 from utils.access_control import login_required, filter_classes_for_user
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
@@ -71,17 +72,21 @@ def dashboard():
     today_total = sum(s.total or 0 for s in todays)
     products = scope_query(Product.query.filter_by(is_active=True), Product).all()
     low_stock = [p for p in products if p.low_stock]
+    out_stock = [p for p in products if p.out_of_stock]
+    inv_value = round(sum(p.stock_value for p in products), 2)
     recent = (scope_query(Sale.query, Sale)
               .order_by(Sale.created_at.desc()).limit(8).all())
     return _render({
         'page': 'dashboard',
         'today_total': today_total, 'today_count': len(todays),
-        'product_count': len(products),
+        'product_count': len(products), 'inventory_value': inv_value,
+        'out_of_stock_count': len(out_stock),
         'low_stock': [{'name': p.name, 'category': p.category,
                        'stock_qty': p.stock_qty, 'reorder_level': p.reorder_level} for p in low_stock],
         'recent': [_sale_row(s) for s in recent],
         'urls': {'new_sale': url_for('sales.new_sale'), 'products': url_for('sales.products'),
-                 'history': url_for('sales.history'), 'analytics': url_for('sales.analytics')},
+                 'history': url_for('sales.history'), 'analytics': url_for('sales.analytics'),
+                 'movements': url_for('sales.movements')},
     })
 
 
@@ -147,6 +152,7 @@ def _product_dict(p):
         'stock_value': p.stock_value, 'margin_pct': p.margin_pct,
         'restock_url': url_for('sales.restock', product_id=p.id),
         'edit_url': url_for('sales.edit_product', product_id=p.id),
+        'adjust_url': url_for('sales.adjust_stock', product_id=p.id),
     }
 
 
@@ -171,9 +177,11 @@ def products():
     return _render({
         'page': 'products', 'q': q, 'category': category, 'stock': stock,
         'categories': PRODUCT_CATEGORIES, 'units': UNITS,
+        'in_reasons': STOCK_IN_REASONS, 'out_reasons': STOCK_OUT_REASONS,
         'products': [_product_dict(p) for p in rows],
         'add_url': url_for('sales.add_product'),
-        'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard')},
+        'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard'),
+                 'movements': url_for('sales.movements')},
     })
 
 
@@ -201,6 +209,23 @@ def edit_product(product_id):
     return _ok('Product updated.', url_for('sales.products'))
 
 
+def _record_movement(product, direction, quantity, reason, *, unit_cost=None,
+                     reference=None, note=None, sale_id=None, apply=True):
+    """Write one stock-ledger row and (by default) apply the change to the
+    product's on-hand quantity. Pass apply=False when the caller has already
+    adjusted stock (e.g. the sale loop). Returns the StockMovement."""
+    quantity = abs(int(quantity or 0))
+    if apply:
+        product.stock_qty = (product.stock_qty or 0) + (quantity if direction == 'in' else -quantity)
+    mv = StockMovement(
+        branch_id=product.branch_id, product_id=product.id, direction=direction,
+        reason=reason, quantity=quantity, qty_after=product.stock_qty,
+        unit_cost=unit_cost, reference=reference, note=note, sale_id=sale_id,
+        performed_by=session.get('user') or session.get('username') or 'System')
+    db.session.add(mv)
+    return mv
+
+
 @sales_bp.route('/products/<int:product_id>/restock', methods=['POST'])
 @login_required
 def restock(product_id):
@@ -208,9 +233,101 @@ def restock(product_id):
     if not can_access_branch(p.branch_id):
         return _err('That product belongs to another branch.', url_for('sales.products'))
     qty = request.form.get('qty', type=int) or 0
-    p.stock_qty = (p.stock_qty or 0) + qty
+    if qty <= 0:
+        return _err('Enter a quantity to add.', url_for('sales.products'))
+    _record_movement(p, 'in', qty, request.form.get('reason') or 'Stock In (Purchase/GRN)',
+                     unit_cost=request.form.get('unit_cost', type=float),
+                     reference=(request.form.get('reference') or '').strip() or None)
     db.session.commit()
     return _ok(f'Added {qty} to {p.name} (now {p.stock_qty}).', url_for('sales.products'))
+
+
+@sales_bp.route('/products/<int:product_id>/adjust', methods=['POST'])
+@login_required
+def adjust_stock(product_id):
+    """Record a manual stock movement (issue, usage, damage, return, transfer,
+    correction…) or set an exact physical count. Every change is ledgered."""
+    p = db.get_or_404(Product, product_id)
+    if not can_access_branch(p.branch_id):
+        return _err('That product belongs to another branch.', url_for('sales.products'))
+    mode = request.form.get('mode') or 'move'
+    note = (request.form.get('note') or '').strip() or None
+    reference = (request.form.get('reference') or '').strip() or None
+
+    if mode == 'count':
+        counted = request.form.get('counted', type=int)
+        if counted is None or counted < 0:
+            return _err('Enter the counted quantity.', url_for('sales.products'))
+        delta = counted - (p.stock_qty or 0)
+        if delta == 0:
+            return _ok('Count matches — no change.', url_for('sales.products'))
+        p.stock_qty = counted
+        _record_movement(p, 'in' if delta > 0 else 'out', abs(delta),
+                         'Physical Stock Count', note=note, reference=reference, apply=False)
+        db.session.commit()
+        return _ok(f'Stock count set to {counted} for {p.name}.', url_for('sales.products'))
+
+    direction = request.form.get('direction')
+    reason = request.form.get('reason') or ''
+    qty = request.form.get('quantity', type=int) or 0
+    if direction not in ('in', 'out') or qty <= 0:
+        return _err('Choose a direction and quantity.', url_for('sales.products'))
+    allowed = STOCK_IN_REASONS if direction == 'in' else STOCK_OUT_REASONS
+    if reason not in allowed:
+        return _err('Invalid reason for this movement.', url_for('sales.products'))
+    if direction == 'out' and qty > (p.stock_qty or 0):
+        return _err(f'Only {p.stock_qty} in stock — cannot remove {qty}.', url_for('sales.products'))
+    _record_movement(p, direction, qty, reason,
+                     unit_cost=request.form.get('unit_cost', type=float),
+                     reference=reference, note=note)
+    db.session.commit()
+    return _ok(f'Recorded {qty} {direction} for {p.name} (now {p.stock_qty}).',
+               url_for('sales.products'))
+
+
+@sales_bp.route('/movements')
+@login_required
+def movements():
+    """The inventory movement ledger — every stock change, filterable."""
+    a = request.args
+    product_id = a.get('product_id', type=int)
+    direction = (a.get('direction') or '').strip()
+    reason = (a.get('reason') or '').strip()
+    from_d = parse_date(a.get('from'))
+    to_d = parse_date(a.get('to'))
+    query = scope_query(StockMovement.query, StockMovement)
+    if product_id:
+        query = query.filter(StockMovement.product_id == product_id)
+    if direction in ('in', 'out'):
+        query = query.filter(StockMovement.direction == direction)
+    if reason:
+        query = query.filter(StockMovement.reason == reason)
+    if from_d:
+        query = query.filter(func.date(StockMovement.created_at) >= from_d)
+    if to_d:
+        query = query.filter(func.date(StockMovement.created_at) <= to_d)
+    rows = query.order_by(StockMovement.created_at.desc()).limit(500).all()
+    name_by_id = {p.id: p.name for p in scope_query(Product.query, Product).all()}
+    total_in = sum(m.quantity for m in rows if m.direction == 'in')
+    total_out = sum(m.quantity for m in rows if m.direction == 'out')
+    return _render({
+        'page': 'movements',
+        'movements': [{'id': m.id, 'product': name_by_id.get(m.product_id, '—'),
+                       'direction': m.direction, 'reason': m.reason,
+                       'quantity': m.quantity, 'qty_after': m.qty_after,
+                       'unit_cost': m.unit_cost, 'reference': m.reference,
+                       'note': m.note, 'by': m.performed_by,
+                       'when': m.created_at.strftime('%d %b %Y %H:%M') if m.created_at else ''}
+                      for m in rows],
+        'summary': {'count': len(rows), 'total_in': total_in, 'total_out': total_out},
+        'options': {'products': [{'id': p.id, 'name': p.name} for p in scope_query(
+            Product.query, Product).order_by(Product.name).all()],
+            'reasons': STOCK_IN_REASONS + STOCK_OUT_REASONS + ['Sale', 'Physical Stock Count']},
+        'applied': {'product_id': product_id or '', 'direction': direction,
+                    'reason': reason, 'from': a.get('from', ''), 'to': a.get('to', '')},
+        'self_url': url_for('sales.movements'),
+        'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +386,9 @@ def new_sale():
                                     description=p.name, quantity=qty,
                                     unit_price=unit, line_total=line_total))
             p.stock_qty = (p.stock_qty or 0) - qty      # decrement stock
+            # Ledger the outward movement (stock already decremented above).
+            _record_movement(p, 'out', qty, 'Sale', sale_id=sale.id,
+                             reference=sale.receipt_no, apply=False)
         db.session.commit()
         from utils.audit import log_action
         log_action('sales.sale', detail=f'{sale.total:g} ({len(lines)} item(s))',

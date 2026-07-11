@@ -547,6 +547,23 @@ def _dash_insights(active_term, tscope):
         except Exception:
             pass
 
+    # Sales & Inventory — products at/below their reorder level.
+    if can_access_module('sales'):
+        try:
+            from models import Product
+            from utils.branch_scope import scope_query
+            prods = scope_query(Product.query.filter_by(is_active=True), Product).all()
+            low = [p for p in prods if p.low_stock]
+            out = [p for p in prods if p.out_of_stock]
+            if low:
+                n_out = len(out)
+                add('low_stock', 'medium' if not n_out else 'high', 'fa-boxes-stacked',
+                    f'{len(low)} product{"s" if len(low) != 1 else ""} low on stock',
+                    (f'{n_out} out of stock. ' if n_out else '') + 'Reorder before they run out.',
+                    url_for('sales.products') + '?stock=low')
+        except Exception:
+            pass
+
     # Admissions — applicants awaiting a decision.
     if can_access_module('admissions'):
         try:
