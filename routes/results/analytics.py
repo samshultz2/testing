@@ -248,9 +248,9 @@ def analytics_hub():
 
     from utils.branch_scope import viewing_branch_id
     bid = viewing_branch_id()
-    waec_stats = AcademicAnalytics.get_waec_school_statistics(year, bid) if year else None
-    jamb_stats = AcademicAnalytics.get_jamb_school_statistics(year, bid) if year else None
-    correlation = AcademicAnalytics.calculate_waec_jamb_correlation(year, bid) if year else None
+    waec_stats = waec_school_stats(year, bid) if year else None
+    jamb_stats = jamb_school_stats(year, bid) if year else None
+    correlation = waec_jamb_correlation(year, bid) if year else None
     yoy = AcademicAnalytics.get_year_over_year_comparison(bid)
 
     # Gender breakdowns for the selected year.
@@ -411,7 +411,25 @@ def analytics_hub():
     # Trends from data we capture but didn't previously analyse.
     from utils import exam_trends
     active_sess = get_active_session()
+
+    mock_trend = _mock_jamb_trend(bid)
+    mock_waec_trend = _mock_waec_trend(bid)
+    at_risk = _at_risk_register(limit=25)
+
+    # Executive Smart Insights — synthesise the above stats into a ranked,
+    # actionable "what / why / do next" summary (pure, adds no queries).
+    from utils import exam_intelligence
+    insights = exam_intelligence.school_insights(
+        year=year, waec_stats=waec_stats, jamb_stats=jamb_stats,
+        correlation=correlation, projection=projection, cutoff=cutoff,
+        class_compare=class_compare, internal_corr=internal_corr,
+        at_risk=at_risk, mock_trend=mock_trend,
+        waec_gender_stats=waec_gender_stats, jamb_gender_stats=jamb_gender_stats,
+        urls={'readiness': url_for('results.readiness_funnel'),
+              'at_risk': url_for('results.api_at_risk')})
+
     return render_template('results/analytics_hub.html',
+        insights=insights,
         years=years,
         selected_year=year,
         jamb_subjects=exam_trends.jamb_subject_breakdown(bid, year),
@@ -429,9 +447,9 @@ def analytics_hub():
         jamb_gender_stats=jamb_gender_stats,
         projection=projection,
         cutoff=cutoff,
-        at_risk=_at_risk_register(limit=25),
-        mock_trend=_mock_jamb_trend(bid),
-        mock_waec_trend=_mock_waec_trend(bid),
+        at_risk=at_risk,
+        mock_trend=mock_trend,
+        mock_waec_trend=mock_waec_trend,
         recompute_url=url_for('results.recompute_analytics'),
     )
 
@@ -599,6 +617,7 @@ def recompute_analytics():
             AnalyticsEngine.recompute_correlation(yr, branch_id=bid)
         except Exception:
             db.session.rollback()
+    bust_school_stats()          # drop cached hub stats so the next load is fresh
     log_action('analytics.recompute', detail=f'{n} student(s), branch={bid or "all"}')
     return _ok(f'Recomputed analytics for {n} student(s).', url_for('results.analytics_hub'))
 

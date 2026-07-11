@@ -128,6 +128,71 @@ def _mock_waec_trend(branch_id):
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Cached school statistics
+# --------------------------------------------------------------------------- #
+# The WAEC/JAMB school statistics and their correlation walk every result row for
+# the year, so the analytics hub recomputes a lot on each load. They only change
+# when results are added/edited (or on an explicit recompute), so cache them per
+# (year, branch) with a short TTL and bust on recompute.
+_STATS_TTL = 900          # 15 min — refreshed sooner by recompute/results edits
+
+
+def _stats_cache_key(kind, year, branch_id):
+    return f'exam_hub:{kind}:{year}:{branch_id if branch_id is not None else "all"}'
+
+
+def _cached_school_stats(kind, year, branch_id, compute):
+    """Return ``compute()`` for (kind, year, branch), memoised in AnalyticsCache.
+
+    Best-effort: any cache error falls through to a live computation so the hub
+    never breaks because of the cache layer."""
+    from models.analytics_models import AnalyticsCache
+    key = _stats_cache_key(kind, year, branch_id)
+    try:
+        hit = AnalyticsCache.get(key)
+        if hit is not None:
+            return hit if hit != '__none__' else None
+    except Exception:
+        db.session.rollback()
+    val = compute()
+    try:
+        AnalyticsCache.set(key, val if val is not None else '__none__', _STATS_TTL)
+    except Exception:
+        db.session.rollback()
+    return val
+
+
+def waec_school_stats(year, branch_id):
+    return _cached_school_stats(
+        'waec', year, branch_id,
+        lambda: AcademicAnalytics.get_waec_school_statistics(year, branch_id))
+
+
+def jamb_school_stats(year, branch_id):
+    return _cached_school_stats(
+        'jamb', year, branch_id,
+        lambda: AcademicAnalytics.get_jamb_school_statistics(year, branch_id))
+
+
+def waec_jamb_correlation(year, branch_id):
+    return _cached_school_stats(
+        'corr', year, branch_id,
+        lambda: AcademicAnalytics.calculate_waec_jamb_correlation(year, branch_id))
+
+
+def bust_school_stats(year=None, branch_id=None):
+    """Drop cached school-stats rows so the next hub load recomputes. Called after
+    a recompute; broad by design (a bulk import can touch any year/branch)."""
+    from models.analytics_models import AnalyticsCache
+    try:
+        AnalyticsCache.query.filter(
+            AnalyticsCache.cache_key.like('exam_hub:%')).delete(synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def _mock_jamb_trend(branch_id):
     """School-level Mock JAMB progression for the active session (branch-scoped):
     one point per mock exam, in order. Drives the Mock JAMB trend chart and shows
