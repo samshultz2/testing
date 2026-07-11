@@ -97,14 +97,13 @@
    weight cells (a real table, not the wide bold roster boxes). */
 .tt-sheet table.grid-tt th.sn-col,
 .tt-sheet table.grid-tt td.sn-col{width:2.6em;text-align:center;font-weight:700}
-/* Size each column to its own content, so a long "Name" gets the room and a
-   short "Number" stays tight — instead of splitting the width evenly (which
-   left short columns wrapping while one column hogged the slack, especially in
-   the widened export sheet). width:max-content keeps the table exactly as wide
-   as its data; nowrap keeps every value on one line. If the whole table is
-   wider than the page the sheet scrolls (screen) / fits-to-width (PDF) rather
-   than mangling the columns. */
-.tt-sheet table.grid-tt.listtable{width:max-content;max-width:none;table-layout:auto}
+/* The table fills the full width, but each column sizes to its own content
+   (nowrap) rather than every column taking an equal share — so a long "Name"
+   gets the room and short columns like "Number" stay tight, and nothing wraps
+   onto a second line. The spare width goes to the widest (description-style)
+   column. If the data is wider than the page the sheet scrolls (screen) /
+   fits-to-width (PDF) instead of mangling the columns. */
+.tt-sheet table.grid-tt.listtable{width:100%;table-layout:auto}
 .tt-sheet table.grid-tt.listtable td.roster-cell{min-width:0;text-align:left;font-weight:400}
 .tt-sheet table.grid-tt.listtable th,
 .tt-sheet table.grid-tt.listtable td{white-space:nowrap}
