@@ -547,6 +547,115 @@ def analytics_export():
     return xlsx_response(wb, f'exam_analytics_{year}.xlsx')
 
 
+def _cutoff_from_jamb(jamb_stats):
+    """University-readiness cut-off summary from JAMB school stats (mirrors the
+    hub's inline computation), or None."""
+    if not jamb_stats:
+        return None
+    total = jamb_stats['total_students']
+    pct = lambda n: round(n / total * 100, 1) if total else 0
+    return {'eligible_200': jamb_stats['above_200'], 'eligible_200_pct': pct(jamb_stats['above_200']),
+            'competitive_250': jamb_stats['above_250'], 'competitive_250_pct': pct(jamb_stats['above_250']),
+            'elite_300': jamb_stats['above_300'], 'elite_300_pct': pct(jamb_stats['above_300'])}
+
+
+def _report_bundle(year, bid):
+    """Shared stats + Smart Insights for the CSV / board-pack exports. Uses the
+    cached school-stat wrappers so an export right after viewing the hub is free."""
+    waec_stats = waec_school_stats(year, bid)
+    jamb_stats = jamb_school_stats(year, bid)
+    correlation = waec_jamb_correlation(year, bid)
+    cutoff = _cutoff_from_jamb(jamb_stats)
+    from utils import exam_intelligence
+    insights = exam_intelligence.school_insights(
+        year=year, waec_stats=waec_stats, jamb_stats=jamb_stats,
+        correlation=correlation, cutoff=cutoff, at_risk=_at_risk_register(limit=25),
+        urls={'readiness': url_for('results.readiness_funnel')})
+    return waec_stats, jamb_stats, correlation, cutoff, insights
+
+
+@results_bp.route('/analytics/export.csv')
+@login_required
+def analytics_export_csv():
+    """Flat CSV of the year's key WAEC/JAMB stats + correlation (formula-guarded)."""
+    import csv
+    from io import StringIO
+    from utils.web_exports import formula_guard as fg
+
+    year = request.args.get('year', type=int)
+    if not year:
+        flash('Select a year to export.', 'error')
+        return redirect(url_for('results.analytics_hub'))
+    bid = viewing_branch_id()
+    waec_stats, jamb_stats, correlation, cutoff, insights = _report_bundle(year, bid)
+
+    out = StringIO()
+    w = csv.writer(out)
+    w.writerow(['Section', 'Metric', 'Value'])
+    if jamb_stats:
+        for label, key in [('Candidates', 'total_students'), ('Mean', 'mean_score'),
+                           ('Median', 'median_score'), ('Highest', 'max_score'),
+                           ('Lowest', 'min_score'), ('Std deviation', 'std_deviation'),
+                           ('>=200', 'above_200'), ('>=250', 'above_250'), ('>=300', 'above_300')]:
+            w.writerow(['JAMB', label, jamb_stats[key]])
+    if cutoff:
+        for label, key in [('Admissible (>=200) %', 'eligible_200_pct'),
+                           ('Competitive (>=250) %', 'competitive_250_pct'),
+                           ('Elite (>=300) %', 'elite_300_pct')]:
+            w.writerow(['University readiness', label, cutoff[key]])
+    if waec_stats:
+        for label, key in [('Students', 'unique_students'), ('Subject entries', 'total_results'),
+                           ('Pass rate %', 'overall_pass_rate'), ('Distinction rate %', 'overall_distinction_rate')]:
+            w.writerow(['WAEC', label, waec_stats[key]])
+    if correlation and not correlation.get('error'):
+        for label, key in [('Pearson r', 'correlation_coefficient'),
+                           ('Predictive power', 'predictive_power'), ('Paired students', 'sample_size')]:
+            w.writerow(['WAEC<->JAMB', label, correlation[key]])
+    if jamb_stats and jamb_stats.get('subject_analysis'):
+        for s in jamb_stats['subject_analysis']:
+            w.writerow(['JAMB subject', fg(s['subject']), s['mean_score']])
+    if waec_stats and waec_stats.get('subject_analysis'):
+        for s in sorted(waec_stats['subject_analysis'], key=lambda x: x['pass_rate'], reverse=True):
+            w.writerow(['WAEC subject pass %', fg(s['subject']), s['pass_rate']])
+    for i in insights:
+        w.writerow(['Insight (%s)' % i['level'], fg(i['title']), fg(i['detail'])])
+
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename=exam_analytics_{year}.csv'})
+
+
+@results_bp.route('/analytics/board-pack')
+@login_required
+def analytics_board_pack():
+    """One-page executive board-pack PDF: KPIs + Smart Insights + key stats."""
+    from utils.web_exports import pdf_response
+    from utils.exam_board_pack import board_pack_pdf
+    from utils.school import school_profile
+
+    year = request.args.get('year', type=int)
+    if not year:
+        flash('Select a year to export.', 'error')
+        return redirect(url_for('results.analytics_hub'))
+    bid = viewing_branch_id()
+    waec_stats, jamb_stats, correlation, cutoff, insights = _report_bundle(year, bid)
+    if not (waec_stats or jamb_stats):
+        flash(f'No exam data for {year}.', 'error')
+        return redirect(url_for('results.analytics_hub', year=year))
+
+    branch_label = None
+    if bid is not None:
+        from models import Branch
+        b = db.session.get(Branch, bid)
+        branch_label = b.name if b else None
+
+    pdf = board_pack_pdf(
+        year=year, school_name=school_profile()['name'], generated=_date.today().isoformat(),
+        insights=insights, jamb_stats=jamb_stats, waec_stats=waec_stats,
+        cutoff=cutoff, correlation=correlation, branch_label=branch_label)
+    log_action('analytics.board_pack', detail=f'year={year}, branch={bid or "all"}')
+    return pdf_response(pdf, f'exam_board_pack_{year}.pdf', inline=True)
+
+
 @results_bp.route('/subject-enrolment/<exam>/<path:subject>')
 @login_required
 def subject_enrolment_detail(exam, subject):

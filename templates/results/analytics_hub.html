@@ -75,7 +75,9 @@ a.exec:hover .go{opacity:1}
             <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Recompute</button>
         </form>
         {% if selected_year %}
+        <a href="{{ url_for('results.analytics_board_pack', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" title="Executive board pack (PDF)"><i class="fas fa-file-invoice"></i> Board pack</a>
         <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>
+        <a href="{{ url_for('results.analytics_export_csv', year=selected_year) }}" class="btn btn-secondary btn-sm" title="CSV"><i class="fas fa-file-csv"></i></a>
         <button type="button" data-call="exportAnalyticsImage" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>
         <button type="button" data-print class="btn btn-secondary btn-sm" title="Print / Save as PDF"><i class="fas fa-file-pdf"></i></button>
         {% endif %}

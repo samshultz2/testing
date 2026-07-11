@@ -133,3 +133,48 @@ def test_analytics_hub_renders_smart_insights(app):
     assert 'exam_hub_year' in html
     # the university-ready card deep-links to the readiness funnel
     assert '/results/admission-readiness' in html
+    # export buttons for the executive reports
+    assert '/results/analytics/board-pack' in html
+    assert '/results/analytics/export.csv' in html
+
+
+def _seed_year(app, yr, score=250, grade='F9'):
+    with app.app_context():
+        s = Student(student_id='EI' + uuid.uuid4().hex[:7].upper(), first_name='Rep',
+                    surname='Ort', gender='Male')
+        db.session.add(s); db.session.commit()
+        db.session.add(JAMBResult(student_id=s.id, exam_year=yr, total_score=score,
+                                  subject1='English', subject1_score=70,
+                                  subject2='Mathematics', subject2_score=60))
+        db.session.add(WAECResult(student_id=s.id, exam_year=yr, subject='Mathematics', grade=grade))
+        db.session.commit()
+        return s.id
+
+
+def test_analytics_csv_export(app):
+    yr = 2093
+    _seed_year(app, yr)
+    c = _admin(app)
+    resp = c.get(f'/results/analytics/export.csv?year={yr}')
+    assert resp.status_code == 200
+    assert resp.mimetype == 'text/csv'
+    assert f'exam_analytics_{yr}.csv' in resp.headers['Content-Disposition']
+    body = resp.get_data(as_text=True)
+    assert 'JAMB' in body and 'WAEC' in body
+    assert 'Insight' in body                       # smart insights are appended
+
+
+def test_board_pack_pdf(app):
+    yr = 2094
+    _seed_year(app, yr)
+    c = _admin(app)
+    resp = c.get(f'/results/analytics/board-pack?year={yr}')
+    assert resp.status_code == 200
+    assert resp.mimetype == 'application/pdf'
+    assert resp.get_data()[:4] == b'%PDF'
+
+
+def test_board_pack_without_year_redirects(app):
+    c = _admin(app)
+    resp = c.get('/results/analytics/board-pack')
+    assert resp.status_code == 302
