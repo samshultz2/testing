@@ -515,6 +515,10 @@ def new_sale():
             # Ledger the outward movement (stock already decremented above).
             _record_movement(p, 'out', qty, 'Sale', sale_id=sale.id,
                              reference=sale.receipt_no, apply=False)
+        # Book cost of goods sold as an expense so the finance ledger reflects
+        # true gross profit (revenue − COGS), recognised at the point of sale.
+        from utils import finance_ledger as _fl
+        _fl.post_sale_cogs(sale, lines)
         db.session.commit()
         from utils.audit import log_action
         log_action('sales.sale', detail=f'{sale.total:g} ({len(lines)} item(s))',

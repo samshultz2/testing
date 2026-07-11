@@ -23,6 +23,14 @@ from sqlalchemy import event, select
 REVENUE = 'in'
 EXPENSE = 'out'
 
+# The expense category a sale's cost of goods is booked under. Recognising cost
+# at the point of sale (the matching principle) is what makes the ledger's
+# net = revenue − expense a true gross-profit figure for the shop. Inventory
+# purchases themselves are *not* expensed — they move cash into stock (an asset)
+# and only become an expense, as COGS, when the stock is sold. Booking both would
+# double-count the same inventory cost.
+COGS_CATEGORY = 'Cost of Goods Sold'
+
 
 def _today():
     return _dt.date.today()
@@ -166,6 +174,32 @@ def _sale_vals(connection, s):
                 origin_type='sale', origin_id=s.id, reference=s.receipt_no,
                 created_by=s.sold_by, description='Shop / inventory sale',
                 occurred_on=(s.created_at.date() if s.created_at else _today()))
+
+
+def cogs_amount(lines):
+    """Total cost of goods for a set of sale lines. ``lines`` is any iterable of
+    (product, quantity, …) tuples — only the first two positions are read."""
+    total = 0.0
+    for line in lines:
+        product, qty = line[0], line[1]
+        total += (getattr(product, 'cost_price', 0) or 0) * (qty or 0)
+    return round(total, 2)
+
+
+def post_sale_cogs(sale, lines):
+    """Book a sale's cost of goods sold as an EXPENSE (ORM), idempotent per sale.
+    Called from the sales route right after the sale + its items are flushed, so
+    the whole sale (revenue, stock, COGS) commits atomically. No-op when the cost
+    is zero (e.g. products without a recorded cost)."""
+    cogs = cogs_amount(lines)
+    if cogs <= 0:
+        return None
+    return post(EXPENSE, cogs, source_module='cogs', category=COGS_CATEGORY,
+                method=sale.payment_method, branch_id=sale.branch_id,
+                student_id=sale.student_id, origin_type='sale_cogs', origin_id=sale.id,
+                reference=sale.receipt_no, description='Cost of goods sold',
+                created_by=sale.sold_by,
+                occurred_on=(sale.created_at.date() if sale.created_at else _today()))
 
 
 def _reverse_by_origin(connection, origin_type, origin_id):
@@ -345,6 +379,7 @@ def register_ledger_hooks():
         @event.listens_for(Sale, 'after_delete')
         def _sale_out(mapper, connection, target):
             _reverse_by_origin(connection, 'sale', target.id)
+            _reverse_by_origin(connection, 'sale_cogs', target.id)
 
     _HOOKS_REGISTERED = True
 
@@ -503,5 +538,15 @@ def backfill():
                     s._ledger_category = sale_category(
                         [(it.product.category if it.product else None) for it in s.items])
                 _insert_row(conn, **_sale_vals(conn, s)); added += 1
+            if ('sale_cogs', s.id) not in have:
+                cost = cogs_amount([(it.product, it.quantity) for it in s.items if it.product])
+                if cost > 0:
+                    _insert_row(conn, direction=EXPENSE, source_module='cogs',
+                                category=COGS_CATEGORY, amount=cost, method=s.payment_method,
+                                branch_id=s.branch_id, student_id=s.student_id,
+                                origin_type='sale_cogs', origin_id=s.id,
+                                reference=s.receipt_no, description='Cost of goods sold',
+                                occurred_on=(s.created_at.date() if s.created_at else _today()))
+                    added += 1
     db.session.commit()
     return added
