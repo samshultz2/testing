@@ -8,11 +8,13 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify)
 from sqlalchemy import func
 
-from models import db, Product, Sale, SaleItem, Student
+from models import (db, Product, Sale, SaleItem, Student, StudentEnrollment,
+                    ClassArmAssignment, SchoolClass, ClassArm)
 from models.models_sales import PRODUCT_CATEGORIES, SALE_METHODS
-from utils.access_control import login_required
+from utils.access_control import login_required, filter_classes_for_user
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
+from utils.helpers import get_active_term
 from utils.search import like_term
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
@@ -211,16 +213,79 @@ def new_sale():
     products = scope_query(
         Product.query.filter_by(is_active=True), Product
     ).filter(Product.stock_qty > 0).order_by(Product.category, Product.name).all()
-    students = scope_query(Student.query.filter_by(is_active=True), Student) \
-        .order_by(Student.surname, Student.first_name).all()
+    classes, arms = _sale_class_arm_options()
     return _render({
         'page': 'new_sale', 'methods': SALE_METHODS,
         'submit_url': url_for('sales.new_sale'),
         'products': [{'id': p.id, 'name': p.name, 'category': p.category,
                       'unit_price': p.unit_price or 0, 'stock_qty': p.stock_qty} for p in products],
-        'students': [{'id': s.id, 'label': f'{s.full_name} ({s.student_id})'} for s in students],
+        # Large schools can't scroll one flat dropdown of every student — the
+        # buyer is chosen by class (+ optional arm) then searched on demand.
+        'classes': classes, 'arms': arms,
+        'student_search_url': url_for('sales.api_students'),
         'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
     })
+
+
+def _active_term_assignments():
+    """ClassArmAssignments in the active term the current user may access."""
+    active_term = get_active_term()
+    if not active_term:
+        return []
+    return filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=active_term.id)
+        .join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id).all())
+
+
+def _sale_class_arm_options():
+    """Distinct class + arm options for the sale buyer picker, scoped to what the
+    user may see in the active term. Empty when no term is active."""
+    assignments = _active_term_assignments()
+    seen_c, seen_a, classes, arms = set(), set(), [], []
+    for a in sorted(assignments, key=lambda x: ((x.school_class.level if x.school_class else 0),
+                                                (x.school_class.name if x.school_class else ''))):
+        if a.class_id not in seen_c and a.school_class:
+            seen_c.add(a.class_id)
+            classes.append({'id': a.class_id, 'name': a.school_class.name})
+        arm = a.arm
+        if arm and not arm.is_default and arm.id not in seen_a:
+            seen_a.add(arm.id)
+            arms.append({'id': arm.id, 'name': arm.name})
+    arms.sort(key=lambda x: x['name'])
+    return classes, arms
+
+
+@sales_bp.route('/api/students')
+@login_required
+def api_students():
+    """Students in a chosen class (+ optional arm) for the active term, matching
+    an optional search — the buyer picker's on-demand lookup, so the sale form
+    never ships every student. Branch/term/teacher scoped; capped."""
+    class_id = request.args.get('class_id', type=int)
+    arm_id = request.args.get('arm_id', type=int)
+    q = (request.args.get('q') or '').strip()
+    if not class_id:
+        return jsonify({'students': []})
+    assignments = [a for a in _active_term_assignments() if a.class_id == class_id
+                   and (not arm_id or a.arm_id == arm_id)]
+    aids = [a.id for a in assignments]
+    if not aids:
+        return jsonify({'students': []})
+    query = (Student.query.filter_by(is_active=True)
+             .join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
+             .filter(StudentEnrollment.class_arm_assignment_id.in_(aids),
+                     StudentEnrollment.is_active == True))
+    if q:
+        term = like_term(q)
+        query = query.filter(db.or_(
+            Student.first_name.ilike(term, escape='\\'),
+            Student.surname.ilike(term, escape='\\'),
+            Student.middle_name.ilike(term, escape='\\'),
+            Student.student_id.ilike(term, escape='\\')))
+    rows = query.order_by(Student.surname, Student.first_name).limit(60).all()
+    return jsonify({'students': [
+        {'id': s.id, 'label': f'{s.full_name} ({s.student_id})',
+         'student_id': s.student_id} for s in rows]})
 
 
 @sales_bp.route('/history')

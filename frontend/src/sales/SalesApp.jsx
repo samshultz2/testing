@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { submitJson } from '../lib/forms';
+import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, PageHeader, Empty, SectionShell, Table } from '../components/ui';
@@ -158,6 +159,102 @@ function ProductRow({ p, onRestock, busy }) {
   );
 }
 
+// ---- Buyer picker ----------------------------------------------------------
+// Records who's buying without a giant student dropdown: pick a class (+ optional
+// arm), then search within it. Non-students fall back to a free-text name.
+function BuyerPicker({ d, pay, setP }) {
+  const [mode, setMode] = useState('student');   // 'student' | 'other'
+  const [classId, setClassId] = useState('');
+  const [armId, setArmId] = useState('');
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [chosen, setChosen] = useState(null);
+
+  // Debounced lookup whenever the class / arm / query changes.
+  useEffect(() => {
+    if (mode !== 'student' || !classId) { setRows([]); return undefined; }
+    let live = true;
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const p = new URLSearchParams({ class_id: classId });
+        if (armId) p.set('arm_id', armId);
+        if (q.trim()) p.set('q', q.trim());
+        const res = await apiGet(`${d.student_search_url}?${p.toString()}`);
+        if (live) setRows(res.students || []);
+      } catch (_) { if (live) setRows([]); }
+      finally { if (live) setLoading(false); }
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [mode, classId, armId, q, d.student_search_url]);
+
+  const pick = (s) => { setChosen(s); setP('student_id', s.id); setP('customer_name', ''); };
+  const clearPick = () => { setChosen(null); setP('student_id', ''); };
+  const chooseMode = (m) => {
+    setMode(m);
+    if (m === 'other') { clearPick(); } else { setP('customer_name', ''); }
+  };
+
+  return (
+    <div className="form-group">
+      <label className="form-label">Buyer</label>
+      <div className="btn-group" role="tablist" style={{ display: 'flex', gap: '.4rem', marginBottom: '.6rem' }}>
+        <button type="button" role="tab" aria-selected={mode === 'student'}
+                className={'btn btn-sm ' + (mode === 'student' ? 'btn-primary' : 'btn-secondary')}
+                onClick={() => chooseMode('student')}><i aria-hidden="true" className="fas fa-user-graduate" /> Student</button>
+        <button type="button" role="tab" aria-selected={mode === 'other'}
+                className={'btn btn-sm ' + (mode === 'other' ? 'btn-primary' : 'btn-secondary')}
+                onClick={() => chooseMode('other')}><i aria-hidden="true" className="fas fa-user" /> Staff / Parent / Walk-in</button>
+      </div>
+
+      {mode === 'other' && (
+        <input type="text" className="form-control" placeholder="Customer name (optional)"
+               value={pay.customer_name} onChange={(e) => setP('customer_name', e.target.value)} />
+      )}
+
+      {mode === 'student' && (chosen ? (
+        <div className="d-flex" style={{ alignItems: 'center', justifyContent: 'space-between', gap: '.5rem',
+             border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '.55rem .75rem' }}>
+          <span><i aria-hidden="true" className="fas fa-user-check" style={{ color: 'var(--success)' }} /> <strong>{chosen.label}</strong></span>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={clearPick}>Change</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.5rem', marginBottom: '.5rem' }}>
+            <select className="form-control" value={classId} aria-label="Class"
+                    onChange={(e) => { setClassId(e.target.value); }}>
+              <option value="">Select class…</option>
+              {(d.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select className="form-control" value={armId} aria-label="Arm (optional)"
+                    onChange={(e) => setArmId(e.target.value)} disabled={!classId}>
+              <option value="">All arms</option>
+              {(d.arms || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          {classId ? (
+            <>
+              <input type="search" className="form-control" placeholder="Search name or ID…"
+                     value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: '.5rem' }} />
+              <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+                {loading && <div className="text-muted text-sm" style={{ padding: '.6rem .75rem' }}>Searching…</div>}
+                {!loading && !rows.length && <div className="text-muted text-sm" style={{ padding: '.6rem .75rem' }}>No students match.</div>}
+                {!loading && rows.map((s) => (
+                  <button type="button" key={s.id} onClick={() => pick(s)}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none',
+                                   border: 'none', borderBottom: '1px solid var(--border-color)', padding: '.5rem .75rem',
+                                   cursor: 'pointer', color: 'inherit' }}>{s.label}</button>
+                ))}
+              </div>
+            </>
+          ) : <p className="text-muted text-sm" style={{ margin: 0 }}>Choose a class to find the student.</p>}
+        </>
+      ))}
+    </div>
+  );
+}
+
 // ---- New sale --------------------------------------------------------------
 function NewSale({ d, notify }) {
   const nav = useNav();
@@ -206,13 +303,7 @@ function NewSale({ d, notify }) {
           <div className="card-header"><h3>Payment</h3> <strong>{naira(total)}</strong></div>
           <div className="card-body">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-              <div className="form-group"><label className="form-label">Student (optional)</label>
-                <select className="form-control" value={pay.student_id} onChange={(e) => setP('student_id', e.target.value)}>
-                  <option value="">— Walk-in / staff —</option>
-                  {d.students.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select></div>
-              <div className="form-group"><label className="form-label">Customer name (if not a student)</label>
-                <input type="text" className="form-control" value={pay.customer_name} onChange={(e) => setP('customer_name', e.target.value)} /></div>
+              <BuyerPicker d={d} pay={pay} setP={setP} />
               <div className="form-group"><label className="form-label">Method</label>
                 <select className="form-control" value={pay.payment_method} onChange={(e) => setP('payment_method', e.target.value)}>
                   {d.methods.map((m) => <option key={m}>{m}</option>)}</select></div>
