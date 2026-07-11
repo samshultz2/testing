@@ -31,6 +31,7 @@ function Dashboard({ d }) {
         {u.purchases && <a href={u.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-invoice" /> Purchases</a>}
         {u.suppliers && <a href={u.suppliers} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-truck-field" /> Suppliers</a>}
         {u.analytics && <a href={u.analytics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
+        {u.reports && <a href={u.reports} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-lines" /> Reports</a>}
       </>} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -1035,9 +1036,73 @@ function PurchaseDetail({ d, notify }) {
   );
 }
 
+// ---- Reports ---------------------------------------------------------------
+function Reports({ d }) {
+  const nav = useNav();
+  const r = d.report || { columns: [], rows: [] };
+  const [from, setFrom] = useState(d.from || '');
+  const [to, setTo] = useState(d.to || '');
+  const [category, setCategory] = useState(d.category || '');
+  const go = (extra) => navParams(nav.go, d.self_url, { kind: d.kind, from, to, category, ...extra });
+  const pick = (kind) => navParams(nav.go, d.self_url, { kind, from, to, category });
+  const cell = (row, col) => {
+    const v = row[col.key];
+    return col.money ? naira(v || 0) : (v === '' || v == null ? '—' : v);
+  };
+  const exportUrl = (fmt) => {
+    const p = new URLSearchParams({ kind: d.kind, format: fmt });
+    if (from) p.set('from', from); if (to) p.set('to', to); if (category) p.set('category', category);
+    return `${d.export_url}?${p.toString()}`;
+  };
+  return (
+    <>
+      <PageHeader icon="fa-file-lines" title="Reports" actions={<>
+        <a className="btn btn-secondary btn-sm" href={exportUrl('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
+        <a className="btn btn-secondary btn-sm" href={exportUrl('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()}><i aria-hidden="true" className="fas fa-print" /> Print</button>
+        <a href={d.urls.dashboard} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
+      </>} />
+
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+        {(d.report_kinds || []).map((k) => (
+          <button type="button" key={k.key} className={'btn btn-sm ' + (k.key === d.kind ? 'btn-primary' : 'btn-light')} onClick={() => pick(k.key)}>{k.label}</button>
+        ))}
+      </div></div>
+
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        {d.is_period && <>
+          <label className="form-group" style={{ margin: 0 }}><span className="form-label">From</span><input type="date" className="form-control" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label className="form-group" style={{ margin: 0 }}><span className="form-label">To</span><input type="date" className="form-control" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+        </>}
+        <label className="form-group" style={{ margin: 0 }}><span className="form-label">Category</span>
+          <select className="form-control" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">All</option>{(d.categories || []).map((c) => <option key={c}>{c}</option>)}</select></label>
+        <button type="button" className="btn btn-primary" onClick={() => go()}><i aria-hidden="true" className="fas fa-filter" /> Apply</button>
+      </div></div>
+
+      <div className="card"><div className="card-header"><h3>{r.title} ({r.rows.length})</h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          {r.rows.length ? (
+            <table className="data-table">
+              <thead><tr>{r.columns.map((c) => <th key={c.key} className={c.align === 'right' ? 'text-right' : undefined}>{c.label}</th>)}</tr></thead>
+              <tbody>{r.rows.map((row, i) => (
+                <tr key={i}>{r.columns.map((c) => <td key={c.key} className={c.align === 'right' ? 'text-right' : undefined}>{cell(row, c)}</td>)}</tr>
+              ))}</tbody>
+              {r.totals && <tfoot><tr>{r.columns.map((c, i) => (
+                <td key={c.key} className={c.align === 'right' ? 'text-right' : undefined}>
+                  {i === 0 ? <strong>Total</strong> : (r.totals[c.key] != null ? <strong>{c.money ? naira(r.totals[c.key]) : r.totals[c.key]}</strong> : '')}
+                </td>
+              ))}</tr></tfoot>}
+            </table>
+          ) : <EmptyState icon="fa-file-lines" title="Nothing to report for this selection" />}
+        </div></div>
+    </>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History,
   analytics: Analytics, movements: Movements, suppliers: Suppliers, supplier_detail: SupplierDetail,
-  purchases: Purchases, purchase_detail: PurchaseDetail };
+  purchases: Purchases, purchase_detail: PurchaseDetail, reports: Reports };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

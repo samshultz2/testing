@@ -145,7 +145,7 @@ def dashboard():
         'urls': {'new_sale': url_for('sales.new_sale'), 'products': url_for('sales.products'),
                  'history': url_for('sales.history'), 'analytics': url_for('sales.analytics'),
                  'movements': url_for('sales.movements'), 'suppliers': url_for('sales.suppliers'),
-                 'purchases': url_for('sales.purchases')},
+                 'purchases': url_for('sales.purchases'), 'reports': url_for('sales.reports')},
     })
 
 
@@ -1141,6 +1141,247 @@ def receive_purchase(po_id):
     po.status = 'Received' if fully else 'Partially Received'
     db.session.commit()
     return _ok(f'Goods received for {po.po_number}.', url_for('sales.purchase_detail', po_id=po.id))
+
+
+# ---------------------------------------------------------------------------
+# Reports
+# ---------------------------------------------------------------------------
+
+REPORT_KINDS = [
+    ('inventory_valuation', 'Inventory Valuation'),
+    ('low_stock', 'Low / Out of Stock'),
+    ('dead_stock', 'Dead Stock'),
+    ('fast_moving', 'Fast-Moving Items'),
+    ('product_sales', 'Product Sales'),
+    ('profit', 'Profit by Category'),
+    ('purchases', 'Purchase Orders'),
+    ('suppliers', 'Suppliers'),
+    ('stock_movements', 'Stock Movements'),
+    ('damaged_returned', 'Damaged / Returned'),
+]
+_REPORT_KEYS = {k for k, _ in REPORT_KINDS}
+# Reports keyed off a date range (vs a current-snapshot report).
+_PERIOD_REPORTS = {'fast_moving', 'product_sales', 'profit', 'purchases',
+                   'stock_movements', 'damaged_returned'}
+
+
+def _col(key, label, money=False, align=None):
+    return {'key': key, 'label': label, 'money': money,
+            'align': align or ('right' if money else 'left')}
+
+
+def _period_items(from_d, to_d):
+    sales = (scope_query(Sale.query, Sale)
+             .filter(func.date(Sale.created_at) >= from_d,
+                     func.date(Sale.created_at) <= to_d).all())
+    ids = [s.id for s in sales]
+    items = []
+    if ids:
+        items = (db.session.query(SaleItem, Product)
+                 .outerjoin(Product, SaleItem.product_id == Product.id)
+                 .filter(SaleItem.sale_id.in_(ids)).all())
+    return sales, items
+
+
+def _sales_report(kind, from_d, to_d, category):
+    """Build one report as {title, columns, rows, totals}. Snapshot reports use
+    the current catalogue; period reports use the from/to window."""
+    from collections import defaultdict
+    prods = scope_query(Product.query, Product)
+    if category:
+        prods = prods.filter(Product.category == category)
+    prods = prods.all()
+    active = [p for p in prods if p.is_active]
+
+    if kind == 'inventory_valuation':
+        rows = [{'name': p.name, 'category': p.category, 'stock_qty': p.stock_qty or 0,
+                 'cost_price': p.cost_price or 0, 'stock_value': p.stock_value,
+                 'sell_value': round((p.stock_qty or 0) * (p.unit_price or 0), 2)} for p in active]
+        rows.sort(key=lambda r: r['stock_value'], reverse=True)
+        return {'title': 'Inventory Valuation',
+                'columns': [_col('name', 'Product'), _col('category', 'Category'),
+                            _col('stock_qty', 'Qty', align='right'), _col('cost_price', 'Cost', money=True),
+                            _col('stock_value', 'Stock value', money=True), _col('sell_value', 'Sell value', money=True)],
+                'rows': rows,
+                'totals': {'stock_value': round(sum(r['stock_value'] for r in rows), 2),
+                           'sell_value': round(sum(r['sell_value'] for r in rows), 2)}}
+
+    if kind == 'low_stock':
+        rows = [{'name': p.name, 'category': p.category, 'stock_qty': p.stock_qty or 0,
+                 'reorder_level': p.reorder_level or 0,
+                 'status': 'Out' if p.out_of_stock else 'Low'} for p in active if p.low_stock]
+        rows.sort(key=lambda r: r['stock_qty'])
+        return {'title': 'Low / Out of Stock',
+                'columns': [_col('name', 'Product'), _col('category', 'Category'),
+                            _col('stock_qty', 'In stock', align='right'),
+                            _col('reorder_level', 'Reorder at', align='right'), _col('status', 'Status')],
+                'rows': rows, 'totals': None}
+
+    if kind == 'dead_stock':
+        _sales, items = _period_items(from_d, to_d)
+        sold_ids = {it.product_id for it, _ in items if it.product_id}
+        rows = [{'name': p.name, 'category': p.category, 'stock_qty': p.stock_qty or 0,
+                 'stock_value': p.stock_value} for p in active
+                if (p.stock_qty or 0) > 0 and p.id not in sold_ids]
+        rows.sort(key=lambda r: r['stock_value'], reverse=True)
+        return {'title': 'Dead Stock (no sales in range)',
+                'columns': [_col('name', 'Product'), _col('category', 'Category'),
+                            _col('stock_qty', 'Qty', align='right'), _col('stock_value', 'Tied-up value', money=True)],
+                'rows': rows, 'totals': {'stock_value': round(sum(r['stock_value'] for r in rows), 2)}}
+
+    if kind in ('fast_moving', 'product_sales'):
+        _sales, items = _period_items(from_d, to_d)
+        agg = defaultdict(lambda: {'units': 0, 'revenue': 0.0, 'name': '', 'category': ''})
+        for it, p in items:
+            if category and (not p or p.category != category):
+                continue
+            key = it.product_id or f'd:{it.description}'
+            agg[key]['units'] += it.quantity or 0
+            agg[key]['revenue'] += it.line_total or 0
+            agg[key]['name'] = (p.name if p else None) or it.description or 'Unknown'
+            agg[key]['category'] = (p.category if p else None) or '—'
+        rows = [{'name': v['name'], 'category': v['category'], 'units': v['units'],
+                 'revenue': round(v['revenue'], 2)} for v in agg.values()]
+        rows.sort(key=lambda r: r['units'] if kind == 'fast_moving' else r['revenue'], reverse=True)
+        if kind == 'fast_moving':
+            rows = rows[:50]
+        return {'title': 'Fast-Moving Items' if kind == 'fast_moving' else 'Product Sales',
+                'columns': [_col('name', 'Product'), _col('category', 'Category'),
+                            _col('units', 'Units', align='right'), _col('revenue', 'Revenue', money=True)],
+                'rows': rows, 'totals': {'units': sum(r['units'] for r in rows),
+                                         'revenue': round(sum(r['revenue'] for r in rows), 2)}}
+
+    if kind == 'profit':
+        _sales, items = _period_items(from_d, to_d)
+        agg = defaultdict(lambda: {'revenue': 0.0, 'cogs': 0.0})
+        for it, p in items:
+            cat = (p.category if p else None) or 'Other'
+            if category and cat != category:
+                continue
+            agg[cat]['revenue'] += it.line_total or 0
+            agg[cat]['cogs'] += (it.quantity or 0) * ((p.cost_price or 0) if p else 0)
+        rows = [{'category': c, 'revenue': round(v['revenue'], 2), 'cogs': round(v['cogs'], 2),
+                 'profit': round(v['revenue'] - v['cogs'], 2)} for c, v in agg.items()]
+        rows.sort(key=lambda r: r['profit'], reverse=True)
+        return {'title': 'Profit by Category',
+                'columns': [_col('category', 'Category'), _col('revenue', 'Revenue', money=True),
+                            _col('cogs', 'Cost of goods', money=True), _col('profit', 'Profit', money=True)],
+                'rows': rows, 'totals': {'revenue': round(sum(r['revenue'] for r in rows), 2),
+                                         'cogs': round(sum(r['cogs'] for r in rows), 2),
+                                         'profit': round(sum(r['profit'] for r in rows), 2)}}
+
+    if kind == 'purchases':
+        pos = (scope_query(PurchaseOrder.query, PurchaseOrder)
+               .filter(func.date(PurchaseOrder.created_at) >= from_d,
+                       func.date(PurchaseOrder.created_at) <= to_d)
+               .order_by(PurchaseOrder.created_at.desc()).all())
+        rows = [{'po_number': po.po_number, 'supplier': po.supplier.company_name if po.supplier else '—',
+                 'status': po.status, 'total': po.total or 0, 'received_value': po.received_value,
+                 'created_at': po.created_at.strftime('%d %b %Y') if po.created_at else ''} for po in pos]
+        return {'title': 'Purchase Orders',
+                'columns': [_col('po_number', 'PO'), _col('supplier', 'Supplier'), _col('status', 'Status'),
+                            _col('total', 'Ordered', money=True), _col('received_value', 'Received', money=True),
+                            _col('created_at', 'Date')],
+                'rows': rows, 'totals': {'total': round(sum(r['total'] for r in rows), 2),
+                                         'received_value': round(sum(r['received_value'] for r in rows), 2)}}
+
+    if kind == 'suppliers':
+        sups = scope_query(Supplier.query.filter_by(is_active=True), Supplier).order_by(Supplier.company_name).all()
+        rows = []
+        for s in sups:
+            st = _supplier_stats(s.id)
+            rows.append({'company_name': s.company_name, 'orders': st['orders'],
+                         'received_value': st['received_value'], 'paid': st['paid'],
+                         'outstanding': st['outstanding']})
+        return {'title': 'Suppliers',
+                'columns': [_col('company_name', 'Supplier'), _col('orders', 'Orders', align='right'),
+                            _col('received_value', 'Received', money=True), _col('paid', 'Paid', money=True),
+                            _col('outstanding', 'Outstanding', money=True)],
+                'rows': rows, 'totals': {'outstanding': round(sum(r['outstanding'] for r in rows), 2),
+                                         'paid': round(sum(r['paid'] for r in rows), 2)}}
+
+    if kind in ('stock_movements', 'damaged_returned'):
+        q = (scope_query(StockMovement.query, StockMovement)
+             .filter(func.date(StockMovement.created_at) >= from_d,
+                     func.date(StockMovement.created_at) <= to_d))
+        if kind == 'damaged_returned':
+            q = q.filter(StockMovement.reason.in_(['Damage', 'Theft', 'Loss', 'Expired',
+                                                   'Customer Return', 'Supplier Return']))
+        moves = q.order_by(StockMovement.created_at.desc()).limit(2000).all()
+        name_by = {p.id: p.name for p in prods}
+        rows = [{'when': m.created_at.strftime('%d %b %Y') if m.created_at else '',
+                 'product': name_by.get(m.product_id, '—'), 'direction': m.direction,
+                 'reason': m.reason, 'quantity': m.quantity, 'reference': m.reference or '',
+                 'by': m.performed_by or ''} for m in moves]
+        return {'title': 'Damaged / Returned' if kind == 'damaged_returned' else 'Stock Movements',
+                'columns': [_col('when', 'Date'), _col('product', 'Product'), _col('direction', 'Dir'),
+                            _col('reason', 'Reason'), _col('quantity', 'Qty', align='right'),
+                            _col('reference', 'Ref'), _col('by', 'By')],
+                'rows': rows, 'totals': None}
+
+    return {'title': 'Report', 'columns': [], 'rows': [], 'totals': None}
+
+
+def _report_range():
+    from datetime import timedelta
+    to_d = parse_date(request.args.get('to')) or timeutil.today()
+    from_d = parse_date(request.args.get('from')) or (to_d - timedelta(days=29))
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    return from_d, to_d, (request.args.get('category') or '').strip()
+
+
+@sales_bp.route('/reports')
+@login_required
+def reports():
+    kind = request.args.get('kind') or 'inventory_valuation'
+    if kind not in _REPORT_KEYS:
+        kind = 'inventory_valuation'
+    from_d, to_d, category = _report_range()
+    report = _sales_report(kind, from_d, to_d, category)
+    return _render({
+        'page': 'reports', 'kind': kind,
+        'report_kinds': [{'key': k, 'label': lbl, 'period': k in _PERIOD_REPORTS} for k, lbl in REPORT_KINDS],
+        'is_period': kind in _PERIOD_REPORTS,
+        'from': from_d.isoformat(), 'to': to_d.isoformat(), 'category': category,
+        'categories': PRODUCT_CATEGORIES, 'report': report,
+        'self_url': url_for('sales.reports'), 'export_url': url_for('sales.reports_export'),
+        'urls': {'dashboard': url_for('sales.dashboard')},
+    })
+
+
+@sales_bp.route('/reports/export')
+@login_required
+def reports_export():
+    kind = request.args.get('kind') or 'inventory_valuation'
+    if kind not in _REPORT_KEYS:
+        kind = 'inventory_valuation'
+    fmt = (request.args.get('format') or 'csv').lower()
+    from_d, to_d, category = _report_range()
+    report = _sales_report(kind, from_d, to_d, category)
+    cols = report['columns']
+    headers = [c['label'] for c in cols]
+
+    def _rec(r):
+        return [r.get(c['key'], '') for c in cols]
+
+    fname = f'sales_report_{kind}'
+    if fmt in ('excel', 'xlsx'):
+        from openpyxl import Workbook
+        wb = Workbook(); ws = wb.active; ws.title = 'Report'
+        ws.append(headers)
+        for r in report['rows']:
+            ws.append(_rec(r))
+        return xlsx_response(wb, f'{fname}.xlsx')
+    import csv
+    import io
+    from flask import Response
+    out = io.StringIO(); w = csv.writer(out)
+    w.writerow(headers)
+    for r in report['rows']:
+        w.writerow(_rec(r))
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
 
 
 @sales_bp.route('/receipt/<int:sale_id>')
