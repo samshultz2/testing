@@ -81,6 +81,10 @@
 .tt-sheet .g-tag{display:block;font-size:.72em;font-weight:800;text-transform:uppercase;opacity:.75;letter-spacing:.4px}
 /* bigger again when rendering the downloadable image/PDF */
 .tt-sheet.exporting{font-size:22px}
+/* The custom list/table has only a few wide columns, so it can (and should)
+   print at a larger, more readable size than a dense day×period timetable
+   (which would overflow the page if enlarged). */
+.tt-sheet.exporting table.grid-tt.listtable{font-size:30px}
 
 /* Clear visual demarcation between days (prints & exports too). currentColor
    adapts to each theme (dark line on light sheets, light line on dark ones). */
