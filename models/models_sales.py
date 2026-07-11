@@ -298,6 +298,79 @@ class SupplierPayment(db.Model):
         return f'<SupplierPayment {self.supplier_id} {self.amount}>'
 
 
+STOCK_AUDIT_STATUSES = ['Counting', 'Completed', 'Cancelled']
+
+
+class StockAudit(db.Model):
+    """A physical stock-count session: snapshot the system quantities for a set
+    of products, enter the counted quantities, review the variances, then sign
+    off — applying the corrections to stock (ledgered) and posting the net
+    shrinkage/gain to the finance ledger. One row per count exercise."""
+    __tablename__ = 'stock_audits'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    reference = db.Column(db.String(20))
+    scope_category = db.Column(db.String(40))       # count filtered to a category (optional)
+    scope_location = db.Column(db.String(80))       # …or a storage location (optional)
+    status = db.Column(db.String(15), default='Counting')
+    note = db.Column(db.String(200))
+    started_by = db.Column(db.String(100))
+    approved_by = db.Column(db.String(100))
+    variance_value = db.Column(db.Float, default=0)   # signed net cost value applied
+    ledger_posted = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=local_now)
+    completed_at = db.Column(db.DateTime)
+
+    branch = db.relationship('Branch')
+    items = db.relationship('StockAuditItem', backref='audit', lazy='dynamic',
+                            cascade='all, delete-orphan')
+
+    @property
+    def counted_list(self):
+        return [i for i in self.items if i.counted_qty is not None]
+
+    @property
+    def is_open(self):
+        return self.status == 'Counting'
+
+    def __repr__(self):
+        return f'<StockAudit {self.reference} {self.status}>'
+
+
+class StockAuditItem(db.Model):
+    __tablename__ = 'stock_audit_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey('stock_audits.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('sales_products.id'))
+    product_name = db.Column(db.String(150))          # snapshot of the name
+    system_qty = db.Column(db.Integer, default=0)     # on-hand when the sheet was built
+    counted_qty = db.Column(db.Integer)               # None until physically counted
+    unit_cost = db.Column(db.Float, default=0)        # snapshot, for variance valuation
+    note = db.Column(db.String(200))
+
+    product = db.relationship('Product')
+
+    @property
+    def counted(self):
+        return self.counted_qty is not None
+
+    @property
+    def variance_qty(self):
+        if self.counted_qty is None:
+            return None
+        return self.counted_qty - (self.system_qty or 0)
+
+    @property
+    def variance_value(self):
+        v = self.variance_qty
+        return round((v or 0) * (self.unit_cost or 0), 2) if v is not None else 0.0
+
+    def __repr__(self):
+        return f'<StockAuditItem {self.product_name} {self.counted_qty}/{self.system_qty}>'
+
+
 class PromoCode(db.Model):
     """A discount voucher applied at checkout — percentage or fixed amount, with
     optional minimum spend, expiry, usage cap and a category restriction."""

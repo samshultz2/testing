@@ -33,6 +33,7 @@ function Dashboard({ d }) {
         {u.analytics && <a href={u.analytics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
         {u.reports && <a href={u.reports} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-lines" /> Reports</a>}
         {u.promos && <a href={u.promos} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-tags" /> Promos</a>}
+        {u.audits && <a href={u.audits} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-clipboard-check" /> Stock Count</a>}
       </>} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -1264,9 +1265,137 @@ function Promos({ d, notify }) {
   );
 }
 
+// ---- Stock audits (physical count) -----------------------------------------
+function Audits({ d, notify }) {
+  const nav = useNav();
+  const [scope, setScope] = useState({ category: '', location: '', note: '' });
+  const set = (k, v) => setScope((s) => ({ ...s, [k]: v }));
+  const start = async () => {
+    const r = await submitJson(d.new_url, scope);
+    if (r.ok) { if (r.redirect) nav.go(r.redirect); else nav.refresh(); }
+    else notify('error', r.error || 'Could not start a count.');
+  };
+  return (
+    <>
+      <PageHeader icon="fa-clipboard-check" title="Stock Counts" actions={
+        <a href={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>} />
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> New stock count</h3></div>
+        <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '.6rem', alignItems: 'flex-end' }}>
+          <Field label="Category (optional)"><select className="form-control" value={scope.category} onChange={(e) => set('category', e.target.value)}><option value="">All categories</option>{(d.categories || []).map((c) => <option key={c}>{c}</option>)}</select></Field>
+          <Field label="Location (optional)"><select className="form-control" value={scope.location} onChange={(e) => set('location', e.target.value)}><option value="">All locations</option>{(d.locations || []).map((l) => <option key={l}>{l}</option>)}</select></Field>
+          <Field label="Note"><input className="form-control" value={scope.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. End-of-term count" /></Field>
+          <button type="button" className="btn btn-primary" onClick={start}><i aria-hidden="true" className="fas fa-clipboard-list" /> Start count</button>
+        </div></div>
+      <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        {d.audits.length ? (
+          <table className="data-table"><thead><tr><th>Ref</th><th>Scope</th><th>Status</th><th className="text-right">Counted</th><th className="text-right">Variance</th><th>By</th><th>Date</th></tr></thead>
+            <tbody>{d.audits.map((a) => (
+              <tr key={a.id}>
+                <td><a href={a.url}>{a.reference}</a>{a.note && <div className="text-muted text-sm">{a.note}</div>}</td>
+                <td>{a.scope}</td>
+                <td><AuditBadge s={a.status} /></td>
+                <td className="text-right">{a.counted}/{a.items}</td>
+                <td className={'text-right ' + (a.variance_value < 0 ? 'text-danger' : a.variance_value > 0 ? 'text-success' : '')}>{a.status === 'Completed' ? naira(a.variance_value) : '—'}</td>
+                <td className="text-muted text-sm">{a.approved_by || a.started_by}</td>
+                <td className="text-muted text-sm">{a.when}</td>
+              </tr>
+            ))}</tbody></table>
+        ) : <EmptyState icon="fa-clipboard-check" title="No stock counts yet">Start one above to reconcile physical stock against the system.</EmptyState>}
+      </div></div>
+    </>
+  );
+}
+
+function AuditBadge({ s }) {
+  const tone = s === 'Completed' ? 'badge-success' : s === 'Cancelled' ? 'badge-danger' : 'badge-warning';
+  return <span className={'badge ' + tone}>{s}</span>;
+}
+
+function AuditDetail({ d, notify }) {
+  const nav = useNav();
+  const open = d.status === 'Counting';
+  // Local edits to counted quantities, keyed by item id.
+  const [counts, setCounts] = useState(() => {
+    const m = {};
+    d.items.forEach((i) => { m[i.id] = i.counted_qty == null ? '' : String(i.counted_qty); });
+    return m;
+  });
+  const setCount = (id, v) => setCounts((s) => ({ ...s, [id]: v.replace(/[^0-9]/g, '') }));
+  const payload = () => d.items.map((i) => ({ item_id: i.id, counted_qty: counts[i.id] === '' ? null : Number(counts[i.id]) }));
+  // Live variance preview from the currently entered numbers.
+  const preview = d.items.reduce((acc, i) => {
+    const c = counts[i.id];
+    if (c === '' || c == null) return acc;
+    return acc + (Number(c) - i.system_qty) * (i.unit_cost || 0);
+  }, 0);
+  const countedN = d.items.filter((i) => counts[i.id] !== '' && counts[i.id] != null).length;
+  const save = async () => {
+    const r = await submitJson(d.save_url, { counts: payload() });
+    if (r.ok) notify('success', 'Counts saved.'); else notify('error', r.error || 'Save failed.');
+  };
+  const complete = async () => {
+    if (!window.confirm('Sign off this count? Stock will be corrected to the counted quantities and the net variance posted to Finance.')) return;
+    const r = await submitJson(d.complete_url, { counts: payload() });
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not complete.');
+  };
+  const cancel = async () => {
+    if (!window.confirm('Cancel this count? No stock will change.')) return;
+    const r = await submitJson(d.cancel_url, {});
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not cancel.');
+  };
+  return (
+    <>
+      <PageHeader icon="fa-clipboard-check" title={d.reference} actions={<>
+        <a className="btn btn-secondary btn-sm" href={d.export_url}><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
+        <a href={d.urls.audits} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> All counts</a>
+      </>} />
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <AuditBadge s={d.status} />
+        <span className="text-muted text-sm">Scope: <strong>{d.scope}</strong></span>
+        <span className="text-muted text-sm">Started by {d.started_by}</span>
+        {d.approved_by && <span className="text-muted text-sm">Signed off by {d.approved_by}</span>}
+        <span style={{ marginLeft: 'auto' }} className="text-sm">
+          {open ? <>Preview net variance: <strong className={preview < 0 ? 'text-danger' : preview > 0 ? 'text-success' : ''}>{naira(preview)}</strong> · {countedN}/{d.items.length} counted</>
+            : <>Net variance: <strong className={d.variance_value < 0 ? 'text-danger' : d.variance_value > 0 ? 'text-success' : ''}>{naira(d.variance_value)}</strong></>}
+        </span>
+      </div></div>
+      {open && <div className="alert alert-info"><i aria-hidden="true" className="fas fa-circle-info" /> Enter the physical count for each item, then Save (to continue later) or Sign off (to apply corrections). Blank = not counted yet.</div>}
+      <div className="card"><div className="card-header"><h3>Items ({d.items.length})</h3>
+        {open && <span style={{ display: 'flex', gap: '.4rem' }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={save}><i aria-hidden="true" className="fas fa-floppy-disk" /> Save</button>
+          <button type="button" className="btn btn-success btn-sm" onClick={complete}><i aria-hidden="true" className="fas fa-check-double" /> Sign off</button>
+          <button type="button" className="btn btn-danger btn-sm" onClick={cancel}><i aria-hidden="true" className="fas fa-ban" /> Cancel</button>
+        </span>}</div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="data-table"><thead><tr><th>Product</th><th>Category</th><th className="text-right">System</th><th style={{ width: 110 }} className="text-right">Counted</th><th className="text-right">Variance</th><th className="text-right">Value</th></tr></thead>
+            <tbody>{d.items.map((i) => {
+              const c = counts[i.id];
+              const has = c !== '' && c != null;
+              const vq = has ? Number(c) - i.system_qty : null;
+              const vv = has ? vq * (i.unit_cost || 0) : null;
+              return (
+                <tr key={i.id}>
+                  <td>{i.product}</td>
+                  <td className="text-muted text-sm">{i.category}</td>
+                  <td className="text-right">{i.system_qty}</td>
+                  <td className="text-right">{open
+                    ? <input type="text" inputMode="numeric" className="form-control" style={{ textAlign: 'right' }} value={c} onChange={(e) => setCount(i.id, e.target.value)} />
+                    : (i.counted_qty == null ? '—' : i.counted_qty)}</td>
+                  <td className={'text-right ' + (vq < 0 ? 'text-danger' : vq > 0 ? 'text-success' : '')}>{vq == null ? '—' : (vq > 0 ? '+' : '') + vq}</td>
+                  <td className={'text-right ' + (vv < 0 ? 'text-danger' : vv > 0 ? 'text-success' : '')}>{vv == null ? '—' : naira(vv)}</td>
+                </tr>
+              );
+            })}</tbody></table>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, products: Products, new_sale: NewSale, history: History,
   analytics: Analytics, movements: Movements, suppliers: Suppliers, supplier_detail: SupplierDetail,
-  purchases: Purchases, purchase_detail: PurchaseDetail, reports: Reports, promos: Promos };
+  purchases: Purchases, purchase_detail: PurchaseDetail, reports: Reports, promos: Promos,
+  audits: Audits, audit_detail: AuditDetail };
 
 export default function SalesApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

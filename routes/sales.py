@@ -10,7 +10,8 @@ from sqlalchemy import func
 
 from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
-                    Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode)
+                    Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
+                    StockAudit, StockAuditItem)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS)
@@ -147,7 +148,7 @@ def dashboard():
                  'history': url_for('sales.history'), 'analytics': url_for('sales.analytics'),
                  'movements': url_for('sales.movements'), 'suppliers': url_for('sales.suppliers'),
                  'purchases': url_for('sales.purchases'), 'reports': url_for('sales.reports'),
-                 'promos': url_for('sales.promos')},
+                 'promos': url_for('sales.promos'), 'audits': url_for('sales.audits')},
     })
 
 
@@ -1287,6 +1288,243 @@ def toggle_promo(promo_id):
     p.is_active = not p.is_active
     db.session.commit()
     return _ok(f'{p.code} {"activated" if p.is_active else "deactivated"}.', url_for('sales.promos'))
+
+
+# ---------------------------------------------------------------------------
+# Stock audits (physical count + variance sign-off)
+# ---------------------------------------------------------------------------
+
+def _audit_row(a):
+    counted = a.counted_list
+    return {
+        'id': a.id, 'reference': a.reference, 'status': a.status,
+        'scope': a.scope_category or a.scope_location or 'All products',
+        'note': a.note or '', 'started_by': a.started_by or '',
+        'approved_by': a.approved_by or '',
+        'items': a.items.count(), 'counted': len(counted),
+        'variance_value': round(a.variance_value or 0, 2),
+        'when': a.created_at.strftime('%d %b %Y') if a.created_at else '',
+        'url': url_for('sales.audit_detail', audit_id=a.id),
+    }
+
+
+@sales_bp.route('/audits')
+@login_required
+def audits():
+    rows = scope_query(StockAudit.query, StockAudit).order_by(StockAudit.created_at.desc()).all()
+    cats = sorted({c for (c,) in scope_query(
+        db.session.query(Product.category), Product).distinct().all() if c})
+    locs = sorted({l for (l,) in scope_query(
+        db.session.query(Product.storage_location), Product).distinct().all() if l})
+    return _render({
+        'page': 'audits', 'audits': [_audit_row(a) for a in rows],
+        'categories': cats, 'locations': locs,
+        'new_url': url_for('sales.new_audit'),
+        'urls': {'dashboard': url_for('sales.dashboard')},
+    })
+
+
+@sales_bp.route('/audits/new', methods=['POST'])
+@login_required
+def new_audit():
+    """Open a count session: snapshot the on-hand quantity of every active
+    product (optionally filtered to a category or storage location) so the
+    physical count can be entered against it."""
+    category = (request.form.get('category') or '').strip() or None
+    location = (request.form.get('location') or '').strip() or None
+    q = scope_query(Product.query.filter_by(is_active=True), Product)
+    if category:
+        q = q.filter(Product.category == category)
+    if location:
+        q = q.filter(Product.storage_location == location)
+    products = q.order_by(Product.category, Product.name).all()
+    if not products:
+        return _err('No matching products to count.', url_for('sales.audits'))
+    audit = StockAudit(
+        branch_id=branch_for_new(), scope_category=category, scope_location=location,
+        status='Counting', note=(request.form.get('note') or '').strip() or None,
+        started_by=session.get('user') or session.get('username') or 'Bursar')
+    db.session.add(audit)
+    db.session.flush()
+    audit.reference = f'SA{audit.id:05d}'
+    for p in products:
+        db.session.add(StockAuditItem(
+            audit_id=audit.id, product_id=p.id, product_name=p.name,
+            system_qty=p.stock_qty or 0, unit_cost=p.cost_price or 0))
+    db.session.commit()
+    return _ok(f'Count sheet {audit.reference} ready ({len(products)} items).',
+               url_for('sales.audit_detail', audit_id=audit.id))
+
+
+def _audit_detail_payload(a):
+    items = a.items.join(Product, StockAuditItem.product_id == Product.id, isouter=True)\
+             .order_by(Product.category, StockAuditItem.product_name).all()
+    net = round(sum(i.variance_value for i in a.counted_list), 2)
+    return {
+        'page': 'audit_detail', 'id': a.id, 'reference': a.reference,
+        'status': a.status, 'scope': a.scope_category or a.scope_location or 'All products',
+        'note': a.note or '', 'started_by': a.started_by or '',
+        'approved_by': a.approved_by or '',
+        'variance_value': round(a.variance_value or 0, 2),
+        'net_preview': net,
+        'items': [{
+            'id': i.id, 'product': i.product_name,
+            'category': (i.product.category if i.product else '') or '',
+            'system_qty': i.system_qty or 0, 'counted_qty': i.counted_qty,
+            'unit_cost': i.unit_cost or 0,
+            'variance_qty': i.variance_qty, 'variance_value': i.variance_value,
+            'note': i.note or '',
+        } for i in items],
+        'save_url': url_for('sales.save_audit', audit_id=a.id),
+        'complete_url': url_for('sales.complete_audit', audit_id=a.id),
+        'cancel_url': url_for('sales.cancel_audit', audit_id=a.id),
+        'export_url': url_for('sales.audit_export', audit_id=a.id),
+        'urls': {'audits': url_for('sales.audits')},
+    }
+
+
+@sales_bp.route('/audits/<int:audit_id>')
+@login_required
+def audit_detail(audit_id):
+    a = db.get_or_404(StockAudit, audit_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That count belongs to another branch.', url_for('sales.audits'))
+    return _render(_audit_detail_payload(a))
+
+
+def _load_audit_counts(data):
+    counts = data.get('counts') or data.get('items') or []
+    if isinstance(counts, str):
+        import json as _json
+        try:
+            counts = _json.loads(counts)
+        except ValueError:
+            counts = []
+    out = {}
+    for r in counts:
+        try:
+            iid = int(r['item_id'])
+        except (KeyError, ValueError, TypeError):
+            continue
+        raw = r.get('counted_qty')
+        out[iid] = None if raw in (None, '') else int(raw)
+    return out
+
+
+@sales_bp.route('/audits/<int:audit_id>/save', methods=['POST'])
+@login_required
+def save_audit(audit_id):
+    """Persist entered counts without closing the session (save-as-you-go)."""
+    a = db.get_or_404(StockAudit, audit_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That count belongs to another branch.', url_for('sales.audits'))
+    if not a.is_open:
+        return _err('This count is closed.', url_for('sales.audit_detail', audit_id=a.id))
+    counts = _load_audit_counts(request.get_json(silent=True) or request.form)
+    for it in a.items.all():
+        if it.id in counts:
+            it.counted_qty = counts[it.id]
+    db.session.commit()
+    if _wants_json():
+        return jsonify({'ok': True, 'net_preview': round(
+            sum(i.variance_value for i in a.counted_list), 2)})
+    return _ok('Counts saved.', url_for('sales.audit_detail', audit_id=a.id))
+
+
+@sales_bp.route('/audits/<int:audit_id>/complete', methods=['POST'])
+@login_required
+def complete_audit(audit_id):
+    """Sign off the count: apply each variance to stock (ledgered as a Physical
+    Stock Count movement) and post the net cost value to the finance ledger —
+    shrinkage as an expense, an overage as an inventory gain."""
+    a = db.get_or_404(StockAudit, audit_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That count belongs to another branch.', url_for('sales.audits'))
+    if not a.is_open:
+        return _err('This count is already closed.', url_for('sales.audit_detail', audit_id=a.id))
+    # Absorb any counts submitted alongside the sign-off.
+    counts = _load_audit_counts(request.get_json(silent=True) or request.form)
+    for it in a.items.all():
+        if it.id in counts:
+            it.counted_qty = counts[it.id]
+    db.session.flush()
+
+    counted = a.counted_list
+    if not counted:
+        return _err('Enter at least one count before signing off.',
+                    url_for('sales.audit_detail', audit_id=a.id))
+    net_value = 0.0
+    for it in counted:
+        delta = it.variance_qty
+        if not delta:
+            continue
+        p = it.product or db.session.get(Product, it.product_id)
+        if not p:
+            continue
+        p.stock_qty = it.counted_qty
+        _record_movement(p, 'in' if delta > 0 else 'out', abs(delta),
+                         'Physical Stock Count', reference=a.reference,
+                         note=f'Audit {a.reference}', apply=False)
+        net_value += it.variance_value
+    net_value = round(net_value, 2)
+    a.variance_value = net_value
+    a.status = 'Completed'
+    a.approved_by = session.get('user') or session.get('username') or 'Bursar'
+    a.completed_at = timeutil.now()
+    # Post the net inventory variance to the finance ledger (idempotent per audit).
+    if net_value and not a.ledger_posted:
+        from utils import finance_ledger as _fl
+        if net_value < 0:
+            _fl.post(_fl.EXPENSE, abs(net_value), source_module='inventory',
+                     category='Inventory Shrinkage', branch_id=a.branch_id,
+                     origin_type='stock_audit', origin_id=a.id, reference=a.reference,
+                     description=f'Stock count shrinkage ({a.reference})',
+                     created_by=a.approved_by)
+        else:
+            _fl.post(_fl.REVENUE, net_value, source_module='inventory',
+                     category='Inventory Gain', branch_id=a.branch_id,
+                     origin_type='stock_audit', origin_id=a.id, reference=a.reference,
+                     description=f'Stock count overage ({a.reference})',
+                     created_by=a.approved_by)
+        a.ledger_posted = True
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('sales.stock_audit', detail=f'{a.reference} net {net_value:g}', target=a)
+    return _ok(f'{a.reference} signed off — net variance {net_value:g}.',
+               url_for('sales.audit_detail', audit_id=a.id))
+
+
+@sales_bp.route('/audits/<int:audit_id>/cancel', methods=['POST'])
+@login_required
+def cancel_audit(audit_id):
+    a = db.get_or_404(StockAudit, audit_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That count belongs to another branch.', url_for('sales.audits'))
+    if not a.is_open:
+        return _err('This count is already closed.', url_for('sales.audit_detail', audit_id=a.id))
+    a.status = 'Cancelled'
+    db.session.commit()
+    return _ok(f'{a.reference} cancelled — no stock changed.',
+               url_for('sales.audit_detail', audit_id=a.id))
+
+
+@sales_bp.route('/audits/<int:audit_id>/export')
+@login_required
+def audit_export(audit_id):
+    a = db.get_or_404(StockAudit, audit_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That count belongs to another branch.', url_for('sales.audits'))
+    from openpyxl import Workbook
+    wb = Workbook(); ws = wb.active; ws.title = 'Stock Count'
+    ws.append(['Product', 'Category', 'System Qty', 'Counted', 'Variance',
+               'Unit Cost', 'Variance Value', 'Note'])
+    for i in a.items.order_by(StockAuditItem.product_name).all():
+        ws.append([i.product_name, (i.product.category if i.product else ''),
+                   i.system_qty or 0,
+                   '' if i.counted_qty is None else i.counted_qty,
+                   '' if i.variance_qty is None else i.variance_qty,
+                   i.unit_cost or 0, i.variance_value, i.note or ''])
+    return xlsx_response(wb, f'{a.reference}_count.xlsx')
 
 
 # ---------------------------------------------------------------------------
