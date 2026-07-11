@@ -252,7 +252,7 @@ function BookForm({ d, notify }) {
       const res = await apiGet(`${d.urls.isbn_lookup}?isbn=${encodeURIComponent(isbn)}`);
       setDupes(res.existing || []);
       if (res.found) { applyMeta(res.book); setLookMsg({ tone: 'success', text: `Found via ${res.book.source}. Details filled in — review and save.` }); }
-      else { set('isbn', res.isbn || isbn); setLookMsg({ tone: 'warn', text: 'No catalogue match — fill the details manually.' }); }
+      else { set('isbn', res.isbn || isbn); setLookMsg({ tone: 'warn', text: 'Not in the online catalogues (common for locally-published Nigerian books). ISBN saved — just type the title and details, then save.' }); }
     } catch (e2) {
       setLookMsg({ tone: 'error', text: 'Lookup failed. Check the connection or type the details.' });
     } finally { setLooking(false); }

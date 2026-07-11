@@ -156,7 +156,7 @@ function ProductForm({ d, product, onClose, onSaved }) {
       const res = await apiGet(`${d.isbn_lookup_url}?isbn=${encodeURIComponent(isbn)}`);
       setDupes(res.existing || []);
       if (res.found) { applyMeta(res.product); setLookMsg({ tone: 'success', text: 'Details filled in — set your prices and save.' }); }
-      else { set('barcode', res.isbn || isbn); setLookMsg({ tone: 'warn', text: 'No catalogue match — fill the details manually.' }); }
+      else { set('barcode', res.isbn || isbn); setLookMsg({ tone: 'warn', text: 'Not in the online catalogues (common for locally-published Nigerian books). Barcode saved — just type the name and details.' }); }
     } catch (e2) { setLookMsg({ tone: 'error', text: 'Lookup failed — type the details instead.' }); }
     finally { setLooking(false); }
   };
