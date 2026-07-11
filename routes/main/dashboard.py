@@ -1,5 +1,9 @@
 """main blueprint — dashboard routes (split from the former routes/main.py)."""
 from routes.main import *  # noqa: F401,F403  (blueprint, models, helpers)
+# Underscore-prefixed helpers aren't re-exported by ``import *`` — pull them in
+# explicitly so the personalization endpoints can use them.
+from routes.main import (_dashboard_layout, _block_permitted, _dash_widget_slice,  # noqa: E402
+                         DASHBOARD_BLOCK_IDS)
 
 
 @main_bp.route('/')
@@ -28,23 +32,59 @@ def api_dashboard_data():
 @main_bp.route('/api/dashboard/widgets', methods=['POST'])
 @login_required
 def api_dashboard_widgets():
-    """Save the user's dashboard widget choices (the in-SPA Customize panel).
-    Stores choices in registry order; what's actually shown is still gated by
-    module permission via enabled_widgets()."""
+    """Save the user's dashboard personalization: which widgets show (Customize),
+    the block order (drag-to-arrange) and favourites. Each field is optional, so
+    a reorder-only or favourite-only save leaves the others intact. Everything is
+    permission-scoped — enabled is gated by module permission via enabled_widgets,
+    and a block can only be favourited if the user may see it."""
     from utils.access_control import get_current_user
     data = request.get_json(silent=True) or {}
     sent = data.get('widgets')
-    if not isinstance(sent, list):
-        return jsonify({'error': 'widgets must be a list'}), 400
-    sent = set(sent)
-    chosen = [k for k, _, _, _ in DASHBOARD_WIDGETS if k in sent]   # registry order
+    order = data.get('order')
+    favorites = data.get('favorites')
+
+    chosen = None
+    if sent is not None:
+        if not isinstance(sent, list):
+            return jsonify({'error': 'widgets must be a list'}), 400
+        s = set(sent)
+        chosen = [k for k, _, _, _ in DASHBOARD_WIDGETS if k in s]   # registry order
+    if order is not None:
+        if not isinstance(order, list):
+            return jsonify({'error': 'order must be a list'}), 400
+        order = [b for b in order if b in DASHBOARD_BLOCK_IDS]
+    if favorites is not None:
+        if not isinstance(favorites, list):
+            return jsonify({'error': 'favorites must be a list'}), 400
+        # Can't favourite a block you're not permitted to see.
+        favorites = [b for b in favorites
+                     if b in DASHBOARD_BLOCK_IDS and _block_permitted(b)]
+
     user = get_current_user()
     if user:
-        user.set_dashboard_widgets(chosen)
+        user.set_dashboard_layout(enabled=chosen, order=order, favorites=favorites)
         db.session.commit()
     else:
-        session['dashboard_prefs'] = chosen
-    return jsonify({'ok': True, 'enabled': sorted(enabled_widgets())})
+        if chosen is not None:
+            session['dashboard_prefs'] = chosen
+        if order is not None:
+            session['dashboard_order'] = order
+        if favorites is not None:
+            session['dashboard_favorites'] = favorites
+    return jsonify({'ok': True, 'enabled': sorted(enabled_widgets()),
+                    'layout': _dashboard_layout()})
+
+
+@main_bp.route('/api/dashboard/widget/<block_id>')
+@login_required
+def api_dashboard_widget(block_id):
+    """Data for a single dashboard block — true per-widget refresh. Only the
+    block's own slice is computed, and only if the user may see it."""
+    if block_id not in DASHBOARD_BLOCK_IDS:
+        return jsonify({'error': 'unknown widget'}), 404
+    if not _block_permitted(block_id):
+        return jsonify({'error': 'forbidden'}), 403
+    return jsonify(_dash_widget_slice(block_id))
 
 
 @main_bp.route('/react-spike')

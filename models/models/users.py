@@ -58,23 +58,64 @@ class User(db.Model):
     # request re-checks it, so a password change / admin reset / forced sign-out
     # logs out all other devices. See routes/auth.py and enforce_session_version.
     token_version = db.Column(db.Integer, default=1, nullable=False)
-    # JSON list of dashboard widget keys this user has enabled (None => defaults).
+    # Dashboard personalization. Historically a JSON *list* of enabled widget
+    # keys; now a JSON *object* {enabled, order, favorites}. Both shapes are read
+    # transparently (a bare list is treated as {enabled: list}) so old rows keep
+    # working without a migration.
     dashboard_prefs = db.Column(db.Text)
 
     @property
-    def dashboard_widgets(self):
+    def _dash_prefs_obj(self):
         import json
         if not self.dashboard_prefs:
-            return None
+            return {}
         try:
             v = json.loads(self.dashboard_prefs)
-            return v if isinstance(v, list) else None
         except (ValueError, TypeError):
-            return None
+            return {}
+        if isinstance(v, list):
+            return {'enabled': v}
+        return v if isinstance(v, dict) else {}
+
+    def _save_dash_obj(self, obj):
+        import json
+        # Drop empty keys so a cleared layout serialises back to null.
+        obj = {k: v for k, v in obj.items() if v}
+        self.dashboard_prefs = json.dumps(obj) if obj else None
+
+    @property
+    def dashboard_widgets(self):
+        v = self._dash_prefs_obj.get('enabled')
+        return v if isinstance(v, list) else None
 
     def set_dashboard_widgets(self, keys):
-        import json
-        self.dashboard_prefs = json.dumps(list(keys)) if keys is not None else None
+        obj = self._dash_prefs_obj
+        if keys is None:
+            obj.pop('enabled', None)
+        else:
+            obj['enabled'] = list(keys)
+        self._save_dash_obj(obj)
+
+    @property
+    def dashboard_order(self):
+        v = self._dash_prefs_obj.get('order')
+        return v if isinstance(v, list) else None
+
+    @property
+    def dashboard_favorites(self):
+        v = self._dash_prefs_obj.get('favorites')
+        return v if isinstance(v, list) else None
+
+    def set_dashboard_layout(self, *, enabled=None, order=None, favorites=None):
+        """Persist any of enabled / order / favorites, leaving the others intact."""
+        obj = self._dash_prefs_obj
+        if enabled is not None:
+            obj['enabled'] = list(enabled)
+        if order is not None:
+            obj['order'] = list(order)
+        if favorites is not None:
+            obj['favorites'] = list(favorites)
+        self._save_dash_obj(obj)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=local_now)

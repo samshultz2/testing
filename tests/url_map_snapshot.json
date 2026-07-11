@@ -3101,6 +3101,13 @@
 ]
 ],
 [
+"main.api_dashboard_widget",
+"/api/dashboard/widget/<block_id>",
+[
+"GET"
+]
+],
+[
 "main.api_dashboard_widgets",
 "/api/dashboard/widgets",
 [

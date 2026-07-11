@@ -71,6 +71,59 @@ _CROSS_MODULE_WIDGETS = {'insights'}
 # Central-only widgets: shown solely to users who see across every branch.
 _CENTRAL_WIDGETS = {'branches'}
 
+# Reorderable/favouritable dashboard *blocks* — the visual sections a user can
+# arrange, favourite and refresh independently. Each maps to the enabled widget
+# key(s) that gate it ('crossmodule' shows if any cross-module KPI is enabled).
+# The fixed chrome (hero, announcements, teacher classes, quick actions) is not
+# part of this and always renders in place.
+DASHBOARD_BLOCKS = [
+    ('insights', ('insights',)),
+    ('branches', ('branches',)),
+    ('kpi', ('kpi',)),
+    ('crossmodule', ('finance', 'sales', 'hr', 'cbt', 'library')),
+    ('exams', ('exams',)),
+    ('charts', ('charts',)),
+    ('attendance_trend', ('attendance_trend',)),
+    ('class_religion', ('class_religion',)),
+    ('people', ('people',)),
+]
+DASHBOARD_BLOCK_IDS = [b for b, _ in DASHBOARD_BLOCKS]
+_BLOCK_GATES = dict(DASHBOARD_BLOCKS)
+
+
+def _block_permitted(block_id):
+    """True if the user may see a dashboard block — i.e. any of its gating
+    widgets is permitted. Guards both the render and the per-widget endpoint so
+    a user can never fetch a slice for a module they can't access."""
+    gates = _BLOCK_GATES.get(block_id)
+    if not gates:
+        return False
+    perm = permitted_widgets()
+    return any(g in perm for g in gates)
+
+
+def _dashboard_layout():
+    """The user's saved block order + favourites, sanitised to known blocks.
+    Unknown/removed ids are dropped; any block missing from a saved order is
+    appended in canonical order so new blocks always appear."""
+    from utils.access_control import get_current_user
+    order = favorites = None
+    try:
+        u = get_current_user()
+        if u is not None:
+            order = u.dashboard_order
+            favorites = u.dashboard_favorites
+    except Exception:
+        pass
+    if order is None:
+        order = session.get('dashboard_order')
+    if favorites is None:
+        favorites = session.get('dashboard_favorites')
+    order = [b for b in (order or []) if b in DASHBOARD_BLOCK_IDS]
+    order += [b for b in DASHBOARD_BLOCK_IDS if b not in order]
+    favorites = [b for b in (favorites or []) if b in DASHBOARD_BLOCK_IDS]
+    return {'order': order, 'favorites': favorites, 'blocks': DASHBOARD_BLOCK_IDS}
+
 
 def permitted_widgets():
     """Widget keys the current user is allowed to see (by module permission).
@@ -119,6 +172,8 @@ def _dashboard_urls():
     """Server-resolved link targets so the React dashboard never hardcodes paths."""
     return {
         'customize': url_for('main.dashboard_customize'),
+        'save_layout': url_for('main.api_dashboard_widgets'),
+        'widget_data': url_for('main.api_dashboard_widget', block_id='__BLOCK__'),
         'week_grid': url_for('attendance.week_grid'),
         'bulk_entry': url_for('subjects.bulk_entry'),
         'students_list': url_for('main.students_list'),
@@ -290,6 +345,7 @@ def dashboard_payload():
         teacher_classes=teacher_classes,
         insights=_dash_insights(active_term, tscope) if 'insights' in enabled else [],
         branch_comparison=_dash_branch_comparison(active_term) if 'branches' in enabled else None,
+        layout=_dashboard_layout(),
         can_results=can_access_module('results'),
         quick_actions=_quick_actions(),
         home_focus=_home_focus(),
@@ -610,6 +666,68 @@ def _dash_branch_comparison(active_term):
 
     tkey = active_term.id if active_term else 'none'
     return _dash_cached(f'branchcmp:t{tkey}', 300, compute)
+
+
+def _dash_widget_slice(block_id):
+    """Compute just one block's data — the payload subset the given block reads —
+    for true per-widget refresh. Reuses the exact helpers dashboard_payload uses,
+    so a refreshed block matches a full reload. Assumes the caller already
+    permission-checked the block."""
+    active_term = get_active_term()
+    tscope = _teacher_scope()
+    enabled = enabled_widgets()
+    if block_id == 'insights':
+        return {'insights': _dash_insights(active_term, tscope)}
+    if block_id == 'branches':
+        return {'branch_comparison': _dash_branch_comparison(active_term)}
+    if block_id == 'kpi':
+        active_enrollments, _tc, _cs = _dash_class_stats(active_term, tscope)
+        out = _dash_student_counts(tscope)
+        out['active_enrollments'] = active_enrollments
+        out['attendance_stats'] = _dash_attendance_stats(active_term, tscope)
+        return out
+    if block_id == 'crossmodule':
+        sales = _dash_sales(active_term) if 'sales' in enabled else None
+        return {
+            'finance_stat': _floats(_dash_finance(active_term)) if 'finance' in enabled else None,
+            'sales_stat': ({**sales, 'today': float(sales['today'])} if sales else None),
+            'hr_stat': _dash_hr() if 'hr' in enabled else None,
+            'cbt_stat': _dash_cbt() if 'cbt' in enabled else None,
+            'library_stat': _dash_library() if 'library' in enabled else None,
+        }
+    if block_id == 'exams':
+        return {'jamb_snapshot': _dash_jamb_snapshot(tscope),
+                'waec_snapshot': _dash_waec_snapshot(tscope),
+                'mock_snapshot': _dash_mock_snapshot(tscope)}
+    if block_id == 'charts':
+        counts = _dash_student_counts(tscope)
+        return {'male_students': counts['male_students'],
+                'female_students': counts['female_students'],
+                'stream_dist': _dash_stream_distribution(tscope),
+                'age_distribution': _dash_age_distribution(tscope)}
+    if block_id == 'attendance_trend':
+        return {'attendance_trend': _dash_attendance_trend(active_term, tscope),
+                'jamb_snapshot': _dash_jamb_snapshot(tscope)}
+    if block_id == 'class_religion':
+        _ae, _tc, class_stats = _dash_class_stats(active_term, tscope)
+        return {'class_stats': class_stats,
+                'religion_stats': _dash_religion_stats(tscope),
+                'total_students': _dash_student_counts(tscope)['total_students']}
+    if block_id == 'people':
+        bt, bw = _dash_birthdays(tscope)
+        recent_students = _student_scope(
+            Student.query.filter_by(is_active=True), tscope).order_by(
+            Student.created_at.desc()).limit(5).all()
+        return {
+            'birthdays_today': [{'full_name': s.full_name, 'age': s.age} for s in bt],
+            'birthdays_week': [{'full_name': s.full_name,
+                                'date_label': s.date_of_birth.strftime('%d %b')} for s in bw],
+            'recent_students': [_ser_student_brief(s) for s in recent_students],
+            'recent_activity': [{'action': a.action, 'detail': a.detail, 'user': a.user,
+                                 'created_at': a.created_at.strftime('%d %b %H:%M') if a.created_at else ''}
+                                for a in _dash_recent_activity()],
+        }
+    return {}
 
 
 def _teacher_scope():
