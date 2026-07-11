@@ -93,6 +93,9 @@ a.exec:hover .go{opacity:1}
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Recompute</button>
         </form>
+        {% if analytics_refreshed_at %}
+        <span class="text-muted text-sm" title="Analytics auto-refresh once a day in the background"><i class="fas fa-clock"></i> Refreshed {{ analytics_refreshed_at[:16]|replace('T', ' ') }}</span>
+        {% endif %}
         {% if selected_year %}
         <a href="{{ url_for('results.analytics_board_pack', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" title="Executive board pack (PDF)"><i class="fas fa-file-invoice"></i> Board pack</a>
         <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>

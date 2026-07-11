@@ -101,6 +101,14 @@ def _tick_one(app):
                 app.logger.exception('stock alert job failed')
             SchoolSettings.set('last_stock_alert_date', today, 'string',
                                'Last date the daily stock-alert job ran')
+        # Daily exam-analytics refresh: recompute the SSS3 risk/prediction rows,
+        # backfill correlation and warm the hub caches so the first load of the
+        # day is never cold. Own DB-shared marker (runs once per day per school).
+        try:
+            from utils.exam_refresh import run_daily_refresh_if_due
+            run_daily_refresh_if_due(app)
+        except Exception:
+            app.logger.exception('exam analytics refresh job failed')
     finally:
         if is_pg:
             db.session.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': _SCHED_LOCK_KEY})

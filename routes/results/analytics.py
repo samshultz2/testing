@@ -433,8 +433,10 @@ def analytics_hub():
     scorecard = exam_subjects.subject_scorecard(
         waec_stats, jamb_stats, sss3_subject_teachers()) if year else []
 
+    from utils.exam_refresh import refreshed_at
     return render_template('results/analytics_hub.html',
         insights=insights,
+        analytics_refreshed_at=refreshed_at(),
         subject_scorecard=scorecard,
         scorecard_summary=exam_subjects.scorecard_summary(scorecard),
         branch_compare=branch_comparison(year) if year else [],
@@ -725,20 +727,14 @@ def recompute_analytics():
     """Backfill/refresh persisted analytics for all in-scope students (and the
     WAEC↔JAMB correlation for recent years). Use after first deploy or a bulk
     import, since per-student rows are otherwise only written on results changes."""
-    from utils.analytics_engine import AnalyticsEngine
+    from utils.exam_refresh import run_exam_analytics_refresh
     bid = viewing_branch_id()
-    # SSS3 only — the cohort this analysis is about (already branch-scoped).
-    sss3_ids = [s.id for s in get_sss3_students()]
-    n = AnalyticsEngine.recompute_all_students(student_ids=sss3_ids)
-    years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().all() if y[0]]
-    for yr in sorted(years, reverse=True)[:5]:
-        try:
-            AnalyticsEngine.recompute_correlation(yr, branch_id=bid)
-        except Exception:
-            db.session.rollback()
-    bust_school_stats()          # drop cached hub stats so the next load is fresh
-    log_action('analytics.recompute', detail=f'{n} student(s), branch={bid or "all"}')
-    return _ok(f'Recomputed analytics for {n} student(s).', url_for('results.analytics_hub'))
+    # Shared with the daily background job: recompute the SSS3 cohort, backfill
+    # correlation, warm the hub caches, and stamp the refresh time.
+    summary = run_exam_analytics_refresh(current_app, warm=True, branch_id=bid)
+    log_action('analytics.recompute', detail=f'{summary["students"]} student(s), branch={bid or "all"}')
+    return _ok(f'Recomputed analytics for {summary["students"]} student(s).',
+               url_for('results.analytics_hub'))
 
 
 @results_bp.route('/api/waec-jamb-correlation/<int:year>')
