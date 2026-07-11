@@ -15,14 +15,28 @@ export function nairaShort(v) {
 }
 
 // ── reusable presentational pieces (match the classic dashboard CSS) ──
-export function Kpi({ tone = 'blue', icon, value, label, title }) {
+// `delta`: { dir: 'up'|'down'|'flat', text, tone? } renders a small trend chip
+// under the value so a KPI reads as movement, not an isolated number. `tone`
+// overrides the colour when up isn't necessarily "good" (e.g. absentees).
+export function Kpi({ tone = 'blue', icon, value, label, title, delta }) {
   return (
     <div className="kpi">
       <div className={'ic ' + tone}><i className={'fas ' + icon} aria-hidden="true" /></div>
       <div>
         <div className="v" title={title}><Counter value={value} /></div>
         <div className="l">{label}</div>
+        {delta && <KpiDelta {...delta} />}
       </div>
+    </div>
+  );
+}
+
+function KpiDelta({ dir = 'flat', text, tone }) {
+  const arrow = dir === 'up' ? 'fa-arrow-trend-up' : dir === 'down' ? 'fa-arrow-trend-down' : 'fa-minus';
+  const color = tone || (dir === 'up' ? 'var(--success)' : dir === 'down' ? 'var(--danger)' : 'var(--text-secondary)');
+  return (
+    <div className="kpi-delta" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color, fontWeight: 600, marginTop: 2 }}>
+      <i className={'fas ' + arrow} aria-hidden="true" /><span>{text}</span>
     </div>
   );
 }

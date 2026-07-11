@@ -324,11 +324,16 @@ def _dash_finance(active_term):
         from utils.branch_scope import scope_query
         from models import FeePayment
         from models.models_finance import Expense
-        collected = sum(p.amount for p in scope_query(
-            FeePayment.query.filter_by(term_id=active_term.id), FeePayment).all())
+        payments = scope_query(
+            FeePayment.query.filter_by(term_id=active_term.id), FeePayment).all()
+        collected = sum(p.amount for p in payments)
+        today = date.today()
+        collected_today = sum(p.amount for p in payments
+                              if getattr(p, 'payment_date', None) == today)
         expenses = sum(e.amount for e in scope_query(
             Expense.query.filter_by(term_id=active_term.id), Expense).all())
-        return {'collected': collected, 'expenses': expenses, 'net': collected - expenses}
+        return {'collected': collected, 'collected_today': collected_today,
+                'expenses': expenses, 'net': collected - expenses}
     except Exception:
         return None
 
@@ -566,11 +571,16 @@ def _dash_student_counts(tscope=None):
     # Current (non-graduate) students only; graduates are counted separately.
     current = Student.query.filter_by(is_active=True).filter(
         db.or_(Student.is_graduated.is_(False), Student.is_graduated.is_(None)))
+    from datetime import datetime as _dt
+    month_ago = _dt.now() - timedelta(days=30)
     return {
         'total_students': sq(current).count(),
         'male_students': sq(current.filter(Student.gender == 'Male')).count(),
         'female_students': sq(current.filter(Student.gender == 'Female')).count(),
         'graduates_count': sq(Student.query.filter_by(is_active=True, is_graduated=True)).count(),
+        # New admissions in the last 30 days — the "growing?" signal on the
+        # Students KPI (a trend, not an isolated headcount).
+        'new_students_month': sq(current.filter(Student.created_at >= month_ago)).count(),
     }
 
 

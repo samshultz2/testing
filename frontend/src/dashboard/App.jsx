@@ -7,6 +7,18 @@ import { Toast, SetupChecklist } from '../components/ui';
 
 const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboard-list' };
 
+// Today's attendance vs the term average → a trend chip. Only shown once there's
+// a term baseline and today has been marked, so it never reads a misleading 0.
+function attendanceDelta(stats) {
+  const s = stats || {};
+  const today = Number(s.today_percentage) || 0;
+  const term = Number(s.term_average) || 0;
+  if (!today || !term) return undefined;
+  const diff = Math.round((today - term) * 10) / 10;
+  if (diff === 0) return { dir: 'flat', text: 'level with term avg' };
+  return { dir: diff > 0 ? 'up' : 'down', text: `${diff > 0 ? '+' : ''}${diff} pp vs term` };
+}
+
 export default function App({ data: initialData }) {
   const [data, setData] = useState(initialData);
   const [toast, setToast] = useState(null);   // surface a refresh failure instead of silently keeping stale data
@@ -146,12 +158,14 @@ export default function App({ data: initialData }) {
           page so leaders see what needs doing before the statistics. */}
       {has('insights') && !emptySchool && <Insights items={d.insights || []} />}
 
-      {/* Student KPIs */}
+      {/* Student KPIs — with trend chips (movement, not isolated numbers) */}
       {has('kpi') && !emptySchool && (
         <div className="kpi-row">
-          <Kpi tone="blue" icon="fa-users" value={d.total_students} label="Students" />
+          <Kpi tone="blue" icon="fa-users" value={d.total_students} label="Students"
+               delta={d.new_students_month > 0 ? { dir: 'up', text: `+${d.new_students_month} this month` } : undefined} />
           <Kpi tone="green" icon="fa-user-check" value={d.active_enrollments} label="Enrolled" />
-          <Kpi tone="teal" icon="fa-percent" value={(d.attendance_stats || {}).today_percentage + '%'} label="Attendance today" />
+          <Kpi tone="teal" icon="fa-percent" value={(d.attendance_stats || {}).today_percentage + '%'} label="Attendance today"
+               delta={attendanceDelta(d.attendance_stats)} />
           <Kpi tone="purple" icon="fa-user-graduate" value={d.graduates_count} label="Graduates" />
         </div>
       )}
@@ -160,8 +174,10 @@ export default function App({ data: initialData }) {
       {crossModule && (
         <div className="kpi-row">
           {d.finance_stat && <>
-            <Kpi tone="green" icon="fa-coins" value={nairaShort(d.finance_stat.collected)} title={naira(d.finance_stat.collected)} label="Fees collected (term)" />
-            <Kpi tone="teal" icon="fa-scale-balanced" value={nairaShort(d.finance_stat.net)} title={naira(d.finance_stat.net)} label="Net (term)" />
+            <Kpi tone="green" icon="fa-coins" value={nairaShort(d.finance_stat.collected)} title={naira(d.finance_stat.collected)} label="Fees collected (term)"
+                 delta={d.finance_stat.collected_today > 0 ? { dir: 'up', text: `${nairaShort(d.finance_stat.collected_today)} today` } : undefined} />
+            <Kpi tone="teal" icon="fa-scale-balanced" value={nairaShort(d.finance_stat.net)} title={naira(d.finance_stat.net)} label="Net (term)"
+                 delta={{ dir: d.finance_stat.net >= 0 ? 'up' : 'down', text: d.finance_stat.net >= 0 ? 'in surplus' : 'in deficit' }} />
           </>}
           {d.sales_stat && <Kpi tone="blue" icon="fa-cash-register" value={nairaShort(d.sales_stat.today)} title={naira(d.sales_stat.today)} label={`Sales today (${d.sales_stat.count_today})`} />}
           {d.hr_stat && <Kpi tone="purple" icon="fa-id-badge" value={d.hr_stat.total} label={`Staff (${d.hr_stat.teaching} teaching)`} />}
