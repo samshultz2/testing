@@ -220,3 +220,28 @@ def test_audit_log_records_actions(mt):
     rows = tenancy.list_platform_audit(subdomain='alpha')
     assert any(r.action == 'grant' and '15' in (r.detail or '') for r in rows)
     assert all(r.actor for r in rows)
+
+
+def test_overview_kpis_and_totals(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    body = c.get('/platform/', headers={'Host': 'edusyncra.test'}).get_data(as_text=True)
+    assert 'ARR' in body and 'New this month' in body
+    assert 'Students (platform)' in body        # cross-tenant totals strip
+    # KPI cards drill down into the filtered schools list
+    assert "filter=trial" in body or "filter=paying" in body
+
+
+def test_schools_filter_segment(mt):
+    app, tenancy = mt
+    from utils import billing
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
+    # make alpha a paying customer
+    c.post('/platform/alpha/grant', headers=H, data={'days': '30', '_csrf_token': tok})
+    paying = c.get('/platform/schools?filter=paying', headers=H).get_data(as_text=True)
+    assert 'Alpha' in paying and 'Beta' not in paying     # only the paying school
+    assert 'clear' in paying.lower()                       # active-segment chip

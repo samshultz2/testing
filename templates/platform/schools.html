@@ -29,6 +29,8 @@
   <div class="toolbar">
     <label class="search"><i class="fas fa-magnifying-glass"></i>
       <input id="q" type="search" placeholder="Search schools by name, subdomain or email…" autocomplete="off"></label>
+    {% if segment %}<a class="btn sm" href="{{ url_for('platform.schools') }}" title="Clear filter">
+      <i class="fas fa-filter"></i> {{ segment|replace('_',' ')|capitalize }} · clear ✕</a>{% endif %}
   </div>
   <div id="recent" class="recent-tenants" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px">
     <span class="muted" style="font-size:12.5px"><i class="fas fa-clock-rotate-left"></i> Recent:</span>

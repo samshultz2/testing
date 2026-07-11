@@ -77,6 +77,12 @@ def _rows_and_summary():
     price = (current_app.config.get('TENANT_PRICE_KOBO', 0) or 0) / 100.0
     paying = sum(1 for r in rows if r['bucket'] == 'paying')
     customers = sum(1 for r in rows if not r['owner'])
+    now = _dt.datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    def _created_since(since):
+        return sum(1 for r in rows if not r['owner'] and r['created_at'] and r['created_at'] >= since)
+    mrr = paying * price
     summary = {
         'total': len(rows),
         'customers': customers,
@@ -86,8 +92,11 @@ def _rows_and_summary():
         'blocked': sum(1 for r in rows if r['bucket'] == 'unpaid'),
         'suspended': sum(1 for r in rows if r['status'] == 'suspended'),
         'ending_soon': sum(1 for r in rows if r['ending_soon']),
-        'mrr': paying * price,
-        'arpa': (paying and (paying * price) / paying) or 0,   # = price when paying>0
+        'mrr': mrr,
+        'arr': mrr * 12,
+        'arpa': price if paying else 0,               # avg revenue per paying account
+        'new_month': _created_since(month_start),
+        'today': _created_since(today_start),
     }
     return rows, summary, price
 
@@ -101,8 +110,10 @@ def dashboard():
     attention.sort(key=lambda r: (r['bucket'] != 'unpaid', r['days_left'] if r['days_left'] is not None else 999))
     recent = sorted([r for r in rows if not r['owner']],
                     key=lambda r: r['created_at'] or _dt_min(), reverse=True)[:6]
+    from utils.platform_stats import platform_totals
+    totals = platform_totals(tenancy.list_tenants())
     return render_template('platform/overview.html', active='overview',
-                           summary=summary, price=price,
+                           summary=summary, price=price, totals=totals,
                            attention=attention[:8], recent=recent,
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
@@ -110,11 +121,23 @@ def dashboard():
 @platform_bp.route('/schools')
 @platform_admin_required
 def schools():
-    """Full school management: search, per-school actions, bulk actions."""
+    """Full school management: search, per-school actions, bulk actions.
+    A ``?filter=`` segment (from the dashboard KPIs) pre-filters the list."""
     rows, summary, price = _rows_and_summary()
+    seg = (request.args.get('filter') or '').strip()
+    _SEGMENTS = {
+        'paying': lambda r: r['bucket'] == 'paying',
+        'trial': lambda r: r['bucket'] == 'trial',
+        'unpaid': lambda r: r['bucket'] == 'unpaid',
+        'suspended': lambda r: r['status'] == 'suspended',
+        'ending_soon': lambda r: r['ending_soon'],
+        'customers': lambda r: not r['owner'],
+    }
+    if seg in _SEGMENTS:
+        rows = [r for r in rows if _SEGMENTS[seg](r)]
     rows.sort(key=lambda r: (r['owner'] is False, r['name'].lower()))
     return render_template('platform/schools.html', active='schools',
-                           rows=rows, summary=summary,
+                           rows=rows, summary=summary, segment=seg if seg in _SEGMENTS else '',
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 

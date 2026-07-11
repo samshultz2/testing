@@ -22,13 +22,23 @@
 {% block content %}
   <div class="cards kpis">
     <div class="kpi hero">
-      <div class="lab"><i class="fas fa-sack-dollar"></i> Estimated monthly revenue</div>
+      <div class="lab"><i class="fas fa-sack-dollar"></i> Estimated monthly revenue (MRR)</div>
       <div class="num">₦{{ '{:,.0f}'.format(summary.mrr) }}</div>
+      <div class="sub" style="color:var(--faint);font-size:12.5px;margin-top:2px">ARR ₦{{ '{:,.0f}'.format(summary.arr) }}</div>
     </div>
-    <div class="kpi"><div class="lab"><i class="fas fa-circle-check"></i> Paying</div><div class="num">{{ summary.paying }}</div></div>
-    <div class="kpi"><div class="lab"><i class="fas fa-hourglass-half"></i> On trial</div><div class="num">{{ summary.trial }}</div></div>
-    <div class="kpi"><div class="lab"><i class="fas fa-triangle-exclamation"></i> Unpaid / locked</div><div class="num">{{ summary.blocked }}</div></div>
-    <div class="kpi"><div class="lab"><i class="fas fa-school"></i> Customer schools</div><div class="num">{{ summary.customers }}</div></div>
+    <a class="kpi" href="{{ url_for('platform.schools', filter='paying') }}"><div class="lab"><i class="fas fa-circle-check"></i> Paying</div><div class="num">{{ summary.paying }}</div></a>
+    <a class="kpi" href="{{ url_for('platform.schools', filter='trial') }}"><div class="lab"><i class="fas fa-hourglass-half"></i> On trial</div><div class="num">{{ summary.trial }}</div></a>
+    <a class="kpi" href="{{ url_for('platform.schools', filter='unpaid') }}"><div class="lab"><i class="fas fa-triangle-exclamation"></i> Unpaid / locked</div><div class="num">{{ summary.blocked }}</div></a>
+    <a class="kpi" href="{{ url_for('platform.schools', filter='customers') }}"><div class="lab"><i class="fas fa-school"></i> Customer schools</div><div class="num">{{ summary.customers }}</div></a>
+  </div>
+
+  <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:14px">
+    <div class="kpi"><div class="lab"><i class="fas fa-calendar-plus"></i> New this month</div><div class="num">{{ summary.new_month }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-bolt"></i> Registered today</div><div class="num">{{ summary.today }}</div></div>
+    <a class="kpi" href="{{ url_for('platform.schools', filter='ending_soon') }}"><div class="lab"><i class="fas fa-clock"></i> Ending soon</div><div class="num">{{ summary.ending_soon }}</div></a>
+    <div class="kpi"><div class="lab"><i class="fas fa-user-graduate"></i> Students (platform)</div><div class="num">{{ '{:,}'.format(totals.students) if totals else '—' }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-chalkboard-user"></i> Staff (platform)</div><div class="num">{{ '{:,}'.format(totals.staff) if totals else '—' }}</div></div>
+    <div class="kpi"><div class="lab"><i class="fas fa-code-branch"></i> Branches (platform)</div><div class="num">{{ '{:,}'.format(totals.branches) if totals else '—' }}</div></div>
   </div>
 
   <div class="two">
