@@ -47,6 +47,7 @@ function Dashboard({ d }) {
         <Tile n={d.low_stock.length} label="Low stock" danger={d.low_stock.length} href={u.products + '?stock=low'} />
         <Tile n={d.out_of_stock_count || 0} label="Out of stock" danger={d.out_of_stock_count} href={u.products + '?stock=out'} />
         {u.purchases && <Tile n={d.awaiting_delivery || 0} label="Awaiting delivery" href={u.purchases} />}
+        {d.expiring_soon > 0 && <Tile n={d.expiring_soon} label="Expiring / expired" danger href={u.reports ? u.reports + '?kind=expiry' : undefined} />}
       </div>
 
       {(d.trend || []).length > 0 && (

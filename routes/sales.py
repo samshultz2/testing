@@ -136,6 +136,7 @@ def dashboard():
         'month_profit': round(month_total - cogs, 2),
         'product_count': len(products), 'inventory_value': inv_value,
         'out_of_stock_count': len(out_stock), 'awaiting_delivery': awaiting,
+        'expiring_soon': _expiring_soon_count(),
         'supplier_payables': round(payables, 2),
         'by_method': _pack(by_method), 'by_cashier': _pack(by_cashier),
         'by_category': _pack(by_category), 'top_products': top_products, 'trend': trend,
@@ -1158,6 +1159,7 @@ REPORT_KINDS = [
     ('suppliers', 'Suppliers'),
     ('stock_movements', 'Stock Movements'),
     ('damaged_returned', 'Damaged / Returned'),
+    ('expiry', 'Expiry Tracking'),
 ]
 _REPORT_KEYS = {k for k, _ in REPORT_KINDS}
 # Reports keyed off a date range (vs a current-snapshot report).
@@ -1319,7 +1321,42 @@ def _sales_report(kind, from_d, to_d, category):
                             _col('reference', 'Ref'), _col('by', 'By')],
                 'rows': rows, 'totals': None}
 
+    if kind == 'expiry':
+        today = timeutil.today()
+        rows = []
+        for p in active:
+            if not p.expiry_date or (p.stock_qty or 0) <= 0:
+                continue
+            days = (p.expiry_date - today).days
+            if days > 90:
+                continue                       # only surface the next 90 days + expired
+            status = ('Expired' if days < 0 else '≤30 days' if days <= 30
+                      else '≤60 days' if days <= 60 else '≤90 days')
+            rows.append({'name': p.name, 'category': p.category,
+                         'expiry_date': p.expiry_date.strftime('%d %b %Y'), 'days_left': days,
+                         'stock_qty': p.stock_qty or 0, 'stock_value': p.stock_value, 'status': status})
+        rows.sort(key=lambda r: r['days_left'])
+        return {'title': 'Expiry Tracking (next 90 days + expired)',
+                'columns': [_col('name', 'Product'), _col('category', 'Category'),
+                            _col('expiry_date', 'Expires'), _col('days_left', 'Days left', align='right'),
+                            _col('stock_qty', 'Qty', align='right'), _col('stock_value', 'Value', money=True),
+                            _col('status', 'Status')],
+                'rows': rows, 'totals': {'stock_value': round(sum(r['stock_value'] for r in rows), 2)}}
+
     return {'title': 'Report', 'columns': [], 'rows': [], 'totals': None}
+
+
+def _expiring_soon_count():
+    """Products with stock that are expired or expiring within 30 days."""
+    try:
+        from datetime import timedelta
+        today = timeutil.today()
+        horizon = today + timedelta(days=30)
+        return scope_query(Product.query.filter(
+            Product.is_active == True, Product.stock_qty > 0,
+            Product.expiry_date.isnot(None), Product.expiry_date <= horizon), Product).count()
+    except Exception:
+        return 0
 
 
 def _report_range():

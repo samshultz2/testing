@@ -561,6 +561,17 @@ def _dash_insights(active_term, tscope):
                     f'{len(low)} product{"s" if len(low) != 1 else ""} low on stock',
                     (f'{n_out} out of stock. ' if n_out else '') + 'Reorder before they run out.',
                     url_for('sales.products') + '?stock=low')
+            # Products expiring within 30 days (or already expired) with stock.
+            today = date.today()
+            horizon = today + timedelta(days=30)
+            exp = [p for p in prods if getattr(p, 'expiry_date', None)
+                   and (p.stock_qty or 0) > 0 and p.expiry_date <= horizon]
+            if exp:
+                gone = sum(1 for p in exp if p.expiry_date < today)
+                add('expiring', 'medium', 'fa-hourglass-end',
+                    f'{len(exp)} product{"s" if len(exp) != 1 else ""} expiring soon',
+                    (f'{gone} already expired. ' if gone else '') + 'Review and dispose or discount.',
+                    url_for('sales.reports') + '?kind=expiry')
         except Exception:
             pass
 
