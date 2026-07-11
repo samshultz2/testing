@@ -10,7 +10,7 @@ from sqlalchemy import func
 
 from models import (db, Product, Sale, SaleItem, Student, StudentEnrollment,
                     ClassArmAssignment, SchoolClass, ClassArm)
-from models.models_sales import PRODUCT_CATEGORIES, SALE_METHODS
+from models.models_sales import PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES, UNITS
 from utils.access_control import login_required, filter_classes_for_user
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
@@ -89,20 +89,89 @@ def dashboard():
 # Products / stock
 # ---------------------------------------------------------------------------
 
+_PRODUCT_STR = ('sku', 'barcode', 'brand', 'description', 'image_url', 'unit',
+                'pack_size', 'preferred_supplier', 'storage_location', 'warranty_period')
+_PRODUCT_FLOAT = ('unit_price', 'cost_price', 'discount_price', 'wholesale_price',
+                  'staff_price', 'student_price', 'parent_price', 'vat_rate')
+_PRODUCT_INT = ('stock_qty', 'reorder_level', 'opening_stock', 'max_stock', 'reorder_qty')
+_PRODUCT_REQUIRED_NUM = {'unit_price', 'cost_price', 'stock_qty', 'reorder_level'}
+
+
+def _apply_product_fields(p, form, is_new=False):
+    """Copy the (many, mostly optional) product fields from a form onto a Product.
+    Only keys present in the POST are touched, so a partial edit never blanks a
+    field it didn't submit. Required numerics default to 0; the rest may be None."""
+    from utils.security import strip_tags
+    if 'name' in form:
+        p.name = strip_tags(form.get('name') or '').strip() or p.name
+    if 'category' in form:
+        p.category = (form.get('category') or '').strip() or p.category or 'Other'
+    for f in _PRODUCT_STR:
+        if f in form:
+            setattr(p, f, strip_tags(form.get(f) or '').strip() or None)
+    for f in _PRODUCT_FLOAT:
+        if f in form:
+            v = form.get(f, type=float)
+            setattr(p, f, (v or 0) if f in _PRODUCT_REQUIRED_NUM else v)
+    for f in _PRODUCT_INT:
+        if f in form:
+            v = form.get(f, type=int)
+            setattr(p, f, (v or 0) if f in _PRODUCT_REQUIRED_NUM else v)
+    if 'taxable' in form:
+        p.taxable = form.get('taxable') in ('on', 'true', '1', 'yes')
+    if 'expiry_date' in form:
+        p.expiry_date = parse_date(form.get('expiry_date'))
+    if 'is_active' in form:
+        p.is_active = form.get('is_active') in ('on', 'true', '1', 'yes')
+    if is_new and p.opening_stock is None:
+        p.opening_stock = p.stock_qty or 0
+
+
+def _product_dict(p):
+    """Full product detail for the list + edit form."""
+    return {
+        'id': p.id, 'name': p.name, 'category': p.category, 'sku': p.sku,
+        'barcode': p.barcode, 'brand': p.brand, 'description': p.description,
+        'unit_price': p.unit_price or 0, 'cost_price': p.cost_price or 0,
+        'discount_price': p.discount_price, 'wholesale_price': p.wholesale_price,
+        'staff_price': p.staff_price, 'student_price': p.student_price,
+        'parent_price': p.parent_price,
+        'stock_qty': p.stock_qty or 0, 'reorder_level': p.reorder_level or 0,
+        'opening_stock': p.opening_stock, 'max_stock': p.max_stock, 'reorder_qty': p.reorder_qty,
+        'unit': p.unit, 'pack_size': p.pack_size, 'taxable': bool(p.taxable),
+        'vat_rate': p.vat_rate, 'preferred_supplier': p.preferred_supplier,
+        'storage_location': p.storage_location,
+        'expiry_date': p.expiry_date.isoformat() if p.expiry_date else '',
+        'warranty_period': p.warranty_period, 'is_active': bool(p.is_active),
+        'low_stock': bool(p.low_stock), 'out_of_stock': bool(p.out_of_stock),
+        'stock_value': p.stock_value, 'margin_pct': p.margin_pct,
+        'restock_url': url_for('sales.restock', product_id=p.id),
+        'edit_url': url_for('sales.edit_product', product_id=p.id),
+    }
+
+
 @sales_bp.route('/products')
 @login_required
 def products():
     q = (request.args.get('q') or '').strip()
+    category = (request.args.get('category') or '').strip()
+    stock = (request.args.get('stock') or '').strip()   # 'low' | 'out'
     query = scope_query(Product.query.filter_by(is_active=True), Product)
     if q:
-        query = query.filter(Product.name.ilike(like_term(q), escape='\\'))
+        query = query.filter(db.or_(Product.name.ilike(like_term(q), escape='\\'),
+                                    Product.sku.ilike(like_term(q), escape='\\'),
+                                    Product.barcode.ilike(like_term(q), escape='\\')))
+    if category:
+        query = query.filter(Product.category == category)
     rows = query.order_by(Product.category, Product.name).all()
+    if stock == 'low':
+        rows = [p for p in rows if p.low_stock]
+    elif stock == 'out':
+        rows = [p for p in rows if p.out_of_stock]
     return _render({
-        'page': 'products', 'q': q, 'categories': PRODUCT_CATEGORIES,
-        'products': [{'id': p.id, 'name': p.name, 'sku': p.sku, 'category': p.category,
-                      'unit_price': p.unit_price or 0, 'stock_qty': p.stock_qty,
-                      'low_stock': bool(p.low_stock),
-                      'restock_url': url_for('sales.restock', product_id=p.id)} for p in rows],
+        'page': 'products', 'q': q, 'category': category, 'stock': stock,
+        'categories': PRODUCT_CATEGORIES, 'units': UNITS,
+        'products': [_product_dict(p) for p in rows],
         'add_url': url_for('sales.add_product'),
         'urls': {'new_sale': url_for('sales.new_sale'), 'dashboard': url_for('sales.dashboard')},
     })
@@ -114,17 +183,11 @@ def add_product():
     name = (request.form.get('name') or '').strip()
     if not name:
         return _err('Product name is required.', url_for('sales.products'))
-    db.session.add(Product(
-        branch_id=branch_for_new(),
-        name=name,
-        category=request.form.get('category') or 'Other',
-        sku=(request.form.get('sku') or '').strip() or None,
-        unit_price=request.form.get('unit_price', type=float) or 0,
-        cost_price=request.form.get('cost_price', type=float) or 0,
-        stock_qty=request.form.get('stock_qty', type=int) or 0,
-        reorder_level=request.form.get('reorder_level', type=int) or 0))
+    p = Product(branch_id=branch_for_new())
+    _apply_product_fields(p, request.form, is_new=True)
+    db.session.add(p)
     db.session.commit()
-    return _ok(f'Added "{name}".', url_for('sales.products'))
+    return _ok(f'Added "{p.name}".', url_for('sales.products'))
 
 
 @sales_bp.route('/products/<int:product_id>/edit', methods=['POST'])
@@ -133,13 +196,7 @@ def edit_product(product_id):
     p = db.get_or_404(Product, product_id)
     if not can_access_branch(p.branch_id):
         return _err('That product belongs to another branch.', url_for('sales.products'))
-    p.name = (request.form.get('name') or p.name).strip()
-    p.category = request.form.get('category') or p.category
-    p.sku = (request.form.get('sku') or '').strip() or None
-    p.unit_price = request.form.get('unit_price', type=float) or 0
-    p.cost_price = request.form.get('cost_price', type=float) or 0
-    p.reorder_level = request.form.get('reorder_level', type=int) or 0
-    p.is_active = request.form.get('is_active') == 'on'
+    _apply_product_fields(p, request.form)
     db.session.commit()
     return _ok('Product updated.', url_for('sales.products'))
 
@@ -164,6 +221,12 @@ def restock(product_id):
 @login_required
 def new_sale():
     if request.method == 'POST':
+        student_id = request.form.get('student_id', type=int) or None
+        # Buyer type drives tiered pricing. A chosen student is always 'Student';
+        # otherwise use the submitted type (Staff/Parent/Visitor/Walk-in).
+        customer_type = (request.form.get('customer_type') or '').strip() or None
+        if student_id:
+            customer_type = 'Student'
         product_ids = request.form.getlist('product_id', type=int)
         quantities = request.form.getlist('quantity', type=int)
         lines = []
@@ -176,16 +239,18 @@ def new_sale():
                 continue
             if qty > (p.stock_qty or 0):
                 return _err(f'Only {p.stock_qty} of "{p.name}" in stock.', url_for('sales.new_sale'))
-            line_total = round((p.unit_price or 0) * qty, 2)
+            unit = p.price_for(customer_type)              # tiered price
+            line_total = round((unit or 0) * qty, 2)
             total += line_total
-            lines.append((p, qty, line_total))
+            lines.append((p, qty, unit, line_total))
         if not lines:
             return _err('Add at least one item with a quantity.', url_for('sales.new_sale'))
 
         sale = Sale(
             branch_id=branch_for_new(),
-            student_id=request.form.get('student_id', type=int) or None,
+            student_id=student_id,
             customer_name=(request.form.get('customer_name') or '').strip() or None,
+            customer_type=customer_type,
             payment_method=request.form.get('payment_method') or 'Cash',
             total=round(total, 2),
             amount_paid=request.form.get('amount_paid', type=float) or round(total, 2),
@@ -195,14 +260,14 @@ def new_sale():
         # the finance ledger categorises this sale when its after_insert fires —
         # the SaleItem rows don't exist in the DB yet at that point.
         from utils.finance_ledger import sale_category
-        sale._ledger_category = sale_category([p.category for p, _, _ in lines])
+        sale._ledger_category = sale_category([p.category for p, _, _, _ in lines])
         db.session.add(sale)
         db.session.flush()
         sale.receipt_no = f'SL{sale.id:05d}'
-        for p, qty, line_total in lines:
+        for p, qty, unit, line_total in lines:
             db.session.add(SaleItem(sale_id=sale.id, product_id=p.id,
                                     description=p.name, quantity=qty,
-                                    unit_price=p.unit_price, line_total=line_total))
+                                    unit_price=unit, line_total=line_total))
             p.stock_qty = (p.stock_qty or 0) - qty      # decrement stock
         db.session.commit()
         from utils.audit import log_action
@@ -216,10 +281,13 @@ def new_sale():
     ).filter(Product.stock_qty > 0).order_by(Product.category, Product.name).all()
     classes, arms = _sale_class_arm_options()
     return _render({
-        'page': 'new_sale', 'methods': SALE_METHODS,
+        'page': 'new_sale', 'methods': SALE_METHODS, 'customer_types': CUSTOMER_TYPES,
         'submit_url': url_for('sales.new_sale'),
+        # Tier prices ride along so the form can price the cart live per buyer type.
         'products': [{'id': p.id, 'name': p.name, 'category': p.category,
-                      'unit_price': p.unit_price or 0, 'stock_qty': p.stock_qty} for p in products],
+                      'unit_price': p.unit_price or 0, 'stock_qty': p.stock_qty,
+                      'student_price': p.student_price, 'staff_price': p.staff_price,
+                      'parent_price': p.parent_price} for p in products],
         # Large schools can't scroll one flat dropdown of every student — the
         # buyer is chosen by class (+ optional arm) then searched on demand.
         'classes': classes, 'arms': arms,

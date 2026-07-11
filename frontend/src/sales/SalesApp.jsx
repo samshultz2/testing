@@ -3,7 +3,7 @@ import { submitJson } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionShell, Table } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionShell, Table, Modal, Button } from '../components/ui';
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
 
@@ -67,23 +67,98 @@ function SalesTable({ rows, withItems, paged }) {
                 pageSize={paged ? 25 : undefined} sticky={paged} maxHeight={paged ? '65vh' : undefined} />;
 }
 
+// ---- Product form (add / edit) ---------------------------------------------
+const PF_NUM = ['cost_price', 'unit_price', 'discount_price', 'wholesale_price',
+  'student_price', 'staff_price', 'parent_price', 'stock_qty', 'reorder_level',
+  'max_stock', 'reorder_qty', 'vat_rate'];
+
+function Field({ label, children, wide }) {
+  return <label className="form-group" style={{ margin: 0, gridColumn: wide ? '1 / -1' : undefined }}>
+    <span className="form-label">{label}</span>{children}</label>;
+}
+function Num({ v, on, step }) {
+  return <input type="number" step={step || '1'} className="form-control" value={v ?? ''} onChange={(e) => on(e.target.value)} />;
+}
+
+function ProductForm({ d, product, onClose, onSaved }) {
+  const editing = !!product;
+  const init = { name: '', category: d.categories[0] || 'Other', sku: '', barcode: '', brand: '',
+    unit: '', pack_size: '', storage_location: '', preferred_supplier: '', warranty_period: '',
+    description: '', image_url: '', cost_price: '', unit_price: '', discount_price: '',
+    wholesale_price: '', student_price: '', staff_price: '', parent_price: '', stock_qty: '0',
+    reorder_level: '0', max_stock: '', reorder_qty: '', vat_rate: '', taxable: false,
+    expiry_date: '', is_active: true, ...(product || {}) };
+  const [f, setF] = useState(init);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+
+  const save = async () => {
+    if (!f.name.trim()) { setErr('Product name is required.'); return; }
+    setBusy(true); setErr(null);
+    const payload = { ...f, taxable: f.taxable ? 'on' : '', is_active: f.is_active ? 'on' : '' };
+    if (editing) delete payload.stock_qty;   // stock changes go through Restock / adjustments
+    const r = await submitJson(editing ? product.edit_url : d.add_url, payload);
+    setBusy(false);
+    if (r.ok) { onSaved(); onClose(); } else setErr(r.error || 'Could not save product.');
+  };
+
+  const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' };
+  return (
+    <Modal title={editing ? 'Edit product' : 'Add product'} icon="fa-box" size="lg" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+             <Button variant="primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button></>}>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      <h4 className="text-muted text-sm" style={{ margin: '0 0 .4rem' }}>Basics</h4>
+      <div style={grid}>
+        <Field label="Name *" wide><input type="text" className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} required /></Field>
+        <Field label="Category"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Brand"><input type="text" className="form-control" value={f.brand} onChange={(e) => set('brand', e.target.value)} /></Field>
+        <Field label="SKU"><input type="text" className="form-control" value={f.sku} onChange={(e) => set('sku', e.target.value)} /></Field>
+        <Field label="Barcode"><input type="text" className="form-control" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></Field>
+        <Field label="Unit"><select className="form-control" value={f.unit || ''} onChange={(e) => set('unit', e.target.value)}><option value="">—</option>{(d.units || []).map((u) => <option key={u}>{u}</option>)}</select></Field>
+        <Field label="Pack size"><input type="text" className="form-control" value={f.pack_size} onChange={(e) => set('pack_size', e.target.value)} /></Field>
+      </div>
+      <h4 className="text-muted text-sm" style={{ margin: '.9rem 0 .4rem' }}>Pricing (₦) — tier prices are optional; blank uses the selling price</h4>
+      <div style={grid}>
+        <Field label="Cost price"><Num v={f.cost_price} on={(v) => set('cost_price', v)} step="0.01" /></Field>
+        <Field label="Selling price"><Num v={f.unit_price} on={(v) => set('unit_price', v)} step="0.01" /></Field>
+        <Field label="Discount price"><Num v={f.discount_price} on={(v) => set('discount_price', v)} step="0.01" /></Field>
+        <Field label="Wholesale price"><Num v={f.wholesale_price} on={(v) => set('wholesale_price', v)} step="0.01" /></Field>
+        <Field label="Student price"><Num v={f.student_price} on={(v) => set('student_price', v)} step="0.01" /></Field>
+        <Field label="Staff price"><Num v={f.staff_price} on={(v) => set('staff_price', v)} step="0.01" /></Field>
+        <Field label="Parent price"><Num v={f.parent_price} on={(v) => set('parent_price', v)} step="0.01" /></Field>
+      </div>
+      <h4 className="text-muted text-sm" style={{ margin: '.9rem 0 .4rem' }}>Stock</h4>
+      <div style={grid}>
+        {!editing && <Field label="Opening stock"><Num v={f.stock_qty} on={(v) => set('stock_qty', v)} /></Field>}
+        <Field label="Reorder / min level"><Num v={f.reorder_level} on={(v) => set('reorder_level', v)} /></Field>
+        <Field label="Max level"><Num v={f.max_stock} on={(v) => set('max_stock', v)} /></Field>
+        <Field label="Reorder qty"><Num v={f.reorder_qty} on={(v) => set('reorder_qty', v)} /></Field>
+        <Field label="Storage location"><input type="text" className="form-control" value={f.storage_location} onChange={(e) => set('storage_location', e.target.value)} /></Field>
+      </div>
+      <h4 className="text-muted text-sm" style={{ margin: '.9rem 0 .4rem' }}>Tax & other</h4>
+      <div style={grid}>
+        <Field label="Taxable"><label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38 }}><input type="checkbox" checked={f.taxable} onChange={(e) => set('taxable', e.target.checked)} /> VAT applies</label></Field>
+        <Field label="VAT rate (%)"><Num v={f.vat_rate} on={(v) => set('vat_rate', v)} step="0.1" /></Field>
+        <Field label="Preferred supplier"><input type="text" className="form-control" value={f.preferred_supplier} onChange={(e) => set('preferred_supplier', e.target.value)} /></Field>
+        <Field label="Expiry date"><input type="date" className="form-control" value={f.expiry_date || ''} onChange={(e) => set('expiry_date', e.target.value)} /></Field>
+        <Field label="Warranty"><input type="text" className="form-control" value={f.warranty_period} onChange={(e) => set('warranty_period', e.target.value)} /></Field>
+        {editing && <Field label="Status"><label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38 }}><input type="checkbox" checked={f.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Active</label></Field>}
+      </div>
+      <Field label="Description" wide><textarea className="form-control" rows={2} value={f.description} onChange={(e) => set('description', e.target.value)} /></Field>
+    </Modal>
+  );
+}
+
 // ---- Products --------------------------------------------------------------
 function Products({ d, notify }) {
   const nav = useNav();
   const [q, setQ] = useState(d.q || '');
+  const [cat, setCat] = useState(d.category || '');
+  const [stock, setStock] = useState(d.stock || '');
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ name: '', category: (d.categories[0] || 'Other'), unit_price: '0', stock_qty: '0', reorder_level: '0' });
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  const submitAdd = async (e) => {
-    e.preventDefault();
-    if (!form.name.trim()) { notify('error', 'Product name is required.'); return; }
-    setBusy(true);
-    const r = await submitJson(d.add_url, form);
-    setBusy(false);
-    if (r.ok) nav.refresh();
-    else notify('error', r.error || 'Could not add product.');
-  };
+  const [editing, setEditing] = useState(null);   // product being edited, or {} for add
 
   const restock = async (p, qty) => {
     if (!qty) return;
@@ -94,67 +169,69 @@ function Products({ d, notify }) {
     else notify('error', r.error || 'Could not restock.');
   };
 
-  // Client-side search over the loaded products (parity: classic reloaded on change).
-  const shown = q ? d.products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : d.products;
+  const shown = d.products.filter((p) => {
+    if (q && !(`${p.name} ${p.sku || ''} ${p.barcode || ''}`.toLowerCase().includes(q.toLowerCase()))) return false;
+    if (cat && p.category !== cat) return false;
+    if (stock === 'low' && !p.low_stock) return false;
+    if (stock === 'out' && !p.out_of_stock) return false;
+    return true;
+  });
+  const invValue = d.products.reduce((t, p) => t + (p.stock_value || 0), 0);
 
   return (
     <>
-      <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={
-        <a href={d.urls.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-cart-plus" /> New Sale</a>} />
+      <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={<>
+        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>
+        <a href={d.urls.new_sale} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-cart-plus" /> New Sale</a>
+      </>} />
 
-      <div className="card mb-3">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add product</h3></div>
-        <div className="card-body">
-          <form onSubmit={submitAdd} className="filter-form" style={{ flexWrap: 'wrap', gap: '1rem' }}>
-            <div className="form-group"><label className="form-label">Name <span className="text-danger">*</span></label>
-              <input type="text" className="form-control" value={form.name} onChange={(e) => set('name', e.target.value)} required /></div>
-            <div className="form-group"><label className="form-label">Category</label>
-              <select className="form-control" value={form.category} onChange={(e) => set('category', e.target.value)}>
-                {d.categories.map((c) => <option key={c}>{c}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Price (₦)</label>
-              <input type="number" step="0.01" className="form-control" value={form.unit_price} onChange={(e) => set('unit_price', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Opening stock</label>
-              <input type="number" className="form-control" value={form.stock_qty} onChange={(e) => set('stock_qty', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Reorder at</label>
-              <input type="number" className="form-control" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} /></div>
-            <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-              <button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
-          </form>
-        </div>
-      </div>
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <input type="search" className="form-control" placeholder="Search name / SKU / barcode" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
+        <select className="form-control" value={cat} onChange={(e) => setCat(e.target.value)} style={{ maxWidth: 200 }}>
+          <option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="form-control" value={stock} onChange={(e) => setStock(e.target.value)} style={{ maxWidth: 160 }}>
+          <option value="">All stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>
+        <span className="text-muted text-sm" style={{ marginLeft: 'auto' }}>Inventory value: <strong>{naira(invValue)}</strong></span>
+      </div></div>
 
       <div className="card">
-        <div className="card-header"><h3>Products ({shown.length})</h3>
-          <input type="text" className="form-control" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 220 }} />
-        </div>
+        <div className="card-header"><h3>Products ({shown.length})</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {shown.length ? (
             <div className="table-container">
               <table className="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Name</th><th>Category</th><th className="text-right">Price</th><th className="text-right">Stock</th><th>Restock</th></tr></thead>
-                <tbody>{shown.map((p) => <ProductRow key={p.id} p={p} onRestock={restock} busy={busy} />)}</tbody>
+                <thead><tr><th>Name</th><th>Category</th><th className="text-right">Price</th><th className="text-right">Stock</th><th>Restock</th><th /></tr></thead>
+                <tbody>{shown.map((p) => <ProductRow key={p.id} p={p} onRestock={restock} onEdit={() => setEditing(p)} busy={busy} />)}</tbody>
               </table>
             </div>
-          ) : <EmptyState icon="fa-boxes-stacked" title="No products">Add your first product above.</EmptyState>}
+          ) : <EmptyState icon="fa-boxes-stacked" title="No products match" />}
         </div>
       </div>
+
+      {editing && <ProductForm d={d} product={editing.id ? editing : null}
+                               onClose={() => setEditing(null)} onSaved={() => nav.refresh()} />}
     </>
   );
 }
 
-function ProductRow({ p, onRestock, busy }) {
+function ProductRow({ p, onRestock, onEdit, busy }) {
   const [qty, setQty] = useState('');
+  const badge = p.out_of_stock ? <span className="badge badge-danger">Out</span>
+    : p.low_stock ? <span className="badge badge-warning">Low</span> : null;
   return (
     <tr>
-      <td data-label="Name">{p.name}{p.sku && <span className="text-muted text-sm"> ({p.sku})</span>}</td>
+      <td data-label="Name">{p.name}{p.sku && <span className="text-muted text-sm"> ({p.sku})</span>}{p.brand && <span className="text-muted text-sm"> · {p.brand}</span>}</td>
       <td data-label="Category">{p.category}</td>
       <td data-label="Price" className="text-right">{naira(p.unit_price)}</td>
-      <td data-label="Stock" className="text-right"><strong style={p.low_stock ? { color: '#e74a3b' } : undefined}>{p.stock_qty}</strong></td>
+      <td data-label="Stock" className="text-right"><strong style={p.low_stock ? { color: '#e74a3b' } : undefined}>{p.stock_qty}</strong> {badge}</td>
       <td data-label="Restock">
         <form onSubmit={(e) => { e.preventDefault(); onRestock(p, Number(qty) || 0); }} style={{ display: 'flex', gap: '.3rem' }}>
           <input type="number" className="form-control" style={{ width: 80 }} placeholder="+qty" value={qty} onChange={(e) => setQty(e.target.value)} />
           <button className="btn btn-sm btn-secondary" disabled={busy}>Add</button>
         </form>
+      </td>
+      <td data-label="">
+        <button type="button" className="btn btn-sm btn-light" onClick={onEdit}><i aria-hidden="true" className="fas fa-pen" /> Edit</button>
       </td>
     </tr>
   );
@@ -190,12 +267,14 @@ function BuyerPicker({ d, pay, setP }) {
     return () => { live = false; clearTimeout(t); };
   }, [mode, classId, armId, q, d.student_search_url]);
 
-  const pick = (s) => { setChosen(s); setP('student_id', s.id); setP('customer_name', ''); };
+  const pick = (s) => { setChosen(s); setP('student_id', s.id); setP('customer_name', ''); setP('customer_type', 'Student'); };
   const clearPick = () => { setChosen(null); setP('student_id', ''); };
   const chooseMode = (m) => {
     setMode(m);
-    if (m === 'other') { clearPick(); } else { setP('customer_name', ''); }
+    if (m === 'other') { clearPick(); setP('customer_type', pay.customer_type && pay.customer_type !== 'Student' ? pay.customer_type : 'Walk-in'); }
+    else { setP('customer_name', ''); setP('customer_type', 'Student'); }
   };
+  const otherTypes = (d.customer_types || ['Staff', 'Parent', 'Visitor', 'Walk-in']).filter((x) => x !== 'Student');
 
   return (
     <div className="form-group">
@@ -210,8 +289,14 @@ function BuyerPicker({ d, pay, setP }) {
       </div>
 
       {mode === 'other' && (
-        <input type="text" className="form-control" placeholder="Customer name (optional)"
-               value={pay.customer_name} onChange={(e) => setP('customer_name', e.target.value)} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.5rem' }}>
+          <select className="form-control" aria-label="Buyer type" value={pay.customer_type || 'Walk-in'}
+                  onChange={(e) => setP('customer_type', e.target.value)}>
+            {otherTypes.map((tp) => <option key={tp}>{tp}</option>)}
+          </select>
+          <input type="text" className="form-control" placeholder="Customer name (optional)"
+                 value={pay.customer_name} onChange={(e) => setP('customer_name', e.target.value)} />
+        </div>
       )}
 
       {mode === 'student' && (chosen ? (
@@ -260,10 +345,16 @@ function BuyerPicker({ d, pay, setP }) {
 function NewSale({ d, notify }) {
   const nav = useNav();
   const [qty, setQty] = useState({});       // product_id -> qty
-  const [pay, setPay] = useState({ student_id: '', customer_name: '', payment_method: d.methods[0] || 'Cash', amount_paid: '' });
+  const [pay, setPay] = useState({ student_id: '', customer_name: '', customer_type: 'Student', payment_method: d.methods[0] || 'Cash', amount_paid: '' });
   const [busy, setBusy] = useState(false);
   const setP = (k, v) => setPay((s) => ({ ...s, [k]: v }));
-  const total = d.products.reduce((t, p) => t + (p.unit_price || 0) * (Number(qty[p.id]) || 0), 0);
+  // Price a product for the current buyer type, honouring tier prices.
+  const priceOf = (p) => {
+    const bt = (pay.customer_type || '').toLowerCase();
+    const tier = bt === 'student' ? p.student_price : bt === 'staff' ? p.staff_price : bt === 'parent' ? p.parent_price : null;
+    return tier && tier > 0 ? tier : (p.unit_price || 0);
+  };
+  const total = d.products.reduce((t, p) => t + priceOf(p) * (Number(qty[p.id]) || 0), 0);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -289,7 +380,7 @@ function NewSale({ d, notify }) {
               <tbody>{d.products.map((p) => (
                 <tr key={p.id}>
                   <td>{p.name} <span className="text-muted text-sm">· {p.category}</span></td>
-                  <td className="text-right">{naira(p.unit_price)}</td>
+                  <td className="text-right">{naira(priceOf(p))}{priceOf(p) !== (p.unit_price || 0) && <span className="text-muted text-sm" style={{ textDecoration: 'line-through', marginLeft: 4 }}>{naira(p.unit_price)}</span>}</td>
                   <td>{p.stock_qty}</td>
                   <td><input type="number" className="form-control" min="0" max={p.stock_qty}
                              value={qty[p.id] || ''} onChange={(e) => setQty((s) => ({ ...s, [p.id]: e.target.value }))} /></td>

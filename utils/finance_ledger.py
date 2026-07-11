@@ -131,8 +131,13 @@ def _expense_vals(connection, e):
 # ledger/accounting splits shop income into meaningful lines (Bookshop, Uniform…)
 # instead of one opaque "Sales". Anything unmapped falls back to "Other sales".
 _SALE_BUCKETS = {
+    # Legacy category names (kept so existing products still bucket correctly).
     'Textbook': 'Bookshop', 'Workbook': 'Bookshop', 'Notebook': 'Bookshop',
     'Stationery': 'Bookshop', 'Uniform': 'Uniform',
+    # Current catalogue categories.
+    'Academic Materials': 'Bookshop', 'Textbooks': 'Bookshop',
+    'Exercise Books': 'Bookshop', 'School Bags': 'Bookshop',
+    'Uniforms': 'Uniform', 'Sports Wear': 'Uniform',
 }
 
 
@@ -224,6 +229,16 @@ _ADDED_COLUMNS = {
         'medical_conditions': 'TEXT', 'disabilities': 'TEXT', 'medications': 'TEXT',
         'medical_notes': 'TEXT', 'emergency_medical': 'TEXT',
     },
+    'sales_products': {
+        'barcode': 'VARCHAR(60)', 'brand': 'VARCHAR(80)', 'description': 'TEXT',
+        'image_url': 'VARCHAR(255)', 'discount_price': 'FLOAT', 'wholesale_price': 'FLOAT',
+        'staff_price': 'FLOAT', 'student_price': 'FLOAT', 'parent_price': 'FLOAT',
+        'opening_stock': 'INTEGER', 'max_stock': 'INTEGER', 'reorder_qty': 'INTEGER',
+        'unit': 'VARCHAR(20)', 'pack_size': 'VARCHAR(30)', 'taxable': 'BOOLEAN',
+        'vat_rate': 'FLOAT', 'preferred_supplier': 'VARCHAR(120)',
+        'storage_location': 'VARCHAR(80)', 'expiry_date': 'DATE', 'warranty_period': 'VARCHAR(40)',
+    },
+    'sales': {'customer_type': 'VARCHAR(20)'},
 }
 
 # Columns whose NOT NULL constraint must be relaxed on existing databases (a
