@@ -48,3 +48,24 @@ def test_broadsheet_totals_reflect_scores(app):
     row = next(r for r in j['rows'] if 'PERF_BROAD' in r['student'])
     # single assessment of 64 → that subject's total is 64
     assert float(row['subjects'][str(ids['cs'])]) == 64
+
+
+def test_build_report_card_reflects_score(app):
+    from utils.report_card import build_report_card
+    ids = _setup(app)
+    sid = _student(app, ids, 'PERF_CARD')
+    _seed_score(app, sid, ids, 58)
+    with app.app_context():
+        enrollment, rc = build_report_card(sid, ids['term'])
+        assert rc is not None
+        row = next(r for r in rc['subjects'] if r['subject'].id == ids['sub'])
+        assert float(row['assessments'][ids['at']]) == 58 and float(row['total']) == 58
+
+
+def test_print_all_report_cards_renders(app):
+    ids = _setup(app)
+    sid = _student(app, ids, 'PERF_PRINT')
+    _seed_score(app, sid, ids, 61)
+    c = _admin(app)
+    r = c.get(f"/subjects/report-cards/print-all?term_id={ids['term']}&assignment_id={ids['asg']}")
+    assert r.status_code == 200

@@ -520,18 +520,31 @@ def print_all_report_cards():
             (ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected_assignment.arm_id)
         ).join(Subject).order_by(Subject.name).all()
         
-        enrollments = StudentEnrollment.query.filter_by(
-            class_arm_assignment_id=assignment_id,
-            is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
-        
+        from sqlalchemy.orm import joinedload
+        enrollments = (StudentEnrollment.query
+                       .options(joinedload(StudentEnrollment.student))
+                       .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                       .join(Student).order_by(Student.surname, Student.first_name).all())
+
+        # Every score for the class in one query, indexed by (student,
+        # class-subject, assessment) — was a query per student × subject, the
+        # main cost when printing a whole class.
+        cs_ids = [cs.id for cs in class_subjects]
+        sids = [e.student_id for e in enrollments]
+        score_map = {}
+        if cs_ids and sids:
+            for s in StudentScore.query.filter(
+                    StudentScore.student_id.in_(sids),
+                    StudentScore.class_subject_id.in_(cs_ids)).all():
+                score_map[(s.student_id, s.class_subject_id, s.assessment_type_id)] = s.score
+
         for enrollment in enrollments:
             student = enrollment.student
             subjects_data = []
             total_score = 0
             subjects_passed = 0
             subjects_failed = 0
-            
+
             for cs in class_subjects:
                 subject_row = {
                     'subject': cs.subject,
@@ -540,17 +553,10 @@ def print_all_report_cards():
                     'grade': '-',
                     'remark': '-'
                 }
-                
-                scores = StudentScore.query.filter_by(
-                    student_id=student.id,
-                    class_subject_id=cs.id
-                ).all()
-                
-                scores_dict = {s.assessment_type_id: s.score for s in scores}
-                
+
                 subject_total = 0
                 for at in assessment_types:
-                    score = scores_dict.get(at.id)
+                    score = score_map.get((student.id, cs.id, at.id))
                     subject_row['assessments'][at.id] = score
                     if score:
                         subject_total += score

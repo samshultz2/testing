@@ -176,15 +176,22 @@ def build_report_card(student_id, term_id):
     subjects_passed = 0
     subjects_failed = 0
 
+    # All of this student's scores across the term's subjects in one query,
+    # indexed by (class-subject, assessment) — was a query per subject.
+    cs_ids = [cs.id for cs in class_subjects]
+    score_map = {}
+    if cs_ids:
+        for s in StudentScore.query.filter(
+                StudentScore.student_id == student_id,
+                StudentScore.class_subject_id.in_(cs_ids)).all():
+            score_map[(s.class_subject_id, s.assessment_type_id)] = s.score
+
     for cs in class_subjects:
         row = {'subject': cs.subject, 'teacher': cs.teacher_name,
                'assessments': {}, 'total': 0, 'grade': '-', 'remark': '-'}
-        scores = StudentScore.query.filter_by(
-            student_id=student_id, class_subject_id=cs.id).all()
-        scores_dict = {s.assessment_type_id: s.score for s in scores}
         subject_total = 0
         for at in assessment_types:
-            score = scores_dict.get(at.id)
+            score = score_map.get((cs.id, at.id))
             row['assessments'][at.id] = score
             if score:
                 subject_total += score
