@@ -74,11 +74,15 @@ def _alert_lockout(ident):
         pass
 
 
-def _complete_login(user, dest=None):
+def _complete_login(user, dest=None, remember=True):
     """Finish a fully-authenticated login (password, and 2FA if enabled): drop
     any pre-login session, set identity, rotate the CSRF token, and land on the
     intended page (``dest``) or the dashboard. Shared by the password path and
-    the 2FA verify path. ``dest`` is captured before the session is cleared."""
+    the 2FA verify path. ``dest`` is captured before the session is cleared.
+
+    ``remember`` drives session persistence: True keeps the signed-in session
+    for PERMANENT_SESSION_LIFETIME (the "Remember me" default); False makes it a
+    browser-session cookie that clears when the browser closes."""
     from utils.branch_scope import set_session_scope
     from utils.org_scope import set_session_org
     from utils.csrf import rotate_csrf_token
@@ -97,7 +101,7 @@ def _complete_login(user, dest=None):
         session['theme'] = user.theme
     session['must_change_password'] = bool(user.must_change_password)
     rotate_csrf_token()
-    session.permanent = True
+    session.permanent = remember
     user.last_login = datetime.now()
     db.session.commit()
     log_action('auth.login', detail=user.username)   # session identity now set
@@ -118,6 +122,9 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+        # "Remember me" is checked by default on the form; unchecked → the field
+        # is absent and the session becomes a browser-session cookie.
+        remember = request.form.get('remember') is not None
 
         if _login_locked(username):
             log_action('auth.login_locked', detail=username or '(no username)')
@@ -133,9 +140,14 @@ def login():
             flash('Invalid credentials. Please try again.', 'error')
             return redirect(url_for('auth.login'))
 
-        # Try user-based login first
+        # Try user-based login first. Accept the school email as an alternative
+        # to the username (emails are unique) so people can sign in with whichever
+        # they remember — matched only when the username itself doesn't exist.
         if username:
             user = User.query.filter_by(username=username).first()
+            if not user and '@' in username:
+                from sqlalchemy import func
+                user = User.query.filter(func.lower(User.email) == username.lower()).first()
 
             if user and user.check_password(password):
                 if not user.is_active:
@@ -152,6 +164,7 @@ def login():
                     session.clear()
                     session['_pending_mfa_uid'] = user.id
                     session['_pending_mfa_ts'] = int(datetime.now().timestamp())
+                    session['_pending_remember'] = remember    # survive the 2FA hop
                     if next_url:
                         session['_pending_next'] = next_url   # survive the 2FA hop
                     from utils.csrf import rotate_csrf_token
@@ -159,7 +172,7 @@ def login():
                     session.permanent = True
                     return redirect(url_for('auth.verify_mfa'))
 
-                return _complete_login(user, dest=next_url)
+                return _complete_login(user, dest=next_url, remember=remember)
 
             elif user:
                 _record_login_failure(username)
@@ -185,7 +198,7 @@ def login():
             set_session_org(None)
             from utils.csrf import rotate_csrf_token
             rotate_csrf_token()
-            session.permanent = True
+            session.permanent = remember
             log_action('auth.login', detail='legacy-admin')
             flash('Welcome back, Admin!', 'success')
             return redirect(next_url or url_for('main.dashboard'))
@@ -193,7 +206,9 @@ def login():
         _record_login_failure(username or None)
         flash('Invalid credentials. Please try again.', 'error')
 
-    return render_template('auth/login.html', next_url=next_url)
+    return render_template('auth/login.html', next_url=next_url,
+                           legacy_login=bool(Config.ENABLE_LEGACY_LOGIN and Config.ADMIN_PASSWORD),
+                           now_year=datetime.now().year)
 
 
 @auth_bp.route('/login/verify', methods=['GET', 'POST'])
@@ -234,9 +249,10 @@ def verify_mfa():
             session.pop('_pending_mfa_uid', None)
             session.pop('_pending_mfa_ts', None)
             dest = session.pop('_pending_next', None)      # remembered before 2FA
+            remember = session.pop('_pending_remember', True)
             if used_backup:
                 flash('Backup code used — consider regenerating your backup codes.', 'info')
-            return _complete_login(user, dest=dest)
+            return _complete_login(user, dest=dest, remember=remember)
         login_limiter.record_attempt(rkey)
         flash('Invalid code. Please try again.', 'error')
         return redirect(url_for('auth.verify_mfa'))
