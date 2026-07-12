@@ -11,6 +11,7 @@ from models import (
 from functools import wraps
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
+from utils.branch_scope import scope_query, can_access_branch
 
 contributions_bp = Blueprint('contributions', __name__, url_prefix='/contributions')
 
@@ -125,7 +126,7 @@ def dashboard():
         flash('No active session found', 'error')
         return redirect(url_for('main.dashboard'))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
     
@@ -253,7 +254,7 @@ def quick_entry():
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
     max_due = float(ContributionSettings.get('max_due', 20000))
@@ -277,9 +278,14 @@ def quick_entry():
             payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
             count = 0
             total_amount = 0
+            # Only students on the (branch-scoped) roster may be collected for —
+            # a crafted amount_<id> for another branch's student is ignored.
+            allowed_ids = {s['id'] for s in students_list}
             for key, value in request.form.items():
                 if key.startswith('amount_') and value.strip():
                     student_id = int(key.replace('amount_', ''))
+                    if student_id not in allowed_ids:
+                        continue
                     amount = float(value.strip())
                     if amount > 0:
                         payment = ContributionPayment(session_id=active_session.id, student_id=student_id, amount=amount, payment_date=payment_date, received_by=received_by)
@@ -314,7 +320,7 @@ def add_payment():
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
     students_list = [{'id': e.student.id, 'name': (f"{e.student.full_name} ({e.class_arm_assignment.arm_label})" if e.class_arm_assignment.arm_label else e.student.full_name)} for e in enrollments]
@@ -323,6 +329,10 @@ def add_payment():
     if request.method == 'POST':
         try:
             student_id = int(request.form.get('student_id'))
+            # Reject a payment posted against a student outside the user's branch.
+            _stu = db.session.get(Student, student_id)
+            if not _stu or not can_access_branch(_stu.branch_id):
+                return _err('That student is not in your branch.', url_for('contributions.add_payment'))
             amount = float(request.form.get('amount'))
             payment_date = datetime.strptime(request.form.get('payment_date'), '%Y-%m-%d').date()
             received_by = request.form.get('received_by', '').strip()
@@ -540,7 +550,7 @@ def report():
     arms_data = {}
     from utils.services.contributions import paid_by_student
     paid_map = paid_by_student(active_session.id)   # one query for the whole session
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     for assignment in sss3_assignments:
         arm_name = assignment.arm_label
         enrollments = StudentEnrollment.query.filter_by(class_arm_assignment_id=assignment.id, is_active=True).all()
@@ -587,7 +597,7 @@ def export_excel():
             cell.fill = header_fill
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center')
-        sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+        sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
         assignment_ids = [a.id for a in sss3_assignments]
         enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
         from utils.services.contributions import paid_by_student
@@ -686,9 +696,11 @@ def import_excel():
                 flash('No active term or SSS3 class found', 'error')
                 return redirect(url_for('contributions.import_excel'))
             
-            sss3_assignments = ClassArmAssignment.query.filter_by(
+            # Branch-scoped: an import only matches names against the current
+            # user's own branch roster, so it can't post to other branches.
+            sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(
                 class_id=sss3_class.id, term_id=active_term.id
-            ).all()
+            ), ClassArmAssignment).all()
             assignment_ids = [a.id for a in sss3_assignments]
             enrollments = StudentEnrollment.query.filter(
                 StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
@@ -873,7 +885,7 @@ def defaulters():
     
     max_due = float(ContributionSettings.get('max_due', 20000))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(
         StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
@@ -998,7 +1010,7 @@ def export_defaulters():
         active_session = get_active_session()
         max_due = float(ContributionSettings.get('max_due', 20000))
         
-        sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+        sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
         assignment_ids = [a.id for a in sss3_assignments]
         enrollments = StudentEnrollment.query.filter(
             StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),

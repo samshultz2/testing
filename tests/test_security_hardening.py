@@ -78,6 +78,40 @@ def test_contributions_student_detail_is_branch_scoped(app):
     assert cc.get(f'/contributions/api/student/{sB}/info').status_code == 200
 
 
+def test_contributions_add_payment_is_branch_scoped(app):
+    """A branch user cannot record a contribution payment against a student in
+    another branch by posting a crafted student_id (cross-branch write IDOR)."""
+    from models import (AcademicSession, Term, SchoolClass, ContributionPayment,
+                        ContributionSettings)
+    with app.app_context():
+        # minimal active config so add_payment gets past its config guard
+        if not AcademicSession.query.filter_by(is_active=True).first():
+            db.session.add(AcademicSession(name='CB-Sess', is_active=True))
+        db.session.flush()
+        ssn = AcademicSession.query.filter_by(is_active=True).first()
+        if not Term.query.filter_by(is_active=True).first():
+            db.session.add(Term(name='CB-Term', session_id=ssn.id, term_number=1, is_active=True))
+        if not SchoolClass.query.filter_by(name='SSS3').first():
+            db.session.add(SchoolClass(name='SSS3', level=6))
+        # a student in branch B
+        brB = Branch.query.filter_by(code='CBB').first() or Branch(name='CBB', code='CBB', is_active=True)
+        db.session.add(brB); db.session.flush()
+        stu = Student(student_id=Student.generate_student_id(), first_name='Cross',
+                      surname='Branch', gender='Male', is_active=True, branch_id=brB.id)
+        db.session.add(stu); db.session.commit()
+        sB = stu.id
+
+    # branch-A admin with contributions access tries to pay for branch B's student
+    bc, btok, _ = _branch_admin(app, 'CBA')
+    with bc.session_transaction() as s:
+        s['contributions_access'] = True
+    bc.post('/contributions/add-payment',
+            data={'student_id': sB, 'amount': '5000', 'payment_date': '2026-01-10',
+                  '_csrf_token': btok}, follow_redirects=True)
+    with app.app_context():
+        assert ContributionPayment.query.filter_by(student_id=sB).count() == 0   # blocked
+
+
 def test_security_headers_hardened(app):
     """Modern header posture: XSS-auditor disabled (CSP is the real defence), a
     Permissions-Policy that only grants what the app uses, and cross-origin
