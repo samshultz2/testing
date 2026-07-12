@@ -59,6 +59,17 @@
     .wb-hero{padding:5rem 0}
     .wb-hero.gradient{background:linear-gradient(135deg,var(--wb-primary),color-mix(in srgb,var(--wb-primary) 40%,#000));color:#fff}
     .wb-hero.gradient .wb-lead,.wb-hero.gradient .wb-eyebrow{color:rgba(255,255,255,.85)}
+    .wb-hero.image-bg{position:relative;color:#fff;background-color:var(--wb-primary);background-size:cover;background-position:center;padding:7rem 0}
+    .wb-hero.image-bg::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.6))}
+    .wb-hero.image-bg .wb-wrap{position:relative}
+    .wb-hero.image-bg .wb-lead,.wb-hero.image-bg .wb-eyebrow{color:rgba(255,255,255,.9)}
+    /* On dark heroes, the outline CTA must be light to stay legible. */
+    .wb-hero.image-bg a.wb-btn-outline,.wb-hero.gradient a.wb-btn-outline{color:#fff;border-color:rgba(255,255,255,.65)}
+    .wb-cta-img{position:relative;color:#fff;background-color:var(--wb-primary);background-size:cover;background-position:center;border-radius:var(--wb-radius);padding:3.5rem;text-align:center;overflow:hidden}
+    .wb-cta-img::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.5)}
+    .wb-cta-img>*{position:relative}
+    .wb-cta-img h2{color:#fff}
+    .wb-gal.showcase img:first-child{grid-column:span 2;grid-row:span 2}
     .wb-hero h1{font-size:clamp(2rem,5vw,3.4rem)}
     .wb-hero-split{display:grid;gap:2rem;align-items:center}
     @media(min-width:820px){.wb-hero-split{grid-template-columns:1fr 1fr}}

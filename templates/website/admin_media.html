@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Media library - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('website_admin.index') }}">Website Builder</a> / <span>Media</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-images"></i> Media library</h1>
+    <p class="text-muted text-sm">Images for your website, stored securely with your school. {{ items|length }} image(s) · {{ (total / 1024 / 1024)|round(2) }} MB</p></div>
+  <div class="page-header-actions"><a href="{{ url_for('website_admin.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a></div>
+</div>
+
+<div class="card mb-3"><div class="card-body">
+  <form method="POST" action="{{ url_for('website_admin.media_upload') }}" enctype="multipart/form-data" class="d-flex gap-2" style="flex-wrap:wrap;align-items:center">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="file" accept="image/*" multiple class="form-control" style="max-width:360px" required>
+    <button class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button>
+    <span class="text-muted text-sm">PNG / JPG / WEBP / GIF, up to 8&nbsp;MB each — resized &amp; optimised automatically.</span>
+  </form>
+</div></div>
+
+<div class="card"><div class="card-body">
+  {% if items %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem">
+    {% for m in items %}
+    <div class="card" style="padding:.5rem">
+      <img src="{{ m.url }}" alt="{{ m.filename }}" loading="lazy" style="width:100%;height:120px;object-fit:cover;border-radius:8px">
+      <div class="text-sm text-muted" style="margin-top:.3rem">{{ m.width }}×{{ m.height }} · {{ (m.bytes/1024)|round }} KB</div>
+      <div class="d-flex gap-2" style="margin-top:.35rem;align-items:center">
+        <input type="text" class="form-control" style="font-size:.75rem" value="{{ m.url }}" readonly onclick="this.select()" title="Image URL">
+        <form method="POST" action="{{ url_for('website_admin.media_delete', media_id=m.id) }}" data-confirm="Delete this image?">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty-state"><i class="fas fa-images"></i><p>No images yet — upload some above, then use them in your page sections.</p></div>{% endif %}
+</div></div>
+{% endblock %}

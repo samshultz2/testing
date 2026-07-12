@@ -19,16 +19,18 @@ REGISTRY = {
     },
     'hero': {
         'label': 'Hero section', 'data': 'branding',
-        'variants': ['center', 'split', 'gradient', 'image-right'],
+        'variants': ['center', 'split', 'gradient', 'image-right', 'image-bg'],
+        'images': ['image', 'bg_image'],
         'props': {'eyebrow': 'Welcome to', 'heading': '', 'subheading':
                   'Nurturing character, curiosity and excellence.',
                   'primary_label': 'Apply for admission', 'primary_href': '/site/admissions',
                   'secondary_label': 'Explore programmes', 'secondary_href': '/site/academics',
-                  'image': ''},
+                  'image': '', 'bg_image': ''},
     },
     'about': {
         'label': 'About section', 'data': None,
         'variants': ['text', 'split-image', 'cards'],
+        'images': ['image'],
         'props': {'heading': 'About our school', 'body':
                   'Tell your school’s story here — history, philosophy and what makes it special.',
                   'image': '', 'points': ['Qualified, caring teachers', 'Safe, modern facilities',
@@ -37,6 +39,7 @@ REGISTRY = {
     'welcome': {
         'label': "Principal’s welcome", 'data': None,
         'variants': ['portrait-left', 'portrait-right', 'quote'],
+        'images': ['image'],
         'props': {'heading': 'A word from our Principal', 'name': '', 'role': 'Principal',
                   'message': 'Share a warm welcome message from the head of school.', 'image': ''},
     },
@@ -82,7 +85,8 @@ REGISTRY = {
     },
     'gallery': {
         'label': 'Gallery', 'data': None,
-        'variants': ['grid', 'masonry'],
+        'variants': ['grid', 'masonry', 'showcase'],
+        'image_list': 'images',
         'props': {'heading': 'Life at our school', 'images': []},
     },
     'testimonials': {
@@ -93,10 +97,12 @@ REGISTRY = {
     },
     'cta': {
         'label': 'Call to action', 'data': None,
-        'variants': ['band', 'boxed', 'split'],
+        'variants': ['band', 'boxed', 'split', 'image'],
+        'images': ['bg_image'],
         'props': {'heading': 'Ready to join our school?', 'subheading':
                   'Applications are open for the new session.',
-                  'button_label': 'Start your application', 'button_href': '/site/admissions'},
+                  'button_label': 'Start your application', 'button_href': '/site/admissions',
+                  'bg_image': ''},
     },
     'contact': {
         'label': 'Contact', 'data': 'branding',
@@ -149,3 +155,13 @@ def catalogue():
     """Editor-facing catalogue: [{type, label, variants}] in registry order."""
     return [{'type': t, 'label': s['label'], 'variants': s['variants']}
             for t, s in REGISTRY.items()]
+
+
+def image_props(btype):
+    """Prop names on ``btype`` that hold a single image URL."""
+    return set(REGISTRY.get(btype, {}).get('images', []))
+
+
+def image_list_prop(btype):
+    """The prop name on ``btype`` that holds a list of image URLs, or None."""
+    return REGISTRY.get(btype, {}).get('image_list')

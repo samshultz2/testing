@@ -81,13 +81,28 @@
         </form>
         {% endif %}
         {% if b.props %}
+        {% set imgs = (registry.get(b.type) or {}).get('images', []) %}
+        {% set ilist = (registry.get(b.type) or {}).get('image_list') %}
         <details>
           <summary style="cursor:pointer;font-weight:600">Edit content</summary>
-          <form method="POST" action="{{ url_for('website_admin.block_content', page_id=pg.id, idx=idx) }}" style="margin-top:.6rem">
+          <form method="POST" action="{{ url_for('website_admin.block_content', page_id=pg.id, idx=idx) }}" enctype="multipart/form-data" style="margin-top:.6rem">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             {% for key, val in b.props.items() %}
             <div class="form-group"><label class="form-label">{{ key.replace('_',' ')|title }}</label>
-              {% if val is string %}
+              {% if key in imgs %}
+                {% if val %}<div style="margin-bottom:.4rem"><img src="{{ val }}" alt="" style="max-height:90px;border-radius:8px;border:1px solid var(--border-color)"></div>
+                <label class="text-sm" style="display:inline-flex;gap:.35rem"><input type="checkbox" name="clear__{{ key }}"> Remove image</label>{% endif %}
+                <input type="file" name="file__{{ key }}" accept="image/*" class="form-control">
+                <span class="text-muted text-sm">PNG/JPG/WEBP, up to 8&nbsp;MB — resized automatically.</span>
+              {% elif key == ilist %}
+                {% if val %}<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">
+                  {% for u in val %}<label style="position:relative;display:inline-block">
+                    <img src="{{ u }}" alt="" style="height:70px;border-radius:8px;border:1px solid var(--border-color)">
+                    <span style="display:block;font-size:.72rem"><input type="checkbox" name="remove__{{ key }}" value="{{ u }}"> remove</span>
+                  </label>{% endfor %}</div>{% endif %}
+                <input type="file" name="file__{{ key }}" accept="image/*" multiple class="form-control">
+                <span class="text-muted text-sm">Add one or more photos.</span>
+              {% elif val is string %}
                 {% if val|length > 60 %}<textarea name="prop__{{ key }}" class="form-control" rows="3">{{ val }}</textarea>
                 {% else %}<input type="text" name="prop__{{ key }}" class="form-control" value="{{ val }}">{% endif %}
               {% else %}

@@ -46,6 +46,28 @@ class SiteSettings(db.Model):
         return row
 
 
+class SiteMedia(db.Model):
+    """An image for the public site, stored IN the school's own tenant database
+    (not a shared filesystem) so it is isolated exactly like every other record
+    and survives ephemeral containers. Served — resized and optimised — through
+    a cached route. Deliberately small: uploads are capped and downscaled."""
+    __tablename__ = 'site_media'
+
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(160))
+    mime = db.Column(db.String(40), nullable=False)
+    data = db.Column(db.LargeBinary, nullable=False)
+    width = db.Column(db.Integer)
+    height = db.Column(db.Integer)
+    bytes = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    @property
+    def url(self):
+        from flask import url_for
+        return url_for('website.media', media_id=self.id)
+
+
 class SitePage(db.Model):
     __tablename__ = 'site_pages'
 

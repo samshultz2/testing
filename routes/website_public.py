@@ -10,7 +10,7 @@ import json
 
 from flask import Blueprint, render_template, abort, request, session, Response, url_for
 
-from models import db, SiteSettings, SitePage
+from models import db, SiteSettings, SitePage, SiteMedia
 from utils.site_themes import theme_css_vars, resolve_theme
 from utils.site_data import public_context
 
@@ -95,6 +95,26 @@ def page(slug):
         abort(404)
     page, settings = _load(slug)
     return _render(page, settings)
+
+
+@website_bp.route('/media/<int:media_id>')
+def media(media_id):
+    """Serve a site image from the tenant DB. Public once the site is published
+    (or to an admin previewing a draft). Long-cached + ETag'd — the bytes for a
+    given id never change (edits create a new row)."""
+    settings = SiteSettings.get()
+    if not settings.published and not _is_admin_preview():
+        abort(404)
+    row = db.session.get(SiteMedia, media_id)
+    if row is None:
+        abort(404)
+    etag = 'sm-%d-%d' % (row.id, row.bytes or 0)
+    if request.headers.get('If-None-Match') == etag:
+        return Response(status=304)
+    resp = Response(row.data, mimetype=row.mime)
+    resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    resp.headers['ETag'] = etag
+    return resp
 
 
 @website_bp.route('/sitemap.xml')

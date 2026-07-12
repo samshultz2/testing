@@ -16,6 +16,16 @@
   </nav>
 
 {% elif b.type == 'hero' %}
+  {% if v == 'image-bg' %}
+  <header class="wb-hero image-bg" {% if p.bg_image %}style="background-image:url('{{ p.bg_image }}')"{% endif %}>
+    <div class="wb-wrap wb-center">
+      {% if p.eyebrow %}<div class="wb-eyebrow">{{ p.eyebrow }} {{ br.name if not p.heading }}</div>{% endif %}
+      <h1>{{ p.heading or br.name }}</h1>
+      <p class="wb-lead">{{ p.subheading }}</p>
+      {{ _hero_ctas(p) }}
+    </div>
+  </header>
+  {% else %}
   <header class="wb-hero {{ v }}">
     <div class="wb-wrap">
       {% if v == 'split' or v == 'image-right' %}
@@ -38,6 +48,7 @@
       {% endif %}
     </div>
   </header>
+  {% endif %}
 
 {% elif b.type == 'about' %}
   <section class="wb-sec">
@@ -143,7 +154,8 @@
 {% elif b.type == 'gallery' %}
   <section class="wb-sec">
     <div class="wb-wrap"><h2 class="wb-h2 wb-center">{{ p.heading }}</h2>
-      <div class="wb-gal {{ 'masonry' if v=='masonry' else '' }}" style="margin-top:1.5rem">
+      {% if not p['images'] %}<p class="wb-muted wb-center">Add photos to this gallery from the section’s “Edit content”.</p>{% endif %}
+      <div class="wb-gal {{ v }}" style="margin-top:1.5rem">
         {% for img in p['images'] or [] %}<img src="{{ img }}" alt="" loading="lazy">{% endfor %}
       </div>
     </div>
@@ -161,10 +173,17 @@
 
 {% elif b.type == 'cta' %}
   <section class="wb-sec"><div class="wb-wrap">
+    {% if v == 'image' %}
+    <div class="wb-cta-img" {% if p.bg_image %}style="background-image:url('{{ p.bg_image }}')"{% endif %}>
+      <h2 class="wb-h2">{{ p.heading }}</h2><p class="wb-lead wb-center" style="color:rgba(255,255,255,.92)">{{ p.subheading }}</p>
+      <div class="wb-cta-row wb-center"><a class="wb-btn wb-btn-ghost" href="{{ p.button_href }}">{{ p.button_label }}</a></div>
+    </div>
+    {% else %}
     <div class="{{ 'wb-band' if v!='boxed' else 'wb-card' }}" style="{{ 'text-align:center' if v!='split' else '' }}">
       <h2 class="wb-h2">{{ p.heading }}</h2><p class="wb-lead {{ 'wb-center' if v!='split' else '' }}" style="{{ 'color:rgba(255,255,255,.9)' if v=='band' else '' }}">{{ p.subheading }}</p>
       <div class="wb-cta-row {{ 'wb-center' if v!='split' else '' }}"><a class="wb-btn {{ 'wb-btn-ghost' if v=='band' else 'wb-btn-primary' }}" href="{{ p.button_href }}">{{ p.button_label }}</a></div>
     </div>
+    {% endif %}
   </div></section>
 
 {% elif b.type == 'contact' %}

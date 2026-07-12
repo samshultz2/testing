@@ -10,11 +10,12 @@ import re
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, abort)
 
-from models import db, SiteSettings, SitePage
+from models import db, SiteSettings, SitePage, SiteMedia
 from utils.access_control import admin_required, login_required
 from utils.audit import log_action
 from utils.site_themes import preset_choices, PRESETS
 from utils import site_blocks
+from utils import site_media
 
 website_admin_bp = Blueprint('website_admin', __name__, url_prefix='/website')
 
@@ -188,9 +189,33 @@ def block_content(page_id, idx):
     blocks = _blocks(pg)
     if not (0 <= idx < len(blocks)):
         abort(404)
+    btype = blocks[idx]['type']
+    img_keys = site_blocks.image_props(btype)
+    list_key = site_blocks.image_list_prop(btype)
     props = dict(blocks[idx].get('props') or {})
     for key, val in props.items():
-        if isinstance(val, (list, dict)):
+        if key in img_keys:
+            # single-image prop: an uploaded file replaces it; a clear box empties it.
+            up = request.files.get('file__' + key)
+            if up and up.filename:
+                try:
+                    props[key] = site_media.store_upload(up).url
+                except ValueError as e:
+                    flash(str(e), 'error')
+            elif request.form.get('clear__' + key):
+                props[key] = ''
+        elif key == list_key and isinstance(val, list):
+            # gallery: drop removed images, then append newly-uploaded ones.
+            removed = set(request.form.getlist('remove__' + key))
+            kept = [u for u in val if u not in removed]
+            for up in request.files.getlist('file__' + key):
+                if up and up.filename:
+                    try:
+                        kept.append(site_media.store_upload(up).url)
+                    except ValueError as e:
+                        flash(str(e), 'error')
+            props[key] = kept
+        elif isinstance(val, (list, dict)):
             raw = request.form.get('prop__' + key)
             if raw is not None:
                 import json
@@ -224,3 +249,39 @@ def delete_page(page_id):
     log_action('website.page_delete', detail=name)
     flash(f'Page “{name}” deleted.', 'success')
     return redirect(url_for('website_admin.index'))
+
+
+# --- media library ---------------------------------------------------------
+@website_admin_bp.route('/media')
+@login_required
+@admin_required
+def media_library():
+    items = SiteMedia.query.order_by(SiteMedia.created_at.desc()).all()
+    total = sum(m.bytes or 0 for m in items)
+    return render_template('website/admin_media.html', items=items, total=total)
+
+
+@website_admin_bp.route('/media/upload', methods=['POST'])
+@login_required
+@admin_required
+def media_upload():
+    for up in request.files.getlist('file'):
+        if up and up.filename:
+            try:
+                m = site_media.store_upload(up)
+                log_action('website.media_upload', detail='%dx%d' % (m.width or 0, m.height or 0))
+            except ValueError as e:
+                flash(str(e), 'error')
+    flash('Image(s) uploaded.', 'success')
+    return redirect(url_for('website_admin.media_library'))
+
+
+@website_admin_bp.route('/media/<int:media_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def media_delete(media_id):
+    m = db.get_or_404(SiteMedia, media_id)
+    db.session.delete(m); db.session.commit()
+    log_action('website.media_delete', detail=str(media_id))
+    flash('Image deleted.', 'success')
+    return redirect(url_for('website_admin.media_library'))

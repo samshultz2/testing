@@ -118,6 +118,85 @@ def test_admin_can_manage_site(app):
         assert SiteSettings.get().published is True
 
 
+def _png(w=2000, h=1200, color=(30, 80, 160)):
+    import io
+    from PIL import Image
+    buf = io.BytesIO(); Image.new('RGB', (w, h), color).save(buf, 'JPEG'); buf.seek(0)
+    return buf
+
+
+# --- media (images stored in the tenant DB) --------------------------------
+def test_media_upload_downscales_and_stores(app):
+    from models import SiteMedia
+    with app.app_context():
+        from utils.finance_ledger import ensure_tables; ensure_tables()
+    c = _admin(app); c.get('/website/')
+    c.post('/website/media/upload',
+           data={'file': (_png(2000, 1200), 'hero.jpg'), '_csrf_token': auth_csrf(c)},
+           content_type='multipart/form-data')
+    with app.app_context():
+        m = SiteMedia.query.first()
+        assert m is not None
+        assert m.width == 1600 and m.mime == 'image/jpeg'    # downscaled from 2000w
+        assert 0 < (m.bytes or 0) < 500_000                  # optimised small
+
+
+def test_media_upload_rejects_non_image(app):
+    import io
+    from models import SiteMedia
+    with app.app_context():
+        from utils.finance_ledger import ensure_tables; ensure_tables()
+    c = _admin(app); c.get('/website/')
+    with app.app_context():
+        before = SiteMedia.query.count()
+    c.post('/website/media/upload',
+           data={'file': (io.BytesIO(b'not an image'), 'x.txt'), '_csrf_token': auth_csrf(c)},
+           content_type='multipart/form-data')
+    with app.app_context():
+        assert SiteMedia.query.count() == before        # rejected, nothing stored
+
+
+def test_media_serving_is_publish_gated_and_cached(app):
+    from models import SiteMedia
+    _publish(app)                       # published site
+    c = _admin(app); c.get('/website/')
+    c.post('/website/media/upload',
+           data={'file': (_png(400, 300), 'p.jpg'), '_csrf_token': auth_csrf(c)},
+           content_type='multipart/form-data')
+    with app.app_context():
+        mid = SiteMedia.query.first().id
+    url = f'/site/media/{mid}'
+    # published -> anonymous can fetch, with a long cache + ETag
+    anon = app.test_client()
+    r = anon.get(url)
+    assert r.status_code == 200 and r.mimetype == 'image/jpeg'
+    assert 'max-age=31536000' in r.headers.get('Cache-Control', '')
+    assert anon.get(url, headers={'If-None-Match': r.headers['ETag']}).status_code == 304
+    # unpublish -> anonymous is 404, but admin preview still works
+    with app.app_context():
+        SiteSettings.get().published = False; db.session.commit()
+    assert app.test_client().get(url).status_code == 404
+    assert c.get(url).status_code == 200
+
+
+def test_uploaded_image_renders_in_hero(app):
+    from models import SiteMedia, SitePage
+    from sqlalchemy.orm.attributes import flag_modified
+    _publish(app)
+    c = _admin(app); c.get('/website/')
+    c.post('/website/media/upload',
+           data={'file': (_png(1000, 700), 'bg.jpg'), '_csrf_token': auth_csrf(c)},
+           content_type='multipart/form-data')
+    with app.app_context():
+        url = f'/site/media/{SiteMedia.query.first().id}'
+        pg = SitePage.query.filter_by(slug='home').first()
+        blocks = list(pg.blocks)
+        blocks[1]['variant'] = 'image-bg'; blocks[1]['props']['bg_image'] = url
+        pg.blocks = blocks; flag_modified(pg, 'blocks'); db.session.commit()
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert 'wb-hero image-bg' in html and url in html
+
+
 def test_admin_add_block_rejects_unknown_type(app):
     with app.app_context():
         from utils.finance_ledger import ensure_tables; ensure_tables()
