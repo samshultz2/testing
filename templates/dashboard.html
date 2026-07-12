@@ -9,7 +9,9 @@
 .dash-hero{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;
     background:linear-gradient(135deg,var(--primary),#064e36);color:#fff;border-radius:var(--radius-lg);
     padding:1.25rem 1.5rem;margin-bottom:1.1rem;box-shadow:var(--shadow-md);position:relative;overflow:hidden}
-.dash-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.08)}
+.dash-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none}
+.dash-hero>*{position:relative;z-index:1}
+.dash-hero-actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;justify-content:flex-end}
 .dash-hero h1{margin:0;font-size:1.4rem;font-family:var(--font-display)}
 .dash-hero p{margin:.2rem 0 0;opacity:.9;font-size:.9rem}
 .dash-hero .term-chip{background:rgba(255,255,255,.18);padding:.5rem .9rem;border-radius:var(--radius-full);font-size:.85rem;font-weight:600;backdrop-filter:blur(4px);z-index:1}

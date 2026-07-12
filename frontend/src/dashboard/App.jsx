@@ -337,7 +337,7 @@ export default function App({ data: initialData }) {
           <h1>Welcome back{d.user_name ? ', ' + d.user_name : ''} 👋</h1>
           <p>{dateLabel}{d.active_session ? ' · ' + d.active_session.name : ''}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
+        <div className="dash-hero-actions">
           {d.active_term && <div className="term-chip"><i aria-hidden="true" className="fas fa-calendar-day" /> {d.active_term.name}</div>}
           <button type="button" onClick={refresh} disabled={refreshing} className="btn btn-secondary btn-sm"
                   title={'Refresh dashboard — last updated ' + updatedLabel} aria-label={'Refresh dashboard, last updated ' + updatedLabel}>
