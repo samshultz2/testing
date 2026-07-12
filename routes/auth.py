@@ -74,7 +74,7 @@ def _alert_lockout(ident):
         pass
 
 
-def _complete_login(user, dest=None, remember=True):
+def _complete_login(user, dest=None, remember=True, trust_device=False):
     """Finish a fully-authenticated login (password, and 2FA if enabled): drop
     any pre-login session, set identity, rotate the CSRF token, and land on the
     intended page (``dest``) or the dashboard. Shared by the password path and
@@ -108,9 +108,13 @@ def _complete_login(user, dest=None, remember=True):
     sid = new_sid()
     session['sid'] = sid
     device_id = request.cookies.get(DEVICE_COOKIE) or new_sid()
+    from utils.sessions import is_new_device, alert_new_device
+    new_device = is_new_device(user.id, device_id)
     start_session(user, sid=sid, device_id=device_id,
                   user_agent=request.headers.get('User-Agent'),
-                  ip=request.remote_addr, trusted=remember)
+                  ip=request.remote_addr, trusted=trust_device)
+    if new_device:                       # notify the owner of a sign-in from a new browser
+        alert_new_device(user, request.headers.get('User-Agent'), request.remote_addr)
 
     user.last_login = datetime.now()
     db.session.commit()
@@ -174,7 +178,11 @@ def login():
                 # the first factor. Hold a short-lived "pending" session (NOT
                 # logged_in, so every protected route still bounces) and require
                 # a code on the next page before completing the login.
-                if user.mfa_enabled and user.mfa_secret:
+                # A device the user previously marked "trusted" skips this step.
+                from utils.sessions import device_is_trusted, DEVICE_COOKIE
+                _did = request.cookies.get(DEVICE_COOKIE)
+                _trusted_here = device_is_trusted(user.id, _did)
+                if user.mfa_enabled and user.mfa_secret and not _trusted_here:
                     session.clear()
                     session['_pending_mfa_uid'] = user.id
                     session['_pending_mfa_ts'] = int(datetime.now().timestamp())
@@ -186,7 +194,9 @@ def login():
                     session.permanent = True
                     return redirect(url_for('auth.verify_mfa'))
 
-                return _complete_login(user, dest=next_url, remember=remember)
+                # Keep the browser trusted across logins when MFA was skipped here.
+                return _complete_login(user, dest=next_url, remember=remember,
+                                       trust_device=_trusted_here)
 
             elif user:
                 _record_login_failure(username)
@@ -264,9 +274,10 @@ def verify_mfa():
             session.pop('_pending_mfa_ts', None)
             dest = session.pop('_pending_next', None)      # remembered before 2FA
             remember = session.pop('_pending_remember', True)
+            trust_device = (request.form.get('trust_device') is not None)
             if used_backup:
                 flash('Backup code used — consider regenerating your backup codes.', 'info')
-            return _complete_login(user, dest=dest, remember=remember)
+            return _complete_login(user, dest=dest, remember=remember, trust_device=trust_device)
         login_limiter.record_attempt(rkey)
         flash('Invalid code. Please try again.', 'error')
         return redirect(url_for('auth.verify_mfa'))

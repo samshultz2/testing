@@ -32,6 +32,9 @@
         .flash-warning { background:#fef9c3; color:#a16207; border:1px solid #fde68a; }
         .alt { text-align:center; margin-top:1.2rem; font-size:.8rem; color:#64748b; }
         .alt a { color:#0d6a4e; text-decoration:none; }
+        .trust { display:flex; align-items:flex-start; gap:.55rem; margin-top:1rem; font-size:.82rem; color:#475569; }
+        .trust input { margin-top:.15rem; width:16px; height:16px; accent-color:#0d6a4e; flex:0 0 auto; }
+        .trust label { cursor:pointer; line-height:1.35; }
     </style>
 </head>
 <body>
@@ -51,6 +54,10 @@
             <label class="form-label" for="code">Authentication code</label>
             <input type="text" name="code" id="code" class="form-control" inputmode="numeric"
                    autocomplete="one-time-code" autofocus placeholder="••••••" maxlength="14">
+            <div class="trust">
+                <input type="checkbox" name="trust_device" id="trust_device" value="1">
+                <label for="trust_device">Trust this device — skip the 6-digit code here for the next 60 days. Only tick this on a device that's yours and not shared.</label>
+            </div>
             <button type="submit" class="btn"><i class="fas fa-unlock"></i> Verify</button>
         </form>
         <p class="alt">Lost your device? Enter a <strong>backup code</strong> above, or

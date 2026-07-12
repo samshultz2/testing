@@ -79,13 +79,54 @@ def is_live(sid) -> bool:
 
 
 def device_is_trusted(user_id, device_id) -> bool:
-    """True if this browser (device_id) has a trusted, un-revoked session for the
-    user — used to skip the extra new-device email verification."""
+    """True if this browser (device_id) was marked "trusted" — used to skip the
+    2FA step on a device the user vouched for. Trust survives a normal logout
+    (the row is revoked but keeps ``trusted=True``); it is cleared only when the
+    user explicitly signs the device out from Active devices, which also flips
+    ``trusted`` off, so revoked rows are intentionally still considered here."""
     if not device_id:
         return False
     from models import UserSession
     return UserSession.query.filter_by(
-        user_id=user_id, device_id=device_id, trusted=True, revoked=False).first() is not None
+        user_id=user_id, device_id=device_id, trusted=True).first() is not None
+
+
+def is_new_device(user_id, device_id) -> bool:
+    """True when this browser has never been seen for the user AND the user has
+    signed in before (so we alert on a genuinely new device, not first login)."""
+    if not device_id:
+        return False
+    from models import UserSession
+    seen_here = UserSession.query.filter_by(user_id=user_id, device_id=device_id).first()
+    if seen_here:
+        return False
+    return UserSession.query.filter_by(user_id=user_id).first() is not None
+
+
+def alert_new_device(user, user_agent, ip):
+    """Best-effort email + in-app alert that the account was accessed from a new
+    device — the pragmatic form of "verify suspicious logins". Never raises."""
+    label = device_label(user_agent)
+    try:
+        from utils.notify import notify
+        notify('New sign-in to your account',
+               f'Your account was just signed in on a new device ({label}, IP {ip or "unknown"}). '
+               f'If this was not you, change your password and review your active devices.',
+               url='/account/sessions', user_id=user.id, category='warning')
+    except Exception:
+        pass
+    try:
+        from utils import mailer
+        if user.email and mailer.is_configured():
+            mailer.send_email(user.email, 'New sign-in to your EduSyncra account',
+                              f'Hello {user.full_name or user.username},\n\n'
+                              f'Your account was just accessed from a new device:\n'
+                              f'  Device: {label}\n  IP: {ip or "unknown"}\n\n'
+                              f'If this was you, no action is needed. If not, please change your '
+                              f'password immediately and sign out other devices from '
+                              f'My profile → Active devices.\n')
+    except Exception:
+        pass
 
 
 def revoke(user_id, session_row_id) -> bool:
@@ -95,6 +136,11 @@ def revoke(user_id, session_row_id) -> bool:
     if not row or row.revoked:
         return False
     row.revoked = True
+    # Explicitly signing a device out also un-trusts every session from that
+    # browser, so it must pass 2FA again on the next sign-in.
+    if row.device_id:
+        UserSession.query.filter_by(user_id=user_id, device_id=row.device_id).update(
+            {'trusted': False}, synchronize_session=False)
     db.session.commit()
     return True
 
@@ -106,6 +152,15 @@ def revoke_others(user, keep_sid):
                                   UserSession.sid != keep_sid,
                                   UserSession.revoked.is_(False))
          .update({'revoked': True}, synchronize_session=False))
+    # Un-trust every OTHER browser so signed-out devices must pass 2FA again.
+    keep_device = None
+    keep_row = UserSession.query.filter_by(sid=keep_sid).first()
+    if keep_row:
+        keep_device = keep_row.device_id
+    q = UserSession.query.filter(UserSession.user_id == user.id, UserSession.trusted.is_(True))
+    if keep_device:
+        q = q.filter(UserSession.device_id != keep_device)
+    q.update({'trusted': False}, synchronize_session=False)
     db.session.commit()
     return n
 
