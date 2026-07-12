@@ -146,7 +146,9 @@ class ParentContact(db.Model):
     __tablename__ = 'parent_contacts'
     
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    # Indexed: parents are looked up by student on every student-profile load and
+    # joined in the students search; without this the FK lookup scans the table.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
     phone_number = db.Column(db.String(15), nullable=False)
     email = db.Column(db.String(120))        # optional — enables email reminders
     relationship = db.Column(db.String(20))  # Father, Mother, Guardian, etc.

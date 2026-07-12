@@ -110,6 +110,25 @@ def test_ensure_tables_adds_gen_teacher_user_id(app):
         assert 'user_id' in cols
 
 
+def test_ensure_tables_adds_parent_contacts_index(app):
+    """The parent_contacts.student_id index is provisioned by ensure_tables so it
+    lands on existing production/tenant DBs that predate it (SKIP_CREATE_ALL)."""
+    from sqlalchemy import inspect, text
+    from utils.finance_ledger import ensure_tables, _ADDED_INDEXES
+    name = 'ix_parent_contacts_student_id'
+    with app.app_context():
+        # simulate an old DB without the index
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(f'DROP INDEX IF EXISTS {name}'))
+        except Exception:
+            pass
+        ensure_tables()
+        idx_names = {i['name'] for i in inspect(db.engine).get_indexes('parent_contacts')}
+        assert name in idx_names
+        assert _ADDED_INDEXES[name] == ('parent_contacts', 'student_id')
+
+
 def test_email_autolink_resolves_name(app):
     term_id, caa_id, slot_id, subj_id = _scaffold(app, 'mail')
     _user(app, 'bola_ti', 'Bola A', email='bola.ti@school.edu')

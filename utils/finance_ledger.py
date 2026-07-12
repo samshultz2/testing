@@ -283,6 +283,33 @@ _ADDED_COLUMNS = {
 _DROP_NOT_NULL = {'library_loans': ['student_id']}
 
 
+# Indexes that post-date the schema baseline and must be added to existing main
+# and tenant databases (SKIP_CREATE_ALL means model-level index=True only affects
+# freshly-created DBs). CREATE INDEX IF NOT EXISTS is supported by SQLite and
+# Postgres and is a no-op once present.
+_ADDED_INDEXES = {
+    'ix_parent_contacts_student_id': ('parent_contacts', 'student_id'),
+}
+
+
+def _ensure_indexes(engine):
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    for name, (table, column) in _ADDED_INDEXES.items():
+        try:
+            existing_tables = insp.get_table_names()
+        except Exception:
+            return
+        if table not in existing_tables:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    f'CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})'))
+        except Exception:
+            pass                               # racy/duplicate — safe to ignore
+
+
 def _ensure_columns(engine):
     from sqlalchemy import inspect, text
     insp = inspect(engine)
@@ -344,6 +371,7 @@ def ensure_tables(bind=None):
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)
+    _ensure_indexes(engine)
 
 
 _HOOKS_REGISTERED = False
