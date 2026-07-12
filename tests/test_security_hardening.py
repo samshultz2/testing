@@ -112,6 +112,38 @@ def test_contributions_add_payment_is_branch_scoped(app):
         assert ContributionPayment.query.filter_by(student_id=sB).count() == 0   # blocked
 
 
+def test_external_exam_writes_are_branch_scoped(app):
+    """A branch user cannot add/delete WAEC or JAMB results for another branch's
+    student by posting a crafted student_id/result_id (cross-branch write IDOR)."""
+    from models import WAECResult, JAMBResult
+    with app.app_context():
+        brB = Branch.query.filter_by(code='XBB').first() or Branch(name='XBB', code='XBB', is_active=True)
+        db.session.add(brB); db.session.flush()
+        st = Student(student_id=Student.generate_student_id(), first_name='Ext',
+                     surname='Branch', gender='Male', is_active=True, branch_id=brB.id)
+        db.session.add(st); db.session.commit()
+        sB = st.id
+        r = WAECResult(student_id=sB, exam_year=2025, subject='Mathematics', grade='A1')
+        db.session.add(r); db.session.commit()
+        rid = r.id
+
+    bc, btok, _ = _branch_admin(app, 'XBA')     # external_exams module, other branch
+    # cannot ADD a WAEC result for branch B's student
+    bc.post('/results/waec/add', data={'student_id': sB, 'exam_year': 2025,
+            'subject[]': 'English Language', 'grade[]': 'B2', '_csrf_token': btok},
+            follow_redirects=True)
+    # cannot DELETE branch B's WAEC result by guessed id
+    resp = bc.post(f'/results/waec/result/{rid}/delete', data={'_csrf_token': btok})
+    # cannot ADD a JAMB result for branch B's student
+    bc.post('/results/jamb/add', data={'student_id': sB, 'exam_year': 2025,
+            'total_score': 250, '_csrf_token': btok}, follow_redirects=True)
+    with app.app_context():
+        assert resp.status_code == 403
+        assert WAECResult.query.filter_by(student_id=sB, subject='English Language').count() == 0
+        assert WAECResult.query.get(rid) is not None            # delete was blocked
+        assert JAMBResult.query.filter_by(student_id=sB).count() == 0
+
+
 def test_security_headers_hardened(app):
     """Modern header posture: XSS-auditor disabled (CSP is the real defence), a
     Permissions-Policy that only grants what the app uses, and cross-origin

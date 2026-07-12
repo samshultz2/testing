@@ -37,6 +37,18 @@ def _is_admin_results():
     return is_admin()
 
 
+def _student_in_scope(student_id):
+    """Load a student by id and confirm the current user's branch may touch it —
+    used to guard the result-entry write paths where the student_id comes from
+    the form (not a scoped roster). Returns the Student, or None when it doesn't
+    exist or belongs to another branch."""
+    from utils.branch_scope import can_access_branch
+    s = db.session.get(Student, student_id) if student_id else None
+    if not s or not can_access_branch(s.branch_id):
+        return None
+    return s
+
+
 
 
 # ============================================================================

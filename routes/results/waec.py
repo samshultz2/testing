@@ -209,7 +209,10 @@ def add_waec():
             if not student_id or not exam_year:
                 flash('Student and exam year are required.', 'error')
                 return redirect(url_for('results.add_waec'))
-            
+            if not _student_in_scope(student_id):   # no adding results to another branch's student
+                flash('That student is not in your branch.', 'error')
+                return redirect(url_for('results.add_waec'))
+
             subjects = request.form.getlist('subject[]')
             grades = request.form.getlist('grade[]')
             
@@ -456,6 +459,7 @@ def delete_waec(student_id, year):
 def delete_waec_single(result_id):
     """Delete a single WAEC result entry"""
     result = db.get_or_404(WAECResult, result_id)
+    require_branch_access(result.student.branch_id)   # no cross-branch deletes by guessed id
     student_id = result.student_id
     year = result.exam_year
     subject = result.subject

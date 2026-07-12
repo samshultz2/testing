@@ -498,7 +498,13 @@ def execute_promotion():
             student = db.session.get(Student, int(student_id))
             if not student:
                 continue
-            
+            # Never promote/graduate a student outside the user's branch, even if
+            # a crafted student_id[] is posted (the single-student routes already
+            # guard; the bulk path must match).
+            from utils.branch_scope import can_access_branch
+            if not can_access_branch(student.branch_id):
+                continue
+
             # Get current class
             current_enrollment = StudentEnrollment.query.join(ClassArmAssignment).join(Term).filter(
                 StudentEnrollment.student_id == int(student_id),

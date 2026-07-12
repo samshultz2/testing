@@ -164,7 +164,10 @@ def add_jamb():
             if not student_id or not exam_year or total_score is None:
                 flash('All required fields must be filled.', 'error')
                 return redirect(url_for('results.add_jamb'))
-            
+            if not _student_in_scope(student_id):   # no adding results to another branch's student
+                flash('That student is not in your branch.', 'error')
+                return redirect(url_for('results.add_jamb'))
+
             if total_score < 0 or total_score > 400:
                 flash('Total score must be between 0 and 400.', 'error')
                 return redirect(url_for('results.add_jamb'))
@@ -337,6 +340,8 @@ def scan_batch():
             student_id = request.form.get(f'student_id_{i}', type=int)
             year = request.form.get(f'year_{i}', type=int)
             if not student_id or not year:
+                continue
+            if not _student_in_scope(student_id):   # skip rows for other branches
                 continue
             touched.add(student_id)
             data = json.loads(request.form.get(f'data_{i}', '{}'))
