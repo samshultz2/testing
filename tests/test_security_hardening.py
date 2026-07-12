@@ -78,6 +78,21 @@ def test_contributions_student_detail_is_branch_scoped(app):
     assert cc.get(f'/contributions/api/student/{sB}/info').status_code == 200
 
 
+def test_security_headers_hardened(app):
+    """Modern header posture: XSS-auditor disabled (CSP is the real defence), a
+    Permissions-Policy that only grants what the app uses, and cross-origin
+    isolation."""
+    c = app.test_client()
+    r = c.get('/login')
+    assert r.headers.get('X-XSS-Protection') == '0'          # deprecated auditor OFF
+    assert r.headers.get('X-Content-Type-Options') == 'nosniff'
+    assert r.headers.get('X-Frame-Options') == 'SAMEORIGIN'
+    pp = r.headers.get('Permissions-Policy', '')
+    assert 'geolocation=(self)' in pp and 'camera=(self)' in pp   # features actually used
+    assert 'microphone=()' in pp and 'payment=()' in pp          # everything else denied
+    assert r.headers.get('Cross-Origin-Opener-Policy') == 'same-origin'
+
+
 def test_csp_is_nonce_based_no_unsafe_inline(app):
     """script-src must be nonce-based with no 'unsafe-inline'/'unsafe-eval', and the
     nonce in the header must match the nonce on the page's inline <script> tags."""

@@ -521,10 +521,23 @@ def add_security_headers(response):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     # Prevent MIME type sniffing
     response.headers['X-Content-Type-Options'] = 'nosniff'
-    # Enable XSS filter
-    response.headers['X-XSS-Protection'] = '1; mode=block'
+    # X-XSS-Protection is deliberately DISABLED (0): the legacy browser auditor is
+    # deprecated and has itself been a source of vulnerabilities. Our real XSS
+    # defence is the nonce-based CSP below (OWASP Secure Headers guidance).
+    response.headers['X-XSS-Protection'] = '0'
     # Referrer policy
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    # Lock down powerful browser features to only what the app actually uses:
+    # geolocation (HR GPS attendance / CBT), camera (barcode scanning in
+    # Sales & Library). Everything else is denied so a future XSS/embed can't
+    # reach the mic, USB, payment API, etc.
+    response.headers['Permissions-Policy'] = (
+        'geolocation=(self), camera=(self), microphone=(), payment=(), '
+        'usb=(), magnetometer=(), gyroscope=(), accelerometer=(), '
+        'interest-cohort=()'
+    )
+    # Isolate our browsing context from any window we open / that opens us.
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
     # Content Security Policy.
     # script-src is nonce-based: inline <script> blocks carry nonce="{{ csp_nonce }}"
     # and all former inline on* handlers were moved to event listeners
