@@ -258,7 +258,10 @@ def delete_page(page_id):
 def media_library():
     items = SiteMedia.query.order_by(SiteMedia.created_at.desc()).all()
     total = sum(m.bytes or 0 for m in items)
-    return render_template('website/admin_media.html', items=items, total=total)
+    from utils import media_storage
+    labels = {'db': 'this school’s database', 'local': 'a filesystem volume', 's3': 'object storage (S3/R2)'}
+    where = labels.get(media_storage.backend(), media_storage.backend())
+    return render_template('website/admin_media.html', items=items, total=total, storage_where=where)
 
 
 @website_admin_bp.route('/media/upload', methods=['POST'])
@@ -281,6 +284,8 @@ def media_upload():
 @admin_required
 def media_delete(media_id):
     m = db.get_or_404(SiteMedia, media_id)
+    from utils import media_storage
+    media_storage.delete(m)                    # remove filesystem/object bytes too
     db.session.delete(m); db.session.commit()
     log_action('website.media_delete', detail=str(media_id))
     flash('Image deleted.', 'success')

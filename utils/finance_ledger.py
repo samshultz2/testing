@@ -228,6 +228,7 @@ def _reverse_by_origin(connection, origin_type, origin_id):
 # column to an existing table, so bring older tenant DBs up to date in place with
 # a tiny, dialect-portable ADD COLUMN (no defaults/constraints beyond the type).
 _ADDED_COLUMNS = {
+    'site_media': {'storage': "VARCHAR(10) DEFAULT 'db'", 'storage_key': 'VARCHAR(300)'},
     'gen_teachers': {'user_id': 'INTEGER'},   # link a generator-teacher to a login account
     'parent_contacts': {'email': 'VARCHAR(120)'},
     'message_recipients': {'email': 'VARCHAR(120)', 'read_at': 'TIMESTAMP'},
@@ -280,7 +281,8 @@ _ADDED_COLUMNS = {
 
 # Columns whose NOT NULL constraint must be relaxed on existing databases (a
 # borrower can now be a staff member, so a loan's student_id may be NULL).
-_DROP_NOT_NULL = {'library_loans': ['student_id']}
+_DROP_NOT_NULL = {'library_loans': ['student_id'],
+                  'site_media': ['data']}          # bytes are NULL for non-DB backends
 
 
 # Indexes that post-date the schema baseline and must be added to existing main

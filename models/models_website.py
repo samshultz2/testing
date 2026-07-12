@@ -56,7 +56,11 @@ class SiteMedia(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(160))
     mime = db.Column(db.String(40), nullable=False)
-    data = db.Column(db.LargeBinary, nullable=False)
+    # Where the bytes live: 'db' keeps them here in `data`; 'local'/'s3' store
+    # them elsewhere and keep only the `storage_key` reference.
+    storage = db.Column(db.String(10), default='db', nullable=False)
+    storage_key = db.Column(db.String(300))
+    data = db.Column(db.LargeBinary)                 # populated only for storage='db'
     width = db.Column(db.Integer)
     height = db.Column(db.Integer)
     bytes = db.Column(db.Integer)
@@ -64,6 +68,12 @@ class SiteMedia(db.Model):
 
     @property
     def url(self):
+        """A direct CDN/bucket URL when one is configured (best performance),
+        else the app's cached, publish-gated serving route."""
+        from utils import media_storage
+        pub = media_storage.public_url(self)
+        if pub:
+            return pub
         from flask import url_for
         return url_for('website.media', media_id=self.id)
 

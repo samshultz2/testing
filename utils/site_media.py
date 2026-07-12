@@ -62,7 +62,12 @@ def store_upload(file):
         mime = 'image/jpeg'
     raw = out.getvalue()
 
-    row = SiteMedia(filename=(file.filename or 'image')[:160], mime=mime, data=raw,
+    # Route the bytes to the configured backend (DB / filesystem / object store).
+    from utils import media_storage
+    storage, key = media_storage.store(raw, mime)
+    row = SiteMedia(filename=(file.filename or 'image')[:160], mime=mime,
+                    storage=storage, storage_key=key,
+                    data=(raw if storage == 'db' else None),
                     width=im.width, height=im.height, bytes=len(raw))
     db.session.add(row)
     db.session.commit()

@@ -197,6 +197,72 @@ def test_uploaded_image_renders_in_hero(app):
     assert 'wb-hero image-bg' in html and url in html
 
 
+# --- pluggable storage backends --------------------------------------------
+def _upload(c):
+    return c.post('/website/media/upload',
+                  data={'file': (_png(800, 600), 'x.jpg'), '_csrf_token': auth_csrf(c)},
+                  content_type='multipart/form-data')
+
+
+def test_default_backend_keeps_bytes_in_db(app):
+    from models import SiteMedia
+    with app.app_context():
+        from utils.finance_ledger import ensure_tables; ensure_tables()
+    c = _admin(app); c.get('/website/'); _upload(c)
+    with app.app_context():
+        m = SiteMedia.query.order_by(SiteMedia.id.desc()).first()
+        assert m.storage == 'db' and m.data is not None and m.storage_key is None
+
+
+def test_filesystem_backend_stores_on_disk(app, tmp_path):
+    import os
+    from models import SiteMedia
+    with app.app_context():
+        from utils.finance_ledger import ensure_tables; ensure_tables()
+    app.config['WEBSITE_MEDIA_BACKEND'] = 'local'
+    app.config['WEBSITE_MEDIA_LOCAL_DIR'] = str(tmp_path)
+    try:
+        c = _admin(app); c.get('/website/'); _upload(c)
+        with app.app_context():
+            SiteSettings.get().published = True; db.session.commit()
+            m = SiteMedia.query.order_by(SiteMedia.id.desc()).first()
+            assert m.storage == 'local' and m.data is None and m.storage_key
+            assert m.storage_key.startswith('website/')      # tenant-namespaced key
+            assert os.path.exists(os.path.join(str(tmp_path), m.storage_key))
+            mid, key = m.id, m.storage_key
+        # served by streaming the file back
+        r = app.test_client().get(f'/site/media/{mid}')
+        assert r.status_code == 200 and r.mimetype == 'image/jpeg'
+        # deleting the row removes the file too
+        c.post(f'/website/media/{mid}/delete', data={'_csrf_token': auth_csrf(c)})
+        assert not os.path.exists(os.path.join(str(tmp_path), key))
+    finally:
+        app.config['WEBSITE_MEDIA_BACKEND'] = 'db'
+        app.config['WEBSITE_MEDIA_PUBLIC_BASE'] = ''
+
+
+def test_public_base_serves_direct_cdn_url(app, tmp_path):
+    from models import SiteMedia
+    with app.app_context():
+        from utils.finance_ledger import ensure_tables; ensure_tables()
+    app.config['WEBSITE_MEDIA_BACKEND'] = 'local'
+    app.config['WEBSITE_MEDIA_LOCAL_DIR'] = str(tmp_path)
+    app.config['WEBSITE_MEDIA_PUBLIC_BASE'] = 'https://cdn.example.com'
+    try:
+        c = _admin(app); c.get('/website/'); _upload(c)
+        with app.app_context():
+            SiteSettings.get().published = True; db.session.commit()
+            m = SiteMedia.query.order_by(SiteMedia.id.desc()).first()
+            mid = m.id
+        with app.test_request_context():
+            assert db.session.get(SiteMedia, mid).url.startswith('https://cdn.example.com/website/')
+        # the app route redirects to the CDN rather than streaming
+        assert app.test_client().get(f'/site/media/{mid}').status_code == 302
+    finally:
+        app.config['WEBSITE_MEDIA_BACKEND'] = 'db'
+        app.config['WEBSITE_MEDIA_PUBLIC_BASE'] = ''
+
+
 def test_admin_add_block_rejects_unknown_type(app):
     with app.app_context():
         from utils.finance_ledger import ensure_tables; ensure_tables()

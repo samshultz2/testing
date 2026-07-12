@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header">
   <div><h1><i class="fas fa-images"></i> Media library</h1>
-    <p class="text-muted text-sm">Images for your website, stored securely with your school. {{ items|length }} image(s) · {{ (total / 1024 / 1024)|round(2) }} MB</p></div>
+    <p class="text-muted text-sm">Images for your website, stored in {{ storage_where }}. {{ items|length }} image(s) · {{ (total / 1024 / 1024)|round(2) }} MB</p></div>
   <div class="page-header-actions"><a href="{{ url_for('website_admin.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a></div>
 </div>
 

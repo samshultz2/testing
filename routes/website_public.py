@@ -8,7 +8,7 @@ Logged-in admins may preview an unpublished site (with a Draft banner).
 """
 import json
 
-from flask import Blueprint, render_template, abort, request, session, Response, url_for
+from flask import Blueprint, render_template, abort, request, session, Response, url_for, redirect
 
 from models import db, SiteSettings, SitePage, SiteMedia
 from utils.site_themes import theme_css_vars, resolve_theme
@@ -108,10 +108,19 @@ def media(media_id):
     row = db.session.get(SiteMedia, media_id)
     if row is None:
         abort(404)
+    # If a public CDN/bucket URL exists, send the visitor straight there.
+    from utils import media_storage
+    pub = media_storage.public_url(row)
+    if pub:
+        return redirect(pub, code=302)
     etag = 'sm-%d-%d' % (row.id, row.bytes or 0)
     if request.headers.get('If-None-Match') == etag:
         return Response(status=304)
-    resp = Response(row.data, mimetype=row.mime)
+    try:
+        data = media_storage.load(row)
+    except Exception:
+        abort(404)
+    resp = Response(data, mimetype=row.mime)
     resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
     resp.headers['ETag'] = etag
     return resp

@@ -270,6 +270,23 @@ class Config:
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
+    # --- Website-Builder media storage --------------------------------------
+    # Where public-site images are stored. 'db' (default) keeps bytes in each
+    # school's own tenant DB — zero-config and perfectly isolated, fine for the
+    # small image count a school site needs. For scale, point this at a
+    # filesystem volume ('local') or S3-compatible object storage ('s3'); the DB
+    # then stores only metadata + a key. Set WEBSITE_MEDIA_PUBLIC_BASE to serve
+    # images straight from a CDN/bucket URL (skips the app) when using local/s3.
+    WEBSITE_MEDIA_BACKEND = (os.environ.get('WEBSITE_MEDIA_BACKEND') or 'db').lower()
+    WEBSITE_MEDIA_LOCAL_DIR = os.environ.get('WEBSITE_MEDIA_LOCAL_DIR') or \
+        os.path.join(BASE_DIR, 'uploads', 'website')
+    WEBSITE_MEDIA_PUBLIC_BASE = (os.environ.get('WEBSITE_MEDIA_PUBLIC_BASE') or '').rstrip('/')
+    WEBSITE_MEDIA_S3_BUCKET = os.environ.get('WEBSITE_MEDIA_S3_BUCKET') or ''
+    WEBSITE_MEDIA_S3_ENDPOINT = os.environ.get('WEBSITE_MEDIA_S3_ENDPOINT') or ''  # R2/MinIO
+    WEBSITE_MEDIA_S3_REGION = os.environ.get('WEBSITE_MEDIA_S3_REGION') or 'auto'
+    WEBSITE_MEDIA_S3_KEY = os.environ.get('WEBSITE_MEDIA_S3_KEY') or ''
+    WEBSITE_MEDIA_S3_SECRET = os.environ.get('WEBSITE_MEDIA_S3_SECRET') or ''
+
 
     # When True (ProductionConfig), security_errors() block startup. Base/dev/
     # test leave it False so local work isn't gated on a full .env.
