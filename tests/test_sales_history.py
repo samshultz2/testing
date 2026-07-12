@@ -67,7 +67,7 @@ def test_history_export_csv(app):
     assert r.status_code == 200
     assert 'text/csv' in r.headers['Content-Type']
     assert 'attachment' in r.headers['Content-Disposition']
-    reader = list(csv.reader(io.StringIO(r.get_data(as_text=True))))
+    reader = list(csv.reader(io.StringIO(r.get_data().decode('utf-8-sig'))))
     assert reader[0][0] == 'Receipt'
     assert any(row[0] == ids['receipt'] for row in reader[1:])
 

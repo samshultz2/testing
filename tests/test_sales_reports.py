@@ -70,7 +70,7 @@ def test_report_export_csv(app):
     c = _admin(app)
     r = c.get('/sales/reports/export?kind=inventory_valuation&format=csv')
     assert r.status_code == 200 and 'text/csv' in r.headers['Content-Type']
-    reader = list(csv.reader(io.StringIO(r.get_data(as_text=True))))
+    reader = list(csv.reader(io.StringIO(r.get_data().decode('utf-8-sig'))))
     assert reader[0][0] == 'Product'
     assert any(names['sold'] in row for row in reader[1:])
 

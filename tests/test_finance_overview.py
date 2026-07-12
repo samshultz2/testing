@@ -40,7 +40,7 @@ def test_overview_export_csv(app):
     c = _admin(app)
     r = c.get('/finance/overview/export')
     assert r.status_code == 200 and 'text/csv' in r.content_type
-    assert r.get_data(as_text=True).splitlines()[0].startswith('Date,Type,Source,Category,Method,Branch,Amount')
+    assert r.get_data().decode('utf-8-sig').splitlines()[0].startswith('Date,Type,Source,Category,Method,Branch,Amount')
 
 
 def test_ledger_sync_is_idempotent(app):
