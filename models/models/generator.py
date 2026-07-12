@@ -13,6 +13,9 @@ class GenTeacher(db.Model):
     staff_id = db.Column(db.String(20))
     phone = db.Column(db.String(20))
     email = db.Column(db.String(100))
+    # Optional link to a login account, so the person can view the personal
+    # timetable published under this teacher's name (the names need not match).
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     school_level = db.Column(db.String(10), default='sss')  # 'jss' or 'sss'
     max_periods_per_day = db.Column(db.Integer, default=6)
     max_periods_per_week = db.Column(db.Integer, default=30)

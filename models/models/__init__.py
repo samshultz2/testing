@@ -421,6 +421,15 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # gen_teachers.user_id — links a timetable-generator teacher to a login
+    # account, so a user can see the personal timetable published under that name.
+    try:
+        gt_cols = {c['name'] for c in inspect(db.engine).get_columns('gen_teachers')}
+        if 'user_id' not in gt_cols:
+            statements.append('ALTER TABLE gen_teachers ADD COLUMN user_id INTEGER')
+    except Exception:
+        pass
+
     if statements:
         dialect = db.engine.dialect.name
         with db.engine.begin() as conn:

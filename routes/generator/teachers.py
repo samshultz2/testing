@@ -59,9 +59,25 @@ def edit_teacher(teacher_id):
     for ua in teacher.availability.filter_by(is_available=False).all():
         unavailable.add(f"{ua.day_of_week}_{ua.period_number}")
     
+    # Candidate login accounts to link this generator-teacher to, so the person
+    # can view their personal timetable. Suggest the closest name match first.
+    from models import User
+    from utils.name_match import normalize_person_name
+    users = User.query.filter_by(is_active=True).order_by(User.full_name).all()
+    tkey = normalize_person_name(teacher.name)
+    suggested_user_id = None
+    if not teacher.user_id and tkey:
+        for u in users:
+            if normalize_person_name(u.full_name or u.username) == tkey:
+                suggested_user_id = u.id
+                break
+
     return render_template('generator/edit_teacher.html',
         teacher=teacher, all_subjects=all_subjects, assigned_ids=assigned_ids,
-        days=DAYS_OF_WEEK, periods_per_day=periods_per_day, unavailable=unavailable
+        days=DAYS_OF_WEEK, periods_per_day=periods_per_day, unavailable=unavailable,
+        users=[{'id': u.id, 'label': (u.full_name or u.username)
+                + (' · @' + u.username if u.full_name else '')} for u in users],
+        suggested_user_id=suggested_user_id,
     )
 
 
@@ -79,6 +95,14 @@ def update_teacher(teacher_id):
         teacher.preferred_time = request.form.get('preferred_time', 'any')
         teacher.is_part_time = request.form.get('is_part_time') == 'on'
         teacher.available_days = ','.join(request.form.getlist('available_days[]')) or '0,1,2,3,4'
+        # Link to a login account (or clear the link). Validated so only a real,
+        # active user id is stored.
+        uid = request.form.get('user_id', type=int)
+        if uid:
+            from models import User
+            teacher.user_id = uid if User.query.filter_by(id=uid, is_active=True).first() else None
+        else:
+            teacher.user_id = None
         db.session.commit()
         flash('Teacher updated!', 'success')
     except Exception as e:

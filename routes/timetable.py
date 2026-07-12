@@ -350,8 +350,15 @@ def my_timetable():
     from utils.access_control import get_current_user
     from utils.branch_scope import can_access_branch
 
+    from utils.name_match import normalize_person_name
+    from utils.teacher_identity import timetable_name_keys
+
     user = get_current_user()
     name = ((user.full_name if user and user.full_name else (user.username if user else '')) or '').strip()
+    # The names this user's periods may be published under (own name/username +
+    # any linked generator-teacher), matched tolerantly so slight formatting or
+    # word-order differences (e.g. "Mr John Doe" vs "Doe John") still resolve.
+    name_keys = timetable_name_keys(user)
 
     term_id = request.args.get('term_id', type=int)
     if not term_id:
@@ -362,16 +369,18 @@ def my_timetable():
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
 
     grid = {}                       # 'day_slot' -> {subject, klass}
-    if term_id and name:
+    if term_id and name_keys:
         entries = (ClassTimetable.query
                    .join(ClassArmAssignment,
                          ClassTimetable.class_arm_assignment_id == ClassArmAssignment.id)
                    .filter(ClassArmAssignment.term_id == term_id,
                            ClassTimetable.is_active.is_(True),
                            ClassTimetable.subject_id.isnot(None),
-                           func.lower(func.trim(ClassTimetable.teacher_name)) == name.lower())
+                           ClassTimetable.teacher_name.isnot(None))
                    .all())
         for e in entries:
+            if normalize_person_name(e.teacher_name) not in name_keys:
+                continue
             caa = e.class_arm_assignment
             if caa is None or not can_access_branch(caa.branch_id):
                 continue

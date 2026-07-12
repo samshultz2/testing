@@ -32,7 +32,24 @@
                 <label class="form-label">Email</label>
                 <input type="email" name="email" class="form-control" value="{{ teacher.email or '' }}">
             </div>
-            
+
+            <div class="form-group">
+                <label class="form-label">Linked login account
+                    <span class="text-muted" style="font-weight:400">— lets this teacher view their personal timetable</span></label>
+                <select name="user_id" class="form-control">
+                    <option value="">— Not linked —</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}"
+                        {% if teacher.user_id == u.id %}selected{% elif not teacher.user_id and suggested_user_id == u.id %}selected{% endif %}>
+                        {{ u.label }}{% if not teacher.user_id and suggested_user_id == u.id %} (suggested match){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if not teacher.user_id and suggested_user_id %}
+                <p class="text-muted" style="font-size:.8rem;margin-top:.3rem;">We matched this teacher to an account by name — save to confirm, or pick another.</p>
+                {% endif %}
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Max Periods Per Day</label>
