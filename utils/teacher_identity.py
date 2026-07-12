@@ -20,19 +20,29 @@ from utils.name_match import name_key_set, normalize_person_name
 
 def linked_gen_teachers(user):
     """GenTeacher rows tied to ``user`` — by explicit link, else by matching
-    email (exact, case-insensitive). Empty list when none / no user."""
+    email (exact, case-insensitive). Empty list when none / no user.
+
+    Best-effort: if the ``gen_teachers.user_id`` column hasn't been added to this
+    database yet (older schema), fall back to email-only and never raise, so the
+    personal-timetable page keeps working via plain name matching."""
     if not user:
         return []
     from models import db
     from models.models.generator import GenTeacher
     from sqlalchemy import func
-    rows = GenTeacher.query.filter_by(user_id=user.id).all()
-    if rows:
-        return rows
+    try:
+        rows = GenTeacher.query.filter_by(user_id=user.id).all()
+        if rows:
+            return rows
+    except Exception:
+        db.session.rollback()             # missing column on an un-migrated DB
     if user.email:
-        rows = GenTeacher.query.filter(
-            func.lower(GenTeacher.email) == user.email.strip().lower()).all()
-    return rows
+        try:
+            return GenTeacher.query.filter(
+                func.lower(GenTeacher.email) == user.email.strip().lower()).all()
+        except Exception:
+            db.session.rollback()
+    return []
 
 
 def timetable_name_keys(user):

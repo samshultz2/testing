@@ -99,6 +99,17 @@ def test_explicit_account_link_resolves_unrelated_name(app):
     assert 'No periods are assigned to you' not in page
 
 
+def test_ensure_tables_adds_gen_teacher_user_id(app):
+    """The gen_teachers.user_id column is provisioned by ensure_tables, so it
+    lands even on SKIP_CREATE_ALL (Alembic) production and existing tenant DBs."""
+    from sqlalchemy import inspect
+    from utils.finance_ledger import ensure_tables
+    with app.app_context():
+        ensure_tables()
+        cols = {c['name'] for c in inspect(db.engine).get_columns('gen_teachers')}
+        assert 'user_id' in cols
+
+
 def test_email_autolink_resolves_name(app):
     term_id, caa_id, slot_id, subj_id = _scaffold(app, 'mail')
     _user(app, 'bola_ti', 'Bola A', email='bola.ti@school.edu')
