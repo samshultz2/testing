@@ -1026,7 +1026,42 @@
                 init.headers = new Headers(init.headers || {});
                 if (!init.headers.has('X-CSRFToken')) init.headers.set('X-CSRFToken', token);
             }
-            return origFetch(input, init);
+            return origFetch(input, init).then(function (resp) {
+                // Detect an expired session without changing request headers:
+                // fetch answers 401 to XHR-flagged callers, and transparently
+                // follows the redirect to /login for the rest (resp.redirected).
+                if (resp && sameOrigin && (resp.status === 401 ||
+                    (resp.redirected && /\/login(\?|$)/.test(resp.url || '')))) {
+                    window.__sessionExpired();
+                }
+                return resp;
+            });
+        };
+    })();
+
+    // Session-expiry re-auth prompt: when an in-page request comes back 401
+    // (idle timeout or a device signed out elsewhere), don't fail silently —
+    // tell the user and offer to sign back in, returning them to this page.
+    window.__sessionExpired = (function () {
+        var shown = false;
+        return function () {
+            if (shown) return;
+            shown = true;
+            var back = window.location.pathname + window.location.search;
+            var login = '{{ url_for("auth.login") }}?next=' + encodeURIComponent(back);
+            var ov = document.createElement('div');
+            ov.setAttribute('role', 'alertdialog');
+            ov.setAttribute('aria-modal', 'true');
+            ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:1rem';
+            ov.innerHTML =
+                '<div style="background:var(--bg-card,#fff);color:var(--text,#1e293b);max-width:400px;width:100%;border-radius:14px;padding:1.6rem;box-shadow:0 20px 40px rgba(0,0,0,.3);text-align:center">' +
+                '<div style="width:54px;height:54px;margin:0 auto .9rem;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#fef9c3;color:#a16207;font-size:1.4rem"><i class="fas fa-hourglass-end"></i></div>' +
+                '<h3 style="margin:0 0 .4rem;font-size:1.15rem">Your session has ended</h3>' +
+                '<p style="margin:0 0 1.1rem;font-size:.9rem;color:var(--text-muted,#64748b)">For your security you\'ve been signed out. Log in again to pick up where you left off — any unsaved work on this page will be lost.</p>' +
+                '<a href="' + login + '" style="display:inline-block;width:100%;padding:.8rem;background:linear-gradient(135deg,#0d6a4e,#11998e);color:#fff;border-radius:8px;font-weight:600;text-decoration:none"><i class="fas fa-right-to-bracket"></i> Log in again</a>' +
+                '</div>';
+            document.body.appendChild(ov);
+            ov.querySelector('a').focus();
         };
     })();
 

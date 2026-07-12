@@ -98,3 +98,11 @@ def test_profile_page_renders(app):
     uid = _user(app)
     html = _login(app, uid).get('/account').get_data(as_text=True)
     assert 'My profile' in html and 'name="full_name"' in html
+
+
+def test_authenticated_pages_ship_session_expiry_modal(app):
+    """Every base-template page carries the client-side re-auth prompt so an
+    expired session surfaces a modal instead of failing silently."""
+    uid = _user(app)
+    html = _login(app, uid).get('/account').get_data(as_text=True)
+    assert '__sessionExpired' in html and 'Your session has ended' in html
