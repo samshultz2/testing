@@ -2462,6 +2462,18 @@ input:focus, select:focus, textarea:focus {
     * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
 
+/* Visually-hidden text that remains available to screen readers. Use for
+   labels that are obvious visually (icon-only controls, loading regions). */
+.sr-only {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* Exam-subject enrolment picker (student add/edit) */
 .exam-subjects-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; }
 .exam-subjects-clear { font-size:0.75rem; color:var(--danger); text-decoration:none; }

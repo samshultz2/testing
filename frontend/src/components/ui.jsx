@@ -206,6 +206,7 @@ export function Skeleton({ width = '100%', height = 14, style }) {
 export function SkeletonCards({ count = 5 }) {
   return (
     <div aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading…</span>
       <div className="sk-bar sk-title" aria-hidden="true" />
       {Array.from({ length: count }).map((_, i) => (
         <div className="sk-card" key={i}>
@@ -270,8 +271,10 @@ export function Banner({ tone = 'info', children, onClose, autoDismiss }) {
     const t = setTimeout(onClose, dismissMs);
     return () => clearTimeout(t);
   }, [onClose, dismissMs]);
+  // Errors/warnings interrupt (assertive alert); success/info wait politely.
+  const urgent = tone === 'error' || tone === 'warn';
   return (
-    <div role="status" aria-live="polite" style={{ background: bg, color: fg, border: '1px solid ' + bd, borderRadius: 8, padding: '.55rem .8rem', display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', margin: '6px 0', animation: 'banner-in 280ms cubic-bezier(0.16,1,0.3,1) both' }}>
+    <div role={urgent ? 'alert' : 'status'} aria-live={urgent ? 'assertive' : 'polite'} style={{ background: bg, color: fg, border: '1px solid ' + bd, borderRadius: 8, padding: '.55rem .8rem', display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', margin: '6px 0', animation: 'banner-in 280ms cubic-bezier(0.16,1,0.3,1) both' }}>
       <i className={'fas ' + icon} aria-hidden="true" style={{ color: fg }} />
       <span style={{ flex: 1 }}>{children}</span>
       {onClose && <button type="button" aria-label="Dismiss" className="att-x" onClick={onClose}>×</button>}
@@ -298,12 +301,14 @@ export function Toast({ tone = 'success', children, onClose, duration = 4000, st
   };
   const [fg, bg] = tones[tone] || tones.success;
   const icon = { success: 'fa-circle-check', warn: 'fa-triangle-exclamation', error: 'fa-circle-xmark', info: 'fa-circle-info' }[tone] || 'fa-circle-check';
+  // Errors/warnings interrupt (assertive alert); success/info wait politely.
+  const urgent = tone === 'error' || tone === 'warn';
   const pos = stacked ? {} : {
     position: 'fixed', left: '50%', bottom: 'max(20px, env(safe-area-inset-bottom))',
     transform: 'translateX(-50%)', zIndex: 3000,
   };
   return (
-    <div className="toast-pop" role="status" aria-live="polite" style={{
+    <div className="toast-pop" role={urgent ? 'alert' : 'status'} aria-live={urgent ? 'assertive' : 'polite'} style={{
       ...pos, position: stacked ? 'relative' : pos.position, background: bg, color: fg,
       border: '1px solid ' + fg + '33', borderRadius: 10, padding: '.7rem 1rem',
       boxShadow: '0 8px 28px rgba(0,0,0,.18)', display: 'flex', gap: 10, alignItems: 'center',
