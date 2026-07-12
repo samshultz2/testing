@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Website Builder - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Website Builder</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-globe"></i> Website Builder</h1>
+    <p class="text-muted text-sm">Build your school’s public website from reusable components. It stays in sync with your school data — update once, it shows everywhere.</p></div>
+  <div class="page-header-actions">
+    <a href="{{ public_home }}" target="_blank" class="btn btn-secondary"><i class="fas fa-external-link-alt"></i> {{ 'View live site' if settings.published else 'Preview draft' }}</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6"><div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-rocket"></i> Publish</h3></div>
+    <div class="card-body">
+      <p>Status:
+        {% if settings.published %}<span class="badge badge-success">Live</span> — your site is public.
+        {% else %}<span class="badge badge-warning">Draft</span> — only you can preview it.{% endif %}
+      </p>
+      <form method="POST" action="{{ url_for('website_admin.publish') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label class="permission-item" style="display:inline-flex;gap:.5rem">
+          <input type="checkbox" name="published" {% if settings.published %}checked{% endif %}>
+          <span>Make my website public</span></label>
+        <div style="margin-top:.7rem"><button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save</button></div>
+      </form>
+    </div>
+  </div></div>
+
+  <div class="col-md-6"><div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-palette"></i> Theme &amp; SEO</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('website_admin.theme') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group"><label class="form-label">Style preset</label>
+          <select name="preset" class="form-control">
+            {% for key, label in presets %}<option value="{{ key }}" {% if (settings.theme or {}).get('preset','emerald')==key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Primary colour</label>
+            <input type="color" name="primary" class="form-control" value="{{ (settings.theme or {}).get('primary','#0d6a4e') }}"></div>
+          <div class="form-group"><label class="form-label">Accent colour</label>
+            <input type="color" name="accent" class="form-control" value="{{ (settings.theme or {}).get('accent','#f2b705') }}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">SEO title</label>
+          <input type="text" name="seo_title" class="form-control" maxlength="70" value="{{ settings.seo_title or '' }}" placeholder="Your School Name — tagline"></div>
+        <div class="form-group"><label class="form-label">SEO description</label>
+          <input type="text" name="seo_description" class="form-control" maxlength="180" value="{{ settings.seo_description or '' }}" placeholder="A short description for Google &amp; social shares"></div>
+        <button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save theme</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3><i class="fas fa-file-lines"></i> Pages</h3></div>
+  <div class="card-body">
+    <div class="data-cards">
+      {% for p in pages %}
+      <div class="data-card">
+        <div class="data-card-header"><div class="data-card-title">{{ p.title }}
+          {% if p.slug == 'home' %}<span class="badge badge-info">Home</span>{% endif %}
+          {% if not p.is_published %}<span class="badge badge-warning">Hidden</span>{% endif %}</div></div>
+        <div class="data-card-row"><span class="data-card-label">Address</span><span>/site{{ '' if p.slug=='home' else '/' + p.slug }}</span></div>
+        <div class="data-card-actions">
+          <a href="{{ url_for('website_admin.edit_page', page_id=p.id) }}" class="btn btn-sm btn-primary"><i class="fas fa-pen"></i> Edit</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="POST" action="{{ url_for('website_admin.new_page') }}" class="d-flex gap-2" style="margin-top:1rem;flex-wrap:wrap">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="title" class="form-control" placeholder="New page title (e.g. Admissions)" style="max-width:280px" required>
+      <button class="btn btn-secondary"><i class="fas fa-plus"></i> Add page</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -229,7 +229,11 @@ def create_app(config_class=None):
     app.register_blueprint(platform_bp)
     from routes.marketing import marketing_bp
     app.register_blueprint(marketing_bp)
-    
+    from routes.website_public import website_bp
+    app.register_blueprint(website_bp)
+    from routes.website_admin import website_admin_bp
+    app.register_blueprint(website_admin_bp)
+
     # Initialize database. In multi-tenant mode the app has no single database of
     # its own — each school's database is created by provisioning — so we init
     # only the control plane here and NEVER create_all/seed against a tenant DB

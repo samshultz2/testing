@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ pg.title }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('website_admin.index') }}">Website Builder</a> / <span>{{ pg.title }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1>{{ pg.title }}</h1><p class="text-muted text-sm">/site{{ '' if pg.slug=='home' else '/' + pg.slug }}</p></div>
+  <div class="page-header-actions">
+    <a href="{{ public_url }}" target="_blank" class="btn btn-secondary"><i class="fas fa-external-link-alt"></i> View live</a>
+    <a href="{{ url_for('website_admin.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-4"><div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-gear"></i> Page settings</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('website_admin.save_page_meta', page_id=pg.id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group"><label class="form-label">Title</label>
+          <input type="text" name="title" class="form-control" value="{{ pg.title }}"></div>
+        <div class="form-group"><label class="form-label">Meta description</label>
+          <input type="text" name="meta_description" class="form-control" maxlength="180" value="{{ pg.meta_description or '' }}"></div>
+        <div class="form-group"><label class="form-label">Nav order</label>
+          <input type="number" name="nav_order" class="form-control" value="{{ pg.nav_order }}" style="max-width:120px"></div>
+        <label class="permission-item" style="display:flex;gap:.5rem"><input type="checkbox" name="show_in_nav" {% if pg.show_in_nav %}checked{% endif %}> <span>Show in navigation</span></label>
+        <label class="permission-item" style="display:flex;gap:.5rem"><input type="checkbox" name="is_published" {% if pg.is_published %}checked{% endif %}> <span>Published</span></label>
+        <div style="margin-top:.7rem"><button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save</button></div>
+      </form>
+      {% if pg.slug != 'home' %}
+      <form method="POST" action="{{ url_for('website_admin.delete_page', page_id=pg.id) }}" data-confirm="Delete this page?" style="margin-top:.8rem">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Delete page</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Add a section</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('website_admin.add_block', page_id=pg.id) }}" class="d-flex gap-2" style="flex-wrap:wrap">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <select name="type" class="form-control" style="max-width:220px">
+          {% for c in catalogue %}<option value="{{ c.type }}">{{ c.label }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add</button>
+      </form>
+    </div>
+  </div></div>
+
+  <div class="col-md-8">
+    {% for b in blocks %}
+    {% set idx = loop.index0 %}
+    {% set spec = registry.get(b.type) %}
+    <div class="card mb-3" id="b{{ idx }}" style="{{ 'opacity:.55' if not b.get('enabled', True) else '' }}">
+      <div class="card-header" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <h3 style="margin:0"><i class="fas fa-grip-vertical text-muted"></i> {{ spec.label if spec else b.type }}</h3>
+        <span class="badge badge-secondary">{{ b.variant }}</span>
+        <div style="margin-left:auto;display:flex;gap:.3rem;flex-wrap:wrap">
+          {% for op, icon, title in [('up','fa-arrow-up','Move up'),('down','fa-arrow-down','Move down'),('duplicate','fa-clone','Duplicate'),('toggle','fa-eye' if not b.get('enabled',True) else 'fa-eye-slash', 'Show/Hide')] %}
+          <form method="POST" action="{{ url_for('website_admin.block_op', page_id=pg.id, idx=idx) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="op" value="{{ op }}">
+            <button class="btn btn-sm btn-secondary" title="{{ title }}"><i class="fas {{ icon }}"></i></button>
+          </form>
+          {% endfor %}
+          <form method="POST" action="{{ url_for('website_admin.block_op', page_id=pg.id, idx=idx) }}" data-confirm="Remove this section?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="op" value="delete">
+            <button class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
+          </form>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if spec and spec.variants|length > 1 %}
+        <form method="POST" action="{{ url_for('website_admin.block_op', page_id=pg.id, idx=idx) }}" class="d-flex gap-2" style="margin-bottom:.8rem;align-items:center">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="op" value="variant">
+          <label class="form-label" style="margin:0">Design</label>
+          <select name="variant" class="form-control" style="max-width:200px" onchange="this.form.submit()">
+            {% for vv in spec.variants %}<option value="{{ vv }}" {% if vv==b.variant %}selected{% endif %}>{{ vv }}</option>{% endfor %}
+          </select>
+        </form>
+        {% endif %}
+        {% if b.props %}
+        <details>
+          <summary style="cursor:pointer;font-weight:600">Edit content</summary>
+          <form method="POST" action="{{ url_for('website_admin.block_content', page_id=pg.id, idx=idx) }}" style="margin-top:.6rem">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            {% for key, val in b.props.items() %}
+            <div class="form-group"><label class="form-label">{{ key.replace('_',' ')|title }}</label>
+              {% if val is string %}
+                {% if val|length > 60 %}<textarea name="prop__{{ key }}" class="form-control" rows="3">{{ val }}</textarea>
+                {% else %}<input type="text" name="prop__{{ key }}" class="form-control" value="{{ val }}">{% endif %}
+              {% else %}
+                <textarea name="prop__{{ key }}" class="form-control" rows="4" style="font-family:monospace;font-size:.85rem">{{ val | tojson(indent=2) }}</textarea>
+                <span class="text-muted text-sm">Structured list — keep it valid JSON.</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+            <button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save content</button>
+          </form>
+        </details>
+        {% else %}<p class="text-muted text-sm">This section pulls its content automatically from your school data.</p>{% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-cube"></i><p>No sections yet — add one from the left.</p></div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

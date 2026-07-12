@@ -638,6 +638,11 @@
                     </li>
                     {% endif %}
                     <li class="nav-item">
+                        <a href="{{ url_for('website_admin.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('website_admin.') %}active{% endif %}">
+                            <i class="fas fa-globe"></i><span>Website Builder</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('settings.index') }}" class="nav-link">
                             <i class="fas fa-cog"></i><span>Settings</span>
                         </a>

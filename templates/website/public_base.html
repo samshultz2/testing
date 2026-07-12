@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ seo.title }}</title>
+  <meta name="description" content="{{ seo.description }}">
+  <link rel="canonical" href="{{ seo.canonical }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ branding.name }}">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  <meta property="og:url" content="{{ seo.canonical }}">
+  {% if branding.logo_url %}<meta property="og:image" content="{{ seo.origin }}{{ branding.logo_url }}">{% endif %}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ seo.title }}">
+  <meta name="twitter:description" content="{{ seo.description }}">
+  <meta name="theme-color" content="{{ theme.primary }}">
+  <meta name="robots" content="index, follow">
+  {% if branding.logo_url %}<link rel="icon" href="{{ branding.logo_url }}">{% endif %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <script type="application/ld+json">{{ seo.jsonld | safe }}</script>
+  <style>
+    :root{ {{ theme_vars | safe }} }
+    *{box-sizing:border-box}
+    body.wb{margin:0;font-family:var(--wb-font-body);color:var(--wb-ink);background:var(--wb-surface);line-height:1.6;-webkit-font-smoothing:antialiased}
+    .wb h1,.wb h2,.wb h3{font-family:var(--wb-font-head);line-height:1.15;margin:0 0 .5rem}
+    .wb a{color:var(--wb-primary);text-decoration:none}
+    .wb-wrap{max-width:1140px;margin:0 auto;padding:0 1.25rem}
+    .wb-sec{padding:4.5rem 0}
+    .wb-sec.alt{background:var(--wb-muted)}
+    .wb-eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.8rem;font-weight:700;color:var(--wb-accent)}
+    .wb-h2{font-size:clamp(1.6rem,3.4vw,2.4rem)}
+    .wb-lead{font-size:1.05rem;color:color-mix(in srgb,var(--wb-ink) 72%,transparent);max-width:60ch}
+    .wb-center{text-align:center}.wb-center .wb-lead{margin-left:auto;margin-right:auto}
+    .wb a.wb-btn,.wb-btn{display:inline-block;padding:.8rem 1.4rem;border-radius:var(--wb-radius);font-weight:700;border:2px solid transparent;cursor:pointer;transition:transform .15s,box-shadow .15s}
+    .wb-btn:hover{transform:translateY(-2px)}
+    /* `.wb a{color:…}` (0,1,1) would beat a single-class button rule, so button
+       colours are written at a higher specificity to always win. */
+    .wb a.wb-btn-primary,.wb .wb-btn-primary{background:var(--wb-primary);color:#fff}
+    .wb a.wb-btn-gradient,.wb .wb-btn-gradient{background:linear-gradient(120deg,var(--wb-primary),var(--wb-accent));color:#fff}
+    .wb a.wb-btn-outline,.wb .wb-btn-outline{background:transparent;border-color:var(--wb-primary);color:var(--wb-primary)}
+    .wb a.wb-btn-ghost,.wb .wb-btn-ghost{background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.6)}
+    .wb-grid{display:grid;gap:1.5rem}
+    @media(min-width:700px){.wb-g2{grid-template-columns:1fr 1fr}.wb-g3{grid-template-columns:repeat(3,1fr)}.wb-g4{grid-template-columns:repeat(4,1fr)}}
+    .wb-card{background:var(--wb-surface);border:1px solid color-mix(in srgb,var(--wb-ink) 10%,transparent);border-radius:var(--wb-radius);padding:1.5rem;box-shadow:var(--wb-shadow)}
+    .wb-ic{width:52px;height:52px;border-radius:var(--wb-radius);display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--wb-primary) 12%,transparent);color:var(--wb-primary);font-size:1.3rem;margin-bottom:.9rem}
+    /* nav */
+    .wb-nav{position:sticky;top:0;z-index:50;background:var(--wb-surface);border-bottom:1px solid color-mix(in srgb,var(--wb-ink) 10%,transparent)}
+    .wb-nav.floating{margin:1rem;border-radius:var(--wb-radius);box-shadow:var(--wb-shadow);border:none;position:sticky;top:1rem}
+    .wb-nav-inner{display:flex;align-items:center;gap:1rem;padding:.8rem 1.25rem;max-width:1140px;margin:0 auto}
+    .wb-brand{display:flex;align-items:center;gap:.6rem;font-family:var(--wb-font-head);font-weight:800;color:var(--wb-ink);font-size:1.15rem}
+    .wb-brand img{height:38px;width:auto}
+    .wb-nav-links{display:flex;gap:1.2rem;margin-left:auto;align-items:center;flex-wrap:wrap}
+    .wb-nav-links a{color:var(--wb-ink);font-weight:600;font-size:.95rem}
+    .wb-nav.centered .wb-nav-inner{flex-direction:column;text-align:center}
+    .wb-nav.centered .wb-nav-links{margin:0}
+    /* hero */
+    .wb-hero{padding:5rem 0}
+    .wb-hero.gradient{background:linear-gradient(135deg,var(--wb-primary),color-mix(in srgb,var(--wb-primary) 40%,#000));color:#fff}
+    .wb-hero.gradient .wb-lead,.wb-hero.gradient .wb-eyebrow{color:rgba(255,255,255,.85)}
+    .wb-hero h1{font-size:clamp(2rem,5vw,3.4rem)}
+    .wb-hero-split{display:grid;gap:2rem;align-items:center}
+    @media(min-width:820px){.wb-hero-split{grid-template-columns:1fr 1fr}}
+    .wb-hero-img{width:100%;border-radius:var(--wb-radius);box-shadow:var(--wb-shadow);object-fit:cover;aspect-ratio:4/3}
+    .wb-cta-row{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:1.4rem}
+    .wb-center .wb-cta-row{justify-content:center}
+    /* stats */
+    .wb-stat{ text-align:center}
+    .wb-stat .v{font-family:var(--wb-font-head);font-size:2.4rem;font-weight:800;color:var(--wb-primary);line-height:1}
+    .wb-stat .l{font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:color-mix(in srgb,var(--wb-ink) 65%,transparent);margin-top:.4rem}
+    .wb-statbar{background:var(--wb-primary);color:#fff;border-radius:var(--wb-radius);padding:2rem}
+    .wb-statbar .v{color:#fff}.wb-statbar .l{color:rgba(255,255,255,.8)}
+    /* cta band */
+    .wb-band{background:linear-gradient(120deg,var(--wb-primary),var(--wb-accent));color:#fff;border-radius:var(--wb-radius);padding:3rem;text-align:center}
+    .wb-band h2{color:#fff}
+    /* events/news */
+    .wb-date{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:60px;height:60px;border-radius:var(--wb-radius);background:color-mix(in srgb,var(--wb-primary) 12%,transparent);color:var(--wb-primary);font-weight:800;line-height:1}
+    .wb-date .d{font-size:1.4rem}.wb-date .m{font-size:.7rem;text-transform:uppercase}
+    .wb-row{display:flex;gap:1rem;align-items:flex-start}
+    .wb-pill{display:inline-block;font-size:.72rem;font-weight:700;padding:.15rem .6rem;border-radius:999px;color:#fff}
+    /* gallery */
+    .wb-gal{display:grid;gap:.6rem;grid-template-columns:repeat(2,1fr)}
+    @media(min-width:700px){.wb-gal{grid-template-columns:repeat(4,1fr)}}
+    .wb-gal.masonry{grid-auto-rows:12px}
+    .wb-gal img{width:100%;height:100%;object-fit:cover;border-radius:var(--wb-radius);display:block}
+    /* footer */
+    .wb-footer{background:var(--wb-ink);color:#fff;padding:3rem 0 1.5rem}
+    .wb-footer a{color:rgba(255,255,255,.8)}
+    .wb-footer h4{color:#fff;margin:0 0 .6rem;font-family:var(--wb-font-head)}
+    .wb-foot-bottom{border-top:1px solid rgba(255,255,255,.15);margin-top:2rem;padding-top:1.2rem;font-size:.85rem;color:rgba(255,255,255,.7);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+    .wb-muted{color:color-mix(in srgb,var(--wb-ink) 65%,transparent)}
+    @media (prefers-reduced-motion: reduce){.wb-btn{transition:none}}
+    {% block extra_css %}{% endblock %}
+  </style>
+</head>
+<body class="wb">
+  {% if draft_banner %}
+  <div style="background:#a16207;color:#fff;text-align:center;padding:.5rem;font-size:.85rem">
+    Draft preview — this site is not public yet. Publish it from the Website Builder.
+  </div>
+  {% endif %}
+  {% block body %}{% endblock %}
+</body>
+</html>
