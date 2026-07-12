@@ -41,8 +41,32 @@ def pdf_escape(value):
 
 
 def _disposition(filename, inline):
+    """RFC 6266 Content-Disposition. The filename is quoted (so spaces — e.g. a
+    term name like "First Term" — don't truncate the download) and also sent as
+    ``filename*=UTF-8''`` so accented names survive; control chars are stripped
+    to prevent header injection."""
+    from urllib.parse import quote
     kind = 'inline' if inline else 'attachment'
-    return {'Content-Disposition': f'{kind}; filename={filename}'}
+    name = ''.join(c for c in str(filename) if c >= ' ' and c not in '\r\n')
+    ascii_name = name.replace('"', '').replace('\\', '').encode('ascii', 'ignore').decode() or 'download'
+    star = quote(name, safe='')
+    return {'Content-Disposition': f'{kind}; filename="{ascii_name}"; filename*=UTF-8\'\'{star}'}
+
+
+CSV_MIME = 'text/csv; charset=utf-8'
+
+
+def csv_response(text, filename, inline=False):
+    """Build a ``.csv`` download from CSV text (e.g. ``io.StringIO().getvalue()``).
+
+    Prepends a UTF-8 BOM so Excel — the tool used for financial/ministry audits —
+    renders accented names correctly instead of mojibake, sets an explicit utf-8
+    charset, and quotes the filename (see :func:`_disposition`)."""
+    if isinstance(text, bytes):
+        text = text.decode('utf-8')
+    body = '﻿' + text                    # BOM for Excel UTF-8 detection
+    return Response(body.encode('utf-8'), mimetype=CSV_MIME,
+                    headers=_disposition(filename, inline))
 
 
 def xlsx_response(data, filename, inline=False):

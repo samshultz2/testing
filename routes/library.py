@@ -4,6 +4,7 @@ and a dashboard.
 """
 from datetime import datetime, date, timedelta
 import csv
+from utils.web_exports import csv_response
 import io
 from utils.helpers import safe_redirect
 
@@ -943,8 +944,7 @@ def reports_export():
     w.writerow([])
     for s in data['summary']:
         w.writerow([s['label'], s['value']])
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
+    return csv_response(out.getvalue(), f'{fname}.csv')
 
 
 @library_bp.route('/remind-overdue', methods=['POST'])
@@ -1062,8 +1062,7 @@ def export():
     for b in scope_query(Book.query.filter_by(is_active=True), Book).order_by(Book.title).all():
         w.writerow([b.title, b.author or '', b.isbn or '', b.category or '',
                     b.copies_total, b.copies_available, b.shelf or ''])
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': 'attachment; filename=library_catalogue.csv'})
+    return csv_response(out.getvalue(), 'library_catalogue.csv')
 
 
 # ============================================================================

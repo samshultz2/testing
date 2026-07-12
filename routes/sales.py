@@ -22,7 +22,7 @@ from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
 from utils.helpers import get_active_term, parse_date
 from utils.search import like_term
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, csv_response
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
 
@@ -909,8 +909,7 @@ def history_export():
     w.writerow(headers)
     for r in rows:
         w.writerow(_record(r))
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': 'attachment; filename=sales_history.csv'})
+    return csv_response(out.getvalue(), 'sales_history.csv')
 
 
 @sales_bp.route('/analytics')
@@ -2171,8 +2170,7 @@ def reports_export():
     w.writerow(headers)
     for r in report['rows']:
         w.writerow(_rec(r))
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
+    return csv_response(out.getvalue(), f'{fname}.csv')
 
 
 @sales_bp.route('/receipt/<int:sale_id>')

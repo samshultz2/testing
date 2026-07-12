@@ -9,6 +9,7 @@ engine (see utils.comms.build_campaign / create_draft_campaign).
 from datetime import datetime
 from utils.helpers import get_active_term
 import csv
+from utils.web_exports import csv_response
 import io
 
 from flask import (Blueprint, request, redirect, url_for,
@@ -1152,9 +1153,7 @@ def reports_export():
     w.writerow(headers)
     for c in d['by_channel']:
         w.writerow([c['channel'], c['campaigns'], c['recipients'], c['sent']])
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition':
-                             f'attachment; filename=comm_report_{d["from"]}_{d["to"]}.csv'})
+    return csv_response(out.getvalue(), f'comm_report_{d["from"]}_{d["to"]}.csv')
 
 
 @comms_bp.route('/messages/<int:message_id>')
@@ -1259,8 +1258,7 @@ def export_recipients(message_id):
         w.writerow([_fg(r.parent_name), _fg(r.phone), comms.normalise_phone(r.phone),
                     _fg(r.student.full_name if r.student else ''), _fg(r.body), r.status])
     fname = f'campaign_{msg.id}_recipients.csv'
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': f'attachment; filename={fname}'})
+    return csv_response(out.getvalue(), f'{fname}')
 
 
 @comms_bp.route('/messages/<int:message_id>/delete', methods=['POST'])

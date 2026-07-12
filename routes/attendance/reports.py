@@ -1,5 +1,6 @@
 """attendance blueprint — reports routes (split from the former routes/attendance.py)."""
 from routes.attendance import *  # noqa: F401,F403
+from utils.web_exports import csv_response
 
 
 @attendance_bp.route('/daily')
@@ -701,8 +702,7 @@ def analytics_export():
             w.writerow([]); w.writerow(['Most improved', 'Class', 'From %', 'To %', 'Change'])
             for r in d['most_improved']:
                 w.writerow([_fg(r['name']), _fg(r['class']), r['from'], r['to'], r['delta']])
-        return Response(out.getvalue(), mimetype='text/csv',
-                        headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
+        return csv_response(out.getvalue(), f'{fname}.csv')
 
     from openpyxl import Workbook
     from utils.web_exports import xlsx_response

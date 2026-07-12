@@ -1,5 +1,6 @@
 """results blueprint — analytics routes (split from the former routes/results.py)."""
 from routes.results import *  # noqa: F401,F403
+from utils.web_exports import csv_response
 
 
 @results_bp.route('/')
@@ -632,8 +633,7 @@ def analytics_export_csv():
     for i in insights:
         w.writerow(['Insight (%s)' % i['level'], fg(i['title']), fg(i['detail'])])
 
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': f'attachment; filename=exam_analytics_{year}.csv'})
+    return csv_response(out.getvalue(), f'exam_analytics_{year}.csv')
 
 
 @results_bp.route('/analytics/board-pack')

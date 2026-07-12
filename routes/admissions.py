@@ -3,6 +3,7 @@ Admissions routes — applicant pipeline, screening/decisions, one-click
 conversion of an admitted applicant into a Student, dashboard and CSV export.
 """
 from datetime import datetime, date
+from utils.web_exports import csv_response
 from utils.helpers import get_active_session
 import csv
 import io
@@ -330,5 +331,4 @@ def export():
                     a.entrance_score if a.entrance_score is not None else '',
                     a.parent_name or '', a.parent_phone or '',
                     a.applied_date or ''])
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': 'attachment; filename=applicants.csv'})
+    return csv_response(out.getvalue(), 'applicants.csv')

@@ -7,6 +7,7 @@ from utils.helpers import get_active_term
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response, abort, session)
+from utils.web_exports import csv_response
 from sqlalchemy import func
 
 from models import (
@@ -719,8 +720,7 @@ def export_staff():
                     _fg(s.department.name if s.department else ''), _fg(s.designation or ''),
                     s.staff_type, s.employment_type, s.status, _fg(s.phone or ''),
                     _fg(s.email or ''), s.date_employed or '', s.salary or 0])
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': 'attachment; filename=staff_directory.csv'})
+    return csv_response(out.getvalue(), 'staff_directory.csv')
 
 
 # ============================================================================
@@ -1336,8 +1336,7 @@ def reports_export():
     w.writerow([])
     for sm in data['summary']:
         w.writerow([sm['label'], sm['value']])
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': f'attachment; filename={fname}.csv'})
+    return csv_response(out.getvalue(), f'{fname}.csv')
 
 
 # ============================================================================

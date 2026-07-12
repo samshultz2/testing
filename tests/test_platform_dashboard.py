@@ -257,7 +257,7 @@ def test_schools_csv_export(mt):
     assert 'Subdomain' in body and 'alpha' in body and 'beta' in body
     # filtered export
     r2 = c.get('/platform/schools/export?filter=trial', headers=H)
-    assert 'attachment; filename=tenants_trial.csv' in (r2.headers.get('Content-Disposition') or '')
+    assert 'filename="tenants_trial.csv"' in (r2.headers.get('Content-Disposition') or '')
 
 
 def test_bulk_grant_days(mt):

@@ -10,7 +10,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response, session)
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, csv_response
 from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 
 from models import (
@@ -148,8 +148,7 @@ def collections_export():
                     _fg(p.term.full_name if p.term else ''), _fg(p.method),
                     _fg(p.reference or ''), _fg(p.received_by or ''), p.amount])
     fname = f'collections_{from_date}_{to_date}.csv'
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': f'attachment; filename={fname}'})
+    return csv_response(out.getvalue(), f'{fname}')
 
 
 # ============================================================================
@@ -1347,8 +1346,7 @@ def overview_export():
     w.writerow(headers)
     w.writerows(rows)
     from flask import Response
-    return Response(buf.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': 'attachment; filename=finance_ledger.csv'})
+    return csv_response(buf.getvalue(), 'finance_ledger.csv')
 
 
 @finance_bp.route('/ledger/sync', methods=['POST'])

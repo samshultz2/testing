@@ -9,6 +9,7 @@ you, on edusyncra.site (the APEX_TENANT). It 404s everywhere else, so a normal
 school never sees it.
 """
 import datetime as _dt
+from utils.web_exports import csv_response
 from functools import wraps
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
@@ -205,8 +206,7 @@ def schools_export():
                     r['access_until'], r['paid_until'], r['created'], tags.get(r['subdomain'], '')])
     _audit('export', detail=f'tenant directory ({len(rows)} rows{", " + seg if seg else ""})')
     fname = f'tenants{"_" + seg if seg else ""}.csv'
-    return Response(out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': f'attachment; filename={fname}'})
+    return csv_response(out.getvalue(), f'{fname}')
 
 
 @platform_bp.route('/subscriptions')
