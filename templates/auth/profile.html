@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}My profile - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>My profile</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .prof-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+  @media(min-width:900px){.prof-grid{grid-template-columns:1.4fr 1fr}}
+  .ro-list{display:grid;grid-template-columns:1fr 1fr;gap:.6rem .9rem}
+  .ro-list .k{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
+  .ro-list .v{font-weight:600}
+  .prof-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1>My profile</h1><p class="text-muted text-sm">Update your own details. Role, permissions, branch and pay are managed by an administrator.</p></div>
+</div>
+
+<form method="POST" action="{{ url_for('auth.profile') }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="prof-grid">
+    <div>
+      <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-id-card"></i> Basic details</h3></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Full name</label>
+              <input type="text" name="full_name" class="form-control" value="{{ user.full_name or '' }}" autocomplete="name"></div>
+            <div class="form-group"><label class="form-label">Phone</label>
+              <input type="tel" name="phone" class="form-control" value="{{ user.phone or '' }}" autocomplete="tel"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" value="{{ user.email or '' }}" autocomplete="email"></div>
+          <div class="form-group"><label class="form-label">Interface theme</label>
+            <select name="theme" class="form-control">
+              {% for key, label in themes %}<option value="{{ key }}" {% if user.theme == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+        </div>
+      </div>
+
+      {% if staff %}
+      <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-address-book"></i> Emergency &amp; personal (your HR record)</h3></div>
+        <div class="card-body">
+          <div class="form-group"><label class="form-label">Home address</label>
+            <input type="text" name="address" class="form-control" value="{{ staff.address or '' }}"></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Next of kin — name</label>
+              <input type="text" name="nok_name" class="form-control" value="{{ staff.nok_name or '' }}"></div>
+            <div class="form-group"><label class="form-label">Next of kin — phone</label>
+              <input type="tel" name="nok_phone" class="form-control" value="{{ staff.nok_phone or '' }}"></div>
+            <div class="form-group"><label class="form-label">Relationship</label>
+              <input type="text" name="nok_relationship" class="form-control" value="{{ staff.nok_relationship or '' }}"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Emergency contact — name</label>
+              <input type="text" name="emergency_name" class="form-control" value="{{ staff.emergency_name or '' }}"></div>
+            <div class="form-group"><label class="form-label">Emergency contact — phone</label>
+              <input type="tel" name="emergency_phone" class="form-control" value="{{ staff.emergency_phone or '' }}"></div>
+            <div class="form-group"><label class="form-label">Blood group</label>
+              <input type="text" name="blood_group" class="form-control" value="{{ staff.blood_group or '' }}" maxlength="6"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Medical notes <span class="text-muted">(confidential)</span></label>
+            <input type="text" name="medical_notes" class="form-control" value="{{ staff.medical_notes or '' }}" placeholder="Allergies, conditions"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save changes</button>
+    </div>
+
+    <div>
+      <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-user-shield"></i> Account</h3></div>
+        <div class="card-body">
+          <div class="ro-list">
+            <div><div class="k">Username</div><div class="v">{{ user.username }}</div></div>
+            <div><div class="k">Role</div><div class="v">{{ (user.role or '').replace('_',' ').title() }}</div></div>
+            {% if staff %}<div><div class="k">Staff ID</div><div class="v">{{ staff.staff_id }}</div></div>
+            <div><div class="k">Designation</div><div class="v">{{ staff.designation or '—' }}</div></div>{% endif %}
+          </div>
+          <div class="prof-actions">
+            <a href="{{ url_for('auth.change_password') }}" class="btn btn-secondary btn-sm"><i class="fas fa-key"></i> Change password</a>
+            <a href="{{ url_for('auth.security_settings') }}" class="btn btn-secondary btn-sm"><i class="fas fa-shield-halved"></i> Security &amp; 2FA</a>
+          </div>
+          <p class="text-muted text-sm" style="margin-top:.6rem">Need your role, branch or salary changed? Contact an administrator.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

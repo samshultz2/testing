@@ -751,6 +751,9 @@
                                 {% endif %}
                             </div>
                             {% if session.get('user_id') %}
+                            <a href="{{ url_for('auth.profile') }}" class="profile-item" role="menuitem">
+                                <i class="fas fa-user-pen"></i> My profile
+                            </a>
                             <a href="{{ url_for('auth.security_settings') }}" class="profile-item" role="menuitem">
                                 <i class="fas fa-shield-halved"></i> Security &amp; 2FA
                             </a>

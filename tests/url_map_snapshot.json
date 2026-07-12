@@ -647,6 +647,14 @@
 ]
 ],
 [
+"auth.profile",
+"/account",
+[
+"GET",
+"POST"
+]
+],
+[
 "auth.reset_password",
 "/reset-password/<int:uid>/<token>",
 [

@@ -426,6 +426,72 @@ def _make_backup_codes(n=10):
     return display, hashes
 
 
+# --- Self-service profile ----------------------------------------------------
+# Fields a user may change about THEMSELVES. Deliberately excludes anything that
+# grants access or money (role, permissions, branch/scope, salary, designation,
+# status) — those stay admin-only. A strict allow-list, never a blanket update.
+_SELF_STAFF_FIELDS = ('phone', 'email', 'address', 'nok_name', 'nok_phone',
+                      'nok_relationship', 'emergency_name', 'emergency_phone',
+                      'blood_group', 'medical_notes')
+
+
+@auth_bp.route('/account', methods=['GET', 'POST'])
+def profile():
+    """Let a signed-in user view and update their own basic details — name,
+    contact, theme (and, if linked, their staff contact/emergency info). Never
+    role, permissions, branch or pay."""
+    user = _self_user()
+    if not user:
+        if session.get('logged_in'):
+            flash('A personal profile isn’t available for the legacy admin login.', 'info')
+            return redirect(url_for('main.dashboard'))
+        return redirect(url_for('auth.login'))
+
+    from models import StaffMember
+    staff = StaffMember.query.filter_by(user_id=user.id).first()
+
+    if request.method == 'POST':
+        from utils.themes import THEMES, normalize_theme
+        full_name = (request.form.get('full_name') or '').strip()
+        email = (request.form.get('email') or '').strip() or None
+        phone = (request.form.get('phone') or '').strip() or None
+
+        # Email stays unique across accounts.
+        if email and User.query.filter(User.email == email, User.id != user.id).first():
+            flash('That email is already used by another account.', 'error')
+            return redirect(url_for('auth.profile'))
+
+        user.full_name = full_name or user.full_name
+        user.email = email
+        user.phone = phone
+        theme = normalize_theme(request.form.get('theme'))
+        if theme in {t['key'] for t in THEMES}:
+            user.theme = theme
+            session['theme'] = theme
+
+        # Mirror contact onto the linked staff record + let them keep their own
+        # emergency / medical details current — all allow-listed.
+        if staff:
+            staff.phone = phone or staff.phone
+            if email is not None:
+                staff.email = email
+            for fld in _SELF_STAFF_FIELDS:
+                if fld in ('phone', 'email'):
+                    continue
+                if fld in request.form:
+                    setattr(staff, fld, (request.form.get(fld) or '').strip() or None)
+
+        db.session.commit()
+        session['user'] = user.full_name or user.username
+        log_action('auth.profile_update', detail=user.username)
+        flash('Your profile has been updated.', 'success')
+        return redirect(url_for('auth.profile'))
+
+    from utils.themes import THEMES as _T
+    return render_template('auth/profile.html', user=user, staff=staff,
+                           themes=[(t['key'], t['label']) for t in _T])
+
+
 @auth_bp.route('/security')
 def security_settings():
     user = _self_user()
