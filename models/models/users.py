@@ -459,3 +459,31 @@ class TeacherSubjectAssignment(db.Model):
         db.UniqueConstraint('teacher_id', 'class_arm_assignment_id', 'subject_id', 
                           name='uq_teacher_subject_class'),
     )
+
+
+class UserSession(db.Model):
+    """One row per active sign-in, so a user can see and manage the devices they
+    are logged in on (and admins can force a device off). Keyed by ``sid`` — a
+    random token stored in the signed session cookie — so revoking a row logs
+    exactly that device out on its next request (see enforce_session_version).
+
+    ``device_id`` groups repeat sign-ins from the same browser and, when marked
+    ``trusted``, lets that browser skip the extra new-device email check."""
+    __tablename__ = 'user_sessions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    sid = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    device_id = db.Column(db.String(64), index=True)     # persistent per-browser cookie
+    device_label = db.Column(db.String(120))             # "Chrome on Windows"
+    user_agent = db.Column(db.String(300))
+    ip = db.Column(db.String(45))
+    trusted = db.Column(db.Boolean, default=False)
+    revoked = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=local_now)
+    last_seen = db.Column(db.DateTime, default=local_now)
+
+    user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<UserSession u{self.user_id} {self.device_label!r}{" revoked" if self.revoked else ""}>'

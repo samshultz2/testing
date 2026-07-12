@@ -497,6 +497,19 @@ def enforce_session_version():
         return None                       # legacy admin: no per-user versioning
     user = db.session.get(User, uid)
     if user is not None and user.is_active and session.get('tv') == user.token_version:
+        # Per-device revocation: if this signed-in device was signed out from the
+        # "active sessions" screen, end it here. Only enforced for sessions that
+        # carry a sid (older sessions predate the feature and stay valid).
+        sid = session.get('sid')
+        if sid:
+            from utils.sessions import is_live, touch
+            if not is_live(sid):
+                session.clear()
+                if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
+                    abort(401)
+                flash('You were signed out of this device.', 'warning')
+                return redirect(url_for('auth.login'))
+            touch(sid)
         return None
     session.clear()
     if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:

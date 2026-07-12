@@ -102,12 +102,26 @@ def _complete_login(user, dest=None, remember=True):
     session['must_change_password'] = bool(user.must_change_password)
     rotate_csrf_token()
     session.permanent = remember
+
+    # Track this device as an active session so it can be listed and revoked.
+    from utils.sessions import new_sid, start_session, DEVICE_COOKIE
+    sid = new_sid()
+    session['sid'] = sid
+    device_id = request.cookies.get(DEVICE_COOKIE) or new_sid()
+    start_session(user, sid=sid, device_id=device_id,
+                  user_agent=request.headers.get('User-Agent'),
+                  ip=request.remote_addr, trusted=remember)
+
     user.last_login = datetime.now()
     db.session.commit()
     log_action('auth.login', detail=user.username)   # session identity now set
     flash(f'Welcome back, {user.full_name or user.username}!', 'success')
     from utils.nav import safe_next
-    return redirect(safe_next(dest, url_for('main.dashboard')))
+    resp = redirect(safe_next(dest, url_for('main.dashboard')))
+    # Remember the browser for ~2 years (device grouping + trusted-device).
+    resp.set_cookie(DEVICE_COOKIE, device_id, max_age=63072000, httponly=True,
+                    samesite='Lax', secure=Config.SESSION_COOKIE_SECURE)
+    return resp
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -326,6 +340,14 @@ def reset_password(uid, token):
 def logout():
     """Handle user logout"""
     log_action('auth.logout')        # log before clearing so the actor is recorded
+    sid = session.get('sid')
+    if sid:
+        try:
+            from models import db, UserSession
+            UserSession.query.filter_by(sid=sid).update({'revoked': True})
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     session.clear()
     flash('You have been logged out successfully.', 'info')
     return redirect(url_for('auth.login'))
@@ -490,6 +512,56 @@ def profile():
     from utils.themes import THEMES as _T
     return render_template('auth/profile.html', user=user, staff=staff,
                            themes=[(t['key'], t['label']) for t in _T])
+
+
+@auth_bp.route('/account/sessions')
+def sessions():
+    """Devices this user is currently signed in on, so they can spot and remove
+    any they don't recognise."""
+    user = _self_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+    from utils import sessions as S
+    cur = session.get('sid')
+    rows = [{'id': r.id, 'label': r.device_label or 'Browser', 'ip': r.ip or '—',
+             'last_seen': r.last_seen, 'created_at': r.created_at,
+             'trusted': r.trusted, 'current': r.sid == cur}
+            for r in S.list_for(user.id)]
+    return render_template('auth/sessions.html', sessions=rows)
+
+
+@auth_bp.route('/account/sessions/<int:sid_id>/revoke', methods=['POST'])
+def revoke_session(sid_id):
+    user = _self_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+    from utils import sessions as S
+    # Revoking the current device signs you out here and now.
+    is_current = False
+    from models import UserSession
+    row = UserSession.query.filter_by(id=sid_id, user_id=user.id).first()
+    if row and row.sid == session.get('sid'):
+        is_current = True
+    if S.revoke(user.id, sid_id):
+        log_action('auth.session_revoke', detail=f'session {sid_id}')
+        if is_current:
+            session.clear()
+            flash('Signed out of this device.', 'info')
+            return redirect(url_for('auth.login'))
+        flash('That device has been signed out.', 'success')
+    return redirect(url_for('auth.sessions'))
+
+
+@auth_bp.route('/account/sessions/revoke-others', methods=['POST'])
+def revoke_other_sessions():
+    user = _self_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+    from utils import sessions as S
+    n = S.revoke_others(user, session.get('sid'))
+    log_action('auth.session_revoke_others', detail=f'{n} device(s)')
+    flash(f'Signed out {n} other device(s).' if n else 'No other devices were signed in.', 'success')
+    return redirect(url_for('auth.sessions'))
 
 
 @auth_bp.route('/security')
