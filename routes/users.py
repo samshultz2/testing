@@ -832,11 +832,41 @@ def reset_password(user_id):
     temp = secrets.token_urlsafe(6)
     user.set_password(temp)
     user.must_change_password = True
+    # Reset revokes existing sessions so a stolen/old session can't linger.
+    user.token_version = (user.token_version or 0) + 1
     db.session.commit()
     log_action('user.password_reset', target=user)
-    return _ok(f'Temporary password for {user.username}: {temp} — '
-               f'they will be required to change it at next login.',
-               url_for('users.view_user', user_id=user.id))
+
+    # Prefer emailing the new password to the user; only fall back to showing it
+    # on the admin's screen when there's no address to send it to. Either way the
+    # user must change it the moment they sign in (must_change_password is set).
+    emailed = False
+    if user.email:
+        from utils import mailer
+        if mailer.is_configured():
+            try:
+                mailer.send_email(
+                    user.email, 'Your EduSyncra password has been reset',
+                    f'Hello {user.full_name or user.username},\n\n'
+                    f'An administrator has reset your EduSyncra password. Use this '
+                    f'temporary password to sign in:\n\n'
+                    f'    Username: {user.username}\n'
+                    f'    Temporary password: {temp}\n\n'
+                    f'For your security, please change it immediately after you log '
+                    f'in — you will be prompted to do so automatically.\n\n'
+                    f'If you did not expect this, contact your administrator.\n')
+                emailed = True
+            except Exception:
+                emailed = False
+
+    if emailed:
+        msg = (f'A temporary password for {user.username} has been emailed to '
+               f'{user.email}. They must change it immediately on their next login.')
+    else:
+        reason = ' (no email on file)' if not user.email else ' (email is not configured)'
+        msg = (f'Temporary password for {user.username}: {temp}{reason} — share it '
+               f'securely; they must change it immediately on their next login.')
+    return _ok(msg, url_for('users.view_user', user_id=user.id))
 
 
 @users_bp.route('/<int:user_id>/reset-mfa', methods=['POST'])

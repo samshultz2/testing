@@ -59,6 +59,50 @@ def test_admin_reset_password(app):
         assert not u.check_password('secret123')   # old password no longer valid
 
 
+def test_admin_reset_emails_temp_password_when_email_present(app, monkeypatch):
+    from utils import mailer
+    with app.app_context():
+        u = User.query.filter_by(username='resetmail').first()
+        if not u:
+            u = User(username='resetmail', role='staff', scope='central',
+                     full_name='Reset Mail', email='rm@example.com')
+            u.set_password('secret123'); db.session.add(u); db.session.commit()
+        uid = u.id
+    sent = []
+    monkeypatch.setattr(mailer, 'is_configured', lambda: True)
+    monkeypatch.setattr(mailer, 'send_email', lambda to, s, b: sent.append((to, s, b)) or True)
+    import re
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    pt = re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                   c.get('/').get_data(as_text=True)).group(1)
+    r = c.post(f'/users/{uid}/reset-password', data={'_csrf_token': pt}, follow_redirects=True)
+    # the temp password is emailed, and NOT shown on the admin's screen
+    assert sent and sent[0][0] == 'rm@example.com'
+    body = sent[0][2]
+    m = re.search(r'Temporary password: (\S+)', body)
+    assert m, 'temp password missing from email'
+    temp = m.group(1)
+    assert 'change it immediately' in body.lower()
+    assert temp not in r.get_data(as_text=True)          # screen shows "emailed", not the secret
+    with app.app_context():
+        u = User.query.get(uid)
+        assert u.must_change_password is True
+        assert u.check_password(temp) and not u.check_password('secret123')
+
+
+def test_admin_reset_shows_on_screen_without_email(app):
+    uid = _mk(app, 'resetnomail')       # no email on file
+    import re
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    pt = re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                   c.get('/').get_data(as_text=True)).group(1)
+    r = c.post(f'/users/{uid}/reset-password', data={'_csrf_token': pt}, follow_redirects=True)
+    html = r.get_data(as_text=True)
+    assert 'Temporary password for resetnomail' in html and 'immediately' in html.lower()
+
+
 def test_idle_timeout_logs_out(app):
     uid = _mk(app, 'idler')
     c = app.test_client()
