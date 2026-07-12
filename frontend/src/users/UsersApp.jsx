@@ -204,6 +204,7 @@ function UserForm({ d, notify }) {
     rank: u.rank || 0,
     view_only: !!u.view_only,
     is_active: edit ? !!u.is_active : true,
+    create_staff: false,                                          // add: also create an HR/staff record
     permission_group_id: u.permission_group_id ? String(u.permission_group_id) : '',
     teacher: u.teacher || { can_mark_attendance: true, can_view_student_details: true, can_print_reports: true, can_enter_results: false, can_edit_results: false },
   }, { omit: ['password', 'confirm_password', 'new_password'], signature: editSig });
@@ -298,6 +299,7 @@ function UserForm({ d, notify }) {
       fields.password = f.password;
       fields.confirm_password = f.confirm_password;
       if (f.require_pw_change) fields.require_pw_change = 'on';
+      if (f.create_staff) fields.create_staff = 'on';
     }
     if (f.view_only) fields.view_only = 'on';
     // Permission group (base) + per-user override selects (whole + sub-parts).
@@ -356,6 +358,8 @@ function UserForm({ d, notify }) {
                 </div>
                 <label className="permission-item" style={{ display: 'inline-flex' }}>
                   <input type="checkbox" checked={f.require_pw_change} onChange={chk('require_pw_change')} /> <span>Require the user to change this password at first login</span></label>
+                <label className="permission-item" style={{ display: 'inline-flex' }}>
+                  <input type="checkbox" checked={f.create_staff} onChange={chk('create_staff')} /> <span>Also create a linked staff (HR) record from these details</span></label>
               </>
             ) : null}
             <div className="form-row">

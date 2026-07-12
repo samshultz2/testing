@@ -335,6 +335,14 @@ function StaffForm({ d, notify }) {
           <div className="form-group"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         </div></div>
 
+        {d.mode !== 'edit' && (
+          <div className="card mb-3"><div className="card-header"><h3>Access</h3></div><div className="card-body">
+            <label className="permission-item" style={{ display: 'inline-flex' }}>
+              <input type="checkbox" checked={!!f.create_user} onChange={(e) => set('create_user', e.target.checked)} />
+              <span>Also create a login account for this staff member (a temporary password is shown after saving)</span></label>
+          </div></div>
+        )}
+
         <div className="page-header-actions">
           <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {d.mode === 'edit' ? 'Save Changes' : 'Add Staff'}</button>
           <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>

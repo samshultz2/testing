@@ -417,12 +417,19 @@ def add_user():
                     can_print_reports=request.form.get('can_print_reports') == 'on',
                 )
                 db.session.add(teacher)
-            
+
+            # Optionally also create a linked HR/staff record from the same details.
+            staff_note = ''
+            if request.form.get('create_staff') == 'on':
+                from utils.staff_user_link import create_staff_for_user
+                s = create_staff_for_user(user)
+                staff_note = f' A staff record ({s.staff_id}) was created and linked.'
+
             db.session.commit()
             log_action('user.create',
                        f'{username} (role={role}, modules={user.module_list or "role default"}, '
-                       f'view_only={user.view_only})')
-            return _ok(f'User "{username}" created successfully!', url_for('users.index'))
+                       f'view_only={user.view_only}){", +staff" if staff_note else ""}')
+            return _ok(f'User "{username}" created successfully!{staff_note}', url_for('users.index'))
 
         except Exception as e:
             db.session.rollback()

@@ -6,7 +6,7 @@ from datetime import datetime, date
 from utils.helpers import get_active_term
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, jsonify, Response, abort)
+                   flash, jsonify, Response, abort, session)
 from sqlalchemy import func
 
 from models import (
@@ -248,10 +248,19 @@ def add_staff():
         from utils.branch_scope import branch_for_new
         s.branch_id = branch_for_new(request.form.get('branch_id', type=int))
         db.session.add(s)
+        db.session.flush()
+        # Optionally also create a linked login account so this person can sign in.
+        user_note = ''
+        if (request.form.get('create_user') or '').lower() in ('on', 'true', '1', 'yes'):
+            from utils.staff_user_link import create_user_for_staff
+            u, temp = create_user_for_staff(s, created_by_id=session.get('user_id'))
+            if temp:
+                user_note = (f' A login account was created — username "{u.username}", '
+                             f'temporary password "{temp}" (they must change it at first sign-in).')
         db.session.commit()
         from utils.audit import log_action
-        log_action('hr.staff_add', target=s)
-        return _ok(f'Staff member {s.full_name} added ({s.staff_id}).',
+        log_action('hr.staff_add', target=s, detail='+user' if user_note else None)
+        return _ok(f'Staff member {s.full_name} added ({s.staff_id}).{user_note}',
                    url_for('hr.staff_detail', staff_id=s.id))
     return _render(_staff_form_payload(None, url_for('hr.add_staff'), url_for('hr.staff_list')))
 
