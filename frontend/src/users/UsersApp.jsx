@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { submitJson, useSave } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, Banner, SectionShell, Empty, Modal } from '../components/ui';
 
 const A = ({ to, className, children, title }) => {
   const nav = useNav();
@@ -498,9 +498,12 @@ function View({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
   const u = d.user;
+  const [resetResult, setResetResult] = useState(null);
   const reset = async () => {
     if (!await confirm("Reset this user's password to a temporary one? They will have to set a new password at next login.")) return;
-    save(u.reset_password_url, {});
+    const r = await submitJson(u.reset_password_url, {});
+    if (r.ok) setResetResult(r);                       // show a persistent dialog
+    else notify('error', r.error || 'Could not reset the password.');
   };
   const resetMfa = async () => {
     if (!await confirm("Turn off two-factor authentication for this user? Use this only to help a user who has lost their authenticator device.")) return;
@@ -614,7 +617,61 @@ function View({ d, notify }) {
           </div>
         </>
       )}
+      {resetResult && <ResetResultModal r={resetResult} onClose={() => setResetResult(null)} />}
     </>
+  );
+}
+
+// Persistent result dialog after an admin password reset. When the password was
+// emailed it confirms the address; otherwise it shows the temporary password
+// with a Copy button and keeps it on screen until the admin dismisses it, so it
+// can be copied down and handed to the staff member.
+function ResetResultModal({ r, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const pw = r.temp_password;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(pw);
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    } catch (_) { /* clipboard blocked — the admin can still select the text */ }
+  };
+  return (
+    <Modal title="Password reset" icon="fa-key" size="sm" onClose={onClose} closeOnBackdrop={false}
+           footer={<button type="button" className="btn btn-primary" onClick={onClose}>Done</button>}>
+      {r.emailed ? (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 54, height: 54, margin: '0 auto .8rem', borderRadius: 14, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', background: '#dcfce7', color: '#166534', fontSize: '1.4rem' }}>
+            <i className="fas fa-paper-plane" aria-hidden="true" />
+          </div>
+          <p style={{ margin: '0 0 .4rem', fontWeight: 600 }}>New password sent by email</p>
+          <p style={{ margin: 0, color: 'var(--text-muted)' }}>
+            A temporary password for <strong>{r.username}</strong> has been emailed to{' '}
+            <strong>{r.user_email}</strong>. They’ll be required to change it the moment they sign in.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <p style={{ marginTop: 0 }}>
+            {r.user_email
+              ? 'Email could not be sent, so share this temporary password securely with '
+              : 'This user has no email on file, so give this temporary password to '}
+            <strong>{r.username}</strong>. They must change it immediately at their next login.
+          </p>
+          <div style={{ display: 'flex', gap: '.5rem', alignItems: 'stretch' }}>
+            <code style={{ flex: 1, padding: '.7rem .9rem', borderRadius: 8, border: '1px solid var(--border-color)',
+                           background: 'var(--bg-muted, #f8fafc)', fontSize: '1.15rem', letterSpacing: '.04em',
+                           userSelect: 'all', wordBreak: 'break-all' }}>{pw}</code>
+            <button type="button" className="btn btn-secondary" onClick={copy} style={{ whiteSpace: 'nowrap' }}>
+              <i className={`fas fa-${copied ? 'check' : 'copy'}`} aria-hidden="true" /> {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p className="text-muted text-sm" style={{ marginBottom: 0, marginTop: '.7rem' }}>
+            <i className="fas fa-triangle-exclamation" aria-hidden="true" /> For security, this password won’t be shown again after you close this dialog.
+          </p>
+        </div>
+      )}
+    </Modal>
   );
 }
 

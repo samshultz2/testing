@@ -863,10 +863,19 @@ def reset_password(user_id):
         msg = (f'A temporary password for {user.username} has been emailed to '
                f'{user.email}. They must change it immediately on their next login.')
     else:
-        reason = ' (no email on file)' if not user.email else ' (email is not configured)'
-        msg = (f'Temporary password for {user.username}: {temp}{reason} — share it '
-               f'securely; they must change it immediately on their next login.')
-    return _ok(msg, url_for('users.view_user', user_id=user.id))
+        reason = 'no email on file' if not user.email else 'email is not configured'
+        # Include the password in the message too so the no-JS fallback (a plain
+        # form POST) still surfaces it; the React client ignores this and shows
+        # the structured temp_password in a persistent dialog instead.
+        msg = (f'Temporary password for {user.username}: {temp} ({reason}) — share it '
+               f'securely. They must change it immediately on next login.')
+    # Structured fields let the React client show a persistent result dialog:
+    # the emailed-to address, or the password itself (with a Copy button) when
+    # it could not be delivered. temp is only returned when NOT emailed.
+    return _ok(msg, url_for('users.view_user', user_id=user.id),
+               emailed=emailed, username=user.username,
+               user_email=user.email or None,
+               temp_password=None if emailed else temp)
 
 
 @users_bp.route('/<int:user_id>/reset-mfa', methods=['POST'])
