@@ -4,7 +4,7 @@ import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
 import BulkMessageModal from './BulkMessageModal';
-import { confirm, Empty, Pagination } from '../components/ui';
+import { confirm, promptDialog, Empty, Pagination } from '../components/ui';
 import { recentSearches, rememberSearch, clearSearches, recentViewed,
          savedFilters, saveFilter, deleteFilter } from '../lib/studprefs';
 
@@ -151,7 +151,8 @@ export default function App({ initial }) {
     setQuery(q);
   };
   const doSaveFilter = async () => {
-    const name = (window.prompt('Save this filter set as…') || '').trim();
+    const name = (await promptDialog({ title: 'Save filter set',
+      label: 'Name this filter set', placeholder: 'e.g. SS3 Science boarders' }) || '').trim();
     if (!name) return;
     setSaved(saveFilter(name, { ...query, search }));
     setShowSaved(true);

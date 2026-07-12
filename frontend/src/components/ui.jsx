@@ -540,6 +540,51 @@ export function confirm(opts) {
   });
 }
 
+// Themed, accessible single-value input dialog used imperatively via promptDialog().
+function PromptDialog({ title = 'Enter a value', message, label, placeholder = '',
+                       defaultValue = '', confirmText = 'OK', cancelText = 'Cancel',
+                       inputType = 'text', required = true, onResolve }) {
+  const [value, setValue] = useState(defaultValue);
+  const inputRef = useRef(null);
+  const submit = (e) => {
+    if (e) e.preventDefault();
+    const v = value == null ? '' : String(value).trim();
+    if (required && !v) { if (inputRef.current) inputRef.current.focus(); return; }
+    onResolve(v);
+  };
+  return (
+    <Modal title={title} icon="fa-keyboard" size="sm" onClose={() => onResolve(null)}
+           initialFocusRef={inputRef}
+           footer={<>
+             <Button variant="light" onClick={() => onResolve(null)}>{cancelText}</Button>
+             <Button variant="primary" onClick={() => submit()}>{confirmText}</Button>
+           </>}>
+      <form onSubmit={submit}>
+        {message && <p style={{ margin: '0 0 .7rem', lineHeight: 1.5 }}>{message}</p>}
+        {label && <label className="form-label" htmlFor="prompt-input">{label}</label>}
+        <input ref={inputRef} id="prompt-input" className="form-control" type={inputType}
+               value={value} placeholder={placeholder} autoFocus
+               onChange={(e) => setValue(e.target.value)} />
+      </form>
+    </Modal>
+  );
+}
+
+// Promise-based replacement for window.prompt(): themed, accessible, non-blocking.
+// Usage:  const name = await promptDialog('Name this filter'); if (name) …
+//   or:   await promptDialog({ title, label, inputType: 'number', defaultValue: '1' })
+// Resolves the trimmed string on OK, or null on cancel / Escape / backdrop.
+export function promptDialog(opts) {
+  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const done = (val) => { root.unmount(); host.remove(); resolve(val); };
+    root.render(<PromptDialog {...o} onResolve={done} />);
+  });
+}
+
 // Status badge mapped onto the app's existing .badge-* theme classes, so a tone
 // name ('success'/'danger'/…) is the single way to label state across modules.
 export function Badge({ tone = 'secondary', icon, children, title }) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, SectionShell, SectionTabs, Empty, Autocomplete } from '../components/ui';
+import { confirm, promptDialog, Banner, SectionShell, SectionTabs, Empty, Autocomplete } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['compose', 'fa-paper-plane', 'Compose'],
@@ -927,7 +927,8 @@ function Compose({ d, notify }) {
     setExcluded((sp.exclude_ids || []).map((id) => ({ id, label: `#${id}` })));
   };
   const saveGroup = async () => {
-    const name = window.prompt('Name this recipient group (e.g. "SS3 Science parents"):');
+    const name = await promptDialog({ title: 'Save recipient group',
+      label: 'Group name', placeholder: 'e.g. SS3 Science parents' });
     if (!name || !name.trim()) return;
     const r = await submitJson(d.urls.save_group, { name: name.trim(), overwrite: 'on', ...buildSpec() });
     if (r.ok) { notify('success', r.message); if (!groups.some((g) => g.name === name.trim())) setGroups((gs) => [...gs, { id: `tmp-${Date.now()}`, name: name.trim(), spec: buildSpec() }]); }

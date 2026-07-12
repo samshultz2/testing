@@ -3,7 +3,7 @@ import { submitJson, postFile } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table, Modal } from '../components/ui';
+import { confirm, promptDialog, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table, Modal } from '../components/ui';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'],
@@ -281,7 +281,8 @@ function BookForm({ d, notify }) {
   };
 
   const addCopies = async (dupe) => {
-    const n = Number(window.prompt(`How many copies of "${dupe.title}" to add?`, '1'));
+    const n = Number(await promptDialog({ title: 'Add copies',
+      label: `How many copies of "${dupe.title}" to add?`, inputType: 'number', defaultValue: '1' }));
     if (!n || n <= 0) return;
     const r = await submitJson(dupe.add_copies_url, { count: n });
     if (r.ok) nav.go(d.urls.books); else notify('error', r.error || 'Could not add copies.');
@@ -509,13 +510,17 @@ function Loans({ d, notify }) {
       act(l.return_url, {}, `Mark '${l.book}' as returned?`);
     }
   };
-  const markLost = (l) => {
-    const cost = window.prompt(`Mark '${l.book}' as LOST. Replacement cost to bill the borrower (₦, blank = book price):`, '');
+  const markLost = async (l) => {
+    const cost = await promptDialog({ title: `Mark '${l.book}' as lost`,
+      label: 'Replacement cost to bill the borrower (₦)', placeholder: 'Blank = book price',
+      inputType: 'number', required: false });
     if (cost === null) return;
     act(l.mark_url, { kind: 'Lost', cost });
   };
-  const markDamaged = (l) => {
-    const cost = window.prompt(`Mark '${l.book}' as DAMAGED. Charge to the borrower (₦, blank = book price):`, '');
+  const markDamaged = async (l) => {
+    const cost = await promptDialog({ title: `Mark '${l.book}' as damaged`,
+      label: 'Charge to the borrower (₦)', placeholder: 'Blank = book price',
+      inputType: 'number', required: false });
     if (cost === null) return;
     act(l.mark_url, { kind: 'Damaged', cost });
   };

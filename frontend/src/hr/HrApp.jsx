@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, SectionShell, SectionTabs, Empty, Modal, Autocomplete } from '../components/ui';
+import { confirm, promptDialog, Banner, SectionShell, SectionTabs, Empty, Modal, Autocomplete } from '../components/ui';
 
 // Small localStorage helpers for recently-viewed staff + saved directory filters.
 const lsGet = (key, fallback) => {
@@ -182,8 +182,8 @@ function Staff({ d, notify }) {
     setBusy(false);
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Import failed.');
   };
-  const saveFilter = () => {
-    const name = window.prompt('Name this filter:');
+  const saveFilter = async () => {
+    const name = await promptDialog({ title: 'Save filter', label: 'Name this filter' });
     if (!name) return;
     const next = [...saved.filter((x) => x.name !== name),
       { name, params: { department_id: a.department_id, staff_type: a.staff_type, status: a.status } }];

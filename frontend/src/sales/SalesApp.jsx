@@ -3,7 +3,7 @@ import { submitJson } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, PageHeader, Empty, SectionShell, Table, Modal, Button } from '../components/ui';
+import { Banner, PageHeader, Empty, SectionShell, Table, Modal, Button, confirm, promptDialog } from '../components/ui';
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
 
@@ -175,7 +175,8 @@ function ProductForm({ d, product, onClose, onSaved }) {
     } catch (e2) { setLookMsg({ tone: 'error', text: 'Could not read the image.' }); }
   };
   const restockDupe = async (dp) => {
-    const n = Number(window.prompt(`Add how many units to "${dp.name}"?`, '1'));
+    const n = Number(await promptDialog({ title: 'Add stock',
+      label: `Add how many units to "${dp.name}"?`, inputType: 'number', defaultValue: '1' }));
     if (!n || n <= 0) return;
     const r = await submitJson(dp.restock_url, { qty: n });
     if (r.ok) { onSaved(); onClose(); } else setErr(r.error || 'Could not add stock.');
@@ -1396,12 +1397,14 @@ function AuditDetail({ d, notify }) {
     if (r.ok) notify('success', 'Counts saved.'); else notify('error', r.error || 'Save failed.');
   };
   const complete = async () => {
-    if (!window.confirm('Sign off this count? Stock will be corrected to the counted quantities and the net variance posted to Finance.')) return;
+    if (!await confirm({ title: 'Sign off count', tone: 'primary', confirmText: 'Sign off',
+      message: 'Sign off this count? Stock will be corrected to the counted quantities and the net variance posted to Finance.' })) return;
     const r = await submitJson(d.complete_url, { counts: payload() });
     if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not complete.');
   };
   const cancel = async () => {
-    if (!window.confirm('Cancel this count? No stock will change.')) return;
+    if (!await confirm({ title: 'Cancel count', tone: 'danger', confirmText: 'Cancel count',
+      cancelText: 'Keep', message: 'Cancel this count? No stock will change.' })) return;
     const r = await submitJson(d.cancel_url, {});
     if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not cancel.');
   };
