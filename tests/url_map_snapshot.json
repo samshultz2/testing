@@ -5643,6 +5643,13 @@
 ]
 ],
 [
+"website_admin.generate_site",
+"/website/generate",
+[
+"POST"
+]
+],
+[
 "website_admin.index",
 "/website/",
 [

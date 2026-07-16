@@ -51,11 +51,13 @@ def index():
         sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
     except Exception:
         sessions = []
+    from utils import site_ai
     return render_template('website/admin_overview.html', settings=settings, pages=pages,
                            presets=preset_choices(), public_home=url_for('website.home'),
                            adm=site_admissions.settings(), sessions=sessions,
                            pay_configured=_payments_configured(),
-                           apply_url=url_for('website.apply'))
+                           apply_url=url_for('website.apply'),
+                           ai_available=site_ai.is_available())
 
 
 def _payments_configured():
@@ -77,6 +79,28 @@ def admissions_settings():
         session_id=request.form.get('session_id'))
     log_action('website.admissions_settings')
     flash('Online admissions settings saved.', 'success')
+    return redirect(url_for('website_admin.index'))
+
+
+@website_admin_bp.route('/generate', methods=['POST'])
+@login_required
+@admin_required
+def generate_site():
+    """Build a complete, uniquely-styled site in one click. Replaces existing
+    pages, so it's a deliberate action from the overview (with confirmation)."""
+    from utils import site_generator, site_ai
+    # 'salt' lets the admin ask for a different look without changing anything else.
+    salt = (request.form.get('salt') or '').strip()
+    use_ai = (request.form.get('use_ai') == 'on') and site_ai.is_available()
+    try:
+        n = site_generator.generate(salt=salt, use_ai=use_ai)
+    except Exception:
+        db.session.rollback()
+        flash('Sorry — the site could not be generated. Please try again.', 'error')
+        return redirect(url_for('website_admin.index'))
+    log_action('website.generate', detail=f'{n} pages, ai={use_ai}')
+    flash(f'Your website has been built — {n} pages ready to review and edit. '
+          'Publish it when you’re happy.', 'success')
     return redirect(url_for('website_admin.index'))
 
 

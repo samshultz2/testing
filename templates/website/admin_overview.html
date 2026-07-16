@@ -13,6 +13,37 @@
   </div>
 </div>
 
+<div class="card mb-3" style="border:1px solid color-mix(in srgb,var(--primary,#0d6a4e) 30%,transparent)">
+  <div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;justify-content:space-between">
+    <div style="max-width:640px">
+      <h3 style="margin:0 0 .3rem"><i class="fas fa-wand-magic-sparkles"></i> Build my website automatically</h3>
+      <p class="text-muted text-sm" style="margin:0">Not a designer? Let us build a complete, ready-to-edit website for
+        <strong>{{ settings.seo_title or 'your school' }}</strong> in one click — a home page plus About, Academics,
+        Admissions and Contact, with a design chosen to suit your school. You can change anything afterwards.</p>
+    </div>
+    <form method="POST" action="{{ url_for('website_admin.generate_site') }}"
+          data-confirm="This builds a fresh website and replaces any pages you already have. Continue?">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      {% if ai_available %}
+      <label class="text-sm" style="display:block;margin-bottom:.4rem"><input type="checkbox" name="use_ai" checked> Write the copy with AI</label>
+      {% endif %}
+      <button class="btn btn-primary"><i class="fas fa-bolt"></i> Build my website</button>
+    </form>
+  </div>
+</div>
+{% if pages and pages|length > 1 %}
+<div class="card mb-3"><div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;justify-content:space-between">
+  <span class="text-muted text-sm"><i class="fas fa-shuffle"></i> Want a different look? Generate a fresh design — your content sections stay the same types, restyled and re-arranged.</span>
+  <form method="POST" action="{{ url_for('website_admin.generate_site') }}"
+        data-confirm="Generate a different design? This replaces your current pages. Continue?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="salt" value="{{ range(100000)|random }}">
+    {% if ai_available %}<input type="hidden" name="use_ai" value="on">{% endif %}
+    <button class="btn btn-secondary btn-sm"><i class="fas fa-shuffle"></i> Try another design</button>
+  </form>
+</div></div>
+{% endif %}
+
 <div class="row">
   <div class="col-md-6"><div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-rocket"></i> Publish</h3></div>
