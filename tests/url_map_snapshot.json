@@ -4169,6 +4169,13 @@
 ]
 ],
 [
+"results.analytics_deck",
+"/results/analytics/deck.pptx",
+[
+"GET"
+]
+],
+[
 "results.analytics_export",
 "/results/analytics/export",
 [

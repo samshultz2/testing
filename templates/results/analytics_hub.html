@@ -98,6 +98,7 @@ a.exec:hover .go{opacity:1}
         {% endif %}
         {% if selected_year %}
         <a href="{{ url_for('results.analytics_board_pack', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" title="Executive board pack (PDF)"><i class="fas fa-file-invoice"></i> Board pack</a>
+        <a href="{{ url_for('results.analytics_deck', year=selected_year) }}" class="btn btn-primary btn-sm" title="PowerPoint deck for meetings"><i class="fas fa-file-powerpoint"></i> Slides</a>
         <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>
         <a href="{{ url_for('results.analytics_export_csv', year=selected_year) }}" class="btn btn-secondary btn-sm" title="CSV"><i class="fas fa-file-csv"></i></a>
         <button type="button" data-call="exportAnalyticsImage" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>

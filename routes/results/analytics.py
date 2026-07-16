@@ -668,6 +668,41 @@ def analytics_board_pack():
     return pdf_response(pdf, f'exam_board_pack_{year}.pdf', inline=True)
 
 
+@results_bp.route('/analytics/deck.pptx')
+@login_required
+def analytics_deck():
+    """Editable PowerPoint deck of the year's external-exam performance, for
+    administration / parent / board meetings."""
+    from flask import Response
+    from utils.exam_deck import build_deck
+    from utils.school import school_profile
+
+    year = request.args.get('year', type=int)
+    if not year:
+        flash('Select a year to build the presentation.', 'error')
+        return redirect(url_for('results.analytics_hub'))
+    bid = viewing_branch_id()
+    waec_stats, jamb_stats, correlation, cutoff, insights = _report_bundle(year, bid)
+    if not (waec_stats or jamb_stats):
+        flash(f'No exam data for {year}.', 'error')
+        return redirect(url_for('results.analytics_hub', year=year))
+
+    branch_label = None
+    if bid is not None:
+        from models import Branch
+        b = db.session.get(Branch, bid)
+        branch_label = b.name if b else None
+
+    data = build_deck(
+        year=year, school_name=school_profile()['name'], generated=_date.today().isoformat(),
+        branch_label=branch_label, waec_stats=waec_stats, jamb_stats=jamb_stats,
+        cutoff=cutoff, correlation=correlation, insights=insights)
+    log_action('analytics.deck', detail=f'year={year}, branch={bid or "all"}')
+    resp = Response(data, mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+    resp.headers['Content-Disposition'] = f'attachment; filename="exam_results_{year}.pptx"'
+    return resp
+
+
 @results_bp.route('/subject-enrolment/<exam>/<path:subject>')
 @login_required
 def subject_enrolment_detail(exam, subject):

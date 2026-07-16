@@ -13,6 +13,7 @@ SQLAlchemy==2.0.23
 # (postgresql+psycopg://...). Not required for the default SQLite backend.
 psycopg[binary]==3.2.3
 openpyxl==3.1.2
+python-pptx==1.0.2
 # pandas 2.2+ supports numpy 2.x, which ortools (below) requires. Older 2.1.x
 # pinned numpy<2 and conflicted with ortools' numpy>=2.0.2.
 pandas==2.2.3
