@@ -180,6 +180,32 @@ def test_csp_is_nonce_based_no_unsafe_inline(app):
     assert body_nonces == {m.group(1)}
 
 
+def test_global_rate_cap_stops_distributed_flood(app):
+    """A distributed flood (many IPs -> many identities) defeats the per-identity
+    cap, but the optional global counter trips a circuit breaker for everyone."""
+    from utils.security import rate_limited, login_limiter
+
+    @rate_limited('flood_probe', max_requests=5, window_minutes=15,
+                  global_max=8, global_window_minutes=15)
+    def _probe():
+        return 'ok'
+
+    from werkzeug.exceptions import HTTPException
+    # Simulate the global counter already at its ceiling (as if hit from 8
+    # different IPs); a fresh client (empty per-identity bucket) must still be
+    # refused because the shared global counter is over the cap.
+    with app.test_request_context('/p'):
+        for _ in range(8):
+            login_limiter.record_attempt('rl:GLOBAL:flood_probe')
+        try:
+            _probe()
+            assert False, 'expected the global cap to abort with 429'
+        except HTTPException as e:
+            assert e.code == 429
+        finally:
+            login_limiter.clear_attempts('rl:GLOBAL:flood_probe')
+
+
 def test_export_endpoint_is_rate_limited(app):
     from utils.security import login_limiter
     cc, _ = _central_admin(app)

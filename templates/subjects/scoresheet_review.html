@@ -18,6 +18,16 @@
     </div>
 </div>
 
+{% set unmatched = rows | rejectattr('matched_id') | list %}
+{% if unmatched %}
+<div class="alert alert-warning">
+    <i class="fas fa-triangle-exclamation"></i>
+    <strong>{{ unmatched|length }} row(s) are not linked to a student</strong> (highlighted below). Their scores
+    <strong>will not be saved</strong> until you pick the student from the dropdown. This usually happens when the
+    pasted name is spelled or ordered differently from the register — choose the right pupil, then save.
+</div>
+{% endif %}
+
 <form method="POST" action="{{ url_for('subjects.scoresheet_save') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="term_id" value="{{ term_id }}">
@@ -44,9 +54,9 @@
                         {% for row in rows %}
                         <tr {% if not row.matched_id %}style="background: var(--warning-bg, rgba(255,193,7,0.08));"{% endif %}>
                             <td>{{ loop.index }}</td>
-                            <td class="text-sm">{{ row.name }}</td>
+                            <td class="text-sm">{{ row.name }}<input type="hidden" name="rowname_{{ loop.index0 }}" value="{{ row.name }}"></td>
                             <td>
-                                <select name="student_{{ loop.index0 }}" class="form-control" style="min-width: 180px;">
+                                <select name="student_{{ loop.index0 }}" class="form-control{% if not row.matched_id %} is-invalid{% endif %}" style="min-width: 180px;">
                                     <option value="">— skip —</option>
                                     {% for s in students %}
                                     <option value="{{ s.id }}" {% if row.matched_id == s.id %}selected{% endif %}>{{ s.full_name }}</option>

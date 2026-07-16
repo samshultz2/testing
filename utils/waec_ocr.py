@@ -686,28 +686,56 @@ def vision_extract_scoresheet(image_bytes, column_labels, media_type='image/png'
         return None
 
 
+def _name_tokens(*parts):
+    """Alphabetic name tokens (length >= 2), lower-cased. Drops punctuation,
+    numbers and lone initials so ordering and middle names don't defeat matching."""
+    out = set()
+    for p in parts:
+        for t in re.findall(r'[a-z]+', (p or '').lower()):
+            if len(t) >= 2:
+                out.add(t)
+    return out
+
+
 def match_student(name, students):
-    """
-    Auto-match the extracted name to a student. Returns (student_or_None, score).
-    `students` is a list of Student objects.
-    """
+    """Auto-match an extracted/pasted name to a student. Returns (student|None, score).
+
+    Robust to the ways real name lists differ from the register: word order
+    ("Surname Firstname" vs "Firstname Surname"), an extra/absent middle name, and
+    minor spelling/spacing. Matching is token-based so "Ada Obi" still matches
+    "Obi Ada Chidinma"; a single shared token is deliberately NOT enough to match,
+    to avoid linking the wrong pupil."""
     if not name or not students:
         return None, 0.0
     name_l = name.lower().strip()
+    q = _name_tokens(name)
 
-    best = None
-    best_score = 0.0
+    best, best_score = None, 0.0
     for s in students:
         full = (s.full_name or '').lower()
-        # also try "first surname" ordering since slips vary
         alt = f"{(s.first_name or '').lower()} {(s.surname or '').lower()}".strip()
-        score = max(
+        # order-sensitive similarity (handles spelling/spacing wobble)
+        seq = max(
             difflib.SequenceMatcher(None, name_l, full).ratio(),
             difflib.SequenceMatcher(None, name_l, alt).ratio(),
         )
+        # order-independent, subset-aware token similarity
+        c = _name_tokens(s.full_name, s.first_name, s.surname, getattr(s, 'middle_name', ''))
+        tset = 0.0
+        if q and c:
+            inter = q & c
+            smaller = q if len(q) <= len(c) else c
+            if q <= c or c <= q:                       # one name fully contains the other
+                tset = 0.97 if len(smaller) >= 2 else 0.55
+            elif len(inter) >= 2:                      # e.g. first + surname both shared
+                tset = 0.9
+            else:
+                tset = len(inter) / len(q | c)         # single shared token -> low
+            tset = max(tset, difflib.SequenceMatcher(
+                None, ' '.join(sorted(q)), ' '.join(sorted(c))).ratio())
+        score = max(seq, tset)
         if score > best_score:
             best_score, best = score, s
-    # Only treat as a confident match above a threshold.
     if best_score >= 0.6:
         return best, round(best_score, 2)
     return None, round(best_score, 2)

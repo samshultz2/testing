@@ -710,13 +710,20 @@ def scoresheet_save():
 
     adopted = 0
     warnings = []
+    dropped = []          # rows that carried scores but weren't linked to a student
     items = []            # (student_id, at_id, raw, max_score)
 
     try:
         for r in range(row_count):
             student_pk = request.form.get(f'student_{r}', type=int)
             if not student_pk:
-                continue  # row skipped by the user
+                # A row the user left unmatched: warn (don't silently lose it) if it
+                # actually carried any scores.
+                had_scores = any((request.form.get(f'cell_{r}_{at.id}') or '').strip()
+                                 for at, _mx in sheet_cols)
+                if had_scores:
+                    dropped.append((request.form.get(f'rowname_{r}') or '').strip() or f'row {r + 1}')
+                continue
             student = db.session.get(Student, student_pk)
             if not student:
                 continue
@@ -745,9 +752,13 @@ def scoresheet_save():
             msg += f' {counts["rejected"]} skipped (outside the allowed range).'
         if counts['blocked']:
             msg += f' {counts["blocked"]} left unchanged (edit permission required).'
-        flash(msg, 'success')
+        flash(msg, 'success' if not dropped else 'warning')
         if adopted:
             flash(f'Adopted scanned student number for {adopted} student(s).', 'info')
+        if dropped:
+            names = ', '.join(dropped[:10]) + ('…' if len(dropped) > 10 else '')
+            flash(f'{len(dropped)} row(s) had scores but were NOT saved because no student was '
+                  f'selected: {names}. Go back, pick the student for each, and save again.', 'error')
         for w in warnings[:5]:
             flash(w, 'warning')
     except Exception as e:

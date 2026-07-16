@@ -135,15 +135,28 @@ def _rl_identity():
     return session.get('user_id') or session.get('user') or (request.remote_addr or 'anon')
 
 
-def rate_limited(bucket, max_requests=10, window_minutes=15):
-    """Decorator: throttle an expensive/abusable endpoint per user+IP.
+def rate_limited(bucket, max_requests=10, window_minutes=15, *,
+                 global_max=None, global_window_minutes=None):
+    """Decorator: throttle an expensive/abusable endpoint.
 
-    Backed by the shared DB limiter, so the cap holds across all workers. Use on
-    CPU/IO-heavy routes (OCR, full exports, DB downloads) so one client can't
-    stall the single-worker app. Returns HTTP 429 when the cap is hit.
+    Two layers, both backed by the shared DB limiter (so caps hold across all
+    workers):
+
+    * **Per-identity** (``max_requests``): keyed by user, else session, else IP.
+      Stops one client hammering the endpoint.
+    * **Global** (``global_max``, optional): a single counter for ALL callers
+      combined. This is the defence for a *distributed* flood — an attacker
+      spreading requests across a thousand IPs defeats the per-IP cap, but every
+      request still increments the one global counter, so the endpoint trips its
+      circuit breaker and sheds load instead of stalling the single worker. The
+      limiter table is per-tenant, so one school's flood can't affect another.
+      Size ``global_max`` well above normal aggregate use for that endpoint.
+
+    Returns HTTP 429 when either cap is hit.
     """
     from functools import wraps
     from flask import abort
+    gwin = global_window_minutes or window_minutes
 
     def decorator(fn):
         @wraps(fn)
@@ -151,6 +164,11 @@ def rate_limited(bucket, max_requests=10, window_minutes=15):
             key = f'rl:{bucket}:{_rl_identity()}'
             if login_limiter.is_rate_limited(key, max_requests, window_minutes):
                 abort(429, description='You are doing that too often. Please wait a moment and try again.')
+            if global_max is not None:
+                gkey = f'rl:GLOBAL:{bucket}'
+                if login_limiter.is_rate_limited(gkey, global_max, gwin):
+                    abort(429, description='This service is busy right now. Please try again shortly.')
+                login_limiter.record_attempt(gkey)
             login_limiter.record_attempt(key)
             return fn(*args, **kwargs)
         return wrapper

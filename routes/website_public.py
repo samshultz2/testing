@@ -191,7 +191,8 @@ def _apply_available():
 
 
 @website_bp.route('/apply', methods=['GET', 'POST'])
-@rate_limited('site_apply', max_requests=30, window_minutes=15)
+@rate_limited('site_apply', max_requests=30, window_minutes=15,
+              global_max=800, global_window_minutes=15)   # circuit breaker vs IP-rotating floods
 def apply():
     from utils import site_admissions, payments
     s, cfg = _apply_available()
@@ -252,7 +253,8 @@ def apply_callback():
 
 
 @website_bp.route('/apply/track', methods=['GET', 'POST'])
-@rate_limited('site_track', max_requests=40, window_minutes=15)
+@rate_limited('site_track', max_requests=40, window_minutes=15,
+              global_max=1500, global_window_minutes=15)
 def apply_track():
     from utils import site_admissions
     s = SiteSettings.get()
