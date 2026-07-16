@@ -137,17 +137,16 @@ def page(slug):
 
 
 # --- public admissions application -----------------------------------------
-def _apply_ctx(extra=None):
-    """Themed page context (branding, theme, nav, seo) for the standalone apply pages."""
+def _chrome_ctx(page_title, page_desc, extra=None):
+    """Themed page chrome (branding, theme, fonts, nav, seo) for standalone pages
+    that aren't block-rendered (apply flow, news articles)."""
     from utils.site_themes import theme_css_vars, resolve_theme
     from utils.site_data import public_context
     s = SiteSettings.get()
-    ctx = public_context()
-    branding = ctx['branding']
+    branding = public_context()['branding']
     origin = request.url_root.rstrip('/')
-    title = (extra or {}).get('page_title') or 'Apply'
-    seo = {'title': f"{title} · {branding['name']}",
-           'description': f"Apply for admission to {branding['name']}.",
+    seo = {'title': f"{page_title} · {branding['name']}",
+           'description': page_desc or f"{branding['name']}.",
            'canonical': origin + request.path, 'origin': origin,
            'jsonld': _jsonld(branding, origin)}
     base = {'branding': branding, 'nav': _nav_links(),
@@ -157,6 +156,29 @@ def _apply_ctx(extra=None):
             'draft_banner': (not s.published), 'seo': seo}
     base.update(extra or {})
     return base
+
+
+def _apply_ctx(extra=None):
+    """Themed context for the standalone admissions pages."""
+    branding_name = SiteSettings.get()  # noqa: F841 (kept for clarity)
+    title = (extra or {}).get('page_title') or 'Apply'
+    from utils.site_data import public_branding
+    desc = f"Apply for admission to {public_branding()['name']}."
+    return _chrome_ctx(title, desc, extra)
+
+
+@website_bp.route('/news/<slug>')
+def news_article(slug):
+    """A single published news/blog article."""
+    from models import NewsPost
+    settings = SiteSettings.get()
+    if not settings.published and not _is_admin_preview():
+        abort(404)
+    post = NewsPost.query.filter_by(slug=slug).first()
+    if post is None or (not post.is_published and not _is_admin_preview()):
+        abort(404)
+    return render_template('website/news_article.html',
+                           **_chrome_ctx(post.title, (post.excerpt or ''), {'post': post}))
 
 
 def _apply_available():

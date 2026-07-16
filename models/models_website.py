@@ -137,6 +137,33 @@ class HolidayAssignment(db.Model):
             n /= 1024.0
 
 
+class NewsPost(db.Model):
+    """A news / blog article for the public site. Body is plain text (rendered as
+    paragraphs through Jinja autoescaping — no raw HTML), so it is safe to author.
+    Lives in the school's own tenant DB and is public only while both the site and
+    the post are published."""
+    __tablename__ = 'news_posts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(140), unique=True, nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    excerpt = db.Column(db.String(400))
+    body = db.Column(db.Text)
+    cover_image = db.Column(db.String(400))
+    category = db.Column(db.String(60))
+    author = db.Column(db.String(120))
+    is_published = db.Column(db.Boolean, default=True, nullable=False)
+    published_at = db.Column(db.Date, default=lambda: local_now().date())
+    created_at = db.Column(db.DateTime, default=local_now)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    @property
+    def paragraphs(self):
+        """Body split into paragraphs on blank lines (for safe rendering)."""
+        import re
+        return [p.strip() for p in re.split(r'\n\s*\n', self.body or '') if p.strip()]
+
+
 class SiteViewDaily(db.Model):
     """Privacy-friendly, first-party traffic: one aggregated row per (day, path)
     holding a page-view count. No cookies, no third-party trackers, no raw IPs —

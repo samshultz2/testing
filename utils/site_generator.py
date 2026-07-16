@@ -238,14 +238,61 @@ def _pages(rng, recipe, brand, src):
     academics = _inner_page(rng, recipe, brand, name, 'Academics', [
         _block('programmes', 'cards'), _block('features', 'grid'), gal])
     admissions = _inner_page(rng, recipe, brand, name, 'Admissions', [
-        cta_img, _block('faq', 'accordion'), _block('contact', 'split')])
+        cta_img, _block('fees', 'table'), _block('faq', 'accordion'), _block('contact', 'split')])
+    news = _inner_page(rng, recipe, brand, name, 'News & Events', [
+        _block('blog', rng.choice(['grid', 'list']))])
     assignments = _inner_page(rng, recipe, brand, name, 'Holiday Assignments', [
         _block('assignments', 'by-class')])
     contact = _inner_page(rng, recipe, brand, name, 'Contact Us', [_block('contact', 'split')])
     return [('about', 'About Us', about), ('academics', 'Academics', academics),
-            ('admissions', 'Admissions', admissions),
+            ('admissions', 'Admissions', admissions), ('news', 'News & Events', news),
             ('holiday-assignments', 'Holiday Assignments', assignments),
             ('contact', 'Contact Us', contact)]
+
+
+def _seed_posts(name, src):
+    """Give a new site a few starter articles so the News page isn't empty. Runs
+    only when the school has no posts yet (never clobbers real content)."""
+    from models import NewsPost
+    from datetime import date, timedelta
+    if NewsPost.query.count() > 0:
+        return
+    starters = [
+        ('Welcome to the new academic session',
+         f'{name} reopens for a fresh session of learning and growth.',
+         'A warm welcome back to all our students and families. We are excited for a new session '
+         'filled with learning, discovery and achievement.\n\n'
+         'Our teachers have prepared engaging lessons and activities across every class. We look '
+         'forward to a wonderful term together.', 'Announcements'),
+        ('Our students shine in external examinations',
+         'Celebrating another year of excellent results.',
+         'We are proud to celebrate the hard work of our students and staff. Once again our '
+         'candidates have recorded strong results in their external examinations.\n\n'
+         'These achievements reflect the dedication of our teachers and the commitment of our '
+         'students and their families.', 'Achievements'),
+        ('Inter-house sports and cultural day',
+         'A colourful celebration of sportsmanship and culture.',
+         'Our annual inter-house sports and cultural day brought the whole school community '
+         'together for a day of energy, colour and friendly competition.\n\n'
+         'Thank you to everyone who came out to support our students. See you at the next event!',
+         'Events'),
+    ]
+    today = date.today()
+    for i, (title, excerpt, body, cat) in enumerate(starters):
+        db.session.add(NewsPost(
+            slug=_post_slug(title), title=title, excerpt=excerpt, body=body, category=cat,
+            author=name, is_published=True, published_at=today - timedelta(days=i * 9),
+            cover_image=src.one(f'news-{i}', 1200, 700)))
+
+
+def _post_slug(title):
+    import re
+    from models import NewsPost
+    base = re.sub(r'[^a-z0-9]+', '-', (title or 'post').lower()).strip('-') or 'post'
+    slug, i = base, 2
+    while NewsPost.query.filter_by(slug=slug).first() is not None:
+        slug = f'{base}-{i}'; i += 1
+    return slug
 
 
 def _ai_polish(home_blocks, brand):
@@ -289,6 +336,7 @@ def generate(*, salt='', use_ai=False):
     if use_ai:
         _ai_polish(home_blocks, brand)
 
+    _seed_posts(name, src)                     # starter articles so the News page isn't empty
     SitePage.query.delete()
     db.session.add(SitePage(slug=SitePage.HOME_SLUG, title='Home', blocks=home_blocks,
                             show_in_nav=True, nav_order=0))

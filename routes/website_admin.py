@@ -480,6 +480,101 @@ def assignment_delete(aid):
     return redirect(url_for('website_admin.assignments'))
 
 
+# --- news / blog -----------------------------------------------------------
+def _unique_news_slug(title, exclude_id=None):
+    from models import NewsPost
+    base = _slugify(title) or 'post'
+    slug, i = base, 2
+    while True:
+        row = NewsPost.query.filter_by(slug=slug).first()
+        if row is None or row.id == exclude_id:
+            return slug
+        slug = f'{base}-{i}'; i += 1
+
+
+@website_admin_bp.route('/news')
+@login_required
+@admin_required
+def news():
+    from models import NewsPost
+    posts = NewsPost.query.order_by(NewsPost.published_at.desc(), NewsPost.id.desc()).all()
+    return render_template('website/admin_news.html', posts=posts)
+
+
+@website_admin_bp.route('/news/new', methods=['POST'])
+@login_required
+@admin_required
+def news_new():
+    from models import NewsPost
+    title = (request.form.get('title') or 'Untitled post').strip()[:200]
+    p = NewsPost(slug=_unique_news_slug(title), title=title, is_published=False,
+                 body='', excerpt='')
+    db.session.add(p); db.session.commit()
+    log_action('website.news_create', target=p)
+    return redirect(url_for('website_admin.news_edit', post_id=p.id))
+
+
+@website_admin_bp.route('/news/<int:post_id>')
+@login_required
+@admin_required
+def news_edit(post_id):
+    from models import NewsPost
+    p = db.get_or_404(NewsPost, post_id)
+    public_url = url_for('website.news_article', slug=p.slug)
+    return render_template('website/admin_news_edit.html', p=p, public_url=public_url)
+
+
+@website_admin_bp.route('/news/<int:post_id>/save', methods=['POST'])
+@login_required
+@admin_required
+def news_save(post_id):
+    from models import NewsPost
+    from datetime import datetime
+    p = db.get_or_404(NewsPost, post_id)
+    new_title = (request.form.get('title') or p.title).strip()[:200]
+    if _slugify(new_title) != _slugify(p.title):
+        p.slug = _unique_news_slug(new_title, exclude_id=p.id)
+    p.title = new_title
+    p.excerpt = (request.form.get('excerpt') or '').strip()[:400] or None
+    p.body = request.form.get('body') or ''
+    p.category = (request.form.get('category') or '').strip()[:60] or None
+    p.author = (request.form.get('author') or '').strip()[:120] or None
+    p.is_published = (request.form.get('is_published') == 'on')
+    pub = (request.form.get('published_at') or '').strip()
+    if pub:
+        try:
+            p.published_at = datetime.strptime(pub, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    up = request.files.get('cover_file')
+    if up and up.filename:
+        try:
+            p.cover_image = site_media.store_upload(up).url
+        except ValueError as e:
+            flash(str(e), 'error')
+    elif request.form.get('clear_cover'):
+        p.cover_image = None
+    elif (request.form.get('cover_url') or '').strip():
+        p.cover_image = request.form.get('cover_url').strip()[:400]
+    db.session.commit()
+    log_action('website.news_save', target=p)
+    flash('Post saved.', 'success')
+    return redirect(url_for('website_admin.news_edit', post_id=p.id))
+
+
+@website_admin_bp.route('/news/<int:post_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def news_delete(post_id):
+    from models import NewsPost
+    p = db.get_or_404(NewsPost, post_id)
+    name = p.title
+    db.session.delete(p); db.session.commit()
+    log_action('website.news_delete', detail=name)
+    flash(f'Post “{name}” deleted.', 'success')
+    return redirect(url_for('website_admin.news'))
+
+
 # --- analytics -------------------------------------------------------------
 @website_admin_bp.route('/analytics')
 @login_required

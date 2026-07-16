@@ -95,6 +95,13 @@ REGISTRY = {
         'props': {'heading': 'Latest news',
                   'items': [{'title': 'Share a highlight', 'date': '', 'body': 'Add school news here.', 'href': ''}]},
     },
+    'blog': {
+        'label': 'News / blog', 'data': 'posts',
+        'variants': ['grid', 'list'],
+        'props': {'heading': 'News & updates',
+                  'intro': 'The latest happenings from around our school.',
+                  'empty': 'No news has been published yet — please check back soon.'},
+    },
     'gallery': {
         'label': 'Gallery', 'data': None,
         'variants': ['grid', 'masonry', 'showcase'],
@@ -109,6 +116,18 @@ REGISTRY = {
                       {'name': 'Principal’s name', 'role': 'Principal', 'image': '', 'bio': ''},
                       {'name': 'Vice Principal', 'role': 'Vice Principal (Academics)', 'image': '', 'bio': ''},
                       {'name': 'Head of Admissions', 'role': 'Admissions Officer', 'image': '', 'bio': ''}]},
+    },
+    'fees': {
+        'label': 'Fees / tuition', 'data': None,
+        'variants': ['table', 'cards'],
+        'props': {'heading': 'School fees', 'intro': 'Our fee structure for the current session.',
+                  'note': 'Fees are per term and subject to review. Please contact the bursary for the '
+                          'latest schedule and available payment plans.',
+                  'items': [
+                      {'level': 'Creche / Nursery', 'amount': '₦—', 'note': 'Per term'},
+                      {'level': 'Primary', 'amount': '₦—', 'note': 'Per term'},
+                      {'level': 'Junior Secondary', 'amount': '₦—', 'note': 'Per term'},
+                      {'level': 'Senior Secondary', 'amount': '₦—', 'note': 'Per term'}]},
     },
     'assignments': {
         'label': 'Holiday assignments', 'data': 'assignments',

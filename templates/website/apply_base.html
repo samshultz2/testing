@@ -25,6 +25,7 @@
 <nav class="wb-nav">
   <div class="wb-nav-inner">
     <a class="wb-brand" href="{{ url_for('website.home') }}">{% if branding.logo_url %}<img src="{{ branding.logo_url }}" alt="{{ branding.name }} logo">{% endif %}{{ branding.name }}</a>
+    <button type="button" class="wb-nav-burger" aria-label="Toggle menu" aria-expanded="false" data-wb-nav-toggle><i class="fas fa-bars"></i></button>
     <div class="wb-nav-links">
       {% for link in nav %}<a href="{{ link.href }}">{{ link.label }}</a>{% endfor %}
     </div>

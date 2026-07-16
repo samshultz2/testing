@@ -24,6 +24,8 @@
   <nav class="wb-nav {{ 'floating' if v=='floating' else '' }} {{ 'centered' if v=='centered' else '' }}">
     <div class="wb-nav-inner">
       <a class="wb-brand" href="/site">{% if br.logo_url %}<img src="{{ br.logo_url }}" alt="{{ br.name }} logo">{% endif %}{{ br.name }}</a>
+      <button type="button" class="wb-nav-burger" aria-label="Toggle menu" aria-expanded="false" data-wb-nav-toggle>
+        <i class="fas fa-bars"></i></button>
       <div class="wb-nav-links">
         {% for link in nav %}<a href="{{ link.href }}">{{ link.label }}</a>{% endfor %}
         {% if p.cta_label and v != 'minimal' %}<a class="wb-btn wb-btn-primary" href="{{ p.cta_href }}">{{ p.cta_label }}</a>{% endif %}
@@ -180,6 +182,32 @@
     </div>
   </section>
 
+{% elif b.type == 'blog' %}
+  <section class="wb-sec">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+        {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+      {% if not ctx.posts %}
+        <p class="wb-muted wb-center" style="margin-top:1.5rem">{{ p.empty }}</p>
+      {% else %}
+      <div class="wb-grid {{ 'wb-g3' if v!='list' else '' }}" style="margin-top:2rem">
+        {% for post in ctx.posts %}
+        <article class="wb-card wb-post">
+          {% if post.cover %}<a href="{{ post.url }}"><img class="wb-post-cover" src="{{ post.cover }}" alt="" loading="lazy"></a>{% endif %}
+          <div class="wb-post-body">
+            {% if post.category %}<div class="wb-eyebrow">{{ post.category }}</div>{% endif %}
+            <h3 style="font-size:1.15rem;margin:.2rem 0"><a href="{{ post.url }}" style="color:var(--wb-ink)">{{ post.title }}</a></h3>
+            {% if post.date %}<div class="wb-muted" style="font-size:.82rem">{{ post.date.strftime('%d %b %Y') }}{% if post.author %} · {{ post.author }}{% endif %}</div>{% endif %}
+            {% if post.excerpt %}<p class="wb-muted" style="margin:.5rem 0 .3rem">{{ post.excerpt }}</p>{% endif %}
+            <a href="{{ post.url }}">Read more →</a>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
 {% elif b.type == 'gallery' %}
   <section class="wb-sec">
     <div class="wb-wrap"><h2 class="wb-h2 wb-center">{{ p.heading }}</h2>
@@ -204,6 +232,35 @@
         {% if m.bio %}<p class="wb-muted" style="font-size:.92rem">{{ m.bio }}</p>{% endif %}
       </div>
       {% endfor %}
+    </div>
+  </section>
+
+{% elif b.type == 'fees' %}
+  <section class="wb-sec {{ 'alt' if v=='cards' else '' }}">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+        {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+      {% if v == 'cards' %}
+      <div class="wb-grid wb-g4" style="margin-top:2rem">
+        {% for it in p['items'] or [] %}
+        <div class="wb-card wb-center"><div class="wb-eyebrow">{{ it.level }}</div>
+          <div class="wb-fee-amt">{{ it.amount }}</div>
+          {% if it.note %}<div class="wb-muted" style="font-size:.85rem">{{ it.note }}</div>{% endif %}</div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="overflow-x:auto;margin-top:2rem">
+        <table class="wb-fee-table">
+          <thead><tr><th>Level</th><th>Fee</th><th>Notes</th></tr></thead>
+          <tbody>
+            {% for it in p['items'] or [] %}
+            <tr><td>{{ it.level }}</td><td class="wb-fee-amt">{{ it.amount }}</td><td class="wb-muted">{{ it.note }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% if p.note %}<p class="wb-muted wb-center" style="margin-top:1.2rem;font-size:.9rem">{{ p.note }}</p>{% endif %}
     </div>
   </section>
 

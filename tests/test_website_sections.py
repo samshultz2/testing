@@ -150,6 +150,96 @@ def test_assignment_download_gated_by_publish(app):
     assert anon.get(f'/site/assignments/{aid}/download').status_code == 404
 
 
+# --- mobile hamburger + fees ----------------------------------------------
+def test_nav_has_mobile_hamburger(app):
+    _publish(app)
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert 'wb-nav-burger' in html and 'data-wb-nav-toggle' in html
+    assert 'has-burger' in html                          # the enabling JS is present
+
+
+def test_fees_section_renders(app):
+    _publish(app)
+    _set_home_block(app, block_defaults('fees'))
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert 'wb-fee-table' in html and 'Senior Secondary' in html
+
+
+# --- news / blog -----------------------------------------------------------
+def _new_post(c):
+    c.post('/website/news/new', data={'_csrf_token': auth_csrf(c), 'title': 'Untitled post'})
+
+
+def test_admin_can_create_and_publish_post(app):
+    from models import NewsPost
+    with app.app_context():
+        from utils.finance_ledger import ensure_tables; ensure_tables()
+    c = _admin(app)
+    _new_post(c)
+    with app.app_context():
+        p = NewsPost.query.order_by(NewsPost.id.desc()).first()
+        pid = p.id
+        assert p.is_published is False              # new posts start as drafts
+    c.post(f'/website/news/{pid}/save',
+           data={'_csrf_token': auth_csrf(c), 'title': 'Sports Day 2025',
+                 'excerpt': 'A great day.', 'body': 'Para one.\n\nPara two.',
+                 'category': 'Events', 'author': 'Head Teacher', 'is_published': 'on'})
+    with app.app_context():
+        p = NewsPost.query.get(pid)
+        assert p.title == 'Sports Day 2025' and p.is_published is True
+        assert p.slug == 'sports-day-2025' and len(p.paragraphs) == 2
+
+
+def test_public_blog_lists_and_article_renders(app):
+    from models import NewsPost
+    from datetime import date
+    _publish(app)
+    with app.app_context():
+        db.session.add(NewsPost(slug='welcome-back', title='Welcome Back',
+                                excerpt='New term begins.', body='First line.\n\nSecond line.',
+                                category='News', author='Admin', is_published=True,
+                                published_at=date.today()))
+        db.session.commit()
+    _set_home_block(app, block_defaults('blog'))
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert 'Welcome Back' in html and '/site/news/welcome-back' in html
+    art = app.test_client().get('/site/news/welcome-back')
+    assert art.status_code == 200
+    body = art.get_data(as_text=True)
+    assert 'Welcome Back' in body and 'First line.' in body and 'Second line.' in body
+
+
+def test_draft_or_unpublished_article_is_404(app):
+    from models import NewsPost
+    from datetime import date
+    _publish(app)
+    with app.app_context():
+        db.session.add(NewsPost(slug='secret-draft', title='Draft', body='x',
+                                is_published=False, published_at=date.today()))
+        db.session.commit()
+    # draft post -> 404 to the public
+    assert app.test_client().get('/site/news/secret-draft').status_code == 404
+    # published post but unpublished site -> also 404
+    with app.app_context():
+        NewsPost.query.filter_by(slug='secret-draft').first().is_published = True
+        SiteSettings.get().published = False
+        db.session.commit()
+    assert app.test_client().get('/site/news/secret-draft').status_code == 404
+
+
+def test_generated_site_has_news_page_and_starter_posts(app):
+    from utils import site_generator
+    from models import NewsPost
+    with app.app_context():
+        from utils.finance_ledger import ensure_tables; ensure_tables()
+        NewsPost.query.delete(); db.session.commit()
+        SchoolSettings.set('school_name', 'Pioneer Centre', 'string'); db.session.commit()
+        site_generator.generate()
+        slugs = {p.slug for p in SitePage.query.all()}
+        assert 'news' in slugs
+        assert NewsPost.query.count() >= 3            # starter articles seeded
+
+
 def test_generated_site_has_assignments_page_and_slider_capable(app):
     from utils import site_generator
     with app.app_context():

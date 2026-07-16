@@ -86,13 +86,33 @@ def public_assignments():
     return [{'class_label': k, 'items': groups[k]} for k in order]
 
 
+def public_posts(limit=6):
+    """Published news/blog posts, newest first, for a blog listing block. Only
+    non-personal fields; author is a name the admin chose to show."""
+    from models import NewsPost
+    from flask import url_for
+    try:
+        rows = (NewsPost.query.filter_by(is_published=True)
+                .order_by(NewsPost.published_at.desc(), NewsPost.id.desc())
+                .limit(max(1, min(limit, 24))).all())
+    except Exception:
+        return []
+    return [{
+        'title': p.title, 'slug': p.slug, 'excerpt': p.excerpt or '',
+        'cover': p.cover_image or '', 'category': p.category or '',
+        'author': p.author or '', 'date': p.published_at,
+        'url': url_for('website.news_article', slug=p.slug),
+    } for p in rows]
+
+
 def public_context():
     """The bundle passed to the public renderer. Cached per-request via flask.g."""
     from flask import g, has_request_context
     if has_request_context() and hasattr(g, '_wb_ctx'):
         return g._wb_ctx
     ctx = {'branding': public_branding(), 'events': public_events(),
-           'stats': public_stats(), 'assignments': public_assignments()}
+           'stats': public_stats(), 'assignments': public_assignments(),
+           'posts': public_posts()}
     if has_request_context():
         g._wb_ctx = ctx
     return ctx

@@ -35,7 +35,7 @@ from .models_library import Book, BookLoan, BookReservation, ReadingListItem
 from .models_events import SchoolEvent
 from .models_website import (SiteSettings, SitePage, SiteMedia,
                              SiteViewDaily, SiteReferrerDaily, SiteVisitorDaily,
-                             HolidayAssignment)
+                             HolidayAssignment, NewsPost)
 from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
                          QuestionBank, CBTLoginEvent, CBTDeviceSession)
 from .models_scratchcard import ScratchCard, ResultCheckLog
@@ -80,7 +80,7 @@ __all__ = [
     'AttendanceIntervention', 'InterventionNote',
     'Book', 'BookLoan', 'BookReservation', 'ReadingListItem',
     'SchoolEvent',
-    'SiteSettings', 'SitePage', 'SiteMedia', 'HolidayAssignment',
+    'SiteSettings', 'SitePage', 'SiteMedia', 'HolidayAssignment', 'NewsPost',
     'SiteViewDaily', 'SiteReferrerDaily', 'SiteVisitorDaily',
     'CBTExam', 'CBTQuestion', 'CBTAttempt', 'CBTAnswer', 'CBTViolation', 'QuestionBank'
 ]
