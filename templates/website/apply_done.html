@@ -1,0 +1,26 @@
+{% extends "website/apply_base.html" %}
+{% block apply_content %}
+{% if bot %}
+  {# honeypot tripped — show a neutral confirmation, create nothing #}
+  <h1 class="wb-h2">Thank you</h1>
+  <p class="wb-lead">Your submission has been received.</p>
+  <a href="{{ url_for('website.home') }}" class="wb-btn wb-btn-primary" style="margin-top:1rem">Back to home</a>
+{% elif error %}
+  <div class="wb-alert err">{{ error }}</div>
+  <h1 class="wb-h2">Application not completed</h1>
+  <p class="wb-lead">Nothing was saved. You can try again.</p>
+  <a href="{{ url_for('website.apply') }}" class="wb-btn wb-btn-primary" style="margin-top:1rem">Back to the form</a>
+{% else %}
+  <div class="wb-alert ok">Your application has been received.{% if paid %} Payment confirmed — thank you.{% endif %}</div>
+  <h1 class="wb-h2">Application submitted</h1>
+  <p class="wb-lead">Please keep your application number safe — you'll use it (with the student's surname) to check your status.</p>
+  <p style="margin:1.2rem 0"><span class="wb-muted">Application number</span><br><span class="wb-appno">{{ app_no }}</span></p>
+  {% if fee_note %}
+    <div class="wb-note">An application fee applies. The school will contact you with payment instructions using the details you provided.</div>
+  {% endif %}
+  <div style="margin-top:1.5rem">
+    <a href="{{ url_for('website.apply_track') }}" class="wb-btn wb-btn-primary">Track your application</a>
+    <a href="{{ url_for('website.home') }}" class="wb-btn wb-btn-outline" style="margin-left:.5rem">Back to home</a>
+  </div>
+{% endif %}
+{% endblock %}

@@ -55,6 +55,38 @@
   </div></div>
 </div>
 
+<div class="card mb-3">
+  <div class="card-header"><h3><i class="fas fa-user-graduate"></i> Online admissions</h3></div>
+  <div class="card-body">
+    <p class="text-muted text-sm">Let prospective parents apply directly from your website. Applications land in your existing
+      Admissions module (marked “Website”). Public form: <a href="{{ apply_url }}" target="_blank">{{ apply_url }}</a></p>
+    <form method="POST" action="{{ url_for('website_admin.admissions_settings') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label class="permission-item" style="display:inline-flex;gap:.5rem;margin-bottom:.6rem">
+        <input type="checkbox" name="web_admissions_open" {% if adm.open %}checked{% endif %}>
+        <span>Accept applications from the website</span></label>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Intended session</label>
+          <select name="session_id" class="form-control">
+            <option value="">— None —</option>
+            {% for s in sessions %}<option value="{{ s.id }}" {% if adm.session_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+          </select></div>
+        <div class="form-group"><label class="form-label">Application fee (₦)</label>
+          <input type="number" step="0.01" min="0" name="fee" class="form-control" value="{{ '%.2f'|format(adm.fee) }}"></div>
+      </div>
+      {% if adm.fee and adm.fee > 0 %}
+        <p class="text-sm {{ 'text-muted' if pay_configured else 'text-warning' }}">
+          {% if pay_configured %}<i class="fas fa-check-circle"></i> Online payment is set up — applicants pay the fee before their application is created.
+          {% else %}<i class="fas fa-triangle-exclamation"></i> Online payment isn’t configured, so the fee is shown as information only. Set up a payment provider to collect it online.{% endif %}
+        </p>
+      {% endif %}
+      <div class="form-group"><label class="form-label">Intro message (shown above the form)</label>
+        <textarea name="intro" class="form-control" rows="2" maxlength="600" placeholder="e.g. We’re delighted you’re considering our school…">{{ adm.intro }}</textarea></div>
+      <button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save admissions settings</button>
+    </form>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-header"><h3><i class="fas fa-file-lines"></i> Pages</h3></div>
   <div class="card-body">

@@ -11,6 +11,7 @@ import json
 from flask import Blueprint, render_template, abort, request, session, Response, url_for, redirect
 
 from models import db, SiteSettings, SitePage, SiteMedia
+from utils.security import rate_limited
 from utils.site_themes import theme_css_vars, resolve_theme
 from utils.site_data import public_context
 
@@ -89,12 +90,142 @@ def home():
     return _render(page, settings)
 
 
+_RESERVED_SLUGS = {'sitemap.xml', 'robots.txt', 'media', 'apply'}
+
+
 @website_bp.route('/<slug>')
 def page(slug):
-    if slug in ('sitemap.xml', 'robots.txt'):     # handled by their own routes
+    if slug in _RESERVED_SLUGS:                    # handled by their own routes
         abort(404)
     page, settings = _load(slug)
     return _render(page, settings)
+
+
+# --- public admissions application -----------------------------------------
+def _apply_ctx(extra=None):
+    """Themed page context (branding, theme, nav, seo) for the standalone apply pages."""
+    from utils.site_themes import theme_css_vars, resolve_theme
+    from utils.site_data import public_context
+    s = SiteSettings.get()
+    ctx = public_context()
+    branding = ctx['branding']
+    origin = request.url_root.rstrip('/')
+    title = (extra or {}).get('page_title') or 'Apply'
+    seo = {'title': f"{title} · {branding['name']}",
+           'description': f"Apply for admission to {branding['name']}.",
+           'canonical': origin + request.path, 'origin': origin,
+           'jsonld': _jsonld(branding, origin)}
+    base = {'branding': branding, 'nav': _nav_links(),
+            'theme': resolve_theme(s.theme), 'theme_vars': theme_css_vars(s.theme),
+            'now_year': __import__('datetime').date.today().year,
+            'draft_banner': (not s.published), 'seo': seo}
+    base.update(extra or {})
+    return base
+
+
+def _apply_available():
+    """(settings_row, adm_cfg) if the public may apply now, else (None, None)."""
+    from utils import site_admissions
+    s = SiteSettings.get()
+    if not s.published and not _is_admin_preview():
+        return None, None
+    return s, site_admissions.settings()
+
+
+@website_bp.route('/apply', methods=['GET', 'POST'])
+@rate_limited('site_apply', max_requests=30, window_minutes=15)
+def apply():
+    from utils import site_admissions, payments
+    s, cfg = _apply_available()
+    if s is None:
+        abort(404)
+    fee = cfg['fee']
+    render_kwargs = dict(cfg=cfg, fee=fee, classes=site_admissions.class_choices(),
+                         pay_configured=payments.is_configured(), errors={}, form={})
+    if request.method == 'POST':
+        if not cfg['open']:
+            abort(404)
+        if (request.form.get('website') or '').strip():      # honeypot — silently drop bots
+            return render_template('website/apply_done.html', **_apply_ctx({'app_no': None, 'bot': True}))
+        clean, errors = site_admissions.validate(request.form)
+        if errors:
+            render_kwargs.update(errors=errors, form=request.form)
+            return render_template('website/apply.html', **_apply_ctx(render_kwargs))
+        # Fee due and payments live → pay first, create on verified callback.
+        if fee > 0 and payments.is_configured():
+            ref = payments.new_reference('APP')
+            session['apply_pending'] = {'ref': ref, 'fee': fee, 'data': _jsonable(clean)}
+            res = payments.initialize(
+                email=(clean['parent_email'] or 'applicant@example.com'),
+                amount_naira=fee, reference=ref,
+                callback_url=url_for('website.apply_callback', _external=True),
+                metadata={'purpose': 'application_fee'})
+            if res.get('ok') and res.get('authorization_url'):
+                return redirect(res['authorization_url'])
+            render_kwargs.update(errors={'_': res.get('error') or 'Could not start payment.'},
+                                 form=request.form)
+            return render_template('website/apply.html', **_apply_ctx(render_kwargs))
+        # Free (or offline-fee) → create immediately.
+        a = site_admissions.create_applicant(clean)
+        return render_template('website/apply_done.html',
+                               **_apply_ctx({'app_no': a.application_no, 'fee_note':
+                                             (fee > 0 and not payments.is_configured())}))
+    return render_template('website/apply.html', **_apply_ctx(render_kwargs))
+
+
+@website_bp.route('/apply/callback')
+def apply_callback():
+    from utils import site_admissions, payments
+    pending = session.get('apply_pending') or {}
+    ref = request.args.get('reference') or request.args.get('trxref')
+    if not ref or ref != pending.get('ref'):
+        return render_template('website/apply_done.html',
+                               **_apply_ctx({'app_no': None, 'error': 'We could not match that payment.'}))
+    res = payments.verify(ref)
+    session.pop('apply_pending', None)             # consume so a replay can't double-create
+    if not res.get('ok'):
+        return render_template('website/apply_done.html',
+                               **_apply_ctx({'app_no': None, 'error':
+                                             'Payment was not completed. Please try again.'}))
+    clean = _from_jsonable(pending['data'])
+    a = site_admissions.create_applicant(clean, fee_paid=pending.get('fee') or 0, fee_reference=ref)
+    return render_template('website/apply_done.html',
+                           **_apply_ctx({'app_no': a.application_no, 'paid': True}))
+
+
+@website_bp.route('/apply/track', methods=['GET', 'POST'])
+@rate_limited('site_track', max_requests=40, window_minutes=15)
+def apply_track():
+    from utils import site_admissions
+    s = SiteSettings.get()
+    if not s.published and not _is_admin_preview():
+        abort(404)
+    result = None
+    searched = False
+    if request.method == 'POST':
+        searched = True
+        result = site_admissions.find_application(
+            request.form.get('application_no', ''), request.form.get('surname', ''))
+    return render_template('website/apply_track.html',
+                           **_apply_ctx({'result': result, 'searched': searched}))
+
+
+def _jsonable(clean):
+    d = dict(clean)
+    if d.get('date_of_birth'):
+        d['date_of_birth'] = d['date_of_birth'].isoformat()
+    return d
+
+
+def _from_jsonable(d):
+    from datetime import date as _d
+    d = dict(d or {})
+    if d.get('date_of_birth'):
+        try:
+            d['date_of_birth'] = _d.fromisoformat(d['date_of_birth'])
+        except (ValueError, TypeError):
+            d['date_of_birth'] = None
+    return d
 
 
 @website_bp.route('/media/<int:media_id>')

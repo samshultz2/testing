@@ -44,8 +44,10 @@ def test_settings_singleton(app):
 def test_draft_site_is_404_for_public(app):
     with app.app_context():
         from utils.finance_ledger import ensure_tables; ensure_tables()
-        db.session.add(SitePage(slug='home', title='Home', blocks=default_home_blocks()))
-        db.session.commit()   # settings.published defaults False
+        if not SitePage.query.filter_by(slug='home').first():   # shared-DB: don't collide
+            db.session.add(SitePage(slug='home', title='Home', blocks=default_home_blocks()))
+        SiteSettings.get().published = False                    # force draft regardless of prior tests
+        db.session.commit()
     assert app.test_client().get('/site/').status_code == 404
 
 

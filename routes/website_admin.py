@@ -16,6 +16,7 @@ from utils.audit import log_action
 from utils.site_themes import preset_choices, PRESETS
 from utils import site_blocks
 from utils import site_media
+from utils import site_admissions
 
 website_admin_bp = Blueprint('website_admin', __name__, url_prefix='/website')
 
@@ -43,8 +44,38 @@ def _seed_if_empty():
 def index():
     settings = _seed_if_empty()
     pages = SitePage.query.order_by(SitePage.nav_order.asc(), SitePage.title.asc()).all()
+    from models import AcademicSession
+    try:
+        sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
+    except Exception:
+        sessions = []
     return render_template('website/admin_overview.html', settings=settings, pages=pages,
-                           presets=preset_choices(), public_home=url_for('website.home'))
+                           presets=preset_choices(), public_home=url_for('website.home'),
+                           adm=site_admissions.settings(), sessions=sessions,
+                           pay_configured=_payments_configured(),
+                           apply_url=url_for('website.apply'))
+
+
+def _payments_configured():
+    try:
+        from utils import payments
+        return payments.is_configured()
+    except Exception:
+        return False
+
+
+@website_admin_bp.route('/admissions', methods=['POST'])
+@login_required
+@admin_required
+def admissions_settings():
+    site_admissions.save_settings(
+        is_open=(request.form.get('web_admissions_open') == 'on'),
+        intro=request.form.get('intro'),
+        fee=request.form.get('fee'),
+        session_id=request.form.get('session_id'))
+    log_action('website.admissions_settings')
+    flash('Online admissions settings saved.', 'success')
+    return redirect(url_for('website_admin.index'))
 
 
 @website_admin_bp.route('/publish', methods=['POST'])

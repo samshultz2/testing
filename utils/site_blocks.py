@@ -15,7 +15,7 @@ REGISTRY = {
     'nav': {
         'label': 'Navigation bar', 'data': 'branding', 'nav': True,
         'variants': ['classic', 'minimal', 'centered'],
-        'props': {'cta_label': 'Apply', 'cta_href': '/site/admissions'},
+        'props': {'cta_label': 'Apply', 'cta_href': '/site/apply'},
     },
     'hero': {
         'label': 'Hero section', 'data': 'branding',
@@ -23,7 +23,7 @@ REGISTRY = {
         'images': ['image', 'bg_image'],
         'props': {'eyebrow': 'Welcome to', 'heading': '', 'subheading':
                   'Nurturing character, curiosity and excellence.',
-                  'primary_label': 'Apply for admission', 'primary_href': '/site/admissions',
+                  'primary_label': 'Apply for admission', 'primary_href': '/site/apply',
                   'secondary_label': 'Explore programmes', 'secondary_href': '/site/academics',
                   'image': '', 'bg_image': ''},
     },
@@ -101,7 +101,7 @@ REGISTRY = {
         'images': ['bg_image'],
         'props': {'heading': 'Ready to join our school?', 'subheading':
                   'Applications are open for the new session.',
-                  'button_label': 'Start your application', 'button_href': '/site/admissions',
+                  'button_label': 'Start your application', 'button_href': '/site/apply',
                   'bg_image': ''},
     },
     'contact': {
