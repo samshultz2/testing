@@ -5608,6 +5608,13 @@
 ]
 ],
 [
+"website_admin.block_ai",
+"/website/pages/<int:page_id>/block/<int:idx>/ai",
+[
+"POST"
+]
+],
+[
 "website_admin.block_content",
 "/website/pages/<int:page_id>/block/<int:idx>/content",
 [

@@ -194,6 +194,12 @@ class Config:
     OCR_VISION_FALLBACK = _as_bool(os.environ.get('OCR_VISION_FALLBACK'), default=False)
     OCR_VISION_MODEL = os.environ.get('OCR_VISION_MODEL', 'claude-haiku-4-5')
 
+    # Website Builder AI copywriting assistant. Opt-in and self-disabling: it only
+    # activates when ANTHROPIC_API_KEY is set and the `anthropic` package is
+    # installed. Only non-personal school branding is ever sent to the model.
+    WEBSITE_AI_ENABLED = _as_bool(os.environ.get('WEBSITE_AI_ENABLED'), default=True)
+    WEBSITE_AI_MODEL = os.environ.get('WEBSITE_AI_MODEL', 'claude-haiku-4-5')
+
     # Session
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
     # Auto-logout after this many minutes of inactivity (0 disables).

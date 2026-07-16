@@ -85,6 +85,16 @@
         {% set ilist = (registry.get(b.type) or {}).get('image_list') %}
         <details>
           <summary style="cursor:pointer;font-weight:600">Edit content</summary>
+          {% if ai_available and idx in ai_text_idx %}
+          <form method="POST" action="{{ url_for('website_admin.block_ai', page_id=pg.id, idx=idx) }}"
+                class="d-flex gap-2" style="margin:.7rem 0;flex-wrap:wrap;align-items:center;background:color-mix(in srgb,var(--primary,#0d6a4e) 6%,transparent);padding:.6rem;border-radius:8px">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <span class="text-sm" style="font-weight:600"><i class="fas fa-wand-magic-sparkles"></i> Write with AI</span>
+            <input type="text" name="tone" class="form-control" placeholder="Tone (e.g. warm, formal)" style="max-width:170px;font-size:.85rem">
+            <input type="text" name="keywords" class="form-control" placeholder="Themes / keywords (optional)" style="max-width:220px;font-size:.85rem">
+            <button class="btn btn-sm btn-secondary" title="Generate a draft you can review before saving"><i class="fas fa-sparkles"></i> Draft</button>
+          </form>
+          {% endif %}
           <form method="POST" action="{{ url_for('website_admin.block_content', page_id=pg.id, idx=idx) }}" enctype="multipart/form-data" style="margin-top:.6rem">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             {% for key, val in b.props.items() %}

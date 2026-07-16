@@ -140,9 +140,15 @@ def edit_page(page_id):
     pg = db.get_or_404(SitePage, page_id)
     public_url = (url_for('website.home') if pg.slug == SitePage.HOME_SLUG
                   else url_for('website.page', slug=pg.slug))
+    from utils import site_ai
+    ai_available = site_ai.is_available()
+    # which block indexes have editable text worth an AI draft
+    ai_text_idx = {i for i, b in enumerate(pg.blocks or [])
+                   if site_ai.copy_fields((b or {}).get('props'))} if ai_available else set()
     return render_template('website/admin_page.html', pg=pg,
                            blocks=pg.blocks or [], catalogue=site_blocks.catalogue(),
-                           registry=site_blocks.REGISTRY, public_url=public_url)
+                           registry=site_blocks.REGISTRY, public_url=public_url,
+                           ai_available=ai_available, ai_text_idx=ai_text_idx)
 
 
 @website_admin_bp.route('/pages/<int:page_id>/meta', methods=['POST'])
@@ -277,6 +283,45 @@ def block_content(page_id, idx):
     _save_blocks(pg, blocks)
     log_action('website.block_content', target=pg)
     flash('Content saved.', 'success')
+    return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
+
+
+@website_admin_bp.route('/pages/<int:page_id>/block/<int:idx>/ai', methods=['POST'])
+@login_required
+@admin_required
+def block_ai(page_id, idx):
+    """Draft copy for a section with AI. The generated text is written into the
+    block's props but must still be reviewed and saved by the admin (they land in
+    the Edit-content form fields), so nothing goes live automatically."""
+    from utils import site_ai, site_blocks
+    pg = db.get_or_404(SitePage, page_id)
+    blocks = _blocks(pg)
+    if not (0 <= idx < len(blocks)):
+        abort(404)
+    if not site_ai.is_available():
+        flash('AI copywriting isn’t set up on this site.', 'error')
+        return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
+    block = blocks[idx]
+    props = dict(block.get('props') or {})
+    fields = site_ai.copy_fields(props)
+    if not fields:
+        flash('This section has no editable text to write.', 'error')
+        return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
+    spec = site_blocks.REGISTRY.get(block['type']) or {}
+    from utils.site_data import public_context
+    branding = public_context()['branding']
+    suggestions = site_ai.suggest_block_copy(
+        spec.get('label', block['type']), fields, props, branding=branding,
+        tone=(request.form.get('tone') or '').strip()[:60],
+        keywords=(request.form.get('keywords') or '').strip()[:200])
+    if not suggestions:
+        flash('AI couldn’t generate copy just now — please try again.', 'error')
+        return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
+    props.update(suggestions)
+    block['props'] = props
+    _save_blocks(pg, blocks)
+    log_action('website.block_ai', detail=block['type'], target=pg)
+    flash('AI draft added — review the wording below and click Save content to publish it.', 'success')
     return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
 
 
