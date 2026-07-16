@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ term.full_name }} assessments - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <a href="{{ url_for('settings.term_assessments') }}">Termly Assessments</a> / <span>{{ term.full_name }}</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-sliders"></i> {{ term.full_name }}</h1>
+    <p class="text-muted text-sm">
+      {% if custom %}<span class="badge badge-info">Custom settings active</span>{% else %}Currently using the school's default settings. Save below to give this term its own.{% endif %}</p></div>
+  <div class="page-header-actions"><a href="{{ url_for('settings.term_assessments') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a></div>
+</div>
+
+{% if others %}
+<div class="card mb-3"><div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;justify-content:space-between">
+  <span class="text-muted text-sm"><i class="fas fa-copy"></i> Start from another term's settings, then adjust.</span>
+  <form method="POST" action="{{ url_for('settings.term_assessment_copy', term_id=term.id) }}" class="d-flex gap-2" style="align-items:center">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <select name="from_term_id" class="form-control" style="min-width:200px" required>
+      <option value="">— Copy settings from… —</option>
+      {% for t in others %}<option value="{{ t.id }}">{{ t.full_name }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-secondary btn-sm">Copy</button>
+  </form>
+</div></div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('settings.term_assessment_save', term_id=term.id) }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="card"><div class="card-body">
+    <p class="text-muted text-sm">Set the maximum for each component <strong>for this term only</strong>. Use
+      <strong>0</strong> to drop a component (e.g. CBT in a term with no objective test) and add the marks to another.
+      The maxes should still total your normal overall (usually 100).</p>
+    <table class="table">
+      <thead><tr><th>Component</th><th style="width:160px">Max this term</th></tr></thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td><strong>{{ it.at.name }}</strong>{% if it.at.short_name %} <span class="text-muted">({{ it.at.short_name }})</span>{% endif %}
+            <div class="text-muted text-sm">default {{ it.at.max_score }}</div></td>
+          <td>
+            <input type="hidden" name="at_id[]" value="{{ it.at.id }}">
+            <input type="number" name="max_score[]" min="0" class="form-control" value="{{ it.max }}" style="max-width:120px">
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><th>Total</th><th id="wb-total">{{ total }}</th></tr></tfoot>
+    </table>
+    <div style="margin-top:.6rem">
+      <button class="btn btn-primary"><i class="fas fa-save"></i> Save for this term</button>
+      {% if custom %}
+      <button class="btn btn-secondary" name="clear" value="1" formnovalidate
+              onclick="return confirm('Clear this term’s custom settings and use the defaults?')">
+        Use default settings</button>{% endif %}
+    </div>
+  </div></div>
+</form>
+{% endblock %}

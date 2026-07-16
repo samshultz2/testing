@@ -266,6 +266,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('settings.term_assessments') }}" class="nav-link {% if request.endpoint in ['settings.term_assessments','settings.term_assessment_edit'] %}active{% endif %}">
+                            <i class="fas fa-sliders"></i><span>Termly Assessment Setup</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('subjects.broadsheet') }}" class="nav-link">
                             <i class="fas fa-table"></i><span>Broadsheet</span>
                         </a>

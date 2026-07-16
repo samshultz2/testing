@@ -220,12 +220,13 @@ def persist_scores(term_id, assignment_id, class_subject_id, subject_id, items,
 # SCORE-SHEET (BROADSHEET) IMAGE IMPORT — Tesseract OCR
 # ============================================================================
 
-def _sheet_columns(class_subject):
-    """Assessment columns for a subject, ordered as they appear on a printed
-    broadsheet. Returns [(assessment_type, max_score), ...]."""
+def _sheet_columns(class_subject, term=None):
+    """Assessment columns for a subject in a term, ordered as they appear on a
+    printed broadsheet. Returns [(assessment_type, max_score), ...]. When ``term``
+    is given, per-term assessment settings apply."""
     from utils.assessments import subject_columns
     from utils.waec_ocr import SHEET_COLUMN_ORDER
-    cols = subject_columns(class_subject.subject)  # [(at, max)] in storage order
+    cols = subject_columns(class_subject.subject, term=term)  # [(at, max)] in storage order
     present = {at.short_name: (at, mx) for at, mx in cols}
     ordered = [present[sn] for sn in SHEET_COLUMN_ORDER if sn in present]
     # Append any columns not covered by the canonical order (defensive).

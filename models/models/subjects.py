@@ -147,3 +147,28 @@ class SubjectAssessmentOverride(db.Model):
     
     def __repr__(self):
         return f'<SubjectAssessmentOverride {self.subject.name} - {self.assessment_type.name}: {self.max_score}>'
+
+
+class TermAssessmentSetting(db.Model):
+    """Per-term override of an assessment type's max score.
+
+    Assessment maxes are normally global (AssessmentType.max_score). Some terms
+    are peculiar — e.g. no CBT/OBJ that term, so Theory carries more — and need
+    their own split. A row here makes ``assessment_type`` worth ``max_score`` for
+    that ``term`` only (0 = the component is not used that term). Absent rows mean
+    the term uses the normal global/subject settings, so existing terms are
+    unaffected."""
+    __tablename__ = 'term_assessment_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False, index=True)
+    assessment_type_id = db.Column(db.Integer, db.ForeignKey('assessment_types.id'), nullable=False)
+    max_score = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=local_now)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    assessment_type = db.relationship('AssessmentType')
+
+    __table_args__ = (
+        db.UniqueConstraint('term_id', 'assessment_type_id', name='uq_term_assessment_setting'),
+    )

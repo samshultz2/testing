@@ -93,16 +93,11 @@ def scores_entry():
                 'score': existing.get(enrollment.student_id),
             })
     
-    # Get max score (check for override)
+    # Max score: per-term setting > subject override > global default.
     max_score = selected_assessment.max_score if selected_assessment else 0
     if selected_class_subject and selected_assessment:
-        override = SubjectAssessmentOverride.query.filter_by(
-            subject_id=selected_class_subject.subject_id,
-            assessment_type_id=assessment_type_id,
-            is_active=True
-        ).first()
-        if override:
-            max_score = override.max_score
+        from utils.assessments import effective_max
+        max_score = effective_max(selected_class_subject.subject, selected_assessment, term=term_id)
     
     return _render({
         'page': 'scores', 'nav': _nav_urls(),
@@ -149,7 +144,12 @@ def save_scores():
                         url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
 
         at = db.session.get(AssessmentType, assessment_type_id)
-        max_score = at.max_score if at else None
+        # Per-term setting > subject override > global default.
+        if at and cs:
+            from utils.assessments import effective_max
+            max_score = effective_max(cs.subject, at, term=term_id)
+        else:
+            max_score = at.max_score if at else None
         items = [(int(sid), assessment_type_id,
                   scores[i].strip() if i < len(scores) else '', max_score)
                  for i, sid in enumerate(student_ids)]
@@ -547,7 +547,7 @@ def scoresheet_scan():
 
         data = upload.read()
         is_pdf = upload.filename.lower().endswith('.pdf')
-        sheet_cols = _sheet_columns(class_subject)
+        sheet_cols = _sheet_columns(class_subject, term=term_id)
 
         # Prefer Claude vision when configured (reads handwriting); fall back to
         # Tesseract text parsing on any failure or for PDFs.
@@ -618,7 +618,7 @@ def scoresheet_paste():
 
     ctx = _scan_selector_context()
     cs = db.session.get(ClassSubject, ctx['class_subject_id']) if ctx['class_subject_id'] else None
-    sheet_cols = _sheet_columns(cs) if cs else []
+    sheet_cols = _sheet_columns(cs, term=ctx['term_id']) if cs else []
     ctx['columns'] = sheet_cols
 
     if request.method == 'POST':
@@ -705,7 +705,7 @@ def scoresheet_save():
         return redirect(url_for('subjects.scores_entry', term_id=term_id,
                                 assignment_id=assignment_id, class_subject_id=class_subject_id))
 
-    sheet_cols = _sheet_columns(class_subject)
+    sheet_cols = _sheet_columns(class_subject, term=term_id)
     auto_id_re = _re.compile(r'^STU\d{3,}$')
 
     adopted = 0

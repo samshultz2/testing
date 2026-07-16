@@ -604,6 +604,75 @@ def save_assessments():
 
 
 # ============================================================================
+# PER-TERM ASSESSMENT SETTINGS
+# ============================================================================
+@settings_bp.route('/assessments/terms')
+@login_required
+@admin_required
+def term_assessments():
+    """List terms and whether each has its own (peculiar) assessment settings."""
+    from utils.assessments import term_maxes
+    terms = Term.query.order_by(Term.id.desc()).all()
+    rows = [{'term': t, 'custom': bool(term_maxes(t.id))} for t in terms]
+    return render_template('settings/term_assessments.html', rows=rows)
+
+
+@settings_bp.route('/assessments/terms/<int:term_id>')
+@login_required
+@admin_required
+def term_assessment_edit(term_id):
+    from utils.assessments import term_maxes
+    term = db.get_or_404(Term, term_id)
+    types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
+    tset = term_maxes(term_id)
+    custom = bool(tset)
+    items = [{'at': at, 'max': tset.get(at.id, at.max_score), 'is_default': at.id not in tset}
+             for at in types]
+    others = [t for t in Term.query.order_by(Term.id.desc()).all() if t.id != term_id]
+    return render_template('settings/term_assessment_edit.html',
+                           term=term, items=items, custom=custom, others=others,
+                           total=sum(i['max'] for i in items))
+
+
+@settings_bp.route('/assessments/terms/<int:term_id>/save', methods=['POST'])
+@login_required
+@admin_required
+def term_assessment_save(term_id):
+    from utils.assessments import save_term_settings
+    db.get_or_404(Term, term_id)
+    if request.form.get('clear'):
+        save_term_settings(term_id, {})           # revert to the normal defaults
+        log_action('settings.term_assessment_clear', detail=str(term_id))
+        flash('This term now uses the normal assessment settings.', 'success')
+        return redirect(url_for('settings.term_assessments'))
+    maxes = {}
+    for at_id, val in zip(request.form.getlist('at_id[]'), request.form.getlist('max_score[]')):
+        if str(at_id).isdigit():
+            try:
+                maxes[int(at_id)] = max(0, int(val or 0))
+            except (TypeError, ValueError):
+                maxes[int(at_id)] = 0
+    save_term_settings(term_id, maxes)
+    log_action('settings.term_assessment_save', detail=str(term_id))
+    flash('Assessment settings saved for this term.', 'success')
+    return redirect(url_for('settings.term_assessment_edit', term_id=term_id))
+
+
+@settings_bp.route('/assessments/terms/<int:term_id>/copy', methods=['POST'])
+@login_required
+@admin_required
+def term_assessment_copy(term_id):
+    from utils.assessments import copy_term_settings
+    db.get_or_404(Term, term_id)
+    src = request.form.get('from_term_id', type=int)
+    n = copy_term_settings(src, term_id) if src else 0
+    log_action('settings.term_assessment_copy', detail=f'{src}->{term_id}')
+    flash(f'Copied {n} assessment setting(s) from the selected term.' if n
+          else 'That term has no custom settings to copy.', 'success' if n else 'warning')
+    return redirect(url_for('settings.term_assessment_edit', term_id=term_id))
+
+
+# ============================================================================
 # TIMETABLE SLOTS
 # ============================================================================
 
