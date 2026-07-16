@@ -310,6 +310,51 @@ def media_upload():
     return redirect(url_for('website_admin.media_library'))
 
 
+# --- analytics -------------------------------------------------------------
+@website_admin_bp.route('/analytics')
+@login_required
+@admin_required
+def analytics():
+    from utils import site_analytics
+    try:
+        days = min(90, max(7, int(request.args.get('days', 30))))
+    except (TypeError, ValueError):
+        days = 30
+    data = site_analytics.summary(days=days)
+    peak = max((p['views'] for p in data['series']), default=0)
+    return render_template('website/admin_analytics.html', data=data, peak=peak, days=days)
+
+
+@website_admin_bp.route('/analytics/export')
+@login_required
+@admin_required
+def analytics_export():
+    import csv
+    import io
+    from utils import site_analytics
+    from utils.web_exports import csv_response
+    try:
+        days = min(90, max(7, int(request.args.get('days', 30))))
+    except (TypeError, ValueError):
+        days = 30
+    data = site_analytics.summary(days=days)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(['Date', 'Page views'])
+    for p in data['series']:
+        w.writerow([p['day'].isoformat(), p['views']])
+    w.writerow([])
+    w.writerow(['Top page', 'Views'])
+    for p in data['top_pages']:
+        w.writerow([p['path'], p['views']])
+    w.writerow([])
+    w.writerow(['Referrer', 'Views'])
+    for r in data['top_referrers']:
+        w.writerow([r['source'], r['views']])
+    log_action('website.analytics_export', detail=f'{days}d')
+    return csv_response(buf.getvalue(), f'website-analytics-{days}d.csv')
+
+
 @website_admin_bp.route('/media/<int:media_id>/delete', methods=['POST'])
 @login_required
 @admin_required

@@ -33,7 +33,8 @@ from .models_recruitment import JobVacancy, JobApplication, Interview
 from .models_attendance_intervention import AttendanceIntervention, InterventionNote
 from .models_library import Book, BookLoan, BookReservation, ReadingListItem
 from .models_events import SchoolEvent
-from .models_website import SiteSettings, SitePage, SiteMedia
+from .models_website import (SiteSettings, SitePage, SiteMedia,
+                             SiteViewDaily, SiteReferrerDaily, SiteVisitorDaily)
 from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
                          QuestionBank, CBTLoginEvent, CBTDeviceSession)
 from .models_scratchcard import ScratchCard, ResultCheckLog

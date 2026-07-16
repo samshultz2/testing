@@ -97,3 +97,41 @@ class SitePage(db.Model):
 
     def __repr__(self):
         return f'<SitePage {self.slug!r}>'
+
+
+class SiteViewDaily(db.Model):
+    """Privacy-friendly, first-party traffic: one aggregated row per (day, path)
+    holding a page-view count. No cookies, no third-party trackers, no raw IPs —
+    just server-side counters, so a school gets useful numbers without shipping
+    visitor data to anyone."""
+    __tablename__ = 'site_view_daily'
+
+    id = db.Column(db.Integer, primary_key=True)
+    day = db.Column(db.Date, nullable=False, index=True)
+    path = db.Column(db.String(200), nullable=False)
+    views = db.Column(db.Integer, default=0, nullable=False)
+    __table_args__ = (db.UniqueConstraint('day', 'path', name='uq_site_view_daily'),)
+
+
+class SiteReferrerDaily(db.Model):
+    """Aggregated referrer breakdown: one row per (day, source) where source is
+    the referring host (e.g. ``google.com``) or ``'direct'``."""
+    __tablename__ = 'site_referrer_daily'
+
+    id = db.Column(db.Integer, primary_key=True)
+    day = db.Column(db.Date, nullable=False, index=True)
+    source = db.Column(db.String(120), nullable=False)
+    views = db.Column(db.Integer, default=0, nullable=False)
+    __table_args__ = (db.UniqueConstraint('day', 'source', name='uq_site_referrer_daily'),)
+
+
+class SiteVisitorDaily(db.Model):
+    """Unique-visitor counting without identifying anyone: one row per (day,
+    visitor_hash), where the hash is a per-day, salted, non-reversible digest of
+    IP+user-agent. Rows count distinct visitors for a day and are safe to purge."""
+    __tablename__ = 'site_visitor_daily'
+
+    id = db.Column(db.Integer, primary_key=True)
+    day = db.Column(db.Date, nullable=False, index=True)
+    visitor_hash = db.Column(db.String(64), nullable=False)
+    __table_args__ = (db.UniqueConstraint('day', 'visitor_hash', name='uq_site_visitor_daily'),)

@@ -84,10 +84,24 @@ def _load(slug):
     return page, settings
 
 
+def _track(settings):
+    """Count a public page view — never for an admin previewing a draft, and
+    never in a way that can break the page being served."""
+    if not settings.published or _is_admin_preview():
+        return
+    try:
+        from utils import site_analytics
+        site_analytics.record(request.path, request)
+    except Exception:
+        pass
+
+
 @website_bp.route('/')
 def home():
     page, settings = _load(SitePage.HOME_SLUG)
-    return _render(page, settings)
+    html = _render(page, settings)
+    _track(settings)
+    return html
 
 
 _RESERVED_SLUGS = {'sitemap.xml', 'robots.txt', 'media', 'apply'}
@@ -98,7 +112,9 @@ def page(slug):
     if slug in _RESERVED_SLUGS:                    # handled by their own routes
         abort(404)
     page, settings = _load(slug)
-    return _render(page, settings)
+    html = _render(page, settings)
+    _track(settings)
+    return html
 
 
 # --- public admissions application -----------------------------------------

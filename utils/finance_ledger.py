@@ -355,7 +355,8 @@ def ensure_tables(bind=None):
                         AttendanceIntervention, InterventionNote, StockMovement,
                         Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment,
                         PromoCode, StockAudit, StockAuditItem, FixedAsset, StockBatch,
-                        UserSession, SiteSettings, SitePage, SiteMedia)
+                        UserSession, SiteSettings, SitePage, SiteMedia,
+                        SiteViewDaily, SiteReferrerDaily, SiteVisitorDaily)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
@@ -370,7 +371,9 @@ def ensure_tables(bind=None):
               PurchaseOrderItem.__table__, SupplierPayment.__table__, PromoCode.__table__,
               StockAudit.__table__, StockAuditItem.__table__, FixedAsset.__table__,
               StockBatch.__table__, UserSession.__table__,
-              SiteSettings.__table__, SitePage.__table__, SiteMedia.__table__]
+              SiteSettings.__table__, SitePage.__table__, SiteMedia.__table__,
+              SiteViewDaily.__table__, SiteReferrerDaily.__table__,
+              SiteVisitorDaily.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)
