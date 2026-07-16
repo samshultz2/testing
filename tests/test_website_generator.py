@@ -44,7 +44,8 @@ def test_generates_full_multipage_site(app):
     with app.app_context():
         home = SitePage.query.filter_by(slug='home').first()
         types = [b['type'] for b in home.blocks]
-        assert types[0] == 'nav' and types[-1] == 'footer' and 'hero' in types
+        assert types[0] in ('topbar', 'nav') and 'nav' in types
+        assert types[-1] == 'footer' and 'hero' in types
 
 
 def test_two_schools_get_different_designs(app):
@@ -110,7 +111,10 @@ def test_generated_site_is_image_rich(app):
 
 
 def test_two_schools_get_different_photos(app):
+    from models import SiteMedia
     _named(app, 'Greenfield Academy')
+    with app.app_context():
+        SiteMedia.query.delete(); db.session.commit()   # no uploads -> seeded stock path
     with app.app_context():
         site_generator.generate()
         a = next(b for b in SitePage.query.filter_by(slug='home').first().blocks
@@ -144,6 +148,57 @@ def test_generated_pages_allow_stock_images_via_csp(app):
     csp = r.headers.get('Content-Security-Policy', '')
     img_src = csp.split('img-src')[1].split(';')[0]
     assert 'https:' in img_src                     # external stock photos are allowed
+
+
+def test_generated_site_uses_professional_fonts(app):
+    _named(app, 'Greenfield Academy')
+    with app.app_context():
+        site_generator.generate()
+        SiteSettings.get().published = True
+        db.session.commit()
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert 'fonts.googleapis.com' in html            # a real font pairing is loaded
+
+
+def test_generated_site_has_genre_sections(app):
+    _named(app, 'Greenfield Academy')
+    with app.app_context():
+        site_generator.generate()
+        SiteSettings.get().published = True
+        db.session.commit()
+        types = [b['type'] for b in SitePage.query.filter_by(slug='home').first().blocks]
+    assert 'topbar' in types                          # contact/social bar like real school sites
+    assert 'gallery' in types and 'faq' in types or 'logos' in types
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert 'wb-topbar' in html                         # and it actually renders
+
+
+def _png(color=(40, 90, 160)):
+    import io
+    from PIL import Image
+    b = io.BytesIO(); Image.new('RGB', (800, 600), color).save(b, 'JPEG'); b.seek(0)
+    return b
+
+
+def test_generator_prefers_school_gallery_images(app):
+    """When the school has uploaded photos, the generated site uses THEM, not
+    stock — directly addressing the request that images come from the gallery."""
+    _named(app, 'Greenfield Academy')
+    c = _admin(app); c.get('/website/')
+    for i, col in enumerate([(200, 60, 60), (60, 160, 90), (70, 90, 200)]):
+        c.post('/website/media/upload',
+               data={'file': (_png(col), f'p{i}.jpg'), '_csrf_token': auth_csrf(c)},
+               content_type='multipart/form-data')
+    with app.app_context():
+        site_generator.generate()
+        SiteSettings.get().published = True
+        db.session.commit()
+        hero = next(b for b in SitePage.query.filter_by(slug='home').first().blocks
+                    if b['type'] == 'hero')
+        img = hero['props'].get('bg_image') or hero['props'].get('image')
+        assert img and img.startswith('/site/media/')       # the school's own upload
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert '/site/media/' in html and 'picsum.photos' not in html
 
 
 def test_every_generated_page_renders(app):

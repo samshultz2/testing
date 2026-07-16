@@ -253,10 +253,11 @@ def test_uploaded_image_renders_in_hero(app):
            data={'file': (_png(1000, 700), 'bg.jpg'), '_csrf_token': auth_csrf(c)},
            content_type='multipart/form-data')
     with app.app_context():
-        url = f'/site/media/{SiteMedia.query.first().id}'
+        url = f'/site/media/{SiteMedia.query.order_by(SiteMedia.id.desc()).first().id}'
         pg = SitePage.query.filter_by(slug='home').first()
         blocks = list(pg.blocks)
-        blocks[1]['variant'] = 'image-bg'; blocks[1]['props']['bg_image'] = url
+        hero_i = next(i for i, b in enumerate(blocks) if b['type'] == 'hero')
+        blocks[hero_i]['variant'] = 'image-bg'; blocks[hero_i]['props']['bg_image'] = url
         pg.blocks = blocks; flag_modified(pg, 'blocks'); db.session.commit()
     html = app.test_client().get('/site/').get_data(as_text=True)
     assert 'wb-hero image-bg' in html and url in html

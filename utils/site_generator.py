@@ -23,48 +23,51 @@ from utils import site_blocks, site_stock
 from utils.site_themes import PRESETS
 
 
-# Curated, designer-composed layouts. Each entry is (block type, variant, image
-# slot) — image slot is None or one of hero/about/principal/cta/gallery, which
-# tells the builder to drop stock photography into the right prop.
+# Curated, designer-composed layouts. Each section is (block type, variant, image
+# slot) — image slot is None or one of hero/about/principal/cta/gallery/logos,
+# telling the builder which prop to fill with imagery. ``topbar`` is the contact
+# bar shown above the nav.
 RECIPES = [
     {   # Editorial — serif, institutional, photo-led
         'name': 'editorial', 'themes': ['royal', 'forest', 'emerald', 'graphite'],
-        'hero': 'image-bg',
+        'topbar': 'dark', 'hero': 'image-bg',
         'sections': [
             ('about', 'split-image', 'about'), ('stats', 'bar', None),
             ('programmes', 'cards', None), ('welcome', 'portrait-left', 'principal'),
             ('features', 'grid', None), ('gallery', 'showcase', 'gallery'),
-            ('testimonials', 'cards', None), ('cta', 'image', 'cta'),
+            ('testimonials', 'cards', None), ('faq', 'two-col', None),
+            ('logos', 'strip', 'logos'), ('cta', 'image', 'cta'),
             ('contact', 'split', None)],
     },
     {   # Modern — bold, sans-serif, energetic
         'name': 'modern', 'themes': ['midnight', 'plum', 'slate'],
-        'hero': 'image-bg',
+        'topbar': 'accent', 'hero': 'image-bg',
         'sections': [
             ('features', 'grid', None), ('about', 'split-image', 'about'),
             ('stats', 'bar', None), ('programmes', 'grid', None),
             ('gallery', 'grid', 'gallery'), ('welcome', 'portrait-right', 'principal'),
-            ('testimonials', 'cards', None), ('cta', 'band', None),
-            ('contact', 'cards', None)],
+            ('testimonials', 'cards', None), ('logos', 'strip', 'logos'),
+            ('cta', 'band', None), ('contact', 'cards', None)],
     },
     {   # Warm — friendly, community-focused
         'name': 'warm', 'themes': ['coral', 'plum', 'forest'],
-        'hero': 'image-bg',
+        'topbar': 'accent', 'hero': 'image-bg',
         'sections': [
             ('about', 'split-image', 'about'), ('values', 'three-cards', None),
             ('programmes', 'cards', None), ('gallery', 'masonry', 'gallery'),
             ('stats', 'cards', None), ('welcome', 'portrait-left', 'principal'),
-            ('testimonials', 'cards', None), ('cta', 'image', 'cta'),
-            ('contact', 'split', None)],
+            ('testimonials', 'cards', None), ('faq', 'accordion', None),
+            ('cta', 'image', 'cta'), ('contact', 'split', None)],
     },
     {   # Refined — minimal, calm, lots of whitespace
         'name': 'refined', 'themes': ['slate', 'graphite', 'royal'],
-        'hero': 'split',
+        'topbar': 'light', 'hero': 'split',
         'sections': [
             ('stats', 'bar', None), ('about', 'split-image', 'about'),
             ('programmes', 'grid', None), ('features', 'alternating', None),
             ('gallery', 'grid', 'gallery'), ('welcome', 'portrait-right', 'principal'),
-            ('cta', 'boxed', None), ('contact', 'cards', None)],
+            ('logos', 'boxed', 'logos'), ('cta', 'boxed', None),
+            ('contact', 'cards', None)],
     },
 ]
 
@@ -79,6 +82,44 @@ def _rng(salt=''):
 def _branding():
     from utils.site_data import public_context
     return public_context()['branding']
+
+
+class _ImageSource:
+    """Serves imagery for the generated site, preferring the school's own uploaded
+    photos (their media library) and falling back to seeded stock photography when
+    the library is empty — so a school that has added photos sees *its* photos."""
+
+    def __init__(self, key):
+        self.key = key
+        self._own = self._own_urls()
+        self._i = 0
+
+    @staticmethod
+    def _own_urls():
+        from models import SiteMedia
+        urls = []
+        for m in SiteMedia.query.order_by(SiteMedia.id.asc()).all():
+            try:
+                urls.append(m.url)
+            except Exception:
+                urls.append(f'/site/media/{m.id}')
+        return urls
+
+    def has_own(self):
+        return bool(self._own)
+
+    def _take(self):
+        u = self._own[self._i % len(self._own)]
+        self._i += 1
+        return u
+
+    def one(self, slot, w, h):
+        return self._take() if self._own else site_stock.pick(self.key, slot, w, h)
+
+    def many(self, n, w, h):
+        if self._own:
+            return [self._own[i % len(self._own)] for i in range(n)]
+        return site_stock.gallery(self.key, n, w, h)
 
 
 def _block(btype, variant=None, **props):
@@ -101,16 +142,18 @@ def _theme(rng, recipe):
     return theme
 
 
-def _fill_image(block, slot, key):
-    """Drop stock photography into a section according to its recipe slot."""
+def _fill_image(block, slot, src):
+    """Drop imagery (the school's own, else stock) into a section per its slot."""
     if slot == 'about':
-        block['props']['image'] = site_stock.pick(key, 'about', 1200, 900)
+        block['props']['image'] = src.one('about', 1200, 900)
     elif slot == 'principal':
-        block['props']['image'] = site_stock.pick(key, 'principal', 800, 900)
+        block['props']['image'] = src.one('principal', 800, 900)
     elif slot == 'cta':
-        block['props']['bg_image'] = site_stock.pick(key, 'cta', 1600, 800)
+        block['props']['bg_image'] = src.one('cta', 1600, 800)
     elif slot == 'gallery':
-        block['props']['images'] = site_stock.gallery(key, 6, 800, 600)
+        block['props']['images'] = src.many(6, 800, 600)
+    elif slot == 'logos':
+        block['props']['logos'] = src.many(5, 220, 120)
 
 
 def _copy(block, name, motto):
@@ -131,60 +174,67 @@ def _copy(block, name, motto):
         block['props']['subheading'] = 'Admissions are open — start your application in minutes.'
 
 
-def _home(rng, brand, recipe, key):
+def _nav_header(rng, recipe, name):
+    """The topbar (contact/social) + sticky nav that opens every page."""
+    return [_block('topbar', recipe.get('topbar', 'dark'),
+                   message=f'Welcome to {name} · Admissions open'),
+            _block('nav', rng.choice(['classic', 'minimal', 'centered']))]
+
+
+def _home(rng, brand, recipe, src):
     name = brand.get('name') or 'Our School'
     motto = brand.get('motto') or 'Nurturing character, curiosity and excellence.'
-    blocks = [_block('nav', rng.choice(['classic', 'minimal', 'centered']))]
+    blocks = _nav_header(rng, recipe, name)
 
     hero = _block('hero', recipe['hero'], eyebrow='Welcome to', heading=name, subheading=motto)
     if recipe['hero'] == 'image-bg':
-        hero['props']['bg_image'] = site_stock.pick(key, 'hero', 1600, 900)
+        hero['props']['bg_image'] = src.one('hero', 1600, 900)
     elif recipe['hero'] in ('split', 'image-right'):
-        hero['props']['image'] = site_stock.pick(key, 'hero', 1100, 850)
+        hero['props']['image'] = src.one('hero', 1100, 850)
     blocks.append(hero)
 
     for btype, variant, slot in recipe['sections']:
         b = _block(btype, variant)
         _copy(b, name, motto)
         if slot:
-            _fill_image(b, slot, key)
+            _fill_image(b, slot, src)
         blocks.append(b)
 
     blocks.append(_block('footer', rng.choice(['rich', 'simple']), tagline=motto))
     return blocks
 
 
-def _inner_page(rng, brand, key, title, body_blocks):
-    blocks = [_block('nav', rng.choice(['classic', 'minimal', 'centered'])),
-              _block('hero', 'center', eyebrow='', heading=title, subheading='',
-                     primary_label='', secondary_label='')]
+def _inner_page(rng, recipe, brand, name, title, body_blocks):
+    blocks = _nav_header(rng, recipe, name)
+    blocks.append(_block('hero', 'center', eyebrow='', heading=title, subheading='',
+                         primary_label='', secondary_label=''))
     blocks.extend(body_blocks)
     blocks.append(_block('footer', rng.choice(['rich', 'simple']),
                          tagline=(brand.get('motto') or '')))
     return blocks
 
 
-def _about_block(key, variant='split-image'):
-    b = _block('about', variant)
-    _fill_image(b, 'about', key)
-    return b
-
-
-def _pages(rng, brand, key):
+def _pages(rng, recipe, brand, src):
     name = brand.get('name') or 'Our School'
-    principal = _block('welcome', 'portrait-left'); _fill_image(principal, 'principal', key)
-    gal = _block('gallery', 'showcase'); _fill_image(gal, 'gallery', key)
+
+    def about_block():
+        b = _block('about', 'split-image'); _copy(b, name, ''); _fill_image(b, 'about', src)
+        return b
+
+    principal = _block('welcome', 'portrait-left'); _copy(principal, name, '')
+    _fill_image(principal, 'principal', src)
+    gal = _block('gallery', 'showcase'); _fill_image(gal, 'gallery', src)
     cta_img = _block('cta', 'image', heading='Ready to apply?',
                      subheading=f'We would love to welcome your child to {name}.')
-    _fill_image(cta_img, 'cta', key)
+    _fill_image(cta_img, 'cta', src)
 
-    about = _inner_page(rng, brand, key, 'About Us', [
-        _about_block(key), principal, _block('values', 'three-cards')])
-    academics = _inner_page(rng, brand, key, 'Academics', [
+    about = _inner_page(rng, recipe, brand, name, 'About Us', [
+        about_block(), principal, _block('values', 'three-cards')])
+    academics = _inner_page(rng, recipe, brand, name, 'Academics', [
         _block('programmes', 'cards'), _block('features', 'grid'), gal])
-    admissions = _inner_page(rng, brand, key, 'Admissions', [
-        cta_img, _block('contact', 'split')])
-    contact = _inner_page(rng, brand, key, 'Contact Us', [_block('contact', 'split')])
+    admissions = _inner_page(rng, recipe, brand, name, 'Admissions', [
+        cta_img, _block('faq', 'accordion'), _block('contact', 'split')])
+    contact = _inner_page(rng, recipe, brand, name, 'Contact Us', [_block('contact', 'split')])
     return [('about', 'About Us', about), ('academics', 'Academics', academics),
             ('admissions', 'Admissions', admissions), ('contact', 'Contact Us', contact)]
 
@@ -218,6 +268,7 @@ def generate(*, salt='', use_ai=False):
     brand = _branding()
     key = f'{name}|{salt}'                    # image seed: unique per school + variation
     recipe = rng.choice(RECIPES)
+    src = _ImageSource(key)                    # school's own photos, else seeded stock
 
     settings = SiteSettings.get()
     settings.theme = _theme(rng, recipe)
@@ -225,7 +276,7 @@ def generate(*, salt='', use_ai=False):
     settings.seo_description = (brand.get('motto')
                                 or f'Welcome to {name}. Discover our programmes and apply online.')[:180]
 
-    home_blocks = _home(rng, brand, recipe, key)
+    home_blocks = _home(rng, brand, recipe, src)
     if use_ai:
         _ai_polish(home_blocks, brand)
 
@@ -233,7 +284,7 @@ def generate(*, salt='', use_ai=False):
     db.session.add(SitePage(slug=SitePage.HOME_SLUG, title='Home', blocks=home_blocks,
                             show_in_nav=True, nav_order=0))
     order = 1
-    for slug, title, blocks in _pages(rng, brand, key):
+    for slug, title, blocks in _pages(rng, recipe, brand, src):
         db.session.add(SitePage(slug=slug, title=title, blocks=blocks,
                                 show_in_nav=True, nav_order=order))
         order += 1

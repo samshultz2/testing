@@ -12,7 +12,7 @@ from flask import Blueprint, render_template, abort, request, session, Response,
 
 from models import db, SiteSettings, SitePage, SiteMedia
 from utils.security import rate_limited
-from utils.site_themes import theme_css_vars, resolve_theme
+from utils.site_themes import theme_css_vars, resolve_theme, google_fonts_href
 from utils.site_data import public_context
 
 website_bp = Blueprint('website', __name__, url_prefix='/site')
@@ -70,6 +70,7 @@ def _render(page, settings):
                            page=page, blocks=[b for b in (page.blocks or []) if b.get('enabled', True)],
                            ctx=ctx, branding=branding, nav=_nav_links(),
                            theme=theme, theme_vars=theme_css_vars(settings.theme),
+                           fonts_href=google_fonts_href(settings.theme),
                            seo=seo, draft_banner=(not settings.published),
                            now_year=__import__('datetime').date.today().year)
 
@@ -133,6 +134,7 @@ def _apply_ctx(extra=None):
            'jsonld': _jsonld(branding, origin)}
     base = {'branding': branding, 'nav': _nav_links(),
             'theme': resolve_theme(s.theme), 'theme_vars': theme_css_vars(s.theme),
+            'fonts_href': google_fonts_href(s.theme),
             'now_year': __import__('datetime').date.today().year,
             'draft_banner': (not s.published), 'seo': seo}
     base.update(extra or {})

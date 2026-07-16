@@ -12,6 +12,12 @@ full catalogue over time.
 # data: which utils.site_data key the block pulls live SIS content from (or None
 # for fully school-authored blocks). props: the editable fields (with defaults).
 REGISTRY = {
+    'topbar': {
+        'label': 'Top contact bar', 'data': 'branding',
+        'variants': ['dark', 'accent', 'light'],
+        'props': {'message': 'Admissions open for the new session',
+                  'facebook': '', 'instagram': '', 'twitter': '', 'youtube': '', 'linkedin': ''},
+    },
     'nav': {
         'label': 'Navigation bar', 'data': 'branding', 'nav': True,
         'variants': ['classic', 'minimal', 'centered'],
@@ -109,6 +115,30 @@ REGISTRY = {
                   'Applications are open for the new session.',
                   'button_label': 'Start your application', 'button_href': '/site/apply',
                   'bg_image': ''},
+    },
+    'logos': {
+        'label': 'Accreditations / partners', 'data': None,
+        'variants': ['strip', 'boxed'],
+        'image_list': 'logos',
+        'props': {'heading': 'Accredited & affiliated', 'logos': []},
+    },
+    'faq': {
+        'label': 'FAQ', 'data': None,
+        'variants': ['accordion', 'two-col'],
+        'props': {'heading': 'Frequently asked questions',
+                  'items': [
+                      {'q': 'How do I apply for admission?',
+                       'a': 'Click “Apply” to complete our online form. You can track your status any '
+                            'time with your application number.'},
+                      {'q': 'What are your school fees?',
+                       'a': 'Fees vary by class level. Contact our admissions office or apply online to '
+                            'receive the current fee schedule.'},
+                      {'q': 'What curriculum do you follow?',
+                       'a': 'We follow the Nigerian national curriculum enriched with modern teaching, '
+                            'preparing students for WAEC, NECO and JAMB.'},
+                      {'q': 'What are your school hours?',
+                       'a': 'Classes run Monday to Friday. Get in touch for the full daily timetable and '
+                            'term calendar.'}]},
     },
     'contact': {
         'label': 'Contact', 'data': 'branding',

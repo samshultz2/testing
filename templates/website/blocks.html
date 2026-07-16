@@ -4,7 +4,23 @@
 {% set p = b.props or {} %}
 {% set v = b.variant %}
 {% set br = ctx.branding %}
-{% if b.type == 'nav' %}
+{% if b.type == 'topbar' %}
+  <div class="wb-topbar {{ v }}">
+    <div class="wb-topbar-inner wb-wrap">
+      <div class="wb-topbar-contact">
+        {% if br.phone %}<a href="tel:{{ br.phone }}"><i class="fas fa-phone"></i> {{ br.phone }}</a>{% endif %}
+        {% if br.email %}<a href="mailto:{{ br.email }}"><i class="fas fa-envelope"></i> {{ br.email }}</a>{% endif %}
+        {% if p.message %}<span class="wb-topbar-msg">{{ p.message }}</span>{% endif %}
+      </div>
+      <div class="wb-topbar-social">
+        {% for net, icon in [('facebook','fa-facebook-f'),('instagram','fa-instagram'),('twitter','fa-x-twitter'),('youtube','fa-youtube'),('linkedin','fa-linkedin-in')] %}
+          {% if p[net] %}<a href="{{ p[net] }}" target="_blank" rel="noopener" aria-label="{{ net }}"><i class="fab {{ icon }}"></i></a>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+{% elif b.type == 'nav' %}
   <nav class="wb-nav {{ 'floating' if v=='floating' else '' }} {{ 'centered' if v=='centered' else '' }}">
     <div class="wb-nav-inner">
       <a class="wb-brand" href="/site">{% if br.logo_url %}<img src="{{ br.logo_url }}" alt="{{ br.name }} logo">{% endif %}{{ br.name }}</a>
@@ -185,6 +201,30 @@
     </div>
     {% endif %}
   </div></section>
+
+{% elif b.type == 'logos' %}
+  <section class="wb-sec {{ 'alt' if v=='boxed' else '' }}">
+    <div class="wb-wrap wb-center">
+      {% if p.heading %}<div class="wb-eyebrow">{{ p.heading }}</div>{% endif %}
+      {% if p['logos'] %}
+      <div class="wb-logos {{ v }}" style="margin-top:1.2rem">
+        {% for logo in p['logos'] %}<img src="{{ logo }}" alt="" loading="lazy">{% endfor %}
+      </div>
+      {% else %}<p class="wb-muted">Add accreditation or partner logos in this section’s “Edit content”.</p>{% endif %}
+    </div>
+  </section>
+
+{% elif b.type == 'faq' %}
+  <section class="wb-sec">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2></div>
+      <div class="wb-faq {{ 'two-col' if v=='two-col' else '' }}">
+        {% for it in p['items'] or [] %}
+        <details class="wb-faq-item"><summary>{{ it.q }}</summary><div class="wb-faq-a">{{ it.a }}</div></details>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
 
 {% elif b.type == 'contact' %}
   <section class="wb-sec" id="contact">
