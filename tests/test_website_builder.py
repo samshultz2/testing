@@ -120,6 +120,38 @@ def test_admin_can_manage_site(app):
         assert SiteSettings.get().published is True
 
 
+def test_in_place_block_edits_persist(app):
+    """Regression: editing a block's text/variant/enabled in place must persist.
+    A shallow copy of pg.blocks shares nested dicts with the ORM's committed
+    snapshot, so an in-place edit looked like a no-op and silently didn't save —
+    the user had to delete and recreate the page to see any change."""
+    _publish(app)
+    c = _admin(app); c.get('/website/')
+    with app.app_context():
+        home = SitePage.query.filter_by(slug='home').first()
+        pid = home.id
+        hero_idx = next(i for i, b in enumerate(home.blocks) if b['type'] == 'hero')
+    tok = auth_csrf(c)
+    # 1) content edit
+    c.post(f'/website/pages/{pid}/block/{hero_idx}/content',
+           data={'_csrf_token': tok, 'prop__heading': 'Persisted Headline'})
+    # 2) variant change
+    c.post(f'/website/pages/{pid}/block/{hero_idx}/op',
+           data={'_csrf_token': tok, 'op': 'variant', 'variant': 'split'})
+    # 3) toggle off
+    c.post(f'/website/pages/{pid}/block/{hero_idx}/op',
+           data={'_csrf_token': tok, 'op': 'toggle'})
+    with app.app_context():
+        blk = SitePage.query.filter_by(slug='home').first().blocks[hero_idx]
+        assert blk['props'].get('heading') == 'Persisted Headline'
+        assert blk.get('variant') == 'split'
+        assert blk.get('enabled') is False
+    # and the public site reflects the saved text (re-enable first so it renders)
+    c.post(f'/website/pages/{pid}/block/{hero_idx}/op', data={'_csrf_token': tok, 'op': 'toggle'})
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert 'Persisted Headline' in html
+
+
 def _png(w=2000, h=1200, color=(30, 80, 160)):
     import io
     from PIL import Image

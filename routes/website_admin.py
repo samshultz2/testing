@@ -5,10 +5,12 @@ All content is school-authored and rendered through Jinja autoescaping on the
 public side; here we validate block types/variants against the registry and keep
 props as plain JSON. Every change is audit-logged.
 """
+import copy
 import re
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, abort)
+from sqlalchemy.orm.attributes import flag_modified
 
 from models import db, SiteSettings, SitePage, SiteMedia
 from utils.access_control import admin_required, login_required
@@ -163,7 +165,21 @@ def save_page_meta(page_id):
 
 
 def _blocks(pg):
-    return list(pg.blocks or [])
+    """A deep copy of the page's blocks to edit safely.
+
+    A shallow ``list(pg.blocks)`` shares the nested dicts with the ORM's
+    committed value, so mutating a block in place (text, variant, enabled…)
+    would also mutate the snapshot SQLAlchemy compares against — the change
+    would look like a no-op and never persist. Deep-copying (plus
+    ``flag_modified`` on save) guarantees in-place edits are written."""
+    return copy.deepcopy(pg.blocks or [])
+
+
+def _save_blocks(pg, blocks):
+    """Assign edited blocks back and force the JSON column to be flushed."""
+    pg.blocks = blocks
+    flag_modified(pg, 'blocks')
+    db.session.commit()
 
 
 @website_admin_bp.route('/pages/<int:page_id>/block/add', methods=['POST'])
@@ -176,8 +192,7 @@ def add_block(page_id):
         abort(400)
     blocks = _blocks(pg)
     blocks.append(site_blocks.block_defaults(btype))
-    pg.blocks = blocks
-    db.session.commit()
+    _save_blocks(pg, blocks)
     log_action('website.block_add', detail=btype, target=pg)
     return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % (len(blocks) - 1)))
 
@@ -206,8 +221,7 @@ def block_op(page_id, idx):
         variant = request.form.get('variant')
         if site_blocks.valid_variant(blocks[idx]['type'], variant):
             blocks[idx]['variant'] = variant
-    pg.blocks = blocks
-    db.session.commit()
+    _save_blocks(pg, blocks)
     log_action('website.block_op', detail=op, target=pg)
     return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % min(idx, len(blocks) - 1) if blocks else None))
 
@@ -260,8 +274,7 @@ def block_content(page_id, idx):
             if ('prop__' + key) in request.form:
                 props[key] = request.form.get('prop__' + key)
     blocks[idx]['props'] = props
-    pg.blocks = blocks
-    db.session.commit()
+    _save_blocks(pg, blocks)
     log_action('website.block_content', target=pg)
     flash('Content saved.', 'success')
     return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
