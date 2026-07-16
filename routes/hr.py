@@ -12,8 +12,9 @@ from sqlalchemy import func
 
 from models import (
     db, StaffMember, Department, LeaveRecord, PayrollRun, Payslip,
-    SalaryHistory, StaffAttendance,
+    SalaryHistory, StaffAttendance, StaffLoan,
 )
+from utils.audit import log_action
 from utils.access_control import login_required, admin_required
 from utils.branch_scope import require_branch_access
 from utils import hr
@@ -974,6 +975,12 @@ def finalize_payroll(run_id):
     run = db.get_or_404(PayrollRun, run_id)
     _require_payroll_run_access(run)
     run.status = 'Finalized'
+    # Book staff-loan salary deductions for this run (idempotent per loan+run).
+    try:
+        from utils.staff_loans import post_run_repayments
+        post_run_repayments(run)
+    except Exception:
+        db.session.rollback()
     # Post the salary run to Finance as a single expense (once).
     if request.form.get('post_expense') and not run.posted_expense_id:
         try:
@@ -1804,3 +1811,129 @@ def save_hr_settings():
     hr.save_leave_allowances(request.form)
     db.session.commit()
     return _ok('HR settings saved.', url_for('hr.settings'))
+
+
+# ============================================================================
+# STAFF LOANS
+# ============================================================================
+def _loan_staff():
+    from utils.branch_scope import scope_query
+    return scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(
+        StaffMember.surname, StaffMember.first_name).all()
+
+
+@hr_bp.route('/loans')
+@login_required
+@admin_required
+def loans_list():
+    from utils.branch_scope import scope_query
+    from utils import staff_loans
+    loans = scope_query(StaffLoan.query, StaffLoan).order_by(StaffLoan.created_at.desc()).all()
+    return render_template('hr/loans.html', loans=loans, cfg=staff_loans.settings())
+
+
+@hr_bp.route('/loans/settings', methods=['POST'])
+@login_required
+@admin_required
+def loans_settings():
+    from utils import staff_loans
+    staff_loans.save_settings(
+        enabled=(request.form.get('enabled') == 'on'),
+        method=request.form.get('method'),
+        rate=request.form.get('rate'),
+        guarantors_required=request.form.get('guarantors_required'))
+    log_action('hr.loan_settings')
+    return _ok('Loan settings saved.', url_for('hr.loans_list'))
+
+
+@hr_bp.route('/loans/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def loan_new():
+    from utils import staff_loans
+    from utils.branch_scope import branch_for_new, require_branch_access
+    cfg = staff_loans.settings()
+    staff = _loan_staff()
+    if request.method == 'POST':
+        staff_id = request.form.get('staff_id', type=int)
+        st = db.session.get(StaffMember, staff_id) if staff_id else None
+        if not st:
+            flash('Choose the staff member taking the loan.', 'error')
+            return render_template('hr/loan_new.html', staff=staff, cfg=cfg)
+        require_branch_access(st.branch_id)
+        loan, err = staff_loans.create_loan(
+            staff_id=st.id, branch_id=st.branch_id or branch_for_new(),
+            principal=request.form.get('principal'),
+            guarantor_ids=request.form.getlist('guarantor_ids'),
+            desired_monthly=request.form.get('monthly_amount'),
+            purpose=request.form.get('purpose'), created_by=_current_user())
+        if err:
+            flash(err, 'error')
+            return render_template('hr/loan_new.html', staff=staff, cfg=cfg)
+        log_action('hr.loan_create', target=loan)
+        flash('Loan created — awaiting guarantor approval before disbursement.', 'success')
+        return redirect(url_for('hr.loan_detail', loan_id=loan.id))
+    return render_template('hr/loan_new.html', staff=staff, cfg=cfg)
+
+
+@hr_bp.route('/loans/<int:loan_id>')
+@login_required
+@admin_required
+def loan_detail(loan_id):
+    from utils.branch_scope import require_branch_access
+    loan = db.get_or_404(StaffLoan, loan_id)
+    require_branch_access(loan.branch_id)
+    return render_template('hr/loan_detail.html', loan=loan)
+
+
+@hr_bp.route('/loans/<int:loan_id>/guarantor/<int:staff_id>/act', methods=['POST'])
+@login_required
+@admin_required
+def loan_guarantor_act(loan_id, staff_id):
+    from utils import staff_loans
+    from utils.branch_scope import require_branch_access
+    loan = db.get_or_404(StaffLoan, loan_id)
+    require_branch_access(loan.branch_id)
+    err = staff_loans.act_on_guarantor(
+        loan, staff_id, approve=(request.form.get('action') == 'approve'), by=_current_user())
+    log_action('hr.loan_guarantor', detail=request.form.get('action'), target=loan)
+    flash(err or 'Guarantor decision recorded.', 'error' if err else 'success')
+    return redirect(url_for('hr.loan_detail', loan_id=loan.id))
+
+
+@hr_bp.route('/loans/<int:loan_id>/repay', methods=['POST'])
+@login_required
+@admin_required
+def loan_repay(loan_id):
+    from utils import staff_loans
+    from utils.branch_scope import require_branch_access
+    loan = db.get_or_404(StaffLoan, loan_id)
+    require_branch_access(loan.branch_id)
+    if loan.status not in ('active',):
+        flash('Only an active (disbursed) loan can take repayments.', 'error')
+        return redirect(url_for('hr.loan_detail', loan_id=loan.id))
+    applied = staff_loans.record_repayment(
+        loan, request.form.get('amount', type=float) or 0, source='manual',
+        note=(request.form.get('note') or 'Manual repayment'))
+    db.session.commit()
+    log_action('hr.loan_repay', detail=str(applied), target=loan)
+    flash(f'Recorded a repayment of {applied:,.2f}.' if applied else 'Nothing to repay.',
+          'success' if applied else 'warning')
+    return redirect(url_for('hr.loan_detail', loan_id=loan.id))
+
+
+@hr_bp.route('/loans/<int:loan_id>/cancel', methods=['POST'])
+@login_required
+@admin_required
+def loan_cancel(loan_id):
+    from utils.branch_scope import require_branch_access
+    loan = db.get_or_404(StaffLoan, loan_id)
+    require_branch_access(loan.branch_id)
+    if loan.status in ('pending', 'active') and not loan.amount_repaid:
+        loan.status = 'cancelled'
+        db.session.commit()
+        log_action('hr.loan_cancel', target=loan)
+        flash('Loan cancelled.', 'success')
+    else:
+        flash('This loan cannot be cancelled (it has repayments or is closed).', 'error')
+    return redirect(url_for('hr.loan_detail', loan_id=loan.id))

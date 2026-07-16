@@ -347,7 +347,8 @@ def active_deduction_types():
 
 def apply_recurring_deductions(ps, types=None):
     """(Re)build a payslip's recurring-deduction line items from the active
-    definitions, based on its current basic pay. Replaces any existing lines."""
+    definitions, based on its current basic pay. Replaces any existing lines.
+    Also appends the staff member's monthly staff-loan repayment, if any."""
     from models import PayslipDeduction
     types = active_deduction_types() if types is None else types
     ps.items[:] = []
@@ -355,6 +356,13 @@ def apply_recurring_deductions(ps, types=None):
         amt = t.amount_for(ps.basic or 0)
         if amt:
             ps.items.append(PayslipDeduction(name=t.label, amount=amt))
+    try:
+        from utils.staff_loans import payslip_loan_deduction
+        loan_amt = payslip_loan_deduction(ps.staff_id)
+        if loan_amt:
+            ps.items.append(PayslipDeduction(name='Staff loan repayment', amount=loan_amt))
+    except Exception:
+        pass
 
 
 def generate_payslips(run):

@@ -415,3 +415,90 @@ class StaffAttendance(db.Model):
 
     def __repr__(self):
         return f'<StaffAttendance {self.staff_id} {self.date} {self.status}>'
+
+
+# ---------------------------------------------------------------------------
+# Staff loans (per branch; each school configures its own interest rules)
+# ---------------------------------------------------------------------------
+class StaffLoan(db.Model):
+    """A loan advanced to a staff member, repaid by monthly salary deductions and
+    due in full by November of the year it was taken. Per-branch; the interest
+    method/rate are a per-school setting snapshotted onto the loan at creation so
+    later setting changes don't rewrite history. Requires guarantor approval
+    before it becomes active (disbursed)."""
+    __tablename__ = 'staff_loans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)
+    principal = db.Column(db.Float, nullable=False)
+    interest_method = db.Column(db.String(10), default='flat')   # 'flat' | 'reducing'
+    interest_rate = db.Column(db.Float, default=5.0)             # percent, snapshot
+    total_repayable = db.Column(db.Float, nullable=False)
+    monthly_amount = db.Column(db.Float, nullable=False)
+    months = db.Column(db.Integer, default=1)
+    amount_repaid = db.Column(db.Float, default=0.0)
+    date_taken = db.Column(db.Date, default=lambda: local_now().date())
+    deadline = db.Column(db.Date)
+    # pending (awaiting guarantors) -> active (disbursed) -> paid | rejected | cancelled
+    status = db.Column(db.String(12), default='pending', index=True)
+    purpose = db.Column(db.String(200))
+    created_by = db.Column(db.String(80))
+    created_at = db.Column(db.DateTime, default=local_now)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    staff = db.relationship('StaffMember')
+    branch = db.relationship('Branch')
+    guarantors = db.relationship('LoanGuarantor', backref='loan',
+                                 lazy='selectin', cascade='all, delete-orphan')
+    repayments = db.relationship('LoanRepayment', backref='loan',
+                                 lazy='selectin', cascade='all, delete-orphan')
+
+    @property
+    def outstanding(self):
+        return round(max(0.0, (self.total_repayable or 0) - (self.amount_repaid or 0)), 2)
+
+    @property
+    def total_interest(self):
+        return round((self.total_repayable or 0) - (self.principal or 0), 2)
+
+    @property
+    def approvals_needed(self):
+        return sum(1 for g in self.guarantors if g.status != 'approved')
+
+    @property
+    def is_fully_approved(self):
+        return bool(self.guarantors) and all(g.status == 'approved' for g in self.guarantors)
+
+    def monthly_due(self):
+        return round(min(self.monthly_amount or 0, self.outstanding), 2)
+
+
+class LoanGuarantor(db.Model):
+    """One of the (default three) staff members who must approve a loan before it
+    is disbursed. Approval is recorded in-app with who/when."""
+    __tablename__ = 'loan_guarantors'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loan_id = db.Column(db.Integer, db.ForeignKey('staff_loans.id'), nullable=False, index=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False)
+    status = db.Column(db.String(10), default='pending')     # pending | approved | declined
+    acted_at = db.Column(db.DateTime)
+    acted_by = db.Column(db.String(80))
+
+    staff = db.relationship('StaffMember')
+
+
+class LoanRepayment(db.Model):
+    """A repayment against a loan — normally a salary deduction booked when a
+    payroll run is finalized (payroll_run_id set), or a manual entry."""
+    __tablename__ = 'loan_repayments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loan_id = db.Column(db.Integer, db.ForeignKey('staff_loans.id'), nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False)
+    date = db.Column(db.Date, default=lambda: local_now().date())
+    source = db.Column(db.String(10), default='payroll')     # payroll | manual
+    payroll_run_id = db.Column(db.Integer, index=True)
+    note = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=local_now)

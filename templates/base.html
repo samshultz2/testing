@@ -480,6 +480,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('hr.loans_list') }}" class="nav-link {% if request.endpoint in ['hr.loans_list','hr.loan_new','hr.loan_detail'] %}active{% endif %}">
+                            <i class="fas fa-hand-holding-dollar"></i><span>Staff Loans</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('hr.departments') }}" class="nav-link {% if request.endpoint == 'hr.departments' %}active{% endif %}">
                             <i class="fas fa-sitemap"></i><span>Departments</span>
                         </a>
