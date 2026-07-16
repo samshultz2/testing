@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Holiday assignments - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('website_admin.index') }}">Website Builder</a> / <span>Holiday assignments</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-file-arrow-down"></i> Holiday assignments</h1>
+    <p class="text-muted text-sm">Upload assignment documents per class. Published files appear on any page that has an
+      “Holiday assignments” section, where students can download them.</p></div>
+  <div class="page-header-actions"><a href="{{ url_for('website_admin.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a></div>
+</div>
+
+<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-upload"></i> Upload an assignment</h3></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('website_admin.assignment_upload') }}" enctype="multipart/form-data" class="form-row" style="flex-wrap:wrap;gap:.8rem;align-items:flex-end">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label class="form-label">Class</label>
+        <select name="class_id" class="form-control" style="min-width:180px">
+          <option value="">General (all classes)</option>
+          {% for cid, cname in classes %}<option value="{{ cid }}">{{ cname }}</option>{% endfor %}
+        </select></div>
+      <div class="form-group" style="flex:1;min-width:220px"><label class="form-label">Title</label>
+        <input type="text" name="title" class="form-control" placeholder="e.g. First term holiday assignment" required></div>
+      <div class="form-group"><label class="form-label">Session / term <span class="text-muted">(optional)</span></label>
+        <input type="text" name="session_label" class="form-control" placeholder="2024/2025 · First term" style="max-width:220px"></div>
+      <div class="form-group"><label class="form-label">File (PDF or Word)</label>
+        <input type="file" name="file" accept=".pdf,.doc,.docx" class="form-control" required></div>
+      <div class="form-group"><button class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button></div>
+    </form>
+    <p class="text-muted text-sm" style="margin:.4rem 0 0">PDF, DOC or DOCX · up to 20&nbsp;MB each.</p>
+  </div>
+</div>
+
+<div class="card"><div class="card-body">
+  {% if items %}
+  <table class="table">
+    <thead><tr><th>Class</th><th>Title</th><th>File</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for a in items %}
+      <tr>
+        <td><strong>{{ a.class_label }}</strong>{% if a.session_label %}<div class="text-muted text-sm">{{ a.session_label }}</div>{% endif %}</td>
+        <td>{{ a.title }}</td>
+        <td><a href="{{ url_for('website.assignment_download', aid=a.id) }}"><i class="fas {{ a.icon }}"></i> {{ a.ext|upper }}</a> <span class="text-muted text-sm">{{ a.size_human }}</span></td>
+        <td>{% if a.is_published %}<span class="badge badge-success">Published</span>{% else %}<span class="badge badge-warning">Hidden</span>{% endif %}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <form method="POST" action="{{ url_for('website_admin.assignment_toggle', aid=a.id) }}" style="display:inline">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-secondary" title="{{ 'Hide' if a.is_published else 'Publish' }}"><i class="fas {{ 'fa-eye-slash' if a.is_published else 'fa-eye' }}"></i></button>
+          </form>
+          <form method="POST" action="{{ url_for('website_admin.assignment_delete', aid=a.id) }}" style="display:inline" data-confirm="Delete this assignment?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty-state"><i class="fas fa-file-arrow-down"></i><p>No assignments uploaded yet. Add one above, then add an “Holiday assignments” section to a page.</p></div>{% endif %}
+</div></div>
+{% endblock %}

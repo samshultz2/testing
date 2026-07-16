@@ -396,6 +396,90 @@ def media_upload():
     return redirect(url_for('website_admin.media_library'))
 
 
+# --- holiday assignments ---------------------------------------------------
+_ASSIGN_EXT = {'pdf': 'application/pdf', 'doc': 'application/msword',
+               'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}
+_ASSIGN_MAX = 20 * 1024 * 1024        # 20 MB per document
+
+
+def _class_choices():
+    from models import SchoolClass
+    try:
+        return [(c.id, c.name) for c in SchoolClass.query.order_by(SchoolClass.name).all()]
+    except Exception:
+        return []
+
+
+@website_admin_bp.route('/assignments')
+@login_required
+@admin_required
+def assignments():
+    from models import HolidayAssignment
+    items = HolidayAssignment.query.order_by(HolidayAssignment.class_label.asc(),
+                                             HolidayAssignment.created_at.desc()).all()
+    return render_template('website/admin_assignments.html', items=items,
+                           classes=_class_choices())
+
+
+@website_admin_bp.route('/assignments/upload', methods=['POST'])
+@login_required
+@admin_required
+def assignment_upload():
+    from models import HolidayAssignment, SchoolClass
+    up = request.files.get('file')
+    title = (request.form.get('title') or '').strip()[:200]
+    session_label = (request.form.get('session_label') or '').strip()[:60]
+    if not up or not up.filename or not title:
+        flash('Please provide a title and choose a file.', 'error')
+        return redirect(url_for('website_admin.assignments'))
+    ext = up.filename.rsplit('.', 1)[-1].lower() if '.' in up.filename else ''
+    if ext not in _ASSIGN_EXT:
+        flash('Only PDF and Word (.doc/.docx) files are allowed.', 'error')
+        return redirect(url_for('website_admin.assignments'))
+    data = up.read()
+    if not data or len(data) > _ASSIGN_MAX:
+        flash('That file is empty or larger than 20 MB.', 'error')
+        return redirect(url_for('website_admin.assignments'))
+    # resolve the class label (denormalised, survives class edits/deletes)
+    cid = request.form.get('class_id')
+    cid = int(cid) if (cid and str(cid).isdigit()) else None
+    label = 'General'
+    if cid:
+        c = db.session.get(SchoolClass, cid)
+        label = c.name if c else 'General'
+    a = HolidayAssignment(class_id=cid, class_label=label, title=title,
+                          session_label=session_label or None, filename=up.filename[:200],
+                          mime=_ASSIGN_EXT[ext], bytes=len(data), data=data, is_published=True)
+    db.session.add(a); db.session.commit()
+    log_action('website.assignment_upload', detail=f'{label}: {title}', target=a)
+    flash('Assignment uploaded.', 'success')
+    return redirect(url_for('website_admin.assignments'))
+
+
+@website_admin_bp.route('/assignments/<int:aid>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def assignment_toggle(aid):
+    from models import HolidayAssignment
+    a = db.get_or_404(HolidayAssignment, aid)
+    a.is_published = not a.is_published
+    db.session.commit()
+    log_action('website.assignment_toggle', detail=str(a.is_published), target=a)
+    return redirect(url_for('website_admin.assignments'))
+
+
+@website_admin_bp.route('/assignments/<int:aid>/delete', methods=['POST'])
+@login_required
+@admin_required
+def assignment_delete(aid):
+    from models import HolidayAssignment
+    a = db.get_or_404(HolidayAssignment, aid)
+    db.session.delete(a); db.session.commit()
+    log_action('website.assignment_delete', detail=str(aid))
+    flash('Assignment deleted.', 'success')
+    return redirect(url_for('website_admin.assignments'))
+
+
 # --- analytics -------------------------------------------------------------
 @website_admin_bp.route('/analytics')
 @login_required

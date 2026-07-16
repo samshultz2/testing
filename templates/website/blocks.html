@@ -32,7 +32,20 @@
   </nav>
 
 {% elif b.type == 'hero' %}
-  {% if v == 'image-bg' %}
+  {% if v == 'slider' %}
+  <header class="wb-hero image-bg wb-slider" data-wb-slider>
+    <div class="wb-slides">
+      {% for s in p['slides'] or [] %}<div class="wb-slide{{ ' is-active' if loop.first else '' }}" style="background-image:url('{{ s }}')"></div>{% endfor %}
+      {% if not p['slides'] %}<div class="wb-slide is-active" style="background:var(--wb-primary)"></div>{% endif %}
+    </div>
+    <div class="wb-wrap wb-center">
+      {% if p.eyebrow %}<div class="wb-eyebrow">{{ p.eyebrow }} {{ br.name if not p.heading }}</div>{% endif %}
+      <h1>{{ p.heading or br.name }}</h1>
+      <p class="wb-lead">{{ p.subheading }}</p>
+      {{ _hero_ctas(p) }}
+    </div>
+  </header>
+  {% elif v == 'image-bg' %}
   <header class="wb-hero image-bg" {% if p.bg_image %}style="background-image:url('{{ p.bg_image }}')"{% endif %}>
     <div class="wb-wrap wb-center">
       {% if p.eyebrow %}<div class="wb-eyebrow">{{ p.eyebrow }} {{ br.name if not p.heading }}</div>{% endif %}
@@ -174,6 +187,52 @@
       <div class="wb-gal {{ v }}" style="margin-top:1.5rem">
         {% for img in p['images'] or [] %}<img src="{{ img }}" alt="" loading="lazy">{% endfor %}
       </div>
+    </div>
+  </section>
+
+{% elif b.type == 'staff' %}
+  <section class="wb-sec {{ 'alt' if v=='cards' else '' }}">
+    <div class="wb-wrap wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+      {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+    <div class="wb-wrap wb-grid wb-g3" style="margin-top:2rem">
+      {% for m in p['items'] or [] %}
+      <div class="wb-staff-card">
+        {% if m.image %}<img class="wb-staff-photo" src="{{ m.image }}" alt="{{ m.name }}" loading="lazy">
+        {% else %}<div class="wb-staff-photo wb-staff-ph"><i class="fas fa-user"></i></div>{% endif %}
+        <h3 style="margin:.2rem 0 0">{{ m.name }}</h3>
+        <div class="wb-eyebrow" style="margin-bottom:.4rem">{{ m.role }}</div>
+        {% if m.bio %}<p class="wb-muted" style="font-size:.92rem">{{ m.bio }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+{% elif b.type == 'assignments' %}
+  <section class="wb-sec" id="assignments">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+        {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+      {% if not ctx.assignments %}
+        <p class="wb-muted wb-center" style="margin-top:1.5rem">{{ p.empty }}</p>
+      {% else %}
+      <div class="wb-assign {{ 'wb-grid wb-g2' if v=='by-class' else '' }}" style="margin-top:2rem">
+        {% for grp in ctx.assignments %}
+        <div class="wb-assign-group">
+          {% if v == 'by-class' %}<h3 class="wb-assign-class">{{ grp.class_label }}</h3>{% endif %}
+          {% for a in grp['items'] %}
+          <a class="wb-assign-row" href="{{ a.url }}">
+            <span class="wb-assign-ic"><i class="fas {{ a.icon }}"></i></span>
+            <span class="wb-assign-meta">
+              <span class="wb-assign-title">{{ a.title }}</span>
+              <span class="wb-assign-sub">{% if v!='by-class' %}{{ grp.class_label }} · {% endif %}{{ a.ext|upper }}{% if a.size %} · {{ a.size }}{% endif %}{% if a.session %} · {{ a.session }}{% endif %}</span>
+            </span>
+            <span class="wb-assign-dl"><i class="fas fa-download"></i></span>
+          </a>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
   </section>
 

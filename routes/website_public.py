@@ -105,7 +105,25 @@ def home():
     return html
 
 
-_RESERVED_SLUGS = {'sitemap.xml', 'robots.txt', 'media', 'apply'}
+_RESERVED_SLUGS = {'sitemap.xml', 'robots.txt', 'media', 'apply', 'assignments'}
+
+
+@website_bp.route('/assignments/<int:aid>/download')
+def assignment_download(aid):
+    """Serve a published holiday-assignment document for download. Gated behind a
+    published site (or admin preview) and the assignment's own publish flag."""
+    from models import HolidayAssignment
+    settings = SiteSettings.get()
+    if not settings.published and not _is_admin_preview():
+        abort(404)
+    a = db.session.get(HolidayAssignment, aid)
+    if a is None or (not a.is_published and not _is_admin_preview()) or a.data is None:
+        abort(404)
+    fname = (a.filename or f'assignment-{a.id}').replace('"', '')
+    resp = Response(a.data, mimetype=a.mime or 'application/octet-stream')
+    resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+    resp.headers['Content-Length'] = str(a.bytes or len(a.data))
+    return resp
 
 
 @website_bp.route('/<slug>')

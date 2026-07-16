@@ -97,6 +97,27 @@
     @media(min-width:700px){.wb-gal{grid-template-columns:repeat(4,1fr)}}
     .wb-gal.masonry{grid-auto-rows:12px}
     .wb-gal img{width:100%;height:100%;object-fit:cover;border-radius:var(--wb-radius);display:block}
+    /* hero slider */
+    .wb-slider{position:relative;overflow:hidden}
+    .wb-slider .wb-slides{position:absolute;inset:0;z-index:0}
+    .wb-slide{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.1s ease-in-out}
+    .wb-slide.is-active{opacity:1}
+    .wb-slider .wb-wrap{position:relative;z-index:2}
+    .wb-slider::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.62))}
+    /* staff / leadership */
+    .wb-staff-card{text-align:center}
+    .wb-staff-photo{width:150px;height:150px;border-radius:50%;object-fit:cover;margin:0 auto .8rem;display:block;box-shadow:var(--wb-shadow);border:4px solid var(--wb-surface)}
+    .wb-staff-ph{display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--wb-primary) 12%,transparent);color:var(--wb-primary);font-size:2.4rem}
+    /* holiday assignments */
+    .wb-assign-group{margin-bottom:1.2rem}
+    .wb-assign-class{font-size:1.15rem;padding-bottom:.5rem;border-bottom:2px solid color-mix(in srgb,var(--wb-primary) 20%,transparent);margin-bottom:.6rem}
+    .wb-assign-row{display:flex;align-items:center;gap:1rem;padding:.85rem 1rem;border:1px solid color-mix(in srgb,var(--wb-ink) 10%,transparent);border-radius:var(--wb-radius);margin-bottom:.55rem;background:var(--wb-surface);color:var(--wb-ink);transition:box-shadow .15s,transform .15s}
+    .wb-assign-row:hover{box-shadow:var(--wb-shadow);transform:translateY(-1px)}
+    .wb-assign-ic{width:42px;height:42px;flex:0 0 42px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--wb-primary) 12%,transparent);color:var(--wb-primary);font-size:1.1rem}
+    .wb-assign-meta{display:flex;flex-direction:column;min-width:0;flex:1}
+    .wb-assign-title{font-weight:600}
+    .wb-assign-sub{font-size:.82rem;color:color-mix(in srgb,var(--wb-ink) 60%,transparent)}
+    .wb-assign-dl{color:var(--wb-primary);font-size:1.05rem}
     /* top contact bar */
     .wb-topbar{font-size:.85rem}
     .wb-topbar.dark{background:var(--wb-ink);color:rgba(255,255,255,.85)}
@@ -140,5 +161,20 @@
   </div>
   {% endif %}
   {% block body %}{% endblock %}
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      document.querySelectorAll('[data-wb-slider]').forEach(function (root) {
+        var slides = root.querySelectorAll('.wb-slide');
+        if (slides.length < 2) return;
+        var i = 0;
+        setInterval(function () {
+          slides[i].classList.remove('is-active');
+          i = (i + 1) % slides.length;
+          slides[i].classList.add('is-active');
+        }, 5000);
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -62,12 +62,37 @@ def public_stats():
     }
 
 
+def public_assignments():
+    """Published holiday-assignment documents grouped by class, newest first.
+    Non-personal: just class labels, titles and download links — no student data."""
+    from models import HolidayAssignment
+    from flask import url_for
+    try:
+        rows = (HolidayAssignment.query.filter_by(is_published=True)
+                .order_by(HolidayAssignment.class_label.asc(),
+                          HolidayAssignment.created_at.desc()).all())
+    except Exception:
+        return []
+    groups, order = {}, []
+    for r in rows:
+        if r.class_label not in groups:
+            groups[r.class_label] = []
+            order.append(r.class_label)
+        groups[r.class_label].append({
+            'id': r.id, 'title': r.title, 'ext': r.ext, 'icon': r.icon,
+            'size': r.size_human, 'session': r.session_label or '',
+            'url': url_for('website.assignment_download', aid=r.id),
+        })
+    return [{'class_label': k, 'items': groups[k]} for k in order]
+
+
 def public_context():
     """The bundle passed to the public renderer. Cached per-request via flask.g."""
     from flask import g, has_request_context
     if has_request_context() and hasattr(g, '_wb_ctx'):
         return g._wb_ctx
-    ctx = {'branding': public_branding(), 'events': public_events(), 'stats': public_stats()}
+    ctx = {'branding': public_branding(), 'events': public_events(),
+           'stats': public_stats(), 'assignments': public_assignments()}
     if has_request_context():
         g._wb_ctx = ctx
     return ctx

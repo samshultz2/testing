@@ -25,8 +25,9 @@ REGISTRY = {
     },
     'hero': {
         'label': 'Hero section', 'data': 'branding',
-        'variants': ['center', 'split', 'gradient', 'image-right', 'image-bg'],
+        'variants': ['center', 'split', 'gradient', 'image-right', 'image-bg', 'slider'],
         'images': ['image', 'bg_image'],
+        'image_list': 'slides',          # the 'slider' variant rotates these photos
         # which variants actually render each image prop (used to auto-switch the
         # design when an admin uploads an image to a variant that would hide it)
         'image_variants': {'image': ['image-right', 'split'], 'bg_image': ['image-bg']},
@@ -34,7 +35,7 @@ REGISTRY = {
                   'Nurturing character, curiosity and excellence.',
                   'primary_label': 'Apply for admission', 'primary_href': '/site/apply',
                   'secondary_label': 'Explore programmes', 'secondary_href': '/site/academics',
-                  'image': '', 'bg_image': ''},
+                  'image': '', 'bg_image': '', 'slides': []},
     },
     'about': {
         'label': 'About section', 'data': None,
@@ -99,6 +100,22 @@ REGISTRY = {
         'variants': ['grid', 'masonry', 'showcase'],
         'image_list': 'images',
         'props': {'heading': 'Life at our school', 'images': []},
+    },
+    'staff': {
+        'label': 'Staff / leadership', 'data': None,
+        'variants': ['grid', 'cards'],
+        'props': {'heading': 'Meet our leadership', 'intro': '',
+                  'items': [
+                      {'name': 'Principal’s name', 'role': 'Principal', 'image': '', 'bio': ''},
+                      {'name': 'Vice Principal', 'role': 'Vice Principal (Academics)', 'image': '', 'bio': ''},
+                      {'name': 'Head of Admissions', 'role': 'Admissions Officer', 'image': '', 'bio': ''}]},
+    },
+    'assignments': {
+        'label': 'Holiday assignments', 'data': 'assignments',
+        'variants': ['by-class', 'list'],
+        'props': {'heading': 'Holiday assignments',
+                  'intro': 'Select your class and download the assignment for the holiday.',
+                  'empty': 'No assignments have been posted yet — please check back soon.'},
     },
     'testimonials': {
         'label': 'Testimonials', 'data': None,

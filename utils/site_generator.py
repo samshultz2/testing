@@ -30,24 +30,24 @@ from utils.site_themes import PRESETS
 RECIPES = [
     {   # Editorial — serif, institutional, photo-led
         'name': 'editorial', 'themes': ['royal', 'forest', 'emerald', 'graphite'],
-        'topbar': 'dark', 'hero': 'image-bg',
+        'topbar': 'dark', 'hero': 'slider',
         'sections': [
             ('about', 'split-image', 'about'), ('stats', 'bar', None),
             ('programmes', 'cards', None), ('welcome', 'portrait-left', 'principal'),
             ('features', 'grid', None), ('gallery', 'showcase', 'gallery'),
-            ('testimonials', 'cards', None), ('faq', 'two-col', None),
-            ('logos', 'strip', 'logos'), ('cta', 'image', 'cta'),
-            ('contact', 'split', None)],
+            ('staff', 'grid', 'staff'), ('testimonials', 'cards', None),
+            ('faq', 'two-col', None), ('logos', 'strip', 'logos'),
+            ('cta', 'image', 'cta'), ('contact', 'split', None)],
     },
     {   # Modern — bold, sans-serif, energetic
         'name': 'modern', 'themes': ['midnight', 'plum', 'slate'],
-        'topbar': 'accent', 'hero': 'image-bg',
+        'topbar': 'accent', 'hero': 'slider',
         'sections': [
             ('features', 'grid', None), ('about', 'split-image', 'about'),
             ('stats', 'bar', None), ('programmes', 'grid', None),
             ('gallery', 'grid', 'gallery'), ('welcome', 'portrait-right', 'principal'),
-            ('testimonials', 'cards', None), ('logos', 'strip', 'logos'),
-            ('cta', 'band', None), ('contact', 'cards', None)],
+            ('staff', 'cards', 'staff'), ('testimonials', 'cards', None),
+            ('logos', 'strip', 'logos'), ('cta', 'band', None), ('contact', 'cards', None)],
     },
     {   # Warm — friendly, community-focused
         'name': 'warm', 'themes': ['coral', 'plum', 'forest'],
@@ -56,8 +56,8 @@ RECIPES = [
             ('about', 'split-image', 'about'), ('values', 'three-cards', None),
             ('programmes', 'cards', None), ('gallery', 'masonry', 'gallery'),
             ('stats', 'cards', None), ('welcome', 'portrait-left', 'principal'),
-            ('testimonials', 'cards', None), ('faq', 'accordion', None),
-            ('cta', 'image', 'cta'), ('contact', 'split', None)],
+            ('staff', 'grid', 'staff'), ('testimonials', 'cards', None),
+            ('faq', 'accordion', None), ('cta', 'image', 'cta'), ('contact', 'split', None)],
     },
     {   # Refined — minimal, calm, lots of whitespace
         'name': 'refined', 'themes': ['slate', 'graphite', 'royal'],
@@ -65,9 +65,9 @@ RECIPES = [
         'sections': [
             ('stats', 'bar', None), ('about', 'split-image', 'about'),
             ('programmes', 'grid', None), ('features', 'alternating', None),
-            ('gallery', 'grid', 'gallery'), ('welcome', 'portrait-right', 'principal'),
-            ('logos', 'boxed', 'logos'), ('cta', 'boxed', None),
-            ('contact', 'cards', None)],
+            ('gallery', 'grid', 'gallery'), ('staff', 'grid', 'staff'),
+            ('welcome', 'portrait-right', 'principal'), ('logos', 'boxed', 'logos'),
+            ('cta', 'boxed', None), ('contact', 'cards', None)],
     },
 ]
 
@@ -80,8 +80,8 @@ def _rng(salt=''):
 
 
 def _branding():
-    from utils.site_data import public_context
-    return public_context()['branding']
+    from utils.site_data import public_branding
+    return public_branding()
 
 
 class _ImageSource:
@@ -154,6 +154,9 @@ def _fill_image(block, slot, src):
         block['props']['images'] = src.many(6, 800, 600)
     elif slot == 'logos':
         block['props']['logos'] = src.many(5, 220, 120)
+    elif slot == 'staff':
+        for m in block['props'].get('items') or []:
+            m['image'] = src.one('staff-' + (m.get('role') or ''), 600, 700)
 
 
 def _copy(block, name, motto):
@@ -187,7 +190,9 @@ def _home(rng, brand, recipe, src):
     blocks = _nav_header(rng, recipe, name)
 
     hero = _block('hero', recipe['hero'], eyebrow='Welcome to', heading=name, subheading=motto)
-    if recipe['hero'] == 'image-bg':
+    if recipe['hero'] == 'slider':
+        hero['props']['slides'] = src.many(4, 1600, 900)
+    elif recipe['hero'] == 'image-bg':
         hero['props']['bg_image'] = src.one('hero', 1600, 900)
     elif recipe['hero'] in ('split', 'image-right'):
         hero['props']['image'] = src.one('hero', 1100, 850)
@@ -234,9 +239,13 @@ def _pages(rng, recipe, brand, src):
         _block('programmes', 'cards'), _block('features', 'grid'), gal])
     admissions = _inner_page(rng, recipe, brand, name, 'Admissions', [
         cta_img, _block('faq', 'accordion'), _block('contact', 'split')])
+    assignments = _inner_page(rng, recipe, brand, name, 'Holiday Assignments', [
+        _block('assignments', 'by-class')])
     contact = _inner_page(rng, recipe, brand, name, 'Contact Us', [_block('contact', 'split')])
     return [('about', 'About Us', about), ('academics', 'Academics', academics),
-            ('admissions', 'Admissions', admissions), ('contact', 'Contact Us', contact)]
+            ('admissions', 'Admissions', admissions),
+            ('holiday-assignments', 'Holiday Assignments', assignments),
+            ('contact', 'Contact Us', contact)]
 
 
 def _ai_polish(home_blocks, brand):

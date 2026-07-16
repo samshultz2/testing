@@ -99,6 +99,44 @@ class SitePage(db.Model):
         return f'<SitePage {self.slug!r}>'
 
 
+class HolidayAssignment(db.Model):
+    """A downloadable holiday-assignment document the admin posts for a class.
+    Stored in the school's own tenant DB (bytes in ``data``); served to the public
+    only while both the site and the assignment are published. ``class_label`` is
+    denormalised so the listing survives class edits/deletes."""
+    __tablename__ = 'holiday_assignments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.Integer, index=True)          # SchoolClass id (reference only)
+    class_label = db.Column(db.String(120), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    session_label = db.Column(db.String(60))
+    filename = db.Column(db.String(200))
+    mime = db.Column(db.String(120), nullable=False)
+    bytes = db.Column(db.Integer)
+    data = db.Column(db.LargeBinary)
+    is_published = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    _EXT_ICON = {'pdf': 'fa-file-pdf', 'doc': 'fa-file-word', 'docx': 'fa-file-word'}
+
+    @property
+    def ext(self):
+        return (self.filename or '').rsplit('.', 1)[-1].lower() if '.' in (self.filename or '') else ''
+
+    @property
+    def icon(self):
+        return self._EXT_ICON.get(self.ext, 'fa-file-lines')
+
+    @property
+    def size_human(self):
+        n = self.bytes or 0
+        for unit in ('B', 'KB', 'MB'):
+            if n < 1024 or unit == 'MB':
+                return f'{n:.0f} {unit}' if unit == 'B' else f'{n:.1f} {unit}'
+            n /= 1024.0
+
+
 class SiteViewDaily(db.Model):
     """Privacy-friendly, first-party traffic: one aggregated row per (day, path)
     holding a page-view count. No cookies, no third-party trackers, no raw IPs —
