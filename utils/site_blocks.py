@@ -21,6 +21,9 @@ REGISTRY = {
         'label': 'Hero section', 'data': 'branding',
         'variants': ['center', 'split', 'gradient', 'image-right', 'image-bg'],
         'images': ['image', 'bg_image'],
+        # which variants actually render each image prop (used to auto-switch the
+        # design when an admin uploads an image to a variant that would hide it)
+        'image_variants': {'image': ['image-right', 'split'], 'bg_image': ['image-bg']},
         'props': {'eyebrow': 'Welcome to', 'heading': '', 'subheading':
                   'Nurturing character, curiosity and excellence.',
                   'primary_label': 'Apply for admission', 'primary_href': '/site/apply',
@@ -31,6 +34,7 @@ REGISTRY = {
         'label': 'About section', 'data': None,
         'variants': ['text', 'split-image', 'cards'],
         'images': ['image'],
+        'image_variants': {'image': ['split-image']},
         'props': {'heading': 'About our school', 'body':
                   'Tell your school’s story here — history, philosophy and what makes it special.',
                   'image': '', 'points': ['Qualified, caring teachers', 'Safe, modern facilities',
@@ -40,6 +44,7 @@ REGISTRY = {
         'label': "Principal’s welcome", 'data': None,
         'variants': ['portrait-left', 'portrait-right', 'quote'],
         'images': ['image'],
+        'image_variants': {'image': ['portrait-left', 'portrait-right']},
         'props': {'heading': 'A word from our Principal', 'name': '', 'role': 'Principal',
                   'message': 'Share a warm welcome message from the head of school.', 'image': ''},
     },
@@ -99,6 +104,7 @@ REGISTRY = {
         'label': 'Call to action', 'data': None,
         'variants': ['band', 'boxed', 'split', 'image'],
         'images': ['bg_image'],
+        'image_variants': {'bg_image': ['image']},
         'props': {'heading': 'Ready to join our school?', 'subheading':
                   'Applications are open for the new session.',
                   'button_label': 'Start your application', 'button_href': '/site/apply',
@@ -165,3 +171,17 @@ def image_props(btype):
 def image_list_prop(btype):
     """The prop name on ``btype`` that holds a list of image URLs, or None."""
     return REGISTRY.get(btype, {}).get('image_list')
+
+
+def variants_showing(btype, image_key):
+    """Variants of ``btype`` that actually render ``image_key`` (empty if any)."""
+    return REGISTRY.get(btype, {}).get('image_variants', {}).get(image_key, [])
+
+
+def variant_for_image(btype, image_key, current_variant):
+    """If ``current_variant`` wouldn't display ``image_key``, return a variant that
+    does (so an uploaded image is never silently hidden); else return None."""
+    shows = variants_showing(btype, image_key)
+    if shows and current_variant not in shows:
+        return shows[0]
+    return None

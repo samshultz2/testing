@@ -152,6 +152,37 @@ def test_in_place_block_edits_persist(app):
     assert 'Persisted Headline' in html
 
 
+def test_uploading_image_auto_switches_variant(app):
+    """Regression: uploading an image to a section whose current design hides
+    images (e.g. a 'center' hero) must switch to a variant that shows it — the
+    uploaded image was previously saved but never appeared on the live site."""
+    from models import SiteMedia, SitePage
+    _publish(app)
+    c = _admin(app); c.get('/website/')
+    with app.app_context():
+        pg = SitePage.query.filter_by(slug='home').first()
+        pid = pg.id
+        hero_idx = next(i for i, b in enumerate(pg.blocks) if b['type'] == 'hero')
+        # force the imageless default so the fix has something to do
+        blocks = list(pg.blocks); blocks[hero_idx]['variant'] = 'center'
+        pg.blocks = blocks
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(pg, 'blocks'); db.session.commit()
+    tok = auth_csrf(c)
+    c.post(f'/website/pages/{pid}/block/{hero_idx}/content',
+           data={'_csrf_token': tok, 'file__image': (_png(1000, 700), 'campus.jpg'),
+                 'prop__heading': 'Hi', 'prop__eyebrow': 'Welcome', 'prop__subheading': 'x',
+                 'prop__primary_label': 'Apply', 'prop__secondary_label': 'More'},
+           content_type='multipart/form-data')
+    with app.app_context():
+        hero = SitePage.query.filter_by(slug='home').first().blocks[hero_idx]
+        assert hero['variant'] in ('image-right', 'split')      # auto-switched
+        url = hero['props']['image']
+        assert url
+    html = app.test_client().get('/site/').get_data(as_text=True)
+    assert url in html                                          # visible on the live site
+
+
 def _png(w=2000, h=1200, color=(30, 80, 160)):
     import io
     from PIL import Image
@@ -169,7 +200,7 @@ def test_media_upload_downscales_and_stores(app):
            data={'file': (_png(2000, 1200), 'hero.jpg'), '_csrf_token': auth_csrf(c)},
            content_type='multipart/form-data')
     with app.app_context():
-        m = SiteMedia.query.first()
+        m = SiteMedia.query.order_by(SiteMedia.id.desc()).first()   # the row we just uploaded
         assert m is not None
         assert m.width == 1600 and m.mime == 'image/jpeg'    # downscaled from 2000w
         assert 0 < (m.bytes or 0) < 500_000                  # optimised small

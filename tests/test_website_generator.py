@@ -91,6 +91,61 @@ def test_copy_uses_school_name(app):
         assert SiteSettings.get().seo_title.startswith('Peculiar Heights School')
 
 
+def test_generated_site_is_image_rich(app):
+    _named(app, 'Greenfield Academy')
+    with app.app_context():
+        site_generator.generate()
+        home = SitePage.query.filter_by(slug='home').first()
+        hero = next(b for b in home.blocks if b['type'] == 'hero')
+        # hero uses an image-bearing variant with a real image URL
+        assert hero['variant'] in ('image-bg', 'split', 'image-right')
+        assert (hero['props'].get('bg_image') or hero['props'].get('image'))
+        # several sections carry imagery (about photo, gallery, cta bg…)
+        with_images = [b for b in home.blocks
+                       if b['props'].get('image') or b['props'].get('bg_image') or b['props'].get('images')]
+        assert len(with_images) >= 3
+        gallery = next((b for b in home.blocks if b['type'] == 'gallery'), None)
+        if gallery:
+            assert len(gallery['props'].get('images') or []) >= 3
+
+
+def test_two_schools_get_different_photos(app):
+    _named(app, 'Greenfield Academy')
+    with app.app_context():
+        site_generator.generate()
+        a = next(b for b in SitePage.query.filter_by(slug='home').first().blocks
+                 if b['type'] == 'hero')['props']
+        a_img = a.get('bg_image') or a.get('image')
+    _named(app, 'Sunrise International College')
+    with app.app_context():
+        site_generator.generate()
+        b = next(bl for bl in SitePage.query.filter_by(slug='home').first().blocks
+                 if bl['type'] == 'hero')['props']
+        b_img = b.get('bg_image') or b.get('image')
+    assert a_img and b_img and a_img != b_img
+
+
+def test_stock_module_is_deterministic_and_distinct():
+    from utils import site_stock
+    assert site_stock.pick('Greenfield', 'hero') == site_stock.pick('Greenfield', 'hero')
+    assert site_stock.pick('Greenfield', 'hero') != site_stock.pick('Sunrise', 'hero')
+    assert site_stock.pick('Greenfield', 'hero') != site_stock.pick('Greenfield', 'about')
+    assert len(site_stock.gallery('Greenfield', 6)) == 6
+    assert len(set(site_stock.gallery('Greenfield', 6))) == 6      # all distinct
+
+
+def test_generated_pages_allow_stock_images_via_csp(app):
+    _named(app, 'Greenfield Academy')
+    with app.app_context():
+        site_generator.generate()
+        SiteSettings.get().published = True
+        db.session.commit()
+    r = app.test_client().get('/site/')
+    csp = r.headers.get('Content-Security-Policy', '')
+    img_src = csp.split('img-src')[1].split(';')[0]
+    assert 'https:' in img_src                     # external stock photos are allowed
+
+
 def test_every_generated_page_renders(app):
     _named(app, 'Greenfield Academy')
     with app.app_context():

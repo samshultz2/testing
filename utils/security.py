@@ -554,7 +554,11 @@ def add_security_headers(response):
         f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
         "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
-        "img-src 'self' data: blob:; "
+        # Images may load over https from anywhere: the Website Builder lets a
+        # school use stock photos and paste external image URLs, and admins embed
+        # remote images in rich content. Images can't execute code, so this is a
+        # safe relaxation; scripts/styles/frames stay locked down above/below.
+        "img-src 'self' data: blob: https:; "
         "connect-src 'self'; "
         "object-src 'none'; "
         # Allow our own pages plus blob: PDFs (the Mock-WAEC result/broadsheet

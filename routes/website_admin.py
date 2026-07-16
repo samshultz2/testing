@@ -275,6 +275,10 @@ def block_content(page_id, idx):
             if up and up.filename:
                 try:
                     props[key] = site_media.store_upload(up).url
+                    # make sure the block's design actually shows this image
+                    switch = site_blocks.variant_for_image(btype, key, blocks[idx].get('variant'))
+                    if switch:
+                        blocks[idx]['variant'] = switch
                 except ValueError as e:
                     flash(str(e), 'error')
             elif request.form.get('clear__' + key):
