@@ -314,10 +314,10 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
                         alignment=1, textColor=colors.black, fontName='Helvetica-Bold')
     nm = ParagraphStyle('nm', parent=styles['Normal'], fontSize=8.5, leading=10)
 
-    # Header row: S/N, First, Middle, Surname, <score cols…>, Exam Total, General Total
+    # Header row: S/N, First, Middle, Surname, <score cols…>, Exam Total, General Total.
+    # No per-column max is printed — the max differs by subject, so the sheet stays generic.
     def col_head(label, mx=None):
-        txt = label + (f'<br/><font size=6>/{mx}</font>' if mx else '')
-        return Paragraph(txt, hd)
+        return Paragraph(label, hd)
     header = [Paragraph('S/N', hd), Paragraph('First Name', hd),
               Paragraph('Middle Name', hd), Paragraph('Surname', hd)]
     for c in cols:
@@ -368,8 +368,7 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
                 f"<b>Term:</b> {pdf_escape(term.name)} &nbsp;&nbsp; "
                 f"<b>Session:</b> {pdf_escape(term.session.name if term.session else '')} &nbsp;&nbsp; "
                 f"<b>Subject:</b> {pdf_escape(subj)}")
-    elems = [Paragraph(pdf_escape(_school_name()), h),
-             Paragraph('Continuous Assessment / Examination Score Sheet', meta),
+    elems = [Paragraph('Continuous Assessment / Examination Score Sheet', h),
              Paragraph(metaline, meta), Spacer(1, 5), t]
     doc.build(elems)
     return buf.getvalue()
