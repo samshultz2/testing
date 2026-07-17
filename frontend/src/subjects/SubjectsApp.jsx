@@ -1308,7 +1308,14 @@ function Institution({ d, notify }) {
               ) : <div style={{ padding: '1rem' }} className="text-muted">No distinctions yet.</div>}
             </div></div>
 
-          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Needs intervention ({a.intervention.length})</h3></div>
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Needs intervention ({a.intervention.length})</h3>
+            {a.intervention.length > 0 && d.urls.compose && (() => {
+              const ids = a.intervention.map((x) => x.id).join(',');
+              const body = 'Dear Parent, this is to notify you that your ward is performing below expectations this term and would benefit from extra support at home. Please arrange to meet the class teacher. Thank you.';
+              const url = `${d.urls.compose}?students=${ids}&body=${encodeURIComponent(body)}`;
+              return <a href={url} className="btn btn-primary btn-sm" title="Draft a message to these students' parents"><i aria-hidden="true" className="fas fa-paper-plane" /> Message parents</a>;
+            })()}
+          </div>
             <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
               {a.intervention.length ? (
                 <table className="data-table"><thead><tr><th>Student</th><th>Class</th><th className="text-right">Avg</th><th className="text-right">Failing</th><th /></tr></thead>

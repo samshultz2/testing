@@ -688,6 +688,22 @@ def compose():
         if t:
             pre_tpl, pre_body = t.id, t.body
 
+    # Specific students carried over from another module (e.g. "Message parents"
+    # of the results intervention list). Scoped to what the caller may see.
+    pre_students = []
+    id_args = request.args.getlist('student_ids', type=int)
+    if not id_args and request.args.get('students'):
+        id_args = [int(x) for x in request.args.get('students').split(',') if x.strip().isdigit()]
+    if id_args:
+        from models import Student
+        rows = scope_query(Student.query.filter(Student.id.in_(id_args[:500])), Student).all()
+        pre_students = [{'id': s.id, 'label': s.full_name} for s in rows]
+        if pre_students:
+            pre_audience = 'students'
+    # An explicit drafted body may be passed in (stripped for safety).
+    if request.args.get('body'):
+        pre_body = strip_tags(request.args.get('body'))
+
     from utils import sms_gateway, mailer
     from models import Department
     gw = sms_gateway.get_config()
@@ -695,6 +711,7 @@ def compose():
                    if _is_admin() else [])
     return _render({
         'page': 'compose', 'nav': _nav_urls(), 'is_admin': _is_admin(),
+        'pre_students': pre_students,
         'term_id': term.id if term else '',
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'classes': [{'id': c.id, 'name': c.name} for c in classes],

@@ -271,6 +271,7 @@ def institution_analytics():
             'class_analytics_base': url_for('subjects.analytics_dashboard'),
             'teacher_base': url_for('subjects.teacher_scorecard_view',
                                     term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
+            'compose': url_for('comms.compose'),
         },
     })
 

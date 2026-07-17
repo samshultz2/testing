@@ -212,3 +212,15 @@ def test_save_and_reload_recipient_group(app):
     assert d['ok']
     with app.app_context():
         assert RecipientGroup.query.get(gid) is None
+
+
+def test_compose_prefills_specific_students_and_body(app):
+    """Deep-link from results ('Message parents') pre-selects the students and a
+    drafted body, with the audience switched to the specific-students mode."""
+    client = _admin(app)
+    sid = _student_with(app, 'PREFILL-1')
+    html = client.get(f'/communication/compose?students={sid}&body=Please+see+the+teacher').get_data(as_text=True)
+    assert '"pre_students"' in html
+    assert 'Oser' in html and 'Comp' in html        # the student label is embedded
+    assert '"pre_audience": "students"' in html
+    assert 'Please see the teacher' in html         # drafted body carried over

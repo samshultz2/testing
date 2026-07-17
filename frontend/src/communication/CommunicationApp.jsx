@@ -845,7 +845,7 @@ function Compose({ d, notify }) {
   const [termId, setTermId] = useState(d.term_id);
   const [classId, setClassId] = useState(d.pre_class || '');
   const [armId, setArmId] = useState('');
-  const [picked, setPicked] = useState([]);   // [{id,label}]
+  const [picked, setPicked] = useState(d.pre_students || []);   // [{id,label}]
   const [excluded, setExcluded] = useState([]);   // [{id,label}] students to drop
   const [gender, setGender] = useState('');
   const [stream, setStream] = useState('');
