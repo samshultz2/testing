@@ -9,7 +9,7 @@ const TABS = [
   ['settings', 'fa-user-shield', 'Supervisor'], ['lab_setup', 'fa-desktop', 'Lab Setup'],
 ];
 // Pages that should highlight the "Exams" tab.
-const TAB_FOR = { dashboard: 'dashboard', exam_form: 'add_exam', results: 'add_exam', settings: 'settings', lab_setup: 'lab_setup' };
+const TAB_FOR = { dashboard: 'dashboard', exam_form: 'add_exam', results: 'add_exam', item_analysis: 'add_exam', settings: 'settings', lab_setup: 'lab_setup' };
 
 function Tabs({ d }) {
   const nav = useNav();
@@ -234,7 +234,10 @@ function Results({ d }) {
   return (
     <>
       <div className="page-header"><h1>Results · {e.title}</h1>
-        <div className="page-header-actions"><a href={d.urls.export} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Download Excel</a></div>
+        <div className="page-header-actions">
+          {d.urls.item_analysis && <a href={d.urls.item_analysis} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-microscope" /> Item analysis</a>}
+          <a href={d.urls.export} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Download Excel</a>
+        </div>
       </div>
       <div className="card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
         <div><div className="text-muted text-sm">Submissions</div><strong style={{ fontSize: 'var(--text-lg)' }}>{submittedCount}</strong></div>
@@ -269,7 +272,133 @@ function Results({ d }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, settings: Settings, lab_setup: LabSetup, exam_form: ExamForm, results: Results };
+// ---- Psychometric item analysis -------------------------------------------
+const VERDICT_STYLE = {
+  keep: { bg: 'var(--success-light,#e6f4ec)', fg: 'var(--success,#1c8c53)', label: 'Keep' },
+  review: { bg: '#fdf3d7', fg: '#9a7b0a', label: 'Review' },
+  reject: { bg: '#fbe6e3', fg: '#b43a2e', label: 'Reject' },
+};
+const TONE_ICON = { positive: 'fa-circle-check', negative: 'fa-triangle-exclamation', watch: 'fa-eye' };
+const TONE_BORDER = { positive: 'var(--success,#1c8c53)', negative: '#b43a2e', watch: '#c9a227' };
+
+function IaBars({ bars }) {
+  const max = Math.max(1, ...bars.map((b) => b.count));
+  return (
+    <div>{bars.map((b) => (
+      <div key={b.band} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '.25rem 0' }}>
+        <span style={{ width: 60, fontSize: 'var(--text-sm)', textAlign: 'right' }} className="text-muted">{b.band}</span>
+        <div style={{ flex: 1, background: 'var(--gray-100,#eef0f4)', borderRadius: 6, height: 16, overflow: 'hidden' }}>
+          <div style={{ width: `${(b.count / max) * 100}%`, height: '100%', background: 'var(--primary,#0D6A4E)' }} /></div>
+        <span style={{ width: 26, fontWeight: 600, fontSize: 'var(--text-sm)' }}>{b.count}</span>
+      </div>))}</div>
+  );
+}
+
+function ItemRow({ it }) {
+  const [open, setOpen] = useState(false);
+  const vs = VERDICT_STYLE[it.verdict] || VERDICT_STYLE.keep;
+  const pColor = it.p_band === 'ideal' ? 'var(--success)' : (it.p_band === 'too_easy' || it.p_band === 'too_hard' ? '#e74a3b' : 'var(--text-primary)');
+  const dColor = it.d == null ? 'var(--text-muted)' : (it.d < 0.2 ? '#e74a3b' : (it.d >= 0.4 ? 'var(--success)' : 'var(--text-primary)'));
+  return (
+    <>
+      <tr onClick={() => setOpen((o) => !o)} style={{ cursor: 'pointer' }}>
+        <td style={{ fontWeight: 700 }}>{it.number}</td>
+        <td className="text-center"><span className="badge badge-secondary">{it.key}</span></td>
+        <td className="text-right" style={{ color: pColor, fontWeight: 600 }}>{it.p_pct}%</td>
+        <td className="text-muted text-sm">{it.p_label}</td>
+        <td className="text-right" style={{ color: dColor, fontWeight: 600 }}>{it.d == null ? '—' : it.d}</td>
+        <td className="text-right">{it.rpb == null ? '—' : it.rpb}</td>
+        <td className="text-right">{it.dead_distractors ? <span className="badge badge-warning">{it.dead_distractors}</span> : ''}</td>
+        <td><span className="badge" style={{ background: vs.bg, color: vs.fg }}>{vs.label}</span></td>
+      </tr>
+      {open && (
+        <tr><td colSpan={8} style={{ background: 'var(--bg-secondary,#f8f9fb)' }}>
+          <div style={{ padding: '.5rem .75rem' }}>
+            <div className="text-sm mb-2">{it.text}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.4rem' }}>
+              {it.options.map((o) => (
+                <div key={o.option} style={{ border: '1px solid var(--border-color,#e2e6ea)', borderRadius: 6, padding: '.35rem .5rem', background: o.is_key ? 'var(--success-light,#e6f4ec)' : '#fff' }}>
+                  <div className="d-flex justify-between" style={{ fontSize: 'var(--text-sm)' }}>
+                    <strong>{o.option}{o.is_key ? ' ✓' : ''}</strong><span>{o.rate}%</span></div>
+                  <div className="text-muted text-sm">↑{o.upper} ↓{o.lower}{o.flag ? ` · ${o.flag}` : ''}</div>
+                </div>))}
+            </div>
+            <div className="text-muted text-sm mt-1">{it.verdict_label} · {it.d_label} discrimination</div>
+          </div></td></tr>
+      )}
+    </>
+  );
+}
+
+function ItemAnalysis({ d }) {
+  const a = d.analysis;
+  const meta = (a && a.meta) || {};
+  const s = (a && a.summary) || {};
+  if (!a || meta.insufficient) {
+    return (
+      <>
+        <div className="page-header"><h1>Item analysis · {d.exam.title}</h1>
+          <div className="page-header-actions"><a href={d.urls.results} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Results</a></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-microscope" title="Not enough data">
+          <p>{meta.reason || 'Item analysis needs at least 5 submitted attempts.'}</p></Empty></div></div>
+      </>
+    );
+  }
+  const krTone = s.kr20 == null ? 'var(--text-muted)' : (s.kr20 >= 0.8 ? 'var(--success)' : (s.kr20 >= 0.7 ? '#c9a227' : '#e74a3b'));
+  return (
+    <>
+      <div className="page-header"><h1>Item analysis · {d.exam.title}</h1>
+        <div className="page-header-actions">
+          <a href={d.urls.export_pdf} className="btn btn-success" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
+          <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+          <a href={d.urls.results} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Results</a>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: krTone }}>{s.kr20 == null ? '—' : s.kr20}</div><div className="text-muted text-sm">KR-20 reliability</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{s.mean_pct}%</div><div className="text-muted text-sm">Mean score</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{s.sem == null ? '—' : s.sem}</div><div className="text-muted text-sm">Std error (SEM)</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{s.mean_difficulty}</div><div className="text-muted text-sm">Avg difficulty (p)</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{s.mean_discrimination}</div><div className="text-muted text-sm">Avg discrimination</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}><span style={{ color: 'var(--success)' }}>{s.keep}</span> / <span style={{ color: '#c9a227' }}>{s.review}</span> / <span style={{ color: '#e74a3b' }}>{s.reject}</span></div><div className="text-muted text-sm">Keep / Review / Reject</div></div></div>
+      </div>
+      <div className="text-muted text-sm mb-2" style={{ marginTop: '-.4rem' }}>
+        {meta.respondents} candidates · {meta.question_count} items · reliability: <strong>{s.kr20_label}</strong>
+        {s.small_groups && <> · <span className="badge badge-warning">small group</span></>}
+      </div>
+
+      {a.recommendations && a.recommendations.length > 0 && (
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-flask" /> Findings &amp; recommendations</h3></div>
+          <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '.6rem' }}>
+            {a.recommendations.map((r, i) => (
+              <div key={i} style={{ borderLeft: `4px solid ${TONE_BORDER[r.tone] || 'var(--primary)'}`, background: 'var(--bg-secondary,#f8f9fb)', borderRadius: 6, padding: '.6rem .8rem' }}>
+                <div style={{ fontWeight: 700, marginBottom: '.2rem' }}><i aria-hidden="true" className={`fas ${TONE_ICON[r.tone] || 'fa-lightbulb'}`} style={{ color: TONE_BORDER[r.tone] || 'var(--primary)', marginRight: '.4rem' }} />{r.title}</div>
+                <div className="text-sm" style={{ color: 'var(--text-secondary,#4a5568)' }}>{r.text}</div>
+              </div>))}
+          </div></div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+        <div className="card"><div className="card-header"><h3>Difficulty spread (% correct)</h3></div><div className="card-body"><IaBars bars={a.difficulty_hist} /></div></div>
+        <div className="card"><div className="card-header"><h3>Discrimination spread (D)</h3></div><div className="card-body"><IaBars bars={a.discrimination_hist} /></div></div>
+      </div>
+
+      <div className="card"><div className="card-header"><h3>Item statistics</h3><span className="text-muted text-sm">tap a row for distractor detail</span></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="data-table"><thead><tr>
+            <th>Q</th><th className="text-center">Key</th><th className="text-right">Difficulty</th><th>Band</th>
+            <th className="text-right" title="Discrimination (upper 27% − lower 27%)">Discr.</th>
+            <th className="text-right" title="Point-biserial item-total correlation">r_pb</th>
+            <th className="text-right" title="Non-functioning distractors">Dead</th><th>Verdict</th>
+          </tr></thead>
+            <tbody>{a.items.map((it) => <ItemRow key={it.number} it={it} />)}</tbody></table>
+        </div></div>
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, settings: Settings, lab_setup: LabSetup, exam_form: ExamForm, results: Results, item_analysis: ItemAnalysis };
 
 export default function CbtApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

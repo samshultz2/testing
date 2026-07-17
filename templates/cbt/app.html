@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set _t = {'dashboard':'CBT / Online Tests','settings':'CBT Settings','lab_setup':'Lab / Kiosk Setup','exam_form':'Exam','results':'Results'} %}
+{% set _t = {'dashboard':'CBT / Online Tests','settings':'CBT Settings','lab_setup':'Lab / Kiosk Setup','exam_form':'Exam','results':'Results','item_analysis':'Item Analysis'} %}
 {% block title %}{{ _t.get(cbt_json.page,'CBT') }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}
 {% if cbt_json.page == 'dashboard' %}<span>CBT</span>

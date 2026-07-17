@@ -565,8 +565,47 @@ def results(exam_id):
         'analysis': [{'text': it['q'].question_text, 'correct': it['correct'], 'pct': it['pct']}
                      for it in analysis],
         'urls': {'export': url_for('cbt.results_export', exam_id=e.id),
-                 'detail': url_for('cbt.exam_detail', exam_id=e.id)},
+                 'detail': url_for('cbt.exam_detail', exam_id=e.id),
+                 'item_analysis': url_for('cbt.item_analysis', exam_id=e.id)},
     })
+
+
+@cbt_bp.route('/exams/<int:exam_id>/item-analysis')
+@login_required
+def item_analysis(exam_id):
+    """Psychometric item analysis for a CBT exam — difficulty, discrimination,
+    point-biserial, distractor analysis and KR-20 reliability."""
+    e = _exam_403(exam_id)
+    from utils.psychometrics import item_analysis as _analyse
+    data = _analyse(e.id)
+    return _render({
+        'page': 'item_analysis', 'nav': _nav_urls(),
+        'exam': {'id': e.id, 'title': e.title},
+        'analysis': data,
+        'urls': {'results': url_for('cbt.results', exam_id=e.id),
+                 'detail': url_for('cbt.exam_detail', exam_id=e.id),
+                 'export_pdf': url_for('cbt.item_analysis_export', exam_id=e.id, format='pdf'),
+                 'export_excel': url_for('cbt.item_analysis_export', exam_id=e.id, format='excel')},
+    })
+
+
+@cbt_bp.route('/exams/<int:exam_id>/item-analysis/export')
+@login_required
+def item_analysis_export(exam_id):
+    """Item-analysis export. ``format`` = pdf (default) | excel."""
+    e = _exam_403(exam_id)
+    from utils.psychometrics import item_analysis as _analyse
+    from utils.psychometrics_report import item_analysis_pdf, item_analysis_xlsx
+    from utils.web_exports import pdf_response, xlsx_response
+    data = _analyse(e.id)
+    if not data or data.get('meta', {}).get('insufficient'):
+        flash('Not enough submitted attempts for an item analysis yet.', 'warning')
+        return redirect(url_for('cbt.item_analysis', exam_id=e.id))
+    stem = ('item_analysis_' + (e.title or 'exam')).replace(' ', '_')
+    fmt = (request.args.get('format') or 'pdf').lower()
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(item_analysis_xlsx(data), f'{stem}.xlsx')
+    return pdf_response(item_analysis_pdf(data), f'{stem}.pdf', inline=False)
 
 
 @cbt_bp.route('/exams/<int:exam_id>/monitor')
