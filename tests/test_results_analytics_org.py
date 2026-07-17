@@ -222,6 +222,29 @@ def test_institution_routes(app):
     assert r.status_code == 200
 
 
+def test_teacher_scorecard(app):
+    from utils.results_analytics_org import teacher_scorecard
+    ids = _seed(app)
+    with app.app_context():
+        sc = teacher_scorecard(ids['term'], 'Mr A', None)
+        assert sc['teacher'] == 'Mr A'
+        assert sc['summary']['entries'] > 0
+        # Mr A teaches Maths across every arm/class -> multiple class-subject rows
+        assert len(sc['rows']) >= 3
+        assert all(r['subject'].endswith('Maths') for r in sc['rows'])
+        assert sc['by_subject'] and sc['summary']['flag'] in (
+            'strong', 'good', 'watch', 'review', 'compliance', 'insufficient')
+
+
+def test_teacher_scorecard_route(app):
+    ids = _seed(app)
+    c = _admin(app)
+    r = c.get(f"/subjects/analytics/teacher?term_id={ids['term']}&name=Mr%20A")
+    assert r.status_code == 200
+    assert b'Teacher Scorecard' in r.data          # title-map label in the shell
+    assert b'Mr A' in r.data                        # teacher name in the embedded payload
+
+
 def test_institution_export_formats(app):
     ids = _seed(app)
     c = _admin(app)

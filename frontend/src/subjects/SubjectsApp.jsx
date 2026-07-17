@@ -1282,10 +1282,13 @@ function Institution({ d, notify }) {
                 { key: 'assessed', label: 'N', right: true },
               ]} /></div></div>
 
-          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chalkboard-user" /> Teacher effectiveness</h3></div>
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chalkboard-user" /> Teacher effectiveness</h3>
+            <span className="text-muted text-sm">tap a teacher for their scorecard</span></div>
             <div className="card-body" style={{ padding: 0 }}>
               {a.teachers.length ? (
-                <LeagueTable rank rows={a.teachers.map((x, i) => ({ ...x, _k: i }))} cols={[
+                <LeagueTable rank rows={a.teachers.map((x, i) => ({ ...x, _k: i }))}
+                  onRow={(r) => { if (r.name && r.name !== 'Unassigned') { const b = d.urls.teacher_base; nav.go(`${b}${b.includes('?') ? '&' : '?'}name=${encodeURIComponent(r.name)}`); } }}
+                  cols={[
                   { key: 'name', label: 'Teacher', render: (r) => <div><strong>{r.name}</strong><div className="text-muted text-sm">{r.subject_count} subj · {r.class_count} class{r.class_count === 1 ? '' : 'es'}</div></div> },
                   { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
                   { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
@@ -1344,10 +1347,88 @@ function Institution({ d, notify }) {
   );
 }
 
+function Teacher({ d, notify }) {
+  const nav = useNav();
+  const sc = d.scorecard;
+  const s = (sc && sc.summary) || {};
+  const pm = s.pass_mark || 50;
+  const goTerm = (tid) => navParams(nav.go, d.self_url, { term_id: tid, name: d.teacher_name });
+  const hasData = sc && s.entries;
+  return (
+    <>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chalkboard-user" /> Teacher scorecard</h1>
+        <div className="page-header-actions">
+          <a href={d.back_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Institution</a>
+        </div>
+      </div>
+      <div className="card mb-3"><div className="card-body">
+        <form className="filter-form" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-group"><label className="form-label">Term</label>
+            <select className="form-control" value={d.term_id} onChange={(e) => goTerm(e.target.value)}>
+              {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
+          <div className="form-group" style={{ flex: 1 }}><label className="form-label">Teacher</label>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', paddingTop: '.3rem' }}>{d.teacher_name || '—'}</div></div>
+          {hasData && <span className="badge" style={{ background: (FLAG_STYLE[s.flag] || FLAG_STYLE.good).bg, color: (FLAG_STYLE[s.flag] || FLAG_STYLE.good).fg, alignSelf: 'center' }}>{s.verdict}</span>}
+        </form>
+      </div></div>
+
+      {!d.teacher_name ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-chalkboard-user" title="No teacher selected"><p>Open a teacher from the Institution Analytics teacher league.</p></Empty></div></div>
+      ) : !hasData ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="No scores"><p>No scored subjects attributed to <strong>{d.teacher_name}</strong> this term.</p></Empty></div></div>
+      ) : (<>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+          <AStat value={fmtNum(s.average)} label="Average score" tone={avgColour(s.average, pm)} />
+          <AStat value={`${fmtNum(s.pass_rate)}%`} label="Pass rate" tone={s.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+          <AStat value={s.subjects} label="Subjects" />
+          <AStat value={s.classes} label="Classes" />
+          <AStat value={s.students} label="Students" />
+          <AStat value={`${fmtNum(s.completion)}%`} label="Entry completion" tone={s.completion >= 85 ? undefined : '#c9a227'} />
+        </div>
+
+        <div className="card mb-3"><div className="card-header"><h3>Per class-subject (weakest → strongest)</h3></div>
+          <div className="card-body" style={{ padding: 0 }}>
+            <LeagueTable rows={sc.rows.map((r, i) => ({ ...r, _k: i }))} cols={[
+              { key: 'subject', label: 'Subject', render: (r) => <strong>{r.subject}</strong> },
+              { key: 'class', label: 'Class' },
+              { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
+              { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
+              { key: 'assessed', label: 'Assessed', right: true, render: (r) => `${r.assessed}/${r.students}` },
+              { key: 'completion', label: 'Entry %', right: true, render: (r) => `${fmtNum(r.completion)}%` },
+              { key: 'range', label: 'Low–High', right: true, render: (r) => `${fmtNum(r.lowest)}–${fmtNum(r.highest)}` },
+            ]} /></div></div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>By subject</h3></div>
+            <div className="card-body">{sc.by_subject.map((x) => (
+              <div key={x.name} style={{ marginBottom: '.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}><strong>{x.name}</strong><span className="text-muted">{x.assessed} · {fmtNum(x.pass_rate)}% pass</span></div>
+                <Bar label={`avg ${fmtNum(x.average)}`} value={x.average} max={100} tone={avgColour(x.average, pm)} />
+              </div>))}</div></div>
+          <div className="card"><div className="card-header"><h3>By class</h3></div>
+            <div className="card-body">{sc.by_class.map((x) => (
+              <div key={x.name} style={{ marginBottom: '.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}><strong>{x.name}</strong><span className="text-muted">{x.assessed} · {fmtNum(x.pass_rate)}% pass</span></div>
+                <Bar label={`avg ${fmtNum(x.average)}`} value={x.average} max={100} tone={avgColour(x.average, pm)} />
+              </div>))}</div></div>
+        </div>
+
+        {sc.trend && sc.trend.term_names.length > 1 && sc.trend.averages.some((v) => v != null) && (
+          <div className="card mt-3"><div className="card-header"><h3>Trend across terms</h3></div>
+            <div className="card-body">{sc.trend.term_names.map((tn, i) => (
+              <Bar key={tn} label={tn} value={sc.trend.averages[i] == null ? 0 : sc.trend.averages[i]} max={100} tone={avgColour(sc.trend.averages[i] || 0, pm)} />
+            ))}</div></div>
+        )}
+      </>)}
+    </>
+  );
+}
+
 const SCREENS = { list: List, add: SubjectForm, edit: SubjectForm, bulk_add: BulkAdd,
   class_subjects: ClassSubjects, assign: Assign, edit_class_subject: EditClassSubject,
   scores: Scores, workflow: Workflow, bulk_entry: BulkEntry, broadsheet: Broadsheet,
-  affective: Affective, comments: Comments, analytics: Analytics, institution: Institution };
+  affective: Affective, comments: Comments, analytics: Analytics, institution: Institution,
+  teacher: Teacher };
 
 export default function SubjectsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

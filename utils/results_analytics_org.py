@@ -695,6 +695,117 @@ def _selectors(term_id, allowed_ids):
     return {'sections': sections, 'classes': class_list, 'arms': arms}
 
 
+def teacher_scorecard(term_id, teacher_name, allowed_ids=None):
+    """Per-class, per-subject breakdown for one teacher in a term — the drill-down
+    behind the teacher-effectiveness league. Returns overall KPIs, a row per
+    class-subject taught, subject/class roll-ups, an HR verdict and a term trend."""
+    from sqlalchemy.orm import joinedload
+    from models import (db, ClassSubject, StudentEnrollment, StudentScore,
+                        SchoolSettings, Term)
+    name = (teacher_name or '').strip()
+    if not name or not term_id:
+        return None
+    pass_mark = SchoolSettings.get('pass_mark', 50)
+    bands = _grade_bands()
+
+    assignments = _scope_assignments(term_id, 'school', None, allowed_ids)
+    asg_by_class = {}
+    for a in assignments:
+        asg_by_class.setdefault(a.class_id, []).append(a)
+    class_ids = list(asg_by_class)
+    if not class_ids:
+        return {'teacher': name, 'summary': {}, 'rows': [], 'by_subject': [],
+                'by_class': [], 'trend': {'term_names': [], 'averages': []}}
+
+    css = (ClassSubject.query.options(joinedload(ClassSubject.subject))
+           .filter(ClassSubject.term_id == term_id, ClassSubject.is_active == True,  # noqa: E712
+                   ClassSubject.class_id.in_(class_ids)).all())
+    css = [cs for cs in css if (cs.teacher_name or '').strip().lower() == name.lower()]
+    if not css:
+        return {'teacher': name, 'summary': {}, 'rows': [], 'by_subject': [],
+                'by_class': [], 'trend': {'term_names': [], 'averages': []}}
+
+    rows = []
+    all_totals = []
+    students_seen = set()
+    subj_roll, class_roll = {}, {}
+    for cs in css:
+        applic = [a for a in asg_by_class.get(cs.class_id, [])
+                  if cs.arm_id is None or a.arm_id == cs.arm_id]
+        enr = (StudentEnrollment.query
+               .filter(StudentEnrollment.class_arm_assignment_id.in_([a.id for a in applic]),
+                       StudentEnrollment.is_active == True).all()) if applic else []  # noqa: E712
+        sids = [e.student_id for e in enr]
+        totals = []
+        if sids:
+            per = {}
+            for s in StudentScore.query.filter(
+                    StudentScore.student_id.in_(sids),
+                    StudentScore.class_subject_id == cs.id).all():
+                if s.score is not None:
+                    per[s.student_id] = per.get(s.student_id, 0) + s.score
+            totals = [round(v, 2) for v in per.values()]
+            students_seen.update(sids)
+        label = ', '.join(sorted({a.display_name for a in applic})) or (
+            cs.school_class.name if cs.school_class else '')
+        avg = _mean(totals)
+        pr = round(100 * sum(1 for t in totals if t >= pass_mark) / len(totals), 1) if totals else 0
+        comp = round(100 * len(totals) / len(sids), 1) if sids else 0
+        subj_name = cs.subject.name if cs.subject else f'Subject {cs.subject_id}'
+        rows.append({
+            'subject': subj_name, 'class': label, 'students': len(sids),
+            'assessed': len(totals), 'average': avg, 'pass_rate': pr, 'completion': comp,
+            'highest': round(max(totals), 1) if totals else 0,
+            'lowest': round(min(totals), 1) if totals else 0,
+        })
+        all_totals += totals
+        subj_roll.setdefault(subj_name, []).extend(totals)
+        class_roll.setdefault(label, []).extend(totals)
+
+    rows.sort(key=lambda r: (r['assessed'] == 0, r['average']))
+    overall_avg = _mean(all_totals)
+    overall_pr = round(100 * sum(1 for t in all_totals if t >= pass_mark) / len(all_totals), 1) if all_totals else 0
+    possible = sum(r['students'] for r in rows)
+    completion = round(100 * len(all_totals) / possible, 1) if possible else 0
+    flag, verdict = _teacher_verdict(overall_avg, overall_pr, len(all_totals), completion)
+
+    by_subject = sorted(
+        [{'name': k, 'average': _mean(v), 'assessed': len(v),
+          'pass_rate': round(100 * sum(1 for t in v if t >= pass_mark) / len(v), 1) if v else 0}
+         for k, v in subj_roll.items()], key=lambda x: -x['average'])
+    by_class = sorted(
+        [{'name': k, 'average': _mean(v), 'assessed': len(v),
+          'pass_rate': round(100 * sum(1 for t in v if t >= pass_mark) / len(v), 1) if v else 0}
+         for k, v in class_roll.items()], key=lambda x: -x['average'])
+
+    # Term trend for this teacher across the session.
+    term = db.session.get(Term, term_id)
+    names, averages = [], []
+    if term and term.session_id:
+        for t in Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all():
+            names.append(t.name)
+            tcss = (ClassSubject.query.filter(
+                ClassSubject.term_id == t.id, ClassSubject.is_active == True).all())  # noqa: E712
+            tcss = [c for c in tcss if (c.teacher_name or '').strip().lower() == name.lower()]
+            tot = []
+            if tcss:
+                for c in tcss:
+                    for sc in StudentScore.query.filter_by(class_subject_id=c.id).all():
+                        if sc.score is not None:
+                            tot.append(sc.score)
+            averages.append(round(sum(tot) / len(tot), 2) if tot else None)
+
+    return {
+        'teacher': name,
+        'summary': {'classes': len({r['class'] for r in rows}), 'subjects': len(subj_roll),
+                    'students': len(students_seen), 'entries': len(all_totals),
+                    'average': overall_avg, 'pass_rate': overall_pr, 'completion': completion,
+                    'pass_mark': pass_mark, 'flag': flag, 'verdict': verdict},
+        'rows': rows, 'by_subject': by_subject, 'by_class': by_class,
+        'trend': {'term_names': names, 'averages': averages},
+    }
+
+
 def _empty(term_id, scope, scope_id, allowed_ids):
     return {
         'scope': scope, 'scope_id': scope_id,

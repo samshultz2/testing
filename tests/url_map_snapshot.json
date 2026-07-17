@@ -5406,6 +5406,13 @@
 ]
 ],
 [
+"subjects.teacher_scorecard_view",
+"/subjects/analytics/teacher",
+[
+"GET"
+]
+],
+[
 "subjects.workflow",
 "/subjects/workflow",
 [

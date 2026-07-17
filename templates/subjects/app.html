@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set _t = {'list':'Subjects','add':'Add Subject','edit':'Edit Subject','bulk_add':'Bulk Add','class_subjects':'Class Subjects','assign':'Assign Subjects','edit_class_subject':'Edit Class Subject','scores':'Score Entry','workflow':'Results Workflow','bulk_entry':'Bulk Score Entry','broadsheet':'Broadsheet','affective':'Behavioural Ratings','comments':'Report Comments','analytics':'Academic Analytics','institution':'Institution Analytics'} %}
+{% set _t = {'list':'Subjects','add':'Add Subject','edit':'Edit Subject','bulk_add':'Bulk Add','class_subjects':'Class Subjects','assign':'Assign Subjects','edit_class_subject':'Edit Class Subject','scores':'Score Entry','workflow':'Results Workflow','bulk_entry':'Bulk Score Entry','broadsheet':'Broadsheet','affective':'Behavioural Ratings','comments':'Report Comments','analytics':'Academic Analytics','institution':'Institution Analytics','teacher':'Teacher Scorecard'} %}
 {% block title %}{{ _t.get(subj_json.page,'Subjects') }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}
 {% if subj_json.page in ['list','add','edit','bulk_add'] %}<span>{{ _t.get(subj_json.page,'Subjects') }}</span>

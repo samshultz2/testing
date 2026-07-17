@@ -269,6 +269,8 @@ def institution_analytics():
             'report_base': url_for('subjects.institution_report',
                                    term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
             'class_analytics_base': url_for('subjects.analytics_dashboard'),
+            'teacher_base': url_for('subjects.teacher_scorecard_view',
+                                    term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
         },
     })
 
@@ -305,6 +307,34 @@ def institution_report():
     if fmt in ('image', 'png'):
         return png_response(institution_png(data, term), institution_filename(data, term, 'png'), inline=False)
     return pdf_response(institution_pdf(data, term), institution_filename(data, term, 'pdf'), inline=False)
+
+
+@subjects_bp.route('/analytics/teacher')
+@login_required
+def teacher_scorecard_view():
+    """Per-class, per-subject scorecard for one teacher in a term (the drill-down
+    behind the teacher-effectiveness league)."""
+    from utils.results_analytics_org import teacher_scorecard
+    term_id = request.args.get('term_id', type=int)
+    name = (request.args.get('name') or '').strip()
+    scope = request.args.get('scope') or 'school'
+    scope_id = request.args.get('scope_id')
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    data = None
+    if term_id and name:
+        data = teacher_scorecard(term_id, name, _org_allowed_ids(term_id))
+    terms = Term.query.order_by(Term.id.desc()).all()
+    return _render({
+        'page': 'teacher', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'teacher_name': name,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'scorecard': data,
+        'self_url': url_for('subjects.teacher_scorecard_view'),
+        'back_url': url_for('subjects.institution_analytics', term_id=term_id or '',
+                            scope=scope, scope_id=scope_id or ''),
+    })
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])
