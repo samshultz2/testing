@@ -467,6 +467,56 @@ def analytics_hub():
     )
 
 
+@results_bp.route('/analytics/by-class')
+@login_required
+def analytics_by_class():
+    """External-exam performance rolled up to the class-arm level for a year —
+    cohort-aware (maps each candidate to their latest senior-class arm)."""
+    from utils.exam_class_league import exam_class_league
+    from utils.branch_scope import viewing_branch_id
+    waec_years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().all()]
+    jamb_years = [y[0] for y in db.session.query(JAMBResult.exam_year).distinct().all()]
+    years = sorted(set(waec_years + jamb_years), reverse=True)
+    year = request.args.get('year', type=int) or (years[0] if years else None)
+    data = exam_class_league(year, viewing_branch_id()) if year else None
+    return render_template('results/analytics_by_class.html',
+                           data=data, years=years, selected_year=year)
+
+
+@results_bp.route('/analytics/by-class/export')
+@login_required
+def analytics_by_class_export():
+    """Export the class-arm external-exam league (Excel)."""
+    from utils.exam_class_league import exam_class_league
+    from utils.branch_scope import viewing_branch_id
+    from utils.web_exports import xlsx_response
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    year = request.args.get('year', type=int)
+    if not year:
+        flash('Select a year first.', 'error')
+        return redirect(url_for('results.analytics_by_class'))
+    data = exam_class_league(year, viewing_branch_id())
+    if not data or data['meta'].get('insufficient'):
+        flash('No external results to group by class for that year.', 'warning')
+        return redirect(url_for('results.analytics_by_class', year=year))
+    wb = Workbook(); ws = wb.active; ws.title = f'By class {year}'
+    head = ['Class arm', 'Students', 'JAMB candidates', 'JAMB mean', 'JAMB ≥ cutoff %',
+            'WAEC students', 'Credit rate %', 'Distinction rate %', '5 credits incl. core %']
+    ws.append(head)
+    for c in ws[1]:
+        c.fill = PatternFill('solid', fgColor='0D6A4E'); c.font = Font(bold=True, color='FFFFFF')
+        c.alignment = Alignment(horizontal='center')
+    for u in data['units']:
+        ws.append([u['label'], u['students'], u['jamb_candidates'], u['jamb_mean'],
+                   u['jamb_above_rate'], u['waec_students'], u['credit_rate'],
+                   u['distinction_rate'], u['five_core_rate']])
+    for col in ws.columns:
+        w = max((len(str(c.value)) if c.value is not None else 0) for c in col) + 2
+        ws.column_dimensions[col[0].column_letter].width = min(max(w, 12), 40)
+    return xlsx_response(wb, f'exam_by_class_{year}.xlsx')
+
+
 @results_bp.route('/analytics/export')
 @login_required
 def analytics_export():

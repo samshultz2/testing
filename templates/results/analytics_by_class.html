@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}External Results by Class — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Exam Analytics</a> / <span>By Class Arm</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.cl-kpis { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+.cl-kpis .kpi { flex:1 1 140px; }
+.cl-rec { border-left:4px solid var(--primary); background:var(--bg-secondary); border-radius:6px; padding:.6rem .8rem; margin-bottom:.5rem; }
+.cl-rec.negative { border-color:#b43a2e; } .cl-rec.watch { border-color:#c9a227; }
+.cl-rec.positive { border-color:var(--success); } .cl-rec.insight { border-color:var(--primary); }
+.cl-rec h4 { margin:0 0 .2rem; font-size:.95rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>External Results by Class Arm</h1>
+        <p class="text-muted text-sm">Which SSS3 arm produced the best WAEC / JAMB outcomes</p>
+    </div>
+    <div class="page-header-actions">
+        {% if data and not data.meta.insufficient %}
+        <a href="{{ url_for('results.analytics_by_class_export', year=selected_year) }}" class="btn btn-secondary btn-sm" download><i class="fas fa-file-excel"></i> Excel</a>
+        {% endif %}
+        <a href="{{ url_for('results.analytics_hub', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics hub</a>
+    </div>
+</div>
+
+{% if years %}
+<form method="get" class="filter-bar mb-3">
+    <div class="form-group mb-0">
+        <label class="form-label">Exam year</label>
+        <select name="year" class="form-control" onchange="this.form.submit()">
+            {% for y in years %}<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select>
+    </div>
+</form>
+{% endif %}
+
+{% if not data or data.meta.insufficient %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-layer-group"></i><h3>No results to group by class</h3>
+    <p>{{ data.meta.reason if data and data.meta.reason else 'Record WAEC / JAMB results (and keep senior-class enrolments) to see them broken down by class arm.' }}</p>
+</div></div></div>
+{% else %}
+{% set s = data.summary %}
+<div class="cl-kpis">
+    <div class="kpi"><div class="kpi-value">{{ s.arms }}</div><div class="kpi-label">Class arms</div></div>
+    <div class="kpi"><div class="kpi-value">{{ data.meta.matched }}/{{ data.meta.candidates }}</div><div class="kpi-label">Candidates mapped</div></div>
+    <div class="kpi"><div class="kpi-value">{{ s.jamb_mean if s.jamb_mean is not none else '—' }}</div><div class="kpi-label">JAMB mean (all)</div></div>
+    <div class="kpi"><div class="kpi-value">{{ s.cutoff }}</div><div class="kpi-label">JAMB cut-off</div></div>
+</div>
+
+{% if data.recommendations %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-lightbulb"></i> Findings &amp; recommendations</h3></div>
+    <div class="card-body">
+        {% for r in data.recommendations %}
+        <div class="cl-rec {{ r.tone }}"><h4>{{ r.title }}</h4><div class="text-sm text-secondary">{{ r.text }}</div></div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header"><h3>Class-arm league</h3><span class="text-muted text-sm">best → worst</span></div>
+    <div class="card-body" style="padding:0; overflow-x:auto;">
+        <table class="data-table">
+            <thead><tr>
+                <th style="width:34px;">#</th><th>Class arm</th>
+                <th class="text-right">Students</th>
+                <th class="text-right">JAMB n</th><th class="text-right">JAMB mean</th><th class="text-right">≥ {{ s.cutoff }}</th>
+                <th class="text-right">Credit rate</th><th class="text-right">Distinction</th><th class="text-right">5 incl. core</th>
+            </tr></thead>
+            <tbody>
+                {% for u in data.units %}
+                <tr>
+                    <td style="font-weight:700; color:var(--text-muted);">{{ loop.index }}</td>
+                    <td><strong>{{ u.label }}</strong></td>
+                    <td class="text-right">{{ u.students }}</td>
+                    <td class="text-right">{{ u.jamb_candidates }}</td>
+                    <td class="text-right" style="font-weight:700;">{{ u.jamb_mean if u.jamb_mean is not none else '—' }}</td>
+                    <td class="text-right">{{ u.jamb_above_rate ~ '%' if u.jamb_above_rate is not none else '—' }}</td>
+                    <td class="text-right">{{ u.credit_rate ~ '%' if u.credit_rate is not none else '—' }}</td>
+                    <td class="text-right">{{ u.distinction_rate ~ '%' if u.distinction_rate is not none else '—' }}</td>
+                    <td class="text-right" style="font-weight:600; color:{{ 'var(--success)' if u.five_core_rate and u.five_core_rate >= 60 else ('#e74a3b' if u.five_core_rate is not none and u.five_core_rate < 50 else 'var(--text-primary)') }};">{{ u.five_core_rate ~ '%' if u.five_core_rate is not none else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="text-muted text-sm mt-2">Candidates are mapped to the arm of their most recent senior-class enrolment. "5 incl. core" = five credits including English &amp; Maths (the admission threshold).</p>
+{% endif %}
+{% endblock %}
