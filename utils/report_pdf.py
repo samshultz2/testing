@@ -25,8 +25,8 @@ _GRID = colors.HexColor('#333333')
 
 # How tall the subject rows may grow to fill the page (mm) and the target height
 # the subject table aims for. Tuned so a typical sheet fills most of the page.
-_MAXROW_MM = 10.5
-_TARGET_MM = 175.0
+_MAXROW_MM = 8.0
+_TARGET_MM = 150.0
 
 
 def _esc(v):
