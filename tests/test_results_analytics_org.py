@@ -156,6 +156,29 @@ def test_board_pack_pdf_builds(app):
         assert 'Pass rate' in text or 'average' in text.lower()
 
 
+def test_attendance_correlation_and_bands(app):
+    import datetime as _dt
+    from models import Week, Attendance, StudentEnrollment
+    from utils.results_analytics_org import org_analytics
+    ids = _seed(app)
+    with app.app_context():
+        wk = Week(term_id=ids['term'], week_number=1,
+                  start_date=_dt.date(2025, 1, 6), end_date=_dt.date(2025, 1, 10))
+        db.session.add(wk); db.session.flush()
+        # give the SSS1-A roster full attendance, SSS1-B none
+        for caa_id, present in ((ids['sss1a'], True), (ids['sss1b'], False)):
+            for enr in StudentEnrollment.query.filter_by(class_arm_assignment_id=caa_id).all():
+                db.session.add(Attendance(enrollment_id=enr.id, week_id=wk.id,
+                                          date=_dt.date(2025, 1, 6),
+                                          morning_present=present, afternoon_present=present))
+        db.session.commit()
+        d = org_analytics(ids['term'], 'section', 'senior', None, use_cache=False)
+        att = d['attendance']
+        assert att['bands'] and att['coverage'] >= 6
+        # high-attendance arm (strong) vs zero-attendance arm (weak) → positive r
+        assert att['correlation'] is not None
+
+
 def test_empty_scope_is_safe(app):
     from utils.results_analytics_org import org_analytics
     with app.app_context():

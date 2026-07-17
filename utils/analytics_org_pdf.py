@@ -239,6 +239,18 @@ def institution_pdf(data, term):
                             [kind, 'Avg', 'Pass %', 'Students'], rows,
                             [W * 0.46, W * 0.18, W * 0.18, W * 0.18], hi))
 
+    # ---- branch (campus) league ------------------------------------------
+    branches = data.get('branches') or []
+    if branches:
+        rows = [[f"{i}. {pdf_escape(b['label'])}", _n(b['average']), f"{_n(b['pass_rate'])}%",
+                 str(b['students'])] for i, b in enumerate(branches, 1)]
+        hi = [(1, primary)]
+        if len(branches) > 1:
+            hi.append((len(branches), danger))
+        elems.append(league("Campus league (best → worst)",
+                            ['Branch', 'Avg', 'Pass %', 'Students'], rows,
+                            [W * 0.46, W * 0.18, W * 0.18, W * 0.18], hi))
+
     # ---- subject league ---------------------------------------------------
     subjects = data.get('subjects') or []
     if subjects:
@@ -277,6 +289,25 @@ def institution_pdf(data, term):
             block.append(Spacer(1, 3))
         elems.append(KeepTogether(block[:2]))
         elems += block[2:]
+
+    # ---- attendance vs results -------------------------------------------
+    att = data.get('attendance') or {}
+    if att.get('bands'):
+        rows = [[pdf_escape(b['band']), str(b['count']), _n(b['average'])] for b in att['bands']]
+        head = ['Attendance band', 'Students', 'Avg score']
+        blk = [Paragraph('Attendance vs results', hh)]
+        if att.get('correlation') is not None:
+            blk.append(Paragraph(f"Correlation (r) = <b>{_n(att['correlation'])}</b> "
+                                 f"across {att.get('coverage', 0)} students with attendance records.", body))
+        t = Table([head] + rows, colWidths=[W * 0.4, W * 0.3, W * 0.3], repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5)]))
+        blk.append(t)
+        elems.append(KeepTogether(blk))
 
     # ---- term-on-term trend ----------------------------------------------
     tr = data.get('trends') or {}

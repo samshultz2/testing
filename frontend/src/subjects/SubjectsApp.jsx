@@ -1237,6 +1237,41 @@ function Institution({ d, notify }) {
               ]} /></div></div>
         )}
 
+        {((a.branches && a.branches.length > 0) || (a.attendance && a.attendance.bands && a.attendance.bands.length > 0)) && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            {a.branches && a.branches.length > 0 && (
+              <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-code-branch" /> Campus league</h3></div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  <LeagueTable rank rows={a.branches.map((b, i) => ({ ...b, _k: i }))} cols={[
+                    { key: 'label', label: 'Branch', render: (r) => <strong>{r.label}</strong> },
+                    { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
+                    { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
+                    { key: 'students', label: 'Students', right: true },
+                  ]} /></div></div>
+            )}
+            {a.attendance && a.attendance.bands && a.attendance.bands.length > 0 && (
+              <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-check" /> Attendance vs results</h3>
+                {a.attendance.correlation != null && <span className="text-muted text-sm">r = {fmtNum(a.attendance.correlation)}</span>}</div>
+                <div className="card-body">
+                  {a.attendance.correlation != null && (
+                    <div className="text-sm mb-2" style={{ color: 'var(--text-secondary,#4a5568)' }}>
+                      {a.attendance.correlation >= 0.3 ? 'Attendance and scores move together — chasing absences should lift results.'
+                        : a.attendance.correlation <= -0.1 ? 'Weak link — poor results here are driven more by teaching than absence.'
+                          : 'A mild relationship between attendance and scores.'} ({a.attendance.coverage} students)
+                    </div>
+                  )}
+                  {a.attendance.bands.map((b) => (
+                    <div key={b.band} style={{ marginBottom: '.4rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+                        <span>{b.band} <span className="text-muted">({b.count})</span></span></div>
+                      <Bar label={`avg ${fmtNum(b.average)}`} value={b.average} max={100} tone={avgColour(b.average, pm)} />
+                    </div>
+                  ))}
+                </div></div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: '1rem' }}>
           <div className="card"><div className="card-header"><h3>Subject league (hardest → easiest)</h3></div>
             <div className="card-body" style={{ padding: 0 }}>

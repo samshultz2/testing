@@ -167,11 +167,26 @@ def _compute(term_id, scope, scope_id, allowed_ids):
             k = (s.student_id, s.class_subject_id)
             present[k] = present.get(k, 0) + s.score
 
+    # Branch names for the "by branch" league (whole-group owners comparing
+    # campuses). Only meaningful when more than one branch is in scope.
+    branch_name = {}
+    branch_ids = {a.branch_id for a in assignments if a.branch_id}
+    if branch_ids:
+        from models import Branch
+        for b in Branch.query.filter(Branch.id.in_(list(branch_ids))).all():
+            branch_name[b.id] = b.name
+
+    # Term attendance % per enrolment (present sessions / opened sessions), one
+    # bulk query — the basis for the attendance-vs-results correlation.
+    att_pct_by_enr = _attendance_pct_map(term_id, [e.id for e in enrollments])
+
     # ---- accumulators -----------------------------------------------------
     grade_dist = {g: 0 for g, _l, _h in bands} or {'F': 0}
     subj_acc = {}      # subject_id -> {name, totals[]}
     teacher_acc = {}   # teacher_name -> {...}
     unit_acc = {}      # unit_key -> {label, averages[], pass, students, scope, scope_id, order}
+    branch_acc = {}    # branch_id -> {label, averages[], pass, students}
+    att_pairs = []     # (attendance_pct, average) for the correlation
     student_recs = []
     cells_possible = cells_entered = 0
     band_defs = [('0–39', 0, 39.999), ('40–49', 40, 49.999), ('50–59', 50, 59.999),
@@ -240,6 +255,17 @@ def _compute(term_id, scope, scope_id, allowed_ids):
             U['students'] += 1
             if avg >= pass_mark:
                 U['pass'] += 1
+        if a.branch_id:
+            B = branch_acc.setdefault(a.branch_id, {
+                'label': branch_name.get(a.branch_id, f'Branch {a.branch_id}'),
+                'averages': [], 'pass': 0, 'students': 0})
+            B['averages'].append(avg)
+            B['students'] += 1
+            if avg >= pass_mark:
+                B['pass'] += 1
+        apct = att_pct_by_enr.get(e.id)
+        if apct is not None:
+            att_pairs.append((apct, avg))
 
     if not student_recs:
         return _empty(term_id, scope, scope_id, allowed_ids)
@@ -295,6 +321,19 @@ def _compute(term_id, scope, scope_id, allowed_ids):
         })
     units.sort(key=lambda u: -u['average'])
 
+    # ---- branch league (only when more than one campus is in scope) -------
+    branches = []
+    if len(branch_acc) > 1:
+        for B in branch_acc.values():
+            branches.append({
+                'label': B['label'], 'students': B['students'], 'average': _mean(B['averages']),
+                'pass_rate': round(100 * B['pass'] / B['students'], 1) if B['students'] else 0,
+            })
+        branches.sort(key=lambda b: -b['average'])
+
+    # ---- attendance vs results -------------------------------------------
+    attendance = _attendance_analysis(att_pairs, pass_mark)
+
     # ---- histograms & splits ----------------------------------------------
     score_bands = [{'band': lbl, 'count': sum(1 for a in averages if lo <= a <= hi)}
                    for lbl, lo, hi in band_defs]
@@ -336,11 +375,13 @@ def _compute(term_id, scope, scope_id, allowed_ids):
         'subjects': subjects, 'teachers': teachers, 'units': units,
         'unit_kind': {'school': 'Section', 'section': 'Class', 'class': 'Arm',
                       'arm': 'Subject'}.get(scope, 'Unit'),
+        'branches': branches, 'attendance': attendance,
         'top_students': [{'name': s['name'], 'class': s['class'], 'average': s['average']}
                          for s in ranked[:10]],
         'honour_roll': honour, 'intervention': intervention,
         'recommendations': _recommendations(summary, units, subjects, teachers,
-                                             gender, intervention, honour, scope),
+                                             gender, intervention, honour, scope,
+                                             branches, attendance),
         'trends': _org_trends(term_id, scope, scope_id, allowed_ids, assignments),
         'selectors': _selectors(term_id, allowed_ids),
     }
@@ -431,6 +472,58 @@ def _org_trends(term_id, scope, scope_id, allowed_ids, ref_assignments):
     return {'term_names': names, 'averages': averages, 'pass_rates': pass_rates}
 
 
+def _attendance_pct_map(term_id, enrollment_ids):
+    """{enrollment_id: term attendance %} in one bulk query. % = present
+    sessions / opened sessions (morning + afternoon). Empty when no records."""
+    from models import Week, Attendance
+    if not enrollment_ids:
+        return {}
+    week_ids = [w.id for w in Week.query.filter_by(term_id=term_id).all()]
+    if not week_ids:
+        return {}
+    agg = {}       # enr_id -> [present_sessions, opened_days]
+    for a in Attendance.query.filter(
+            Attendance.enrollment_id.in_(list(enrollment_ids)),
+            Attendance.week_id.in_(week_ids)).all():
+        cell = agg.setdefault(a.enrollment_id, [0, 0])
+        cell[0] += (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
+        cell[1] += 1
+    return {eid: round(pres / (days * 2) * 100, 1)
+            for eid, (pres, days) in agg.items() if days}
+
+
+ATT_BANDS = [('<50%', 0, 49.999), ('50–69%', 50, 69.999), ('70–84%', 70, 84.999),
+             ('85–94%', 85, 94.999), ('95–100%', 95, 1e9)]
+
+
+def _pearson(pairs):
+    """Pearson correlation of (x, y) pairs, rounded; None when undefined."""
+    n = len(pairs)
+    if n < 3:
+        return None
+    xs = [p[0] for p in pairs]
+    ys = [p[1] for p in pairs]
+    mx, my = sum(xs) / n, sum(ys) / n
+    cov = sum((x - mx) * (y - my) for x, y in pairs)
+    vx = sum((x - mx) ** 2 for x in xs)
+    vy = sum((y - my) ** 2 for y in ys)
+    if vx <= 0 or vy <= 0:
+        return None
+    return round(cov / (vx ** 0.5 * vy ** 0.5), 2)
+
+
+def _attendance_analysis(att_pairs, pass_mark):
+    """Average score per attendance band + the attendance↔score correlation."""
+    if not att_pairs:
+        return {'bands': [], 'correlation': None, 'coverage': 0}
+    bands = []
+    for lbl, lo, hi in ATT_BANDS:
+        vals = [avg for apct, avg in att_pairs if lo <= apct <= hi]
+        if vals:
+            bands.append({'band': lbl, 'count': len(vals), 'average': _mean(vals)})
+    return {'bands': bands, 'correlation': _pearson(att_pairs), 'coverage': len(att_pairs)}
+
+
 def _teacher_verdict(avg, pass_rate, entries, completion):
     """Map a teacher's aggregate to an actionable HR verdict."""
     if entries < MIN_TEACHER_ENTRIES:
@@ -446,7 +539,8 @@ def _teacher_verdict(avg, pass_rate, entries, completion):
     return 'watch', 'Below target — targeted support / monitoring'
 
 
-def _recommendations(summary, units, subjects, teachers, gender, intervention, honour, scope):
+def _recommendations(summary, units, subjects, teachers, gender, intervention, honour,
+                     scope, branches=None, attendance=None):
     """Plain-English, decision-oriented reads an owner/principal can act on."""
     recs = []
 
@@ -539,6 +633,28 @@ def _recommendations(summary, units, subjects, teachers, gender, intervention, h
             add('insight', 'Gender performance gap',
                 f"{lead['group']} outperform {lag['group']} by {gap} points on average. "
                 f"Investigate the drivers and target support at the trailing group.")
+
+    # Branch (campus) comparison.
+    if branches and len(branches) > 1:
+        best, worst = branches[0], branches[-1]
+        gap = round(best['average'] - worst['average'], 1)
+        add('insight', 'Campus comparison',
+            f"{best['label']} leads the group at {best['average']} while {worst['label']} "
+            f"trails at {worst['average']} ({gap}-point gap). Transfer what works at "
+            f"{best['label']} and audit leadership/staffing at {worst['label']}.")
+
+    # Attendance ↔ results.
+    if attendance and attendance.get('correlation') is not None:
+        r = attendance['correlation']
+        if r >= 0.3:
+            add('insight', 'Attendance drives results',
+                f"Attendance and scores are positively correlated (r={r}). Tightening "
+                f"attendance follow-up is a concrete lever on academic outcomes — "
+                f"prioritise chronically-absent students.")
+        elif r <= -0.1:
+            add('watch', 'Attendance–results link is weak',
+                f"Attendance and scores barely track together (r={r}); poor results here "
+                f"are being driven by teaching/curriculum factors more than absence.")
     return recs
 
 
@@ -585,6 +701,7 @@ def _empty(term_id, scope, scope_id, allowed_ids):
         'scope_label': _scope_label(term_id, scope, scope_id, []),
         'summary': {}, 'grade_distribution': [], 'score_bands': [], 'gender': [],
         'subjects': [], 'teachers': [], 'units': [], 'unit_kind': 'Unit',
+        'branches': [], 'attendance': {'bands': [], 'correlation': None},
         'top_students': [], 'honour_roll': [], 'intervention': [],
         'recommendations': [], 'trends': {'term_names': [], 'averages': [], 'pass_rates': []},
         'selectors': _selectors(term_id, allowed_ids),
