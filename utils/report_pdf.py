@@ -25,8 +25,8 @@ _GRID = colors.HexColor('#333333')
 
 # How tall the subject rows may grow to fill the page (mm) and the target height
 # the subject table aims for. Tuned so a typical sheet fills most of the page.
-_MAXROW_MM = 12.7
-_TARGET_MM = 189.0
+_MAXROW_MM = 10.5
+_TARGET_MM = 175.0
 
 
 def _esc(v):
@@ -334,9 +334,7 @@ def _card_flowables(student, report_data, term, school, affective_traits, rating
             _subject_table(report_data, left_w), Spacer(1, 5),
             _summary_block(report_data, left_w)]
     right = _sidebar(report_data, affective_traits, rating_labels, right_w)
-    left_cell = KeepInFrame(left_w, 258 * mm, left, mode='shrink')
-    right_cell = KeepInFrame(right_w, 258 * mm, right, mode='shrink')
-    body = Table([[left_cell, right_cell]], colWidths=[left_w, gap + right_w])
+    body = Table([[left, right]], colWidths=[left_w, gap + right_w])
     body.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (0, 0), 0), ('RIGHTPADDING', (0, 0), (0, 0), gap),
@@ -347,6 +345,14 @@ def _card_flowables(student, report_data, term, school, affective_traits, rating
     return e
 
 
+def _card_page(doc, student, report_data, term, school, affective_traits, rating_labels):
+    """A single report card wrapped so the whole sheet — letterhead + body —
+    always fits on exactly one page (KeepInFrame shrinks it if it's too tall)."""
+    flows = _card_flowables(student, report_data, term, school, affective_traits,
+                            rating_labels, frame_w=doc.width)
+    return KeepInFrame(doc.width, doc.height, flows, mode='shrink', hAlign='CENTER')
+
+
 def report_card_pdf(student, report_data, term, school, affective_traits, rating_labels):
     """A single student's report sheet as a one-PDF buffer. ``school`` may be the
     full school-profile dict (name/address/phone/email/motto/logo) or a name str."""
@@ -355,8 +361,7 @@ def report_card_pdf(student, report_data, term, school, affective_traits, rating
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=10 * mm, bottomMargin=10 * mm,
                             leftMargin=10 * mm, rightMargin=10 * mm,
                             title=f'Report — {student.full_name}')
-    doc.build(_card_flowables(student, report_data, term, school, affective_traits, rating_labels,
-                              frame_w=doc.width))
+    doc.build([_card_page(doc, student, report_data, term, school, affective_traits, rating_labels)])
     buf.seek(0)
     return buf
 
@@ -375,8 +380,8 @@ def batch_report_cards_pdf(cards, school, affective_traits, rating_labels, *, ti
         if not first:
             flow.append(PageBreak())
         first = False
-        flow.extend(_card_flowables(student, report_data, term, school, affective_traits,
-                                    rating_labels, frame_w=doc.width))
+        flow.append(_card_page(doc, student, report_data, term, school,
+                               affective_traits, rating_labels))
     if not flow:
         flow.append(Paragraph('No results to export.', _S['sub']))
     doc.build(flow)
