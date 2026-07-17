@@ -375,9 +375,10 @@ def student_report_card(student_id):
         from utils.report_card import build_report_card
         enrollment, report_data = build_report_card(student_id, term_id)
 
+    from utils.school import school_profile
     return render_template('subjects/report_card.html',
         student=student, terms=terms, term_id=term_id, selected_term=selected_term,
-        report_data=report_data, enrollment=enrollment,
+        report_data=report_data, enrollment=enrollment, school=school_profile(),
         affective_traits=active_traits(), rating_labels=RATING_LABELS
     )
 
@@ -400,8 +401,8 @@ def report_card_pdf(student_id):
         flash('No results to export for this term.', 'error')
         return redirect(url_for('subjects.student_report_card', student_id=student_id, term_id=term_id))
     term = db.session.get(Term, term_id)
-    buf = build_pdf(student, report_data, term,
-                    SchoolSettings.get('school_name', 'School'),
+    from utils.school import school_profile
+    buf = build_pdf(student, report_data, term, school_profile(),
                     active_traits(), RATING_LABELS)
     name = f"{student.student_id}_{term.name.replace(' ', '_')}_report.pdf"
     return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=name)
@@ -442,7 +443,8 @@ def report_cards_pdf_batch():
     if not cards:
         flash('No results to export for this class yet.', 'error')
         return redirect(url_for('subjects.print_all_report_cards', term_id=term_id, assignment_id=assignment_id))
-    buf = batch_report_cards_pdf(cards, SchoolSettings.get('school_name', 'School'),
+    from utils.school import school_profile
+    buf = batch_report_cards_pdf(cards, school_profile(),
                                  active_traits(), RATING_LABELS,
                                  title=f'{asg.display_name} — {term.full_name}')
     from utils.audit import log_action

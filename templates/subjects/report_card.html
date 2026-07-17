@@ -50,10 +50,18 @@
 {% if report_data %}
 <div class="card mb-3">
     <div class="card-body">
-        <div class="report-header">
-            <h2>{{ config.get('school_name', 'School Name') if config else 'School Name' }}</h2>
+        <div class="report-header" style="text-align:center;">
+            {% if school and school.logo_url %}<img src="{{ school.logo_url }}" alt="School logo" style="max-height:70px;max-width:120px;margin-bottom:.35rem;">{% endif %}
+            <h2 style="margin:.1rem 0;">{{ (school.name if school and school.name else 'Your School')|e }}</h2>
+            {% if school and school.address %}<p style="margin:.05rem 0;">{{ school.address }}</p>{% endif %}
+            <p style="margin:.05rem 0;">
+                {% if school and school.phone %}Tel: {{ school.phone }}{% endif %}
+                {% if school and school.phone and school.email %} &nbsp;·&nbsp; {% endif %}
+                {% if school and school.email %}{{ school.email }}{% endif %}
+            </p>
+            {% if school and school.motto %}<p style="font-style:italic;margin:.05rem 0;">{{ school.motto }}</p>{% endif %}
             {% if student.branch %}<p style="font-weight:600;margin:.1rem 0;">{{ student.branch.name }} Branch{% if student.branch.address %} · {{ student.branch.address }}{% endif %}</p>{% endif %}
-            <p>{{ selected_term.full_name }} Academic Report</p>
+            <p style="margin-top:.2rem;font-weight:600;">{{ selected_term.full_name }} Academic Report</p>
         </div>
         
         <div class="student-info-grid">

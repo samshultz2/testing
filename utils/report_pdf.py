@@ -14,8 +14,10 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
                                 Spacer, PageBreak)
 
-_PRIMARY = colors.HexColor('#0d6a4e')
-_LIGHT = colors.HexColor('#e8f5f1')
+# Monochrome report card — the school logo is the only splash of colour. Headings
+# and table chrome are black / grey so it prints cleanly on any printer.
+_PRIMARY = colors.black
+_LIGHT = colors.HexColor('#f0f0f0')          # neutral grey zebra (grayscale)
 
 
 def _esc(v):
@@ -44,9 +46,14 @@ def _styles():
         return _S
     base = getSampleStyleSheet()
     _S['title'] = ParagraphStyle('t', parent=base['Title'], fontSize=16,
-                                 textColor=_PRIMARY, spaceAfter=2)
+                                 textColor=_PRIMARY, spaceAfter=1)
+    _S['school_line'] = ParagraphStyle('sl', parent=base['Normal'], alignment=TA_CENTER,
+                                       fontSize=9, leading=11, textColor=colors.black)
+    _S['motto'] = ParagraphStyle('mt', parent=base['Normal'], alignment=TA_CENTER,
+                                 fontSize=8.5, leading=10, textColor=colors.HexColor('#333333'),
+                                 fontName='Helvetica-Oblique')
     _S['sub'] = ParagraphStyle('s', parent=base['Normal'], alignment=TA_CENTER,
-                               fontSize=10, spaceAfter=8)
+                               fontSize=10, spaceAfter=8, spaceBefore=2, fontName='Helvetica-Bold')
     _S['h'] = ParagraphStyle('h', parent=base['Heading4'], textColor=_PRIMARY,
                              spaceBefore=8, spaceAfter=4)
     _S['cell'] = ParagraphStyle('c', parent=base['Normal'], fontSize=8.5)
@@ -55,16 +62,37 @@ def _styles():
     return _S
 
 
-def _card_flowables(student, report_data, term, school_name,
+def _school_dict(school):
+    """Accept either a school-profile dict or a bare name string (back-compat)."""
+    if isinstance(school, dict):
+        return school
+    return {'name': school or 'School', 'address': '', 'phone': '', 'email': '',
+            'motto': '', 'logo_path': None}
+
+
+def _card_flowables(student, report_data, term, school,
                     affective_traits, rating_labels):
     """The flowables for one student's report sheet — shared by the single-card
     and whole-class batch renderers so both stay pixel-identical."""
     e = []
     from utils.school import logo_flowable, logo_header_flowable
-    logo = logo_flowable(max_h_mm=16, max_w_mm=28)
+    sch = _school_dict(school)
+    logo = logo_flowable(max_h_mm=18, max_w_mm=30, path=sch.get('logo_path'))
+    name = sch.get('name') or 'School'
     sub_text = f'{term.full_name} — Report Sheet'
-    items = [(Paragraph(_esc(school_name or 'School'), _S['title']), school_name or 'School', 'Helvetica-Bold', 16),
-             (Paragraph(_esc(sub_text), _S['sub']), sub_text, 'Helvetica', 10)]
+
+    # Letterhead: logo (only colour) beside centred name + full contact details.
+    items = [(Paragraph(_esc(name), _S['title']), name, 'Helvetica-Bold', 16)]
+    if sch.get('address'):
+        items.append((Paragraph(_esc(sch['address']), _S['school_line']), sch['address'], 'Helvetica', 9))
+    contact = ' · '.join(x for x in [
+        (f"Tel: {sch['phone']}" if sch.get('phone') else ''), sch.get('email') or ''] if x)
+    if contact:
+        items.append((Paragraph(_esc(contact), _S['school_line']), contact, 'Helvetica', 9))
+    if sch.get('motto'):
+        items.append((Paragraph(_esc(sch['motto']), _S['motto']), sch['motto'], 'Helvetica-Oblique', 8.5))
+    items.append((Paragraph(_esc(sub_text), _S['sub']), sub_text, 'Helvetica-Bold', 10))
+
     header = logo_header_flowable(logo, items) if logo is not None else None
     if header is not None:
         e.append(header)
@@ -152,21 +180,22 @@ def _card_flowables(student, report_data, term, school_name,
     return e
 
 
-def report_card_pdf(student, report_data, term, school_name,
+def report_card_pdf(student, report_data, term, school,
                     affective_traits, rating_labels):
-    """A single student's report sheet as a one-PDF buffer."""
+    """A single student's report sheet as a one-PDF buffer. ``school`` may be the
+    full school-profile dict (name/address/phone/email/motto/logo) or a name str."""
     _styles()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
                             leftMargin=12 * mm, rightMargin=12 * mm,
                             title=f'Report — {student.full_name}')
-    doc.build(_card_flowables(student, report_data, term, school_name,
+    doc.build(_card_flowables(student, report_data, term, school,
                               affective_traits, rating_labels))
     buf.seek(0)
     return buf
 
 
-def batch_report_cards_pdf(cards, school_name, affective_traits, rating_labels, *, title='Report Cards'):
+def batch_report_cards_pdf(cards, school, affective_traits, rating_labels, *, title='Report Cards'):
     """A whole class's report sheets in one PDF, one student per page.
 
     ``cards`` is an iterable of (student, report_data, term). Reuses the exact
@@ -183,7 +212,7 @@ def batch_report_cards_pdf(cards, school_name, affective_traits, rating_labels, 
         if not first:
             flow.append(PageBreak())
         first = False
-        flow.extend(_card_flowables(student, report_data, term, school_name,
+        flow.extend(_card_flowables(student, report_data, term, school,
                                     affective_traits, rating_labels))
     if not flow:
         flow.append(Paragraph('No results to export.', _S['sub']))
