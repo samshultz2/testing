@@ -1343,7 +1343,7 @@ function Institution({ d, notify }) {
               const ids = a.intervention.map((x) => x.id).join(',');
               const body = 'Dear Parent, this is to notify you that your ward is performing below expectations this term and would benefit from extra support at home. Please arrange to meet the class teacher. Thank you.';
               const url = `${d.urls.compose}?students=${ids}&body=${encodeURIComponent(body)}`;
-              return <a href={url} className="btn btn-primary btn-sm" title="Draft a message to these students' parents"><i aria-hidden="true" className="fas fa-paper-plane" /> Message parents</a>;
+              return <a href={url} data-native className="btn btn-primary btn-sm" title="Draft a message to these students' parents"><i aria-hidden="true" className="fas fa-paper-plane" /> Message parents</a>;
             })()}
           </div>
             <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
@@ -1398,7 +1398,7 @@ function Teacher({ d, notify }) {
           {hasData && d.is_admin && d.staff_id && d.urls.compose && (() => {
             const body = `Dear ${d.teacher_name}, I would like to discuss your class results for this term and how we can support stronger outcomes. Please see me at your earliest convenience. Thank you.`;
             const url = `${d.urls.compose}?to=staff&staff_ids=${d.staff_id}&body=${encodeURIComponent(body)}`;
-            return <a href={url} className="btn btn-primary btn-sm" title="Message this teacher privately"><i aria-hidden="true" className="fas fa-paper-plane" /> Message this teacher</a>;
+            return <a href={url} data-native className="btn btn-primary btn-sm" title="Message this teacher privately"><i aria-hidden="true" className="fas fa-paper-plane" /> Message this teacher</a>;
           })()}
           {hasData && (() => {
             const base = d.urls.report_base; const sep = base.includes('?') ? '&' : '?';
