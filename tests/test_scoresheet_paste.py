@@ -175,6 +175,63 @@ def test_paste_save_survives_duplicate_assessment_types(app):
         assert all(s.score == 3 for s in scores)
 
 
+def test_paste_review_grid_saves_every_row_not_just_the_first(app):
+    """Regression for the real data-loss bug: the review grid named each score input
+    by COLUMN index, so every row emitted identical field names — on submit they
+    collided and only the first row's scores survived (the app reported "saved 6",
+    then 0 on retry). Render the grid, post it back verbatim, and require BOTH
+    pupils' distinct scores to persist."""
+    import re
+    from html.parser import HTMLParser
+    from models import StudentScore
+    ids = _setup(app)                                        # enrols Aa One + Bb Two
+    c = _admin(app)
+    with app.test_request_context():
+        cs = db.session.get(ClassSubject, ids['cs'])
+        cols = _sheet_columns(cs)
+        ncols = len(cols)
+        first_at = cols[0][0].id
+        paste_url = url_for('subjects.scoresheet_paste')
+        save_url = url_for('subjects.scoresheet_save')
+    line = lambda nm, first: nm + ', ' + ', '.join([str(first)] + ['-'] * (ncols - 1))
+    body = c.post(paste_url, data={
+        'term_id': ids['term'], 'assignment_id': ids['asg'], 'class_subject_id': ids['cs'],
+        '_csrf_token': auth_csrf(c),
+        'data': line('Aa One', 4) + '\n' + line('Bb Two', 5),   # distinct values per pupil
+    }).get_data(as_text=True)
+
+    # Harvest EVERY posted field straight from the rendered grid (what a browser sends).
+    class _F(HTMLParser):
+        def __init__(self): super().__init__(); self.data = {}
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag in ('input', 'select') and a.get('name'):
+                if tag == 'input' and a.get('type') != 'checkbox':
+                    self.data[a['name']] = a.get('value', '')
+        # selects: capture the selected option
+        def _sel(self): pass
+    # inputs
+    f = _F(); f.feed(body); posted = f.data
+    # selected dropdown options (student_N)
+    for m in re.finditer(r'name="(student_\d+)".*?</select>', body, re.S):
+        block = m.group(0)
+        sel = re.search(r'<option value="(\d+)"[^>]*selected', block)
+        posted[m.group(1)] = sel.group(1) if sel else ''
+    posted['_csrf_token'] = auth_csrf(c)
+    # the two rows must carry DISTINCT cell field names (row-indexed, not column-indexed)
+    assert any(k.startswith('cell_0_') for k in posted)
+    assert any(k.startswith('cell_1_') for k in posted)
+
+    c.post(save_url, data=posted, follow_redirects=True)
+    with app.app_context():
+        sa = StudentScore.query.filter_by(student_id=ids['a'], class_subject_id=ids['cs'],
+                                          assessment_type_id=first_at).first()
+        sb = StudentScore.query.filter_by(student_id=ids['b'], class_subject_id=ids['cs'],
+                                          assessment_type_id=first_at).first()
+        assert sa and sa.score == 4, 'first pupil not saved'
+        assert sb and sb.score == 5, 'second pupil lost to field-name collision'
+
+
 def test_paste_does_not_collide_unenrolled_row_onto_a_pupil(app):
     """End-to-end: pasting a name that isn't on the register must leave that row
     unmatched instead of hijacking an enrolled pupil's slot — so the enrolled rows

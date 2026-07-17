@@ -52,6 +52,7 @@
                     </thead>
                     <tbody>
                         {% for row in rows %}
+                        {% set rowidx = loop.index0 %}
                         <tr {% if not row.matched_id %}style="background: var(--warning-bg, rgba(255,193,7,0.08));"{% endif %}>
                             <td>{{ loop.index }}</td>
                             <td class="text-sm">{{ row.name }}<input type="hidden" name="rowname_{{ loop.index0 }}" value="{{ row.name }}"></td>
@@ -68,7 +69,7 @@
                             </td>
                             {% for at, mx in columns %}
                             <td>
-                                <input type="number" name="cell_{{ loop.index0 }}_{{ at.id }}" class="form-control"
+                                <input type="number" name="cell_{{ rowidx }}_{{ at.id }}" class="form-control"
                                     value="{{ row.cells.get(at.id, '') }}" min="0" max="{{ mx }}" step="0.5" style="width: 72px;">
                             </td>
                             {% endfor %}
