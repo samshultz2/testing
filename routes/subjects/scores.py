@@ -803,21 +803,38 @@ def scoresheet_save():
             return redirect(url_for('subjects.scores_entry', term_id=term_id,
                                     assignment_id=assignment_id, class_subject_id=class_subject_id))
         db.session.commit()
+
+        # --- server-side diagnostic (terminal / server log, not the page) --------
+        # A compact breakdown of exactly what the save did, so a "Saved N scores"
+        # that looks too low can be traced without guessing. Includes the column
+        # ids the grid posted vs the ids the sheet re-derives, to spot any drift,
+        # plus a few sample cells.
+        try:
+            from flask import current_app
+            posted_at_ids = sorted({aid for cs in row_cells.values() for aid in cs})
+            sheet_at_ids = sorted(at.id for at, _ in _sheet_columns(class_subject, term=term_id))
+            sample = []
+            for r in range(min(row_count, 3)):
+                sample.append({'row': r, 'student': request.form.get(f'student_{r}'),
+                               'name': request.form.get(f'rowname_{r}'),
+                               'cells': row_cells.get(r, {})})
+            unchanged = max(cells_with_values - counts['rejected'] - counts['blocked'] - counts['saved'], 0)
+            current_app.logger.warning(
+                'SCORESHEET_SAVE_DIAG term=%s asg=%s cs=%s subject_id=%s | rows=%s matched=%s '
+                'cells_with_values=%s | saved=%s rejected=%s blocked=%s unknown_col=%s '
+                'already_had_value=%s | posted_col_ids=%s sheet_col_ids=%s | sample=%s',
+                term_id, assignment_id, class_subject_id, class_subject.subject_id,
+                row_count, matched_rows, cells_with_values, counts['saved'], counts['rejected'],
+                counts['blocked'], bad_max, unchanged, posted_at_ids, sheet_at_ids, sample)
+        except Exception:
+            pass
+
         msg = f'Saved {counts["saved"]} scores.'
         if counts['rejected']:
             msg += f' {counts["rejected"]} skipped (outside the allowed range).'
         if counts['blocked']:
             msg += f' {counts["blocked"]} left unchanged (edit permission required).'
         flash(msg, 'success' if (counts['saved'] and not dropped) else 'warning')
-        # Diagnostic breakdown when little/nothing saved despite submitted values —
-        # tells the user (and us) exactly where the scores went.
-        if counts['saved'] == 0 and (cells_with_values or matched_rows):
-            unchanged = cells_with_values - counts['rejected'] - counts['blocked']
-            flash(f'Diagnostic — rows submitted: {row_count}; matched to a student: '
-                  f'{matched_rows}; cells with a value: {cells_with_values}; '
-                  f'rejected (out of range): {counts["rejected"]}; blocked (locked/permission): '
-                  f'{counts["blocked"]}; unknown column: {bad_max}; already had this value: '
-                  f'{max(unchanged, 0)}.', 'info')
         if adopted:
             flash(f'Adopted scanned student number for {adopted} student(s).', 'info')
         if dropped:
