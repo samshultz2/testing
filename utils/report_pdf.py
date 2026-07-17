@@ -126,13 +126,12 @@ def _card_flowables(student, report_data, term, school,
     tail = (rest * 0.5) / 3
     score_tbl = Table(data, colWidths=[subj_w] + [at_w] * n + [tail, tail, tail], repeatRows=1)
     score_tbl.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), _PRIMARY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 8),
         ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cccccc')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, _LIGHT]),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     e.append(score_tbl)
@@ -164,8 +163,8 @@ def _card_flowables(student, report_data, term, school,
         at_tbl = Table(adata, colWidths=[90 * mm, 80 * mm])
         at_tbl.setStyle(TableStyle([
             ('FONTSIZE', (0, 0), (-1, -1), 8.5),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#dddddd')),
-            ('BACKGROUND', (0, 0), (-1, 0), _LIGHT),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.black),
         ]))
         e.append(at_tbl)
 

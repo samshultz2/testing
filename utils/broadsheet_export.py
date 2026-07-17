@@ -338,20 +338,30 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm, bottomMargin=8 * mm,
                             leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f"Score sheet — {asg.display_name}")
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     avail = landscape(A4)[0] - 16 * mm
-    sn_w = 8 * mm
-    score_w = 12 * mm
-    n_score = len(cols) + 2
-    names_w = avail - sn_w - score_w * n_score
-    name_each = max(24 * mm, names_w / 3)
-    widths = [sn_w, name_each, name_each, name_each] + [score_w] * n_score
+    sn_w = 9 * mm
 
-    # Tall rows so marks can be hand-written; fill the page.
+    # Name columns fit their contents (roster + header label), within sane bounds.
+    def _fit(label, values, mn=20 * mm, mx=48 * mm):
+        w = stringWidth(label, 'Helvetica-Bold', 7)
+        for v in values:
+            w = max(w, stringWidth(v or '', 'Helvetica', 8.5))
+        return min(max(w + 6 * mm, mn), mx)
+    first_w = _fit('First Name', [s.first_name for s in students])
+    mid_w = _fit('Middle Name', [s.middle_name for s in students])
+    sur_w = _fit('Surname', [s.surname for s in students])
+
+    # Score columns share the remaining width (min 11mm each) so the grid still
+    # spans the page even when the names are short.
+    n_score = len(cols) + 2
+    score_w = max(11 * mm, (avail - sn_w - first_w - mid_w - sur_w) / n_score)
+    widths = [sn_w, first_w, mid_w, sur_w] + [score_w] * n_score
+
+    # A fixed, comfortable writing height — the sheet needn't stretch to fill the page.
     body_rows = len(data) - 1
-    page_h = landscape(A4)[1] - 16 * mm - 34 * mm     # minus margins and header block
     header_h = 13 * mm
-    row_h = max(8 * mm, min(15 * mm, (page_h - header_h) / max(body_rows, 1))) if body_rows else 10 * mm
-    heights = [header_h] + [row_h] * body_rows
+    heights = [header_h] + [10 * mm] * body_rows
 
     t = Table(data, colWidths=widths, rowHeights=heights, repeatRows=1)
     t.setStyle(TableStyle([
