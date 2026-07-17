@@ -239,6 +239,22 @@ def build_report_card(student_id, term_id):
     no_in_class = StudentEnrollment.query.filter_by(
         class_arm_assignment_id=assignment.id, is_active=True).count()
 
+    # Attendance filled straight from the term's records (no separate compute
+    # needed): total times present (sessions), days present and school days.
+    week_ids = [w.id for w in Week.query.filter_by(term_id=term_id).all()]
+    att_present = att_days_present = att_days_opened = None
+    if week_ids:
+        att_recs = Attendance.query.filter(
+            Attendance.enrollment_id == enrollment.id,
+            Attendance.week_id.in_(week_ids)).all()
+        if att_recs:
+            att_present = sum(r.total_present for r in att_recs)
+            att_days_present = sum(1 for r in att_recs if r.total_present > 0)
+            att_days_opened = len(att_recs)
+    # Percentage: prefer the live figure, fall back to any stored one.
+    att_pct = (round(att_present / (att_days_opened * 2) * 100, 1)
+               if att_present is not None and att_days_opened else None)
+
     report_data = {
         'enrollment': enrollment,
         'assignment': assignment,
@@ -258,6 +274,11 @@ def build_report_card(student_id, term_id):
         'average_pct': average_pct,
         'result_status': 'PASS' if average_pct >= pass_mark else 'FAIL',
         'no_in_class': no_in_class,
+        'attendance_present': att_present,          # total times present (sessions)
+        'attendance_days_present': att_days_present,
+        'attendance_days_opened': att_days_opened,
+        'attendance_pct': att_pct if att_pct is not None else (
+            term_summary.attendance_percentage if term_summary else None),
         'next_term_fees': SchoolSettings.get('next_term_fees'),
         'next_term_begins': SchoolSettings.get('next_term_begins'),
     }

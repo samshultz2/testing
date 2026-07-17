@@ -103,7 +103,17 @@ def _card_flowables(student, report_data, term, school,
 
     ts = report_data.get('term_summary')
     pos = ts.position_in_class if (ts and ts.position_in_class) else '—'
-    att = (f'{_n(ts.attendance_percentage)}%' if (ts and ts.attendance_percentage is not None) else '—')
+    # Attendance = total times present for the term, out of the sessions the school
+    # opened, with the percentage in brackets.
+    ap = report_data.get('attendance_present')
+    if ap is not None:
+        att = _n(ap)
+        if report_data.get('attendance_days_opened'):
+            att += f" / {_n(report_data['attendance_days_opened'] * 2)}"
+        if report_data.get('attendance_pct') is not None:
+            att += f" ({_n(report_data['attendance_pct'])}%)"
+    else:
+        att = '—'
     e.append(_info_table([
         [('Name', student.full_name), ('Exam No', student.student_id)],
         [('Class', report_data['assignment'].display_name), ('No. in Class', report_data.get('no_in_class', '—'))],
