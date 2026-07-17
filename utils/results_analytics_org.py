@@ -341,9 +341,94 @@ def _compute(term_id, scope, scope_id, allowed_ids):
         'honour_roll': honour, 'intervention': intervention,
         'recommendations': _recommendations(summary, units, subjects, teachers,
                                              gender, intervention, honour, scope),
+        'trends': _org_trends(term_id, scope, scope_id, allowed_ids, assignments),
         'selectors': _selectors(term_id, allowed_ids),
     }
     return payload
+
+
+def _student_averages(assignment_ids, term_id, pass_mark):
+    """Slim per-student averages (mean of a student's assessed subject totals)
+    for a set of assignments in a term — the shared basis for roll-ups and the
+    term-on-term trend. Returns the list of student averages (0–100)."""
+    from sqlalchemy.orm import joinedload
+    from models import ClassSubject, StudentEnrollment, StudentScore
+    if not assignment_ids:
+        return []
+    from models import ClassArmAssignment
+    asgs = (ClassArmAssignment.query
+            .filter(ClassArmAssignment.id.in_(list(assignment_ids))).all())
+    asg_by_id = {a.id: a for a in asgs}
+    class_ids = {a.class_id for a in asgs}
+    if not class_ids:
+        return []
+    all_cs = (ClassSubject.query
+              .filter(ClassSubject.term_id == term_id, ClassSubject.is_active == True,  # noqa: E712
+                      ClassSubject.class_id.in_(class_ids)).all())
+    cs_by_class = {}
+    for cs in all_cs:
+        cs_by_class.setdefault(cs.class_id, []).append(cs)
+    enrollments = (StudentEnrollment.query
+                   .filter(StudentEnrollment.class_arm_assignment_id.in_(list(asg_by_id)),
+                           StudentEnrollment.is_active == True).all())  # noqa: E712
+    cs_ids = [cs.id for cs in all_cs]
+    sids = [e.student_id for e in enrollments]
+    present = {}
+    if cs_ids and sids:
+        for s in StudentScore.query.filter(
+                StudentScore.student_id.in_(sids),
+                StudentScore.class_subject_id.in_(cs_ids)).all():
+            if s.score is None:
+                continue
+            k = (s.student_id, s.class_subject_id)
+            present[k] = present.get(k, 0) + s.score
+    out = []
+    for e in enrollments:
+        a = asg_by_id[e.class_arm_assignment_id]
+        applic = [cs for cs in cs_by_class.get(a.class_id, [])
+                  if cs.arm_id is None or cs.arm_id == a.arm_id]
+        assessed = [round(present[(e.student_id, cs.id)], 2)
+                    for cs in applic if (e.student_id, cs.id) in present]
+        if assessed:
+            out.append(round(sum(assessed) / len(assessed), 2))
+    return out
+
+
+def _org_trends(term_id, scope, scope_id, allowed_ids, ref_assignments):
+    """Scope average & pass rate across every term of the session — the
+    institution-level term-on-term trend. ``ref_assignments`` are the current
+    scope's assignments (used to translate an arm scope to other terms)."""
+    from models import db, Term, ClassArmAssignment, SchoolSettings
+    term = db.session.get(Term, term_id)
+    if not term or not term.session_id:
+        return {'term_names': [], 'averages': [], 'pass_rates': []}
+    pass_mark = SchoolSettings.get('pass_mark', 50)
+    terms = Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all()
+    # For an arm scope, follow the same class+arm across terms (assignment ids
+    # are term-specific); other scopes filter by stable class_id / section.
+    arm_key = None
+    if scope == 'arm' and ref_assignments:
+        a0 = ref_assignments[0]
+        arm_key = (a0.class_id, a0.arm_id)
+    names, averages, pass_rates = [], [], []
+    for t in terms:
+        names.append(t.name)
+        if arm_key:
+            rows = ClassArmAssignment.query.filter_by(
+                term_id=t.id, class_id=arm_key[0], arm_id=arm_key[1]).all()
+            if allowed_ids is not None:
+                rows = [r for r in rows if r.id in allowed_ids]
+            ids = [r.id for r in rows]
+        else:
+            ids = [a.id for a in _scope_assignments(t.id, scope, scope_id, allowed_ids)]
+        vals = _student_averages(ids, t.id, pass_mark) if ids else []
+        if vals:
+            averages.append(round(sum(vals) / len(vals), 2))
+            pass_rates.append(round(100 * sum(1 for v in vals if v >= pass_mark) / len(vals), 1))
+        else:
+            averages.append(None)
+            pass_rates.append(None)
+    return {'term_names': names, 'averages': averages, 'pass_rates': pass_rates}
 
 
 def _teacher_verdict(avg, pass_rate, entries, completion):
@@ -501,5 +586,6 @@ def _empty(term_id, scope, scope_id, allowed_ids):
         'summary': {}, 'grade_distribution': [], 'score_bands': [], 'gender': [],
         'subjects': [], 'teachers': [], 'units': [], 'unit_kind': 'Unit',
         'top_students': [], 'honour_roll': [], 'intervention': [],
-        'recommendations': [], 'selectors': _selectors(term_id, allowed_ids),
+        'recommendations': [], 'trends': {'term_names': [], 'averages': [], 'pass_rates': []},
+        'selectors': _selectors(term_id, allowed_ids),
     }

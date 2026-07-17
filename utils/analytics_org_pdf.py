@@ -159,6 +159,18 @@ def institution_pdf(data, term):
         elems.append(KeepTogether(block[:2]))
         elems += block[2:]
 
+    # ---- term-on-term trend ----------------------------------------------
+    tr = data.get('trends') or {}
+    tnames = tr.get('term_names') or []
+    if len(tnames) > 1 and any(v is not None for v in (tr.get('averages') or [])):
+        head = ['Metric'] + tnames
+        rows = [['Average score'] + [_n(v) if v is not None else '—' for v in tr.get('averages', [])],
+                ['Pass rate'] + [(f"{_n(v)}%" if v is not None else '—') for v in tr.get('pass_rates', [])]]
+        w0 = W * 0.28
+        col = (W - w0) / len(tnames)
+        elems.append(league("Performance trend across terms (this session)",
+                            head, rows, [w0] + [col] * len(tnames)))
+
     # ---- intervention & honour -------------------------------------------
     interv = data.get('intervention') or []
     if interv:

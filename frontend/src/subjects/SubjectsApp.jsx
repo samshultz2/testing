@@ -1279,6 +1279,27 @@ function Institution({ d, notify }) {
               ) : <div style={{ padding: '1rem' }} className="text-muted">No students below the pass mark. 🎉</div>}
             </div></div>
         </div>
+
+        {a.trends && a.trends.term_names.length > 1 && a.trends.averages.some((v) => v != null) && (
+          <div className="card mt-3"><div className="card-header"><h3>Performance trend across terms</h3>
+            <span className="text-muted text-sm">{a.scope_label} · this session</span></div>
+            <div className="card-body">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '1.5rem' }}>
+                <div>
+                  <div className="text-muted text-sm mb-1">Average score</div>
+                  {a.trends.term_names.map((tn, i) => (
+                    <Bar key={tn} label={tn} value={a.trends.averages[i] == null ? 0 : a.trends.averages[i]} max={100} tone={avgColour(a.trends.averages[i] || 0, pm)} />
+                  ))}
+                </div>
+                <div>
+                  <div className="text-muted text-sm mb-1">Pass rate</div>
+                  {a.trends.term_names.map((tn, i) => (
+                    <Bar key={tn} label={tn} value={a.trends.pass_rates[i] == null ? 0 : a.trends.pass_rates[i]} max={100} pct tone={(a.trends.pass_rates[i] || 0) >= 50 ? 'var(--success)' : '#e74a3b'} />
+                  ))}
+                </div>
+              </div>
+            </div></div>
+        )}
       </>)}
     </>
   );

@@ -163,6 +163,17 @@ def test_empty_scope_is_safe(app):
         assert d['summary'] == {} and d['units'] == []
 
 
+def test_trends_present(app):
+    from utils.results_analytics_org import org_analytics
+    ids = _seed(app)
+    with app.app_context():
+        d = org_analytics(ids['term'], 'school', None, None, use_cache=False)
+        tr = d['trends']
+        assert ids['term'] and 'term_names' in tr and 'averages' in tr and 'pass_rates' in tr
+        # the seeded term is First Term of the session; its average is populated
+        assert any(v is not None for v in tr['averages'])
+
+
 def _admin(app):
     from config import Config
     from tests.conftest import login_token
