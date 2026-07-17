@@ -37,6 +37,7 @@ function Index({ d }) {
         <div className="d-flex gap-2">
           <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>
           <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
+          {d.urls.validation && <a href={d.urls.validation} className="btn btn-outline"><i aria-hidden="true" className="fas fa-bullseye" /> Validation</a>}
           <a href={d.urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-crystal-ball" /> Predictions</a>
         </div>
       </div></div>
@@ -816,7 +817,9 @@ function Analytics({ d }) {
 
   return (
     <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chart-bar" /> Mock JAMB Analytics</h1></div>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chart-bar" /> Mock JAMB Analytics</h1>
+        {d.urls.validation && <div className="page-header-actions"><a href={d.urls.validation} className="btn btn-outline"><i aria-hidden="true" className="fas fa-bullseye" /> Mock Validation</a></div>}
+      </div>
       <div className="filter-bar">
         <div className="form-group mb-0">
           <label className="form-label">Academic Session</label>
@@ -904,8 +907,133 @@ function Analytics({ d }) {
   );
 }
 
+function Validation({ d }) {
+  const nav = useNav();
+  const v = d.validation;
+  const meta = (v && v.meta) || {};
+  const s = (v && v.summary) || {};
+  const scatterRef = useRef();
+  useEffect(() => {
+    if (!v || meta.insufficient || !scatterRef.current || !window.Chart) return;
+    const pts = (v.scatter || []).map((p) => ({ x: p.mock, y: p.actual }));
+    const lo = 0; const hi = 400;
+    const chart = new window.Chart(scatterRef.current, {
+      data: {
+        datasets: [
+          { type: 'scatter', label: 'Candidate', data: pts, backgroundColor: 'rgba(17,153,142,0.7)', pointRadius: 4 },
+          { type: 'line', label: 'Perfect prediction', data: [{ x: lo, y: lo }, { x: hi, y: hi }], borderColor: 'rgba(0,0,0,0.35)', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 },
+          { type: 'line', label: 'Cut-off', data: [{ x: meta.cutoff, y: lo }, { x: meta.cutoff, y: hi }], borderColor: '#e74a3b', borderWidth: 1, pointRadius: 0 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (c) => `mock ${c.parsed.x} → actual ${c.parsed.y}` } } },
+        scales: { x: { title: { display: true, text: 'Mock score' }, min: lo, max: hi }, y: { title: { display: true, text: 'Actual JAMB' }, min: lo, max: hi } },
+      },
+    });
+    return () => chart.destroy();
+  }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const TONE = { positive: ['fa-circle-check', 'var(--success,#1c8c53)'], negative: ['fa-triangle-exclamation', '#b43a2e'], watch: ['fa-eye', '#c9a227'] };
+  const kpi = (label, value, tone) => (
+    <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: tone }}>{value}</div><div className="text-muted text-sm">{label}</div></div></div>
+  );
+  const th = s.threshold || {};
+  return (
+    <>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-bullseye" /> Mock → Actual Validation</h1>
+        <div className="page-header-actions">
+          {v && !meta.insufficient && <><a href={d.urls.export_pdf} className="btn btn-success" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
+          <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a></>}
+          <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
+        </div>
+      </div>
+      <div className="filter-bar">
+        <div className="form-group mb-0"><label className="form-label">Academic Session</label>
+          <select className="form-control" value={d.selected_session_id} onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
+            {d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+        {d.exams.length > 0 && (
+          <div className="form-group mb-0"><label className="form-label">Mock</label>
+            <select className="form-control" value={d.selected_mock_exam_id} onChange={(e) => navParams(nav.go, d.urls.self, { session_id: d.selected_session_id, mock_exam_id: e.target.value })}>
+              {d.exams.map((x) => <option key={x.id} value={x.id}>{x.display_name}</option>)}</select></div>
+        )}
+        {d.years.length > 0 && (
+          <div className="form-group mb-0"><label className="form-label">Actual JAMB year</label>
+            <select className="form-control" value={d.selected_year} onChange={(e) => navParams(nav.go, d.urls.self, { session_id: d.selected_session_id, mock_exam_id: d.selected_mock_exam_id, year: e.target.value })}>
+              <option value="">Latest available</option>
+              {d.years.map((y) => <option key={y} value={y}>{y}</option>)}</select></div>
+        )}
+      </div>
+
+      {!v || meta.insufficient ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-bullseye" title="Not enough matched candidates">
+          <p>{(meta && meta.reason) || 'Validation needs candidates with both a Mock JAMB and an actual JAMB result. Record actual JAMB results to unlock it.'}</p></Empty></div></div>
+      ) : (<>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+          {kpi('Correlation (r)', s.correlation == null ? '—' : s.correlation, s.correlation >= 0.7 ? 'var(--success)' : (s.correlation >= 0.4 ? '#c9a227' : '#e74a3b'))}
+          {kpi('R² explained', s.r_squared == null ? '—' : s.r_squared)}
+          {kpi('Mean abs error', `±${s.mae}`)}
+          {kpi('Bias', `${s.bias > 0 ? '+' : ''}${s.bias}`, Math.abs(s.bias) <= 8 ? 'var(--success)' : '#e74a3b')}
+          {kpi('Within 40 pts', `${s.within40_pct}%`)}
+          {kpi('Calibration', s.bias_direction, s.bias_direction === 'well-calibrated' ? 'var(--success)' : '#c9a227')}
+        </div>
+        <div className="text-muted text-sm mb-2" style={{ marginTop: '-.4rem' }}>
+          {s.matched} matched candidate(s) · mock mean {s.mock_mean} vs actual mean {s.actual_mean} · bias 95% CI {s.bias_ci_low}…{s.bias_ci_high}
+        </div>
+
+        {v.recommendations && v.recommendations.length > 0 && (
+          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-lightbulb" /> Findings &amp; recommendations</h3></div>
+            <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '.6rem' }}>
+              {v.recommendations.map((r, i) => { const [ic, col] = TONE[r.tone] || ['fa-lightbulb', 'var(--primary)']; return (
+                <div key={i} style={{ borderLeft: `4px solid ${col}`, background: 'var(--bg-secondary,#f8f9fb)', borderRadius: 6, padding: '.6rem .8rem' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '.2rem' }}><i aria-hidden="true" className={`fas ${ic}`} style={{ color: col, marginRight: '.4rem' }} />{r.title}</div>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary,#4a5568)' }}>{r.text}</div>
+                </div>); })}
+            </div></div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>Mock vs actual</h3><span className="text-muted text-sm">points near the dashed line predicted well</span></div>
+            <div className="card-body"><div style={{ height: 300 }}><canvas ref={scatterRef} /></div></div></div>
+          <div className="card"><div className="card-header"><h3>Cut-off ({th.cutoff}) reliability</h3></div>
+            <div className="card-body">
+              <table className="data-table"><thead><tr><th /><th className="text-center">Actual ≥ {th.cutoff}</th><th className="text-center">Actual &lt; {th.cutoff}</th></tr></thead>
+                <tbody>
+                  <tr><td><strong>Mock ≥ {th.cutoff}</strong></td><td className="text-center" style={{ color: 'var(--success)', fontWeight: 700 }}>{th.tp}</td><td className="text-center">{th.fp}</td></tr>
+                  <tr><td><strong>Mock &lt; {th.cutoff}</strong></td><td className="text-center">{th.fn}</td><td className="text-center" style={{ fontWeight: 700 }}>{th.tn}</td></tr>
+                </tbody></table>
+              <div className="text-sm mt-2 text-muted">Accuracy {th.accuracy}% · sensitivity {th.sensitivity}% · specificity {th.specificity}% · PPV {th.ppv}%</div>
+            </div></div>
+        </div>
+
+        {v.per_mock && v.per_mock.length > 1 && (
+          <div className="card mb-3"><div className="card-header"><h3>Which mock predicts best</h3></div>
+            <div className="card-body" style={{ padding: 0 }}>
+              <table className="data-table"><thead><tr><th>Mock</th><th className="text-right">Matched</th><th className="text-right">Correlation</th><th className="text-right">MAE</th></tr></thead>
+                <tbody>{v.per_mock.map((m) => (
+                  <tr key={m.number}><td><strong>{m.name}</strong></td><td className="text-right">{m.matched}</td>
+                    <td className="text-right" style={{ fontWeight: 600 }}>{m.correlation == null ? '—' : m.correlation}</td><td className="text-right">±{m.mae}</td></tr>
+                ))}</tbody></table>
+            </div></div>
+        )}
+
+        <div className="card"><div className="card-header"><h3>Candidate mock vs actual (largest gaps)</h3></div>
+          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="data-table"><thead><tr><th>Candidate</th><th className="text-right">Mock</th><th className="text-right">Actual</th><th className="text-right">Δ</th></tr></thead>
+              <tbody>{[...v.pairs].sort((a, b) => (a.actual - a.mock) - (b.actual - b.mock)).slice(0, 30).map((p) => {
+                const delta = p.actual - p.mock;
+                return <tr key={p.student_id}><td>{p.name}</td><td className="text-right">{p.mock}</td><td className="text-right">{p.actual}</td>
+                  <td className="text-right" style={{ color: delta < 0 ? '#e74a3b' : 'var(--success)', fontWeight: 600 }}>{delta > 0 ? '+' : ''}{delta}</td></tr>;
+              })}</tbody></table>
+          </div></div>
+      </>)}
+    </>
+  );
+}
+
 const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult,
-  bulk_entry: BulkEntry, add_result: AddResult, view_exam: ViewExam, student_progress: StudentProgress, analytics: Analytics };
+  bulk_entry: BulkEntry, add_result: AddResult, view_exam: ViewExam, student_progress: StudentProgress,
+  analytics: Analytics, validation: Validation };
 
 export default function MockJambApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

@@ -311,6 +311,41 @@ def analytics(exam_id):
                            grade_classes=_GRADE_CLASS)
 
 
+@mock_waec_bp.route('/exam/<int:exam_id>/validation')
+@login_required
+def validation(exam_id):
+    """How well this Mock WAEC predicted actual WAEC grades (per subject)."""
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    from utils.mock_validation import waec_validation
+    from models import WAECResult
+    year = request.args.get('year', type=int)
+    data = waec_validation(mock_exam_id=exam.id, year=year)
+    years = sorted({y for (y,) in db.session.query(WAECResult.exam_year).distinct().all()}, reverse=True)
+    return render_template('mock_waec/validation.html', exam=exam, v=data,
+                           years=years, selected_year=year or '')
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/validation/export')
+@login_required
+def validation_export(exam_id):
+    """Export the Mock→actual WAEC validation. ``format`` = pdf | excel."""
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    from utils.mock_validation import waec_validation
+    from utils.mock_validation_report import validation_pdf, validation_xlsx
+    from utils.web_exports import pdf_response, xlsx_response
+    year = request.args.get('year', type=int)
+    data = waec_validation(mock_exam_id=exam.id, year=year)
+    if not data or data['meta'].get('insufficient'):
+        flash('Not enough matched subject grades to validate this mock yet.', 'warning')
+        return redirect(url_for('mock_waec.validation', exam_id=exam.id))
+    stem = 'waec_mock_validation'
+    if (request.args.get('format') or 'pdf').lower() in ('excel', 'xlsx'):
+        return xlsx_response(validation_xlsx(data), f'{stem}.xlsx')
+    return pdf_response(validation_pdf(data), f'{stem}.pdf', inline=False)
+
+
 # =============================================================================
 # GRID ENTRY — fast spreadsheet-style entry across the whole cohort
 # =============================================================================

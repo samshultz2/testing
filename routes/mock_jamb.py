@@ -103,7 +103,8 @@ def index():
                         'above_250': round((c.get('above_250_pct') or 0) * c['student_count'] / 100)}
                        for c in (comparison_data or [])],
         'urls': {'create': url_for('mock_jamb.create_exam'), 'analytics': url_for('mock_jamb.analytics'),
-                 'predictions': url_for('results.predictions_dashboard'), 'self': url_for('mock_jamb.index')},
+                 'predictions': url_for('results.predictions_dashboard'), 'validation': url_for('mock_jamb.validation'),
+                 'self': url_for('mock_jamb.index')},
     })
 
 
@@ -701,8 +702,73 @@ def analytics():
         'comparison': comp_payload,
         'exams_stats': estats_payload,
         'urls': {'index': url_for('mock_jamb.index'), 'create': url_for('mock_jamb.create_exam'),
-                 'self': url_for('mock_jamb.analytics')},
+                 'validation': url_for('mock_jamb.validation'), 'self': url_for('mock_jamb.analytics')},
     })
+
+
+@mock_jamb_bp.route('/validation')
+@login_required
+def validation():
+    """Mock→actual validation: how well this session's Mock JAMB predicts the
+    real JAMB (correlation, error, bias, calibration, cut-off reliability)."""
+    from models import JAMBResult
+    from utils.mock_validation import jamb_validation
+    session_id = request.args.get('session_id', type=int)
+    mock_exam_id = request.args.get('mock_exam_id', type=int)
+    year = request.args.get('year', type=int)
+    active = get_active_session()
+    if not session_id and not mock_exam_id and active:
+        session_id = active.id
+    sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
+
+    exams = (scope_query(MockJAMBExam.query.filter_by(session_id=session_id), MockJAMBExam)
+             .order_by(MockJAMBExam.exam_number).all() if session_id else [])
+    scoped = {e.id for e in exams}
+    if mock_exam_id and mock_exam_id not in scoped:
+        mock_exam_id = None                       # out of the caller's branch scope
+    if not mock_exam_id and exams:
+        mock_exam_id = exams[-1].id               # default to the final mock
+    data = jamb_validation(mock_exam_id=mock_exam_id, year=year) if mock_exam_id else None
+    years = sorted({y for (y,) in db.session.query(JAMBResult.exam_year).distinct().all()}, reverse=True)
+
+    return _render({
+        'page': 'validation',
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'selected_session_id': session_id or '',
+        'exams': [{'id': e.id, 'display_name': e.display_name, 'number': e.exam_number} for e in exams],
+        'selected_mock_exam_id': mock_exam_id or '',
+        'years': years, 'selected_year': year or '',
+        'validation': data,
+        'urls': {'index': url_for('mock_jamb.index'), 'analytics': url_for('mock_jamb.analytics'),
+                 'self': url_for('mock_jamb.validation'),
+                 'export_pdf': url_for('mock_jamb.validation_export', format='pdf',
+                                       mock_exam_id=mock_exam_id or '', year=year or ''),
+                 'export_excel': url_for('mock_jamb.validation_export', format='excel',
+                                         mock_exam_id=mock_exam_id or '', year=year or '')},
+    })
+
+
+@mock_jamb_bp.route('/validation/export')
+@login_required
+def validation_export():
+    """Export the Mock→actual JAMB validation. ``format`` = pdf | excel."""
+    from utils.mock_validation import jamb_validation
+    from utils.mock_validation_report import validation_pdf, validation_xlsx
+    from utils.web_exports import pdf_response, xlsx_response
+    mock_exam_id = request.args.get('mock_exam_id', type=int)
+    year = request.args.get('year', type=int)
+    if mock_exam_id:
+        m = db.session.get(MockJAMBExam, mock_exam_id)
+        if m:
+            require_branch_access(m.branch_id)
+    data = jamb_validation(mock_exam_id=mock_exam_id, year=year) if mock_exam_id else None
+    if not data or data['meta'].get('insufficient'):
+        flash('Not enough matched candidates to validate this mock yet.', 'warning')
+        return redirect(url_for('mock_jamb.validation', mock_exam_id=mock_exam_id or ''))
+    stem = 'jamb_mock_validation'
+    if (request.args.get('format') or 'pdf').lower() in ('excel', 'xlsx'):
+        return xlsx_response(validation_xlsx(data), f'{stem}.xlsx')
+    return pdf_response(validation_pdf(data), f'{stem}.pdf', inline=False)
 
 
 # =============================================================================
