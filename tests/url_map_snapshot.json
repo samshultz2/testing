@@ -5195,6 +5195,13 @@
 ]
 ],
 [
+"subjects.blank_score_sheet",
+"/subjects/broadsheet/blank-sheet",
+[
+"GET"
+]
+],
+[
 "subjects.broadsheet",
 "/subjects/broadsheet",
 [

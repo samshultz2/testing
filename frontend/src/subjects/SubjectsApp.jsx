@@ -606,6 +606,51 @@ function BulkEntry({ d, notify }) {
 }
 
 // ---- Broadsheet ------------------------------------------------------------
+function ExportMenu({ urls }) {
+  const [open, setOpen] = useState(false);
+  const items = [
+    { href: urls.export, icon: 'fa-file-excel', label: 'Excel' },
+    { href: urls.export_pdf, icon: 'fa-file-pdf', label: 'PDF' },
+    { href: urls.export_word, icon: 'fa-file-word', label: 'Word' },
+    { href: urls.export_image, icon: 'fa-file-image', label: 'HD Image' },
+  ].filter((i) => i.href);
+  return (
+    <span style={{ position: 'relative', display: 'inline-block' }}>
+      <button type="button" className="btn btn-success btn-sm" onClick={() => setOpen((o) => !o)}>
+        <i aria-hidden="true" className="fas fa-download" /> Export <i aria-hidden="true" className="fas fa-caret-down" />
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+          <div className="card" style={{ position: 'absolute', right: 0, top: '110%', zIndex: 21, minWidth: 170, padding: '.35rem', boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>
+            {items.map((i) => (
+              <a key={i.label} href={i.href} data-native download onClick={() => setOpen(false)}
+                 className="btn btn-light btn-sm" style={{ display: 'flex', gap: '.5rem', width: '100%', justifyContent: 'flex-start', marginBottom: 2 }}>
+                <i aria-hidden="true" className={'fas ' + i.icon} /> {i.label}
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
+function BlankSheetButton({ url }) {
+  if (!url) return null;
+  const go = () => {
+    const subj = window.prompt('Subject name for the sheet (optional — leave blank for a write-in space):', '');
+    if (subj === null) return;                    // cancelled
+    const sep = url.includes('?') ? '&' : '?';
+    window.open(subj.trim() ? `${url}${sep}subject=${encodeURIComponent(subj.trim())}` : url, '_blank');
+  };
+  return (
+    <button type="button" className="btn btn-secondary btn-sm" onClick={go} title="Printable blank score-entry sheet (A4)">
+      <i aria-hidden="true" className="fas fa-file-lines" /> Blank sheet
+    </button>
+  );
+}
+
 function Broadsheet({ d, notify }) {
   const nav = useNav();
   const compute = async () => {
@@ -639,7 +684,8 @@ function Broadsheet({ d, notify }) {
               <a href={d.urls.affective} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-star-half-stroke" /> Behaviour</a>
               <a href={d.urls.comments} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-comment-dots" /> Comments</a>
               {d.urls.analytics && <a href={d.urls.analytics} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-column" /> Analytics</a>}
-              <a href={d.urls.export} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-download" /> Export</a>
+              <ExportMenu urls={d.urls} />
+              <BlankSheetButton url={d.urls.blank_sheet} />
               <span className="badge badge-info">{d.rows.length} Students</span>
             </div>
           </div>

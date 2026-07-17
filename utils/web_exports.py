@@ -17,6 +17,8 @@ from flask import Response
 
 XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 PDF_MIME = 'application/pdf'
+DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+PNG_MIME = 'image/png'
 
 # Characters that make Excel/Sheets treat a cell as a formula.
 _FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
@@ -94,4 +96,22 @@ def pdf_response(data, filename, inline=True):
     if hasattr(data, 'getvalue'):
         data = data.getvalue()
     return Response(data, mimetype=PDF_MIME,
+                    headers=_disposition(filename, inline))
+
+
+def docx_response(data, filename, inline=False):
+    """Wrap Word (.docx) bytes (or a python-docx ``Document`` / ``BytesIO``)."""
+    if hasattr(data, 'save') and not hasattr(data, 'getvalue'):   # python-docx Document
+        buf = BytesIO(); data.save(buf); data = buf
+    if hasattr(data, 'getvalue'):
+        data = data.getvalue()
+    return Response(data, mimetype=DOCX_MIME,
+                    headers=_disposition(filename, inline))
+
+
+def png_response(data, filename, inline=True):
+    """Wrap PNG image bytes (or a ``BytesIO``) in a response."""
+    if hasattr(data, 'getvalue'):
+        data = data.getvalue()
+    return Response(data, mimetype=PNG_MIME,
                     headers=_disposition(filename, inline))

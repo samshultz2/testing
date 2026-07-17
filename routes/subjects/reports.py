@@ -132,6 +132,10 @@ def broadsheet():
                  'affective': url_for('subjects.affective', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'comments': url_for('subjects.comments', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'export': url_for('subjects.export_broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'export_pdf': url_for('subjects.export_broadsheet', term_id=term_id or '', assignment_id=assignment_id or '', format='pdf'),
+                 'export_word': url_for('subjects.export_broadsheet', term_id=term_id or '', assignment_id=assignment_id or '', format='word'),
+                 'export_image': url_for('subjects.export_broadsheet', term_id=term_id or '', assignment_id=assignment_id or '', format='image'),
+                 'blank_sheet': url_for('subjects.blank_score_sheet', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'analytics': url_for('subjects.analytics_dashboard', term_id=term_id or '', assignment_id=assignment_id or '')},
     })
@@ -422,28 +426,44 @@ def report_cards_pdf_batch():
 @subjects_bp.route('/broadsheet/export')
 @login_required
 def export_broadsheet():
-    """Export broadsheet to Excel"""
+    """Export a class broadsheet. ``format`` = excel (default) | pdf | word | image."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from flask import Response
     import io
-    
+
     term_id = request.args.get('term_id', type=int)
     assignment_id = request.args.get('assignment_id', type=int)
-    
+    fmt = (request.args.get('format') or 'excel').lower()
+
     if not term_id or not assignment_id:
         flash('Select term and class first.', 'error')
         return redirect(url_for('subjects.broadsheet'))
-    
+
     selected_term = db.session.get(Term, term_id)
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
-    
+
     if not selected_term or not selected_assignment:
         flash('Invalid selection.', 'error')
         return redirect(url_for('subjects.broadsheet'))
     if not can_access_class(assignment_id):
         flash('You do not have access to that class.', 'error')
         return redirect(url_for('subjects.broadsheet'))
+
+    # Non-Excel formats are rendered by the shared exporter (PDF / Word / HD image).
+    if fmt in ('pdf', 'word', 'docx', 'image', 'png'):
+        from utils import broadsheet_export as bx
+        from utils.web_exports import pdf_response, docx_response, png_response
+        base = (selected_assignment.display_name or 'broadsheet').replace(' ', '_')
+        stem = f"broadsheet_{base}_{selected_term.name.replace(' ', '_')}"
+        if fmt == 'pdf':
+            data = bx.broadsheet_pdf(term_id, assignment_id)
+            return pdf_response(data, f'{stem}.pdf', inline=False)
+        if fmt in ('word', 'docx'):
+            data = bx.broadsheet_docx(term_id, assignment_id)
+            return docx_response(data, f'{stem}.docx')
+        data = bx.broadsheet_png(term_id, assignment_id)
+        return png_response(data, f'{stem}.png', inline=False)
 
     # Get data (same as broadsheet view)
     class_subjects = ClassSubject.query.filter_by(
@@ -558,6 +578,39 @@ def export_broadsheet():
     filename = f"broadsheet_{selected_assignment.display_name.replace(' ', '_')}_{selected_term.name}.xlsx"
 
     return xlsx_response(wb, filename)
+
+
+@subjects_bp.route('/broadsheet/blank-sheet')
+@login_required
+def blank_score_sheet():
+    """A printable, A4 blank score-entry sheet for a class arm: the school's own
+    assessment columns (CAs, optional HA, optional P.E/M.E, CBT, PBT/Theory, Exam
+    Total, General Total) with the roster pre-printed in First / Middle / Surname
+    columns and a blank space for the subject name."""
+    from utils.broadsheet_export import blank_sheet_pdf, blank_sheet_filename
+    from utils.web_exports import pdf_response
+
+    term_id = request.args.get('term_id', type=int)
+    assignment_id = request.args.get('assignment_id', type=int)
+    subject_name = (request.args.get('subject') or '').strip()[:60]
+
+    if not term_id or not assignment_id:
+        flash('Select term and class first.', 'error')
+        return redirect(url_for('subjects.broadsheet'))
+    selected_term = db.session.get(Term, term_id)
+    selected_assignment = db.session.get(ClassArmAssignment, assignment_id)
+    if not selected_term or not selected_assignment:
+        flash('Invalid selection.', 'error')
+        return redirect(url_for('subjects.broadsheet'))
+    if not can_access_class(assignment_id):
+        flash('You do not have access to that class.', 'error')
+        return redirect(url_for('subjects.broadsheet'))
+
+    data = blank_sheet_pdf(term_id, assignment_id, subject_name=subject_name)
+    if not data:
+        flash('Could not build the score sheet.', 'error')
+        return redirect(url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))
+    return pdf_response(data, blank_sheet_filename(selected_assignment, selected_term), inline=True)
 
 
 @subjects_bp.route('/report-cards/print-all')
