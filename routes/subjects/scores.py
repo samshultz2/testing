@@ -756,6 +756,9 @@ def scoresheet_save():
     warnings = []
     dropped = []          # rows that carried scores but weren't linked to a student
     items = []            # (student_id, at_id, raw, max_score)
+    matched_rows = 0
+    cells_with_values = 0
+    bad_max = 0           # matched cells whose column had no resolvable max (unknown at id)
 
     try:
         for r in range(row_count):
@@ -770,6 +773,7 @@ def scoresheet_save():
             student = db.session.get(Student, student_pk)
             if not student:
                 continue
+            matched_rows += 1
 
             # Adopt the scanned student number only when the student currently
             # has an auto-generated STU##### id (never overwrite a manual id).
@@ -784,17 +788,36 @@ def scoresheet_save():
                     adopted += 1
 
             for at_id, raw in cells.items():
-                items.append((student.id, at_id, raw, _max_for(at_id)))
+                if (raw or '').strip():
+                    cells_with_values += 1
+                mx = _max_for(at_id)
+                if mx is None:
+                    bad_max += 1
+                items.append((student.id, at_id, raw, mx))
 
         counts = persist_scores(term_id, assignment_id, class_subject_id,
                                 class_subject.subject_id, items, allow_delete=False)
+        if counts is None:                       # term became locked between load and save
+            db.session.rollback()
+            flash('Results for this term are locked — nothing was saved.', 'error')
+            return redirect(url_for('subjects.scores_entry', term_id=term_id,
+                                    assignment_id=assignment_id, class_subject_id=class_subject_id))
         db.session.commit()
         msg = f'Saved {counts["saved"]} scores.'
         if counts['rejected']:
             msg += f' {counts["rejected"]} skipped (outside the allowed range).'
         if counts['blocked']:
             msg += f' {counts["blocked"]} left unchanged (edit permission required).'
-        flash(msg, 'success' if not dropped else 'warning')
+        flash(msg, 'success' if (counts['saved'] and not dropped) else 'warning')
+        # Diagnostic breakdown when little/nothing saved despite submitted values —
+        # tells the user (and us) exactly where the scores went.
+        if counts['saved'] == 0 and (cells_with_values or matched_rows):
+            unchanged = cells_with_values - counts['rejected'] - counts['blocked']
+            flash(f'Diagnostic — rows submitted: {row_count}; matched to a student: '
+                  f'{matched_rows}; cells with a value: {cells_with_values}; '
+                  f'rejected (out of range): {counts["rejected"]}; blocked (locked/permission): '
+                  f'{counts["blocked"]}; unknown column: {bad_max}; already had this value: '
+                  f'{max(unchanged, 0)}.', 'info')
         if adopted:
             flash(f'Adopted scanned student number for {adopted} student(s).', 'info')
         if dropped:
