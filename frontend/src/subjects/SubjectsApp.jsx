@@ -1148,6 +1148,20 @@ function Institution({ d, notify }) {
   const a = d.analytics;
   const s = (a && a.summary) || {};
   const pm = s.pass_mark || 50;
+  const [auto, setAuto] = useState(!!d.auto_board_pack);
+  const [emailing, setEmailing] = useState(false);
+  const emailOwners = async () => {
+    if (emailing) return;
+    setEmailing(true);
+    const r = await submitJson(d.urls.email_report, { term_id: d.term_id, scope: d.scope, scope_id: d.scope_id });
+    setEmailing(false);
+    if (r.ok) notify('success', r.message); else notify('error', r.error || 'Could not send.');
+  };
+  const toggleAuto = async (on) => {
+    setAuto(on);
+    const r = await submitJson(d.urls.toggle_auto, { enabled: on ? '1' : '0' });
+    if (r.ok) notify('success', r.message); else { setAuto(!on); notify('error', r.error || 'Could not change.'); }
+  };
   const cardLink = (id) => `${d.report_card_base}${id}?term_id=${d.term_id}`;
   const drill = (u) => navParams(nav.go, d.self_url, { term_id: d.term_id, scope: u.scope, scope_id: u.scope_id });
   const refresh = () => { navParams(nav.go, d.self_url, { term_id: d.term_id, scope: d.scope, scope_id: d.scope_id, refresh: 1 }); notify('success', 'Recomputing…'); };
@@ -1158,6 +1172,10 @@ function Institution({ d, notify }) {
       <div className="page-header"><h1>Institution Analytics</h1>
         <div className="page-header-actions">
           <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><i aria-hidden="true" className="fas fa-rotate" /> Refresh</button>
+          {a && s.assessed && d.is_admin && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={emailOwners} disabled={emailing} title="Email this board pack to the school owners/admins">
+              <i aria-hidden="true" className="fas fa-envelope" /> {emailing ? 'Sending…' : 'Email to owners'}</button>
+          )}
           {a && s.assessed ? (() => {
             const base = d.urls.report_base; const sep = base.includes('?') ? '&' : '?';
             const exp = (fmt) => `${base}${sep}format=${fmt}`;
@@ -1166,6 +1184,15 @@ function Institution({ d, notify }) {
         </div>
       </div>
       <ScopePicker d={d} />
+      {d.is_admin && (
+        <div className="text-sm" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '-.4rem 0 .8rem' }}>
+          <label className="form-check" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', cursor: 'pointer' }}>
+            <input type="checkbox" checked={auto} onChange={(e) => toggleAuto(e.target.checked)} />
+            <span><i aria-hidden="true" className="fas fa-clock" /> Auto-email the board pack to owners each term</span>
+          </label>
+          <span className="text-muted">(fires once when a term's results are published)</span>
+        </div>
+      )}
 
       {needsPick ? (
         <div className="card"><div className="card-body"><Empty icon="fa-layer-group" title={`Select a ${d.scope}`}><p>Choose a {d.scope} above to roll up its results.</p></Empty></div></div>

@@ -259,8 +259,9 @@ def institution_analytics():
         data = org_analytics(term_id, scope, scope_id, _org_allowed_ids(term_id),
                              use_cache=(request.args.get('refresh') != '1'))
     return _render({
-        'page': 'institution', 'nav': _nav_urls(),
+        'page': 'institution', 'nav': _nav_urls(), 'is_admin': is_admin(),
         'term_id': term_id or '', 'scope': scope, 'scope_id': scope_id or '',
+        'auto_board_pack': bool(SchoolSettings.get('auto_board_pack')),
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'analytics': data,
         'self_url': url_for('subjects.institution_analytics'),
@@ -274,8 +275,54 @@ def institution_analytics():
             'subject_base': url_for('subjects.subject_scorecard_view',
                                     term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
             'compose': url_for('comms.compose'),
+            'email_report': url_for('subjects.institution_email'),
+            'toggle_auto': url_for('subjects.institution_auto_email'),
         },
     })
+
+
+@subjects_bp.route('/analytics/institution/email', methods=['POST'])
+@login_required
+def institution_email():
+    """Email the board pack for a scope to the school's owners/admins now."""
+    if not is_admin():
+        return _err('Only administrators can email the board pack.',
+                    url_for('subjects.institution_analytics'))
+    from utils.results_notify import deliver_board_pack, board_pack_recipients
+    from utils import mailer
+    term_id = request.form.get('term_id', type=int)
+    scope = request.form.get('scope') or 'school'
+    scope_id = request.form.get('scope_id') or None
+    if not term_id:
+        return _err('Select a term first.', url_for('subjects.institution_analytics'))
+    if not mailer.is_configured():
+        return _err('Email is not configured — set up SMTP in Settings first.',
+                    url_for('subjects.institution_analytics'))
+    if not board_pack_recipients():
+        return _err('No owner/admin email addresses on file to send to.',
+                    url_for('subjects.institution_analytics'))
+    res = deliver_board_pack(term_id=term_id, scope=scope, scope_id=scope_id, force=True)
+    if res.get('ok'):
+        return _ok(f"Board pack emailed to {res['sent']} recipient(s).",
+                   url_for('subjects.institution_analytics'))
+    reason = {'no scores': 'No scores entered for this scope yet.'}.get(
+        res.get('reason'), 'Could not send the board pack.')
+    return _err(reason, url_for('subjects.institution_analytics'))
+
+
+@subjects_bp.route('/analytics/institution/auto-email', methods=['POST'])
+@login_required
+def institution_auto_email():
+    """Toggle the once-per-term automatic board-pack delivery to owners."""
+    if not is_admin():
+        return _err('Only administrators can change this.',
+                    url_for('subjects.institution_analytics'))
+    on = (request.form.get('enabled') in ('1', 'true', 'on', 'yes'))
+    SchoolSettings.set('auto_board_pack', 'yes' if on else '', 'string',
+                       'Auto-email the institution board pack to owners each published term')
+    state = 'on' if on else 'off'
+    return _ok(f'Automatic term board-pack email is now {state}.',
+               url_for('subjects.institution_analytics'))
 
 
 @subjects_bp.route('/analytics/institution/report.pdf')

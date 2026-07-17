@@ -109,6 +109,13 @@ def _tick_one(app):
             run_daily_refresh_if_due(app)
         except Exception:
             app.logger.exception('exam analytics refresh job failed')
+        # Term-end board-pack delivery: email the institution analytics pack to
+        # owners once per published term. Opt-in via the institution view.
+        try:
+            from utils.results_notify import run_board_pack_delivery_if_due
+            run_board_pack_delivery_if_due(app)
+        except Exception:
+            app.logger.exception('board pack delivery job failed')
     finally:
         if is_pg:
             db.session.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': _SCHED_LOCK_KEY})

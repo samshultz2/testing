@@ -179,6 +179,58 @@ def test_attendance_correlation_and_bands(app):
         assert att['correlation'] is not None
 
 
+def test_board_pack_recipients_and_delivery_guard(app):
+    from models import db, SchoolSettings
+    from utils.results_notify import board_pack_recipients, deliver_board_pack
+    ids = _seed(app)
+    with app.app_context():
+        # no SMTP configured in tests -> delivery reports the reason, sends nothing
+        SchoolSettings.set('board_pack_recipients', 'owner@example.com', 'string', 'x')
+        assert 'owner@example.com' in board_pack_recipients()
+        res = deliver_board_pack(term_id=ids['term'], force=True)
+        assert res['sent'] == 0
+        assert res['reason'] in ('email not configured', 'no recipients', 'send failed', 'no scores')
+
+
+def _csrf(c):
+    import re
+    html = c.get('/students').get_data(as_text=True)
+    m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', html)
+    return m.group(1) if m else None
+
+
+def test_auto_email_toggle_route(app):
+    from models import SchoolSettings
+    ids = _seed(app)
+    c = _admin(app)
+    tok = _csrf(c)
+    r = c.post('/subjects/analytics/institution/auto-email',
+               headers={'X-Requested-With': 'fetch'},
+               data={'enabled': '1', '_csrf_token': tok}).get_json()
+    assert r['ok']
+    with app.app_context():
+        assert SchoolSettings.get('auto_board_pack') == 'yes'
+    r = c.post('/subjects/analytics/institution/auto-email',
+               headers={'X-Requested-With': 'fetch'},
+               data={'enabled': '0', '_csrf_token': tok}).get_json()
+    assert r['ok']
+    with app.app_context():
+        assert not SchoolSettings.get('auto_board_pack')
+
+
+def test_institution_email_route_needs_config(app):
+    ids = _seed(app)
+    c = _admin(app)
+    tok = _csrf(c)
+    # no SMTP in tests -> a clean error, never a 500
+    r = c.post('/subjects/analytics/institution/email',
+               headers={'X-Requested-With': 'fetch'},
+               data={'term_id': ids['term'], 'scope': 'school', '_csrf_token': tok})
+    assert r.status_code in (200, 400)
+    j = r.get_json()
+    assert j is not None and (j.get('error') or j.get('ok') is False)
+
+
 def test_empty_scope_is_safe(app):
     from utils.results_analytics_org import org_analytics
     with app.app_context():
