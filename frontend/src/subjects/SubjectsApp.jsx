@@ -1365,6 +1365,16 @@ function Teacher({ d, notify }) {
     <>
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chalkboard-user" /> Teacher scorecard</h1>
         <div className="page-header-actions">
+          {hasData && d.is_admin && d.staff_id && d.urls.compose && (() => {
+            const body = `Dear ${d.teacher_name}, I would like to discuss your class results for this term and how we can support stronger outcomes. Please see me at your earliest convenience. Thank you.`;
+            const url = `${d.urls.compose}?to=staff&staff_ids=${d.staff_id}&body=${encodeURIComponent(body)}`;
+            return <a href={url} className="btn btn-primary btn-sm" title="Message this teacher privately"><i aria-hidden="true" className="fas fa-paper-plane" /> Message this teacher</a>;
+          })()}
+          {hasData && (() => {
+            const base = d.urls.report_base; const sep = base.includes('?') ? '&' : '?';
+            const exp = (fmt) => `${base}${sep}format=${fmt}`;
+            return <ExportMenu urls={{ export: exp('excel'), export_pdf: exp('pdf'), export_image: exp('image') }} />;
+          })()}
           <a href={d.back_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Institution</a>
         </div>
       </div>

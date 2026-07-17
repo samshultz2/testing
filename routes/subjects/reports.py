@@ -327,15 +327,46 @@ def teacher_scorecard_view():
     if term_id and name:
         data = teacher_scorecard(term_id, name, _org_allowed_ids(term_id))
     terms = Term.query.order_by(Term.id.desc()).all()
+    staff_id = (data or {}).get('staff_id') if data else None
     return _render({
-        'page': 'teacher', 'nav': _nav_urls(),
-        'term_id': term_id or '', 'teacher_name': name,
+        'page': 'teacher', 'nav': _nav_urls(), 'is_admin': is_admin(),
+        'term_id': term_id or '', 'teacher_name': name, 'staff_id': staff_id,
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'scorecard': data,
         'self_url': url_for('subjects.teacher_scorecard_view'),
         'back_url': url_for('subjects.institution_analytics', term_id=term_id or '',
                             scope=scope, scope_id=scope_id or ''),
+        'urls': {
+            'report_base': url_for('subjects.teacher_report', term_id=term_id or '', name=name),
+            'compose': url_for('comms.compose'),
+        },
     })
+
+
+@subjects_bp.route('/analytics/teacher/report')
+@login_required
+def teacher_report():
+    """Teacher scorecard export. ``format`` = pdf (default) | excel | image."""
+    from utils.analytics_org_pdf import (teacher_pdf, teacher_png, teacher_xlsx,
+                                         teacher_filename)
+    from utils.web_exports import pdf_response, xlsx_response, png_response
+    from utils.results_analytics_org import teacher_scorecard
+    term_id = request.args.get('term_id', type=int)
+    name = (request.args.get('name') or '').strip()
+    fmt = (request.args.get('format') or 'pdf').lower()
+    if not term_id or not name:
+        flash('Select a term and teacher first.', 'error')
+        return redirect(url_for('subjects.institution_analytics'))
+    data = teacher_scorecard(term_id, name, _org_allowed_ids(term_id))
+    if not data or not (data.get('summary') or {}).get('entries'):
+        flash('No scores attributed to that teacher yet.', 'warning')
+        return redirect(url_for('subjects.teacher_scorecard_view', term_id=term_id, name=name))
+    term = db.session.get(Term, term_id)
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(teacher_xlsx(data, term), teacher_filename(data, term, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(teacher_png(data, term), teacher_filename(data, term, 'png'), inline=False)
+    return pdf_response(teacher_pdf(data, term), teacher_filename(data, term, 'pdf'), inline=False)
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])

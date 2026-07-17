@@ -700,6 +700,18 @@ def compose():
         pre_students = [{'id': s.id, 'label': s.full_name} for s in rows]
         if pre_students:
             pre_audience = 'students'
+    # Specific staff carried over (e.g. "Message this teacher" from a scorecard).
+    # Admin-only, since staff messaging is admin-gated.
+    pre_staff, pre_to = [], (request.args.get('to') or '').lower()
+    if _is_admin():
+        sid_args = request.args.getlist('staff_ids', type=int)
+        if sid_args:
+            from models import StaffMember
+            rows = scope_query(StaffMember.query.filter(StaffMember.id.in_(sid_args[:200]),
+                                                        StaffMember.is_active.is_(True)), StaffMember).all()
+            pre_staff = [{'id': s.id, 'label': s.full_name} for s in rows]
+            if pre_staff:
+                pre_to = 'staff'
     # An explicit drafted body may be passed in (stripped for safety).
     if request.args.get('body'):
         pre_body = strip_tags(request.args.get('body'))
@@ -711,7 +723,8 @@ def compose():
                    if _is_admin() else [])
     return _render({
         'page': 'compose', 'nav': _nav_urls(), 'is_admin': _is_admin(),
-        'pre_students': pre_students,
+        'pre_students': pre_students, 'pre_staff': pre_staff,
+        'pre_to': pre_to if pre_to in ('parents', 'staff') else '',
         'term_id': term.id if term else '',
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'classes': [{'id': c.id, 'name': c.name} for c in classes],
@@ -751,6 +764,7 @@ def _recipient_spec(form):
             'to': 'staff',
             'staff_scope': (form.get('staff_scope') or 'all'),
             'department_id': form.get('department_id', type=int),
+            'staff_ids': form.getlist('staff_ids', type=int),
             'exclude_ids': form.getlist('exclude_ids', type=int),
         }
     return {

@@ -695,6 +695,31 @@ def _selectors(term_id, allowed_ids):
     return {'sections': sections, 'classes': class_list, 'arms': arms}
 
 
+def resolve_teacher_staff(name):
+    """Best-effort match of a free-text ``teacher_name`` to an active StaffMember
+    id (so an admin can message that specific teacher). Titles are stripped and
+    both name orders are tried. Returns the id or None when there's no clear hit."""
+    n = (name or '').strip().lower()
+    if not n:
+        return None
+    for title in ('prof. ', 'prof ', 'dr. ', 'dr ', 'mr. ', 'mr ', 'mrs. ', 'mrs ',
+                  'miss ', 'ms. ', 'ms '):
+        if n.startswith(title):
+            n = n[len(title):].strip()
+            break
+    from models import StaffMember
+    for st in StaffMember.query.filter_by(is_active=True).all():
+        fn = (st.first_name or '').strip().lower()
+        sn = (st.surname or '').strip().lower()
+        if not (fn or sn):
+            continue
+        if n in (f'{fn} {sn}'.strip(), f'{sn} {fn}'.strip()):
+            return st.id
+        if fn and sn and fn in n and sn in n:
+            return st.id
+    return None
+
+
 def teacher_scorecard(term_id, teacher_name, allowed_ids=None):
     """Per-class, per-subject breakdown for one teacher in a term — the drill-down
     behind the teacher-effectiveness league. Returns overall KPIs, a row per
@@ -797,6 +822,7 @@ def teacher_scorecard(term_id, teacher_name, allowed_ids=None):
 
     return {
         'teacher': name,
+        'staff_id': resolve_teacher_staff(name),
         'summary': {'classes': len({r['class'] for r in rows}), 'subjects': len(subj_roll),
                     'students': len(students_seen), 'entries': len(all_totals),
                     'average': overall_avg, 'pass_rate': overall_pr, 'completion': completion,

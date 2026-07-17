@@ -245,6 +245,33 @@ def test_teacher_scorecard_route(app):
     assert b'Mr A' in r.data                        # teacher name in the embedded payload
 
 
+def test_teacher_report_formats(app):
+    ids = _seed(app)
+    c = _admin(app)
+    q = f"term_id={ids['term']}&name=Mr%20A"
+    r = c.get(f"/subjects/analytics/teacher/report?{q}&format=excel")
+    assert r.status_code == 200 and 'spreadsheetml' in r.headers['Content-Type']
+    assert r.get_data()[:2] == b'PK'
+    r = c.get(f"/subjects/analytics/teacher/report?{q}&format=image")
+    assert r.status_code == 200 and r.headers['Content-Type'] == 'image/png'
+    r = c.get(f"/subjects/analytics/teacher/report?{q}")
+    assert r.status_code == 200 and r.get_data()[:4] == b'%PDF'
+
+
+def test_resolve_teacher_staff(app):
+    from models import db, StaffMember, Branch
+    from utils.results_analytics_org import resolve_teacher_staff
+    with app.app_context():
+        bid = Branch.get_default().id
+        st = StaffMember(first_name='John', surname='Doe', staff_type='Teaching',
+                         is_active=True, branch_id=bid)
+        db.session.add(st); db.session.commit()
+        assert resolve_teacher_staff('John Doe') == st.id
+        assert resolve_teacher_staff('Mr John Doe') == st.id
+        assert resolve_teacher_staff('Doe John') == st.id
+        assert resolve_teacher_staff('Nobody Here') is None
+
+
 def test_institution_export_formats(app):
     ids = _seed(app)
     c = _admin(app)

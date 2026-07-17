@@ -840,7 +840,8 @@ export default function CommunicationApp({ data }) {
 function Compose({ d, notify }) {
   const nav = useNav();
   const canStaff = !!d.is_admin;
-  const [to, setTo] = useState('parents');       // parents | staff
+  const [to, setTo] = useState(d.pre_to || 'parents');       // parents | staff
+  const [pickedStaff, setPickedStaff] = useState(d.pre_staff || []);   // [{id,label}] specific staff
   const [audience, setAudience] = useState(d.pre_audience || 'all');
   const [termId, setTermId] = useState(d.term_id);
   const [classId, setClassId] = useState(d.pre_class || '');
@@ -871,6 +872,7 @@ function Compose({ d, notify }) {
   const buildSpec = () => {
     const sp = { to };
     if (to === 'staff') {
+      if (pickedStaff.length) sp.staff_ids = pickedStaff.map((p) => p.id);
       sp.staff_scope = staffScope;
       if (staffScope === 'department' && deptId) sp.department_id = deptId;
     } else {
@@ -901,7 +903,7 @@ function Compose({ d, notify }) {
   };
   const schedulePreview = () => { clearTimeout(ptRef.current); ptRef.current = setTimeout(runPreview, 400); };
   useEffect(() => { schedulePreview(); /* eslint-disable-next-line */ },
-    [to, audience, termId, classId, armId, picked, excluded, gender, stream, staffScope, deptId, body, channel]);
+    [to, audience, termId, classId, armId, picked, excluded, gender, stream, staffScope, deptId, pickedStaff, body, channel]);
 
   const insertPh = (ph) => {
     const el = bodyRef.current; const s = el ? el.selectionStart : body.length; const e = el ? el.selectionEnd : body.length;
@@ -981,13 +983,27 @@ function Compose({ d, notify }) {
 
                 {to === 'staff' ? (
                   <>
+                    {pickedStaff.length > 0 && (
+                      <div className="form-group"><label className="form-label">Specific staff</label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.35rem' }}>
+                          {pickedStaff.map((p) => (
+                            <span key={p.id} className="badge" style={{ background: 'var(--primary,#0D6A4E)', color: '#fff', display: 'inline-flex', gap: '.4rem', alignItems: 'center' }}>
+                              {p.label}
+                              <button type="button" aria-label={`Remove ${p.label}`} onClick={() => setPickedStaff((xs) => xs.filter((x) => x.id !== p.id))}
+                                style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}>×</button>
+                            </span>))}
+                        </div>
+                        <p className="form-hint">Message goes only to the staff above. Clear them to use a group instead.</p>
+                      </div>
+                    )}
+                    {pickedStaff.length === 0 && (
                     <div className="form-group"><label className="form-label">Staff group</label>
                       <select className="form-control" value={staffScope} onChange={(e) => setStaffScope(e.target.value)}>
                         <option value="all">All staff</option>
                         <option value="teaching">Teaching staff</option>
                         <option value="non-teaching">Non-teaching staff</option>
                         <option value="department">By department</option>
-                      </select></div>
+                      </select></div>)}
                     {staffScope === 'department' && (
                       <div className="form-group"><label className="form-label">Department</label>
                         <select className="form-control" value={deptId} onChange={(e) => setDeptId(e.target.value)}>

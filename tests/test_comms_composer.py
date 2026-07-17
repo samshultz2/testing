@@ -224,3 +224,20 @@ def test_compose_prefills_specific_students_and_body(app):
     assert 'Oser' in html and 'Comp' in html        # the student label is embedded
     assert '"pre_audience": "students"' in html
     assert 'Please see the teacher' in html         # drafted body carried over
+
+
+def test_compose_prefills_specific_staff(app):
+    """'Message this teacher' deep-link pre-selects a specific staff member and
+    switches the composer to staff mode (admin only)."""
+    from models import db, StaffMember, Branch
+    client = _admin(app)
+    with app.app_context():
+        bid = Branch.get_default().id
+        st = StaffMember(first_name='Grace', surname='Ade', staff_type='Teaching',
+                         is_active=True, branch_id=bid)
+        db.session.add(st); db.session.commit()
+        sid = st.id
+    html = client.get(f'/communication/compose?to=staff&staff_ids={sid}&body=Please+see+me').get_data(as_text=True)
+    assert '"pre_staff"' in html
+    assert 'Grace' in html and 'Ade' in html
+    assert '"pre_to": "staff"' in html
