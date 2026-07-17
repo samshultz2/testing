@@ -227,11 +227,18 @@ def _sheet_columns(class_subject, term=None):
     from utils.assessments import subject_columns
     from utils.waec_ocr import SHEET_COLUMN_ORDER
     cols = subject_columns(class_subject.subject, term=term)  # [(at, max)] in storage order
-    present = {at.short_name: (at, mx) for at, mx in cols}
+    # Collapse assessment types that share a short name. A mis-seeded tenant DB can
+    # hold two active "EXAM"/"CBT" types; without this the sheet showed each column
+    # twice and split a single pasted value across the duplicate ids (scores then
+    # looked lost on the report card). Keep the first (lowest order) per short name.
+    present = {}
+    for at, mx in cols:
+        sn = (at.short_name or at.name or '').upper()
+        present.setdefault(sn, (at, mx))
     ordered = [present[sn] for sn in SHEET_COLUMN_ORDER if sn in present]
-    # Append any columns not covered by the canonical order (defensive).
-    seen = {at.id for at, _ in ordered}
-    ordered += [(at, mx) for at, mx in cols if at.id not in seen]
+    # Append any remaining columns not covered by the canonical order (defensive).
+    seen_sn = {sn for sn in SHEET_COLUMN_ORDER if sn in present}
+    ordered += [(at, mx) for sn, (at, mx) in present.items() if sn not in seen_sn]
     return ordered
 
 

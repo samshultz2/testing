@@ -510,7 +510,7 @@ def scoresheet_scan():
 
     from utils.waec_ocr import (
         tesseract_available, extract_text, extract_text_from_pdf,
-        parse_score_sheet, match_student, vision_available, vision_extract_scoresheet,
+        parse_score_sheet, match_students_unique, vision_available, vision_extract_scoresheet,
     )
 
     ctx = _scan_selector_context()
@@ -575,15 +575,23 @@ def scoresheet_scan():
         students = [e.student for e in enrollments]
         by_student_id = {s.student_id: s for s in students}
 
+        # 1) Exact matches on a scanned student number reserve those pupils.
+        matched = [None] * len(parsed)
+        used = set()
+        for i, p in enumerate(parsed):
+            s = by_student_id.get(p['student_num']) if p['student_num'] else None
+            if s and s.id not in used:
+                matched[i] = s
+                used.add(s.id)
+        # 2) Greedy unique fuzzy match for the rest — no two rows share one pupil.
+        rest_idx = [i for i in range(len(parsed)) if matched[i] is None]
+        pool = [s for s in students if s.id not in used]
+        fuzzy = match_students_unique([parsed[i]['name'] for i in rest_idx], pool)
+        for i, (s, _sc) in zip(rest_idx, fuzzy):
+            matched[i] = s
+
         rows = []
-        for p in parsed:
-            matched = None
-            # 1) exact match on a scanned student number
-            if p['student_num'] and p['student_num'] in by_student_id:
-                matched = by_student_id[p['student_num']]
-            # 2) fuzzy match on the name
-            if not matched:
-                matched, _ = match_student(p['name'], students)
+        for i, p in enumerate(parsed):
             # Map the positional cells to assessment-type ids.
             cell_map = {}
             for (at, _mx), value in zip(sheet_cols, p['cells']):
@@ -591,7 +599,7 @@ def scoresheet_scan():
             rows.append({
                 'student_num': p['student_num'],
                 'name': p['name'],
-                'matched_id': matched.id if matched else None,
+                'matched_id': matched[i].id if matched[i] else None,
                 'cells': cell_map,
             })
 
@@ -614,7 +622,7 @@ def scoresheet_paste():
         flash('You do not have permission to enter scores.', 'error')
         return redirect(url_for('main.dashboard'))
 
-    from utils.waec_ocr import match_student
+    from utils.waec_ocr import match_students_unique
 
     ctx = _scan_selector_context()
     cs = db.session.get(ClassSubject, ctx['class_subject_id']) if ctx['class_subject_id'] else None
@@ -647,19 +655,32 @@ def scoresheet_paste():
         students = [e.student for e in enrollments]
         by_student_id = {s.student_id: s for s in students}
 
+        # 1) Exact matches on the school's own student number reserve those pupils.
+        matched = [None] * len(parsed)
+        exact_num = [False] * len(parsed)
+        used = set()
+        for i, p in enumerate(parsed):
+            s = by_student_id.get(p['identifier'])
+            if s and s.id not in used:
+                matched[i], exact_num[i] = s, True
+                used.add(s.id)
+        # 2) Greedy unique fuzzy match for the rest, so two pasted rows never claim
+        #    the same pupil (that collision silently dropped scores at save time).
+        rest_idx = [i for i in range(len(parsed)) if matched[i] is None]
+        pool = [s for s in students if s.id not in used]
+        fuzzy = match_students_unique([parsed[i]['identifier'] for i in rest_idx], pool)
+        for i, (s, _sc) in zip(rest_idx, fuzzy):
+            matched[i] = s
+
         rows = []
-        for p in parsed:
-            matched = by_student_id.get(p['identifier'])
-            student_num = p['identifier'] if matched else ''
-            if not matched:                                   # fall back to fuzzy name match
-                matched, _ = match_student(p['identifier'], students)
+        for i, p in enumerate(parsed):
             cell_map = {}
             for (at, _mx), value in zip(sheet_cols, p['cells']):
                 cell_map[at.id] = value
             rows.append({
-                'student_num': student_num,
+                'student_num': p['identifier'] if exact_num[i] else '',
                 'name': p['identifier'],
-                'matched_id': matched.id if matched else None,
+                'matched_id': matched[i].id if matched[i] else None,
                 'cells': cell_map,
             })
 

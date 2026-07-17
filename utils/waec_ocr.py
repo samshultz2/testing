@@ -697,6 +697,39 @@ def _name_tokens(*parts):
     return out
 
 
+MATCH_THRESHOLD = 0.6
+
+
+def _score_pair(name_l, q, student):
+    """Similarity in [0, 1] between a scanned/pasted name and one roster student.
+
+    ``name_l`` is the lower-cased name and ``q`` its ``_name_tokens`` set (computed
+    once by the caller so batch matching stays O(names x students) not worse)."""
+    full = (student.full_name or '').lower()
+    alt = f"{(student.first_name or '').lower()} {(student.surname or '').lower()}".strip()
+    # order-sensitive similarity (handles spelling/spacing wobble)
+    seq = max(
+        difflib.SequenceMatcher(None, name_l, full).ratio(),
+        difflib.SequenceMatcher(None, name_l, alt).ratio(),
+    )
+    # order-independent, subset-aware token similarity
+    c = _name_tokens(student.full_name, student.first_name, student.surname,
+                     getattr(student, 'middle_name', ''))
+    tset = 0.0
+    if q and c:
+        inter = q & c
+        smaller = q if len(q) <= len(c) else c
+        if q <= c or c <= q:                       # one name fully contains the other
+            tset = 0.97 if len(smaller) >= 2 else 0.55
+        elif len(inter) >= 2:                      # e.g. first + surname both shared
+            tset = 0.9
+        else:
+            tset = len(inter) / len(q | c)         # single shared token -> low
+        tset = max(tset, difflib.SequenceMatcher(
+            None, ' '.join(sorted(q)), ' '.join(sorted(c))).ratio())
+    return max(seq, tset)
+
+
 def match_student(name, students):
     """Auto-match an extracted/pasted name to a student. Returns (student|None, score).
 
@@ -709,36 +742,54 @@ def match_student(name, students):
         return None, 0.0
     name_l = name.lower().strip()
     q = _name_tokens(name)
-
     best, best_score = None, 0.0
     for s in students:
-        full = (s.full_name or '').lower()
-        alt = f"{(s.first_name or '').lower()} {(s.surname or '').lower()}".strip()
-        # order-sensitive similarity (handles spelling/spacing wobble)
-        seq = max(
-            difflib.SequenceMatcher(None, name_l, full).ratio(),
-            difflib.SequenceMatcher(None, name_l, alt).ratio(),
-        )
-        # order-independent, subset-aware token similarity
-        c = _name_tokens(s.full_name, s.first_name, s.surname, getattr(s, 'middle_name', ''))
-        tset = 0.0
-        if q and c:
-            inter = q & c
-            smaller = q if len(q) <= len(c) else c
-            if q <= c or c <= q:                       # one name fully contains the other
-                tset = 0.97 if len(smaller) >= 2 else 0.55
-            elif len(inter) >= 2:                      # e.g. first + surname both shared
-                tset = 0.9
-            else:
-                tset = len(inter) / len(q | c)         # single shared token -> low
-            tset = max(tset, difflib.SequenceMatcher(
-                None, ' '.join(sorted(q)), ' '.join(sorted(c))).ratio())
-        score = max(seq, tset)
+        score = _score_pair(name_l, q, s)
         if score > best_score:
             best_score, best = score, s
-    if best_score >= 0.6:
+    if best_score >= MATCH_THRESHOLD:
         return best, round(best_score, 2)
     return None, round(best_score, 2)
+
+
+def match_students_unique(names, students):
+    """Match a batch of names to a roster so each student is used at most once.
+
+    Independent best-match (``match_student`` per row) silently collapses several
+    pasted rows onto the same pupil when the roster is missing some of the pasted
+    students — the duplicate then overwrites the first at save time, so only a
+    handful of scores survive. This assigns greedily by confidence: the most
+    certain (row, student) pairs are locked first, and once a student is taken no
+    other row can claim them. Rows that can't win a confident, unclaimed student
+    are returned unmatched (to be picked manually) rather than colliding.
+
+    ``names`` is a list of strings; returns a list aligned with it of
+    ``(student|None, score)``."""
+    n = len(names)
+    result = [(None, 0.0)] * n
+    if not students or not names:
+        return result
+    # Score every (row, student) pair once.
+    triples = []                                   # (score, row_idx, student)
+    for i, nm in enumerate(names):
+        if not nm:
+            continue
+        name_l = nm.lower().strip()
+        q = _name_tokens(nm)
+        for s in students:
+            sc = _score_pair(name_l, q, s)
+            if sc >= MATCH_THRESHOLD:
+                triples.append((sc, i, s))
+    # Lock the most confident pairs first; each row and each student used once.
+    triples.sort(key=lambda t: t[0], reverse=True)
+    used_rows, used_students = set(), set()
+    for sc, i, s in triples:
+        if i in used_rows or s.id in used_students:
+            continue
+        result[i] = (s, round(sc, 2))
+        used_rows.add(i)
+        used_students.add(s.id)
+    return result
 
 
 # ---------------------------------------------------------------------------
