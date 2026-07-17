@@ -47,7 +47,7 @@ def _styles():
     _S['subj'] = ParagraphStyle('sj', parent=base['Normal'], fontSize=7, leading=8)
     _S['rmk'] = ParagraphStyle('rk', parent=base['Normal'], fontSize=6.3, leading=7)
     _S['sidehdr'] = ParagraphStyle('sd', parent=base['Normal'], fontSize=8, leading=9,
-                                   fontName='Helvetica-Bold', alignment=TA_CENTER, textColor=colors.white)
+                                   fontName='Helvetica-Bold', alignment=TA_CENTER, textColor=_INK)
     _S['side'] = ParagraphStyle('si', parent=base['Normal'], fontSize=6.8, leading=8)
     _S['remark'] = ParagraphStyle('rm', parent=base['Normal'], fontSize=7, leading=8.5)
     _S['sub'] = ParagraphStyle('s', parent=base['Normal'], alignment=TA_CENTER, fontSize=10)
@@ -133,7 +133,6 @@ def _particulars(student, report_data, term, width):
         ('SPAN', (0, 3), (1, 3)), ('SPAN', (2, 3), (3, 3)),
         ('SPAN', (0, 4), (3, 4)),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ececec')),
         ('BOX', (0, 0), (-1, -1), 0.8, _INK),
         ('LINEBELOW', (0, 0), (-1, 0), 0.8, _INK),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -233,7 +232,6 @@ def _sidebar(report_data, affective_traits, rating_labels, width):
     at = Table(adata, colWidths=[width * 0.68, width * 0.32])
     at.setStyle(TableStyle([
         ('SPAN', (0, 0), (1, 0)),
-        ('BACKGROUND', (0, 0), (-1, 0), _INK),
         ('ALIGN', (1, 1), (1, -1), 'CENTER'),
         ('GRID', (0, 0), (-1, -1), 0.4, _GRID),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -253,7 +251,6 @@ def _sidebar(report_data, affective_traits, rating_labels, width):
         gt = Table(gdata, colWidths=[width * 0.28, width * 0.72])
         gt.setStyle(TableStyle([
             ('SPAN', (0, 0), (1, 0)),
-            ('BACKGROUND', (0, 0), (-1, 0), _INK),
             ('GRID', (0, 0), (-1, -1), 0.4, _GRID),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
@@ -276,9 +273,9 @@ def _sidebar(report_data, affective_traits, rating_labels, width):
     ]
     rt = Table(rdata, colWidths=[width])
     rt.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), _INK),
         ('ALIGN', (0, 0), (0, 0), 'CENTER'),
         ('BOX', (0, 0), (-1, -1), 0.4, _GRID),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.6, _INK),
         ('LINEBELOW', (0, 2), (-1, 2), 0.3, colors.HexColor('#bbbbbb')),
         ('LINEBELOW', (0, 5), (-1, 5), 0.3, colors.HexColor('#bbbbbb')),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
