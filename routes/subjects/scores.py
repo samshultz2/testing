@@ -173,6 +173,8 @@ def save_scores():
                 compute_term_summaries(term_id, asg.class_id)
             from utils.results_analytics import bust as _bust_analytics
             _bust_analytics(term_id, assignment_id)
+            from utils.results_analytics_org import bust_all as _bust_org
+            _bust_org()
         msg = f'{counts["saved"]} scores saved!'
         if counts['rejected']:
             msg += f' {counts["rejected"]} skipped (outside the 0–{max_score:g} range).'
@@ -305,6 +307,8 @@ def bulk_entry():
         compute_term_summaries(term_id, selected.class_id)
         from utils.results_analytics import bust as _bust_analytics
         _bust_analytics(term_id, assignment_id)
+        from utils.results_analytics_org import bust_all as _bust_org
+        _bust_org()
         msg = f'Saved — {total["saved"]} change(s).'
         if total['rejected']:
             msg += f' {total["rejected"]} skipped (outside the allowed range).'

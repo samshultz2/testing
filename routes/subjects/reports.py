@@ -194,7 +194,8 @@ def analytics_dashboard():
         'report_card_base': url_for('subjects.student_report_card', student_id=0)[:-1],
         'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
-                 'report_pdf': url_for('subjects.analytics_report', term_id=term_id or '', assignment_id=assignment_id or '')},
+                 'report_pdf': url_for('subjects.analytics_report', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'institution': url_for('subjects.institution_analytics', term_id=term_id or '')},
     })
 
 
@@ -223,6 +224,80 @@ def analytics_report():
         flash('No scores entered for this class yet.', 'warning')
         return redirect(url_for('subjects.analytics_dashboard', term_id=term_id, assignment_id=assignment_id))
     return pdf_response(data, analytics_filename(asg, term), inline=False)
+
+
+def _org_allowed_ids(term_id):
+    """Assignment ids the current user may roll up for a term — None for admins
+    (meaning 'everything', the fast path)."""
+    if is_admin():
+        return None
+    asgs = filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else []
+    return {a.id for a in asgs}
+
+
+@subjects_bp.route('/analytics/institution')
+@login_required
+def institution_analytics():
+    """Institution-wide academic analytics — roll the term's entered scores up to
+    an arm, a class, a section or the whole school, with subject & teacher
+    leagues and decision-oriented recommendations. Cached (?refresh=1 forces)."""
+    term_id = request.args.get('term_id', type=int)
+    scope = request.args.get('scope') or 'school'
+    scope_id = request.args.get('scope_id')
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    # An arm/class scope is guarded to the caller's access.
+    if scope == 'arm' and scope_id and not can_access_class(int(scope_id)):
+        flash('You do not have access to this class.', 'error')
+        scope, scope_id = 'school', None
+    terms = Term.query.order_by(Term.id.desc()).all()
+    data = None
+    if term_id:
+        from utils.results_analytics_org import org_analytics
+        data = org_analytics(term_id, scope, scope_id, _org_allowed_ids(term_id),
+                             use_cache=(request.args.get('refresh') != '1'))
+    return _render({
+        'page': 'institution', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'scope': scope, 'scope_id': scope_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'analytics': data,
+        'self_url': url_for('subjects.institution_analytics'),
+        'report_card_base': url_for('subjects.student_report_card', student_id=0)[:-1],
+        'urls': {
+            'report_pdf': url_for('subjects.institution_report',
+                                  term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
+            'class_analytics_base': url_for('subjects.analytics_dashboard'),
+        },
+    })
+
+
+@subjects_bp.route('/analytics/institution/report.pdf')
+@login_required
+def institution_report():
+    """Board-pack PDF of the institution analytics for a scope in a term."""
+    from utils.analytics_org_pdf import institution_pdf, institution_filename
+    from utils.web_exports import pdf_response
+    from utils.results_analytics_org import org_analytics
+
+    term_id = request.args.get('term_id', type=int)
+    scope = request.args.get('scope') or 'school'
+    scope_id = request.args.get('scope_id')
+    if not term_id:
+        flash('Select a term first.', 'error')
+        return redirect(url_for('subjects.institution_analytics'))
+    if scope == 'arm' and scope_id and not can_access_class(int(scope_id)):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.institution_analytics'))
+    data = org_analytics(term_id, scope, scope_id, _org_allowed_ids(term_id))
+    if not data or not (data.get('summary') or {}).get('assessed'):
+        flash('No scores entered for this scope yet.', 'warning')
+        return redirect(url_for('subjects.institution_analytics',
+                                term_id=term_id, scope=scope, scope_id=scope_id or ''))
+    term = db.session.get(Term, term_id)
+    pdf = institution_pdf(data, term)
+    return pdf_response(pdf, institution_filename(data, term), inline=False)
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])

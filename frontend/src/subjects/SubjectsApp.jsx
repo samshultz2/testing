@@ -950,6 +950,7 @@ function Analytics({ d, notify }) {
     <>
       <div className="page-header"><h1>Academic Analytics</h1>
         <div className="page-header-actions">
+          {d.urls.institution && <a href={d.urls.institution} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-building-columns" /> Institution view</a>}
           {d.has_selection && <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><i aria-hidden="true" className="fas fa-rotate" /> Refresh</button>}
           {d.has_selection && a && s.assessed && d.urls.report_pdf && <a href={d.urls.report_pdf} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> Report PDF</a>}
           {d.assignment_id && <a href={d.urls.broadsheet} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}
@@ -1061,10 +1062,232 @@ function Analytics({ d, notify }) {
   );
 }
 
+// ---- Institution-wide executive analytics ---------------------------------
+const FLAG_STYLE = {
+  strong: { bg: 'var(--success-light,#e6f4ec)', fg: 'var(--success,#1c8c53)' },
+  good: { bg: 'var(--gray-100,#eef0f4)', fg: 'var(--text-primary,#1f2d3d)' },
+  watch: { bg: '#fdf3d7', fg: '#9a7b0a' },
+  review: { bg: '#fbe6e3', fg: '#b43a2e' },
+  compliance: { bg: '#fbe6e3', fg: '#b43a2e' },
+  insufficient: { bg: 'var(--gray-100,#eef0f4)', fg: 'var(--text-muted,#889)' },
+};
+const TONE_STYLE = {
+  positive: { border: 'var(--success,#1c8c53)', icon: 'fa-circle-check' },
+  negative: { border: '#b43a2e', icon: 'fa-triangle-exclamation' },
+  watch: { border: '#c9a227', icon: 'fa-eye' },
+  insight: { border: 'var(--primary,#0D6A4E)', icon: 'fa-lightbulb' },
+};
+
+function avgColour(v, pass) {
+  if (v >= 75) return 'var(--success,#1c8c53)';
+  if (v >= (pass || 50)) return 'var(--primary,#0D6A4E)';
+  return '#e74a3b';
+}
+
+function LeagueTable({ rows, cols, onRow, rank }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="data-table"><thead><tr>
+        {rank && <th style={{ width: 34 }}>#</th>}
+        {cols.map((c) => <th key={c.key} className={c.right ? 'text-right' : ''}>{c.label}</th>)}
+      </tr></thead>
+        <tbody>{rows.map((r, i) => (
+          <tr key={r._k || i} onClick={onRow ? () => onRow(r) : undefined}
+            style={onRow ? { cursor: 'pointer' } : undefined}>
+            {rank && <td style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{i + 1}</td>}
+            {cols.map((c) => <td key={c.key} className={c.right ? 'text-right' : ''}>{c.render ? c.render(r) : r[c.key]}</td>)}
+          </tr>
+        ))}</tbody></table>
+    </div>
+  );
+}
+
+function ScopePicker({ d }) {
+  const nav = useNav();
+  const a = d.analytics || {};
+  const sel = a.selectors || { sections: [], classes: [], arms: [] };
+  const goScope = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, scope: d.scope, scope_id: d.scope_id, ...extra });
+  return (
+    <div className="card mb-3"><div className="card-body">
+      <form className="filter-form" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="form-group"><label className="form-label">Term</label>
+          <select className="form-control" value={d.term_id} onChange={(e) => goScope({ term_id: e.target.value, scope: 'school', scope_id: '' })}>
+            {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
+        <div className="form-group"><label className="form-label">Level</label>
+          <select className="form-control" value={d.scope} onChange={(e) => goScope({ scope: e.target.value, scope_id: '' })}>
+            <option value="school">Whole School</option>
+            <option value="section">Section</option>
+            <option value="class">Class</option>
+            <option value="arm">Class arm</option>
+          </select></div>
+        {d.scope === 'section' && (
+          <div className="form-group"><label className="form-label">Section</label>
+            <select className="form-control" value={d.scope_id} onChange={(e) => goScope({ scope_id: e.target.value })}>
+              <option value="">Select section…</option>
+              {sel.sections.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select></div>
+        )}
+        {d.scope === 'class' && (
+          <div className="form-group"><label className="form-label">Class</label>
+            <select className="form-control" value={d.scope_id} onChange={(e) => goScope({ scope_id: e.target.value })}>
+              <option value="">Select class…</option>
+              {sel.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        )}
+        {d.scope === 'arm' && (
+          <div className="form-group"><label className="form-label">Class arm</label>
+            <select className="form-control" value={d.scope_id} onChange={(e) => goScope({ scope_id: e.target.value })}>
+              <option value="">Select class arm…</option>
+              {sel.arms.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
+        )}
+      </form>
+    </div></div>
+  );
+}
+
+function Institution({ d, notify }) {
+  const nav = useNav();
+  const a = d.analytics;
+  const s = (a && a.summary) || {};
+  const pm = s.pass_mark || 50;
+  const cardLink = (id) => `${d.report_card_base}${id}?term_id=${d.term_id}`;
+  const drill = (u) => navParams(nav.go, d.self_url, { term_id: d.term_id, scope: u.scope, scope_id: u.scope_id });
+  const refresh = () => { navParams(nav.go, d.self_url, { term_id: d.term_id, scope: d.scope, scope_id: d.scope_id, refresh: 1 }); notify('success', 'Recomputing…'); };
+  const needsPick = d.scope !== 'school' && !d.scope_id;
+  const gradeMax = a && a.grade_distribution.length ? Math.max(1, ...a.grade_distribution.map((g) => g.count)) : 1;
+  return (
+    <>
+      <div className="page-header"><h1>Institution Analytics</h1>
+        <div className="page-header-actions">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><i aria-hidden="true" className="fas fa-rotate" /> Refresh</button>
+          {a && s.assessed ? <a href={d.urls.report_pdf} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> Board-pack PDF</a> : null}
+        </div>
+      </div>
+      <ScopePicker d={d} />
+
+      {needsPick ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-layer-group" title={`Select a ${d.scope}`}><p>Choose a {d.scope} above to roll up its results.</p></Empty></div></div>
+      ) : !a || !s.assessed ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="No scores yet"><p>No entered scores for <strong>{a ? a.scope_label : 'this scope'}</strong> yet. Enter some scores to unlock analytics.</p></Empty></div></div>
+      ) : (<>
+        <div className="text-muted text-sm mb-2" style={{ marginTop: '-.4rem' }}>
+          Showing <strong>{a.scope_label}</strong> · {s.assessed} of {s.students} students assessed across {s.units} unit(s) · pass mark {pm}
+          {a.cached === false && <> · <span className="badge badge-secondary">fresh</span></>}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+          <AStat value={fmtNum(s.class_average)} label="Average score" tone={avgColour(s.class_average, pm)} />
+          <AStat value={`${fmtNum(s.pass_rate)}%`} label="Pass rate" tone={s.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+          <AStat value={`${fmtNum(s.distinction_rate)}%`} label="Distinctions" tone="var(--success)" />
+          <AStat value={fmtNum(s.highest)} label="Highest" tone="var(--success)" />
+          <AStat value={fmtNum(s.lowest)} label="Lowest" tone="#e74a3b" />
+          <AStat value={`${fmtNum(s.completion)}%`} label="Entry completion" tone={s.completion >= 85 ? undefined : '#c9a227'} />
+        </div>
+
+        {a.recommendations && a.recommendations.length > 0 && (
+          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-briefcase" /> Insights &amp; recommendations</h3>
+            <span className="text-muted text-sm">what to do next</span></div>
+            <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '.6rem' }}>
+              {a.recommendations.map((r, i) => {
+                const t = TONE_STYLE[r.tone] || TONE_STYLE.insight;
+                return (
+                  <div key={i} style={{ borderLeft: `4px solid ${t.border}`, background: 'var(--bg-secondary,#f8f9fb)', borderRadius: 6, padding: '.6rem .8rem' }}>
+                    <div style={{ fontWeight: 700, marginBottom: '.2rem' }}><i aria-hidden="true" className={`fas ${t.icon}`} style={{ color: t.border, marginRight: '.4rem' }} />{r.title}</div>
+                    <div className="text-sm" style={{ color: 'var(--text-secondary,#4a5568)' }}>{r.text}</div>
+                  </div>
+                );
+              })}
+            </div></div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>Pass vs below pass</h3></div>
+            <div className="card-body" style={{ display: 'flex', justifyContent: 'center' }}>
+              <Donut center={`${fmtNum(s.pass_rate)}%`} segments={[
+                { label: 'Passed', value: Math.round((s.pass_rate / 100) * s.assessed), color: 'var(--success,#1c8c53)' },
+                { label: 'Below pass', value: s.assessed - Math.round((s.pass_rate / 100) * s.assessed), color: '#e74a3b' },
+              ]} /></div></div>
+          {a.score_bands && a.score_bands.length > 0 && (
+            <div className="card"><div className="card-header"><h3>Spread of student averages</h3></div>
+              <div className="card-body"><ColumnChart bars={a.score_bands.map((b) => ({ label: b.band, value: b.count, color: b.band === '0–39' ? '#e74a3b' : (parseInt(b.band, 10) >= 70 ? 'var(--success,#1c8c53)' : 'var(--primary,#0D6A4E)') }))} /></div></div>
+          )}
+          <div className="card"><div className="card-header"><h3>Grade distribution</h3></div>
+            <div className="card-body">{a.grade_distribution.map((g) => <Bar key={g.grade} label={`Grade ${g.grade}`} value={g.count} max={gradeMax} />)}</div></div>
+          {a.gender && a.gender.length > 0 && (
+            <div className="card"><div className="card-header"><h3>By gender</h3></div>
+              <div className="card-body">{a.gender.map((g) => (
+                <div key={g.group} style={{ marginBottom: '.6rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}><strong>{g.group}</strong><span className="text-muted">{g.count} · avg {fmtNum(g.average)}</span></div>
+                  <Bar label={`${fmtNum(g.pass_rate)}% pass`} value={g.pass_rate} max={100} pct tone={g.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+                </div>))}</div></div>
+          )}
+        </div>
+
+        {a.units && a.units.length > 0 && (
+          <div className="card mb-3"><div className="card-header"><h3>{a.unit_kind} league (best → worst)</h3>
+            <span className="text-muted text-sm">tap a row to drill in</span></div>
+            <div className="card-body" style={{ padding: 0 }}>
+              <LeagueTable rank rows={a.units.map((u, i) => ({ ...u, _k: i }))} onRow={a.unit_kind !== 'Subject' ? drill : undefined} cols={[
+                { key: 'label', label: a.unit_kind, render: (r) => <strong>{r.label}</strong> },
+                { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
+                { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
+                { key: 'students', label: 'Students', right: true },
+              ]} /></div></div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>Subject league (hardest → easiest)</h3></div>
+            <div className="card-body" style={{ padding: 0 }}>
+              <LeagueTable rows={a.subjects.map((x, i) => ({ ...x, _k: i }))} cols={[
+                { key: 'name', label: 'Subject' },
+                { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
+                { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
+                { key: 'assessed', label: 'N', right: true },
+              ]} /></div></div>
+
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chalkboard-user" /> Teacher effectiveness</h3></div>
+            <div className="card-body" style={{ padding: 0 }}>
+              {a.teachers.length ? (
+                <LeagueTable rank rows={a.teachers.map((x, i) => ({ ...x, _k: i }))} cols={[
+                  { key: 'name', label: 'Teacher', render: (r) => <div><strong>{r.name}</strong><div className="text-muted text-sm">{r.subject_count} subj · {r.class_count} class{r.class_count === 1 ? '' : 'es'}</div></div> },
+                  { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
+                  { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
+                  { key: 'verdict', label: 'Verdict', render: (r) => { const st = FLAG_STYLE[r.flag] || FLAG_STYLE.good; return <span className="badge" style={{ background: st.bg, color: st.fg }}>{r.verdict}</span>; } },
+                ]} />
+              ) : <div style={{ padding: '1rem' }} className="text-muted">No teachers attributed to these subjects yet — set the teacher on each class-subject.</div>}
+            </div></div>
+
+          <div className="card"><div className="card-header"><h3>🏅 Honour roll ({a.honour_roll.length})</h3>
+            <span className="text-muted text-sm">distinctions (avg ≥ {s.distinction_mark})</span></div>
+            <div className="card-body" style={{ padding: 0 }}>
+              {a.honour_roll.length ? (
+                <LeagueTable rank rows={a.honour_roll.map((x, i) => ({ ...x, _k: i }))} cols={[
+                  { key: 'name', label: 'Student', render: (r) => <span>{r.name} <span className="text-muted text-sm">· {r.class}</span></span> },
+                  { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: 'var(--success)', fontWeight: 700 }}>{fmtNum(r.average)}</span> },
+                ]} />
+              ) : <div style={{ padding: '1rem' }} className="text-muted">No distinctions yet.</div>}
+            </div></div>
+
+          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Needs intervention ({a.intervention.length})</h3></div>
+            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+              {a.intervention.length ? (
+                <table className="data-table"><thead><tr><th>Student</th><th>Class</th><th className="text-right">Avg</th><th className="text-right">Failing</th><th /></tr></thead>
+                  <tbody>{a.intervention.map((st_) => (
+                    <tr key={st_.id}><td>{st_.name}</td><td className="text-muted text-sm">{st_.class}</td>
+                      <td className="text-right" style={{ color: '#e74a3b', fontWeight: 600 }}>{fmtNum(st_.average)}</td>
+                      <td className="text-right">{st_.failed}</td>
+                      <td className="text-right"><a href={cardLink(st_.id)} className="btn btn-sm btn-light" data-native><i aria-hidden="true" className="fas fa-id-card" /></a></td></tr>
+                  ))}</tbody></table>
+              ) : <div style={{ padding: '1rem' }} className="text-muted">No students below the pass mark. 🎉</div>}
+            </div></div>
+        </div>
+      </>)}
+    </>
+  );
+}
+
 const SCREENS = { list: List, add: SubjectForm, edit: SubjectForm, bulk_add: BulkAdd,
   class_subjects: ClassSubjects, assign: Assign, edit_class_subject: EditClassSubject,
   scores: Scores, workflow: Workflow, bulk_entry: BulkEntry, broadsheet: Broadsheet,
-  affective: Affective, comments: Comments, analytics: Analytics };
+  affective: Affective, comments: Comments, analytics: Analytics, institution: Institution };
 
 export default function SubjectsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
