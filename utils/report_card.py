@@ -159,8 +159,19 @@ def build_report_card(student_id, term_id):
         .join(Subject).order_by(Subject.name).all())
 
     assessment_types = (AssessmentType.query.filter_by(is_active=True)
-                        .order_by(AssessmentType.order).all())
+                        .order_by(AssessmentType.order, AssessmentType.id).all())
     pass_mark = SchoolSettings.get('pass_mark', 50)
+
+    # Report-sheet columns: the CAs / Holiday Assignment etc. each show on their
+    # own, but the exam papers — Mid-term (P.E/M.E), CBT and Theory — are summed
+    # into a single "EXAM" column (no separate spaces for mid-term/CBT).
+    from utils.assessments import is_midterm, is_cbt, is_theory
+    exam_type_ids = [at.id for at in assessment_types
+                     if is_midterm(at) or is_cbt(at) or is_theory(at)]
+    display_columns = [{'key': at.id, 'label': at.short_name or at.name}
+                       for at in assessment_types if at.id not in exam_type_ids]
+    if exam_type_ids:
+        display_columns.append({'key': 'EXAM', 'label': 'EXAM'})
     # Load the configured grade scale once (avoids a per-subject DB lookup) and
     # use it for both the printed grade key and grade/remark resolution.
     grade_bands = GradeScale.query.order_by(GradeScale.order, GradeScale.min_score.desc()).all()
@@ -186,15 +197,23 @@ def build_report_card(student_id, term_id):
                 StudentScore.class_subject_id.in_(cs_ids)).all():
             score_map[(s.class_subject_id, s.assessment_type_id)] = s.score
 
+    exam_id_set = set(exam_type_ids)
     for cs in class_subjects:
         row = {'subject': cs.subject, 'teacher': cs.teacher_name,
-               'assessments': {}, 'total': 0, 'grade': '-', 'remark': '-'}
+               'assessments': {}, 'cells': [], 'total': 0, 'grade': '-', 'remark': '-'}
         subject_total = 0
         for at in assessment_types:
             score = score_map.get((cs.id, at.id))
             row['assessments'][at.id] = score
             if score:
                 subject_total += score
+        # Per-display-column values (exam papers merged into one EXAM figure).
+        exam_sum = sum(score_map.get((cs.id, tid)) or 0 for tid in exam_type_ids)
+        for col in display_columns:
+            if col['key'] == 'EXAM':
+                row['cells'].append(exam_sum or None)
+            else:
+                row['cells'].append(score_map.get((cs.id, col['key'])))
         row['total'] = subject_total
         if subject_total > 0:
             row['grade'], row['remark'] = grade_for(subject_total)
@@ -216,16 +235,16 @@ def build_report_card(student_id, term_id):
     obtainable_each = sum((_tm.get(at.id, at.max_score) or 0) for at in assessment_types) or 100
     scores_obtainable = len(class_subjects) * obtainable_each
     average_pct = round(total_score / scores_obtainable * 100, 2) if scores_obtainable else 0
-    no_in_class = (StudentEnrollment.query.join(ClassArmAssignment).filter(
-        ClassArmAssignment.term_id == term_id,
-        ClassArmAssignment.class_id == assignment.class_id,
-        StudentEnrollment.is_active == True).count())
+    # Number in class = the roster of the student's own class arm.
+    no_in_class = StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=assignment.id, is_active=True).count()
 
     report_data = {
         'enrollment': enrollment,
         'assignment': assignment,
         'subjects': subjects_data,
         'assessment_types': assessment_types,
+        'columns': display_columns,
         'total_score': total_score,
         'average': average,
         'overall_grade': grade_for(average)[0] if average else '-',

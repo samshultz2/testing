@@ -112,16 +112,20 @@ def _card_flowables(student, report_data, term, school,
     ], [95 * mm, 75 * mm]))
     e.append(Spacer(1, 6))
 
-    # Scores table
-    ats = report_data['assessment_types']
-    header = ['Subject'] + [(a.short_name or a.name) for a in ats] + ['Total', 'Grade', 'Remark']
+    # Scores table. Columns come pre-merged (exam papers summed into one EXAM col).
+    cols = report_data.get('columns') or [{'key': a.id, 'label': (a.short_name or a.name)}
+                                          for a in report_data['assessment_types']]
+    header = ['Subject'] + [c['label'] for c in cols] + ['Total', 'Grade', 'Remark']
     data = [header]
     for row in report_data['subjects']:
+        rc = row.get('cells')
+        if rc is None:
+            rc = [row['assessments'].get(c['key']) for c in cols]
         cells = [row['subject'].name]
-        cells += [_n(row['assessments'].get(a.id), blank='') for a in ats]
+        cells += [_n(v, blank='') for v in rc]
         cells += [_n(row['total']), row['grade'], row['remark']]
         data.append([str(c) for c in cells])
-    n = len(ats)
+    n = len(cols)
     subj_w = 46 * mm
     rest = 170 * mm - subj_w
     at_w = (rest * 0.5) / max(n, 1)

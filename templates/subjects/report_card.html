@@ -84,8 +84,8 @@
             <thead>
                 <tr>
                     <th>Subject</th>
-                    {% for at in report_data.assessment_types %}
-                    <th style="text-align: center; font-size: 0.75rem;">{{ at.short_name }}</th>
+                    {% for col in report_data.columns %}
+                    <th style="text-align: center; font-size: 0.75rem;">{{ col.label }}</th>
                     {% endfor %}
                     <th style="text-align: center;">Total</th>
                     <th style="text-align: center;">Grade</th>
@@ -96,8 +96,8 @@
                 {% for subj in report_data.subjects %}
                 <tr>
                     <td>{{ subj.subject.name }}</td>
-                    {% for at in report_data.assessment_types %}
-                    <td style="text-align: center;">{{ subj.assessments.get(at.id)|num if subj.assessments.get(at.id) else '-' }}</td>
+                    {% for cell in subj.cells %}
+                    <td style="text-align: center;">{{ cell|num if cell else '-' }}</td>
                     {% endfor %}
                     <td style="text-align: center; font-weight: bold;">{{ subj.total|num if subj.total else '-' }}</td>
                     <td style="text-align: center;"><span class="badge {% if subj.grade == 'F' %}badge-danger{% elif subj.grade in ['A+', 'A'] %}badge-success{% else %}badge-info{% endif %}">{{ subj.grade }}</span></td>
@@ -107,7 +107,7 @@
             </tbody>
             <tfoot>
                 <tr style="font-weight: bold; background: var(--bg-secondary);">
-                    <td colspan="{{ report_data.assessment_types|length + 1 }}">Summary</td>
+                    <td colspan="{{ report_data.columns|length + 1 }}">Summary</td>
                     <td style="text-align: center;">{{ report_data.total_score|num }}</td>
                     <td style="text-align: center;"><span class="badge badge-primary">{{ report_data.overall_grade }}</span></td>
                     <td></td>
