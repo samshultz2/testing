@@ -23,6 +23,11 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 _INK = colors.black
 _GRID = colors.HexColor('#333333')
 
+# How tall the subject rows may grow to fill the page (mm) and the target height
+# the subject table aims for. Tuned so a typical sheet fills most of the page.
+_MAXROW_MM = 12.7
+_TARGET_MM = 189.0
+
 
 def _esc(v):
     """Escape a value before it is placed into reportlab Paragraph mini-XML markup."""
@@ -172,7 +177,7 @@ def _subject_table(report_data, width):
     # Taller body rows so the sheet fills the page for shorter subject lists;
     # KeepInFrame shrinks the whole card to fit when the list is long.
     nrows = len(data) - 1
-    body_h = max(8 * mm, min(15 * mm, (200 * mm - hh) / nrows)) if nrows else 10 * mm
+    body_h = max(8 * mm, min(_MAXROW_MM * mm, (_TARGET_MM * mm - hh) / nrows)) if nrows else 10 * mm
     heights = [hh] + [body_h] * nrows
     t = Table(data, colWidths=col_widths, rowHeights=heights, repeatRows=1)
     t.setStyle(TableStyle([
