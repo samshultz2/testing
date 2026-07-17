@@ -1273,9 +1273,12 @@ function Institution({ d, notify }) {
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: '1rem' }}>
-          <div className="card"><div className="card-header"><h3>Subject league (hardest → easiest)</h3></div>
+          <div className="card"><div className="card-header"><h3>Subject league (hardest → easiest)</h3>
+            <span className="text-muted text-sm">tap a subject for its scorecard</span></div>
             <div className="card-body" style={{ padding: 0 }}>
-              <LeagueTable rows={a.subjects.map((x, i) => ({ ...x, _k: i }))} cols={[
+              <LeagueTable rows={a.subjects.map((x, i) => ({ ...x, _k: i }))}
+                onRow={(r) => { if (r.id && d.urls.subject_base) { const b = d.urls.subject_base; nav.go(`${b}${b.includes('?') ? '&' : '?'}subject_id=${r.id}`); } }}
+                cols={[
                 { key: 'name', label: 'Subject' },
                 { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
                 { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
@@ -1441,11 +1444,92 @@ function Teacher({ d, notify }) {
   );
 }
 
+function SubjectScorecard({ d, notify }) {
+  const nav = useNav();
+  const sc = d.scorecard;
+  const s = (sc && sc.summary) || {};
+  const pm = s.pass_mark || 50;
+  const goTerm = (tid) => navParams(nav.go, d.self_url, { term_id: tid, subject_id: d.subject_id });
+  const hasData = sc && s.entries;
+  const gradeMax = sc && sc.grade_distribution && sc.grade_distribution.length ? Math.max(1, ...sc.grade_distribution.map((g) => g.count)) : 1;
+  return (
+    <>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-book" /> Subject scorecard</h1>
+        <div className="page-header-actions">
+          {hasData && (() => {
+            const base = d.urls.report_base; const sep = base.includes('?') ? '&' : '?';
+            const exp = (fmt) => `${base}${sep}format=${fmt}`;
+            return <ExportMenu urls={{ export: exp('excel'), export_pdf: exp('pdf'), export_image: exp('image') }} />;
+          })()}
+          <a href={d.back_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Institution</a>
+        </div>
+      </div>
+      <div className="card mb-3"><div className="card-body">
+        <form className="filter-form" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-group"><label className="form-label">Term</label>
+            <select className="form-control" value={d.term_id} onChange={(e) => goTerm(e.target.value)}>
+              {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
+          <div className="form-group" style={{ flex: 1 }}><label className="form-label">Subject</label>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', paddingTop: '.3rem' }}>{sc ? sc.subject : '—'}</div></div>
+        </form>
+      </div></div>
+
+      {!d.subject_id ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-book" title="No subject selected"><p>Open a subject from the Institution Analytics subject league.</p></Empty></div></div>
+      ) : !hasData ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="No scores"><p>No scores for <strong>{sc ? sc.subject : 'this subject'}</strong> this term.</p></Empty></div></div>
+      ) : (<>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+          <AStat value={fmtNum(s.average)} label="Average score" tone={avgColour(s.average, pm)} />
+          <AStat value={`${fmtNum(s.pass_rate)}%`} label="Pass rate" tone={s.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+          <AStat value={`${fmtNum(s.distinction_rate)}%`} label="Distinctions" tone="var(--success)" />
+          <AStat value={s.classes} label="Class arms" />
+          <AStat value={s.teachers} label="Teachers" />
+          <AStat value={`${fmtNum(s.completion)}%`} label="Entry completion" tone={s.completion >= 85 ? undefined : '#c9a227'} />
+        </div>
+
+        <div className="card mb-3"><div className="card-header"><h3>Per class-arm (weakest → strongest)</h3></div>
+          <div className="card-body" style={{ padding: 0 }}>
+            <LeagueTable rows={sc.rows.map((r, i) => ({ ...r, _k: i }))} cols={[
+              { key: 'class', label: 'Class', render: (r) => <strong>{r.class}</strong> },
+              { key: 'teacher', label: 'Teacher', render: (r) => <span className="text-muted">{r.teacher}</span> },
+              { key: 'average', label: 'Avg', right: true, render: (r) => <span style={{ color: avgColour(r.average, pm), fontWeight: 700 }}>{fmtNum(r.average)}</span> },
+              { key: 'pass_rate', label: 'Pass %', right: true, render: (r) => `${fmtNum(r.pass_rate)}%` },
+              { key: 'assessed', label: 'Assessed', right: true, render: (r) => `${r.assessed}/${r.students}` },
+              { key: 'range', label: 'Low–High', right: true, render: (r) => `${fmtNum(r.lowest)}–${fmtNum(r.highest)}` },
+            ]} /></div></div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>By teacher (who gets the best results)</h3></div>
+            <div className="card-body">{sc.by_teacher.map((x) => (
+              <div key={x.name} style={{ marginBottom: '.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}><strong>{x.name}</strong><span className="text-muted">{x.assessed} · {fmtNum(x.pass_rate)}% pass</span></div>
+                <Bar label={`avg ${fmtNum(x.average)}`} value={x.average} max={100} tone={avgColour(x.average, pm)} />
+              </div>))}</div></div>
+          <div className="card"><div className="card-header"><h3>Grade distribution</h3></div>
+            <div className="card-body">{(sc.grade_distribution || []).map((g) => <Bar key={g.grade} label={`Grade ${g.grade}`} value={g.count} max={gradeMax} />)}</div></div>
+          {sc.score_bands && sc.score_bands.length > 0 && (
+            <div className="card"><div className="card-header"><h3>Score spread</h3></div>
+              <div className="card-body"><ColumnChart bars={sc.score_bands.map((b) => ({ label: b.band, value: b.count, color: b.band === '0–39' ? '#e74a3b' : (parseInt(b.band, 10) >= 70 ? 'var(--success,#1c8c53)' : 'var(--primary,#0D6A4E)') }))} /></div></div>
+          )}
+        </div>
+
+        {sc.trend && sc.trend.term_names.length > 1 && sc.trend.averages.some((v) => v != null) && (
+          <div className="card mt-3"><div className="card-header"><h3>Trend across terms</h3></div>
+            <div className="card-body">{sc.trend.term_names.map((tn, i) => (
+              <Bar key={tn} label={tn} value={sc.trend.averages[i] == null ? 0 : sc.trend.averages[i]} max={100} tone={avgColour(sc.trend.averages[i] || 0, pm)} />
+            ))}</div></div>
+        )}
+      </>)}
+    </>
+  );
+}
+
 const SCREENS = { list: List, add: SubjectForm, edit: SubjectForm, bulk_add: BulkAdd,
   class_subjects: ClassSubjects, assign: Assign, edit_class_subject: EditClassSubject,
   scores: Scores, workflow: Workflow, bulk_entry: BulkEntry, broadsheet: Broadsheet,
   affective: Affective, comments: Comments, analytics: Analytics, institution: Institution,
-  teacher: Teacher };
+  teacher: Teacher, subject: SubjectScorecard };
 
 export default function SubjectsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

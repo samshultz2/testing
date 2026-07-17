@@ -232,6 +232,175 @@ def teacher_xlsx(data, term):
     out = io.BytesIO(); wb.save(out); return out.getvalue()
 
 
+def _pdf_to_png(pdf, dpi=200):
+    """Render a PDF to a single tall PNG (all pages stitched)."""
+    if not pdf:
+        return None
+    import fitz
+    doc = fitz.open(stream=pdf, filetype='pdf')
+    matrix = fitz.Matrix(dpi / 72.0, dpi / 72.0)
+    pms = [p.get_pixmap(matrix=matrix) for p in doc]
+    if len(pms) == 1:
+        return pms[0].tobytes('png')
+    from PIL import Image
+    imgs = [Image.frombytes('RGB', (p.width, p.height), p.samples) for p in pms]
+    gap = max(1, dpi // 20)
+    width = max(im.width for im in imgs)
+    height = sum(im.height for im in imgs) + gap * (len(imgs) - 1)
+    canvas = Image.new('RGB', (width, height), 'white')
+    y = 0
+    for im in imgs:
+        canvas.paste(im, ((width - im.width) // 2, y)); y += im.height + gap
+    out = io.BytesIO(); canvas.save(out, format='PNG'); return out.getvalue()
+
+
+def subject_stem(data, term):
+    who = (data.get('subject') or 'subject').replace(' ', '_')
+    tname = (term.name if term else 'term').replace(' ', '_')
+    return f"subject_{who}_{tname}"
+
+
+def subject_filename(data, term, ext='pdf'):
+    return f"{subject_stem(data, term)}.{ext}"
+
+
+def subject_pdf(data, term):
+    """One-subject scorecard as a branded PDF: KPIs, per-class-arm table (with
+    teacher), teacher/class roll-ups and grade distribution."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
+                                    Spacer, KeepTogether)
+    from utils.web_exports import pdf_escape
+
+    primary, accent, light, ink, muted, danger = _theme()
+    s = data.get('summary') or {}
+    styles = getSampleStyleSheet()
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=17, textColor=primary, spaceAfter=1)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=10, textColor=muted)
+    hh = ParagraphStyle('hh', parent=styles['Heading2'], fontSize=12.5, textColor=primary,
+                        spaceBefore=10, spaceAfter=4)
+    muted_s = ParagraphStyle('mu', parent=styles['Normal'], fontSize=9, textColor=muted)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=15 * mm, rightMargin=15 * mm,
+                            title=f"Subject scorecard — {data.get('subject', '')}")
+    W = A4[0] - 30 * mm
+    elems = [Paragraph(pdf_escape(_school_name()), h),
+             Paragraph(f"Subject Scorecard · <b>{pdf_escape(data.get('subject', ''))}</b> · "
+                       f"{pdf_escape(term.full_name if term else '')}", sub),
+             Spacer(1, 8)]
+
+    kpis = [('Average', _n(s.get('average'))), ('Pass rate', f"{_n(s.get('pass_rate'))}%"),
+            ('Distinctions', f"{_n(s.get('distinction_rate'))}%"), ('Classes', str(s.get('classes', 0))),
+            ('Teachers', str(s.get('teachers', 0))), ('Entries', str(s.get('entries', 0)))]
+    krows, row = [], []
+    for lbl, val in kpis:
+        row.append(Paragraph(f"<b><font size=14 color='#0D6A4E'>{pdf_escape(val)}</font></b>"
+                             f"<br/><font size=8 color='#6B7A74'>{pdf_escape(lbl)}</font>", muted_s))
+        if len(row) == 3:
+            krows.append(row); row = []
+    if row:
+        row += [''] * (3 - len(row)); krows.append(row)
+    kt = Table(krows, colWidths=[W / 3] * 3)
+    kt.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), light),
+                            ('INNERGRID', (0, 0), (-1, -1), 3, colors.white),
+                            ('BOX', (0, 0), (-1, -1), 3, colors.white),
+                            ('TOPPADDING', (0, 0), (-1, -1), 9), ('BOTTOMPADDING', (0, 0), (-1, -1), 9),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 10)]))
+    elems.append(kt)
+
+    def _tbl(head, rows, widths):
+        t = Table([head] + rows, colWidths=widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5)]))
+        return t
+
+    rows = data.get('rows') or []
+    if rows:
+        r = [[pdf_escape(x['class']), pdf_escape(x['teacher']), _n(x['average']),
+              f"{_n(x['pass_rate'])}%", f"{x['assessed']}/{x['students']}",
+              f"{_n(x['lowest'])}–{_n(x['highest'])}"] for x in rows]
+        elems.append(KeepTogether([Paragraph('Per class-arm (weakest → strongest)', hh),
+                     _tbl(['Class', 'Teacher', 'Avg', 'Pass %', 'Assessed', 'Low–High'], r,
+                          [W * 0.24, W * 0.22, W * 0.12, W * 0.13, W * 0.14, W * 0.15])]))
+    bt = data.get('by_teacher') or []
+    if bt:
+        r = [[pdf_escape(x['name']), _n(x['average']), f"{_n(x['pass_rate'])}%", str(x['assessed'])] for x in bt]
+        elems.append(KeepTogether([Paragraph('By teacher', hh),
+                     _tbl(['Teacher', 'Avg', 'Pass %', 'Assessed'], r,
+                          [W * 0.5, W * 0.17, W * 0.17, W * 0.16])]))
+    gd = data.get('grade_distribution') or []
+    if any(g['count'] for g in gd):
+        r = [[g['grade'], str(g['count'])] for g in gd]
+        elems.append(KeepTogether([Paragraph('Grade distribution', hh),
+                     _tbl(['Grade', 'Count'], r, [W * 0.5, W * 0.5])]))
+    tr = data.get('trend') or {}
+    if tr.get('term_names') and len([v for v in tr.get('averages', []) if v is not None]) > 1:
+        r = [['Average'] + [_n(v) if v is not None else '—' for v in tr['averages']]]
+        col = (W * 0.72) / len(tr['term_names'])
+        elems.append(KeepTogether([Paragraph('Trend across terms', hh),
+                     _tbl(['Metric'] + tr['term_names'], r, [W * 0.28] + [col] * len(tr['term_names']))]))
+
+    doc.build(elems)
+    return buf.getvalue()
+
+
+def subject_png(data, term, dpi=200):
+    return _pdf_to_png(subject_pdf(data, term), dpi)
+
+
+def subject_xlsx(data, term):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    s = data.get('summary') or {}
+    wb = Workbook()
+    head_fill = PatternFill('solid', fgColor='0D6A4E'); head_font = Font(bold=True, color='FFFFFF')
+
+    def sheet(title, headers, rows, first=False):
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = title[:31]; ws.append(headers)
+        for c in ws[1]:
+            c.fill = head_fill; c.font = head_font; c.alignment = Alignment(horizontal='center')
+        for r in rows:
+            ws.append(r)
+        for col in ws.columns:
+            width = max((len(str(c.value)) if c.value is not None else 0) for c in col) + 2
+            ws.column_dimensions[col[0].column_letter].width = min(max(width, 10), 44)
+        return ws
+
+    ws = wb.active; ws.title = 'Summary'
+    ws['A1'] = f"Subject Scorecard — {data.get('subject', '')}"
+    ws['A1'].font = Font(bold=True, size=14, color='0D6A4E')
+    ws['A2'] = term.full_name if term else ''
+    r = 4
+    for lbl, val in [('Average', s.get('average')), ('Pass rate %', s.get('pass_rate')),
+                     ('Distinction rate %', s.get('distinction_rate')), ('Classes', s.get('classes')),
+                     ('Teachers', s.get('teachers')), ('Students', s.get('students')),
+                     ('Entry completion %', s.get('completion'))]:
+        ws[f'A{r}'] = lbl; ws[f'A{r}'].font = Font(bold=True); ws[f'B{r}'] = val; r += 1
+    ws.column_dimensions['A'].width = 20; ws.column_dimensions['B'].width = 16
+
+    if data.get('rows'):
+        sheet('Class-arms', ['Class', 'Teacher', 'Average', 'Pass %', 'Assessed', 'Students', 'Entry %', 'Lowest', 'Highest'],
+              [[x['class'], x['teacher'], x['average'], x['pass_rate'], x['assessed'], x['students'],
+                x['completion'], x['lowest'], x['highest']] for x in data['rows']])
+    if data.get('by_teacher'):
+        sheet('By teacher', ['Teacher', 'Average', 'Pass %', 'Assessed'],
+              [[x['name'], x['average'], x['pass_rate'], x['assessed']] for x in data['by_teacher']])
+    if data.get('grade_distribution'):
+        sheet('Grades', ['Grade', 'Count'], [[g['grade'], g['count']] for g in data['grade_distribution']])
+    out = io.BytesIO(); wb.save(out); return out.getvalue()
+
+
 def institution_xlsx(data, term):
     """Multi-sheet workbook of the institution analytics (KPIs + every league +
     trend + the roll lists) for analysts who want the raw numbers."""

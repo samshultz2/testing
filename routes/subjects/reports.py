@@ -271,6 +271,8 @@ def institution_analytics():
             'class_analytics_base': url_for('subjects.analytics_dashboard'),
             'teacher_base': url_for('subjects.teacher_scorecard_view',
                                     term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
+            'subject_base': url_for('subjects.subject_scorecard_view',
+                                    term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
             'compose': url_for('comms.compose'),
         },
     })
@@ -367,6 +369,63 @@ def teacher_report():
     if fmt in ('image', 'png'):
         return png_response(teacher_png(data, term), teacher_filename(data, term, 'png'), inline=False)
     return pdf_response(teacher_pdf(data, term), teacher_filename(data, term, 'pdf'), inline=False)
+
+
+@subjects_bp.route('/analytics/subject')
+@login_required
+def subject_scorecard_view():
+    """Per-class-arm, per-teacher scorecard for one subject in a term (the
+    drill-down behind the subject league)."""
+    from utils.results_analytics_org import subject_scorecard
+    term_id = request.args.get('term_id', type=int)
+    subject_id = request.args.get('subject_id', type=int)
+    scope = request.args.get('scope') or 'school'
+    scope_id = request.args.get('scope_id')
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    data = None
+    if term_id and subject_id:
+        data = subject_scorecard(term_id, subject_id, _org_allowed_ids(term_id))
+    terms = Term.query.order_by(Term.id.desc()).all()
+    return _render({
+        'page': 'subject', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'subject_id': subject_id or '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'scorecard': data,
+        'self_url': url_for('subjects.subject_scorecard_view'),
+        'back_url': url_for('subjects.institution_analytics', term_id=term_id or '',
+                            scope=scope, scope_id=scope_id or ''),
+        'urls': {'report_base': url_for('subjects.subject_report',
+                                        term_id=term_id or '', subject_id=subject_id or '')},
+    })
+
+
+@subjects_bp.route('/analytics/subject/report')
+@login_required
+def subject_report():
+    """Subject scorecard export. ``format`` = pdf (default) | excel | image."""
+    from utils.analytics_org_pdf import (subject_pdf, subject_png, subject_xlsx,
+                                         subject_filename)
+    from utils.web_exports import pdf_response, xlsx_response, png_response
+    from utils.results_analytics_org import subject_scorecard
+    term_id = request.args.get('term_id', type=int)
+    subject_id = request.args.get('subject_id', type=int)
+    fmt = (request.args.get('format') or 'pdf').lower()
+    if not term_id or not subject_id:
+        flash('Select a term and subject first.', 'error')
+        return redirect(url_for('subjects.institution_analytics'))
+    data = subject_scorecard(term_id, subject_id, _org_allowed_ids(term_id))
+    if not data or not (data.get('summary') or {}).get('entries'):
+        flash('No scores for that subject yet.', 'warning')
+        return redirect(url_for('subjects.subject_scorecard_view',
+                                term_id=term_id, subject_id=subject_id))
+    term = db.session.get(Term, term_id)
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(subject_xlsx(data, term), subject_filename(data, term, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(subject_png(data, term), subject_filename(data, term, 'png'), inline=False)
+    return pdf_response(subject_pdf(data, term), subject_filename(data, term, 'pdf'), inline=False)
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])

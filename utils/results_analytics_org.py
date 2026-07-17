@@ -284,7 +284,7 @@ def _compute(term_id, scope, scope_id, allowed_ids):
         for t in tot:
             sg[_grade_for(t, bands)] = sg.get(_grade_for(t, bands), 0) + 1
         subjects.append({
-            'name': info['name'], 'average': _mean(tot),
+            'id': sid_, 'name': info['name'], 'average': _mean(tot),
             'pass_rate': round(100 * sum(1 for t in tot if t >= pass_mark) / len(tot), 1) if tot else 0,
             'assessed': len(tot), 'highest': round(max(tot), 1) if tot else 0,
             'lowest': round(min(tot), 1) if tot else 0,
@@ -828,6 +828,127 @@ def teacher_scorecard(term_id, teacher_name, allowed_ids=None):
                     'average': overall_avg, 'pass_rate': overall_pr, 'completion': completion,
                     'pass_mark': pass_mark, 'flag': flag, 'verdict': verdict},
         'rows': rows, 'by_subject': by_subject, 'by_class': by_class,
+        'trend': {'term_names': names, 'averages': averages},
+    }
+
+
+def subject_scorecard(term_id, subject_id, allowed_ids=None):
+    """Per-class-arm, per-teacher breakdown for one subject in a term — the
+    drill-down behind the subject league. Returns overall KPIs, a row per
+    class-arm (with its teacher), teacher/class roll-ups, grade spread and a
+    term trend, so a head of department can see where the subject is hardest
+    and which teachers get better results in it."""
+    from sqlalchemy.orm import joinedload
+    from models import (db, Subject, ClassSubject, StudentEnrollment, StudentScore,
+                        SchoolSettings, Term)
+    if not subject_id or not term_id:
+        return None
+    subject = db.session.get(Subject, int(subject_id))
+    if not subject:
+        return None
+    pass_mark = SchoolSettings.get('pass_mark', 50)
+    bands = _grade_bands()
+
+    assignments = _scope_assignments(term_id, 'school', None, allowed_ids)
+    asg_by_class = {}
+    for a in assignments:
+        asg_by_class.setdefault(a.class_id, []).append(a)
+    class_ids = list(asg_by_class)
+    empty = {'subject': subject.name, 'subject_id': subject.id, 'summary': {}, 'rows': [],
+             'by_teacher': [], 'by_class': [], 'grade_distribution': [],
+             'trend': {'term_names': [], 'averages': []}}
+    if not class_ids:
+        return empty
+
+    css = (ClassSubject.query.options(joinedload(ClassSubject.school_class))
+           .filter(ClassSubject.term_id == term_id, ClassSubject.is_active == True,  # noqa: E712
+                   ClassSubject.subject_id == subject.id,
+                   ClassSubject.class_id.in_(class_ids)).all())
+    if not css:
+        return empty
+
+    rows, all_totals = [], []
+    students_seen = set()
+    teacher_roll, class_roll = {}, {}
+    grade_dist = {g: 0 for g, _l, _h in bands}
+    for cs in css:
+        applic = [a for a in asg_by_class.get(cs.class_id, [])
+                  if cs.arm_id is None or a.arm_id == cs.arm_id]
+        enr = (StudentEnrollment.query
+               .filter(StudentEnrollment.class_arm_assignment_id.in_([a.id for a in applic]),
+                       StudentEnrollment.is_active == True).all()) if applic else []  # noqa: E712
+        sids = [e.student_id for e in enr]
+        totals = []
+        if sids:
+            per = {}
+            for s in StudentScore.query.filter(
+                    StudentScore.student_id.in_(sids),
+                    StudentScore.class_subject_id == cs.id).all():
+                if s.score is not None:
+                    per[s.student_id] = per.get(s.student_id, 0) + s.score
+            totals = [round(v, 2) for v in per.values()]
+            students_seen.update(sids)
+        for t in totals:
+            grade_dist[_grade_for(t, bands)] = grade_dist.get(_grade_for(t, bands), 0) + 1
+        teacher = (cs.teacher_name or '').strip() or 'Unassigned'
+        label = ', '.join(sorted({a.display_name for a in applic})) or (
+            cs.school_class.name if cs.school_class else '')
+        avg = _mean(totals)
+        pr = round(100 * sum(1 for t in totals if t >= pass_mark) / len(totals), 1) if totals else 0
+        comp = round(100 * len(totals) / len(sids), 1) if sids else 0
+        rows.append({
+            'class': label, 'teacher': teacher, 'students': len(sids),
+            'assessed': len(totals), 'average': avg, 'pass_rate': pr, 'completion': comp,
+            'highest': round(max(totals), 1) if totals else 0,
+            'lowest': round(min(totals), 1) if totals else 0,
+        })
+        all_totals += totals
+        teacher_roll.setdefault(teacher, []).extend(totals)
+        class_roll.setdefault(label, []).extend(totals)
+
+    rows.sort(key=lambda r: (r['assessed'] == 0, r['average']))
+    overall_avg = _mean(all_totals)
+    overall_pr = round(100 * sum(1 for t in all_totals if t >= pass_mark) / len(all_totals), 1) if all_totals else 0
+    dist = round(100 * sum(1 for t in all_totals if t >= DISTINCTION) / len(all_totals), 1) if all_totals else 0
+    possible = sum(r['students'] for r in rows)
+    completion = round(100 * len(all_totals) / possible, 1) if possible else 0
+
+    def _roll(d):
+        return sorted(
+            [{'name': k, 'average': _mean(v), 'assessed': len(v),
+              'pass_rate': round(100 * sum(1 for t in v if t >= pass_mark) / len(v), 1) if v else 0}
+             for k, v in d.items()], key=lambda x: -x['average'])
+
+    # Term trend for this subject across the session.
+    term = db.session.get(Term, term_id)
+    names, averages = [], []
+    if term and term.session_id:
+        for t in Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all():
+            names.append(t.name)
+            tcss = ClassSubject.query.filter(
+                ClassSubject.term_id == t.id, ClassSubject.subject_id == subject.id,
+                ClassSubject.is_active == True).all()  # noqa: E712
+            tot = []
+            for c in tcss:
+                for sc in StudentScore.query.filter_by(class_subject_id=c.id).all():
+                    if sc.score is not None:
+                        tot.append(sc.score)
+            averages.append(round(sum(tot) / len(tot), 2) if tot else None)
+
+    band_defs = [('0–39', 0, 39.999), ('40–49', 40, 49.999), ('50–59', 50, 59.999),
+                 ('60–69', 60, 69.999), ('70–79', 70, 79.999), ('80–100', 80, 1e9)]
+    return {
+        'subject': subject.name, 'subject_id': subject.id,
+        'summary': {'classes': len({r['class'] for r in rows}), 'teachers': len(teacher_roll),
+                    'students': len(students_seen), 'entries': len(all_totals),
+                    'average': overall_avg, 'pass_rate': overall_pr, 'distinction_rate': dist,
+                    'completion': completion, 'pass_mark': pass_mark,
+                    'highest': round(max(all_totals), 1) if all_totals else 0,
+                    'lowest': round(min(all_totals), 1) if all_totals else 0},
+        'rows': rows, 'by_teacher': _roll(teacher_roll), 'by_class': _roll(class_roll),
+        'grade_distribution': [{'grade': g, 'count': grade_dist.get(g, 0)} for g, _l, _h in bands],
+        'score_bands': [{'band': lbl, 'count': sum(1 for t in all_totals if lo <= t <= hi)}
+                        for lbl, lo, hi in band_defs],
         'trend': {'term_names': names, 'averages': averages},
     }
 

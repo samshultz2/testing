@@ -245,6 +245,43 @@ def test_teacher_scorecard_route(app):
     assert b'Mr A' in r.data                        # teacher name in the embedded payload
 
 
+def test_subject_scorecard(app):
+    from utils.results_analytics_org import subject_scorecard, org_analytics
+    ids = _seed(app)
+    with app.app_context():
+        # find the Maths subject id from the school-scope subject league
+        d = org_analytics(ids['term'], 'school', None, None, use_cache=False)
+        maths = next(x for x in d['subjects'] if x['name'].endswith('Maths'))
+        assert maths['id']
+        sc = subject_scorecard(ids['term'], maths['id'], None)
+        assert sc['subject'].endswith('Maths')
+        assert sc['summary']['entries'] > 0
+        # Maths is offered in every arm/class -> several class-arm rows
+        assert len(sc['rows']) >= 3
+        # Mr A teaches all Maths -> appears in the by-teacher roll-up
+        assert any(t['name'] == 'Mr A' for t in sc['by_teacher'])
+        assert len(sc['grade_distribution']) >= 1
+
+
+def test_subject_report_formats(app):
+    from utils.results_analytics_org import org_analytics
+    ids = _seed(app)
+    with app.app_context():
+        d = org_analytics(ids['term'], 'school', None, None, use_cache=False)
+        sid = next(x['id'] for x in d['subjects'] if x['name'].endswith('Maths'))
+    c = _admin(app)
+    q = f"term_id={ids['term']}&subject_id={sid}"
+    r = c.get(f"/subjects/analytics/subject/report?{q}&format=excel")
+    assert r.status_code == 200 and 'spreadsheetml' in r.headers['Content-Type']
+    r = c.get(f"/subjects/analytics/subject/report?{q}&format=image")
+    assert r.status_code == 200 and r.headers['Content-Type'] == 'image/png'
+    r = c.get(f"/subjects/analytics/subject/report?{q}")
+    assert r.status_code == 200 and r.get_data()[:4] == b'%PDF'
+    # the SPA view renders too
+    r = c.get(f"/subjects/analytics/subject?{q}")
+    assert r.status_code == 200 and b'Subject Scorecard' in r.data
+
+
 def test_teacher_report_formats(app):
     ids = _seed(app)
     c = _admin(app)
