@@ -384,6 +384,27 @@ function ItemAnalysis({ d }) {
         <div className="card"><div className="card-header"><h3>Discrimination spread (D)</h3></div><div className="card-body"><IaBars bars={a.discrimination_hist} /></div></div>
       </div>
 
+      {a.topics && a.topics.has_topics && a.topics.items.length > 0 && (
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-diagram-project" /> Topic mastery</h3>
+          <span className="text-muted text-sm">weakest first · tag questions with a topic to power this</span></div>
+          <div className="card-body">
+            {a.topics.items.map((t) => {
+              const col = t.band === 'weak' ? '#e74a3b' : (t.band === 'secure' ? 'var(--success,#1c8c53)' : '#c9a227');
+              return (
+                <div key={t.topic} style={{ marginBottom: '.6rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+                    <span><strong>{t.topic}</strong> <span className="text-muted">· {t.questions} item(s)</span></span>
+                    <span style={{ color: col, fontWeight: 700 }}>{t.mastery}%</span>
+                  </div>
+                  <div style={{ height: 12, background: 'var(--gray-100,#eef0f4)', borderRadius: 99, overflow: 'hidden', marginTop: '.2rem' }}>
+                    <div style={{ height: '100%', width: `${t.mastery}%`, background: col }} /></div>
+                  <div className="text-muted text-sm" style={{ marginTop: '.15rem' }}>{t.below_half} of the cohort ({t.below_half_pct}%) scored under half on this topic</div>
+                </div>
+              );
+            })}
+          </div></div>
+      )}
+
       <div className="card"><div className="card-header"><h3>Item statistics</h3><span className="text-muted text-sm">tap a row for distractor detail</span></div>
         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
           <table className="data-table"><thead><tr>

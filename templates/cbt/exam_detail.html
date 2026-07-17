@@ -57,7 +57,9 @@
             <div class="form-row">
                 <div class="form-group"><label class="form-label">Correct option <span class="required">*</span></label><select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
                 <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" class="form-control" step="0.5" value="1"></div>
+                <div class="form-group"><label class="form-label">Topic</label><input type="text" name="topic" class="form-control" placeholder="e.g. Algebra" list="topic_list"></div>
             </div>
+            <datalist id="topic_list">{% for t in questions|map(attribute='topic')|select|unique %}<option value="{{ t }}">{% endfor %}</datalist>
             <button class="btn btn-primary"><i class="fas fa-plus"></i> Add Question</button>
         </form>
     </div>
@@ -75,7 +77,7 @@
                 </div>
                 {% if q.image_url %}<div style="margin:.4rem 0"><img src="{{ q.image_url }}" alt="Question figure" style="max-width:260px;max-height:180px;border:1px solid var(--border-color);border-radius:6px"></div>{% endif %}
                 {% for letter, text in q.options %}{% if text %}<div class="qopt {% if q.correct_option==letter %}correct{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
-                <div class="text-muted text-sm mt-1">{{ q.marks }} mark(s)</div>
+                <div class="text-muted text-sm mt-1">{{ q.marks }} mark(s){% if q.topic %} · <span class="badge badge-secondary">{{ q.topic }}</span>{% endif %}</div>
             </div>
             {% endfor %}
         {% else %}<div class="empty-state"><i class="fas fa-circle-question"></i><h3>No questions yet</h3><p>Add questions above. You can publish once there's at least one.</p></div>{% endif %}

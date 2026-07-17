@@ -122,6 +122,7 @@ class CBTQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exam_id = db.Column(db.Integer, db.ForeignKey('cbt_exams.id'), nullable=False)
     question_text = db.Column(db.Text, nullable=False)
+    topic = db.Column(db.String(100))            # syllabus topic (for topic-mastery analytics)
     image_url = db.Column(db.String(300))        # optional figure (e.g. a diagram)
     option_a = db.Column(db.String(300))
     option_b = db.Column(db.String(300))

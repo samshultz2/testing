@@ -332,6 +332,7 @@ def add_question(exam_id):
     image_url = _save_question_image(request.files.get('image'))
     db.session.add(CBTQuestion(
         exam_id=exam_id, question_text=text, image_url=image_url,
+        topic=(request.form.get('topic') or '').strip() or None,
         option_a=(request.form.get('option_a') or '').strip(),
         option_b=(request.form.get('option_b') or '').strip(),
         option_c=(request.form.get('option_c') or '').strip(),
@@ -365,7 +366,7 @@ def import_questions_file(exam_id):
                .filter(CBTQuestion.exam_id == exam_id).scalar())
     for q in parsed:
         nextord += 1
-        db.session.add(CBTQuestion(exam_id=exam_id, order=nextord, **{k: q[k] for k in
+        db.session.add(CBTQuestion(exam_id=exam_id, order=nextord, topic=q.get('topic'), **{k: q[k] for k in
             ('question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'marks')}))
     db.session.commit()
     flash(f'Imported {len(parsed)} question(s) into the exam.', 'success')
@@ -385,7 +386,7 @@ def import_from_bank(exam_id):
         for bq in QuestionBank.query.filter(QuestionBank.id.in_(ids or [-1])).all():
             nextord += 1
             db.session.add(CBTQuestion(exam_id=exam_id, order=nextord,
-                question_text=bq.question_text, image_url=bq.image_url,
+                question_text=bq.question_text, image_url=bq.image_url, topic=bq.topic,
                 option_a=bq.option_a, option_b=bq.option_b,
                 option_c=bq.option_c, option_d=bq.option_d,
                 correct_option=bq.correct_option, marks=bq.marks))

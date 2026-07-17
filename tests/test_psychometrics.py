@@ -19,10 +19,12 @@ def _seed(app, n_students=12):
         bid = Branch.get_default().id
         exam = CBTExam(title=f'{tag} Test', branch_id=bid, is_published=True)
         db.session.add(exam); db.session.flush()
+        # Q1,Q2 tagged 'Algebra'; Q3,Q4 tagged 'Geometry' (for topic mastery).
+        topics = ['Algebra', 'Algebra', 'Geometry', 'Geometry']
         qs = []
         for i in range(4):
             q = CBTQuestion(exam_id=exam.id, question_text=f'Q{i + 1}?', option_a='a',
-                            option_b='b', option_c='c', option_d='d',
+                            option_b='b', option_c='c', option_d='d', topic=topics[i],
                             correct_option='A', marks=1, order=i)
             db.session.add(q); db.session.flush()
             qs.append(q)
@@ -77,6 +79,25 @@ def test_kr20_and_summary(app):
         assert a['recommendations']              # not empty
         # a reject item should surface in the recommendations
         assert any('reject' in r['title'].lower() for r in a['recommendations'])
+
+
+def test_topic_mastery(app):
+    from utils.psychometrics import item_analysis
+    ids = _seed(app, n_students=12)
+    with app.app_context():
+        a = item_analysis(ids['exam'])
+        tm = a['topics']
+        assert tm['has_topics'] is True
+        by = {t['topic']: t for t in tm['items']}
+        assert set(by) == {'Algebra', 'Geometry'}
+        # Algebra = Q1 (all correct) + Q2 (half) -> ~75% mastery
+        # Geometry = Q3 (top quarter) + Q4 (bottom half) -> lower mastery
+        assert by['Algebra']['mastery'] > by['Geometry']['mastery']
+        assert by['Geometry']['band'] in ('weak', 'developing')
+        # weakest topic surfaces in the recommendations
+        assert any('topic' in r['title'].lower() for r in a['recommendations'])
+        # items carry their topic
+        assert all(it['topic'] in ('Algebra', 'Geometry') for it in a['items'])
 
 
 def test_insufficient_attempts(app):

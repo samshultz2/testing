@@ -93,7 +93,8 @@ def item_analysis(exam_id):
         meta['reason'] = ('Need at least 5 submitted attempts for a reliable '
                           'analysis.' if questions else 'This exam has no questions.')
         return {'meta': meta, 'items': [], 'summary': {}, 'recommendations': [],
-                'difficulty_hist': [], 'discrimination_hist': []}
+                'difficulty_hist': [], 'discrimination_hist': [],
+                'topics': {'has_topics': False, 'items': []}}
 
     attempt_ids = [a.id for a in attempts]
     qids = [q.id for q in questions]
@@ -168,6 +169,7 @@ def item_analysis(exam_id):
         items.append({
             'number': idx, 'question_id': qid,
             'text': (q.question_text or '')[:180],
+            'topic': (getattr(q, 'topic', None) or '').strip() or None,
             'key': key or '—',
             'p': round(p, 3), 'p_pct': round(p * 100, 1),
             'p_band': p_band, 'p_label': p_label,
@@ -215,17 +217,80 @@ def item_analysis(exam_id):
         1 for it in items if it['d'] is not None and lo <= it['d'] < hi)}
         for lbl, lo, hi in disc_bins]
 
+    # ---- topic mastery (only when questions carry syllabus topics) --------
+    topics = _topic_mastery(questions, correct_by_attempt, attempt_ids, n)
+
     return {'meta': meta, 'summary': summary, 'items': items,
             'difficulty_hist': difficulty_hist,
             'discrimination_hist': discrimination_hist,
-            'recommendations': _recommendations(summary, items)}
+            'topics': topics,
+            'recommendations': _recommendations(summary, items, topics)}
 
 
-def _recommendations(summary, items):
+def _topic_mastery(questions, correct_by_attempt, attempt_ids, n):
+    """Per-syllabus-topic mastery across the cohort. Empty ``list`` under
+    ``has_topics=False`` when no question is tagged with a topic."""
+    topic_qids = {}
+    for q in questions:
+        t = (getattr(q, 'topic', None) or '').strip()
+        if t:
+            topic_qids.setdefault(t, []).append(q.id)
+    if not topic_qids:
+        return {'has_topics': False, 'items': []}
+
+    out = []
+    for topic, qids in topic_qids.items():
+        qset = set(qids)
+        total_cells = n * len(qids)
+        correct_cells = sum(len(correct_by_attempt[a] & qset) for a in attempt_ids)
+        # candidates scoring below half on this topic's items
+        below = 0
+        per_student = []
+        for a in attempt_ids:
+            c = len(correct_by_attempt[a] & qset)
+            pct = c / len(qids)
+            per_student.append(pct)
+            if pct < 0.5:
+                below += 1
+        mastery = round(100 * correct_cells / total_cells, 1) if total_cells else 0
+        band = ('weak' if mastery < 50 else 'developing' if mastery < 70 else 'secure')
+        out.append({'topic': topic, 'questions': len(qids), 'mastery': mastery,
+                    'band': band, 'below_half': below,
+                    'below_half_pct': round(100 * below / n, 1) if n else 0})
+    out.sort(key=lambda x: x['mastery'])       # weakest first
+    return {'has_topics': True, 'items': out}
+
+
+def _topic_recommendations(topics, add):
+    items = (topics or {}).get('items') or []
+    if not items:
+        return
+    weak = [t for t in items if t['band'] == 'weak']
+    if weak:
+        names = ', '.join(t['topic'] for t in weak[:6])
+        add('negative', f'{len(weak)} topic(s) not yet mastered',
+            f"Cohort mastery is below 50% on {names}. These are the highest-priority "
+            f"topics to reteach before the next assessment.")
+    developing = [t for t in items if t['band'] == 'developing']
+    if developing:
+        add('watch', 'Topics still developing',
+            f"{', '.join(t['topic'] for t in developing[:6])} sit at 50–70% mastery — "
+            f"a targeted revision session would push them to secure.")
+    secure = [t for t in items if t['band'] == 'secure']
+    if secure and not weak:
+        add('positive', 'Well-understood topics',
+            f"{', '.join(t['topic'] for t in secure[:6])} are secure (≥70% mastery) — "
+            f"maintain with light revision and reallocate teaching time to weaker areas.")
+
+
+def _recommendations(summary, items, topics=None):
     recs = []
 
     def add(tone, title, text):
         recs.append({'tone': tone, 'title': title, 'text': text})
+
+    # Topic mastery leads — it's the most actionable teaching signal.
+    _topic_recommendations(topics, add)
 
     kr = summary.get('kr20')
     if kr is not None:

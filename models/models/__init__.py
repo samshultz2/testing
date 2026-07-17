@@ -257,6 +257,14 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # cbt_questions.topic (syllabus topic tag for topic-mastery analytics).
+    try:
+        cq_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_questions')}
+        if 'topic' not in cq_cols:
+            statements.append('ALTER TABLE cbt_questions ADD COLUMN topic VARCHAR(100)')
+    except Exception:
+        pass
+
     # cbt_attempts raw score columns.
     try:
         ca_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_attempts')}

@@ -80,6 +80,21 @@ def item_analysis_pdf(data):
             block.append(Spacer(1, 3))
         elems += block
 
+    topics = (data.get('topics') or {})
+    if topics.get('has_topics') and topics.get('items'):
+        trows = [[pdf_escape(t['topic']), str(t['questions']), f"{_n(t['mastery'])}%",
+                  t['band'].title(), f"{t['below_half']} ({_n(t['below_half_pct'])}%)"]
+                 for t in topics['items']]
+        tt = Table([['Topic', 'Items', 'Mastery', 'Band', 'Below half']] + trows,
+                   colWidths=[W * 0.4, W * 0.1, W * 0.15, W * 0.15, W * 0.2], repeatRows=1)
+        tt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+        elems.append(KeepTogether([Paragraph('Topic mastery (weakest first)', hh), tt]))
+
     items = data.get('items') or []
     if items:
         head = ['Q', 'Key', 'p%', 'Difficulty', 'D', 'r_pb', 'Dead', 'Verdict']
@@ -151,6 +166,12 @@ def item_analysis_xlsx(data):
                      ('Keep', s.get('keep')), ('Review', s.get('review')), ('Reject', s.get('reject'))]:
         ws[f'A{r}'] = lbl; ws[f'A{r}'].font = Font(bold=True); ws[f'B{r}'] = val; r += 1
     ws.column_dimensions['A'].width = 24; ws.column_dimensions['B'].width = 30
+
+    topics = (data.get('topics') or {})
+    if topics.get('has_topics') and topics.get('items'):
+        sheet('Topics', ['Topic', 'Items', 'Mastery %', 'Band', 'Below half', 'Below half %'],
+              [[t['topic'], t['questions'], t['mastery'], t['band'], t['below_half'],
+                t['below_half_pct']] for t in topics['items']])
 
     items = data.get('items') or []
     if items:
