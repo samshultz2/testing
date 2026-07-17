@@ -4,6 +4,15 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
+// Whole numbers print without a trailing .0 (34, not 34.0); genuine decimals to
+// two places (34.3 -> 34.30). Non-numeric / blank values pass through.
+function fmtNum(v) {
+  if (v == null || v === '') return v;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return v;
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
 // Recently-accessed classes, shared across every results screen (localStorage),
 // so a teacher resumes any class they've touched this term with one click
 // instead of re-picking term + class each time.
@@ -712,9 +721,9 @@ function Broadsheet({ d, notify }) {
                 <tr key={i}>
                   <td style={{ ...sticky(0), fontWeight: 'bold' }}>{r.position}</td>
                   <td style={sticky(40)}>{r.student}</td>
-                  {d.class_subjects.map((cs) => <td key={cs.id} style={{ textAlign: 'center' }}>{r.subjects[String(cs.id)] != null ? r.subjects[String(cs.id)] : '-'}</td>)}
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{r.total}</td>
-                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{r.average}</td>
+                  {d.class_subjects.map((cs) => <td key={cs.id} style={{ textAlign: 'center' }}>{r.subjects[String(cs.id)] != null ? fmtNum(r.subjects[String(cs.id)]) : '-'}</td>)}
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{fmtNum(r.total)}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{fmtNum(r.average)}</td>
                   <td style={{ textAlign: 'center' }}><span className="badge badge-success">{r.passed}</span> <span className="badge badge-danger">{r.failed}</span></td>
                 </tr>))}</tbody>
             </table>
@@ -833,7 +842,7 @@ function Bar({ label, value, max, pct, tone }) {
       <span style={{ width: 120, flexShrink: 0, fontSize: 'var(--text-sm)' }} className="text-truncate" title={label}>{label}</span>
       <div style={{ flex: 1, background: 'var(--gray-100, #eef0f4)', borderRadius: 6, height: 18, overflow: 'hidden' }}>
         <div style={{ width: `${w}%`, background: colour, height: '100%' }} /></div>
-      <span style={{ width: 64, textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{pct != null ? `${value}%` : value}</span>
+      <span style={{ width: 64, textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{pct != null ? `${fmtNum(value)}%` : fmtNum(value)}</span>
     </div>
   );
 }
@@ -906,14 +915,14 @@ function SubjectDifficulty({ subjects }) {
                 <tr onClick={() => sub.assessed && setOpen(isOpen ? null : sub.id)} style={{ cursor: sub.assessed ? 'pointer' : 'default' }}>
                   <td style={{ width: 24, color: 'var(--text-muted)' }}>{sub.assessed ? <i aria-hidden="true" className={'fas fa-chevron-' + (isOpen ? 'down' : 'right')} /> : ''}</td>
                   <td>{sub.name}</td>
-                  <td className="text-right"><strong>{sub.assessed ? sub.average : '—'}</strong></td>
-                  <td className="text-right"><span className={'badge ' + (sub.pass_rate >= 50 ? 'badge-success' : 'badge-danger')}>{sub.assessed ? sub.pass_rate + '%' : '—'}</span></td>
+                  <td className="text-right"><strong>{sub.assessed ? fmtNum(sub.average) : '—'}</strong></td>
+                  <td className="text-right"><span className={'badge ' + (sub.pass_rate >= 50 ? 'badge-success' : 'badge-danger')}>{sub.assessed ? fmtNum(sub.pass_rate) + '%' : '—'}</span></td>
                 </tr>
                 {isOpen && (
                   <tr><td colSpan={4} style={{ background: 'var(--surface-2,#f8f9fb)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '1rem', padding: '.5rem' }}>
                       <div>
-                        <div className="text-muted text-sm mb-1">Grade spread · {sub.assessed} assessed · high {sub.highest} · low {sub.lowest}</div>
+                        <div className="text-muted text-sm mb-1">Grade spread · {sub.assessed} assessed · high {fmtNum(sub.highest)} · low {fmtNum(sub.lowest)}</div>
                         <ColumnChart height={130} bars={(sub.grades || []).map((g) => ({ label: g.grade, value: g.count }))} />
                       </div>
                       <div>
@@ -954,12 +963,12 @@ function Analytics({ d, notify }) {
         <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="No scores yet"><p>Enter some scores for this class to unlock analytics.</p></Empty></div></div>
       ) : (<>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
-          <AStat value={s.class_average} label="Class average" />
-          <AStat value={`${s.pass_rate}%`} label="Pass rate" tone={s.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
-          <AStat value={s.highest} label="Highest average" tone="var(--success)" />
-          <AStat value={s.lowest} label="Lowest average" tone="#e74a3b" />
-          <AStat value={`${s.completion}%`} label="Entry completion" />
-          {s.trend != null && <AStat value={`${s.trend > 0 ? '+' : ''}${s.trend}`} label="vs last term" tone={s.trend >= 0 ? 'var(--success)' : '#e74a3b'} />}
+          <AStat value={fmtNum(s.class_average)} label="Class average" />
+          <AStat value={`${fmtNum(s.pass_rate)}%`} label="Pass rate" tone={s.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+          <AStat value={fmtNum(s.highest)} label="Highest average" tone="var(--success)" />
+          <AStat value={fmtNum(s.lowest)} label="Lowest average" tone="#e74a3b" />
+          <AStat value={`${fmtNum(s.completion)}%`} label="Entry completion" />
+          {s.trend != null && <AStat value={`${s.trend > 0 ? '+' : ''}${fmtNum(s.trend)}`} label="vs last term" tone={s.trend >= 0 ? 'var(--success)' : '#e74a3b'} />}
         </div>
         <div className="text-muted text-sm mb-2">
           {s.assessed} of {s.students} students assessed · pass mark {s.pass_mark}
@@ -987,8 +996,8 @@ function Analytics({ d, notify }) {
                 {a.gender.map((g) => (
                   <div key={g.group} style={{ marginBottom: '.6rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
-                      <strong>{g.group}</strong><span className="text-muted">{g.count} · avg {g.average}</span></div>
-                    <Bar label={`${g.pass_rate}% pass`} value={g.pass_rate} max={100} pct tone={g.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+                      <strong>{g.group}</strong><span className="text-muted">{g.count} · avg {fmtNum(g.average)}</span></div>
+                    <Bar label={`${fmtNum(g.pass_rate)}% pass`} value={g.pass_rate} max={100} pct tone={g.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
                   </div>))}
               </div></div>
           )}
@@ -1005,7 +1014,7 @@ function Analytics({ d, notify }) {
           <div className="card"><div className="card-header"><h3>Top students</h3></div>
             <div className="card-body">
               <ol style={{ margin: 0, paddingLeft: '1.2rem' }}>
-                {a.top_students.map((t, i) => <li key={i} style={{ margin: '.15rem 0' }}>{t.name} <span className="text-muted">— {t.average}</span></li>)}
+                {a.top_students.map((t, i) => <li key={i} style={{ margin: '.15rem 0' }}>{t.name} <span className="text-muted">— {fmtNum(t.average)}</span></li>)}
               </ol></div></div>
 
           <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Needs attention ({a.intervention.length})</h3></div>
@@ -1014,7 +1023,7 @@ function Analytics({ d, notify }) {
                 <table className="data-table"><thead><tr><th>Student</th><th className="text-right">Avg</th><th className="text-right">Failing</th><th /></tr></thead>
                   <tbody>{a.intervention.map((st) => (
                     <tr key={st.id}><td>{st.name}</td>
-                      <td className="text-right" style={{ color: '#e74a3b', fontWeight: 600 }}>{st.average}</td>
+                      <td className="text-right" style={{ color: '#e74a3b', fontWeight: 600 }}>{fmtNum(st.average)}</td>
                       <td className="text-right">{st.failed}</td>
                       <td className="text-right"><a href={cardLink(st.id)} className="btn btn-sm btn-light" data-native><i aria-hidden="true" className="fas fa-id-card" /></a></td></tr>
                   ))}</tbody></table>
@@ -1040,7 +1049,7 @@ function Analytics({ d, notify }) {
                           const prev = i > 0 ? sub.values[i - 1] : null;
                           const up = v != null && prev != null && v > prev;
                           const down = v != null && prev != null && v < prev;
-                          return <td key={i} className="text-right">{v == null ? '—' : v}{up && <span style={{ color: 'var(--success)' }}> ▲</span>}{down && <span style={{ color: '#e74a3b' }}> ▼</span>}</td>;
+                          return <td key={i} className="text-right">{v == null ? '—' : fmtNum(v)}{up && <span style={{ color: 'var(--success)' }}> ▲</span>}{down && <span style={{ color: '#e74a3b' }}> ▼</span>}</td>;
                         })}</tr>
                     ))}</tbody></table>
                 </div>

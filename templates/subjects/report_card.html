@@ -72,7 +72,7 @@
             <div class="student-info-item"><span>Session:</span><strong>{{ selected_term.session.name }}</strong></div>
             <div class="student-info-item"><span>No. in Class:</span><strong>{{ report_data.no_in_class }}</strong></div>
             <div class="student-info-item"><span>Class Position:</span><strong>{{ report_data.term_summary.position_in_class if report_data.term_summary and report_data.term_summary.position_in_class else '—' }}</strong></div>
-            <div class="student-info-item"><span>Attendance:</span><strong>{% if report_data.term_summary and report_data.term_summary.attendance_percentage is not none %}{{ report_data.term_summary.attendance_percentage }}%{% else %}—{% endif %}</strong></div>
+            <div class="student-info-item"><span>Attendance:</span><strong>{% if report_data.term_summary and report_data.term_summary.attendance_percentage is not none %}{{ report_data.term_summary.attendance_percentage|num }}%{% else %}—{% endif %}</strong></div>
         </div>
     </div>
 </div>
@@ -97,9 +97,9 @@
                 <tr>
                     <td>{{ subj.subject.name }}</td>
                     {% for at in report_data.assessment_types %}
-                    <td style="text-align: center;">{{ subj.assessments.get(at.id, '-') if subj.assessments.get(at.id) else '-' }}</td>
+                    <td style="text-align: center;">{{ subj.assessments.get(at.id)|num if subj.assessments.get(at.id) else '-' }}</td>
                     {% endfor %}
-                    <td style="text-align: center; font-weight: bold;">{{ subj.total if subj.total else '-' }}</td>
+                    <td style="text-align: center; font-weight: bold;">{{ subj.total|num if subj.total else '-' }}</td>
                     <td style="text-align: center;"><span class="badge {% if subj.grade == 'F' %}badge-danger{% elif subj.grade in ['A+', 'A'] %}badge-success{% else %}badge-info{% endif %}">{{ subj.grade }}</span></td>
                     <td>{{ subj.remark }}</td>
                 </tr>
@@ -108,7 +108,7 @@
             <tfoot>
                 <tr style="font-weight: bold; background: var(--bg-secondary);">
                     <td colspan="{{ report_data.assessment_types|length + 1 }}">Summary</td>
-                    <td style="text-align: center;">{{ report_data.total_score|round(1) }}</td>
+                    <td style="text-align: center;">{{ report_data.total_score|num }}</td>
                     <td style="text-align: center;"><span class="badge badge-primary">{{ report_data.overall_grade }}</span></td>
                     <td></td>
                 </tr>
@@ -122,9 +122,9 @@
     <div class="card-body">
         <div class="student-info-grid">
             <div class="student-info-item"><span>No. of Subjects:</span><strong>{{ report_data.total_subjects }}</strong></div>
-            <div class="student-info-item"><span>Scores Obtainable:</span><strong>{{ report_data.scores_obtainable }}</strong></div>
-            <div class="student-info-item"><span>Score Obtained:</span><strong>{{ report_data.scores_obtained|round(1) }}</strong></div>
-            <div class="student-info-item"><span>Average Mark:</span><strong>{{ report_data.average_pct }}%</strong></div>
+            <div class="student-info-item"><span>Scores Obtainable:</span><strong>{{ report_data.scores_obtainable|num }}</strong></div>
+            <div class="student-info-item"><span>Score Obtained:</span><strong>{{ report_data.scores_obtained|num }}</strong></div>
+            <div class="student-info-item"><span>Average Mark:</span><strong>{{ report_data.average_pct|num }}%</strong></div>
             <div class="student-info-item"><span>Result Status:</span><strong class="{{ 'text-success' if report_data.result_status == 'PASS' else 'text-danger' }}">{{ report_data.result_status }}</strong></div>
             <div class="student-info-item"><span>Overall Grade:</span><strong>{{ report_data.overall_grade }}</strong></div>
             <div class="student-info-item"><span>Subjects Passed:</span><strong class="text-success">{{ report_data.subjects_passed }}</strong></div>

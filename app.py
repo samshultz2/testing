@@ -614,6 +614,13 @@ def create_app(config_class=None):
         except (ValueError, TypeError):
             return []
 
+    @app.template_filter('num')
+    def num_filter(value, dp=2):
+        """Whole numbers without a trailing .0 (34 not 34.0); genuine decimals to
+        ``dp`` places (34.3 -> 34.30). Blank/non-numeric values pass through."""
+        from utils.numfmt import fmt_num
+        return fmt_num(value, dp=dp, blank='')
+
     @app.template_filter('naira')
     def naira_filter(value):
         """Format a number as Naira, e.g. 25000 -> ₦25,000.00."""

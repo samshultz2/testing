@@ -52,3 +52,27 @@ def test_report_card_pdf_has_school_details(app):
     assert 'Greenfield International Academy' in text
     assert 'Palm Avenue' in text
     assert '801 234 5678' in text.replace('  ', ' ')
+
+
+def test_number_formatting_helper():
+    from utils.numfmt import fmt_num
+    assert fmt_num(34.0) == '34'
+    assert fmt_num(34) == '34'
+    assert fmt_num(34.3) == '34.30'
+    assert fmt_num(34.333) == '34.33'
+    assert fmt_num(0) == '0'
+    assert fmt_num(None) == ''
+    assert fmt_num(None, blank='—') == '—'
+    assert fmt_num('') == ''
+    assert fmt_num('abc') == 'abc'
+
+
+def test_report_card_page_shows_whole_numbers(app):
+    _prime_school(app)
+    ids = _setup(app)
+    c = _admin(app)
+    _enter_and_compute(app, ids, c)   # student a scores 80 (whole)
+    html = c.get(f'/subjects/report-card/{ids["a"]}?term_id={ids["term"]}').get_data(as_text=True)
+    # a whole score must render as 80, never 80.0
+    assert '80.0' not in html
+    assert '>80<' in html or '80' in html

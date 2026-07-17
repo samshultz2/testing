@@ -18,6 +18,7 @@ import io
 from models import (db, Term, ClassArmAssignment, ClassSubject, Subject, Student,
                     StudentEnrollment, StudentScore, AssessmentType, SchoolSettings, GradeScale)
 from utils.assessments import is_midterm, is_theory, is_cbt
+from utils.numfmt import fmt_num as _n
 
 
 # --------------------------------------------------------------------------- #
@@ -174,8 +175,8 @@ def broadsheet_pdf(term_id, assignment_id):
         row = [str(r['position']), Paragraph(pdf_escape(r['student'].full_name), cell)]
         for cs in subjects:
             v = r['subjects'].get(cs.id, 0)
-            row.append(str(round(v, 1)) if v else '–')
-        row += [str(r['total']), str(r['average']),
+            row.append(_n(v) if v else '–')
+        row += [_n(r['total']), _n(r['average']),
                 GradeScale.get_grade(r['average']) if r['average'] else '–']
         data.append(row)
 
@@ -257,9 +258,9 @@ def broadsheet_docx(term_id, assignment_id):
         idx = 2
         for cs in subjects:
             v = r['subjects'].get(cs.id, 0)
-            cells[idx].text = str(round(v, 1)) if v else '–'; idx += 1
-        cells[idx].text = str(r['total'])
-        cells[idx + 1].text = str(r['average'])
+            cells[idx].text = _n(v) if v else '–'; idx += 1
+        cells[idx].text = _n(r['total'])
+        cells[idx + 1].text = _n(r['average'])
         cells[idx + 2].text = GradeScale.get_grade(r['average']) if r['average'] else '–'
         for c in cells:
             for p in c.paragraphs:
@@ -419,13 +420,13 @@ def analytics_pdf(term_id, assignment_id):
 
     def kpi_table():
         cells = [
-            ('Class average', s.get('class_average')), ('Pass rate', f"{s.get('pass_rate')}%"),
-            ('Highest avg', s.get('highest')), ('Lowest avg', s.get('lowest')),
+            ('Class average', _n(s.get('class_average'))), ('Pass rate', f"{_n(s.get('pass_rate'))}%"),
+            ('Highest avg', _n(s.get('highest'))), ('Lowest avg', _n(s.get('lowest'))),
             ('Students assessed', f"{s.get('assessed')}/{s.get('students')}"),
-            ('Entry completion', f"{s.get('completion')}%"),
+            ('Entry completion', f"{_n(s.get('completion'))}%"),
         ]
         if s.get('trend') is not None:
-            cells.append(('vs last term', f"{'+' if s['trend'] > 0 else ''}{s['trend']}"))
+            cells.append(('vs last term', f"{'+' if s['trend'] > 0 else ''}{_n(s['trend'])}"))
         rows, row = [], []
         for i, (lbl, val) in enumerate(cells):
             row.append(Paragraph(f"<b><font size=15 color='#0D6A4E'>{pdf_escape(val)}</font></b>"
@@ -472,14 +473,14 @@ def analytics_pdf(term_id, assignment_id):
                   _bar_table([(f"Grade {g['grade']}", g['count']) for g in a['grade_distribution']])]
     if a.get('gender'):
         elems += [Paragraph('By gender', hh),
-                  _bar_table([(f"{g['group']} (avg {g['average']}, {g['pass_rate']}% pass)", g['count'])
+                  _bar_table([(f"{g['group']} (avg {_n(g['average'])}, {_n(g['pass_rate'])}% pass)", g['count'])
                               for g in a['gender']])]
     if a.get('subjects'):
         elems += [Paragraph('Subject difficulty (hardest first)', hh)]
         srows = [['Subject', 'Average', 'Pass %', 'Assessed']]
         for sub_ in a['subjects']:
-            srows.append([sub_['name'], str(sub_['average']) if sub_['assessed'] else '—',
-                          (str(sub_['pass_rate']) + '%') if sub_['assessed'] else '—',
+            srows.append([sub_['name'], _n(sub_['average']) if sub_['assessed'] else '—',
+                          (_n(sub_['pass_rate']) + '%') if sub_['assessed'] else '—',
                           str(sub_['assessed'])])
         st = Table(srows, colWidths=[(A4[0] - 30 * mm) * f for f in (0.46, 0.18, 0.18, 0.18)], repeatRows=1)
         st.setStyle(TableStyle([

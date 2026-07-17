@@ -6,6 +6,8 @@ so the downloaded PDF matches the on-screen / printed sheet.
 import io
 from xml.sax.saxutils import escape as _xml_escape
 
+from utils.numfmt import fmt_num as _n
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
@@ -101,7 +103,7 @@ def _card_flowables(student, report_data, term, school,
 
     ts = report_data.get('term_summary')
     pos = ts.position_in_class if (ts and ts.position_in_class) else '—'
-    att = (f'{ts.attendance_percentage}%' if (ts and ts.attendance_percentage is not None) else '—')
+    att = (f'{_n(ts.attendance_percentage)}%' if (ts and ts.attendance_percentage is not None) else '—')
     e.append(_info_table([
         [('Name', student.full_name), ('Exam No', student.student_id)],
         [('Class', report_data['assignment'].display_name), ('No. in Class', report_data.get('no_in_class', '—'))],
@@ -116,8 +118,8 @@ def _card_flowables(student, report_data, term, school,
     data = [header]
     for row in report_data['subjects']:
         cells = [row['subject'].name]
-        cells += [('' if row['assessments'].get(a.id) is None else row['assessments'].get(a.id)) for a in ats]
-        cells += [row['total'], row['grade'], row['remark']]
+        cells += [_n(row['assessments'].get(a.id), blank='') for a in ats]
+        cells += [_n(row['total']), row['grade'], row['remark']]
         data.append([str(c) for c in cells])
     n = len(ats)
     subj_w = 46 * mm
@@ -139,8 +141,8 @@ def _card_flowables(student, report_data, term, school,
 
     # Summary line
     e.append(_info_table([
-        [('No. of Subjects', report_data['total_subjects']), ('Scores Obtainable', report_data.get('scores_obtainable', '—'))],
-        [('Score Obtained', round(report_data['total_score'], 1)), ('Average Mark', f"{report_data.get('average_pct', report_data['average'])}%")],
+        [('No. of Subjects', report_data['total_subjects']), ('Scores Obtainable', _n(report_data.get('scores_obtainable'), blank='—'))],
+        [('Score Obtained', _n(report_data['total_score'])), ('Average Mark', f"{_n(report_data.get('average_pct', report_data['average']))}%")],
         [('Result Status', report_data.get('result_status', '')), ('Overall Grade', report_data['overall_grade'])],
     ] + ([[('Next Term Fees', report_data['next_term_fees']), ('Next Term Begins', report_data.get('next_term_begins', ''))]]
          if report_data.get('next_term_fees') or report_data.get('next_term_begins') else []),
