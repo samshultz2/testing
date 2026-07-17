@@ -726,8 +726,31 @@ def scoresheet_save():
         return redirect(url_for('subjects.scores_entry', term_id=term_id,
                                 assignment_id=assignment_id, class_subject_id=class_subject_id))
 
-    sheet_cols = _sheet_columns(class_subject, term=term_id)
     auto_id_re = _re.compile(r'^STU\d{3,}$')
+
+    # Read the cell values straight from the submitted field names rather than
+    # re-deriving which assessment-type ids "should" be present. The review grid
+    # rendered inputs named ``cell_<row>_<assessment_type_id>``; a tenant with two
+    # active assessment types sharing a short name (e.g. two "EXAM") could make a
+    # re-derived column list resolve to a *different* id here than the one the grid
+    # used, so every cell read back empty and the save reported 0 (or a partial
+    # count) scores. Trusting the posted keys makes the save match the grid exactly.
+    cell_key_re = _re.compile(r'^cell_(\d+)_(\d+)$')
+    row_cells = {}                                   # row_index -> {at_id: raw_value}
+    for key, val in request.form.items():
+        m = cell_key_re.match(key)
+        if m:
+            row_cells.setdefault(int(m.group(1)), {})[int(m.group(2))] = val
+
+    # Effective max per assessment-type id (per-term settings honoured), so an
+    # out-of-range value is still rejected correctly however the column was named.
+    from utils.assessments import effective_max
+    from models import AssessmentType
+    at_by_id = {at.id: at for at in AssessmentType.query.filter_by(is_active=True).all()}
+
+    def _max_for(at_id):
+        at = at_by_id.get(at_id)
+        return effective_max(class_subject.subject, at, term=term_id) if at else None
 
     adopted = 0
     warnings = []
@@ -736,13 +759,12 @@ def scoresheet_save():
 
     try:
         for r in range(row_count):
+            cells = row_cells.get(r, {})
             student_pk = request.form.get(f'student_{r}', type=int)
             if not student_pk:
                 # A row the user left unmatched: warn (don't silently lose it) if it
                 # actually carried any scores.
-                had_scores = any((request.form.get(f'cell_{r}_{at.id}') or '').strip()
-                                 for at, _mx in sheet_cols)
-                if had_scores:
+                if any((v or '').strip() for v in cells.values()):
                     dropped.append((request.form.get(f'rowname_{r}') or '').strip() or f'row {r + 1}')
                 continue
             student = db.session.get(Student, student_pk)
@@ -761,9 +783,8 @@ def scoresheet_save():
                     student.student_id = scanned
                     adopted += 1
 
-            for at, max_score in sheet_cols:
-                items.append((student.id, at.id,
-                              request.form.get(f'cell_{r}_{at.id}'), max_score))
+            for at_id, raw in cells.items():
+                items.append((student.id, at_id, raw, _max_for(at_id)))
 
         counts = persist_scores(term_id, assignment_id, class_subject_id,
                                 class_subject.subject_id, items, allow_delete=False)

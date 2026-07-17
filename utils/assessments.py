@@ -138,7 +138,10 @@ def subject_columns(subject, term=None):
     """Ordered [(assessment_type, max)] for a subject in a term, skipping excluded
     (max 0) columns. Honours per-term settings when the term has any."""
     from models import AssessmentType, SubjectAssessmentOverride
-    types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
+    # Deterministic order (id breaks ties on equal ``order``) so the score-sheet
+    # columns are identical between the preview render and the save round-trip.
+    types = AssessmentType.query.filter_by(is_active=True).order_by(
+        AssessmentType.order, AssessmentType.id).all()
     overrides = {o.assessment_type_id: o.max_score
                  for o in SubjectAssessmentOverride.query.filter_by(
                      subject_id=subject.id, is_active=True).all()}

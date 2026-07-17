@@ -132,6 +132,49 @@ def test_sheet_columns_deduplicates_assessment_types(app):
         assert len(shorts) == len(set(shorts))               # no short name appears twice
 
 
+def test_paste_save_survives_duplicate_assessment_types(app):
+    """The '0 or sometimes 6 scores' bug. When a tenant has two active assessment
+    types with the SAME order value, re-deriving the column list at save time could
+    resolve a column to a different id than the review grid rendered — so every cell
+    read back empty and the save reported a partial (or zero) count, non-deterministically.
+    The save must persist exactly what the grid posted."""
+    import re
+    from models import AssessmentType, StudentScore
+    ids = _setup(app)
+    with app.app_context():
+        # two active 'EXAM' types sharing an order value (the drift trigger)
+        db.session.add(AssessmentType(name='Exam A', short_name='EXAM', max_score=40, order=50, is_active=True))
+        db.session.add(AssessmentType(name='Exam B', short_name='EXAM', max_score=40, order=50, is_active=True))
+        db.session.commit()
+        cs = db.session.get(ClassSubject, ids['cs'])
+        ncols = len(_sheet_columns(cs))
+    c = _admin(app)
+    with app.test_request_context():
+        paste_url = url_for('subjects.scoresheet_paste')
+        save_url = url_for('subjects.scoresheet_save')
+    # every column gets 3 (within every max, including the duplicated EXAM/40)
+    data = 'Aa One, ' + ', '.join(['3'] * ncols)
+    body = c.post(paste_url, data={
+        'term_id': ids['term'], 'assignment_id': ids['asg'], 'class_subject_id': ids['cs'],
+        '_csrf_token': auth_csrf(c), 'data': data,
+    }).get_data(as_text=True)
+    # submit the grid back exactly as it was rendered (what a browser posts)
+    save = {'term_id': ids['term'], 'assignment_id': ids['asg'], 'class_subject_id': ids['cs'],
+            '_csrf_token': auth_csrf(c), 'row_count': '1',
+            'student_0': str(ids['a']), 'rowname_0': 'Aa One'}
+    posted = 0
+    for m in re.finditer(r'name="(cell_0_\d+)"[^>]*?value="([^"]*)"', body):
+        save[m.group(1)] = m.group(2)
+        if m.group(2).strip():
+            posted += 1
+    assert posted >= 1
+    c.post(save_url, data=save, follow_redirects=True)
+    with app.app_context():
+        scores = StudentScore.query.filter_by(class_subject_id=ids['cs'], student_id=ids['a']).all()
+        assert len(scores) == posted, f'{len(scores)} saved of {posted} posted (drift loss)'
+        assert all(s.score == 3 for s in scores)
+
+
 def test_paste_does_not_collide_unenrolled_row_onto_a_pupil(app):
     """End-to-end: pasting a name that isn't on the register must leave that row
     unmatched instead of hijacking an enrolled pupil's slot — so the enrolled rows
