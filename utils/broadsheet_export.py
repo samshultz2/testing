@@ -161,10 +161,10 @@ def broadsheet_pdf(term_id, assignment_id):
     m = build_model(term_id, assignment_id)
     if not m:
         return None
-    primary, accent, light, ink = _theme()
     styles = getSampleStyleSheet()
-    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=primary, spaceAfter=2)
-    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#6B7A74'))
+    # Monochrome — no colours or shading (clean to print / photocopy).
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=colors.black, spaceAfter=2)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.black)
     cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=7.5, leading=9)
 
     subjects = m['subjects']
@@ -191,15 +191,14 @@ def broadsheet_pdf(term_id, assignment_id):
 
     t = Table(data, colWidths=widths, repeatRows=1)
     ts = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), primary),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('FONTSIZE', (0, 0), (-1, -1), 7.5),
         ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.black),
         ('FONTNAME', (-3, 1), (-1, -1), 'Helvetica-Bold'),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ])
@@ -276,15 +275,35 @@ def broadsheet_docx(term_id, assignment_id):
 # --------------------------------------------------------------------------- #
 
 def broadsheet_png(term_id, assignment_id, dpi=200):
-    """Render the broadsheet PDF's first page to a high-resolution PNG."""
+    """Render the broadsheet PDF to a single high-resolution PNG.
+
+    Every page is rendered and the pages are stacked vertically into one image,
+    so a broadsheet whose roster spills onto several pages exports in full
+    (previously only the first page was captured)."""
     pdf = broadsheet_pdf(term_id, assignment_id)
     if not pdf:
         return None
     import fitz
     doc = fitz.open(stream=pdf, filetype='pdf')
-    page = doc.load_page(0)
-    pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72.0, dpi / 72.0))
-    return pix.tobytes('png')
+    matrix = fitz.Matrix(dpi / 72.0, dpi / 72.0)
+    pixmaps = [page.get_pixmap(matrix=matrix) for page in doc]
+    if len(pixmaps) == 1:
+        return pixmaps[0].tobytes('png')
+
+    # Stitch all pages into one tall image (white gutter between pages).
+    from PIL import Image
+    imgs = [Image.frombytes('RGB', (p.width, p.height), p.samples) for p in pixmaps]
+    gap = max(1, dpi // 20)
+    width = max(im.width for im in imgs)
+    height = sum(im.height for im in imgs) + gap * (len(imgs) - 1)
+    canvas = Image.new('RGB', (width, height), 'white')
+    y = 0
+    for im in imgs:
+        canvas.paste(im, ((width - im.width) // 2, y))
+        y += im.height + gap
+    out = io.BytesIO()
+    canvas.save(out, format='PNG')
+    return out.getvalue()
 
 
 # --------------------------------------------------------------------------- #
@@ -292,7 +311,7 @@ def broadsheet_png(term_id, assignment_id, dpi=200):
 # --------------------------------------------------------------------------- #
 
 def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -331,20 +350,21 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
                Paragraph(pdf_escape(st.surname or ''), nm)]
         row += [''] * (len(cols) + 2)          # blank score cells
         data.append(row)
-    # A few spare blank rows for late entrants
-    for _ in range(3):
+    # A couple of spare blank rows for late entrants.
+    for _ in range(2):
         data.append([''] * (4 + len(cols) + 2))
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm, bottomMargin=8 * mm,
+    # Portrait A4 gives the vertical room to keep a full class on a single page.
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=8 * mm, bottomMargin=8 * mm,
                             leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f"Score sheet — {asg.display_name}")
     from reportlab.pdfbase.pdfmetrics import stringWidth
-    avail = landscape(A4)[0] - 16 * mm
+    avail = A4[0] - 16 * mm
     sn_w = 9 * mm
 
     # Name columns fit their contents (roster + header label), within sane bounds.
-    def _fit(label, values, mn=20 * mm, mx=48 * mm):
+    def _fit(label, values, mn=18 * mm, mx=34 * mm):
         w = stringWidth(label, 'Helvetica-Bold', 7)
         for v in values:
             w = max(w, stringWidth(v or '', 'Helvetica', 8.5))
@@ -353,16 +373,30 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
     mid_w = _fit('Middle Name', [s.middle_name for s in students])
     sur_w = _fit('Surname', [s.surname for s in students])
 
-    # Score columns share the remaining width (min 11mm each) so the grid still
+    # Score columns share the remaining width (min 9mm each) so the grid still
     # spans the page even when the names are short.
     n_score = len(cols) + 2
-    score_w = max(11 * mm, (avail - sn_w - first_w - mid_w - sur_w) / n_score)
+    names_w = sn_w + first_w + mid_w + sur_w
+    score_w = max(9 * mm, (avail - names_w) / n_score)
     widths = [sn_w, first_w, mid_w, sur_w] + [score_w] * n_score
+    # If long names + many columns overspill the page width, shrink names to fit.
+    overflow = sum(widths) - avail
+    if overflow > 0:
+        shrink = min(overflow, first_w + mid_w + sur_w - 3 * (16 * mm))
+        if shrink > 0:
+            scale = 1 - shrink / (first_w + mid_w + sur_w)
+            first_w, mid_w, sur_w = first_w * scale, mid_w * scale, sur_w * scale
+            widths = [sn_w, first_w, mid_w, sur_w] + [score_w] * n_score
 
-    # A fixed, comfortable writing height — the sheet needn't stretch to fill the page.
+    # Dynamic row height: fill the page's vertical space so a class up to ~45
+    # students stays on one page, but each row keeps a comfortable writing floor
+    # (~5.2mm) so larger classes spill onto a second page rather than cramming.
     body_rows = len(data) - 1
     header_h = 13 * mm
-    heights = [header_h] + [10 * mm] * body_rows
+    # Vertical room left for the table after the title block and margins.
+    body_avail = A4[1] - 16 * mm - 26 * mm - header_h
+    row_h = max(5.2 * mm, min(10 * mm, body_avail / max(body_rows, 1)))
+    heights = [header_h] + [row_h] * body_rows
 
     t = Table(data, colWidths=widths, rowHeights=heights, repeatRows=1)
     t.setStyle(TableStyle([

@@ -86,6 +86,93 @@ def test_blank_score_sheet_pdf(app):
     assert r.get_data()[:4] == b'%PDF'
 
 
+def _seed_large(app, n=60):
+    """A class large enough that the broadsheet spills onto more than one page."""
+    with app.app_context():
+        _SEQ[0] += 1
+        tag = f'BIG{_SEQ[0]}'
+        bid = Branch.get_default().id
+        sess = AcademicSession(name=f'{tag}-Sess'); db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name='First Term'); db.session.add(term); db.session.flush()
+        sc = SchoolClass.query.first(); arm = ClassArm.query.first()
+        caa = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+        db.session.add(caa); db.session.flush()
+        subj = Subject(name=f'{tag}-English', is_active=True); db.session.add(subj); db.session.flush()
+        cs = ClassSubject(subject_id=subj.id, class_id=sc.id, arm_id=arm.id, term_id=term.id, is_active=True)
+        db.session.add(cs); db.session.flush()
+        at = (AssessmentType.query.filter_by(short_name='CA1').first()
+              or AssessmentType(name='1st CA', short_name='CA1', max_score=5, order=1, is_active=True))
+        if at.id is None:
+            db.session.add(at); db.session.flush()
+        for i in range(n):
+            s = Student(student_id=f'{tag}-{i}', first_name=f'First{i}', middle_name='Mid',
+                        surname=f'Sur{i}', gender='Male', is_active=True, branch_id=bid)
+            db.session.add(s); db.session.flush()
+            db.session.add(StudentEnrollment(student_id=s.id, class_arm_assignment_id=caa.id, is_active=True))
+            db.session.add(StudentScore(student_id=s.id, class_subject_id=cs.id,
+                                        assessment_type_id=at.id, score=4))
+        db.session.commit()
+        return dict(term=term.id, asg=caa.id)
+
+
+def test_broadsheet_png_captures_every_page(app):
+    """A multi-page broadsheet must export as one tall PNG covering all pages,
+    not just the first (regression for the single-page image bug)."""
+    import fitz
+    from PIL import Image
+    import io as _io
+    from utils.broadsheet_export import broadsheet_pdf, broadsheet_png
+    ids = _seed_large(app, n=60)
+    with app.app_context():
+        pdf = broadsheet_pdf(ids['term'], ids['asg'])
+        doc = fitz.open(stream=pdf, filetype='pdf')
+        assert doc.page_count > 1                       # roster really spills
+        png = broadsheet_png(ids['term'], ids['asg'], dpi=100)
+        img = Image.open(_io.BytesIO(png))
+        # stitched height ≈ sum of per-page heights (well beyond a single page)
+        one_page_h = doc.load_page(0).get_pixmap(matrix=fitz.Matrix(100 / 72.0, 100 / 72.0)).height
+        assert img.height > one_page_h * 1.5
+
+
+def test_broadsheet_pdf_is_monochrome(app):
+    """The broadsheet PDF must have no colour/shading — only black on white."""
+    import fitz
+    from utils.broadsheet_export import broadsheet_pdf
+    ids = _seed(app)
+    with app.app_context():
+        pdf = broadsheet_pdf(ids['term'], ids['asg'])
+        doc = fitz.open(stream=pdf, filetype='pdf')
+        pix = doc.load_page(0).get_pixmap(matrix=fitz.Matrix(2, 2))
+        px = pix.samples
+        n = pix.n                                       # bytes per pixel (3 or 4)
+        # every pixel must be greyscale (r≈g≈b): no coloured header/zebra fills
+        for i in range(0, len(px), n * 37):             # sample every 37th pixel
+            r, g, b = px[i], px[i + 1], px[i + 2]
+            assert max(r, g, b) - min(r, g, b) <= 12
+
+
+def test_blank_sheet_single_page_for_normal_class(app):
+    """A normal-size class fits the blank score sheet on one page."""
+    import fitz
+    from utils.broadsheet_export import blank_sheet_pdf
+    ids = _seed_large(app, n=40)
+    with app.app_context():
+        pdf = blank_sheet_pdf(ids['term'], ids['asg'], subject_name='Maths')
+        doc = fitz.open(stream=pdf, filetype='pdf')
+        assert doc.page_count == 1
+
+
+def test_blank_sheet_spills_for_very_large_class(app):
+    """A very large class (45+) spills onto a second page rather than cramming."""
+    import fitz
+    from utils.broadsheet_export import blank_sheet_pdf
+    ids = _seed_large(app, n=70)
+    with app.app_context():
+        pdf = blank_sheet_pdf(ids['term'], ids['asg'], subject_name='Maths')
+        doc = fitz.open(stream=pdf, filetype='pdf')
+        assert doc.page_count >= 2
+
+
 def test_export_requires_selection(app):
     c = _admin(app)
     r = c.get('/subjects/broadsheet/export?format=pdf', follow_redirects=False)
