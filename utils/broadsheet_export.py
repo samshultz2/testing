@@ -306,12 +306,12 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
                 .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
                 .join(Student).order_by(Student.surname, Student.first_name).all())]
     cols = score_columns()
-    primary, accent, light, ink = _theme()
+    # Plain black-and-white — no fills or shading (clean to photocopy).
     styles = getSampleStyleSheet()
-    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=primary, spaceAfter=1)
-    meta = ParagraphStyle('m', parent=styles['Normal'], fontSize=10, textColor=ink, leading=15)
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=colors.black, spaceAfter=1)
+    meta = ParagraphStyle('m', parent=styles['Normal'], fontSize=10, textColor=colors.black, leading=15)
     hd = ParagraphStyle('hd', parent=styles['Normal'], fontSize=6.8, leading=7.8,
-                        alignment=1, textColor=colors.white, fontName='Helvetica-Bold')
+                        alignment=1, textColor=colors.black, fontName='Helvetica-Bold')
     nm = ParagraphStyle('nm', parent=styles['Normal'], fontSize=8.5, leading=10)
 
     # Header row: S/N, First, Middle, Surname, <score cols…>, Exam Total, General Total
@@ -355,13 +355,12 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
 
     t = Table(data, colWidths=widths, rowHeights=heights, repeatRows=1)
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), primary),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('ALIGN', (4, 0), (-1, -1), 'CENTER'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#9AA8A1')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('FONTSIZE', (0, 1), (0, -1), 8),
-        ('LINEBELOW', (0, 0), (-1, 0), 1, primary),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.black),
     ]))
 
     subj = subject_name or '__________________________'

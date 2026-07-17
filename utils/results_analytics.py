@@ -92,6 +92,8 @@ def _compute(term_id, assignment_id):
     bands = _grade_bands()
     grade_dist = {g: 0 for g, _lo, _hi, _r in bands} or {'F': 0}
     n_subjects = len(class_subjects)
+    band_defs = [('0–39', 0, 39.999), ('40–49', 40, 49.999), ('50–59', 50, 59.999),
+                 ('60–69', 60, 69.999), ('70–79', 70, 79.999), ('80–100', 80, 1e9)]
 
     # Per-subject accumulators.
     subj = {cs.id: {'name': cs.subject.name, 'totals': []} for cs in class_subjects}
@@ -126,17 +128,28 @@ def _compute(term_id, assignment_id):
     passed = sum(1 for a in averages if a >= pass_mark)
     ranked = sorted(assessed_students, key=lambda s: -s['average'])
 
-    # Subject difficulty: mean subject total, ascending (hardest first).
+    # Subject difficulty: mean subject total, ascending (hardest first). Each
+    # subject also carries its own grade spread + score-band histogram for the
+    # per-subject drill-down.
     subjects = []
     for cs in class_subjects:
         totals = subj[cs.id]['totals']
         if totals:
             avg = round(sum(totals) / len(totals), 2)
             pr = round(100 * sum(1 for t in totals if t >= pass_mark) / len(totals), 1)
+            hi, lo = round(max(totals), 1), round(min(totals), 1)
         else:
-            avg, pr = 0, 0
-        subjects.append({'id': cs.id, 'name': subj[cs.id]['name'], 'average': avg,
-                         'pass_rate': pr, 'assessed': len(totals)})
+            avg, pr, hi, lo = 0, 0, 0, 0
+        sg = {g: 0 for g, _l, _h, _r in bands}
+        for t in totals:
+            sg[_grade_for(t, bands)] = sg.get(_grade_for(t, bands), 0) + 1
+        subjects.append({
+            'id': cs.id, 'name': subj[cs.id]['name'], 'average': avg,
+            'pass_rate': pr, 'assessed': len(totals), 'highest': hi, 'lowest': lo,
+            'grades': [{'grade': g, 'count': sg.get(g, 0)} for g, _l, _h, _r in bands],
+            'bands': [{'band': lbl, 'count': sum(1 for t in totals if lo2 <= t <= hi2)}
+                      for lbl, lo2, hi2 in band_defs],
+        })
     subjects_by_difficulty = sorted(subjects, key=lambda r: (r['assessed'] == 0, r['average']))
 
     # Students needing intervention: assessed but below the pass mark on average,
@@ -146,8 +159,6 @@ def _compute(term_id, assignment_id):
         key=lambda s: s['average'])[:25]
 
     # Score-band histogram of student averages (the shape of the class).
-    band_defs = [('0–39', 0, 39.999), ('40–49', 40, 49.999), ('50–59', 50, 59.999),
-                 ('60–69', 60, 69.999), ('70–79', 70, 79.999), ('80–100', 80, 1e9)]
     score_bands = [{'band': lbl, 'count': sum(1 for a in averages if lo <= a <= hi)}
                    for lbl, lo, hi in band_defs]
 

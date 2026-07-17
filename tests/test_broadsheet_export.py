@@ -111,3 +111,21 @@ def test_class_analytics_has_score_bands_and_gender(app):
         assert 'score_bands' in a and len(a['score_bands']) == 6
         assert 'gender' in a          # boys seeded -> at least one group
         assert any(g['group'] == 'Boys' for g in a['gender'])
+
+
+def test_per_subject_drilldown_data(app):
+    from utils.results_analytics import class_analytics
+    ids = _seed(app)
+    with app.app_context():
+        a = class_analytics(ids['term'], ids['asg'], use_cache=False)
+        sub = a['subjects'][0]
+        assert 'grades' in sub and 'bands' in sub
+        assert len(sub['bands']) == 6
+        assert 'highest' in sub and 'lowest' in sub
+
+
+def test_score_entry_exposes_blank_sheet_link(app):
+    ids = _seed(app)
+    c = _admin(app)
+    html = c.get(f"/subjects/scores?term_id={ids['term']}&assignment_id={ids['asg']}").get_data(as_text=True)
+    assert '/subjects/broadsheet/blank-sheet' in html

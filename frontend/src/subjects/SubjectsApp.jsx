@@ -426,6 +426,7 @@ function Scores({ d, notify }) {
         <div className="page-header-actions">
           <a href={d.urls.scan} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan Score Sheet</a>
           <a href={d.urls.import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Import Excel</a>
+          {d.urls.blank_sheet && <a href={d.urls.blank_sheet} className="btn btn-secondary" data-native target="_blank" rel="noopener"><i aria-hidden="true" className="fas fa-file-lines" /> Blank sheet</a>}
         </div>
       </div>
       <RecentClasses currentId={d.assignment_id} onPick={(term, asg) => set({ term_id: term, assignment_id: asg, class_subject_id: '', assessment_type_id: '' })} />
@@ -881,6 +882,44 @@ function ColumnChart({ bars, height = 170, color = 'var(--primary,#0D6A4E)' }) {
   );
 }
 
+function SubjectDifficulty({ subjects }) {
+  const [open, setOpen] = useState(null);
+  return (
+    <div className="card"><div className="card-header"><h3>Subject difficulty (hardest first)</h3>
+      <span className="text-muted text-sm">tap a subject for its breakdown</span></div>
+      <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        <table className="data-table"><thead><tr><th /><th>Subject</th><th className="text-right">Avg</th><th className="text-right">Pass %</th></tr></thead>
+          <tbody>{subjects.map((sub) => {
+            const isOpen = open === sub.id;
+            return (
+              <React.Fragment key={sub.id}>
+                <tr onClick={() => sub.assessed && setOpen(isOpen ? null : sub.id)} style={{ cursor: sub.assessed ? 'pointer' : 'default' }}>
+                  <td style={{ width: 24, color: 'var(--text-muted)' }}>{sub.assessed ? <i aria-hidden="true" className={'fas fa-chevron-' + (isOpen ? 'down' : 'right')} /> : ''}</td>
+                  <td>{sub.name}</td>
+                  <td className="text-right"><strong>{sub.assessed ? sub.average : '—'}</strong></td>
+                  <td className="text-right"><span className={'badge ' + (sub.pass_rate >= 50 ? 'badge-success' : 'badge-danger')}>{sub.assessed ? sub.pass_rate + '%' : '—'}</span></td>
+                </tr>
+                {isOpen && (
+                  <tr><td colSpan={4} style={{ background: 'var(--surface-2,#f8f9fb)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '1rem', padding: '.5rem' }}>
+                      <div>
+                        <div className="text-muted text-sm mb-1">Grade spread · {sub.assessed} assessed · high {sub.highest} · low {sub.lowest}</div>
+                        <ColumnChart height={130} bars={(sub.grades || []).map((g) => ({ label: g.grade, value: g.count }))} />
+                      </div>
+                      <div>
+                        <div className="text-muted text-sm mb-1">Score bands</div>
+                        <ColumnChart height={130} bars={(sub.bands || []).map((b) => ({ label: b.band, value: b.count, color: b.band === '0–39' ? '#e74a3b' : (parseInt(b.band) >= 70 ? 'var(--success,#1c8c53)' : 'var(--primary,#0D6A4E)') }))} />
+                      </div>
+                    </div>
+                  </td></tr>
+                )}
+              </React.Fragment>
+            );
+          })}</tbody></table>
+      </div></div>
+  );
+}
+
 function Analytics({ d, notify }) {
   const nav = useNav();
   const a = d.analytics;
@@ -951,15 +990,7 @@ function Analytics({ d, notify }) {
               {a.grade_distribution.map((g) => <Bar key={g.grade} label={`Grade ${g.grade}`} value={g.count} max={gradeMax} />)}
             </div></div>
 
-          <div className="card"><div className="card-header"><h3>Subject difficulty (hardest first)</h3></div>
-            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-              <table className="data-table"><thead><tr><th>Subject</th><th className="text-right">Avg</th><th className="text-right">Pass %</th></tr></thead>
-                <tbody>{a.subjects.map((sub) => (
-                  <tr key={sub.id}><td>{sub.name}</td>
-                    <td className="text-right"><strong>{sub.assessed ? sub.average : '—'}</strong></td>
-                    <td className="text-right"><span className={'badge ' + (sub.pass_rate >= 50 ? 'badge-success' : 'badge-danger')}>{sub.assessed ? sub.pass_rate + '%' : '—'}</span></td></tr>
-                ))}</tbody></table>
-            </div></div>
+          <SubjectDifficulty subjects={a.subjects} />
 
           <div className="card"><div className="card-header"><h3>Top students</h3></div>
             <div className="card-body">

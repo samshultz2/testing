@@ -119,7 +119,10 @@ def scores_entry():
         'save_url': url_for('subjects.save_scores'),
         'urls': {'scan': url_for('subjects.scoresheet_scan', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'paste': url_for('subjects.scoresheet_paste', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
-                 'import': url_for('subjects.import_scores', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or '')},
+                 'import': url_for('subjects.import_scores', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
+                 'blank_sheet': (url_for('subjects.blank_score_sheet', term_id=term_id or '', assignment_id=assignment_id or '',
+                                         subject=selected_class_subject.subject.name if selected_class_subject else '')
+                                 if term_id and assignment_id else '')},
     })
 
 
