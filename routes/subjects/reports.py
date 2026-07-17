@@ -266,24 +266,28 @@ def institution_analytics():
         'self_url': url_for('subjects.institution_analytics'),
         'report_card_base': url_for('subjects.student_report_card', student_id=0)[:-1],
         'urls': {
-            'report_pdf': url_for('subjects.institution_report',
-                                  term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
+            'report_base': url_for('subjects.institution_report',
+                                   term_id=term_id or '', scope=scope, scope_id=scope_id or ''),
             'class_analytics_base': url_for('subjects.analytics_dashboard'),
         },
     })
 
 
 @subjects_bp.route('/analytics/institution/report.pdf')
+@subjects_bp.route('/analytics/institution/report')
 @login_required
 def institution_report():
-    """Board-pack PDF of the institution analytics for a scope in a term."""
-    from utils.analytics_org_pdf import institution_pdf, institution_filename
-    from utils.web_exports import pdf_response
+    """Institution analytics export for a scope in a term.
+    ``format`` = pdf (default) | excel | image."""
+    from utils.analytics_org_pdf import (institution_pdf, institution_png,
+                                         institution_xlsx, institution_filename)
+    from utils.web_exports import pdf_response, xlsx_response, png_response
     from utils.results_analytics_org import org_analytics
 
     term_id = request.args.get('term_id', type=int)
     scope = request.args.get('scope') or 'school'
     scope_id = request.args.get('scope_id')
+    fmt = (request.args.get('format') or 'pdf').lower()
     if not term_id:
         flash('Select a term first.', 'error')
         return redirect(url_for('subjects.institution_analytics'))
@@ -296,8 +300,11 @@ def institution_report():
         return redirect(url_for('subjects.institution_analytics',
                                 term_id=term_id, scope=scope, scope_id=scope_id or ''))
     term = db.session.get(Term, term_id)
-    pdf = institution_pdf(data, term)
-    return pdf_response(pdf, institution_filename(data, term), inline=False)
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(institution_xlsx(data, term), institution_filename(data, term, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(institution_png(data, term), institution_filename(data, term, 'png'), inline=False)
+    return pdf_response(institution_pdf(data, term), institution_filename(data, term, 'pdf'), inline=False)
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])

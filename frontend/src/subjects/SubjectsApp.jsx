@@ -1158,7 +1158,11 @@ function Institution({ d, notify }) {
       <div className="page-header"><h1>Institution Analytics</h1>
         <div className="page-header-actions">
           <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><i aria-hidden="true" className="fas fa-rotate" /> Refresh</button>
-          {a && s.assessed ? <a href={d.urls.report_pdf} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> Board-pack PDF</a> : null}
+          {a && s.assessed ? (() => {
+            const base = d.urls.report_base; const sep = base.includes('?') ? '&' : '?';
+            const exp = (fmt) => `${base}${sep}format=${fmt}`;
+            return <ExportMenu urls={{ export: exp('excel'), export_pdf: exp('pdf'), export_image: exp('image') }} />;
+          })() : null}
         </div>
       </div>
       <ScopePicker d={d} />

@@ -5314,6 +5314,13 @@
 ],
 [
 "subjects.institution_report",
+"/subjects/analytics/institution/report",
+[
+"GET"
+]
+],
+[
+"subjects.institution_report",
 "/subjects/analytics/institution/report.pdf",
 [
 "GET"

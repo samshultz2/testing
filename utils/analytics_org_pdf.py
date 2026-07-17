@@ -23,10 +23,129 @@ def _school_name():
         return 'School'
 
 
-def institution_filename(data, term):
+def institution_stem(data, term):
     base = (data.get('scope_label') or 'school').replace(' ', '_')
     tname = (term.name if term else 'term').replace(' ', '_')
-    return f"analytics_{base}_{tname}.pdf"
+    return f"analytics_{base}_{tname}"
+
+
+def institution_filename(data, term, ext='pdf'):
+    return f"{institution_stem(data, term)}.{ext}"
+
+
+def institution_png(data, term, dpi=200):
+    """Render the board-pack PDF to a single tall HD PNG (every page stitched)."""
+    pdf = institution_pdf(data, term)
+    if not pdf:
+        return None
+    import fitz
+    doc = fitz.open(stream=pdf, filetype='pdf')
+    matrix = fitz.Matrix(dpi / 72.0, dpi / 72.0)
+    pixmaps = [page.get_pixmap(matrix=matrix) for page in doc]
+    if len(pixmaps) == 1:
+        return pixmaps[0].tobytes('png')
+    from PIL import Image
+    imgs = [Image.frombytes('RGB', (p.width, p.height), p.samples) for p in pixmaps]
+    gap = max(1, dpi // 20)
+    width = max(im.width for im in imgs)
+    height = sum(im.height for im in imgs) + gap * (len(imgs) - 1)
+    canvas = Image.new('RGB', (width, height), 'white')
+    y = 0
+    for im in imgs:
+        canvas.paste(im, ((width - im.width) // 2, y))
+        y += im.height + gap
+    out = io.BytesIO()
+    canvas.save(out, format='PNG')
+    return out.getvalue()
+
+
+def institution_xlsx(data, term):
+    """Multi-sheet workbook of the institution analytics (KPIs + every league +
+    trend + the roll lists) for analysts who want the raw numbers."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    s = data.get('summary') or {}
+    wb = Workbook()
+    head_fill = PatternFill('solid', fgColor='0D6A4E')
+    head_font = Font(bold=True, color='FFFFFF')
+    title_font = Font(bold=True, size=14, color='0D6A4E')
+
+    def sheet(title, headers, rows, first=False):
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = title[:31]
+        ws.append(headers)
+        for c in ws[1]:
+            c.fill = head_fill; c.font = head_font; c.alignment = Alignment(horizontal='center')
+        for r in rows:
+            ws.append(r)
+        for col in ws.columns:
+            width = max((len(str(c.value)) if c.value is not None else 0) for c in col) + 2
+            ws.column_dimensions[col[0].column_letter].width = min(max(width, 10), 44)
+        return ws
+
+    # Summary sheet
+    ws = wb.active
+    ws.title = 'Summary'
+    ws['A1'] = f"Academic Performance — {data.get('scope_label', '')}"
+    ws['A1'].font = title_font
+    ws['A2'] = f"{term.full_name if term else ''}"
+    r = 4
+    for lbl, val in [
+        ('Students', s.get('students')), ('Assessed', s.get('assessed')),
+        ('Average score', s.get('class_average')), ('Pass rate %', s.get('pass_rate')),
+        ('Distinction rate %', s.get('distinction_rate')), ('Highest', s.get('highest')),
+        ('Lowest', s.get('lowest')), ('Entry completion %', s.get('completion')),
+        ('Units', s.get('units')), ('Subjects', s.get('subjects_count')),
+        ('Teachers', s.get('teachers_count')), ('Pass mark', s.get('pass_mark')),
+    ]:
+        ws[f'A{r}'] = lbl; ws[f'A{r}'].font = Font(bold=True); ws[f'B{r}'] = val
+        r += 1
+    ws.column_dimensions['A'].width = 22; ws.column_dimensions['B'].width = 14
+
+    units = data.get('units') or []
+    if units:
+        sheet(f"{data.get('unit_kind','Unit')} league",
+              [data.get('unit_kind', 'Unit'), 'Average', 'Pass %', 'Students'],
+              [[u['label'], u['average'], u['pass_rate'], u['students']] for u in units])
+    subjects = data.get('subjects') or []
+    if subjects:
+        sheet('Subjects', ['Subject', 'Average', 'Pass %', 'Highest', 'Lowest', 'Assessed'],
+              [[x['name'], x['average'], x['pass_rate'], x['highest'], x['lowest'], x['assessed']]
+               for x in subjects])
+    teachers = data.get('teachers') or []
+    if teachers:
+        sheet('Teachers', ['Teacher', 'Average', 'Pass %', 'Subjects', 'Classes', 'Entries',
+                           'Completion %', 'Verdict'],
+              [[t['name'], t['average'], t['pass_rate'], t['subject_count'], t['class_count'],
+                t['entries'], t['completion'], t['verdict']] for t in teachers])
+    branches = data.get('branches') or []
+    if branches:
+        sheet('Branches', ['Branch', 'Average', 'Pass %', 'Students'],
+              [[b['label'], b['average'], b['pass_rate'], b['students']] for b in branches])
+    att = data.get('attendance') or {}
+    if att.get('bands'):
+        rows = [[b['band'], b['count'], b['average']] for b in att['bands']]
+        ws2 = sheet('Attendance vs results', ['Attendance band', 'Students', 'Avg score'], rows)
+        if att.get('correlation') is not None:
+            ws2.append([]); ws2.append(['Correlation (r)', att['correlation']])
+    tr = data.get('trends') or {}
+    if tr.get('term_names'):
+        rows = [['Average score'] + list(tr.get('averages', [])),
+                ['Pass rate'] + list(tr.get('pass_rates', []))]
+        sheet('Trend', ['Metric'] + tr['term_names'], rows)
+    interv = data.get('intervention') or []
+    if interv:
+        sheet('Intervention', ['Student', 'Class', 'Average', 'Failing'],
+              [[x['name'], x.get('class', ''), x['average'], x['failed']] for x in interv])
+    honour = data.get('honour_roll') or []
+    if honour:
+        sheet('Honour roll', ['Student', 'Class', 'Average'],
+              [[x['name'], x.get('class', ''), x['average']] for x in honour])
+
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
 
 
 def institution_pdf(data, term):

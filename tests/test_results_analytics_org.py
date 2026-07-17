@@ -197,3 +197,21 @@ def test_institution_routes(app):
     # section drill-down
     r = c.get(f"/subjects/analytics/institution?term_id={ids['term']}&scope=section&scope_id=senior")
     assert r.status_code == 200
+
+
+def test_institution_export_formats(app):
+    ids = _seed(app)
+    c = _admin(app)
+    q = f"term_id={ids['term']}&scope=school"
+    # Excel
+    r = c.get(f"/subjects/analytics/institution/report?{q}&format=excel")
+    assert r.status_code == 200 and 'spreadsheetml' in r.headers['Content-Type']
+    assert r.get_data()[:2] == b'PK'
+    # HD image
+    r = c.get(f"/subjects/analytics/institution/report?{q}&format=image")
+    assert r.status_code == 200 and r.headers['Content-Type'] == 'image/png'
+    assert r.get_data()[:8] == b'\x89PNG\r\n\x1a\n'
+    # PDF (default)
+    r = c.get(f"/subjects/analytics/institution/report?{q}")
+    assert r.status_code == 200 and 'application/pdf' in r.headers['Content-Type']
+    assert r.get_data()[:4] == b'%PDF'
