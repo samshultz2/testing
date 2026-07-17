@@ -608,24 +608,34 @@ function BulkEntry({ d, notify }) {
 
 // ---- Broadsheet ------------------------------------------------------------
 function ExportMenu({ urls }) {
-  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);        // null = closed; {top,left} = open
+  const btnRef = React.useRef(null);
+  const MENU_W = 180;
   const items = [
     { href: urls.export, icon: 'fa-file-excel', label: 'Excel' },
     { href: urls.export_pdf, icon: 'fa-file-pdf', label: 'PDF' },
     { href: urls.export_word, icon: 'fa-file-word', label: 'Word' },
     { href: urls.export_image, icon: 'fa-file-image', label: 'HD Image' },
   ].filter((i) => i.href);
+  const toggle = () => {
+    if (pos) { setPos(null); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    // Anchor under the button, right-aligned, clamped into the viewport.
+    let left = r.right - MENU_W;
+    left = Math.max(8, Math.min(left, window.innerWidth - MENU_W - 8));
+    setPos({ top: Math.min(r.bottom + 4, window.innerHeight - 200), left });
+  };
   return (
-    <span style={{ position: 'relative', display: 'inline-block' }}>
-      <button type="button" className="btn btn-success btn-sm" onClick={() => setOpen((o) => !o)}>
+    <>
+      <button ref={btnRef} type="button" className="btn btn-success btn-sm" onClick={toggle}>
         <i aria-hidden="true" className="fas fa-download" /> Export <i aria-hidden="true" className="fas fa-caret-down" />
       </button>
-      {open && (
+      {pos && (
         <>
-          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
-          <div className="card" style={{ position: 'absolute', right: 0, top: '110%', zIndex: 21, minWidth: 170, padding: '.35rem', boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>
+          <div onClick={() => setPos(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000 }} />
+          <div className="card" style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 1001, width: MENU_W, padding: '.35rem', boxShadow: '0 6px 20px rgba(0,0,0,.18)' }}>
             {items.map((i) => (
-              <a key={i.label} href={i.href} data-native download onClick={() => setOpen(false)}
+              <a key={i.label} href={i.href} data-native download onClick={() => setPos(null)}
                  className="btn btn-light btn-sm" style={{ display: 'flex', gap: '.5rem', width: '100%', justifyContent: 'flex-start', marginBottom: 2 }}>
                 <i aria-hidden="true" className={'fas ' + i.icon} /> {i.label}
               </a>
@@ -633,7 +643,7 @@ function ExportMenu({ urls }) {
           </div>
         </>
       )}
-    </span>
+    </>
   );
 }
 
