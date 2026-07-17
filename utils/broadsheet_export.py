@@ -379,3 +379,127 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
 def blank_sheet_filename(assignment, term):
     base = (assignment.display_name or 'class').replace(' ', '_')
     return f"score_sheet_{base}_{term.name.replace(' ', '_')}.pdf"
+
+
+# --------------------------------------------------------------------------- #
+# Class analytics report (PDF) — KPIs + distributions + subject difficulty
+# --------------------------------------------------------------------------- #
+
+def analytics_pdf(term_id, assignment_id):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer)
+    from utils.web_exports import pdf_escape
+    from utils.results_analytics import class_analytics
+
+    term = db.session.get(Term, term_id)
+    asg = db.session.get(ClassArmAssignment, assignment_id)
+    if not (term and asg):
+        return None
+    a = class_analytics(term_id, assignment_id, use_cache=False)
+    s = (a or {}).get('summary') or {}
+    if not s.get('assessed'):
+        return None
+    primary, accent, light, ink = _theme()
+    styles = getSampleStyleSheet()
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=16, textColor=primary, spaceAfter=1)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#6B7A74'))
+    hh = ParagraphStyle('hh', parent=styles['Heading2'], fontSize=12, textColor=primary, spaceBefore=8, spaceAfter=4)
+    muted = ParagraphStyle('mu', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#6B7A74'))
+
+    def kpi_table():
+        cells = [
+            ('Class average', s.get('class_average')), ('Pass rate', f"{s.get('pass_rate')}%"),
+            ('Highest avg', s.get('highest')), ('Lowest avg', s.get('lowest')),
+            ('Students assessed', f"{s.get('assessed')}/{s.get('students')}"),
+            ('Entry completion', f"{s.get('completion')}%"),
+        ]
+        if s.get('trend') is not None:
+            cells.append(('vs last term', f"{'+' if s['trend'] > 0 else ''}{s['trend']}"))
+        rows, row = [], []
+        for i, (lbl, val) in enumerate(cells):
+            row.append(Paragraph(f"<b><font size=15 color='#0D6A4E'>{pdf_escape(val)}</font></b>"
+                                 f"<br/><font size=8 color='#6B7A74'>{pdf_escape(lbl)}</font>", muted))
+            if len(row) == 3:
+                rows.append(row); row = []
+        if row:
+            row += [''] * (3 - len(row)); rows.append(row)
+        t = Table(rows, colWidths=[(A4[0] - 30 * mm) / 3] * 3)
+        t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0, colors.white),
+                               ('BACKGROUND', (0, 0), (-1, -1), light),
+                               ('INNERGRID', (0, 0), (-1, -1), 3, colors.white),
+                               ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                               ('LEFTPADDING', (0, 0), (-1, -1), 10)]))
+        return t
+
+    def _bar_table(pairs, unit=''):
+        mx = max([p[1] for p in pairs] + [1])
+        data = []
+        for label, val in pairs:
+            w = int(round(38 * (val / mx))) if mx else 0
+            bar = '█' * w
+            data.append([Paragraph(pdf_escape(label), muted),
+                         Paragraph(f"<font color='#0D6A4E'>{bar}</font> {pdf_escape(val)}{unit}", muted)])
+        t = Table(data, colWidths=[45 * mm, A4[0] - 75 * mm])
+        t.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 8),
+                               ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1)]))
+        return t
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=15 * mm, rightMargin=15 * mm,
+                            title=f"Analytics — {asg.display_name}")
+    elems = [Paragraph(pdf_escape(_school_name()), h),
+             Paragraph(f"Class Performance Report · {pdf_escape(asg.display_name)} · "
+                       f"{pdf_escape(term.full_name)}", sub),
+             Spacer(1, 8), kpi_table(), Spacer(1, 4)]
+
+    if a.get('score_bands'):
+        elems += [Paragraph('Distribution of student averages', hh),
+                  _bar_table([(b['band'], b['count']) for b in a['score_bands']])]
+    if a.get('grade_distribution'):
+        elems += [Paragraph('Grade distribution', hh),
+                  _bar_table([(f"Grade {g['grade']}", g['count']) for g in a['grade_distribution']])]
+    if a.get('gender'):
+        elems += [Paragraph('By gender', hh),
+                  _bar_table([(f"{g['group']} (avg {g['average']}, {g['pass_rate']}% pass)", g['count'])
+                              for g in a['gender']])]
+    if a.get('subjects'):
+        elems += [Paragraph('Subject difficulty (hardest first)', hh)]
+        srows = [['Subject', 'Average', 'Pass %', 'Assessed']]
+        for sub_ in a['subjects']:
+            srows.append([sub_['name'], str(sub_['average']) if sub_['assessed'] else '—',
+                          (str(sub_['pass_rate']) + '%') if sub_['assessed'] else '—',
+                          str(sub_['assessed'])])
+        st = Table(srows, colWidths=[(A4[0] - 30 * mm) * f for f in (0.46, 0.18, 0.18, 0.18)], repeatRows=1)
+        st.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+        elems.append(st)
+    if a.get('intervention'):
+        elems += [Paragraph(f"Needs attention ({len(a['intervention'])})", hh)]
+        irows = [['Student', 'Average', 'Failing']]
+        for st_ in a['intervention']:
+            irows.append([st_['name'], str(st_['average']), str(st_['failed'])])
+        it = Table(irows, colWidths=[(A4[0] - 30 * mm) * f for f in (0.6, 0.2, 0.2)], repeatRows=1)
+        it.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#B43A2E')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9), ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+        elems.append(it)
+
+    doc.build(elems)
+    return buf.getvalue()
+
+
+def analytics_filename(assignment, term):
+    base = (assignment.display_name or 'class').replace(' ', '_')
+    return f"analytics_{base}_{term.name.replace(' ', '_')}.pdf"

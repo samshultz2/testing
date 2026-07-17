@@ -92,3 +92,22 @@ def test_export_requires_selection(app):
     assert r.status_code in (302, 303)
     r = c.get('/subjects/broadsheet/blank-sheet', follow_redirects=False)
     assert r.status_code in (302, 303)
+
+
+def test_analytics_report_pdf(app):
+    ids = _seed(app)
+    c = _admin(app)
+    r = c.get(f"/subjects/analytics/report.pdf?term_id={ids['term']}&assignment_id={ids['asg']}")
+    assert r.status_code == 200
+    assert 'application/pdf' in r.headers['Content-Type']
+    assert r.get_data()[:4] == b'%PDF'
+
+
+def test_class_analytics_has_score_bands_and_gender(app):
+    from utils.results_analytics import class_analytics
+    ids = _seed(app)
+    with app.app_context():
+        a = class_analytics(ids['term'], ids['asg'], use_cache=False)
+        assert 'score_bands' in a and len(a['score_bands']) == 6
+        assert 'gender' in a          # boys seeded -> at least one group
+        assert any(g['group'] == 'Boys' for g in a['gender'])

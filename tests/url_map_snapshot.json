@@ -5173,6 +5173,13 @@
 ]
 ],
 [
+"subjects.analytics_report",
+"/subjects/analytics/report.pdf",
+[
+"GET"
+]
+],
+[
 "subjects.api_class_subjects",
 "/subjects/api/class-subjects/<int:term_id>/<int:class_id>",
 [

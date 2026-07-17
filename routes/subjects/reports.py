@@ -193,8 +193,36 @@ def analytics_dashboard():
                                assignment_id=assignment_id or '', refresh=1),
         'report_card_base': url_for('subjects.student_report_card', student_id=0)[:-1],
         'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
-                 'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or '')},
+                 'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'report_pdf': url_for('subjects.analytics_report', term_id=term_id or '', assignment_id=assignment_id or '')},
     })
+
+
+@subjects_bp.route('/analytics/report.pdf')
+@login_required
+def analytics_report():
+    """Download the class analytics as a formatted PDF report."""
+    from utils.broadsheet_export import analytics_pdf, analytics_filename
+    from utils.web_exports import pdf_response
+
+    term_id = request.args.get('term_id', type=int)
+    assignment_id = request.args.get('assignment_id', type=int)
+    if not term_id or not assignment_id:
+        flash('Select term and class first.', 'error')
+        return redirect(url_for('subjects.analytics_dashboard'))
+    if not can_access_class(assignment_id):
+        flash('You do not have access to this class.', 'error')
+        return redirect(url_for('subjects.analytics_dashboard'))
+    term = db.session.get(Term, term_id)
+    asg = db.session.get(ClassArmAssignment, assignment_id)
+    if not (term and asg):
+        flash('Invalid selection.', 'error')
+        return redirect(url_for('subjects.analytics_dashboard'))
+    data = analytics_pdf(term_id, assignment_id)
+    if not data:
+        flash('No scores entered for this class yet.', 'warning')
+        return redirect(url_for('subjects.analytics_dashboard', term_id=term_id, assignment_id=assignment_id))
+    return pdf_response(data, analytics_filename(asg, term), inline=False)
 
 
 @subjects_bp.route('/affective', methods=['GET', 'POST'])

@@ -145,6 +145,23 @@ def _compute(term_id, assignment_id):
         [s for s in assessed_students if s['average'] < pass_mark or s['failed'] >= 2],
         key=lambda s: s['average'])[:25]
 
+    # Score-band histogram of student averages (the shape of the class).
+    band_defs = [('0–39', 0, 39.999), ('40–49', 40, 49.999), ('50–59', 50, 59.999),
+                 ('60–69', 60, 69.999), ('70–79', 70, 79.999), ('80–100', 80, 1e9)]
+    score_bands = [{'band': lbl, 'count': sum(1 for a in averages if lo <= a <= hi)}
+                   for lbl, lo, hi in band_defs]
+
+    # Gender split (average + pass rate) — only shown when both are present.
+    gmap = {e.student_id: (getattr(e.student, 'gender', None) or '').lower() for e in enrollments}
+    gender = []
+    for key, label in (('male', 'Boys'), ('female', 'Girls')):
+        vals = [s['average'] for s in assessed_students if gmap.get(s['id']) == key]
+        if vals:
+            gp = sum(1 for a in vals if a >= pass_mark)
+            gender.append({'group': label, 'count': len(vals),
+                           'average': round(sum(vals) / len(vals), 2),
+                           'pass_rate': round(100 * gp / len(vals), 1)})
+
     # Historical: same class-arm's previous term average (one lookup).
     prev_avg = _previous_term_average(term_id, asg)
     trends = _class_trends(term_id, asg)
@@ -166,6 +183,8 @@ def _compute(term_id, assignment_id):
         'grade_distribution': [{'grade': g, 'count': grade_dist.get(g, 0)} for g, _lo, _hi, _r in bands]
                               or [{'grade': 'F', 'count': grade_dist.get('F', 0)}],
         'subjects': subjects_by_difficulty,
+        'score_bands': score_bands,
+        'gender': gender,
         'top_students': [{'name': s['name'], 'average': s['average']} for s in ranked[:10]],
         'intervention': intervention,
         'trends': trends,
@@ -248,5 +267,6 @@ def _previous_term_average(term_id, asg):
 
 def _empty():
     return {'summary': {}, 'grade_distribution': [], 'subjects': [],
+            'score_bands': [], 'gender': [],
             'top_students': [], 'intervention': [],
             'trends': {'term_names': [], 'averages': [], 'subjects': []}}

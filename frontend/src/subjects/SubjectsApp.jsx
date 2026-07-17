@@ -833,6 +833,54 @@ function AStat({ value, label, tone }) {
     <div className="text-muted text-sm">{label}</div></div></div>;
 }
 
+// Dependency-free SVG donut (pass vs fail, etc.)
+function Donut({ segments, size = 150, center }) {
+  const total = segments.reduce((a, s) => a + s.value, 0) || 1;
+  const r = size / 2 - 12; const cx = size / 2; const cy = size / 2; const circ = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--gray-100,#eef0f4)" strokeWidth="18" />
+        {segments.map((s, i) => {
+          const frac = s.value / total; const dash = frac * circ;
+          const el = <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color} strokeWidth="18"
+            strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={-offset}
+            transform={`rotate(-90 ${cx} ${cy})`} />;
+          offset += dash; return el;
+        })}
+        {center != null && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+          style={{ fontSize: 22, fontWeight: 700, fill: 'var(--text-primary,#1f2d3d)' }}>{center}</text>}
+      </svg>
+      <div>{segments.map((s, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '.4rem', margin: '.2rem 0', fontSize: 'var(--text-sm)' }}>
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: s.color, display: 'inline-block' }} />
+          {s.label} <strong>{s.value}</strong></div>))}</div>
+    </div>
+  );
+}
+
+// Dependency-free SVG column chart (score-band histogram, etc.)
+function ColumnChart({ bars, height = 170, color = 'var(--primary,#0D6A4E)' }) {
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  const bw = 100 / bars.length;
+  return (
+    <svg width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" role="img" style={{ overflow: 'visible' }}>
+      {bars.map((b, i) => {
+        const h = (b.value / max) * (height - 34); const x = i * bw + bw * 0.15; const w = bw * 0.7;
+        const y = height - 20 - h;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={w} height={Math.max(h, 0.5)} fill={b.color || color} rx="1" />
+            <text x={x + w / 2} y={y - 3} textAnchor="middle" style={{ fontSize: 6, fontWeight: 700, fill: 'var(--text-primary,#333)' }}>{b.value || ''}</text>
+            <text x={x + w / 2} y={height - 8} textAnchor="middle" style={{ fontSize: 5, fill: 'var(--text-muted,#888)' }}>{b.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function Analytics({ d, notify }) {
   const nav = useNav();
   const a = d.analytics;
@@ -845,6 +893,7 @@ function Analytics({ d, notify }) {
       <div className="page-header"><h1>Academic Analytics</h1>
         <div className="page-header-actions">
           {d.has_selection && <button type="button" className="btn btn-secondary btn-sm" onClick={refresh}><i aria-hidden="true" className="fas fa-rotate" /> Refresh</button>}
+          {d.has_selection && a && s.assessed && d.urls.report_pdf && <a href={d.urls.report_pdf} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> Report PDF</a>}
           {d.assignment_id && <a href={d.urls.broadsheet} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}
           {d.assignment_id && <a href={d.urls.scores} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-pen" /> Enter scores</a>}
         </div>
@@ -867,6 +916,33 @@ function Analytics({ d, notify }) {
           {s.assessed} of {s.students} students assessed · pass mark {s.pass_mark}
           {s.top_student && <> · top: <strong>{s.top_student}</strong></>}
           {a.cached === false && <> · <span className="badge badge-secondary">fresh</span></>}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="card"><div className="card-header"><h3>Pass vs fail</h3></div>
+            <div className="card-body" style={{ display: 'flex', justifyContent: 'center' }}>
+              <Donut center={`${s.pass_rate}%`} segments={[
+                { label: 'Passed', value: Math.round((s.pass_rate / 100) * s.assessed), color: 'var(--success,#1c8c53)' },
+                { label: 'Below pass', value: s.assessed - Math.round((s.pass_rate / 100) * s.assessed), color: '#e74a3b' },
+              ]} />
+            </div></div>
+          {a.score_bands && a.score_bands.length > 0 && (
+            <div className="card"><div className="card-header"><h3>Spread of averages</h3></div>
+              <div className="card-body">
+                <ColumnChart bars={a.score_bands.map((b) => ({ label: b.band, value: b.count, color: b.band === '0–39' ? '#e74a3b' : (parseInt(b.band) >= 70 ? 'var(--success,#1c8c53)' : 'var(--primary,#0D6A4E)') }))} />
+              </div></div>
+          )}
+          {a.gender && a.gender.length > 0 && (
+            <div className="card"><div className="card-header"><h3>By gender</h3></div>
+              <div className="card-body">
+                {a.gender.map((g) => (
+                  <div key={g.group} style={{ marginBottom: '.6rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+                      <strong>{g.group}</strong><span className="text-muted">{g.count} · avg {g.average}</span></div>
+                    <Bar label={`${g.pass_rate}% pass`} value={g.pass_rate} max={100} pct tone={g.pass_rate >= 50 ? 'var(--success)' : '#e74a3b'} />
+                  </div>))}
+              </div></div>
+          )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '1rem' }}>
