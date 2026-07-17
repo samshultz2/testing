@@ -229,11 +229,10 @@ def build_report_card(student_id, term_id):
         student_id=student_id, term_id=term_id).first()
 
     # Marks obtainable/obtained + percentage (matches the printed report sheet).
-    # Honour any per-term assessment settings (e.g. a term with no CBT).
-    from utils.assessments import term_maxes as _term_maxes
-    _tm = _term_maxes(term_id)
-    obtainable_each = sum((_tm.get(at.id, at.max_score) or 0) for at in assessment_types) or 100
-    scores_obtainable = len(class_subjects) * obtainable_each
+    # Each subject is scored out of 100 (the CA components + exam always sum to
+    # 100), so total obtainable is simply 100 × the number of subjects taken.
+    PER_SUBJECT_MAX = 100
+    scores_obtainable = len(class_subjects) * PER_SUBJECT_MAX
     average_pct = round(total_score / scores_obtainable * 100, 2) if scores_obtainable else 0
     # Number in class = the roster of the student's own class arm.
     no_in_class = StudentEnrollment.query.filter_by(

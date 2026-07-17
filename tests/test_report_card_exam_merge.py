@@ -72,6 +72,19 @@ def test_exam_columns_merged_and_arm_count(app):
         assert rc['no_in_class'] == 2
 
 
+def test_scores_obtainable_is_100_per_subject(app):
+    """Total obtainable = 100 × number of subjects, regardless of how the
+    assessment components sum (here CA/HA/MID/CBT/EXAM add to 95, not 100)."""
+    from utils.report_card import build_report_card
+    ids = _seed(app)
+    with app.app_context():
+        _, rc = build_report_card(ids['student'], ids['term'])
+        assert rc['total_subjects'] == 1
+        assert rc['scores_obtainable'] == 100          # 100 × 1 subject
+        # percentage uses the 100-per-subject denominator
+        assert rc['average_pct'] == round(rc['scores_obtained'] / 100 * 100, 2)
+
+
 def test_attendance_filled_from_records(app):
     import datetime as _dt
     from models import Week, Attendance, StudentEnrollment
