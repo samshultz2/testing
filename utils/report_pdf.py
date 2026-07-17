@@ -36,20 +36,20 @@ def _styles():
     if _S:
         return _S
     base = getSampleStyleSheet()
-    _S['title'] = ParagraphStyle('t', parent=base['Title'], fontSize=16, textColor=_INK, spaceAfter=1)
+    _S['title'] = ParagraphStyle('t', parent=base['Title'], fontSize=18, textColor=_INK, spaceAfter=1)
     _S['school_line'] = ParagraphStyle('sl', parent=base['Normal'], alignment=TA_CENTER,
-                                       fontSize=9, leading=11, textColor=_INK)
-    _S['motto'] = ParagraphStyle('mt', parent=base['Normal'], alignment=TA_CENTER, fontSize=8.5,
-                                 leading=10, textColor=colors.HexColor('#333333'), fontName='Helvetica-Oblique')
-    _S['sheet'] = ParagraphStyle('sh', parent=base['Normal'], alignment=TA_CENTER, fontSize=10.5,
-                                 leading=12, fontName='Helvetica-Bold', textColor=_INK)
-    _S['lbl'] = ParagraphStyle('lb', parent=base['Normal'], fontSize=7.5, leading=9)
-    _S['subj'] = ParagraphStyle('sj', parent=base['Normal'], fontSize=7, leading=8)
-    _S['rmk'] = ParagraphStyle('rk', parent=base['Normal'], fontSize=6.3, leading=7)
-    _S['sidehdr'] = ParagraphStyle('sd', parent=base['Normal'], fontSize=8, leading=9,
+                                       fontSize=10, leading=12.5, textColor=_INK)
+    _S['motto'] = ParagraphStyle('mt', parent=base['Normal'], alignment=TA_CENTER, fontSize=9.5,
+                                 leading=11, textColor=colors.HexColor('#333333'), fontName='Helvetica-Oblique')
+    _S['sheet'] = ParagraphStyle('sh', parent=base['Normal'], alignment=TA_CENTER, fontSize=12.5,
+                                 leading=14, fontName='Helvetica-Bold', textColor=_INK)
+    _S['lbl'] = ParagraphStyle('lb', parent=base['Normal'], fontSize=9.5, leading=11.5)
+    _S['subj'] = ParagraphStyle('sj', parent=base['Normal'], fontSize=9, leading=10.5)
+    _S['rmk'] = ParagraphStyle('rk', parent=base['Normal'], fontSize=8, leading=9)
+    _S['sidehdr'] = ParagraphStyle('sd', parent=base['Normal'], fontSize=10, leading=11.5,
                                    fontName='Helvetica-Bold', alignment=TA_CENTER, textColor=_INK)
-    _S['side'] = ParagraphStyle('si', parent=base['Normal'], fontSize=6.8, leading=8)
-    _S['remark'] = ParagraphStyle('rm', parent=base['Normal'], fontSize=7, leading=8.5)
+    _S['side'] = ParagraphStyle('si', parent=base['Normal'], fontSize=8.5, leading=10)
+    _S['remark'] = ParagraphStyle('rm', parent=base['Normal'], fontSize=8.5, leading=10.5)
     _S['sub'] = ParagraphStyle('s', parent=base['Normal'], alignment=TA_CENTER, fontSize=10)
     return _S
 
@@ -64,7 +64,7 @@ def _school_dict(school):
 
 class _VText(Flowable):
     """A short header label drawn rotated 90° (bottom-to-top), for narrow columns."""
-    def __init__(self, text, size=6.5, pad=3):
+    def __init__(self, text, size=8, pad=4):
         Flowable.__init__(self)
         self.text = '' if text is None else str(text)
         self.size = size
@@ -136,8 +136,8 @@ def _particulars(student, report_data, term, width):
         ('BOX', (0, 0), (-1, -1), 0.8, _INK),
         ('LINEBELOW', (0, 0), (-1, 0), 0.8, _INK),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 5.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5.5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
     ]))
     return t
 
@@ -168,17 +168,21 @@ def _subject_table(report_data, width):
 
     # header height from the longest rotated label
     labels = [c['label'] for c in cols] + ['TOTAL', 'GRADE', 'REMARK']
-    hh = min(30 * mm, max(12 * mm, max((stringWidth(x, 'Helvetica-Bold', 6.5) for x in labels), default=0) + 5 * mm))
-    heights = [hh] + [None] * (len(data) - 1)
+    hh = min(34 * mm, max(15 * mm, max((stringWidth(x, 'Helvetica-Bold', 8) for x in labels), default=0) + 6 * mm))
+    # Taller body rows so the sheet fills the page for shorter subject lists;
+    # KeepInFrame shrinks the whole card to fit when the list is long.
+    nrows = len(data) - 1
+    body_h = max(8 * mm, min(15 * mm, (200 * mm - hh) / nrows)) if nrows else 10 * mm
+    heights = [hh] + [body_h] * nrows
     t = Table(data, colWidths=col_widths, rowHeights=heights, repeatRows=1)
     t.setStyle(TableStyle([
-        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, 0), 'BOTTOM'),
         ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, _GRID),
-        ('TOPPADDING', (0, 1), (-1, -1), 2), ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
-        ('LEFTPADDING', (0, 0), (0, -1), 3),
+        ('TOPPADDING', (0, 1), (-1, -1), 3), ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (0, -1), 4),
     ]))
     return t
 
@@ -205,8 +209,8 @@ def _summary_block(report_data, width):
         ('BOX', (0, 0), (-1, -1), 0.8, _INK),
         ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#bbbbbb')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
     ]))
     return t
 
@@ -235,8 +239,8 @@ def _sidebar(report_data, affective_traits, rating_labels, width):
         ('ALIGN', (1, 1), (1, -1), 'CENTER'),
         ('GRID', (0, 0), (-1, -1), 0.4, _GRID),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
     ]))
     flows.append(at)
     flows.append(Spacer(1, 5))
@@ -253,7 +257,7 @@ def _sidebar(report_data, affective_traits, rating_labels, width):
             ('SPAN', (0, 0), (1, 0)),
             ('GRID', (0, 0), (-1, -1), 0.4, _GRID),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5),
             ('LEFTPADDING', (0, 0), (-1, -1), 3),
         ]))
         flows.append(gt)
@@ -325,8 +329,8 @@ def _card_flowables(student, report_data, term, school, affective_traits, rating
             _subject_table(report_data, left_w), Spacer(1, 5),
             _summary_block(report_data, left_w)]
     right = _sidebar(report_data, affective_traits, rating_labels, right_w)
-    left_cell = KeepInFrame(left_w, 245 * mm, left, mode='shrink')
-    right_cell = KeepInFrame(right_w, 245 * mm, right, mode='shrink')
+    left_cell = KeepInFrame(left_w, 258 * mm, left, mode='shrink')
+    right_cell = KeepInFrame(right_w, 258 * mm, right, mode='shrink')
     body = Table([[left_cell, right_cell]], colWidths=[left_w, gap + right_w])
     body.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
