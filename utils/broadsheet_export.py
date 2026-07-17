@@ -150,7 +150,12 @@ def _theme():
     return HexColor('#0D6A4E'), HexColor('#C9A227'), HexColor('#F4F7F5'), HexColor('#14211C')
 
 
-def broadsheet_pdf(term_id, assignment_id):
+def broadsheet_pdf(term_id, assignment_id, mono=True):
+    """Filled broadsheet as a PDF.
+
+    ``mono=True`` (the downloadable PDF) is plain black-on-white — no colour or
+    shading, clean to print / photocopy. ``mono=False`` keeps the branded design
+    (green header, zebra rows) and is what the HD-image export renders from."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -161,10 +166,12 @@ def broadsheet_pdf(term_id, assignment_id):
     m = build_model(term_id, assignment_id)
     if not m:
         return None
+    primary, accent, light, ink = _theme()
+    title_color = colors.black if mono else primary
+    sub_color = colors.black if mono else colors.HexColor('#6B7A74')
     styles = getSampleStyleSheet()
-    # Monochrome — no colours or shading (clean to print / photocopy).
-    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=colors.black, spaceAfter=2)
-    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.black)
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=title_color, spaceAfter=2)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=sub_color)
     cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=7.5, leading=9)
 
     subjects = m['subjects']
@@ -192,16 +199,24 @@ def broadsheet_pdf(term_id, assignment_id):
     t = Table(data, colWidths=widths, repeatRows=1)
     ts = TableStyle([
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('FONTSIZE', (0, 0), (-1, -1), 7.5),
         ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.black),
-        ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.black),
         ('FONTNAME', (-3, 1), (-1, -1), 'Helvetica-Bold'),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ])
+    if mono:
+        # Plain black on white — no fills or shading.
+        ts.add('TEXTCOLOR', (0, 0), (-1, -1), colors.black)
+        ts.add('GRID', (0, 0), (-1, -1), 0.4, colors.black)
+        ts.add('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.black)
+    else:
+        # Branded design (used by the HD-image export).
+        ts.add('BACKGROUND', (0, 0), (-1, 0), primary)
+        ts.add('TEXTCOLOR', (0, 0), (-1, 0), colors.white)
+        ts.add('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9'))
+        ts.add('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light])
     t.setStyle(ts)
 
     elems = [Paragraph(pdf_escape(_school_name()), h),
@@ -279,8 +294,9 @@ def broadsheet_png(term_id, assignment_id, dpi=200):
 
     Every page is rendered and the pages are stacked vertically into one image,
     so a broadsheet whose roster spills onto several pages exports in full
-    (previously only the first page was captured)."""
-    pdf = broadsheet_pdf(term_id, assignment_id)
+    (previously only the first page was captured). Keeps the branded colour
+    design — only the downloadable PDF is monochrome."""
+    pdf = broadsheet_pdf(term_id, assignment_id, mono=False)
     if not pdf:
         return None
     import fitz

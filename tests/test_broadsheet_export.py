@@ -151,6 +151,25 @@ def test_broadsheet_pdf_is_monochrome(app):
             assert max(r, g, b) - min(r, g, b) <= 12
 
 
+def test_broadsheet_image_keeps_colour_design(app):
+    """The HD image export must keep the branded colour design (only the
+    downloadable PDF is monochrome)."""
+    from PIL import Image
+    import io as _io
+    from utils.broadsheet_export import broadsheet_png
+    ids = _seed(app)
+    with app.app_context():
+        png = broadsheet_png(ids['term'], ids['asg'], dpi=120)
+        img = Image.open(_io.BytesIO(png)).convert('RGB')
+        # at least one strongly-coloured pixel (the green header band)
+        coloured = False
+        for r, g, b in img.getdata():
+            if max(r, g, b) - min(r, g, b) > 30:
+                coloured = True
+                break
+        assert coloured, 'image export lost its colour design'
+
+
 def test_blank_sheet_single_page_for_normal_class(app):
     """A normal-size class fits the blank score sheet on one page."""
     import fitz
