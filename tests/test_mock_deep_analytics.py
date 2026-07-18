@@ -41,6 +41,26 @@ def _session_term(app):
         return ssn.id
 
 
+def _fresh_session_term(app):
+    """A brand-new (inactive) session + term + SSS3 teacher assignments, isolated
+    from other tests' mocks so trends aggregate only this test's exams."""
+    with app.app_context():
+        _SEQ[0] += 1
+        ssn = AcademicSession(name=f'TR{_SEQ[0]} 25/26', is_active=False)
+        db.session.add(ssn); db.session.flush()
+        term = Term(session_id=ssn.id, term_number=1, name=f'T{_SEQ[0]}', is_active=False)
+        db.session.add(term); db.session.flush()
+        sss3 = SchoolClass.query.filter_by(name='SSS3').first() or SchoolClass(name='SSS3', level=6)
+        db.session.add(sss3); db.session.flush()
+        for subj_name, teacher in [('Mathematics', 'Mr Bello'), ('English Language', 'Mrs Coker')]:
+            subj = Subject.query.filter_by(name=subj_name).first() or Subject(name=subj_name, is_active=True)
+            db.session.add(subj); db.session.flush()
+            db.session.add(ClassSubject(subject_id=subj.id, class_id=sss3.id, term_id=term.id,
+                                        teacher_name=teacher, is_active=True))
+        db.session.commit()
+        return ssn.id
+
+
 def _students(app, n):
     ids = []
     with app.app_context():
@@ -56,11 +76,12 @@ def _students(app, n):
     return ids
 
 
-def _jamb_exam(app, session_id):
+def _jamb_exam(app, session_id, num=None):
     with app.app_context():
         _SEQ[0] += 1
-        ex = MockJAMBExam(name=f'Mock J {_SEQ[0]}', exam_number=(_SEQ[0] % 4) + 1,
-                          session_id=session_id, exam_date=date(2025, 3, 1))
+        n = num if num is not None else (_SEQ[0] % 4) + 1
+        ex = MockJAMBExam(name=f'Mock J {_SEQ[0]}', exam_number=n,
+                          session_id=session_id, exam_date=date(2025, 3, n))
         db.session.add(ex); db.session.commit()
         return ex.id
 
@@ -133,11 +154,12 @@ def test_jamb_deep_route_and_exports(app):
 # WAEC
 # ---------------------------------------------------------------------------
 
-def _waec_exam(app, session_id):
+def _waec_exam(app, session_id, num=None):
     with app.app_context():
         _SEQ[0] += 1
-        ex = MockWAECExam(name=f'Mock W {_SEQ[0]}', exam_number=(_SEQ[0] % 4) + 1,
-                          session_id=session_id, exam_date=date(2025, 4, 1))
+        n = num if num is not None else (_SEQ[0] % 4) + 1
+        ex = MockWAECExam(name=f'Mock W {_SEQ[0]}', exam_number=n,
+                          session_id=session_id, exam_date=date(2025, 4, n))
         db.session.add(ex); db.session.commit()
         return ex.id
 
@@ -192,6 +214,89 @@ def test_waec_deep_route_and_exports(app):
     assert r.status_code == 200 and r.get_data()[:2] == b'PK'
     r = c.get(f'/mock-waec/exam/{exam_id}/deep/export?format=pdf')
     assert r.status_code == 200 and r.get_data()[:4] == b'%PDF'
+
+
+def test_jamb_trends_across_mocks(app):
+    """Two mocks in one session -> a progress trajectory with subject trends."""
+    from utils.mock_deep_analytics import deep_trends
+    ssid = _fresh_session_term(app)
+    # Mock 1: weaker; Mock 2: stronger — cohort should trend up.
+    ex1 = _jamb_exam(app, ssid, num=1)
+    ids = _students(app, 3)
+    _jamb_result(app, ex1, ids[0], 60, 30, 40, 40)   # 170
+    _jamb_result(app, ex1, ids[1], 55, 28, 35, 32)   # 150
+    _jamb_result(app, ex1, ids[2], 50, 25, 30, 25)   # 130
+    ex2 = _jamb_exam(app, ssid, num=2)
+    _jamb_result(app, ex2, ids[0], 80, 55, 60, 60)   # 255
+    _jamb_result(app, ex2, ids[1], 75, 50, 55, 52)   # 232
+    _jamb_result(app, ex2, ids[2], 70, 45, 50, 45)   # 210
+    with app.app_context():
+        d = deep_trends('jamb', session_id=ssid)
+        assert not d['meta'].get('insufficient')
+        assert d['meta']['periods_count'] == 2
+        assert d['headline']['primary_label'] == 'Mean score'
+        # cohort mean rose from mock 1 to mock 2
+        assert d['headline']['primary_direction'] == 'up'
+        assert d['headline']['primary_delta'] > 0
+        # English rose from 0% pass (mock 1) to a real pass rate (mock 2)
+        sm = {s['name']: s for s in d['subject_trends']}
+        assert sm['English Language']['direction'] == 'up'
+        # improving movers non-empty, cohort series has 2 points
+        assert d['movers']['improving']
+        assert len(d['cohort']) == 2
+    c = _admin(app)
+    r = c.get(f'/mock-jamb/trends?session_id={ssid}')
+    assert r.status_code == 200 and b'Progress Trends' in r.data
+    r = c.get(f'/mock-jamb/trends/export?format=excel&session_id={ssid}')
+    assert r.status_code == 200 and r.get_data()[:2] == b'PK'
+    r = c.get(f'/mock-jamb/trends/export?format=pdf&session_id={ssid}')
+    assert r.status_code == 200 and r.get_data()[:4] == b'%PDF'
+
+
+def test_waec_trends_and_all_sessions(app):
+    from utils.mock_deep_analytics import deep_trends
+    ssid = _fresh_session_term(app)
+    ex1 = _waec_exam(app, ssid, num=1)
+    ids = _students(app, 3)
+    for i, sid in enumerate(ids):
+        _waec_row(app, ex1, sid, 'Mathematics', 50 + i)     # around credit line
+        _waec_row(app, ex1, sid, 'English Language', 40 + i)
+    ex2 = _waec_exam(app, ssid, num=2)
+    for i, sid in enumerate(ids):
+        _waec_row(app, ex2, sid, 'Mathematics', 70 + i)     # improved
+        _waec_row(app, ex2, sid, 'English Language', 60 + i)
+    with app.app_context():
+        d = deep_trends('waec', session_id=ssid)
+        assert d['meta']['periods_count'] == 2
+        assert d['headline']['primary_label'] == 'Avg credits'
+        assert d['headline']['primary_direction'] == 'up'
+        # all-sessions scope also works (may be one session here, still valid data)
+        d2 = deep_trends('waec', session_id=None)
+        assert d2['meta']['periods_count'] >= 2
+    c = _admin(app)
+    r = c.get(f'/mock-waec/trends?session_id={ssid}')
+    assert r.status_code == 200 and b'Progress Trends' in r.data
+    r = c.get('/mock-waec/trends?scope=all')
+    assert r.status_code == 200
+    r = c.get(f'/mock-waec/trends/export?format=pdf&session_id={ssid}')
+    assert r.status_code == 200 and r.get_data()[:4] == b'%PDF'
+
+
+def test_trends_insufficient(app):
+    """A single mock -> insufficient, renders guidance not a crash."""
+    from utils.mock_deep_analytics import deep_trends
+    ssid = _fresh_session_term(app)
+    ex1 = _jamb_exam(app, ssid, num=1)
+    ids = _students(app, 2)
+    _jamb_result(app, ex1, ids[0], 60, 40, 50, 50)
+    with app.app_context():
+        d = deep_trends('jamb', session_id=ssid)
+        assert d['meta'].get('insufficient') is True
+    c = _admin(app)
+    r = c.get(f'/mock-jamb/trends?session_id={ssid}')
+    assert r.status_code == 200
+    r = c.get(f'/mock-jamb/trends/export?format=pdf&session_id={ssid}', follow_redirects=True)
+    assert r.status_code == 200
 
 
 def test_deep_empty_exam(app):

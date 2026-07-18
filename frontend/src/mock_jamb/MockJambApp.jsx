@@ -37,6 +37,7 @@ function Index({ d }) {
         <div className="d-flex gap-2">
           <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>
           <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
+          {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Progress Trends</a>}
           {d.urls.validation && <a href={d.urls.validation} className="btn btn-outline"><i aria-hidden="true" className="fas fa-bullseye" /> Validation</a>}
           <a href={d.urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-crystal-ball" /> Predictions</a>
         </div>
@@ -1083,6 +1084,7 @@ function Deep({ d }) {
       <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" title="PDF" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
       <a href={d.urls.export_excel} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
       <a href={d.urls.export_image} className="btn btn-info btn-sm" title="HD image" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>
+      {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline btn-sm" title="Progress trends"><i aria-hidden="true" className="fas fa-chart-line" /> Trends</a>}
       <a href={d.urls.view} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
     </>
   );
@@ -1192,9 +1194,166 @@ function Deep({ d }) {
   );
 }
 
+const PALETTE = ['#2563eb', '#047857', '#b45309', '#7c3aed', '#dc2626', '#0d9488', '#c2410c', '#0891b2', '#9333ea', '#65a30d'];
+const arrow = (dir) => (dir === 'up' ? 'fa-arrow-up' : dir === 'down' ? 'fa-arrow-down' : 'fa-arrow-right');
+const dirColor = (dir) => (dir === 'up' ? '#047857' : dir === 'down' ? '#dc2626' : 'var(--text-secondary)');
+
+function Trends({ d }) {
+  const nav = useNav();
+  const t = d.trends;
+  const cohortRef = useRef();
+  const subjRef = useRef();
+  const insufficient = !t || (t.meta && t.meta.insufficient);
+  const labels = insufficient ? [] : t.periods.map((p) => p.label);
+
+  useEffect(() => {
+    if (insufficient || !window.Chart) return;
+    const charts = [];
+    const grid = 'rgba(140,140,140,.2)';
+    if (cohortRef.current) {
+      charts.push(new window.Chart(cohortRef.current, {
+        type: 'line',
+        data: { labels, datasets: [
+          { label: t.headline.primary_label, data: t.cohort.map((c) => c.primary), borderColor: '#2563eb', backgroundColor: '#2563eb22', tension: 0.3, yAxisID: 'y', spanGaps: true },
+          { label: t.headline.secondary_label, data: t.cohort.map((c) => c.secondary), borderColor: '#047857', backgroundColor: '#04785722', tension: 0.3, yAxisID: 'y1', spanGaps: true },
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { position: 'left', beginAtZero: true, grid: { color: grid } }, y1: { position: 'right', beginAtZero: true, grid: { display: false } }, x: { grid: { display: false } } } },
+      }));
+    }
+    if (subjRef.current) {
+      const subs = t.subject_trends.slice(0, 8);
+      charts.push(new window.Chart(subjRef.current, {
+        type: 'line',
+        data: { labels, datasets: subs.map((s, i) => ({ label: s.name, data: s.points, borderColor: PALETTE[i % PALETTE.length], backgroundColor: 'transparent', tension: 0.3, spanGaps: true })) },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+          scales: { y: { beginAtZero: true, max: 100, grid: { color: grid } }, x: { grid: { display: false } } } },
+      }));
+    }
+    return () => charts.forEach((c) => c.destroy());
+  }, [t, insufficient]);
+
+  const go = (scope, sessionId) => {
+    const params = scope === 'all' ? { scope: 'all' } : { session_id: sessionId };
+    navParams(nav.go, d.urls.self, params);
+  };
+
+  const header = (
+    <div className="page-header">
+      <div><h1>Progress Trends — Mock JAMB</h1>
+        <p className="text-muted text-sm">Track mean score, subjects, teachers and arms across mocks{t && t.meta.multi_session ? ' and across sessions' : ''}.</p></div>
+      <div className="page-header-actions">
+        {!insufficient && <>
+          <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
+          <a href={d.urls.export_excel} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+          <a href={d.urls.export_image} className="btn btn-info btn-sm" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>
+        </>}
+        <a href={d.urls.index} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
+      </div>
+    </div>
+  );
+
+  const selector = (
+    <div className="filter-form mb-3" style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <label className="text-sm text-muted">Scope</label>
+      <select className="form-control" style={{ width: 'auto' }} value={d.scope}
+              onChange={(e) => go(e.target.value, d.selected_session_id)}>
+        <option value="session">A single session</option>
+        <option value="all">All sessions (year-over-year)</option>
+      </select>
+      {d.scope !== 'all' && (
+        <select className="form-control" style={{ width: 'auto' }} value={d.selected_session_id || ''}
+                onChange={(e) => go('session', e.target.value)}>
+          {d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      )}
+      <span className="text-muted text-sm">“All sessions” tracks year-over-year across cohorts.</span>
+    </div>
+  );
+
+  if (insufficient) {
+    return <>{header}{selector}<Empty icon="fa-chart-line" title="Not enough mocks yet"><p className="text-muted">Progress needs at least two mocks with results{d.scope !== 'all' ? ' in this session' : ''}. Add more mock results, or switch scope to “All sessions”.</p></Empty></>;
+  }
+
+  const hb = (lbl, first, last, delta, dir) => (
+    <div className="card" style={{ padding: '1rem 1.1rem' }}>
+      <div style={{ fontSize: '1.6rem', fontWeight: 800, lineHeight: 1.1, color: dirColor(dir) }}>
+        {first} → {last} <i aria-hidden="true" className={`fas ${arrow(dir)}`} /></div>
+      <div style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--text-secondary)', marginTop: '.3rem' }}>{lbl}</div>
+      <div style={{ fontSize: '.74rem', color: 'var(--text-muted)', marginTop: '.15rem' }}>{delta == null ? '' : `${delta > 0 ? '+' : ''}${delta} first → latest`}</div>
+    </div>
+  );
+
+  const trendTable = (title, rows, note) => (
+    <div className="card mb-3"><div className="card-header"><h3>{title}</h3></div>
+      <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        <table className="data-table"><thead><tr><th style={{ textAlign: 'left' }}>Name</th>{labels.map((l, i) => <th key={i}>{l}</th>)}<th>Trend</th></tr></thead>
+          <tbody>{rows.length === 0 ? (
+            <tr><td colSpan={labels.length + 2} className="text-muted text-sm">{note}</td></tr>
+          ) : rows.map((r) => (
+            <tr key={r.name}><td><strong>{r.name}</strong></td>
+              {r.points.map((v, i) => <td key={i} className="text-center">{v == null ? '—' : v}</td>)}
+              <td className="text-center" style={{ color: dirColor(r.direction), fontWeight: 700 }}>
+                {r.delta == null ? '' : (r.delta > 0 ? '+' : '') + r.delta} {r.direction === 'up' ? '↑' : r.direction === 'down' ? '↓' : '→'}</td></tr>
+          ))}</tbody></table>
+      </div></div>
+  );
+
+  return (
+    <>
+      {header}
+      {selector}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '.75rem', marginBottom: '1.1rem' }}>
+        {hb(t.headline.primary_label, t.headline.primary_first, t.headline.primary_last, t.headline.primary_delta, t.headline.primary_direction)}
+        {hb(t.headline.secondary_label, t.headline.secondary_first, t.headline.secondary_last, t.headline.secondary_delta, t.headline.secondary_direction)}
+      </div>
+      <div style={{ fontSize: '.8rem', color: 'var(--text-muted)', marginBottom: '.6rem' }}>{t.meta.periods_count} mocks · {t.meta.span}</div>
+
+      <div className="charts-row">
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Cohort trajectory</h3></div><div className="chart-body" style={{ height: 260 }}><canvas ref={cohortRef} /></div></div>
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Subject pass rate over time</h3></div><div className="chart-body" style={{ height: 260 }}><canvas ref={subjRef} /></div></div>
+      </div>
+
+      {trendTable('Subject trend — biggest movement first', t.subject_trends, '')}
+      {trendTable('Teacher trend — pass rate per mock', t.teacher_trends, 'No teacher-attributed subjects yet. Set teachers on SSS3 Class Subjects.')}
+
+      <div className="charts-row">
+        {[['improving', 'Improving', 'fa-arrow-trend-up', '#047857'], ['declining', 'Declining — attention', 'fa-arrow-trend-down', '#dc2626']].map(([key, title, icon, col]) => (
+          <div key={key} className="card"><div className="card-header"><h3><i aria-hidden="true" className={`fas ${icon}`} style={{ color: col }} /> {title}</h3></div>
+            <div className="card-body">
+              {t.movers[key].length === 0 ? <p className="text-muted text-sm">{key === 'improving' ? 'No clear improvers yet.' : 'Nothing declining — good.'}</p> : t.movers[key].map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: '.6rem', padding: '.4rem 0', borderBottom: '1px solid var(--border-color)' }}>
+                  <div><div style={{ fontWeight: 600, fontSize: '.84rem' }}>{m.name}</div><div style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{m.kind} · now {m.current}%</div></div>
+                  <div style={{ fontWeight: 700, color: col }}>{m.delta > 0 ? '+' : ''}{m.delta}</div>
+                </div>
+              ))}
+            </div></div>
+        ))}
+      </div>
+
+      <h3 style={{ margin: '1.2rem 0 .6rem' }}>Recommendations</h3>
+      <div className="charts-row">
+        {[['students', 'Students', 'fa-user-graduate', '#2563eb'], ['teachers', 'Teachers', 'fa-chalkboard-teacher', '#0d9488'], ['management', 'Management', 'fa-briefcase', '#b45309']].map(([bucket, title, icon, col]) => (
+          <div key={bucket} className="card"><div className="card-header"><h3><i aria-hidden="true" className={`fas ${icon}`} style={{ color: col }} /> {title}</h3></div>
+            <div className="card-body">
+              {t.recommendations[bucket].length === 0 ? <p className="text-muted text-sm">Nothing flagged.</p> : t.recommendations[bucket].map((r, i) => (
+                <div key={i} style={{ borderLeft: `3px solid ${RECO[r.tone] || '#64748b'}`, padding: '.35rem 0 .55rem .65rem', marginBottom: '.55rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '.82rem' }}>{r.title}</div>
+                  <div style={{ fontSize: '.78rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{r.text}</div>
+                </div>
+              ))}
+            </div></div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult,
   bulk_entry: BulkEntry, add_result: AddResult, view_exam: ViewExam, student_progress: StudentProgress,
-  analytics: Analytics, validation: Validation, deep: Deep };
+  analytics: Analytics, validation: Validation, deep: Deep, trends: Trends };
 
 export default function MockJambApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

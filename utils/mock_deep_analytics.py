@@ -635,6 +635,24 @@ def deep_analytics(kind, exam_id, allowed_ids=None):
     meta['teachers_count'] = len([t for t in teachers if t['teacher'] != 'Unassigned'])
     meta['arms_count'] = len(arms)
 
+    # Raw numeric headline metrics for the longitudinal (trends) layer.
+    if kind == 'jamb':
+        totals = [r['total'] for r in records if r['total'] is not None]
+        nt = len(totals)
+        meta['mean_total'] = _mean(totals)
+        meta['above_200_rate'] = _rate(sum(1 for s in totals if s >= 200), nt)
+        meta['above_250_rate'] = _rate(sum(1 for s in totals if s >= 250), nt)
+    else:
+        creds = [r['credits'] or 0 for r in records]
+        five = 0
+        for r in records:
+            core_ok = sum(1 for s in r['subjects'] if _is_core(s['subject']) and s['passed'])
+            if (r['credits'] or 0) >= 5 and core_ok >= 2:
+                five += 1
+        meta['avg_credits'] = _mean(creds)
+        meta['five_core_rate'] = _rate(five, len(records))
+        meta['credit_rate'] = cohort_pass_rate
+
     recommendations = _recommendations(kind, subjects, teachers, arms, segments, cohort_pass_rate)
 
     return {
@@ -642,3 +660,236 @@ def deep_analytics(kind, exam_id, allowed_ids=None):
         'arms': arms, 'segments': segments, 'distribution': distribution,
         'recommendations': recommendations,
     }
+
+
+# ---------------------------------------------------------------------------
+# longitudinal / progress analytics across many mocks (one session or all)
+# ---------------------------------------------------------------------------
+
+def _short_session(name):
+    """'2025/2026' -> '25/26'; leaves anything else untouched."""
+    import re
+    m = re.match(r'^\s*(\d{2})(\d{2})\s*/\s*(\d{2})(\d{2})\s*$', name or '')
+    return f"{m.group(2)}/{m.group(4)}" if m else (name or '')
+
+
+def _direction(delta, thr):
+    if delta is None:
+        return 'flat'
+    if delta >= thr:
+        return 'up'
+    if delta <= -thr:
+        return 'down'
+    return 'flat'
+
+
+def _series(points, thr):
+    """(direction, delta, first, last, current) from numeric-or-None points."""
+    vals = [p for p in points if p is not None]
+    if not vals:
+        return ('flat', None, None, None, None)
+    first, last = vals[0], vals[-1]
+    if len(vals) < 2:
+        return ('flat', None, first, last, last)
+    delta = round(last - first, 1)
+    return (_direction(delta, thr), delta, first, last, last)
+
+
+def _trend_rows(names, per_period_maps, thr):
+    """Build a trend row per name across periods, decliners first."""
+    rows = []
+    for name in names:
+        pts = [pm.get(name) for pm in per_period_maps]
+        direction, delta, first, last, current = _series(pts, thr)
+        rows.append({'name': name, 'points': pts, 'direction': direction,
+                     'delta': delta, 'first': first, 'current': current})
+    rows.sort(key=lambda r: (r['delta'] if r['delta'] is not None else 0))
+    return rows
+
+
+def deep_trends(kind, session_id=None, allowed_ids=None):
+    """Longitudinal deep analytics across many mocks — every mock in one session
+    (``session_id`` set) or every mock across all sessions (year-over-year).
+
+    Each mock is a period on a shared timeline; the cohort headline, every
+    subject, every teacher and every class arm is tracked across those periods
+    with a direction (improving / declining / steady) and a first→latest delta.
+    """
+    import datetime as _dt
+    if kind == 'jamb':
+        from models import MockJAMBExam as EM
+    else:
+        from models import MockWAECExam as EM
+
+    q = EM.query
+    if session_id:
+        q = q.filter_by(session_id=session_id)
+    exams = q.all()
+    exams.sort(key=lambda e: (e.exam_date or _dt.date.min, e.session_id or 0, e.exam_number or 0))
+    multi_session = len({e.session_id for e in exams}) > 1
+
+    periods = []
+    for e in exams:
+        d = deep_analytics(kind, e.id, allowed_ids)
+        if not d or d['meta'].get('empty'):
+            continue
+        m = d['meta']
+        ordinal = {1: 'M1', 2: 'M2', 3: 'M3', 4: 'M4'}.get(e.exam_number, f'M{e.exam_number}')
+        sess_short = _short_session(m.get('session_name'))
+        label = f"{sess_short} · {ordinal}" if multi_session else ordinal
+        period = {
+            'exam_id': e.id, 'label': label, 'session_name': m.get('session_name'),
+            'mock': e.display_name, 'exam_date': m.get('exam_date'), 'students': m.get('students'),
+            'deep_url': None,   # filled by the route
+            '_subjects': {s['subject']: s['pass_rate'] for s in d['subjects']},
+            '_teachers': {t['teacher']: t['pass_rate'] for t in d['teachers'] if t['teacher'] != 'Unassigned'},
+            '_arms': {a['arm']: (a.get('jamb_mean') if kind == 'jamb' else a.get('avg_credits'))
+                      for a in d['arms']},
+        }
+        if kind == 'jamb':
+            period['metrics'] = {'mean_total': m.get('mean_total'),
+                                 'above_200_rate': m.get('above_200_rate'),
+                                 'pass_rate': m.get('cohort_pass_rate')}
+        else:
+            period['metrics'] = {'avg_credits': m.get('avg_credits'),
+                                 'five_core_rate': m.get('five_core_rate'),
+                                 'credit_rate': m.get('credit_rate')}
+        periods.append(period)
+
+    meta = {'kind': kind, 'session_id': session_id, 'multi_session': multi_session,
+            'periods_count': len(periods),
+            'span': f"{periods[0]['mock']} → {periods[-1]['mock']}" if len(periods) >= 2 else '',
+            'generated_at': _dt.datetime.now().strftime('%d %b %Y, %H:%M')}
+    if len(periods) < 2:
+        meta['insufficient'] = True
+        return {'meta': meta, 'periods': periods, 'cohort': [], 'headline': {},
+                'subject_trends': [], 'teacher_trends': [], 'arm_trends': [],
+                'movers': {'improving': [], 'declining': []},
+                'recommendations': {'students': [], 'teachers': [], 'management': []}}
+
+    # --- cohort trajectory ------------------------------------------------
+    if kind == 'jamb':
+        primary_key, primary_label, primary_thr = 'mean_total', 'Mean score', 8
+        secondary_key, secondary_label = 'above_200_rate', '% ≥ 200'
+    else:
+        primary_key, primary_label, primary_thr = 'avg_credits', 'Avg credits', 0.4
+        secondary_key, secondary_label = 'five_core_rate', '% 5 credits + core'
+
+    cohort = [{'label': p['label'], 'primary': p['metrics'].get(primary_key),
+               'secondary': p['metrics'].get(secondary_key),
+               'pass_rate': p['metrics'].get('pass_rate' if kind == 'jamb' else 'credit_rate'),
+               'students': p['students']} for p in periods]
+    pdir, pdelta, pfirst, plast, pcur = _series([c['primary'] for c in cohort], primary_thr)
+    sdir, sdelta, sfirst, slast, scur = _series([c['secondary'] for c in cohort], 5)
+    headline = {
+        'primary_label': primary_label, 'primary_first': pfirst, 'primary_last': plast,
+        'primary_delta': pdelta, 'primary_direction': pdir,
+        'secondary_label': secondary_label, 'secondary_first': sfirst, 'secondary_last': slast,
+        'secondary_delta': sdelta, 'secondary_direction': sdir,
+    }
+
+    # --- subject / teacher / arm trends ----------------------------------
+    subj_names = sorted({n for p in periods for n in p['_subjects']})
+    teach_names = sorted({n for p in periods for n in p['_teachers']})
+    arm_names = sorted({n for p in periods for n in p['_arms']})
+    subject_trends = _trend_rows(subj_names, [p['_subjects'] for p in periods], 5)
+    teacher_trends = _trend_rows(teach_names, [p['_teachers'] for p in periods], 5)
+    arm_thr = 10 if kind == 'jamb' else 0.5
+    arm_trends = _trend_rows(arm_names, [p['_arms'] for p in periods], arm_thr)
+
+    def _movers(rows, kindlabel):
+        out = []
+        for r in rows:
+            if r['delta'] is None or r['direction'] == 'flat':
+                continue
+            out.append({'name': r['name'], 'kind': kindlabel, 'delta': r['delta'],
+                        'direction': r['direction'], 'current': r['current']})
+        return out
+
+    all_movers = _movers(subject_trends, 'subject') + _movers(teacher_trends, 'teacher')
+    improving = sorted([m for m in all_movers if m['direction'] == 'up'],
+                       key=lambda x: -x['delta'])
+    declining = sorted([m for m in all_movers if m['direction'] == 'down'],
+                       key=lambda x: x['delta'])
+
+    recommendations = _trend_recommendations(kind, multi_session, headline, subject_trends,
+                                             teacher_trends, improving, declining, periods)
+
+    # strip private maps before returning
+    for p in periods:
+        p.pop('_subjects', None); p.pop('_teachers', None); p.pop('_arms', None)
+
+    return {'meta': meta, 'periods': periods, 'cohort': cohort, 'headline': headline,
+            'subject_trends': subject_trends, 'teacher_trends': teacher_trends,
+            'arm_trends': arm_trends,
+            'movers': {'improving': improving, 'declining': declining},
+            'recommendations': recommendations}
+
+
+def _trend_recommendations(kind, multi_session, headline, subject_trends, teacher_trends,
+                           improving, declining, periods):
+    students, tstaff, mgmt = [], [], []
+
+    def rec(bucket, tone, title, text):
+        bucket.append({'tone': tone, 'title': title, 'text': text})
+
+    pass_word = 'credit' if kind == 'waec' else 'pass'
+    horizon = 'across sessions' if multi_session else 'across the mocks'
+
+    # --- overall trajectory (management) ---
+    pdir = headline['primary_direction']
+    pl = headline['primary_label'].lower()
+    if pdir == 'up':
+        rec(mgmt, 'positive', f'{headline["primary_label"]} is trending up',
+            f"{headline['primary_label']} rose from {headline['primary_first']} to "
+            f"{headline['primary_last']} ({headline['primary_delta']:+}) {horizon}. The "
+            f"preparation strategy is working — keep the revision cadence and protect what drives it.")
+    elif pdir == 'down':
+        rec(mgmt, 'negative', f'{headline["primary_label"]} is slipping',
+            f"{headline['primary_label']} fell from {headline['primary_first']} to "
+            f"{headline['primary_last']} ({headline['primary_delta']:+}) {horizon}. Diagnose the "
+            f"cause now — pacing, syllabus coverage, fatigue or attendance — before the real exam.")
+    else:
+        rec(mgmt, 'insight', f'{headline["primary_label"]} is flat',
+            f"{headline['primary_label']} has plateaued around {headline['primary_last']} {horizon}. "
+            f"Incremental effort is holding the line but not moving it — a change of approach "
+            f"(targeted clinics, differentiated groups) is needed to break the ceiling.")
+
+    if multi_session:
+        rec(mgmt, 'insight', 'Year-over-year view',
+            'This spans multiple sessions, so each point is a different cohort — read it as the '
+            'institution\'s trajectory, not one class\'s. Compare like mocks (e.g. each session\'s '
+            'final mock) when judging whether the school is improving.')
+
+    # --- declining / improving subjects (students + management) ---
+    dec_subj = [s for s in subject_trends if s['direction'] == 'down'][:5]
+    if dec_subj:
+        rec(students, 'negative', 'Subjects losing ground',
+            f"{', '.join(s['name'] for s in dec_subj)} have falling {pass_word} rates {horizon}. "
+            f"Reassign revision time toward them and re-check whether the syllabus is being covered "
+            f"in the right order.")
+    imp_subj = [s for s in subject_trends if s['direction'] == 'up'][:5]
+    if imp_subj:
+        rec(students, 'positive', 'Subjects gaining momentum',
+            f"{', '.join(s['name'] for s in imp_subj)} are improving {horizon} — lock in the method "
+            f"and push the top band toward distinctions.")
+
+    # --- teacher trajectory (teachers) ---
+    imp_t = [t for t in teacher_trends if t['direction'] == 'up'][:5]
+    dec_t = [t for t in teacher_trends if t['direction'] == 'down'][:5]
+    if imp_t:
+        rec(tstaff, 'positive', 'Teachers on an upward trend',
+            f"{', '.join(t['name'] for t in imp_t)} have lifted their {pass_word} rate {horizon}. "
+            f"A sustained trend is far stronger evidence than one mock — recognise it and have them "
+            f"share what changed.")
+    if dec_t:
+        rec(tstaff, 'warning', 'Teachers trending down — support',
+            f"{', '.join(t['name'] for t in dec_t)} show a falling {pass_word} rate {horizon}. Because "
+            f"this is a trend, not a single sitting, it is worth a supportive conversation: workload, "
+            f"class ability, resources and a co-planned recovery — before any formal step.")
+
+    rec(mgmt, 'insight', 'Aim the last mock at the real exam',
+        'The final mock before WAEC/JAMB should mirror real timing and marking. Use this trend to '
+        'set targeted goals per subject and per group for that last rehearsal.')
+
+    return {'students': students, 'teachers': tstaff, 'management': mgmt}

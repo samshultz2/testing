@@ -105,7 +105,7 @@ def index():
                        for c in (comparison_data or [])],
         'urls': {'create': url_for('mock_jamb.create_exam'), 'analytics': url_for('mock_jamb.analytics'),
                  'predictions': url_for('results.predictions_dashboard'), 'validation': url_for('mock_jamb.validation'),
-                 'self': url_for('mock_jamb.index')},
+                 'trends': url_for('mock_jamb.trends'), 'self': url_for('mock_jamb.index')},
     })
 
 
@@ -727,11 +727,76 @@ def deep(exam_id):
         'urls': {'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
                  'index': url_for('mock_jamb.index'),
                  'analytics': url_for('mock_jamb.analytics'),
+                 'trends': url_for('mock_jamb.trends', session_id=exam.session_id),
                  'self': url_for('mock_jamb.deep', exam_id=exam.id),
                  'export_pdf': url_for('mock_jamb.deep_export', exam_id=exam.id, format='pdf'),
                  'export_excel': url_for('mock_jamb.deep_export', exam_id=exam.id, format='excel'),
                  'export_image': url_for('mock_jamb.deep_export', exam_id=exam.id, format='image')},
     })
+
+
+@mock_jamb_bp.route('/trends')
+@login_required
+def trends():
+    """Longitudinal deep analytics across many Mock JAMB exams — one session, or
+    all sessions (year-over-year progress)."""
+    from utils.mock_deep_analytics import deep_trends
+    scope = request.args.get('scope')            # 'all' -> every session
+    session_id = request.args.get('session_id', type=int)
+    active = get_active_session()
+    if scope != 'all' and not session_id and active:
+        session_id = active.id
+    if scope == 'all':
+        session_id = None
+    data = deep_trends('jamb', session_id=session_id)
+    for p in data.get('periods', []):
+        p['deep_url'] = url_for('mock_jamb.deep', exam_id=p['exam_id'])
+    sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
+    return _render({
+        'page': 'trends',
+        'trends': data,
+        'scope': 'all' if session_id is None else 'session',
+        'selected_session_id': session_id or '',
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'compose_base': url_for('comms.compose'),
+        'urls': {'index': url_for('mock_jamb.index'),
+                 'analytics': url_for('mock_jamb.analytics'),
+                 'self': url_for('mock_jamb.trends'),
+                 'all': url_for('mock_jamb.trends', scope='all'),
+                 'export_pdf': url_for('mock_jamb.trends_export', format='pdf',
+                                       scope=('all' if session_id is None else ''), session_id=session_id or ''),
+                 'export_excel': url_for('mock_jamb.trends_export', format='excel',
+                                         scope=('all' if session_id is None else ''), session_id=session_id or ''),
+                 'export_image': url_for('mock_jamb.trends_export', format='image',
+                                         scope=('all' if session_id is None else ''), session_id=session_id or '')},
+    })
+
+
+@mock_jamb_bp.route('/trends/export')
+@login_required
+def trends_export():
+    """Export the Mock JAMB progress trends. ``format`` = pdf | excel | image."""
+    from utils.mock_deep_analytics import deep_trends
+    from utils.mock_deep_report import trends_pdf, trends_xlsx, trends_png, trends_filename
+    from utils.web_exports import pdf_response, xlsx_response, png_response
+    scope = request.args.get('scope')
+    session_id = request.args.get('session_id', type=int)
+    if scope != 'all' and not session_id:
+        active = get_active_session()
+        session_id = active.id if active else None
+    if scope == 'all':
+        session_id = None
+    data = deep_trends('jamb', session_id=session_id)
+    if not data or data['meta'].get('insufficient'):
+        flash('Need at least two mocks with results to chart progress.', 'warning')
+        return redirect(url_for('mock_jamb.trends', scope=scope or '', session_id=session_id or ''))
+    fmt = (request.args.get('format') or 'pdf').lower()
+    meta = data['meta']
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(trends_xlsx(data), trends_filename(meta, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(trends_png(data), trends_filename(meta, 'png'), inline=False)
+    return pdf_response(trends_pdf(data), trends_filename(meta, 'pdf'), inline=False)
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/deep/export')

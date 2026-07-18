@@ -49,6 +49,7 @@
         <a href="{{ url_for('mock_waec.deep_export', exam_id=exam.id, format='pdf') }}" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> PDF</a>
         <a href="{{ url_for('mock_waec.deep_export', exam_id=exam.id, format='excel') }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
         <a href="{{ url_for('mock_waec.deep_export', exam_id=exam.id, format='image') }}" class="btn btn-info btn-sm"><i class="fas fa-image"></i> HD image</a>
+        <a href="{{ url_for('mock_waec.trends', session_id=exam.session_id) }}" class="btn btn-primary btn-sm"><i class="fas fa-chart-line"></i> Progress trends</a>
         <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
         <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>

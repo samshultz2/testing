@@ -15,6 +15,7 @@
                 {% for s in sessions %}<option value="{{ s.id }}" {% if s.id == selected_session_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
             </select>
         </form>
+        <a href="{{ url_for('mock_waec.trends', session_id=selected_session_id) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-line"></i> Progress trends</a>
         <a href="{{ url_for('mock_waec.create_exam') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Mock WAEC</a>
     </div>
 </div>
