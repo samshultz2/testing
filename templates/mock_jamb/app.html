@@ -154,6 +154,21 @@
 .improvement-badge{padding:.25rem .5rem;border-radius:4px;font-size:.75rem}
 .improvement-badge.improving{background:rgba(40,167,69,.15);color:#28a745}
 .improvement-badge.declining{background:rgba(220,53,69,.15);color:#dc3545}
+
+/* index dashboard — responsive grid utilities (used by the exam cards) */
+#mj-app .grid{display:grid;gap:1rem}
+#mj-app .grid-2{grid-template-columns:1fr}
+#mj-app .grid-3{grid-template-columns:repeat(3,1fr)}
+@media(min-width:768px){ #mj-app .grid-2{grid-template-columns:repeat(2,1fr)} }
+/* header action buttons must wrap and stay tappable on small screens */
+#mj-app .page-header-actions,#mj-app .d-flex.gap-2{flex-wrap:wrap}
+@media(max-width:600px){
+  #mj-app .page-header-actions .btn,#mj-app h1+p+.d-flex .btn,#mj-app .d-flex.gap-2>.btn{flex:1 1 auto;justify-content:center}
+  #mj-app h1{font-size:1.3rem}
+}
+/* keep the dashboard within the viewport width on a phone */
+#mj-app{max-width:100%}
+#mj-app .card{min-width:0}
 </style>
 {% endblock %}
 {% block content %}
