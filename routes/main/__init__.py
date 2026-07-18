@@ -45,9 +45,11 @@ DASHBOARD_WIDGETS = [
     ('charts', 'Gender / Stream / Age charts', 'Students', True),
     ('class_religion', 'Class enrolment & Religion', 'Students', True),
     ('people', 'Birthdays, Recent students, Activity', 'Students', True),
+    ('academic', 'Academic performance — pass rates & weak subjects', 'Academics', True),
     ('attendance_trend', 'Attendance trend', 'Academics', True),
     ('exams', 'WAEC / JAMB / Mock snapshots', 'Academics', True),
     ('finance', 'Finance — fees this term', 'Finance', True),
+    ('finance_health', 'Finance health — collection rate & outstanding', 'Finance', True),
     ('sales', 'Sales — today & term', 'Finance', False),
     ('hr', 'Staff / HR', 'Operations', False),
     ('cbt', 'CBT activity', 'Academics', False),
@@ -61,9 +63,9 @@ DASHBOARD_DEFAULTS = [k for k, _, _, d in DASHBOARD_WIDGETS if d]
 # widget preferences.
 WIDGET_MODULE = {
     'kpi': 'students', 'charts': 'students', 'class_religion': 'students',
-    'people': 'students', 'attendance_trend': 'attendance',
-    'exams': 'external_exams', 'finance': 'finance', 'sales': 'sales',
-    'hr': 'hr', 'cbt': 'cbt', 'library': 'library',
+    'people': 'students', 'attendance_trend': 'attendance', 'academic': 'results',
+    'exams': 'external_exams', 'finance': 'finance', 'finance_health': 'finance',
+    'sales': 'sales', 'hr': 'hr', 'cbt': 'cbt', 'library': 'library',
 }
 # The Needs-Attention panel spans modules; its individual items self-filter by
 # module permission, so the widget itself is available to every signed-in user.
@@ -80,6 +82,8 @@ DASHBOARD_BLOCKS = [
     ('insights', ('insights',)),
     ('branches', ('branches',)),
     ('kpi', ('kpi',)),
+    ('academic', ('academic',)),
+    ('finance_health', ('finance_health',)),
     ('crossmodule', ('finance', 'sales', 'hr', 'cbt', 'library')),
     ('exams', ('exams',)),
     ('charts', ('charts',)),
@@ -192,6 +196,8 @@ def _dashboard_urls():
         'record_payment': url_for('finance.record_payment'),
         'defaulters': url_for('finance.defaulters'),
         'finance_overview': url_for('finance.dashboard'),
+        'finance_collections': url_for('finance.collections'),
+        'institution_analytics': url_for('subjects.institution_analytics'),
         'new_sale': url_for('sales.new_sale'),
         'send_message': url_for('comms.compose'),
     }
@@ -336,6 +342,9 @@ def dashboard_payload():
         recent_activity=[{'action': a.action, 'detail': a.detail, 'user': a.user,
                           'created_at': a.created_at.strftime('%d %b %H:%M') if a.created_at else ''}
                          for a in recent_activity],
+        # Decision blocks (computed only when enabled + permitted).
+        academic=_dash_academic(active_term, tscope) if 'academic' in enabled else None,
+        finance_health=_dash_finance_health(active_term) if 'finance_health' in enabled else None,
         # Cross-module widgets (computed only when enabled).
         finance_stat=_floats(_dash_finance(active_term)) if 'finance' in enabled else None,
         sales_stat=({**sales, 'today': float(sales['today'])} if sales else None),
@@ -398,6 +407,82 @@ def _dash_finance(active_term):
             Expense.query.filter_by(term_id=active_term.id), Expense).all())
         return {'collected': collected, 'collected_today': collected_today,
                 'expenses': expenses, 'net': collected - expenses}
+    except Exception:
+        return None
+
+
+def _dash_academic(active_term, tscope=None):
+    """Internal academic-performance snapshot for the active term — the grades
+    quality an educator actually steers on: pass/distinction rates, completion,
+    average by section, the subjects failing most students, the at-risk count and
+    the top evidence-based recommendations. Powered by the cached org-analytics
+    engine and scoped to the caller's classes (admins see the whole school)."""
+    if not active_term:
+        return None
+    try:
+        from utils.access_control import is_admin
+        from utils.branch_scope import filter_classes_for_user
+        from utils.results_analytics_org import org_analytics
+        if is_admin():
+            allowed_ids = None
+        else:
+            asgs = filter_classes_for_user(
+                ClassArmAssignment.query.filter_by(term_id=active_term.id).all())
+            allowed_ids = {a.id for a in asgs}
+            if not allowed_ids:
+                return None
+        data = org_analytics(active_term.id, 'school', None, allowed_ids)
+        s = (data or {}).get('summary') or {}
+        if not s or not s.get('assessed'):
+            return None
+        return {
+            'summary': {k: s.get(k) for k in (
+                'class_average', 'pass_rate', 'fail_rate', 'distinction_rate',
+                'completion', 'assessed', 'students', 'subjects_count', 'pass_mark',
+                'distinction_mark', 'top_student')},
+            'scope_label': data.get('scope_label') or 'Whole school',
+            'unit_kind': data.get('unit_kind') or 'Section',
+            'sections': [{'label': u['label'], 'average': u['average'],
+                          'pass_rate': u['pass_rate'], 'students': u['students']}
+                         for u in (data.get('units') or [])[:8]],
+            'weak_subjects': [{'name': x['name'], 'average': x['average'],
+                               'pass_rate': x['pass_rate'], 'entries': x.get('entries', 0)}
+                              for x in (data.get('subjects') or [])[:6]],
+            'intervention_count': len(data.get('intervention') or []),
+            'recommendations': [{'tone': r.get('tone'), 'title': r.get('title'),
+                                 'text': r.get('text')}
+                                for r in (data.get('recommendations') or [])[:3]],
+        }
+    except Exception:
+        return None
+
+
+def _dash_finance_health(active_term):
+    """Fee-collection health for the active term — the bursar/MBA view: expected
+    vs collected, collection rate, outstanding and the defaulter count, plus a
+    collection trend. Reuses the same maths as the Defaulters and Collections
+    pages, branch-scoped, so it agrees with those reports."""
+    if not active_term:
+        return None
+    try:
+        from utils.finance import defaulters_summary, collection_trend
+        fin = _dash_finance(active_term) or {}
+        collected = float(fin.get('collected') or 0)
+        expenses = float(fin.get('expenses') or 0)
+        deff = defaulters_summary(active_term.id) or {'count': 0, 'balance': 0.0}
+        outstanding = float(deff.get('balance') or 0)
+        expected = collected + outstanding
+        rate = round(collected / expected * 100, 1) if expected > 0 else None
+        trend = [{'label': t['label'], 'amount': float(t['amount'])}
+                 for t in (collection_trend(active_term.id, weeks=12) or [])]
+        return {
+            'expected': round(expected, 2), 'collected': round(collected, 2),
+            'outstanding': round(outstanding, 2), 'collection_rate': rate,
+            'defaulter_count': int(deff.get('count') or 0),
+            'expenses': round(expenses, 2), 'net': round(collected - expenses, 2),
+            'collected_today': float(fin.get('collected_today') or 0),
+            'trend': trend,
+        }
     except Exception:
         return None
 
@@ -723,6 +808,10 @@ def _dash_widget_slice(block_id):
             'cbt_stat': _dash_cbt() if 'cbt' in enabled else None,
             'library_stat': _dash_library() if 'library' in enabled else None,
         }
+    if block_id == 'academic':
+        return {'academic': _dash_academic(active_term, tscope)}
+    if block_id == 'finance_health':
+        return {'finance_health': _dash_finance_health(active_term)}
     if block_id == 'exams':
         return {'jamb_snapshot': _dash_jamb_snapshot(tscope),
                 'waec_snapshot': _dash_waec_snapshot(tscope),

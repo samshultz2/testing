@@ -12,6 +12,8 @@ const BLOCK_META = {
   insights: { label: 'Needs attention', icon: 'fa-bell' },
   branches: { label: 'Branch performance', icon: 'fa-code-branch' },
   kpi: { label: 'Student KPIs', icon: 'fa-users' },
+  academic: { label: 'Academic performance', icon: 'fa-graduation-cap' },
+  finance_health: { label: 'Finance health', icon: 'fa-coins' },
   crossmodule: { label: 'Module KPIs', icon: 'fa-layer-group' },
   exams: { label: 'Exam snapshots', icon: 'fa-file-contract' },
   charts: { label: 'Demographics', icon: 'fa-chart-pie' },
@@ -19,8 +21,8 @@ const BLOCK_META = {
   class_religion: { label: 'Class & religion', icon: 'fa-school' },
   people: { label: 'People', icon: 'fa-user-clock' },
 };
-const FALLBACK_ORDER = ['insights', 'branches', 'kpi', 'crossmodule', 'exams',
-  'charts', 'attendance_trend', 'class_religion', 'people'];
+const FALLBACK_ORDER = ['insights', 'branches', 'kpi', 'academic', 'finance_health',
+  'crossmodule', 'exams', 'charts', 'attendance_trend', 'class_religion', 'people'];
 
 // Today's attendance vs the term average → a trend chip. Only shown once there's
 // a term baseline and today has been marked, so it never reads a misleading 0.
@@ -151,6 +153,8 @@ export default function App({ data: initialData }) {
       case 'insights': return has('insights') && !emptySchool;
       case 'branches': return has('branches') && (d.branch_comparison || []).length > 1;
       case 'kpi': return has('kpi') && !emptySchool;
+      case 'academic': return has('academic') && !!d.academic && !emptySchool;
+      case 'finance_health': return has('finance_health') && !!d.finance_health && !emptySchool;
       case 'crossmodule': return !!crossModule;
       case 'exams': return has('exams') && !emptySchool;
       case 'charts': return has('charts') && !emptySchool;
@@ -175,6 +179,8 @@ export default function App({ data: initialData }) {
         <Kpi tone="purple" icon="fa-user-graduate" value={d.graduates_count} label="Graduates" />
       </div>
     ),
+    academic: <AcademicPerformance a={d.academic} urls={urls} t={t} />,
+    finance_health: <FinanceHealth f={d.finance_health} urls={urls} t={t} />,
     crossmodule: (
       <div className="kpi-row">
         {d.finance_stat && <>
@@ -607,6 +613,135 @@ function BranchComparison({ rows }) {
         </table>
       </div>
     </div>
+  );
+}
+
+// Shared performance-colour helpers: green ≥70, amber ≥50, red below — the
+// traffic-light an educator/bursar reads at a glance.
+const RECO_TONE = { positive: '#1cc88a', negative: '#e74a3b', warning: '#f6c23e', insight: '#4e73df' };
+const rateColor = (v) => (v >= 70 ? '#1cc88a' : v >= 50 ? '#f6c23e' : '#e74a3b');
+const rateTone = (v) => (v >= 70 ? 'green' : v >= 50 ? 'amber' : 'red');
+
+function RecoList({ items }) {
+  if (!items || !items.length) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', marginTop: '.7rem' }}>
+      {items.map((r, i) => (
+        <div key={i} style={{ borderLeft: '3px solid ' + (RECO_TONE[r.tone] || '#4e73df'), padding: '.25rem 0 .3rem .6rem' }}>
+          <div style={{ fontWeight: 700, fontSize: '.82rem' }}>{r.title}</div>
+          <div className="text-muted" style={{ fontSize: '.78rem', lineHeight: 1.4 }}>{r.text}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Academic performance: the internal-grades quality a head-teacher steers on —
+// pass/distinction rates, completion, average by section, the subjects failing
+// most students and evidence-based recommendations. Server-scoped to the
+// caller's classes; only shown to users permitted the results module.
+function AcademicPerformance({ a, urls, t }) {
+  if (!a || !a.summary) return null;
+  const s = a.summary;
+  const sections = a.sections || [];
+  const weak = a.weak_subjects || [];
+  const unit = (a.unit_kind || 'Section').toLowerCase();
+  return (
+    <>
+      <div className="kpi-row">
+        <Kpi tone="blue" icon="fa-chart-simple" value={s.class_average} label={'Class average · ' + (a.scope_label || 'school')} />
+        <Kpi tone={rateTone(s.pass_rate)} icon="fa-circle-check" value={s.pass_rate + '%'} label={'Pass rate (≥' + s.pass_mark + ')'} />
+        <Kpi tone="purple" icon="fa-star" value={s.distinction_rate + '%'} label={'Distinctions (≥' + s.distinction_mark + ')'} />
+        <Kpi tone="teal" icon="fa-clipboard-check" value={s.completion + '%'} label="Scores entered" />
+      </div>
+      <div className="dash-grid split">
+        <Widget icon="fa-graduation-cap" title={'Average by ' + unit}
+                action={urls.institution_analytics && <a href={urls.institution_analytics} className="btn btn-secondary btn-sm">Analytics</a>}>
+          <ChartBox height="240px">
+            {sections.length ? (
+              <Chart type="bar"
+                ariaLabel={'Average score by ' + unit + ': ' + sections.map((x) => x.label + ' ' + x.average).join(', ')}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                  scales: { y: { beginAtZero: true, max: 100, grid: { color: t.grid } }, x: { grid: { display: false } } } }}
+                data={{ labels: sections.map((x) => x.label),
+                  datasets: [{ data: sections.map((x) => x.average), backgroundColor: sections.map((x) => rateColor(x.pass_rate)), borderRadius: 6 }] }} />
+            ) : <Empty icon="fa-graduation-cap">No scores entered yet</Empty>}
+          </ChartBox>
+        </Widget>
+        <Widget icon="fa-triangle-exclamation" title="Subjects needing attention"
+                action={a.intervention_count > 0 ? <span className="badge badge-danger">{a.intervention_count} at risk</span> : null}>
+          {weak.length ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ margin: 0 }}>
+                <thead><tr><th>Subject</th><th style={{ textAlign: 'right' }}>Avg</th><th style={{ textAlign: 'right' }}>Pass</th></tr></thead>
+                <tbody>
+                  {weak.map((x) => (
+                    <tr key={x.name}>
+                      <td>{x.name}</td>
+                      <td style={{ textAlign: 'right' }}>{x.average}</td>
+                      <td style={{ textAlign: 'right', color: rateColor(x.pass_rate), fontWeight: 700 }}>{x.pass_rate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <Empty icon="fa-circle-check">Every subject is passing</Empty>}
+          <RecoList items={a.recommendations} />
+        </Widget>
+      </div>
+    </>
+  );
+}
+
+// Finance health: the bursar/MBA view of fee collection — expected vs collected,
+// collection rate, outstanding + defaulters and a collection trend. Only shown
+// to users permitted the finance module.
+function FinanceHealth({ f, urls, t }) {
+  if (!f) return null;
+  const rate = f.collection_rate;
+  const trend = f.trend || [];
+  return (
+    <>
+      <div className="kpi-row">
+        <Kpi tone="green" icon="fa-hand-holding-dollar" value={nairaShort(f.collected)} title={naira(f.collected)} label="Collected (term)"
+             delta={f.collected_today > 0 ? { dir: 'up', text: nairaShort(f.collected_today) + ' today' } : undefined} />
+        <Kpi tone={rate == null ? 'blue' : rateTone(rate)} icon="fa-gauge-high" value={rate == null ? '—' : rate + '%'} label="Collection rate" />
+        <Kpi tone="amber" icon="fa-file-invoice-dollar" value={nairaShort(f.outstanding)} title={naira(f.outstanding)} label={'Outstanding · ' + f.defaulter_count + ' owing'} />
+        <Kpi tone={f.net >= 0 ? 'teal' : 'red'} icon="fa-scale-balanced" value={nairaShort(f.net)} title={naira(f.net)} label="Net (term)"
+             delta={{ dir: f.net >= 0 ? 'up' : 'down', text: f.net >= 0 ? 'surplus' : 'deficit' }} />
+      </div>
+      <div className="dash-grid split">
+        <Widget icon="fa-gauge-high" title="Fee collection"
+                action={urls.finance_collections && <a href={urls.finance_collections} className="btn btn-secondary btn-sm">Collections</a>}>
+          {rate == null ? <Empty icon="fa-file-invoice-dollar">No fees expected yet this term</Empty> : (
+            <div style={{ padding: '.3rem 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.82rem', marginBottom: 4 }}>
+                <span className="text-muted">Collected {nairaShort(f.collected)}</span>
+                <span className="text-muted">Expected {nairaShort(f.expected)}</span>
+              </div>
+              <div style={{ height: 14, borderRadius: 8, background: 'var(--border-color)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: Math.min(100, rate) + '%', background: rateColor(rate), borderRadius: 8, transition: 'width .3s' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '.7rem' }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: 800, color: rateColor(rate) }}>{rate}%</span>
+                {urls.defaulters && <a href={urls.defaulters} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-user-clock" /> {f.defaulter_count} defaulters</a>}
+              </div>
+            </div>
+          )}
+        </Widget>
+        <Widget icon="fa-chart-line" title="Collection trend">
+          <ChartBox>
+            {trend.length ? (
+              <Chart type="line"
+                ariaLabel={'Weekly fee collection: ' + trend.map((x) => x.label + ' ' + nairaShort(x.amount)).join(', ')}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                  scales: { y: { beginAtZero: true, grid: { color: t.grid }, ticks: { callback: (v) => nairaShort(v) } }, x: { grid: { display: false } } } }}
+                data={{ labels: trend.map((x) => x.label), datasets: [{ data: trend.map((x) => x.amount), borderColor: '#11998e', backgroundColor: 'rgba(17,153,142,.12)', fill: true, tension: .35, pointRadius: 3, borderWidth: 3 }] }} />
+            ) : <Empty icon="fa-chart-line">No payments recorded yet</Empty>}
+          </ChartBox>
+        </Widget>
+      </div>
+    </>
   );
 }
 
