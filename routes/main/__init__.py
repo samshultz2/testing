@@ -39,6 +39,7 @@ main_bp = Blueprint('main', __name__)
 
 # Selectable dashboard widgets: (key, label, category, default-on).
 DASHBOARD_WIDGETS = [
+    ('exec_summary', 'Executive summary — one-glance KPIs', 'Overview', True),
     ('insights', 'Needs attention — prioritized alerts', 'Overview', True),
     ('branches', 'Branch performance comparison', 'Overview', True),
     ('kpi', 'Student KPIs', 'Students', True),
@@ -67,9 +68,9 @@ WIDGET_MODULE = {
     'exams': 'external_exams', 'finance': 'finance', 'finance_health': 'finance',
     'sales': 'sales', 'hr': 'hr', 'cbt': 'cbt', 'library': 'library',
 }
-# The Needs-Attention panel spans modules; its individual items self-filter by
+# Cross-module widgets span modules; their individual items/tiles self-filter by
 # module permission, so the widget itself is available to every signed-in user.
-_CROSS_MODULE_WIDGETS = {'insights'}
+_CROSS_MODULE_WIDGETS = {'insights', 'exec_summary'}
 # Central-only widgets: shown solely to users who see across every branch.
 _CENTRAL_WIDGETS = {'branches'}
 
@@ -79,6 +80,7 @@ _CENTRAL_WIDGETS = {'branches'}
 # The fixed chrome (hero, announcements, teacher classes, quick actions) is not
 # part of this and always renders in place.
 DASHBOARD_BLOCKS = [
+    ('exec_summary', ('exec_summary',)),
     ('insights', ('insights',)),
     ('branches', ('branches',)),
     ('kpi', ('kpi',)),
@@ -343,6 +345,7 @@ def dashboard_payload():
                           'created_at': a.created_at.strftime('%d %b %H:%M') if a.created_at else ''}
                          for a in recent_activity],
         # Decision blocks (computed only when enabled + permitted).
+        exec_summary=_dash_exec_summary(active_term, tscope) if 'exec_summary' in enabled else [],
         academic=_dash_academic(active_term, tscope) if 'academic' in enabled else None,
         finance_health=_dash_finance_health(active_term) if 'finance_health' in enabled else None,
         # Cross-module widgets (computed only when enabled).
@@ -485,6 +488,92 @@ def _dash_finance_health(active_term):
         }
     except Exception:
         return None
+
+
+def _rate_tone(v):
+    """Traffic-light tone for a 0-100 rate KPI (green ≥75, amber ≥50, red below)."""
+    if v is None:
+        return 'blue'
+    return 'green' if v >= 75 else 'amber' if v >= 50 else 'red'
+
+
+def _short_money(v):
+    """Compact naira for a KPI tile (mirrors the React nairaShort filter)."""
+    v = float(v or 0)
+    a = abs(v)
+    sign = '-' if v < 0 else ''
+    if a >= 1e6:
+        return f"{sign}₦{a / 1e6:.2f}M"
+    if a >= 1e3:
+        return f"{sign}₦{a / 1e3:.1f}k"
+    return f"{sign}₦{round(a):,}"
+
+
+def _dash_exec_summary(active_term, tscope=None):
+    """A one-glance executive KPI strip spanning students, attendance, academics,
+    finance and exams. Every tile self-filters by module permission, so a user
+    only ever sees the headline numbers for modules they may access — a teacher
+    never sees fee collection, a bursar never sees the pass rate."""
+    from utils.access_control import can_access_module
+    tiles = []
+
+    def add(module, **t):
+        t['module'] = module
+        tiles.append(t)
+
+    if can_access_module('students'):
+        counts = _dash_student_counts(tscope)
+        delta = ({'dir': 'up', 'text': f"+{counts['new_students_month']} this month"}
+                 if counts['new_students_month'] else None)
+        add('students', key='students', icon='fa-users', label='Students',
+            value=counts['total_students'], tone='blue',
+            sub=f"{counts['male_students']}M · {counts['female_students']}F", delta=delta)
+
+    if can_access_module('attendance') and active_term:
+        ast = _dash_attendance_stats(active_term, tscope) or {}
+        today = ast.get('today_percentage')
+        term = ast.get('term_average')
+        delta = None
+        if today and term:
+            diff = round(today - term, 1)
+            delta = {'dir': 'up' if diff > 0 else 'down' if diff < 0 else 'flat',
+                     'text': f"{'+' if diff > 0 else ''}{diff} pp vs term"}
+        add('attendance', key='attendance', icon='fa-user-check', label='Attendance today',
+            value=(f"{today}%" if today is not None else '—'), tone=_rate_tone(today),
+            sub=(f"term avg {term}%" if term else 'today'), delta=delta)
+
+    if can_access_module('results') and active_term:
+        acad = _dash_academic(active_term, tscope)
+        if acad and acad.get('summary'):
+            s = acad['summary']
+            add('results', key='pass_rate', icon='fa-graduation-cap', label='Pass rate',
+                value=f"{s['pass_rate']}%", tone=_rate_tone(s['pass_rate']),
+                sub=f"avg {s['class_average']} · {s['distinction_rate']}% distinction")
+
+    if can_access_module('finance') and active_term:
+        fh = _dash_finance_health(active_term)
+        if fh and fh.get('collection_rate') is not None:
+            add('finance', key='collection', icon='fa-coins', label='Fee collection',
+                value=f"{fh['collection_rate']}%", tone=_rate_tone(fh['collection_rate']),
+                sub=f"{_short_money(fh['collected'])} of {_short_money(fh['expected'])}")
+        elif fh:
+            add('finance', key='collection', icon='fa-coins', label='Fees collected',
+                value=_short_money(fh['collected']), tone='green', sub='this term')
+
+    if can_access_module('external_exams'):
+        snap = _dash_jamb_snapshot(tscope)
+        if snap:
+            add('external_exams', key='jamb', icon='fa-file-contract', label='JAMB mean',
+                value=snap.get('mean'), tone='purple',
+                sub=f"≥200: {snap.get('above_200_pct', 0)}% ({snap.get('count', 0)})")
+
+    if can_access_module('hr'):
+        hr = _dash_hr()
+        if hr:
+            add('hr', key='staff', icon='fa-id-badge', label='Staff',
+                value=hr['total'], tone='teal', sub=f"{hr['teaching']} teaching")
+
+    return tiles
 
 
 def _dash_sales(active_term):
@@ -808,6 +897,8 @@ def _dash_widget_slice(block_id):
             'cbt_stat': _dash_cbt() if 'cbt' in enabled else None,
             'library_stat': _dash_library() if 'library' in enabled else None,
         }
+    if block_id == 'exec_summary':
+        return {'exec_summary': _dash_exec_summary(active_term, tscope)}
     if block_id == 'academic':
         return {'academic': _dash_academic(active_term, tscope)}
     if block_id == 'finance_health':

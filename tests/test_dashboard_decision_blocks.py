@@ -7,13 +7,16 @@ from tests.conftest import login_token
 
 
 def test_blocks_registered():
-    from routes.main import DASHBOARD_BLOCK_IDS, WIDGET_MODULE, DASHBOARD_WIDGETS
+    from routes.main import (DASHBOARD_BLOCK_IDS, WIDGET_MODULE, DASHBOARD_WIDGETS,
+                             _CROSS_MODULE_WIDGETS)
     assert 'academic' in DASHBOARD_BLOCK_IDS
     assert 'finance_health' in DASHBOARD_BLOCK_IDS
+    assert DASHBOARD_BLOCK_IDS[0] == 'exec_summary'   # top of the dashboard
+    assert 'exec_summary' in _CROSS_MODULE_WIDGETS
     assert WIDGET_MODULE['academic'] == 'results'
     assert WIDGET_MODULE['finance_health'] == 'finance'
     keys = {k for k, *_ in DASHBOARD_WIDGETS}
-    assert {'academic', 'finance_health'} <= keys
+    assert {'academic', 'finance_health', 'exec_summary'} <= keys
 
 
 def _staff_with(app, username, perms):
@@ -78,6 +81,43 @@ def test_admin_payload_has_block_keys(app):
     data = r.get_json()
     assert 'academic' in data
     assert 'finance_health' in data
+    assert 'exec_summary' in data and isinstance(data['exec_summary'], list)
+
+
+def test_exec_summary_tiles_permission_filtered(app):
+    """The executive strip only emits tiles for modules the user may access."""
+    from routes.main import _dash_exec_summary
+    from models import AcademicSession, Term
+    from utils.branch_scope import set_session_scope
+    from utils.org_scope import set_session_org
+    res_id = _staff_with(app, 'ex_res', {'results': 'view', 'students': 'view'})
+    fin_id = _staff_with(app, 'ex_fin', {'finance': 'view'})
+    with app.app_context():
+        ssn = (AcademicSession.query.filter_by(is_active=True).first()
+               or AcademicSession(name='EX 25/26', is_active=True))
+        db.session.add(ssn); db.session.flush()
+        term = (Term.query.filter_by(is_active=True).first()
+                or Term(session_id=ssn.id, term_number=1, name='EX Term', is_active=True))
+        db.session.add(term); db.session.commit()
+        term_id = term.id
+
+    with app.test_request_context('/'):
+        u = db.session.get(User, res_id)
+        session['logged_in'] = True; session['user_id'] = res_id; session['role'] = 'staff'
+        set_session_scope(u); set_session_org(u)
+        tiles = _dash_exec_summary(db.session.get(Term, term_id), None)
+        mods = {t['module'] for t in tiles}
+        assert 'finance' not in mods          # no finance access → no collection tile
+        assert mods <= {'students', 'attendance', 'results', 'external_exams', 'hr'}
+
+    with app.test_request_context('/'):
+        u = db.session.get(User, fin_id)
+        session['logged_in'] = True; session['user_id'] = fin_id; session['role'] = 'staff'
+        set_session_scope(u); set_session_org(u)
+        tiles = _dash_exec_summary(db.session.get(Term, term_id), None)
+        mods = {t['module'] for t in tiles}
+        assert 'results' not in mods and 'students' not in mods
+        assert mods == {'finance'}            # only the module they may access
 
 
 def test_finance_health_shape(app):

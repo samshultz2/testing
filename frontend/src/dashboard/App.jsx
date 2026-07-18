@@ -9,6 +9,7 @@ const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboar
 
 // Reorderable/favouritable blocks — labels + icons for the block toolbar.
 const BLOCK_META = {
+  exec_summary: { label: 'Executive summary', icon: 'fa-gauge-high' },
   insights: { label: 'Needs attention', icon: 'fa-bell' },
   branches: { label: 'Branch performance', icon: 'fa-code-branch' },
   kpi: { label: 'Student KPIs', icon: 'fa-users' },
@@ -21,8 +22,8 @@ const BLOCK_META = {
   class_religion: { label: 'Class & religion', icon: 'fa-school' },
   people: { label: 'People', icon: 'fa-user-clock' },
 };
-const FALLBACK_ORDER = ['insights', 'branches', 'kpi', 'academic', 'finance_health',
-  'crossmodule', 'exams', 'charts', 'attendance_trend', 'class_religion', 'people'];
+const FALLBACK_ORDER = ['exec_summary', 'insights', 'branches', 'kpi', 'academic',
+  'finance_health', 'crossmodule', 'exams', 'charts', 'attendance_trend', 'class_religion', 'people'];
 
 // Today's attendance vs the term average → a trend chip. Only shown once there's
 // a term baseline and today has been marked, so it never reads a misleading 0.
@@ -150,6 +151,7 @@ export default function App({ data: initialData }) {
   // enforced server-side via `enabled`; these are the client-side data gates).
   const visible = (id) => {
     switch (id) {
+      case 'exec_summary': return has('exec_summary') && (d.exec_summary || []).length > 0 && !emptySchool;
       case 'insights': return has('insights') && !emptySchool;
       case 'branches': return has('branches') && (d.branch_comparison || []).length > 1;
       case 'kpi': return has('kpi') && !emptySchool;
@@ -167,6 +169,7 @@ export default function App({ data: initialData }) {
 
   // Each block's content (the existing sections, now data-driven and orderable).
   const blockNodes = {
+    exec_summary: <ExecSummary tiles={d.exec_summary || []} />,
     insights: <Insights items={d.insights || []} />,
     branches: <BranchComparison rows={d.branch_comparison || []} />,
     kpi: (
@@ -632,6 +635,42 @@ function RecoList({ items }) {
           <div className="text-muted" style={{ fontSize: '.78rem', lineHeight: 1.4 }}>{r.text}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// School-at-a-glance: a permission-filtered executive KPI band across students,
+// attendance, academics, finance and exams. Tiles are already gated server-side
+// (a user only receives tiles for modules they may access), so this just lays
+// them out — each with its value, a context sub-line and an optional trend chip.
+function ExecSummary({ tiles }) {
+  if (!tiles.length) return null;
+  return (
+    <div className="widget" style={{ marginBottom: '1.1rem' }}>
+      <div className="wh">
+        <h3><i className="fas fa-gauge-high" aria-hidden="true" /> School at a glance</h3>
+      </div>
+      <div className="wb">
+        <div className="kpi-row" style={{ marginBottom: 0 }}>
+          {tiles.map((tl) => (
+            <div className="kpi" key={tl.key}>
+              <div className={'ic ' + (tl.tone || 'blue')}><i className={'fas ' + tl.icon} aria-hidden="true" /></div>
+              <div style={{ minWidth: 0 }}>
+                <div className="v">{tl.value}</div>
+                <div className="l">{tl.label}</div>
+                {tl.sub && <div className="text-muted" style={{ fontSize: 'var(--text-xs)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={tl.sub}>{tl.sub}</div>}
+                {tl.delta && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', fontWeight: 600, marginTop: 2,
+                                color: tl.delta.dir === 'up' ? 'var(--success)' : tl.delta.dir === 'down' ? 'var(--danger)' : 'var(--text-secondary)' }}>
+                    <i className={'fas ' + (tl.delta.dir === 'up' ? 'fa-arrow-trend-up' : tl.delta.dir === 'down' ? 'fa-arrow-trend-down' : 'fa-minus')} aria-hidden="true" />
+                    <span>{tl.delta.text}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
