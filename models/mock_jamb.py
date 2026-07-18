@@ -23,7 +23,8 @@ class MockJAMBExam(db.Model):
     is_completed = db.Column(db.Boolean, default=False)
     is_published = db.Column(db.Boolean, default=False)   # students may sit it online
     duration_minutes = db.Column(db.Integer, default=120)  # the in-app sitting timer
-    questions_per_subject = db.Column(db.Integer)  # draw a random N per subject (NULL = all)
+    questions_per_subject = db.Column(db.Integer)  # legacy cap (NULL = use blueprint / all)
+    blueprint = db.Column(db.Text)   # optional JSON {subject_key: {section: count}} per-mock override
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -377,8 +378,11 @@ class MockJAMBPassage(db.Model):
     __tablename__ = 'mock_jamb_passages'
 
     id = db.Column(db.Integer, primary_key=True)
-    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=False)
+    # NULL mock_exam_id => a reusable *bank* passage (drawn into mocks per the
+    # JAMB blueprint). A set id is a legacy per-mock passage (still supported).
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=True)
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    section = db.Column(db.String(40))           # JAMB paper section (e.g. comprehension/cloze)
     kind = db.Column(db.String(20), default='comprehension')   # comprehension/cloze/summary/oral/general
     title = db.Column(db.String(150))
     body = db.Column(db.Text)                    # the passage / instruction text
@@ -406,9 +410,14 @@ class MockJAMBQuestion(db.Model):
     __tablename__ = 'mock_jamb_questions'
 
     id = db.Column(db.Integer, primary_key=True)
-    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=False)
+    # NULL mock_exam_id => a reusable *bank* question drawn into mocks per the
+    # JAMB blueprint. A set id is a legacy per-mock question (still supported).
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=True)
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
     passage_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_passages.id'))   # NULL = stand-alone
+    section = db.Column(db.String(40))           # JAMB paper section (drives the blueprint draw)
+    exam_body = db.Column(db.String(10), default='JAMB')   # JAMB / WAEC / Both
+    difficulty = db.Column(db.String(10))        # optional: easy / medium / hard
     topic = db.Column(db.String(100))
     subtopic = db.Column(db.String(120))
     question_text = db.Column(db.Text, nullable=False)

@@ -284,6 +284,26 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN duration_minutes INTEGER DEFAULT 120')
         if 'questions_per_subject' not in mj_cols:
             statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN questions_per_subject INTEGER')
+        if 'blueprint' not in mj_cols:
+            statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN blueprint TEXT')
+    except Exception:
+        pass
+
+    # mock_jamb_questions / mock_jamb_passages central-bank columns.
+    try:
+        mq_cols = {c['name'] for c in inspect(db.engine).get_columns('mock_jamb_questions')}
+        if 'section' not in mq_cols:
+            statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN section VARCHAR(40)')
+        if 'exam_body' not in mq_cols:
+            statements.append("ALTER TABLE mock_jamb_questions ADD COLUMN exam_body VARCHAR(10) DEFAULT 'JAMB'")
+        if 'difficulty' not in mq_cols:
+            statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN difficulty VARCHAR(10)')
+    except Exception:
+        pass
+    try:
+        mp_cols = {c['name'] for c in inspect(db.engine).get_columns('mock_jamb_passages')}
+        if 'section' not in mp_cols:
+            statements.append('ALTER TABLE mock_jamb_passages ADD COLUMN section VARCHAR(40)')
     except Exception:
         pass
 

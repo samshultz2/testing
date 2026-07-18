@@ -28,11 +28,22 @@ def _is_english(name):
     return 'english' in (name or '').lower()
 
 
+def _pool_condition(model, exam):
+    """Rows visible to this mock: the shared bank (mock_exam_id NULL) plus any
+    legacy questions/passages authored directly into this exam."""
+    from models import db
+    return db.or_(model.mock_exam_id == exam.id, model.mock_exam_id.is_(None))
+
+
 def candidate_subject_ids(exam, student):
-    """Ordered subject ids the student sits for this mock (English first, ≤ 4)."""
+    """Ordered subject ids the student sits for this mock (English first, ≤ 4).
+
+    Subjects are those with questions in the pool the mock draws from — the
+    shared bank plus any legacy in-exam questions — intersected with the
+    student's registered JAMB subjects."""
     from models import db, MockJAMBQuestion, Subject
     subj_ids = [s for (s,) in db.session.query(MockJAMBQuestion.subject_id)
-                .filter(MockJAMBQuestion.mock_exam_id == exam.id).distinct().all()]
+                .filter(_pool_condition(MockJAMBQuestion, exam)).distinct().all()]
     if not subj_ids:
         return []
     subjects = {s.id: s for s in Subject.query.filter(Subject.id.in_(subj_ids)).all()}
@@ -55,27 +66,87 @@ def _seed(attempt, *parts):
     return hash((int(getattr(attempt, 'id', 0) or 0), *parts)) & 0x7fffffff
 
 
+def _blueprint_override(exam, subject_name):
+    """Per-mock section-count override for one subject, parsed from the exam's
+    ``blueprint`` JSON ``{subject_key: {section: count}}``; else None."""
+    import json
+    from utils.jamb_blueprint import norm_subject
+    raw = getattr(exam, 'blueprint', None)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    ov = data.get(norm_subject(subject_name))
+    return ov if isinstance(ov, dict) else None
+
+
+def _subject_pool(exam, subject_id):
+    """(passages, questions) available to this mock for one subject — the shared
+    bank plus any legacy in-exam rows — ordered deterministically."""
+    from models import MockJAMBPassage, MockJAMBQuestion
+    passages = (MockJAMBPassage.query
+                .filter(MockJAMBPassage.subject_id == subject_id,
+                        _pool_condition(MockJAMBPassage, exam))
+                .order_by(MockJAMBPassage.order, MockJAMBPassage.id).all())
+    qrows = (MockJAMBQuestion.query
+             .filter(MockJAMBQuestion.subject_id == subject_id,
+                     _pool_condition(MockJAMBQuestion, exam))
+             .order_by(MockJAMBQuestion.order, MockJAMBQuestion.id).all())
+    return passages, qrows
+
+
 def subject_items(exam, subject_id, attempt):
     """Deterministic served paper for one subject: an ordered list of items, each
-    either a passage-group (passage + its questions) or a stand-alone question.
-    Applies the per-subject random subset (if set) and the per-candidate order
-    shuffle. Returns (items, served_question_ids)."""
-    from models import MockJAMBPassage, MockJAMBQuestion
-    passages = (MockJAMBPassage.query.filter_by(mock_exam_id=exam.id, subject_id=subject_id)
-                .order_by(MockJAMBPassage.order, MockJAMBPassage.id).all())
-    qrows = (MockJAMBQuestion.query.filter_by(mock_exam_id=exam.id, subject_id=subject_id)
-             .order_by(MockJAMBQuestion.order, MockJAMBQuestion.id).all())
+    a passage-group (passage + its questions) or a stand-alone question.
+
+    Draws a JAMB-shaped, per-candidate random paper from the subject's pool: for
+    a subject with a JAMB blueprint whose questions are section-tagged, it samples
+    each section to the blueprint counts (comprehension/cloze passages kept
+    whole). Untagged pools or non-JAMB subjects fall back to the legacy behaviour
+    (optional ``questions_per_subject`` cap + shuffle). Returns (items, served)."""
+    from models import db, Subject
+    from utils.jamb_blueprint import blueprint_for, draw_paper, JAMB_BLUEPRINT, norm_subject
+    passages, qrows = _subject_pool(exam, subject_id)
+    if not qrows:
+        return [], set()
+
     by_passage, standalone = {}, []
     for q in qrows:
         if q.passage_id:
             by_passage.setdefault(q.passage_id, []).append(q)
         else:
             standalone.append(q)
-    passage_groups = [{'passage': p, 'questions': by_passage[p.id]}
-                      for p in passages if by_passage.get(p.id)]
 
     rng = random.Random(_seed(attempt, subject_id, 'order'))
-    # Random subset (comprehension passages kept whole; the cap trims stand-alone).
+
+    subject = db.session.get(Subject, subject_id)
+    subj_name = subject.name if subject else ''
+    has_sections = any((q.section or '').strip() for q in qrows)
+
+    # Structured JAMB draw when the subject has a blueprint AND tagged questions.
+    if norm_subject(subj_name) in JAMB_BLUEPRINT and has_sections:
+        bp = blueprint_for(subj_name, _blueprint_override(exam, subj_name))
+        passages_by_section = {}
+        for p in passages:
+            qs = by_passage.get(p.id)
+            if qs:
+                passages_by_section.setdefault(p.section or '', []).append(
+                    {'passage': p, 'questions': qs})
+        questions_by_section = {}
+        for q in standalone:
+            questions_by_section.setdefault(q.section or '', []).append(q)
+        items, served = draw_paper(bp, passages_by_section, questions_by_section, rng)
+        if served:
+            return items, served
+        # blueprint drew nothing (mis-tagged) → fall through to legacy
+
+    # Legacy fallback: passages kept whole; optional cap trims stand-alone.
+    passage_groups = [{'passage': p, 'questions': by_passage[p.id]}
+                      for p in passages if by_passage.get(p.id)]
     cap = exam.questions_per_subject or 0
     if cap:
         passage_q = sum(len(g['questions']) for g in passage_groups)
@@ -84,11 +155,9 @@ def subject_items(exam, subject_id, attempt):
         rng.shuffle(pool)
         standalone = pool[:rem]
 
-    # Shuffle order: passages and stand-alone questions interleave as items.
     items = [{'kind': 'passage', **g} for g in passage_groups] + \
             [{'kind': 'question', 'q': q} for q in standalone]
     rng.shuffle(items)
-
     served = set()
     for it in items:
         if it['kind'] == 'passage':
@@ -144,8 +213,8 @@ def grade_attempt(attempt):
     per = []
     for sid in subject_ids:
         _items, served = subject_items(exam, sid, attempt)
-        qs = [q for q in MockJAMBQuestion.query.filter_by(mock_exam_id=exam.id, subject_id=sid).all()
-              if q.id in served]
+        qs = (MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(served)).all()
+              if served else [])
         total_marks = sum((q.marks or 1) for q in qs)
         earned = sum((q.marks or 1) for q in qs
                      if ans.get(q.id) and ans[q.id].is_correct)

@@ -386,7 +386,11 @@ def item_analysis(exam_id, allowed_ids=None):
     upper_ids = {a.id for a in ranked[:gsize]} if gsize else set()
     lower_ids = {a.id for a in ranked[-gsize:]} if gsize else set()
 
-    questions = (MockJAMBQuestion.query.filter_by(mock_exam_id=exam.id).all())
+    # Load exactly the questions that were served to at least one candidate
+    # (works for bank-drawn papers, where questions aren't owned by the exam).
+    served_qids = set(served_ids_by_q.keys())
+    questions = (MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(served_qids)).all()
+                 if served_qids else [])
     items = _analyse_items(questions, answers_by_q, served_ids_by_q, upper_ids, lower_ids)
     if not items:
         meta['empty'] = True
