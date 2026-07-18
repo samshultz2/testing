@@ -1033,12 +1033,10 @@ def bank():
             sq = sq.filter(MockJAMBQuestion.section == section)
         standalone = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
                                  MockJAMBQuestion.id).all()
-    from utils.mock_bank_seed import has_starter
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
                            topic_tree=_subject_topic_tree(subject_id),
-                           has_starter=bool(subject and has_starter(subject.name)),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
 
@@ -1203,41 +1201,6 @@ def bank_delete_question(question_id):
     db.session.commit()
     flash('Question deleted from the bank.', 'success')
     return redirect(_bank_url(sid, sec))
-
-
-@mock_jamb_bp.route('/bank/seed', methods=['POST'])
-@login_required
-@csrf_protect
-def bank_seed():
-    """Seed the starter question bank for one subject (or every core subject when
-    ``all`` is set) — original JAMB-style samples so mocks work immediately."""
-    from utils.mock_bank_seed import seed_starter_bank, has_starter, STARTER_BANK
-    from utils.jamb_blueprint import norm_subject
-    if request.form.get('all'):
-        p_total, q_total, done = 0, 0, 0
-        for subj in _mock_subjects():
-            if has_starter(subj.name):
-                p, q = seed_starter_bank(subj.id, subj.name)
-                p_total += p; q_total += q
-                done += 1 if (p or q) else 0
-        flash(f'Seeded {q_total} starter question(s) across {done} subject(s).'
-              if q_total else 'Starter questions already present for all core subjects.',
-              'success' if q_total else 'info')
-        return redirect(_bank_url(request.form.get('subject_id', type=int)))
-    subject_id = request.form.get('subject_id', type=int)
-    subject = db.session.get(Subject, subject_id) if subject_id else None
-    if not subject:
-        flash('Choose a subject first.', 'error')
-        return redirect(_bank_url(subject_id))
-    if not has_starter(subject.name):
-        flash('No starter questions for this subject yet — add or import your own.', 'warning')
-        return redirect(_bank_url(subject_id))
-    padded, qadded = seed_starter_bank(subject_id, subject.name)
-    if qadded or padded:
-        flash(f'Added {qadded} starter question(s) and {padded} passage(s) — edit or grow from here.', 'success')
-    else:
-        flash('Starter questions already present for this subject.', 'info')
-    return redirect(_bank_url(subject_id))
 
 
 @mock_jamb_bp.route('/bank/import', methods=['POST'])

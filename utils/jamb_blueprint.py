@@ -54,19 +54,22 @@ def _sec(key, label, count, passage=False, per_passage=5):
 # per-subject blueprints (section → count), reflecting the real UTME paper
 # ---------------------------------------------------------------------------
 JAMB_BLUEPRINT = {
-    # Real UTME Use of English (60): Comprehension (3 passages, 15) + Cloze
-    # (1 passage, 10) + Sentence Interpretation (10) + Antonyms (5) + Synonyms
-    # (5) + Lexis & Structure/sentence completion (5) + Test of Orals (10).
+    # Real UTME Use of English (60): Comprehension (3 passages) + Cloze
+    # (1 passage) + Sentence Interpretation + Antonyms + Synonyms + Lexis &
+    # Structure (sentence completion) + Test of Orals + questions on the
+    # recommended Novel/reading text. Counts vary slightly by year and are
+    # editable per mock; they sum to 60 here.
     'english language': {
         'total': 60,
         'sections': [
             _sec('comprehension', 'Comprehension', 15, passage=True, per_passage=5),
             _sec('cloze', 'Cloze passage', 10, passage=True, per_passage=10),
-            _sec('sentence_interpretation', 'Sentence Interpretation', 10),
-            _sec('antonyms', 'Antonyms', 5),
-            _sec('synonyms', 'Synonyms', 5),
-            _sec('lexis_structure', 'Lexis & Structure', 5),
-            _sec('oral', 'Test of Orals', 10),
+            _sec('sentence_interpretation', 'Sentence Interpretation', 8),
+            _sec('antonyms', 'Antonyms', 4),
+            _sec('synonyms', 'Synonyms', 4),
+            _sec('lexis_structure', 'Lexis & Structure', 4),
+            _sec('oral', 'Test of Orals', 5),
+            _sec('novel', 'Recommended Novel', 10),
         ],
     },
     'mathematics': {

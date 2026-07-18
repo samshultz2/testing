@@ -3660,13 +3660,6 @@
 ]
 ],
 [
-"mock_jamb.bank_seed",
-"/mock-jamb/bank/seed",
-[
-"POST"
-]
-],
-[
 "mock_jamb.bulk_entry",
 "/mock-jamb/exam/<int:exam_id>/results/bulk",
 [

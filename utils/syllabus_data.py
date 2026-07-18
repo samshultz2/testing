@@ -104,6 +104,14 @@ FULL_SYLLABUS = {
             'Religious register',
             'Motor/automobile register',
         ]),
+        ('Recommended Novel', [
+            'Plot & structure',
+            'Characters & characterisation',
+            'Themes',
+            'Setting',
+            'Language & style',
+            'Narrative technique & point of view',
+        ]),
     ],
     # =====================================================================
     'physics': [
