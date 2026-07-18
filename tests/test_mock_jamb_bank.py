@@ -184,3 +184,26 @@ def test_bank_bulk_import(app):
         assert after == before + 2                       # two good rows, one skipped
         q = MockJAMBQuestion.query.filter_by(subject_id=sid, question_text='What is 3x2?').first()
         assert q.section == 'algebra' and q.topic == 'Polynomials'
+
+
+def test_blueprint_editor_saves_override(app):
+    """The blueprint editor renders and persists a per-mock section override that
+    the draw then honours."""
+    import json
+    from utils.mock_jamb_sitting import subject_items
+    eid, sid, subj_id = _bank_maths(app, n_per_section=12)
+    c = _admin(app); tok = _bank_csrf(c)
+    r = c.get(f'/mock-jamb/exam/{eid}/blueprint')
+    assert r.status_code == 200 and 'Paper Blueprint' in r.get_data(as_text=True)
+    # set every Maths section to 2 (=> 10 total), leave others at default
+    data = {'_csrf_token': tok}
+    for section in ('number', 'algebra', 'geometry', 'calculus', 'statistics'):
+        data[f'mathematics__{section}'] = '2'
+    r = c.post(f'/mock-jamb/exam/{eid}/blueprint', data=data, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        exam = db.session.get(MockJAMBExam, eid)
+        assert exam.blueprint and 'mathematics' in json.loads(exam.blueprint)
+        att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(att); db.session.flush()
+        _items, served = subject_items(exam, subj_id, att)
+        assert len(served) == 10

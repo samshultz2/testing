@@ -24,6 +24,7 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ url_for('mock_jamb.bank') }}" class="btn btn-primary btn-sm"><i class="fas fa-database"></i> Central Question Bank</a>
+        <a href="{{ url_for('mock_jamb.exam_blueprint', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-sliders"></i> Paper blueprint</a>
         <a href="{{ url_for('mock_jamb.items', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-microscope"></i> Item analysis</a>
         <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
     </div>

@@ -1557,6 +1557,58 @@ def api_student_progress(student_id):
 # ADMIN: publish an exam for the online sitting + set its duration
 # =============================================================================
 
+@mock_jamb_bp.route('/exam/<int:exam_id>/blueprint', methods=['GET', 'POST'])
+@login_required
+@csrf_protect
+def exam_blueprint(exam_id):
+    """Per-mock JAMB blueprint editor: tune how many questions each subject draws
+    from each section. A value equal to the JAMB default stores nothing; real
+    deviations are kept as a compact override on the mock."""
+    import json
+    from utils.jamb_blueprint import JAMB_BLUEPRINT
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    if request.method == 'POST':
+        override = {}
+        for subj_key, bp in JAMB_BLUEPRINT.items():
+            for s in bp['sections']:
+                raw = request.form.get(f'{subj_key}__{s["section"]}')
+                if raw in (None, ''):
+                    continue
+                try:
+                    n = max(0, int(raw))
+                except (TypeError, ValueError):
+                    continue
+                if n != s['count']:               # only store real deviations
+                    override.setdefault(subj_key, {})[s['section']] = n
+        exam.blueprint = json.dumps(override) if override else None
+        db.session.commit()
+        flash('Blueprint saved.' if override else 'Reset to the JAMB default.', 'success')
+        return redirect(url_for('mock_jamb.exam_blueprint', exam_id=exam_id))
+
+    current = {}
+    if exam.blueprint:
+        try:
+            current = json.loads(exam.blueprint)
+        except Exception:
+            current = {}
+    subjects_view = []
+    for subj_key, bp in JAMB_BLUEPRINT.items():
+        ov = current.get(subj_key, {})
+        secs = [{'section': s['section'], 'label': s['label'], 'passage': s['passage'],
+                 'count': ov.get(s['section'], s['count']), 'default': s['count']}
+                for s in bp['sections']]
+        subjects_view.append({'key': subj_key, 'name': subj_key.title(),
+                              'total': sum(x['count'] for x in secs),
+                              'default_total': sum(x['default'] for x in secs),
+                              'sections': secs, 'customised': subj_key in current})
+    return render_template('mock_jamb/blueprint.html', exam=exam, subjects=subjects_view,
+                           urls={'questions': url_for('mock_jamb.questions', exam_id=exam.id),
+                                 'bank': url_for('mock_jamb.bank'),
+                                 'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
+                                 'self': url_for('mock_jamb.exam_blueprint', exam_id=exam.id)})
+
+
 @mock_jamb_bp.route('/exam/<int:exam_id>/publish', methods=['POST'])
 @login_required
 @csrf_protect

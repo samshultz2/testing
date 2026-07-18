@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Paper Blueprint — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ urls.view }}">{{ exam.display_name }}</a> / <span>Blueprint</span>{% endblock %}
+{% block extra_css %}
+<style>
+.bp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
+.bp-card{border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.bp-head{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;background:var(--gray-50)}
+.bp-head .t{font-weight:700;flex:1}
+.bp-total{font-size:.75rem;font-weight:700;background:rgba(13,106,78,.12);color:#0d6a4e;padding:.1rem .5rem;border-radius:var(--radius-full)}
+.bp-cust{font-size:.68rem;font-weight:700;background:rgba(180,83,9,.14);color:#b45309;padding:.1rem .45rem;border-radius:var(--radius-full)}
+.bp-sec{display:flex;align-items:center;gap:.5rem;padding:.4rem .9rem;border-top:1px solid var(--border-light)}
+.bp-sec .l{flex:1;font-size:.86rem}
+.bp-sec input{width:64px;text-align:center}
+.bp-sec .def{font-size:.68rem;color:var(--text-muted);width:58px;text-align:right}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Paper Blueprint — {{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">How many questions each subject draws from each JAMB section for this mock. Defaults follow the real UTME structure (English 60, others 40). Change any count to override; match the default to keep it.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ urls.bank }}" class="btn btn-secondary btn-sm"><i class="fas fa-database"></i> Question Bank</a>
+        <a href="{{ urls.view }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
+    </div>
+</div>
+
+<form method="post" action="{{ urls.self }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="bp-grid">
+        {% for s in subjects %}
+        <div class="bp-card">
+            <div class="bp-head">
+                <span class="t">{{ s.name }}</span>
+                {% if s.customised %}<span class="bp-cust">custom</span>{% endif %}
+                <span class="bp-total" title="Total questions drawn">{{ s.total }} Q</span>
+            </div>
+            {% for sec in s.sections %}
+            <div class="bp-sec">
+                <span class="l">{{ sec.label }}{% if sec.passage %} <i class="fas fa-align-left text-muted" title="passage section"></i>{% endif %}</span>
+                <input type="number" min="0" max="100" name="{{ s.key }}__{{ sec.section }}" value="{{ sec.count }}" class="form-control">
+                <span class="def">def {{ sec.default }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    <div style="margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap;">
+        <button class="btn btn-primary"><i class="fas fa-save"></i> Save blueprint</button>
+        <button class="btn btn-secondary" type="reset">Reset form</button>
+        <span class="text-muted text-sm" style="align-self:center;">Tip: set every count back to its default and save to fully restore the JAMB blueprint.</span>
+    </div>
+</form>
+{% endblock %}

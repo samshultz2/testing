@@ -3749,6 +3749,14 @@
 ]
 ],
 [
+"mock_jamb.exam_blueprint",
+"/mock-jamb/exam/<int:exam_id>/blueprint",
+[
+"GET",
+"POST"
+]
+],
+[
 "mock_jamb.export_results",
 "/mock-jamb/exam/<int:exam_id>/export",
 [
