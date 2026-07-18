@@ -26,6 +26,10 @@ from utils.search import like_term
 
 mock_jamb_bp = Blueprint('mock_jamb', __name__, url_prefix='/mock-jamb')
 
+# Student-facing online sitting shares the CBT student portal login (student ID +
+# portal password) but delivers the JAMB 4-subjects-in-one sitting.
+mock_jamb_portal_bp = Blueprint('mock_jamb_portal', __name__, url_prefix='/exam/mock-jamb')
+
 
 def _read_subject_scores(form, suffix=''):
     """
@@ -1220,3 +1224,171 @@ def api_student_progress(student_id):
         return jsonify({'error': 'No data available'}), 404
     
     return jsonify(progress)
+
+
+# =============================================================================
+# ADMIN: publish an exam for the online sitting + set its duration
+# =============================================================================
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/publish', methods=['POST'])
+@login_required
+@csrf_protect
+def toggle_publish(exam_id):
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    if not exam.is_published and exam.questions.count() == 0:
+        flash('Add questions before publishing the online sitting.', 'error')
+        return redirect(url_for('mock_jamb.questions', exam_id=exam_id))
+    dur = request.form.get('duration_minutes', type=int)
+    if dur and 5 <= dur <= 300:
+        exam.duration_minutes = dur
+    exam.is_published = not exam.is_published
+    db.session.commit()
+    flash('Online sitting opened for students.' if exam.is_published
+          else 'Online sitting closed.', 'success')
+    return redirect(url_for('mock_jamb.questions', exam_id=exam_id))
+
+
+# =============================================================================
+# STUDENT PORTAL: sit the mock JAMB online (shares the CBT portal login)
+# =============================================================================
+
+def _portal_guard(exam):
+    """Ensure the exam is published and the student may sit it (same branch)."""
+    from routes.cbt import _current_student
+    student = _current_student()
+    if not student:
+        return None, None
+    if not exam or not exam.is_published or not exam.is_active:
+        return student, None
+    if exam.branch_id and student.branch_id and exam.branch_id != student.branch_id:
+        return student, None
+    return student, exam
+
+
+@mock_jamb_portal_bp.route('/')
+def portal_list():
+    from routes.cbt import cbt_login_required, _current_student
+    @cbt_login_required
+    def _inner():
+        from models import MockJAMBAttempt
+        from utils.mock_jamb_sitting import candidate_subject_ids
+        student = _current_student()
+        exams = (MockJAMBExam.query.filter_by(is_published=True, is_active=True)
+                 .order_by(MockJAMBExam.exam_date.desc()).all())
+        rows = []
+        for e in exams:
+            if e.branch_id and student.branch_id and e.branch_id != student.branch_id:
+                continue
+            subs = candidate_subject_ids(e, student)
+            if not subs:
+                continue
+            att = MockJAMBAttempt.query.filter_by(mock_exam_id=e.id, student_id=student.id).first()
+            rows.append({'exam': e, 'subjects': len(subs),
+                         'submitted': bool(att and att.status == 'Submitted'),
+                         'in_progress': bool(att and att.status != 'Submitted'),
+                         'score': att.total_score if att and att.status == 'Submitted' else None})
+        return render_template('mock_jamb/portal_list.html', student=student, rows=rows)
+    return _inner()
+
+
+@mock_jamb_portal_bp.route('/<int:exam_id>')
+def portal_sit(exam_id):
+    from routes.cbt import cbt_login_required
+    @cbt_login_required
+    def _inner():
+        from models import MockJAMBAttempt
+        from utils.mock_jamb_sitting import candidate_subject_ids, sitting_payload
+        exam = db.session.get(MockJAMBExam, exam_id)
+        student, ok = _portal_guard(exam)
+        if not ok:
+            flash('This mock is not open for you.', 'error')
+            return redirect(url_for('mock_jamb_portal.portal_list'))
+        subject_ids = candidate_subject_ids(exam, student)
+        if not subject_ids:
+            flash('You have no subjects to sit in this mock.', 'error')
+            return redirect(url_for('mock_jamb_portal.portal_list'))
+        att = MockJAMBAttempt.query.filter_by(mock_exam_id=exam.id, student_id=student.id).first()
+        if att and att.status == 'Submitted':
+            return redirect(url_for('mock_jamb_portal.portal_done', exam_id=exam.id))
+        if not att:
+            att = MockJAMBAttempt(mock_exam_id=exam.id, student_id=student.id,
+                                  duration_minutes=exam.duration_minutes or 120)
+            db.session.add(att); db.session.commit()
+        saved = {a.question_id: a.selected_option for a in att.answers}
+        # seconds left = duration - elapsed
+        import datetime as _dt
+        elapsed = (_dt.datetime.now() - att.started_at).total_seconds() if att.started_at else 0
+        remaining = max(0, int((att.duration_minutes or 120) * 60 - elapsed))
+        return render_template('mock_jamb/portal_sit.html', exam=exam, student=student,
+                               subjects=sitting_payload(exam, subject_ids), saved=saved,
+                               attempt=att, remaining=remaining)
+    return _inner()
+
+
+@mock_jamb_portal_bp.route('/<int:exam_id>/save', methods=['POST'])
+def portal_save(exam_id):
+    from routes.cbt import cbt_login_required
+    @cbt_login_required
+    def _inner():
+        from models import MockJAMBAttempt, MockJAMBAnswer, MockJAMBQuestion
+        exam = db.session.get(MockJAMBExam, exam_id)
+        student, ok = _portal_guard(exam)
+        if not ok:
+            return jsonify({'error': 'closed'}), 403
+        att = MockJAMBAttempt.query.filter_by(mock_exam_id=exam.id, student_id=student.id).first()
+        if not att or att.status == 'Submitted':
+            return jsonify({'error': 'not-active'}), 400
+        qid = request.form.get('question_id', type=int)
+        opt = (request.form.get('option') or '').strip().upper()
+        q = db.session.get(MockJAMBQuestion, qid)
+        if not q or q.mock_exam_id != exam.id or opt not in ('A', 'B', 'C', 'D'):
+            return jsonify({'error': 'bad'}), 400
+        ans = MockJAMBAnswer.query.filter_by(attempt_id=att.id, question_id=qid).first()
+        if not ans:
+            ans = MockJAMBAnswer(attempt_id=att.id, question_id=qid)
+            db.session.add(ans)
+        ans.selected_option = opt
+        ans.is_correct = (opt == (q.correct_option or '').upper())
+        db.session.commit()
+        return jsonify({'ok': True})
+    return _inner()
+
+
+@mock_jamb_portal_bp.route('/<int:exam_id>/submit', methods=['POST'])
+def portal_submit(exam_id):
+    from routes.cbt import cbt_login_required
+    @cbt_login_required
+    def _inner():
+        from models import MockJAMBAttempt
+        from utils.mock_jamb_sitting import grade_attempt
+        exam = db.session.get(MockJAMBExam, exam_id)
+        from routes.cbt import _current_student
+        student = _current_student()
+        att = (MockJAMBAttempt.query.filter_by(mock_exam_id=exam_id, student_id=student.id).first()
+               if (exam and student) else None)
+        if not att:
+            flash('No attempt to submit.', 'error')
+            return redirect(url_for('mock_jamb_portal.portal_list'))
+        if att.status != 'Submitted':
+            grade_attempt(att)
+        return redirect(url_for('mock_jamb_portal.portal_done', exam_id=exam_id))
+    return _inner()
+
+
+@mock_jamb_portal_bp.route('/<int:exam_id>/done')
+def portal_done(exam_id):
+    from routes.cbt import cbt_login_required, _current_student
+    @cbt_login_required
+    def _inner():
+        from models import MockJAMBAttempt, MockJAMBResult
+        student = _current_student()
+        exam = db.session.get(MockJAMBExam, exam_id)
+        att = (MockJAMBAttempt.query.filter_by(mock_exam_id=exam_id, student_id=student.id).first()
+               if (exam and student) else None)
+        if not att or att.status != 'Submitted':
+            return redirect(url_for('mock_jamb_portal.portal_sit', exam_id=exam_id))
+        result = MockJAMBResult.query.filter_by(student_id=student.id, mock_exam_id=exam_id).first()
+        return render_template('mock_jamb/portal_done.html', exam=exam, student=student,
+                               attempt=att, result=result)
+    return _inner()

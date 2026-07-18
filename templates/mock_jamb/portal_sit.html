@@ -1,0 +1,124 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}{{ exam.display_name }}{% endblock %}
+{% block head_extra %}
+<style>
+.mjs-bar{position:sticky;top:0;z-index:20;background:#0d6a4e;color:#fff;border-radius:12px;padding:.7rem 1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem}
+.mjs-bar .timer{font-family:'Space Grotesk',monospace;font-weight:700;font-size:1.15rem;background:rgba(255,255,255,.16);padding:.2rem .6rem;border-radius:8px}
+.mjs-bar .timer.warn{background:#c0392b}
+.mjs-tabs{display:flex;gap:.4rem;overflow-x:auto;margin-bottom:.8rem;-webkit-overflow-scrolling:touch}
+.mjs-tab{white-space:nowrap;padding:.5rem .9rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;font-weight:600;font-size:.85rem}
+.mjs-tab.active{background:#0d6a4e;color:#fff;border-color:#0d6a4e}
+.mjs-tab .cnt{opacity:.7;font-weight:400;font-size:.75rem}
+.mjs-subject{display:none}.mjs-subject.active{display:block}
+.mjs-passage{background:#f4f7f5;border-left:4px solid #7c3aed;border-radius:10px;padding:.8rem 1rem;margin:.7rem 0;white-space:pre-wrap;line-height:1.55;font-size:.92rem}
+.mjs-passage .ptitle{font-weight:700;color:#7c3aed;margin-bottom:.3rem}
+.mjs-q{border:1px solid var(--border-color);border-radius:12px;padding:.9rem 1rem;margin-bottom:.7rem}
+.mjs-q .qh{font-weight:600;margin-bottom:.5rem}
+.mjs-opt{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border:1px solid var(--border-color);border-radius:8px;margin-bottom:.4rem;cursor:pointer}
+.mjs-opt:hover{background:#f0fbf6}
+.mjs-opt input{accent-color:#0d6a4e;width:18px;height:18px}
+.mjs-opt.chosen{border-color:#0d6a4e;background:#eafaf3}
+.mjs-q img{max-height:180px;border-radius:8px;margin:.3rem 0}
+.mjs-answered{font-size:.85rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="portal-card">
+    <div class="mjs-bar">
+        <div style="flex:1;min-width:130px;"><strong>{{ exam.display_name }}</strong><div class="mjs-answered"><span id="ansCount">0</span> answered</div></div>
+        <div class="timer" id="timer" data-remaining="{{ remaining }}">--:--</div>
+        <button type="button" class="btn btn-warning btn-sm" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit</button>
+    </div>
+
+    <div class="mjs-tabs" id="tabs">
+        {% for s in subjects %}
+        <button type="button" class="mjs-tab {{ 'active' if loop.first else '' }}" data-subject="s{{ s.subject.id }}">{{ s.subject.name }} <span class="cnt">({{ s.count }})</span></button>
+        {% endfor %}
+    </div>
+
+    {% for s in subjects %}
+    <div class="mjs-subject {{ 'active' if loop.first else '' }}" id="s{{ s.subject.id }}">
+        {% for g in s.groups %}
+        <div class="mjs-passage">
+            {% if g.passage.title %}<div class="ptitle">{{ g.passage.title }} <span style="font-weight:400;font-size:.75rem;">({{ g.passage.kind_label }})</span></div>{% endif %}
+            {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" style="max-height:180px;border-radius:8px;display:block;margin-bottom:.4rem;">{% endif %}
+            {{ g.passage.body }}
+        </div>
+        {% for q in g.questions %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+        {% endfor %}
+        {% for q in s.standalone %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+    </div>
+    {% endfor %}
+
+    <div style="text-align:center;margin-top:1rem;">
+        <button type="button" class="btn btn-primary" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit my answers</button>
+    </div>
+</div>
+
+<form method="post" id="submitForm" action="{{ url_for('mock_jamb_portal.portal_submit', exam_id=exam.id) }}" style="display:none;">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var SAVE_URL = '{{ url_for("mock_jamb_portal.portal_save", exam_id=exam.id) }}';
+    var CSRF = document.querySelector('meta[name=csrf-token]').content;
+    var answered = new Set();
+
+    // tabs
+    var tabs = document.getElementById('tabs');
+    tabs.addEventListener('click', function(e){
+        var b = e.target.closest('.mjs-tab'); if(!b) return;
+        tabs.querySelectorAll('.mjs-tab').forEach(function(x){ x.classList.remove('active'); });
+        document.querySelectorAll('.mjs-subject').forEach(function(x){ x.classList.remove('active'); });
+        b.classList.add('active');
+        var el = document.getElementById(b.dataset.subject); if(el) el.classList.add('active');
+        window.scrollTo(0,0);
+    });
+
+    // pre-mark saved answers + count
+    document.querySelectorAll('.mjs-q').forEach(function(q){
+        var checked = q.querySelector('input[type=radio]:checked');
+        if(checked){ answered.add(q.dataset.qid); markChosen(q); }
+    });
+    updateCount();
+
+    function markChosen(q){
+        q.querySelectorAll('.mjs-opt').forEach(function(o){
+            o.classList.toggle('chosen', !!o.querySelector('input:checked')); });
+    }
+    function updateCount(){ document.getElementById('ansCount').textContent = answered.size; }
+
+    document.addEventListener('change', function(e){
+        var r = e.target; if(r.type !== 'radio' || !r.name.startsWith('q')) return;
+        var q = r.closest('.mjs-q'); markChosen(q);
+        answered.add(q.dataset.qid); updateCount();
+        var body = new URLSearchParams({ _csrf_token: CSRF, question_id: q.dataset.qid, option: r.value });
+        fetch(SAVE_URL, { method:'POST', body: body }).catch(function(){});
+    });
+
+    // timer
+    var timer = document.getElementById('timer');
+    var remaining = parseInt(timer.dataset.remaining, 10) || 0;
+    function tick(){
+        var m = Math.floor(remaining/60), s = remaining%60;
+        timer.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+        if(remaining <= 60) timer.classList.add('warn');
+        if(remaining <= 0){ doSubmit(true); return; }
+        remaining--; setTimeout(tick, 1000);
+    }
+    tick();
+
+    var submitted = false;
+    function doSubmit(auto){
+        if(submitted) return;
+        if(!auto && !window.confirm('Submit your answers? You will not be able to change them.')) return;
+        submitted = true;
+        document.getElementById('submitForm').submit();
+    }
+    document.getElementById('submitBtn').addEventListener('click', function(){ doSubmit(false); });
+    document.getElementById('submitBtn2').addEventListener('click', function(){ doSubmit(false); });
+})();
+</script>
+{% endblock %}

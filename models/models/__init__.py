@@ -275,6 +275,16 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
+    # mock_jamb_exams online-sitting columns.
+    try:
+        mj_cols = {c['name'] for c in inspect(db.engine).get_columns('mock_jamb_exams')}
+        if 'is_published' not in mj_cols:
+            statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN is_published BOOLEAN DEFAULT 0')
+        if 'duration_minutes' not in mj_cols:
+            statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN duration_minutes INTEGER DEFAULT 120')
+    except Exception:
+        pass
+
     # cbt_attempts raw score columns.
     try:
         ca_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_attempts')}

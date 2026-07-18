@@ -21,6 +21,8 @@ class MockJAMBExam(db.Model):
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))   # owning branch (for scoping)
     is_active = db.Column(db.Boolean, default=True)
     is_completed = db.Column(db.Boolean, default=False)
+    is_published = db.Column(db.Boolean, default=False)   # students may sit it online
+    duration_minutes = db.Column(db.Integer, default=120)  # the in-app sitting timer
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -429,3 +431,47 @@ class MockJAMBQuestion(db.Model):
     def options(self):
         return [('A', self.option_a), ('B', self.option_b),
                 ('C', self.option_c), ('D', self.option_d)]
+
+
+class MockJAMBAttempt(db.Model):
+    """A student's online sitting of a mock exam — the in-progress state and the
+    graded totals. One per (student, exam); on submit the per-subject scores are
+    also written to MockJAMBResult so all the existing analytics keep working."""
+    __tablename__ = 'mock_jamb_attempts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    started_at = db.Column(db.DateTime, default=datetime.now)
+    submitted_at = db.Column(db.DateTime)
+    status = db.Column(db.String(15), default='In progress')   # In progress / Submitted
+    total_score = db.Column(db.Integer, default=0)             # out of 400
+    duration_minutes = db.Column(db.Integer, default=120)      # snapshot of the exam's timer
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    exam = db.relationship('MockJAMBExam', backref=db.backref(
+        'attempts', lazy='dynamic', cascade='all, delete-orphan'))
+    student = db.relationship('Student')
+    answers = db.relationship('MockJAMBAnswer', backref='attempt', lazy='dynamic',
+                              cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('mock_exam_id', 'student_id', name='unique_mock_attempt'),
+    )
+
+
+class MockJAMBAnswer(db.Model):
+    """One saved answer within an online sitting."""
+    __tablename__ = 'mock_jamb_answers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    attempt_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_attempts.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_questions.id'), nullable=False)
+    selected_option = db.Column(db.String(1))
+    is_correct = db.Column(db.Boolean, default=False)
+
+    question = db.relationship('MockJAMBQuestion')
+
+    __table_args__ = (
+        db.UniqueConstraint('attempt_id', 'question_id', name='unique_mock_answer'),
+    )

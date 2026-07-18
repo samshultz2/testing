@@ -1,6 +1,11 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}My Tests{% endblock %}
 {% block content %}
+<a href="{{ url_for('mock_jamb_portal.portal_list') }}" class="portal-card" style="display:flex;align-items:center;gap:.8rem;text-decoration:none;color:inherit;margin-bottom:.8rem;">
+    <span style="width:44px;height:44px;border-radius:12px;background:#0d6a4e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.2rem;"><i class="fas fa-file-contract"></i></span>
+    <span style="flex:1;"><strong>Mock JAMB</strong><div class="text-muted text-sm">Sit a full JAMB-style mock — 4 subjects, one timed session.</div></span>
+    <i class="fas fa-arrow-right text-muted"></i>
+</a>
 <div class="portal-card">
     <h1>Today's Tests</h1>
     <p class="text-muted">{{ "now"|default('') }}Tests available for your class today. Each test needs its access password (your teacher will provide it).</p>
