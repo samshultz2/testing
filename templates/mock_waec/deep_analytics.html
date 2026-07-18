@@ -190,42 +190,52 @@
         {% else %}<p class="text-muted text-sm">No management actions flagged.</p>{% endfor %}
     </div>
 </div>
+{% endif %}
+{% endblock %}
 
+{% block extra_js %}
+{% if d and not d.meta.empty %}
+<script nonce="{{ csp_nonce }}" id="da-data" type="application/json">{{ {'distribution': d.distribution, 'subjects': d.subjects, 'arms': d.arms}|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
 (function(){
-    if(!window.Chart) return;
-    var cs=getComputedStyle(document.documentElement);
-    var grid=cs.getPropertyValue('--border-color')||'rgba(140,140,140,.2)';
-    var txt=cs.getPropertyValue('--text-secondary')||'#667';
-    Chart.defaults.font.family=cs.getPropertyValue('--font-body')||'system-ui';
-    Chart.defaults.color=txt;
-    var noLeg={legend:{display:false}};
+    function draw(){
+        if(!window.Chart){return;}
+        var payload=JSON.parse(document.getElementById('da-data').textContent);
+        var cs=getComputedStyle(document.documentElement);
+        var grid=cs.getPropertyValue('--border-color')||'rgba(140,140,140,.2)';
+        try{Chart.defaults.color=cs.getPropertyValue('--text-secondary')||'#667';}catch(e){}
+        var noLeg={legend:{display:false}};
 
-    var gd={{ d.distribution|tojson }};
-    var gColors={A1:'#047857',B2:'#0d9488',B3:'#0d9488',C4:'#2563eb',C5:'#2563eb',C6:'#2563eb',D7:'#b45309',E8:'#c2410c',F9:'#dc2626'};
-    new Chart(document.getElementById('gradeChart'),{type:'bar',
-        data:{labels:gd.map(function(x){return x.grade;}),
-            datasets:[{data:gd.map(function(x){return x.count;}),
-                backgroundColor:gd.map(function(x){return gColors[x.grade]||'#64748b';}),borderRadius:4}]},
-        options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
-            scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});
+        var gd=payload.distribution||[];
+        var gColors={A1:'#047857',B2:'#0d9488',B3:'#0d9488',C4:'#2563eb',C5:'#2563eb',C6:'#2563eb',D7:'#b45309',E8:'#c2410c',F9:'#dc2626'};
+        var gEl=document.getElementById('gradeChart');
+        if(gEl){new Chart(gEl,{type:'bar',
+            data:{labels:gd.map(function(x){return x.grade;}),
+                datasets:[{data:gd.map(function(x){return x.count;}),
+                    backgroundColor:gd.map(function(x){return gColors[x.grade]||'#64748b';}),borderRadius:4}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});}
 
-    var subj={{ d.subjects|tojson }};
-    var sColor=function(b){return b==='critical'?'#dc2626':b==='weak'?'#b45309':b==='fair'?'#0d9488':'#047857';};
-    new Chart(document.getElementById('subjChart'),{type:'bar',
-        data:{labels:subj.map(function(x){return x.subject;}),
-            datasets:[{data:subj.map(function(x){return x.pass_rate;}),
-                backgroundColor:subj.map(function(x){return sColor(x.band);}),borderRadius:4}]},
-        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:noLeg,
-            scales:{x:{beginAtZero:true,max:100,grid:{color:grid}},y:{grid:{display:false}}}}});
+        var subj=payload.subjects||[];
+        var sColor=function(b){return b==='critical'?'#dc2626':b==='weak'?'#b45309':b==='fair'?'#0d9488':'#047857';};
+        var sEl=document.getElementById('subjChart');
+        if(sEl){new Chart(sEl,{type:'bar',
+            data:{labels:subj.map(function(x){return x.subject;}),
+                datasets:[{data:subj.map(function(x){return x.pass_rate;}),
+                    backgroundColor:subj.map(function(x){return sColor(x.band);}),borderRadius:4}]},
+            options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{x:{beginAtZero:true,max:100,grid:{color:grid}},y:{grid:{display:false}}}}});}
 
-    var arms={{ d.arms|tojson }};
-    new Chart(document.getElementById('armChart'),{type:'bar',
-        data:{labels:arms.map(function(x){return x.arm;}),
-            datasets:[{label:'Avg credits',data:arms.map(function(x){return x.avg_credits;}),
-                backgroundColor:'#2563eb',borderRadius:4}]},
-        options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
-            scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});
+        var arms=payload.arms||[];
+        var aEl=document.getElementById('armChart');
+        if(aEl){new Chart(aEl,{type:'bar',
+            data:{labels:arms.map(function(x){return x.arm;}),
+                datasets:[{label:'Avg credits',data:arms.map(function(x){return x.avg_credits;}),
+                    backgroundColor:'#2563eb',borderRadius:4}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});}
+    }
+    if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',draw);}else{draw();}
 })();
 </script>
 {% endif %}
