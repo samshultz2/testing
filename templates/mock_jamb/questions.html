@@ -32,13 +32,15 @@
         <div style="flex:1;min-width:200px;">
             <strong><i class="fas fa-{{ 'circle-check' if exam.is_published else 'lock' }}"></i>
                 Online sitting: {{ 'OPEN — students can sit it' if exam.is_published else 'Closed' }}</strong>
-            <div class="text-muted text-sm">Students sit their registered subjects in one timed session at <code>/exam</code> (student portal login).</div>
+            <div class="text-muted text-sm">Students sit their registered subjects in one timed session at <code>/exam</code>. Each student gets the questions <strong>and options in a different, shuffled order</strong>{% if exam.questions_per_subject %} — a random {{ exam.questions_per_subject }} per subject{% endif %}.</div>
         </div>
-        <form method="post" action="{{ url_for('mock_jamb.toggle_publish', exam_id=exam.id) }}" style="display:flex;gap:.5rem;align-items:center;">
+        <form method="post" action="{{ url_for('mock_jamb.toggle_publish', exam_id=exam.id) }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <label class="text-sm mb-0">Duration</label>
-            <input type="number" name="duration_minutes" value="{{ exam.duration_minutes or 120 }}" min="5" max="300" style="width:80px;" class="form-control">
+            <input type="number" name="duration_minutes" value="{{ exam.duration_minutes or 120 }}" min="5" max="300" style="width:76px;" class="form-control">
             <span class="text-sm text-muted">min</span>
+            <label class="text-sm mb-0" title="Draw this many random questions per subject for each student (blank = all)">Q/subject</label>
+            <input type="number" name="questions_per_subject" value="{{ exam.questions_per_subject or '' }}" min="1" placeholder="all" style="width:70px;" class="form-control">
             <button class="btn btn-{{ 'danger' if exam.is_published else 'success' }} btn-sm">{{ 'Close sitting' if exam.is_published else 'Publish & open' }}</button>
         </form>
     </div>

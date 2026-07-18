@@ -23,6 +23,7 @@ class MockJAMBExam(db.Model):
     is_completed = db.Column(db.Boolean, default=False)
     is_published = db.Column(db.Boolean, default=False)   # students may sit it online
     duration_minutes = db.Column(db.Integer, default=120)  # the in-app sitting timer
+    questions_per_subject = db.Column(db.Integer)  # draw a random N per subject (NULL = all)
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

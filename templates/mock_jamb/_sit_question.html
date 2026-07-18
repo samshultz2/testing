@@ -1,10 +1,10 @@
-<div class="mjs-q" data-qid="{{ q.id }}">
-    <div class="qh">{{ q.question_text }}</div>
-    {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure">{% endif %}
-    {% for opt, val in q.options %}{% if val %}
+<div class="mjs-q" data-qid="{{ qd.q.id }}">
+    <div class="qh">{{ qd.q.question_text }}</div>
+    {% if qd.q.image_url %}<img src="{{ qd.q.image_url }}" alt="figure">{% endif %}
+    {% for letter, text in qd.options %}
     <label class="mjs-opt">
-        <input type="radio" name="q{{ q.id }}" value="{{ opt }}" {{ 'checked' if saved.get(q.id) == opt else '' }}>
-        <span><strong>{{ opt }}.</strong> {{ val }}</span>
+        <input type="radio" name="q{{ qd.q.id }}" value="{{ letter }}" {{ 'checked' if saved.get(qd.q.id) == letter else '' }}>
+        <span><strong>{{ 'ABCD'[loop.index0] }}.</strong> {{ text }}</span>
     </label>
-    {% endif %}{% endfor %}
+    {% endfor %}
 </div>

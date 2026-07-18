@@ -32,21 +32,22 @@
 
     <div class="mjs-tabs" id="tabs">
         {% for s in subjects %}
-        <button type="button" class="mjs-tab {{ 'active' if loop.first else '' }}" data-subject="s{{ s.subject.id }}">{{ s.subject.name }} <span class="cnt">({{ s.count }})</span></button>
+        <button type="button" class="mjs-tab {{ 'active' if loop.first else '' }}" data-subject="s{{ s.subject.id }}">{{ s.subject.name }} <span class="cnt" data-total="{{ s.count }}">(0/{{ s.count }})</span></button>
         {% endfor %}
     </div>
+    <p class="text-muted text-sm" style="margin:-.3rem 0 .7rem;"><i class="fas fa-arrows-left-right"></i> Switch subjects any time using the tabs — your answers are saved as you go.</p>
 
     {% for s in subjects %}
-    <div class="mjs-subject {{ 'active' if loop.first else '' }}" id="s{{ s.subject.id }}">
+    <div class="mjs-subject {{ 'active' if loop.first else '' }}" id="s{{ s.subject.id }}" data-subject-tab="s{{ s.subject.id }}">
         {% for g in s.groups %}
         <div class="mjs-passage">
             {% if g.passage.title %}<div class="ptitle">{{ g.passage.title }} <span style="font-weight:400;font-size:.75rem;">({{ g.passage.kind_label }})</span></div>{% endif %}
             {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" style="max-height:180px;border-radius:8px;display:block;margin-bottom:.4rem;">{% endif %}
             {{ g.passage.body }}
         </div>
-        {% for q in g.questions %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+        {% for qd in g.questions %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
         {% endfor %}
-        {% for q in s.standalone %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+        {% for qd in s.standalone %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
     </div>
     {% endfor %}
 
@@ -88,7 +89,15 @@
         q.querySelectorAll('.mjs-opt').forEach(function(o){
             o.classList.toggle('chosen', !!o.querySelector('input:checked')); });
     }
-    function updateCount(){ document.getElementById('ansCount').textContent = answered.size; }
+    function updateCount(){
+        document.getElementById('ansCount').textContent = answered.size;
+        // per-subject progress on each tab
+        document.querySelectorAll('.mjs-subject').forEach(function(sec){
+            var ansd = sec.querySelectorAll('.mjs-q input[type=radio]:checked').length;
+            var tab = document.querySelector('.mjs-tab[data-subject="' + sec.id + '"] .cnt');
+            if(tab){ tab.textContent = '(' + ansd + '/' + tab.dataset.total + ')'; }
+        });
+    }
 
     document.addEventListener('change', function(e){
         var r = e.target; if(r.type !== 'radio' || !r.name.startsWith('q')) return;

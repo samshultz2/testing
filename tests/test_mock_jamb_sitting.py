@@ -145,6 +145,89 @@ def test_portal_flow_start_save_submit(app):
         assert res.total_score == 200
 
 
+def _exam_with_n(app, n, per_subject=None):
+    """A one-subject exam with n stand-alone questions + a candidate."""
+    with app.app_context():
+        _SEQ[0] += 1
+        bid = Branch.get_default().id
+        subj = Subject.query.filter_by(name='Physics').first() or Subject(name='Physics', is_active=True)
+        db.session.add(subj); db.session.flush()
+        s = AcademicSession(name=f'RND-{_SEQ[0]}'); db.session.add(s); db.session.flush()
+        ex = MockJAMBExam(name=f'Mock {_SEQ[0]}', exam_number=1, session_id=s.id,
+                          exam_date=date(2025, 3, 1), branch_id=bid, is_published=True,
+                          duration_minutes=90, questions_per_subject=per_subject)
+        db.session.add(ex); db.session.flush()
+        for i in range(n):
+            db.session.add(MockJAMBQuestion(
+                mock_exam_id=ex.id, subject_id=subj.id, question_text=f'Q{i + 1}',
+                option_a='a', option_b='b', option_c='c', option_d='d',
+                correct_option='A', marks=1, order=i + 1))
+        st = Student(student_id=f'RND{_SEQ[0]:03d}', first_name='R', surname='N',
+                     gender='Male', is_active=True, branch_id=bid, jamb_subjects='Physics')
+        db.session.add(st); db.session.commit()
+        return ex.id, st.id, subj.id
+
+
+def test_options_shuffled_and_stable(app):
+    """Option order is shuffled per candidate but identical on a reload."""
+    from utils.mock_jamb_sitting import sitting_payload
+    eid, sid, subj_id = _exam_with_n(app, 6)
+    with app.app_context():
+        exam = db.session.get(MockJAMBExam, eid)
+        att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(att); db.session.flush()
+        p1 = sitting_payload(exam, [subj_id], att)
+        p2 = sitting_payload(exam, [subj_id], att)
+        # each question's option order is a permutation of the 4 original letters
+        for qd in p1[0]['standalone']:
+            letters = [l for l, _t in qd['options']]
+            assert sorted(letters) == ['A', 'B', 'C', 'D']
+        # identical across the two renders (stable for resume)
+        o1 = [[l for l, _ in qd['options']] for qd in p1[0]['standalone']]
+        o2 = [[l for l, _ in qd['options']] for qd in p2[0]['standalone']]
+        assert o1 == o2
+        # ... but not the trivial A,B,C,D for every question (something was shuffled)
+        assert any(order != ['A', 'B', 'C', 'D'] for order in o1)
+
+
+def test_different_candidates_get_different_papers(app):
+    from utils.mock_jamb_sitting import sitting_payload
+    eid, sid, subj_id = _exam_with_n(app, 8)
+    with app.app_context():
+        exam = db.session.get(MockJAMBExam, eid)
+        a1 = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(a1); db.session.flush()
+        st2 = Student(student_id='RND-OTHER', first_name='O', surname='T', gender='Male',
+                      is_active=True, branch_id=exam.branch_id, jamb_subjects='Physics')
+        db.session.add(st2); db.session.flush()
+        a2 = MockJAMBAttempt(mock_exam_id=eid, student_id=st2.id); db.session.add(a2); db.session.flush()
+        p1 = sitting_payload(exam, [subj_id], a1)
+        p2 = sitting_payload(exam, [subj_id], a2)
+        order1 = [qd['q'].id for qd in p1[0]['standalone']]
+        order2 = [qd['q'].id for qd in p2[0]['standalone']]
+        opts1 = [[l for l, _ in qd['options']] for qd in p1[0]['standalone']]
+        opts2 = [[l for l, _ in qd['options']] for qd in p2[0]['standalone']]
+        # two candidates differ in question order and/or option order
+        assert order1 != order2 or opts1 != opts2
+
+
+def test_random_subset_and_grading(app):
+    """questions_per_subject serves a random subset; grading counts only served."""
+    from utils.mock_jamb_sitting import subject_items, grade_attempt
+    eid, sid, subj_id = _exam_with_n(app, 6, per_subject=2)
+    with app.app_context():
+        exam = db.session.get(MockJAMBExam, eid)
+        att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(att); db.session.flush()
+        items, served = subject_items(exam, subj_id, att)
+        assert len(served) == 2                     # only 2 of 6 served
+        # answer both served correctly (correct is 'A')
+        from models import MockJAMBAnswer
+        for qid in served:
+            db.session.add(MockJAMBAnswer(attempt_id=att.id, question_id=qid,
+                                          selected_option='A', is_correct=True))
+        db.session.commit()
+        per = grade_attempt(att)
+        assert dict(per)['Physics'] == 100          # 2/2 served correct → full, blanks ignored
+
+
 def test_unpublished_not_sittable(app):
     eid, sid, eng_id, mth_id = _build_exam(app, publish=False)
     c = _portal_login(app, sid)

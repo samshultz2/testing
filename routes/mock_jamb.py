@@ -1242,6 +1242,9 @@ def toggle_publish(exam_id):
     dur = request.form.get('duration_minutes', type=int)
     if dur and 5 <= dur <= 300:
         exam.duration_minutes = dur
+    if 'questions_per_subject' in request.form:
+        qps = request.form.get('questions_per_subject', type=int)
+        exam.questions_per_subject = qps if (qps and qps > 0) else None
     exam.is_published = not exam.is_published
     db.session.commit()
     flash('Online sitting opened for students.' if exam.is_published
@@ -1321,7 +1324,7 @@ def portal_sit(exam_id):
         elapsed = (_dt.datetime.now() - att.started_at).total_seconds() if att.started_at else 0
         remaining = max(0, int((att.duration_minutes or 120) * 60 - elapsed))
         return render_template('mock_jamb/portal_sit.html', exam=exam, student=student,
-                               subjects=sitting_payload(exam, subject_ids), saved=saved,
+                               subjects=sitting_payload(exam, subject_ids, att), saved=saved,
                                attempt=att, remaining=remaining)
     return _inner()
 

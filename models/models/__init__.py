@@ -282,6 +282,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN is_published BOOLEAN DEFAULT 0')
         if 'duration_minutes' not in mj_cols:
             statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN duration_minutes INTEGER DEFAULT 120')
+        if 'questions_per_subject' not in mj_cols:
+            statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN questions_per_subject INTEGER')
     except Exception:
         pass
 
