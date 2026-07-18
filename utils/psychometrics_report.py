@@ -172,6 +172,11 @@ def item_analysis_xlsx(data):
         sheet('Topics', ['Topic', 'Items', 'Mastery %', 'Band', 'Below half', 'Below half %'],
               [[t['topic'], t['questions'], t['mastery'], t['band'], t['below_half'],
                 t['below_half_pct']] for t in topics['items']])
+        cols = topics.get('columns') or []
+        if topics.get('students') and cols:
+            sheet('Student topics', ['Student', 'Overall %'] + cols + ['Weakest'],
+                  [[s['name'], s['overall']] + [s['cells'].get(c) for c in cols] + [s['weakest']]
+                   for s in topics['students']])
 
     items = data.get('items') or []
     if items:

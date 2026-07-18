@@ -98,6 +98,13 @@ def test_topic_mastery(app):
         assert any('topic' in r['title'].lower() for r in a['recommendations'])
         # items carry their topic
         assert all(it['topic'] in ('Algebra', 'Geometry') for it in a['items'])
+        # per-student topic matrix: one row per candidate, weakest-topic named
+        assert tm['columns'] == [t['topic'] for t in tm['items']]   # weakest-first order
+        assert len(tm['students']) == 12
+        row = tm['students'][0]
+        assert set(row['cells']) == {'Algebra', 'Geometry'}
+        assert row['weakest'] in ('Algebra', 'Geometry')
+        assert 0 <= row['overall'] <= 100
 
 
 def test_insufficient_attempts(app):

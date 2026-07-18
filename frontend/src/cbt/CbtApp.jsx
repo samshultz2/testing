@@ -294,6 +294,48 @@ function IaBars({ bars }) {
   );
 }
 
+// Per-student × topic heatmap (weakest students / topics first).
+function TopicMatrix({ cols, students }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? students : students.slice(0, 15);
+  const cellColour = (v) => (v < 50 ? '#fbe6e3' : v < 70 ? '#fdf3d7' : 'var(--success-light,#e6f4ec)');
+  const cellText = (v) => (v < 50 ? '#b43a2e' : v < 70 ? '#9a7b0a' : 'var(--success,#1c8c53)');
+  return (
+    <div style={{ marginTop: '1rem' }}>
+      <div className="d-flex justify-between" style={{ alignItems: 'baseline', marginBottom: '.35rem' }}>
+        <strong className="text-sm">Per-student topic mastery</strong>
+        <span className="text-muted text-sm">neediest first · red &lt;50% · amber 50–70% · green ≥70%</span>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table" style={{ minWidth: 360 }}>
+          <thead><tr>
+            <th style={{ position: 'sticky', left: 0, background: 'var(--bg-card)' }}>Student</th>
+            <th className="text-center">Overall</th>
+            {cols.map((c) => <th key={c} className="text-center" title={c}>{c.length > 12 ? c.slice(0, 12) + '…' : c}</th>)}
+            <th>Weakest</th>
+          </tr></thead>
+          <tbody>{shown.map((s, i) => (
+            <tr key={s.student_id || i}>
+              <td style={{ position: 'sticky', left: 0, background: 'var(--bg-card)', whiteSpace: 'nowrap' }}>{s.name}</td>
+              <td className="text-center" style={{ fontWeight: 700, color: cellText(s.overall) }}>{s.overall}%</td>
+              {cols.map((c) => {
+                const v = s.cells[c];
+                return <td key={c} className="text-center" style={{ background: cellColour(v), color: cellText(v), fontWeight: 600 }}>{v}%</td>;
+              })}
+              <td className="text-muted text-sm">{s.weakest}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {students.length > 15 && (
+        <button type="button" className="btn btn-light btn-sm mt-2" onClick={() => setAll((x) => !x)}>
+          {all ? 'Show top 15 neediest' : `Show all ${students.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ItemRow({ it }) {
   const [open, setOpen] = useState(false);
   const vs = VERDICT_STYLE[it.verdict] || VERDICT_STYLE.keep;
@@ -402,6 +444,9 @@ function ItemAnalysis({ d }) {
                 </div>
               );
             })}
+            {a.topics.students && a.topics.students.length > 0 && a.topics.columns.length > 0 && (
+              <TopicMatrix cols={a.topics.columns} students={a.topics.students} />
+            )}
           </div></div>
       )}
 

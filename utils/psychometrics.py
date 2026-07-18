@@ -94,7 +94,7 @@ def item_analysis(exam_id):
                           'analysis.' if questions else 'This exam has no questions.')
         return {'meta': meta, 'items': [], 'summary': {}, 'recommendations': [],
                 'difficulty_hist': [], 'discrimination_hist': [],
-                'topics': {'has_topics': False, 'items': []}}
+                'topics': {'has_topics': False, 'items': [], 'students': [], 'columns': []}}
 
     attempt_ids = [a.id for a in attempts]
     qids = [q.id for q in questions]
@@ -218,7 +218,11 @@ def item_analysis(exam_id):
         for lbl, lo, hi in disc_bins]
 
     # ---- topic mastery (only when questions carry syllabus topics) --------
-    topics = _topic_mastery(questions, correct_by_attempt, attempt_ids, n)
+    name_by_attempt = {a.id: (a.student.full_name if a.student else str(a.student_id))
+                       for a in attempts}
+    sid_by_attempt = {a.id: a.student_id for a in attempts}
+    topics = _topic_mastery(questions, correct_by_attempt, attempt_ids, n,
+                            name_by_attempt, sid_by_attempt)
 
     return {'meta': meta, 'summary': summary, 'items': items,
             'difficulty_hist': difficulty_hist,
@@ -227,38 +231,57 @@ def item_analysis(exam_id):
             'recommendations': _recommendations(summary, items, topics)}
 
 
-def _topic_mastery(questions, correct_by_attempt, attempt_ids, n):
-    """Per-syllabus-topic mastery across the cohort. Empty ``list`` under
-    ``has_topics=False`` when no question is tagged with a topic."""
+def _topic_mastery(questions, correct_by_attempt, attempt_ids, n,
+                   name_by_attempt=None, sid_by_attempt=None):
+    """Per-syllabus-topic mastery across the cohort, plus a per-student × topic
+    matrix for targeted intervention. ``has_topics=False`` when nothing is
+    tagged with a topic."""
+    name_by_attempt = name_by_attempt or {}
+    sid_by_attempt = sid_by_attempt or {}
     topic_qids = {}
     for q in questions:
         t = (getattr(q, 'topic', None) or '').strip()
         if t:
             topic_qids.setdefault(t, []).append(q.id)
     if not topic_qids:
-        return {'has_topics': False, 'items': []}
+        return {'has_topics': False, 'items': [], 'students': [], 'columns': []}
 
     out = []
     for topic, qids in topic_qids.items():
         qset = set(qids)
         total_cells = n * len(qids)
         correct_cells = sum(len(correct_by_attempt[a] & qset) for a in attempt_ids)
-        # candidates scoring below half on this topic's items
-        below = 0
-        per_student = []
-        for a in attempt_ids:
-            c = len(correct_by_attempt[a] & qset)
-            pct = c / len(qids)
-            per_student.append(pct)
-            if pct < 0.5:
-                below += 1
+        below = sum(1 for a in attempt_ids if len(correct_by_attempt[a] & qset) / len(qids) < 0.5)
         mastery = round(100 * correct_cells / total_cells, 1) if total_cells else 0
         band = ('weak' if mastery < 50 else 'developing' if mastery < 70 else 'secure')
         out.append({'topic': topic, 'questions': len(qids), 'mastery': mastery,
                     'band': band, 'below_half': below,
                     'below_half_pct': round(100 * below / n, 1) if n else 0})
     out.sort(key=lambda x: x['mastery'])       # weakest first
-    return {'has_topics': True, 'items': out}
+    ordered_topics = [t['topic'] for t in out]
+
+    # Per-student matrix: each student's % on each topic (weakest topics first
+    # for the columns), their overall topic %, and their own weakest topic.
+    students = []
+    for a in attempt_ids:
+        cells, worst_pct, worst_topic, tot_c, tot_q = {}, 101, None, 0, 0
+        for topic in ordered_topics:
+            qset = set(topic_qids[topic])
+            c = len(correct_by_attempt[a] & qset)
+            k = len(qset)
+            pct = round(100 * c / k, 0) if k else 0
+            cells[topic] = pct
+            tot_c += c; tot_q += k
+            if pct < worst_pct:
+                worst_pct, worst_topic = pct, topic
+        students.append({
+            'student_id': sid_by_attempt.get(a),
+            'name': name_by_attempt.get(a, str(a)),
+            'overall': round(100 * tot_c / tot_q, 0) if tot_q else 0,
+            'cells': cells, 'weakest': worst_topic,
+        })
+    students.sort(key=lambda s: s['overall'])   # neediest students first
+    return {'has_topics': True, 'items': out, 'columns': ordered_topics, 'students': students}
 
 
 def _topic_recommendations(topics, add):
