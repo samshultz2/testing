@@ -356,3 +356,76 @@ class MockJAMBAnalytics:
         priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'none': 4}
         recommendations.sort(key=lambda x: priority_order[x['priority']])
         return recommendations
+
+
+# =============================================================================
+# ONLINE MOCK JAMB — question bank (JAMB-standard structures) for the in-app
+# sitting. Questions belong to a mock exam + subject; a question that needs a
+# shared stimulus (a comprehension passage, cloze text, summary passage, oral
+# register instruction) points at a MockJAMBPassage so it can never be served
+# without its passage. Diagrams are supported on both passages and questions.
+# =============================================================================
+
+class MockJAMBPassage(db.Model):
+    """A shared stimulus a group of Mock JAMB questions attach to — a
+    comprehension passage, cloze text, summary passage or oral/register lead-in.
+    JAMB English (and some others) present several questions against one
+    passage."""
+    __tablename__ = 'mock_jamb_passages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=False)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    kind = db.Column(db.String(20), default='comprehension')   # comprehension/cloze/summary/oral/general
+    title = db.Column(db.String(150))
+    body = db.Column(db.Text)                    # the passage / instruction text
+    image_url = db.Column(db.String(300))        # optional figure
+    order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    exam = db.relationship('MockJAMBExam', backref=db.backref(
+        'passages', lazy='dynamic', cascade='all, delete-orphan'))
+    subject = db.relationship('Subject')
+
+    KINDS = ('comprehension', 'cloze', 'summary', 'oral', 'general')
+
+    @property
+    def kind_label(self):
+        return {'comprehension': 'Comprehension passage', 'cloze': 'Cloze passage',
+                'summary': 'Summary passage', 'oral': 'Oral / register',
+                'general': 'Shared instruction'}.get(self.kind, self.kind)
+
+
+class MockJAMBQuestion(db.Model):
+    """One objective Mock JAMB question (4 options, one correct), tagged by
+    subject + syllabus topic/sub-topic, optionally attached to a passage and/or
+    carrying a diagram image."""
+    __tablename__ = 'mock_jamb_questions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=False)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    passage_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_passages.id'))   # NULL = stand-alone
+    topic = db.Column(db.String(100))
+    subtopic = db.Column(db.String(120))
+    question_text = db.Column(db.Text, nullable=False)
+    image_url = db.Column(db.String(300))        # optional figure / diagram
+    option_a = db.Column(db.String(400))
+    option_b = db.Column(db.String(400))
+    option_c = db.Column(db.String(400))
+    option_d = db.Column(db.String(400))
+    correct_option = db.Column(db.String(1))     # 'A'/'B'/'C'/'D'
+    marks = db.Column(db.Float, default=1)
+    order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    exam = db.relationship('MockJAMBExam', backref=db.backref(
+        'questions', lazy='dynamic', cascade='all, delete-orphan'))
+    subject = db.relationship('Subject')
+    passage = db.relationship('MockJAMBPassage', backref=db.backref(
+        'questions', lazy='dynamic'))
+
+    @property
+    def options(self):
+        return [('A', self.option_a), ('B', self.option_b),
+                ('C', self.option_c), ('D', self.option_d)]

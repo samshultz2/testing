@@ -2,13 +2,18 @@
 Mock JAMB Examination Routes
 Full management of mock JAMB exams with analytics and insights
 """
-from flask import Blueprint, request, redirect, url_for, flash, jsonify, Response
+from flask import (Blueprint, request, redirect, url_for, flash, jsonify, Response,
+                   render_template, current_app)
 from utils.helpers import get_active_term, get_active_session
 from datetime import datetime
 from io import BytesIO
+import os
+import secrets
+from sqlalchemy import func
 from utils.web_exports import xlsx_response
 
-from models import db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment, SchoolClass
+from models import (db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment,
+                    SchoolClass, Subject, MockJAMBPassage, MockJAMBQuestion)
 from models.mock_jamb import MockJAMBExam, MockJAMBResult, MockJAMBAnalytics
 from utils.helpers import login_required, WAEC_SUBJECTS, get_sss3_students, student_subject_map
 from utils.branch_scope import require_branch_access, branch_for_new, scope_query
@@ -280,6 +285,7 @@ def view_exam(exam_id):
                  'export': url_for('mock_jamb.export_results', exam_id=exam.id),
                  'edit': url_for('mock_jamb.edit_exam', exam_id=exam.id),
                  'deep': url_for('mock_jamb.deep', exam_id=exam.id),
+                 'questions': url_for('mock_jamb.questions', exam_id=exam.id),
                  'index': url_for('mock_jamb.index'),
                  'self': url_for('mock_jamb.view_exam', exam_id=exam.id),
                  'delete_exam': url_for('mock_jamb.delete_exam', exam_id=exam.id)},
@@ -884,6 +890,215 @@ def validation_export():
     if (request.args.get('format') or 'pdf').lower() in ('excel', 'xlsx'):
         return xlsx_response(validation_xlsx(data), f'{stem}.xlsx')
     return pdf_response(validation_pdf(data), f'{stem}.pdf', inline=False)
+
+
+# =============================================================================
+# ONLINE QUESTION BANK — JAMB-standard questions (with comprehension passages,
+# topics/sub-topics and diagrams) that students will sit in-app (Phase 3).
+# =============================================================================
+
+_MOCK_IMG_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+
+def _save_mock_image(file):
+    """Save an uploaded figure under static/uploads/mock_jamb, re-encoded to PNG
+    (decompression-bomb capped); returns its URL, or None."""
+    if not file or not file.filename:
+        return None
+    from utils.uploads import ext_ok, open_image
+    if not ext_ok(file.filename, _MOCK_IMG_EXTS):
+        return None
+    try:
+        im = open_image(file).convert('RGB')
+    except Exception:
+        return None
+    name = secrets.token_hex(8) + '.png'
+    folder = os.path.join(current_app.root_path, 'static', 'uploads', 'mock_jamb')
+    os.makedirs(folder, exist_ok=True)
+    im.save(os.path.join(folder, name), 'PNG')
+    return url_for('static', filename='uploads/mock_jamb/' + name)
+
+
+def _mock_subjects():
+    return Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/questions')
+@login_required
+def questions(exam_id):
+    """Question manager for a mock exam, filtered to one subject: passages with
+    their questions, plus stand-alone questions. Feeds the in-app sitting."""
+    from routes.cbt import _subject_topic_tree
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    subjects = _mock_subjects()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    passages, standalone, qcount = [], [], 0
+    if subject_id:
+        prows = (MockJAMBPassage.query.filter_by(mock_exam_id=exam_id, subject_id=subject_id)
+                 .order_by(MockJAMBPassage.order, MockJAMBPassage.id).all())
+        passages = [{'p': p, 'questions': p.questions.order_by(
+            MockJAMBQuestion.order, MockJAMBQuestion.id).all()} for p in prows]
+        standalone = (MockJAMBQuestion.query.filter_by(
+            mock_exam_id=exam_id, subject_id=subject_id, passage_id=None)
+            .order_by(MockJAMBQuestion.order, MockJAMBQuestion.id).all())
+        qcount = MockJAMBQuestion.query.filter_by(
+            mock_exam_id=exam_id, subject_id=subject_id).count()
+    return render_template('mock_jamb/questions.html', exam=exam, subjects=subjects,
+                           subject=subject, subject_id=subject_id, passages=passages,
+                           standalone=standalone, qcount=qcount,
+                           topic_tree=_subject_topic_tree(subject_id),
+                           syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''))
+
+
+def _q_url(exam_id, subject_id):
+    return url_for('mock_jamb.questions', exam_id=exam_id, subject_id=subject_id or '')
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/passages/add', methods=['POST'])
+@login_required
+@csrf_protect
+def add_passage(exam_id):
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    subject_id = request.form.get('subject_id', type=int)
+    kind = (request.form.get('kind') or 'comprehension').strip()
+    if kind not in MockJAMBPassage.KINDS:
+        kind = 'comprehension'
+    body = (request.form.get('body') or '').strip()
+    if not subject_id or not body:
+        flash('A subject and the passage text are required.', 'error')
+        return redirect(_q_url(exam_id, subject_id))
+    nextord = (db.session.query(func.coalesce(func.max(MockJAMBPassage.order), 0))
+               .filter(MockJAMBPassage.mock_exam_id == exam_id,
+                       MockJAMBPassage.subject_id == subject_id).scalar()) + 1
+    db.session.add(MockJAMBPassage(
+        mock_exam_id=exam_id, subject_id=subject_id, kind=kind,
+        title=(request.form.get('title') or '').strip() or None, body=body,
+        image_url=_save_mock_image(request.files.get('image')), order=nextord))
+    db.session.commit()
+    flash('Passage added — now add its questions.', 'success')
+    return redirect(_q_url(exam_id, subject_id))
+
+
+@mock_jamb_bp.route('/passage/<int:passage_id>/edit', methods=['POST'])
+@login_required
+@csrf_protect
+def edit_passage(passage_id):
+    p = db.get_or_404(MockJAMBPassage, passage_id)
+    require_branch_access(p.exam.branch_id)
+    p.title = (request.form.get('title') or '').strip() or None
+    if (request.form.get('body') or '').strip():
+        p.body = request.form.get('body').strip()
+    kind = (request.form.get('kind') or '').strip()
+    if kind in MockJAMBPassage.KINDS:
+        p.kind = kind
+    img = _save_mock_image(request.files.get('image'))
+    if img:
+        p.image_url = img
+    db.session.commit()
+    flash('Passage updated.', 'success')
+    return redirect(_q_url(p.mock_exam_id, p.subject_id))
+
+
+@mock_jamb_bp.route('/passage/<int:passage_id>/delete', methods=['POST'])
+@login_required
+@csrf_protect
+def delete_passage(passage_id):
+    p = db.get_or_404(MockJAMBPassage, passage_id)
+    require_branch_access(p.exam.branch_id)
+    eid, sid = p.mock_exam_id, p.subject_id
+    MockJAMBQuestion.query.filter_by(passage_id=p.id).delete()   # its questions go too
+    db.session.delete(p)
+    db.session.commit()
+    flash('Passage and its questions removed.', 'success')
+    return redirect(_q_url(eid, sid))
+
+
+def _read_question(form, q, files):
+    """Populate a MockJAMBQuestion from a submitted form. Returns an error string
+    or None. A question attached to a passage is validated to belong to the same
+    exam+subject, so a comprehension item can never be orphaned from its passage."""
+    text = (form.get('question_text') or '').strip()
+    correct = (form.get('correct_option') or '').strip().upper()
+    if not text or correct not in ('A', 'B', 'C', 'D'):
+        return 'Question text and a correct option (A–D) are required.'
+    q.question_text = text
+    q.correct_option = correct
+    q.topic = (form.get('topic') or '').strip() or None
+    q.subtopic = (form.get('subtopic') or '').strip() or None
+    q.option_a = (form.get('option_a') or '').strip()
+    q.option_b = (form.get('option_b') or '').strip()
+    q.option_c = (form.get('option_c') or '').strip()
+    q.option_d = (form.get('option_d') or '').strip()
+    q.marks = form.get('marks', type=float) or 1
+    img = _save_mock_image(files.get('image'))
+    if img:
+        q.image_url = img
+    return None
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/questions/add', methods=['POST'])
+@login_required
+@csrf_protect
+def add_mock_question(exam_id):
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    subject_id = request.form.get('subject_id', type=int)
+    passage_id = request.form.get('passage_id', type=int)
+    if not subject_id:
+        flash('Choose a subject first.', 'error')
+        return redirect(_q_url(exam_id, subject_id))
+    passage = db.session.get(MockJAMBPassage, passage_id) if passage_id else None
+    if passage and (passage.mock_exam_id != exam_id or passage.subject_id != subject_id):
+        passage = None
+    q = MockJAMBQuestion(mock_exam_id=exam_id, subject_id=subject_id,
+                         passage_id=(passage.id if passage else None))
+    err = _read_question(request.form, q, request.files)
+    if err:
+        flash(err, 'error')
+        return redirect(_q_url(exam_id, subject_id))
+    q.order = (db.session.query(func.coalesce(func.max(MockJAMBQuestion.order), 0))
+               .filter(MockJAMBQuestion.mock_exam_id == exam_id,
+                       MockJAMBQuestion.subject_id == subject_id).scalar()) + 1
+    db.session.add(q)
+    db.session.commit()
+    flash('Question added.', 'success')
+    return redirect(_q_url(exam_id, subject_id))
+
+
+@mock_jamb_bp.route('/question/<int:question_id>/edit', methods=['GET', 'POST'])
+@login_required
+@csrf_protect
+def edit_mock_question(question_id):
+    from routes.cbt import _subject_topic_tree
+    q = db.get_or_404(MockJAMBQuestion, question_id)
+    require_branch_access(q.exam.branch_id)
+    if request.method == 'POST':
+        err = _read_question(request.form, q, request.files)
+        if err:
+            flash(err, 'error')
+            return redirect(url_for('mock_jamb.edit_mock_question', question_id=question_id))
+        db.session.commit()
+        flash('Question updated.', 'success')
+        return redirect(_q_url(q.mock_exam_id, q.subject_id))
+    return render_template('mock_jamb/edit_question.html', q=q, exam=q.exam,
+                           topic_tree=_subject_topic_tree(q.subject_id),
+                           back_url=_q_url(q.mock_exam_id, q.subject_id))
+
+
+@mock_jamb_bp.route('/question/<int:question_id>/delete', methods=['POST'])
+@login_required
+@csrf_protect
+def delete_mock_question(question_id):
+    q = db.get_or_404(MockJAMBQuestion, question_id)
+    require_branch_access(q.exam.branch_id)
+    eid, sid = q.mock_exam_id, q.subject_id
+    db.session.delete(q)
+    db.session.commit()
+    flash('Question deleted.', 'success')
+    return redirect(_q_url(eid, sid))
 
 
 # =============================================================================

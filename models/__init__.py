@@ -97,5 +97,6 @@ from models.analytics_models import (
 )
 
 # Mock JAMB Models
-from models.mock_jamb import MockJAMBExam, MockJAMBResult, MockJAMBAnalytics
+from models.mock_jamb import (MockJAMBExam, MockJAMBResult, MockJAMBAnalytics,
+                              MockJAMBPassage, MockJAMBQuestion)
 from models.mock_waec import MockWAECExam, MockWAECResult, MockWAECAnalytics
