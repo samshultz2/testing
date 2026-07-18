@@ -207,3 +207,44 @@ def test_blueprint_editor_saves_override(app):
         att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(att); db.session.flush()
         _items, served = subject_items(exam, subj_id, att)
         assert len(served) == 10
+
+
+def test_starter_seed_and_draw(app):
+    """Seeding the starter bank lets a mock draw a real English paper (passages
+    kept whole) with a per-student shuffle."""
+    from utils.mock_bank_seed import seed_starter_bank
+    from utils.mock_jamb_sitting import subject_items
+    with app.app_context():
+        _SEQ[0] += 1
+        bid = Branch.get_default().id
+        eng = Subject.query.filter_by(name='English Language').first() or Subject(name='English Language', is_active=True)
+        db.session.add(eng); db.session.commit()
+        p, q = seed_starter_bank(eng.id, eng.name)
+        assert p == 2 and q >= 30          # 2 passages + section questions
+        # a second seed does not duplicate
+        p2, q2 = seed_starter_bank(eng.id, eng.name)
+        assert p2 == 0 and q2 == 0
+        s = AcademicSession(name=f'SEED-{_SEQ[0]}'); db.session.add(s); db.session.flush()
+        ex = MockJAMBExam(name='Seeded', exam_number=1, session_id=s.id,
+                          exam_date=date(2025, 3, 1), branch_id=bid, is_published=True)
+        db.session.add(ex); db.session.flush()
+        att = MockJAMBAttempt(mock_exam_id=ex.id, student_id=1); db.session.add(att); db.session.flush()
+        items, served = subject_items(ex, eng.id, att)
+        assert served                       # a paper was drawn
+        # comprehension + cloze passages are served whole
+        passage_items = [it for it in items if it['kind'] == 'passage']
+        assert len(passage_items) == 2
+
+
+def test_bank_seed_route(app):
+    with app.app_context():
+        subj = Subject.query.filter_by(name='Chemistry').first() or Subject(name='Chemistry', is_active=True)
+        db.session.add(subj); db.session.commit(); sid = subj.id
+    c = _admin(app); tok = _bank_csrf(c)
+    r = c.post('/mock-jamb/bank/seed', data={'_csrf_token': tok, 'subject_id': sid},
+               follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        n = MockJAMBQuestion.query.filter_by(subject_id=sid, mock_exam_id=None).count()
+        assert n >= 12 and MockJAMBQuestion.query.filter_by(
+            subject_id=sid, mock_exam_id=None, section='organic').first() is not None

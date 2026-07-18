@@ -31,6 +31,12 @@
         <p class="text-muted text-sm">One central, section-tagged bank per subject. Every Mock JAMB draws a different, JAMB-shaped paper per student from here — no need to author questions into each mock.</p>
     </div>
     <div class="page-header-actions">
+        <form method="post" action="{{ url_for('mock_jamb.bank_seed') }}" data-confirm="Seed original JAMB-style starter questions for all core subjects (English, Maths, Physics, Chemistry, Biology)?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="all" value="1">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <button class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Seed starter (all core)</button>
+        </form>
         <a href="{{ syllabus_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-list-check"></i> Syllabus topics</a>
         <a href="{{ index_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Mock JAMB</a>
     </div>
@@ -49,6 +55,23 @@
 {% if not subject %}
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subjects</h3><p>Add subjects first.</p></div></div></div>
 {% else %}
+
+{% if has_starter and coverage and coverage.total == 0 %}
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #0d6a4e;background:rgba(13,106,78,.05);">
+    <div class="card-body" style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;">
+        <i class="fas fa-seedling" style="color:#0d6a4e;font-size:1.2rem;"></i>
+        <div style="flex:1;min-width:220px;">
+            <strong>{{ subject.name }}'s bank is empty.</strong>
+            <div class="text-muted text-sm">Seed original, JAMB-style starter questions (passages + all sections) to run a mock right away, then edit or grow them into your own bank.</div>
+        </div>
+        <form method="post" action="{{ url_for('mock_jamb.bank_seed') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <button class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Seed starter questions</button>
+        </form>
+    </div>
+</div>
+{% endif %}
 
 {# ---- Coverage vs JAMB blueprint ---- #}
 {% if coverage %}
