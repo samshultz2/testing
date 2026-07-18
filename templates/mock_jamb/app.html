@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set _t = {'index':'Mock JAMB','create_exam':'Create Mock Exam','edit_exam':'Edit Mock Exam','edit_result':'Edit Result','view_exam':'Mock Exam','student_progress':'Student Progress','analytics':'Analytics','add_result':'Add Result','bulk_entry':'Bulk Entry','validation':'Mock Validation'} %}
+{% set _t = {'index':'Mock JAMB','create_exam':'Create Mock Exam','edit_exam':'Edit Mock Exam','edit_result':'Edit Result','view_exam':'Mock Exam','student_progress':'Student Progress','analytics':'Analytics','add_result':'Add Result','bulk_entry':'Bulk Entry','validation':'Mock Validation','deep':'Deep Analytics'} %}
 {% block title %}{{ _t.get(mj_json.page,'Mock JAMB') }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}
 {% if mj_json.page == 'index' %}<span>Mock JAMB Examinations</span>

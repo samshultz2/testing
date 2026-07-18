@@ -311,6 +311,42 @@ def analytics(exam_id):
                            grade_classes=_GRADE_CLASS)
 
 
+@mock_waec_bp.route('/exam/<int:exam_id>/deep')
+@login_required
+def deep(exam_id):
+    """Decision-grade deep analytics for one Mock WAEC exam — per subject, per
+    teacher, per class arm, with evidence-based recommendations."""
+    from utils.mock_deep_analytics import deep_analytics
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = deep_analytics('waec', exam_id)
+    return render_template('mock_waec/deep_analytics.html', exam=exam, d=data,
+                           grade_classes=_GRADE_CLASS,
+                           compose_base=url_for('comms.compose'))
+
+
+@mock_waec_bp.route('/exam/<int:exam_id>/deep/export')
+@login_required
+def deep_export(exam_id):
+    """Export the Mock WAEC deep analytics. ``format`` = pdf | excel | image."""
+    from utils.mock_deep_analytics import deep_analytics
+    from utils.mock_deep_report import deep_pdf, deep_xlsx, deep_png, deep_filename
+    from utils.web_exports import pdf_response, xlsx_response, png_response
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = deep_analytics('waec', exam_id)
+    if not data or data['meta'].get('empty'):
+        flash('No results yet — enter scores to unlock deep analytics.', 'warning')
+        return redirect(url_for('mock_waec.deep', exam_id=exam_id))
+    fmt = (request.args.get('format') or 'pdf').lower()
+    meta = data['meta']
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(deep_xlsx(data), deep_filename(meta, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(deep_png(data), deep_filename(meta, 'png'), inline=False)
+    return pdf_response(deep_pdf(data), deep_filename(meta, 'pdf'), inline=False)
+
+
 @mock_waec_bp.route('/exam/<int:exam_id>/validation')
 @login_required
 def validation(exam_id):

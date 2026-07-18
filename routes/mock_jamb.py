@@ -90,6 +90,7 @@ def index():
             'view_url': url_for('mock_jamb.view_exam', exam_id=e.id),
             'add_url': url_for('mock_jamb.add_result', exam_id=e.id),
             'bulk_url': url_for('mock_jamb.bulk_entry', exam_id=e.id),
+            'deep_url': url_for('mock_jamb.deep', exam_id=e.id),
         }
     avg_scores = [e.average_score for e in exams if e.student_count > 0]
     return _render({
@@ -278,6 +279,7 @@ def view_exam(exam_id):
                  'bulk': url_for('mock_jamb.bulk_entry', exam_id=exam.id),
                  'export': url_for('mock_jamb.export_results', exam_id=exam.id),
                  'edit': url_for('mock_jamb.edit_exam', exam_id=exam.id),
+                 'deep': url_for('mock_jamb.deep', exam_id=exam.id),
                  'index': url_for('mock_jamb.index'),
                  'self': url_for('mock_jamb.view_exam', exam_id=exam.id),
                  'delete_exam': url_for('mock_jamb.delete_exam', exam_id=exam.id)},
@@ -704,6 +706,54 @@ def analytics():
         'urls': {'index': url_for('mock_jamb.index'), 'create': url_for('mock_jamb.create_exam'),
                  'validation': url_for('mock_jamb.validation'), 'self': url_for('mock_jamb.analytics')},
     })
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/deep')
+@login_required
+def deep(exam_id):
+    """Decision-grade deep analytics for one Mock JAMB exam — per subject, per
+    teacher, per class arm, with evidence-based recommendations."""
+    from utils.mock_deep_analytics import deep_analytics
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = deep_analytics('jamb', exam_id)
+    return _render({
+        'page': 'deep',
+        'exam': {'id': exam.id, 'display_name': exam.display_name,
+                 'exam_date': exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '',
+                 'session_name': exam.session.name if exam.session else ''},
+        'deep': data,
+        'compose_base': url_for('comms.compose'),
+        'urls': {'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
+                 'index': url_for('mock_jamb.index'),
+                 'analytics': url_for('mock_jamb.analytics'),
+                 'self': url_for('mock_jamb.deep', exam_id=exam.id),
+                 'export_pdf': url_for('mock_jamb.deep_export', exam_id=exam.id, format='pdf'),
+                 'export_excel': url_for('mock_jamb.deep_export', exam_id=exam.id, format='excel'),
+                 'export_image': url_for('mock_jamb.deep_export', exam_id=exam.id, format='image')},
+    })
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/deep/export')
+@login_required
+def deep_export(exam_id):
+    """Export the Mock JAMB deep analytics. ``format`` = pdf | excel | image."""
+    from utils.mock_deep_analytics import deep_analytics
+    from utils.mock_deep_report import deep_pdf, deep_xlsx, deep_png, deep_filename
+    from utils.web_exports import pdf_response, xlsx_response, png_response
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = deep_analytics('jamb', exam_id)
+    if not data or data['meta'].get('empty'):
+        flash('No results yet — enter scores to unlock deep analytics.', 'warning')
+        return redirect(url_for('mock_jamb.deep', exam_id=exam_id))
+    fmt = (request.args.get('format') or 'pdf').lower()
+    meta = data['meta']
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(deep_xlsx(data), deep_filename(meta, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(deep_png(data), deep_filename(meta, 'png'), inline=False)
+    return pdf_response(deep_pdf(data), deep_filename(meta, 'pdf'), inline=False)
 
 
 @mock_jamb_bp.route('/validation')

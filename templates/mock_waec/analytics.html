@@ -30,6 +30,7 @@
         <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }}</p>
     </div>
     <div class="page-header-actions">
+        <a href="{{ url_for('mock_waec.deep', exam_id=exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-brain"></i> Deep analytics</a>
         <a href="{{ url_for('mock_waec.validation', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-bullseye"></i> Validation</a>
         <a href="{{ url_for('mock_waec.broadsheet', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-list"></i> Broadsheet</a>
         <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>

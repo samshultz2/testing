@@ -80,6 +80,7 @@ function Index({ d }) {
                   <a href={e.view_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View</a>
                   <a href={e.add_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-plus" /> Add Results</a>
                   <a href={e.bulk_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-list" /> Bulk Entry</a>
+                  {e.deep_url && <a href={e.deep_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-brain" /> Deep</a>}
                 </div>
               </div></div>
             ))}</div>
@@ -438,6 +439,7 @@ function ViewExam({ d, notify }) {
       <a href={d.urls.add} className="btn btn-primary btn-sm" title="Add"><i aria-hidden="true" className="fas fa-plus" /></a>
       <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i aria-hidden="true" className="fas fa-list" /></a>
       <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /></a>
+      {d.urls.deep && <a href={d.urls.deep} className="btn btn-info btn-sm" title="Deep analytics"><i aria-hidden="true" className="fas fa-brain" /></a>}
       {d.results.length > 0 && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="HD Image"><i aria-hidden="true" className="fas fa-image" /></button>}
       <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
       <a href={d.urls.index} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /></a>
@@ -1031,9 +1033,168 @@ function Validation({ d }) {
   );
 }
 
+const BAND = { critical: '#dc2626', weak: '#b45309', fair: '#0d9488', strong: '#047857', unknown: '#64748b' };
+const FLAG = {
+  strong: { bg: 'rgba(4,120,87,.14)', c: '#047857' }, solid: { bg: 'rgba(13,148,136,.14)', c: '#0d9488' },
+  watch: { bg: 'rgba(180,83,9,.14)', c: '#b45309' }, support: { bg: 'rgba(220,38,38,.14)', c: '#dc2626' },
+  insufficient: { bg: 'rgba(107,122,116,.16)', c: '#6b7a74' }, unassigned: { bg: 'rgba(107,122,116,.16)', c: '#6b7a74' },
+};
+const RECO = { positive: '#047857', negative: '#dc2626', warning: '#b45309', insight: '#2563eb' };
+
+function Deep({ d }) {
+  const deep = d.deep;
+  const distRef = useRef();
+  const subjRef = useRef();
+  const armRef = useRef();
+  const empty = !deep || (deep.meta && deep.meta.empty);
+
+  useEffect(() => {
+    if (empty || !window.Chart) return;
+    const charts = [];
+    const grid = 'rgba(140,140,140,.2)';
+    if (distRef.current) {
+      const dd = deep.distribution;
+      const cols = ['#047857', '#0d9488', '#2563eb', '#b45309', '#dc2626'];
+      charts.push(new window.Chart(distRef.current, {
+        type: 'bar',
+        data: { labels: dd.map((x) => x.band), datasets: [{ data: dd.map((x) => x.count), backgroundColor: cols, borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: grid } }, x: { grid: { display: false } } } },
+      }));
+    }
+    if (subjRef.current && deep.subjects.length) {
+      charts.push(new window.Chart(subjRef.current, {
+        type: 'bar',
+        data: { labels: deep.subjects.map((s) => s.subject), datasets: [{ data: deep.subjects.map((s) => s.pass_rate), backgroundColor: deep.subjects.map((s) => BAND[s.band] || '#64748b'), borderRadius: 4 }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, max: 100, grid: { color: grid } }, y: { grid: { display: false } } } },
+      }));
+    }
+    if (armRef.current && deep.arms.length) {
+      charts.push(new window.Chart(armRef.current, {
+        type: 'bar',
+        data: { labels: deep.arms.map((a) => a.arm), datasets: [{ label: 'JAMB mean', data: deep.arms.map((a) => a.jamb_mean), backgroundColor: '#2563eb', borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: grid } }, x: { grid: { display: false } } } },
+      }));
+    }
+    return () => charts.forEach((c) => c.destroy());
+  }, [deep, empty]);
+
+  const actions = (
+    <>
+      <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" title="PDF" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
+      <a href={d.urls.export_excel} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+      <a href={d.urls.export_image} className="btn btn-info btn-sm" title="HD image" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>
+      <a href={d.urls.view} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
+    </>
+  );
+
+  const header = (
+    <div className="page-header">
+      <div><h1>Deep Analytics — {d.exam.display_name}</h1>
+        <p className="text-muted text-sm">{d.exam.exam_date}{d.exam.session_name ? ` | ${d.exam.session_name}` : ''} · per subject · per teacher · per class arm</p></div>
+      <div className="page-header-actions">{actions}</div>
+    </div>
+  );
+
+  if (empty) {
+    return <>{header}<Empty icon="fa-brain" title="No results yet"><p className="text-muted">Enter scores to unlock per-subject, per-teacher and per-arm deep analytics.</p><a href={d.urls.view} className="btn btn-primary mt-2">Enter results</a></Empty></>;
+  }
+
+  const kpiBorder = { blue: '#2563eb', teal: '#0d9488', green: '#047857', amber: '#b45309' };
+  return (
+    <>
+      {header}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.75rem', marginBottom: '1.1rem' }}>
+        {deep.kpis.map((k, i) => (
+          <div key={i} className="card" style={{ padding: '.9rem 1rem', borderTop: `3px solid ${kpiBorder[k.tone] || '#2563eb'}` }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>{k.value}</div>
+            <div style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--text-secondary)', marginTop: '.35rem' }}>{k.label}</div>
+            <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', marginTop: '.15rem' }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="charts-row">
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-column" /> Score distribution</h3></div><div className="chart-body" style={{ height: 230 }}><canvas ref={distRef} /></div></div>
+        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-bar" /> Subject pass rate</h3></div><div className="chart-body" style={{ height: 230 }}><canvas ref={subjRef} /></div></div>
+        {deep.arms.length > 0 && <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Class-arm JAMB mean</h3></div><div className="chart-body" style={{ height: 230 }}><canvas ref={armRef} /></div></div>}
+      </div>
+
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Subject league — weakest first</h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="data-table"><thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>N</th><th>Mean</th><th>SD</th><th>Pass %</th><th>Strong %</th><th>Verdict</th><th style={{ textAlign: 'left' }}>Recommended action</th></tr></thead>
+            <tbody>{deep.subjects.map((s) => (
+              <tr key={s.subject}><td><strong>{s.subject}</strong></td><td className="text-center">{s.n}</td><td className="text-center">{s.mean == null ? '—' : s.mean}</td><td className="text-center">{s.sd}</td>
+                <td className="text-center" style={{ color: BAND[s.band], fontWeight: 700 }}>{s.pass_rate == null ? '—' : s.pass_rate}%</td>
+                <td className="text-center">{s.distinction_rate == null ? '—' : s.distinction_rate}%</td>
+                <td className="text-center" style={{ color: BAND[s.band], fontWeight: 700 }}>{s.band_label}</td>
+                <td style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>{s.recommendation}</td></tr>
+            ))}</tbody></table>
+        </div></div>
+
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> Teacher effectiveness <span className="text-muted text-sm">— evidence-based, one mock</span></h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="data-table"><thead><tr><th style={{ textAlign: 'left' }}>Teacher</th><th style={{ textAlign: 'left' }}>Subjects</th><th>Students</th><th>Mean</th><th>Pass %</th><th>Δ cohort</th><th style={{ textAlign: 'left' }}>Verdict &amp; action</th><th /></tr></thead>
+            <tbody>{deep.teachers.map((t, i) => {
+              const f = FLAG[t.flag] || FLAG.insufficient;
+              return (
+                <tr key={i}><td><strong>{t.teacher}</strong></td><td className="text-sm">{t.subjects.join(', ')}</td><td className="text-center">{t.students}</td>
+                  <td className="text-center">{t.mean == null ? '—' : t.mean}</td><td className="text-center">{t.pass_rate == null ? '—' : t.pass_rate}%</td>
+                  <td className="text-center" style={{ color: t.delta == null ? 'inherit' : t.delta >= 0 ? '#047857' : '#dc2626', fontWeight: 700 }}>{t.delta == null ? '—' : (t.delta > 0 ? '+' : '') + t.delta}</td>
+                  <td><span style={{ display: 'inline-block', fontSize: '.68rem', fontWeight: 700, padding: '.15rem .5rem', borderRadius: 999, background: f.bg, color: f.c }}>{t.verdict}</span>
+                    <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginTop: '.3rem' }}>{t.recommendation}</div></td>
+                  <td>{t.staff_id && <a href={`${d.compose_base}?to=staff&staff_ids=${t.staff_id}`} className="btn btn-sm btn-outline" title="Message this teacher" data-native><i aria-hidden="true" className="fas fa-paper-plane" /></a>}</td></tr>
+              );
+            })}</tbody></table>
+        </div>
+        <div className="card-body" style={{ paddingTop: 0, fontSize: '.78rem', color: 'var(--text-muted)' }}>Subject results are attributed to the SSS3 subject teacher for each candidate's arm. No HR decision should rest on one mock — confirm across sittings and against intake ability.</div>
+      </div>
+
+      {deep.arms.length > 0 && (
+        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Class-arm league — best first</h3></div>
+          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="data-table"><thead><tr><th>#</th><th style={{ textAlign: 'left' }}>Class arm</th><th>Students</th><th>JAMB mean</th><th>≥200</th><th>Subject pass</th></tr></thead>
+              <tbody>{deep.arms.map((a, i) => (
+                <tr key={a.arm}><td className="text-center">{i + 1}</td><td><strong>{a.arm}</strong></td><td className="text-center">{a.students}</td>
+                  <td className="text-center">{a.jamb_mean == null ? '—' : a.jamb_mean}</td><td className="text-center">{a.above_200_rate == null ? '—' : a.above_200_rate}%</td><td className="text-center">{a.pass_rate == null ? '—' : a.pass_rate}%</td></tr>
+              ))}</tbody></table>
+          </div></div>
+      )}
+
+      <div className="charts-row">
+        {[['critical', 'Critical — urgent', '#dc2626'], ['at_risk', 'At risk — borderline', '#b45309'], ['honour', 'Honour roll — stretch', '#047857']].map(([key, title, col]) => (
+          <div key={key} className="card"><div className="card-header"><h3 style={{ color: col }}>{title}</h3></div>
+            <div className="card-body" style={{ maxHeight: 340, overflow: 'auto' }}>
+              {deep.segments[key].length === 0 ? <p className="text-muted text-sm">None.</p> : deep.segments[key].map((x) => (
+                <div key={x.student_id} style={{ display: 'flex', justifyContent: 'space-between', gap: '.6rem', padding: '.4rem 0', borderBottom: '1px solid var(--border-color)' }}>
+                  <div><div style={{ fontWeight: 600, fontSize: '.84rem' }}>{x.name}</div><div style={{ fontSize: '.74rem', color: 'var(--text-muted)' }}>{x.note}</div></div>
+                  <div style={{ fontWeight: 700, whiteSpace: 'nowrap', color: col, fontSize: '.8rem' }}>{x.metric}</div>
+                </div>
+              ))}
+            </div></div>
+        ))}
+      </div>
+
+      <h3 style={{ margin: '1.2rem 0 .6rem' }}>Recommendations</h3>
+      <div className="charts-row">
+        {[['students', 'Students', 'fa-user-graduate', '#2563eb'], ['teachers', 'Teachers', 'fa-chalkboard-teacher', '#0d9488'], ['management', 'Management', 'fa-briefcase', '#b45309']].map(([bucket, title, icon, col]) => (
+          <div key={bucket} className="card"><div className="card-header"><h3><i aria-hidden="true" className={`fas ${icon}`} style={{ color: col }} /> {title}</h3></div>
+            <div className="card-body">
+              {deep.recommendations[bucket].length === 0 ? <p className="text-muted text-sm">Nothing flagged.</p> : deep.recommendations[bucket].map((r, i) => (
+                <div key={i} style={{ borderLeft: `3px solid ${RECO[r.tone] || '#64748b'}`, padding: '.35rem 0 .55rem .65rem', marginBottom: '.55rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '.82rem' }}>{r.title}</div>
+                  <div style={{ fontSize: '.78rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{r.text}</div>
+                </div>
+              ))}
+            </div></div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 const SCREENS = { index: Index, create_exam: CreateExam, edit_exam: EditExam, edit_result: EditResult,
   bulk_entry: BulkEntry, add_result: AddResult, view_exam: ViewExam, student_progress: StudentProgress,
-  analytics: Analytics, validation: Validation };
+  analytics: Analytics, validation: Validation, deep: Deep };
 
 export default function MockJambApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
