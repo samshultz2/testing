@@ -636,54 +636,28 @@ def _subject_topic_tree(subject_id):
             for t in tops]
 
 
-# Curated JAMB/WAEC starter syllabus for the core subjects — an admin can seed
-# these for a subject with one click, then edit/extend. Keys are matched on a
-# normalised subject name so 'Maths'/'Mathematics' both resolve.
-_STARTER_SYLLABUS = {
-    'mathematics': [
-        ('Number and Numeration', ['Number bases', 'Fractions & decimals', 'Indices & logarithms', 'Surds', 'Sets']),
-        ('Algebra', ['Polynomials', 'Variation', 'Inequalities', 'Progressions', 'Matrices & determinants']),
-        ('Geometry & Trigonometry', ['Angles & polygons', 'Circle theorems', 'Trigonometric ratios', 'Bearings', 'Mensuration']),
-        ('Calculus', ['Differentiation', 'Integration', 'Application of calculus']),
-        ('Statistics', ['Measures of central tendency', 'Measures of dispersion', 'Probability', 'Permutations & combinations']),
-    ],
-    'english language': [
-        ('Comprehension', ['Passage comprehension', 'Inference', 'Vocabulary in context']),
-        ('Summary', ['Main-idea summary', 'Note making']),
-        ('Lexis and Structure', ['Synonyms & antonyms', 'Sentence interpretation', 'Concord', 'Idioms']),
-        ('Oral English', ['Vowels', 'Consonants', 'Stress & intonation', 'Rhymes']),
-        ('Register', ['Sports', 'Legal', 'Medical', 'Commerce']),
-    ],
-    'physics': [
-        ('Mechanics', ['Motion', 'Newton’s laws', 'Work, energy & power', 'Momentum', 'Simple machines']),
-        ('Heat & Thermodynamics', ['Temperature & heat', 'Gas laws', 'Change of state']),
-        ('Waves & Optics', ['Wave properties', 'Reflection & refraction', 'Lenses', 'Sound']),
-        ('Electricity & Magnetism', ['Current electricity', 'Magnetism', 'Electromagnetic induction', 'Electronics']),
-        ('Modern Physics', ['Atomic structure', 'Radioactivity', 'Photoelectric effect']),
-    ],
-    'chemistry': [
-        ('Atomic Structure & Bonding', ['Atomic models', 'Electron configuration', 'Chemical bonding', 'Periodic table']),
-        ('Stoichiometry', ['Mole concept', 'Chemical equations', 'Volumetric analysis']),
-        ('Acids, Bases & Salts', ['pH & indicators', 'Salt preparation', 'Titration']),
-        ('Organic Chemistry', ['Hydrocarbons', 'Alkanols & alkanoic acids', 'Polymers']),
-        ('Electrochemistry & Energetics', ['Electrolysis', 'Redox reactions', 'Rates of reaction']),
-    ],
-    'biology': [
-        ('Cell Biology', ['Cell structure', 'Cell division', 'Cell physiology']),
-        ('Nutrition', ['Modes of nutrition', 'Digestive system', 'Food tests']),
-        ('Transport & Respiration', ['Circulatory system', 'Respiration', 'Excretion']),
-        ('Reproduction & Genetics', ['Reproduction', 'Heredity', 'Variation', 'Evolution']),
-        ('Ecology', ['Ecosystems', 'Food chains', 'Conservation', 'Pollution']),
-    ],
-}
+# Complete JAMB/WAEC syllabus for the core & main subjects — an admin can seed a
+# subject's full curriculum with one click, then edit/extend. Keys are matched on
+# a normalised subject name so 'Maths'/'Mathematics' both resolve. See
+# ``utils.syllabus_data`` for the data itself.
+from utils.syllabus_data import FULL_SYLLABUS as _STARTER_SYLLABUS
 
 
 def _norm_subject_name(name):
     import re
     key = re.sub(r'[^a-z0-9]', '', (name or '').lower())
-    aliases = {'maths': 'mathematics', 'math': 'mathematics', 'english': 'english language',
-               'englishlanguage': 'english language', 'bio': 'biology', 'chem': 'chemistry',
-               'phy': 'physics', 'physic': 'physics'}
+    aliases = {
+        'maths': 'mathematics', 'math': 'mathematics', 'mathematic': 'mathematics',
+        'english': 'english language', 'englishlanguage': 'english language',
+        'useofenglish': 'english language', 'bio': 'biology', 'chem': 'chemistry',
+        'phy': 'physics', 'physic': 'physics', 'econs': 'economics', 'econ': 'economics',
+        'govt': 'government', 'gov': 'government', 'lit': 'literature in english',
+        'literature': 'literature in english', 'literatureinenglish': 'literature in english',
+        'crs': 'christian religious studies', 'crk': 'christian religious studies',
+        'geo': 'geography', 'accounts': 'accounting', 'financialaccounting': 'accounting',
+        'agric': 'agricultural science', 'agriculture': 'agricultural science',
+        'civic': 'civic education', 'civics': 'civic education',
+    }
     return aliases.get(key, ' '.join(re.findall(r'[a-z]+|[0-9]+', (name or '').lower())).strip())
 
 
@@ -698,8 +672,16 @@ def syllabus():
     tree = _subject_topic_tree(subject_id)
     can_seed = bool(subject and not tree
                     and _norm_subject_name(subject.name) in _STARTER_SYLLABUS)
+    # How many subjects could be bulk-seeded (have a syllabus + no topics yet).
+    from models import SyllabusTopic
+    seed_all_count = 0
+    for s in subjects:
+        if (_norm_subject_name(s.name) in _STARTER_SYLLABUS
+                and not SyllabusTopic.query.filter_by(subject_id=s.id, parent_id=None).first()):
+            seed_all_count += 1
     return render_template('cbt/syllabus.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, tree=tree, can_seed=can_seed,
+                           seed_all_count=seed_all_count,
                            dashboard_url=url_for('cbt.dashboard'))
 
 
@@ -790,6 +772,36 @@ def syllabus_seed():
     db.session.commit()
     flash(f'Seeded {added} topics & sub-topics — edit or extend as needed.', 'success')
     return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+
+
+@cbt_bp.route('/syllabus/seed-all', methods=['POST'])
+@admin_required
+def syllabus_seed_all():
+    """Seed the full JAMB/WAEC syllabus for every active subject that has one and
+    isn't already populated — a one-click curriculum bootstrap for the school."""
+    from models import SyllabusTopic
+    subjects = Subject.query.filter_by(is_active=True).all()
+    added, seeded_subjects = 0, 0
+    for subject in subjects:
+        starter = _STARTER_SYLLABUS.get(_norm_subject_name(subject.name))
+        if not starter:
+            continue
+        # Skip a subject that already has any topics (never duplicate).
+        if SyllabusTopic.query.filter_by(subject_id=subject.id, parent_id=None).first():
+            continue
+        seeded_subjects += 1
+        for i, (topic, subs) in enumerate(starter):
+            t = SyllabusTopic(subject_id=subject.id, title=topic, order=i + 1, exam_body='Both')
+            db.session.add(t); db.session.flush(); added += 1
+            for j, sub in enumerate(subs):
+                db.session.add(SyllabusTopic(subject_id=subject.id, parent_id=t.id, title=sub,
+                                             order=j + 1, exam_body='Both')); added += 1
+    db.session.commit()
+    if added:
+        flash(f'Seeded {added} topics & sub-topics across {seeded_subjects} subject(s).', 'success')
+    else:
+        flash('Nothing to seed — matching subjects already have a syllabus.', 'info')
+    return redirect(url_for('cbt.syllabus'))
 
 
 @cbt_bp.route('/api/subjects/<int:subject_id>/topics')

@@ -985,6 +985,13 @@
 ]
 ],
 [
+"cbt.syllabus_seed_all",
+"/cbt/syllabus/seed-all",
+[
+"POST"
+]
+],
+[
 "cbt.toggle_publish",
 "/cbt/exams/<int:exam_id>/publish",
 [

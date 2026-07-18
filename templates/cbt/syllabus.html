@@ -23,6 +23,12 @@
         <p class="text-muted text-sm">The WAEC/JAMB curriculum vocabulary used when tagging CBT &amp; Mock JAMB questions.</p>
     </div>
     <div class="page-header-actions">
+        {% if seed_all_count %}
+        <form method="post" action="{{ url_for('cbt.syllabus_seed_all') }}" data-confirm="Seed the full JAMB/WAEC syllabus for {{ seed_all_count }} subject(s) that have one and no topics yet?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Seed all {{ seed_all_count }} subject(s)</button>
+        </form>
+        {% endif %}
         <a href="{{ dashboard_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to CBT</a>
     </div>
 </div>
@@ -47,7 +53,7 @@
         <form method="post" action="{{ url_for('cbt.syllabus_seed') }}" data-confirm="Add the starter WAEC/JAMB topics for {{ subject.name }}?">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
-            <button class="btn btn-info btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Seed starter syllabus</button>
+            <button class="btn btn-info btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Seed full syllabus</button>
         </form>
         {% endif %}
     </div>

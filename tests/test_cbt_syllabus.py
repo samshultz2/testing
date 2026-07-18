@@ -81,6 +81,41 @@ def test_seed_starter_syllabus(app):
         assert tops >= 4 and subs >= 8
 
 
+def test_full_syllabus_covers_core_and_main_subjects(app):
+    """The bundled syllabus is complete for the core UTME subjects and covers the
+    main electives — every entry has topics, and every topic has sub-topics."""
+    from utils.syllabus_data import FULL_SYLLABUS
+    expected = {'mathematics', 'english language', 'physics', 'chemistry', 'biology',
+                'economics', 'government', 'commerce', 'accounting', 'literature in english',
+                'agricultural science', 'geography', 'christian religious studies', 'civic education'}
+    assert expected <= set(FULL_SYLLABUS)
+    for subj, topics in FULL_SYLLABUS.items():
+        assert topics, subj
+        for topic, subs in topics:
+            assert topic and subs, (subj, topic)      # no empty topic or sub-topic list
+    # the core science/maths blueprints are genuinely detailed
+    assert len(FULL_SYLLABUS['mathematics']) >= 5
+    assert sum(len(s) for _t, s in FULL_SYLLABUS['physics']) >= 30
+
+
+def test_seed_all_subjects(app):
+    """One click seeds the full syllabus for every matching subject with no topics.
+    (Uses electives untouched by other tests, since the test DB is shared.)"""
+    com = _subject(app, 'Commerce'); civ = _subject(app, 'Civic Education')
+    c = _admin(app); tok = _csrf(c)
+    r = c.post('/cbt/syllabus/seed-all', data={'_csrf_token': tok}, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        for sid in (com, civ):
+            assert SyllabusTopic.query.filter_by(subject_id=sid, parent_id=None).count() >= 4
+        # a subject already seeded is not duplicated on a second run
+        before = SyllabusTopic.query.filter_by(subject_id=com, parent_id=None).count()
+    c.post('/cbt/syllabus/seed-all', data={'_csrf_token': tok}, follow_redirects=True)
+    with app.app_context():
+        after = SyllabusTopic.query.filter_by(subject_id=com, parent_id=None).count()
+        assert after == before
+
+
 def test_delete_topic_cascades_subtopics(app):
     sid = _subject(app, 'Biology')
     with app.app_context():
