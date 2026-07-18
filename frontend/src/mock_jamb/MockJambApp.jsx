@@ -36,6 +36,7 @@ function Index({ d }) {
         <div><h1>Mock JAMB Examinations</h1><p className="text-muted text-sm mt-1">Track and analyze mock JAMB performance</p></div>
         <div className="d-flex gap-2">
           <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>
+          {d.urls.bank && <a href={d.urls.bank} className="btn btn-outline" data-native><i aria-hidden="true" className="fas fa-database" /> Question Bank</a>}
           <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
           {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Progress Trends</a>}
           {d.urls.validation && <a href={d.urls.validation} className="btn btn-outline"><i aria-hidden="true" className="fas fa-bullseye" /> Validation</a>}

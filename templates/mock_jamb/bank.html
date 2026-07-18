@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Questions — {{ exam.display_name }} - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Questions</span>{% endblock %}
+{% block title %}Question Bank - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <span>Question Bank</span>{% endblock %}
 {% block extra_css %}
 <style>
 .mjq-passage{border:1px solid var(--border-color);border-left:4px solid #7c3aed;border-radius:var(--radius-md);margin-bottom:1rem;overflow:hidden}
@@ -14,48 +14,25 @@
 .opt-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-grid{grid-template-columns:1fr}}
 .addq{background:var(--gray-50);border:1px dashed var(--border-color);border-radius:var(--radius-md);padding:.7rem .9rem;margin:.5rem .9rem}
 .badge-topic{background:var(--gray-100);border-radius:var(--radius-sm);padding:.05rem .4rem;font-size:.72rem}
+.badge-sec{background:rgba(37,99,235,.12);color:#2563eb;border-radius:var(--radius-sm);padding:.05rem .4rem;font-size:.72rem;font-weight:700}
+.cov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.55rem}
+.cov{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.5rem .65rem;cursor:pointer;display:block;text-decoration:none;color:inherit}
+.cov.short{border-color:#dc2626;background:rgba(220,38,38,.05)}
+.cov.active{border-color:#0d6a4e;box-shadow:0 0 0 2px rgba(13,106,78,.18)}
+.cov .cl{font-size:.75rem;font-weight:700;line-height:1.2}
+.cov .cn{font-size:.72rem;color:var(--text-muted);margin-top:.2rem}
+.cov .have{font-weight:800}.cov.short .have{color:#dc2626}
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Questions — {{ exam.display_name }}</h1>
-        <p class="text-muted text-sm">Author JAMB-standard questions students will sit in-app. Comprehension items live under a passage so they’re never served without it.</p>
+        <h1>Question Bank</h1>
+        <p class="text-muted text-sm">One central, section-tagged bank per subject. Every Mock JAMB draws a different, JAMB-shaped paper per student from here — no need to author questions into each mock.</p>
     </div>
     <div class="page-header-actions">
-        <a href="{{ url_for('mock_jamb.bank') }}" class="btn btn-primary btn-sm"><i class="fas fa-database"></i> Central Question Bank</a>
-        <a href="{{ url_for('mock_jamb.items', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-microscope"></i> Item analysis</a>
-        <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
-    </div>
-</div>
-
-<div class="card" style="margin-bottom:1rem;border-left:4px solid #2563eb;background:rgba(37,99,235,.04);">
-    <div class="card-body" style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;">
-        <i class="fas fa-circle-info" style="color:#2563eb;font-size:1.2rem;"></i>
-        <div style="flex:1;min-width:220px;">
-            <strong>This mock now draws from the central Question Bank.</strong>
-            <div class="text-muted text-sm">Build thousands of section-tagged questions once in the bank; every mock serves each student a different, JAMB-shaped paper drawn from it. Questions authored directly here still work, but the bank is the recommended home.</div>
-        </div>
-        <a href="{{ url_for('mock_jamb.bank') }}" class="btn btn-primary btn-sm"><i class="fas fa-database"></i> Go to Question Bank</a>
-    </div>
-</div>
-
-<div class="card" style="margin-bottom:1rem;border-left:4px solid {{ '#047857' if exam.is_published else 'var(--border-color)' }};">
-    <div class="card-body" style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;">
-        <div style="flex:1;min-width:200px;">
-            <strong><i class="fas fa-{{ 'circle-check' if exam.is_published else 'lock' }}"></i>
-                Online sitting: {{ 'OPEN — students can sit it' if exam.is_published else 'Closed' }}</strong>
-            <div class="text-muted text-sm">Students sit their registered subjects in one timed session at <code>/exam</code>. Each student gets the questions <strong>and options in a different, shuffled order</strong>{% if exam.questions_per_subject %} — a random {{ exam.questions_per_subject }} per subject{% endif %}.</div>
-        </div>
-        <form method="post" action="{{ url_for('mock_jamb.toggle_publish', exam_id=exam.id) }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <label class="text-sm mb-0">Duration</label>
-            <input type="number" name="duration_minutes" value="{{ exam.duration_minutes or 120 }}" min="5" max="300" style="width:76px;" class="form-control">
-            <span class="text-sm text-muted">min</span>
-            <label class="text-sm mb-0" title="Draw this many random questions per subject for each student (blank = all)">Q/subject</label>
-            <input type="number" name="questions_per_subject" value="{{ exam.questions_per_subject or '' }}" min="1" placeholder="all" style="width:70px;" class="form-control">
-            <button class="btn btn-{{ 'danger' if exam.is_published else 'success' }} btn-sm">{{ 'Close sitting' if exam.is_published else 'Publish & open' }}</button>
-        </form>
+        <a href="{{ syllabus_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-list-check"></i> Syllabus topics</a>
+        <a href="{{ index_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Mock JAMB</a>
     </div>
 </div>
 
@@ -65,8 +42,7 @@
         <select name="subject_id" class="form-control" style="max-width:260px;" data-autosubmit>
             {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}
         </select>
-        <span class="text-muted text-sm">{{ qcount }} question{{ '' if qcount == 1 else 's' }} in {{ subject.name if subject else '—' }}</span>
-        <a href="{{ syllabus_url }}" class="text-sm" style="margin-left:auto;"><i class="fas fa-list-check"></i> Manage syllabus topics</a>
+        {% if coverage %}<span class="text-muted text-sm">{{ coverage.total }} question(s) banked{% if coverage.untagged %} · {{ coverage.untagged }} untagged{% endif %}</span>{% endif %}
     </div>
 </form>
 
@@ -74,7 +50,29 @@
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subjects</h3><p>Add subjects first.</p></div></div></div>
 {% else %}
 
-{% macro qform(action, passage_id) -%}
+{# ---- Coverage vs JAMB blueprint ---- #}
+{% if coverage %}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-bullseye"></i> Section coverage <span class="text-muted text-sm">— stock vs what a full JAMB paper needs (click to filter)</span></h3></div>
+    <div class="card-body">
+        <div class="cov-grid">
+            <a class="cov {{ 'active' if not section else '' }}" href="{{ url_for('mock_jamb.bank', subject_id=subject_id) }}">
+                <div class="cl">All sections</div><div class="cn"><span class="have">{{ coverage.total }}</span> banked</div></a>
+            {% for r in coverage.rows %}
+            <a class="cov {{ 'short' if r.short else '' }} {{ 'active' if section == r.section else '' }}" href="{{ url_for('mock_jamb.bank', subject_id=subject_id, section=r.section) }}">
+                <div class="cl">{{ r.label }}{% if r.passage %} <i class="fas fa-align-left" title="passage section"></i>{% endif %}</div>
+                <div class="cn"><span class="have">{{ r.have }}</span>{% if r.need %} / need {{ r.need }}/paper{% endif %}</div>
+            </a>
+            {% endfor %}
+        </div>
+        {% if coverage.rows|selectattr('short')|list %}
+        <p class="text-sm" style="margin-top:.6rem;color:#b45309;"><i class="fas fa-triangle-exclamation"></i> Sections in red have fewer questions than a single JAMB paper draws — add more so each student still gets a varied paper.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% macro qform(action, passage_id, in_passage) -%}
 <form method="post" action="{{ action }}" enctype="multipart/form-data" class="addq">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="subject_id" value="{{ subject_id }}">
@@ -90,6 +88,15 @@
     <div class="form-row" style="margin-top:.5rem;">
         <div class="form-group"><label class="form-label">Correct <span class="required">*</span></label>
             <select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+        {% if not in_passage %}
+        <div class="form-group"><label class="form-label">Section <span class="required">*</span></label>
+            <select name="section" class="form-control" required><option value="">— Section —</option>
+                {% for s in sections %}<option value="{{ s.section }}" {{ 'selected' if section == s.section else '' }}>{{ s.label }}</option>{% endfor %}</select></div>
+        {% endif %}
+        <div class="form-group"><label class="form-label">Exam</label>
+            <select name="exam_body" class="form-control"><option>JAMB</option><option>WAEC</option><option>Both</option></select></div>
+        <div class="form-group"><label class="form-label">Difficulty</label>
+            <select name="difficulty" class="form-control"><option value="">—</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></div>
         <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" step="0.5" value="1" class="form-control"></div>
         <div class="form-group"><label class="form-label">Topic</label>
             <select name="topic" class="form-control mjq-topic"><option value="">— Topic —</option>
@@ -98,7 +105,7 @@
             <select name="subtopic" class="form-control mjq-subtopic" disabled><option value="">— Topic first —</option></select></div>
     </div>
     <div class="form-group"><label class="form-label">Diagram / figure (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
-    <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add question</button>
+    <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add to bank</button>
 </form>
 {%- endmacro %}
 
@@ -107,8 +114,8 @@
     <div style="display:flex;justify-content:space-between;gap:.5rem;">
         <div class="qtxt">{{ n }}. {{ q.question_text }}</div>
         <div style="white-space:nowrap;">
-            <a href="{{ url_for('mock_jamb.edit_mock_question', question_id=q.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-pen"></i></a>
-            <form method="post" action="{{ url_for('mock_jamb.delete_mock_question', question_id=q.id) }}" style="display:inline;" data-confirm="Delete this question?">
+            <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-pen"></i></a>
+            <form method="post" action="{{ url_for('mock_jamb.bank_delete_question', question_id=q.id) }}" style="display:inline;" data-confirm="Delete this question?">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-danger btn-sm" title="Delete"><i class="fas fa-trash"></i></button>
             </form>
@@ -116,15 +123,37 @@
     </div>
     {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure" style="max-height:130px;margin:.4rem 0;border-radius:var(--radius-sm);">{% endif %}
     {% for opt, val in q.options %}{% if val %}<div class="qopt {{ 'correct' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
-    <div class="mjq-meta">{{ q.marks }} mark(s){% if q.topic %} · <span class="badge-topic">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}</div>
+    <div class="mjq-meta">{{ q.marks }} mark(s){% if q.section %} · <span class="badge-sec">{{ q.section|replace('_',' ')|title }}</span>{% endif %}{% if q.exam_body %} · {{ q.exam_body }}{% endif %}{% if q.difficulty %} · {{ q.difficulty|title }}{% endif %}{% if q.topic %} · <span class="badge-topic">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}</div>
 </div>
 {%- endmacro %}
 
-{# ---- Add a comprehension / cloze / summary passage ---- #}
+{# ---- Bulk import ---- #}
+<details class="card" style="margin-bottom:1rem;">
+    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-file-import"></i> Bulk import questions</h3></summary>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('mock_jamb.bank_import') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <p class="text-sm text-muted">One question per line, fields separated by a <strong>tab</strong> or <strong>|</strong>:<br>
+                <code>question | Option A | Option B | Option C | Option D | correct(A–D) | [section] | [topic] | [subtopic]</code></p>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Default section (if a row omits it)</label>
+                    <select name="default_section" class="form-control"><option value="">— None —</option>
+                        {% for s in sections %}<option value="{{ s.section }}" {{ 'selected' if section == s.section else '' }}>{{ s.label }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label class="form-label">Exam body</label>
+                    <select name="exam_body" class="form-control"><option>JAMB</option><option>WAEC</option><option>Both</option></select></div>
+            </div>
+            <div class="form-group"><textarea name="rows" class="form-control" rows="6" placeholder="What is 2+2? | 3 | 4 | 5 | 6 | B | number&#10;..."></textarea></div>
+            <button class="btn btn-primary"><i class="fas fa-file-import"></i> Import</button>
+        </form>
+    </div>
+</details>
+
+{# ---- Add a passage ---- #}
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-align-left"></i> Add a passage (comprehension / cloze / summary / oral)</h3></div>
     <div class="card-body">
-        <form method="post" action="{{ url_for('mock_jamb.add_passage', exam_id=exam.id) }}" enctype="multipart/form-data">
+        <form method="post" action="{{ url_for('mock_jamb.bank_add_passage') }}" enctype="multipart/form-data">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             <div class="form-row">
@@ -134,6 +163,9 @@
                         <option value="summary">Summary</option><option value="oral">Oral / register</option>
                         <option value="general">Shared instruction</option>
                     </select></div>
+                <div class="form-group"><label class="form-label">Section</label>
+                    <select name="section" class="form-control"><option value="">— None —</option>
+                        {% for s in sections %}{% if s.passage %}<option value="{{ s.section }}" {{ 'selected' if section == s.section else '' }}>{{ s.label }}</option>{% endif %}{% endfor %}</select></div>
                 <div class="form-group" style="flex:1;"><label class="form-label">Title (optional)</label><input type="text" name="title" class="form-control" placeholder="e.g. Passage I"></div>
             </div>
             <div class="form-group"><label class="form-label">Passage / instruction text <span class="required">*</span></label>
@@ -150,9 +182,10 @@
 <div class="mjq-passage">
     <div class="mjq-passage-head">
         <span class="mjq-kind">{{ p.kind_label }}</span>
+        {% if p.section %}<span class="badge-sec">{{ p.section|replace('_',' ')|title }}</span>{% endif %}
         <strong style="flex:1;">{{ p.title or 'Passage' }}</strong>
         <span class="text-muted text-sm">{{ grp.questions|length }} question{{ '' if grp.questions|length == 1 else 's' }}</span>
-        <form method="post" action="{{ url_for('mock_jamb.delete_passage', passage_id=p.id) }}" style="display:inline;" data-confirm="Delete “{{ p.title or 'this passage' }}” and its questions?">
+        <form method="post" action="{{ url_for('mock_jamb.bank_delete_passage', passage_id=p.id) }}" style="display:inline;" data-confirm="Delete “{{ p.title or 'this passage' }}” and its questions?">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-danger btn-sm" title="Delete passage"><i class="fas fa-trash"></i></button>
         </form>
@@ -161,18 +194,18 @@
     <div class="mjq-body">{{ p.body }}</div>
     {% for q in grp.questions %}{{ show_q(q, loop.index) }}{% endfor %}
     <details style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a question to this passage</summary>
-        {{ qform(url_for('mock_jamb.add_mock_question', exam_id=exam.id), p.id) }}
+        {{ qform(url_for('mock_jamb.bank_add_question'), p.id, true) }}
     </details>
 </div>
 {% endfor %}
 
 {# ---- Stand-alone questions ---- #}
 <div class="card">
-    <div class="card-header"><h3><i class="fas fa-list-ol"></i> Stand-alone questions ({{ standalone|length }})</h3></div>
+    <div class="card-header"><h3><i class="fas fa-list-ol"></i> Stand-alone questions ({{ standalone|length }}){% if section %} · {{ section|replace('_',' ')|title }}{% endif %}</h3></div>
     <div class="card-body" style="padding:.3rem 0;">
-        {% for q in standalone %}{{ show_q(q, loop.index) }}{% else %}<p class="text-muted text-sm" style="padding:0 .9rem;">No stand-alone questions yet.</p>{% endfor %}
+        {% for q in standalone %}{{ show_q(q, loop.index) }}{% else %}<p class="text-muted text-sm" style="padding:0 .9rem;">No stand-alone questions yet{{ ' in this section' if section else '' }}.</p>{% endfor %}
         <details open style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a stand-alone question</summary>
-            {{ qform(url_for('mock_jamb.add_mock_question', exam_id=exam.id), none) }}
+            {{ qform(url_for('mock_jamb.bank_add_question'), none, false) }}
         </details>
     </div>
 </div>

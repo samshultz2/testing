@@ -28,11 +28,21 @@ def _is_english(name):
     return 'english' in (name or '').lower()
 
 
+def _exam_owns_questions(exam):
+    """True if this mock has its own authored questions (a legacy mock). Such a
+    mock serves ONLY its own questions; a mock with none draws from the bank."""
+    from models import db, MockJAMBQuestion
+    return db.session.query(MockJAMBQuestion.id).filter(
+        MockJAMBQuestion.mock_exam_id == exam.id).first() is not None
+
+
 def _pool_condition(model, exam):
-    """Rows visible to this mock: the shared bank (mock_exam_id NULL) plus any
-    legacy questions/passages authored directly into this exam."""
-    from models import db
-    return db.or_(model.mock_exam_id == exam.id, model.mock_exam_id.is_(None))
+    """Rows visible to this mock: its own authored rows if it is a legacy mock,
+    otherwise the shared bank (mock_exam_id NULL). The two are never mixed, so a
+    legacy mock is unaffected by the bank and vice-versa."""
+    if _exam_owns_questions(exam):
+        return model.mock_exam_id == exam.id
+    return model.mock_exam_id.is_(None)
 
 
 def candidate_subject_ids(exam, student):

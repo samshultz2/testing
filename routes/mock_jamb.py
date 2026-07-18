@@ -114,7 +114,8 @@ def index():
                        for c in (comparison_data or [])],
         'urls': {'create': url_for('mock_jamb.create_exam'), 'analytics': url_for('mock_jamb.analytics'),
                  'predictions': url_for('results.predictions_dashboard'), 'validation': url_for('mock_jamb.validation'),
-                 'trends': url_for('mock_jamb.trends'), 'self': url_for('mock_jamb.index')},
+                 'trends': url_for('mock_jamb.trends'), 'bank': url_for('mock_jamb.bank'),
+                 'self': url_for('mock_jamb.index')},
     })
 
 
@@ -971,6 +972,286 @@ def _save_mock_image(file):
 
 def _mock_subjects():
     return Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+
+
+# =============================================================================
+# CENTRAL QUESTION BANK — subject-scoped, section-tagged questions & passages
+# (mock_exam_id NULL) that mocks draw from per the JAMB blueprint.
+# =============================================================================
+
+def _bank_url(subject_id, section=None):
+    return url_for('mock_jamb.bank', subject_id=subject_id or '', section=section or '')
+
+
+def _bank_coverage(subject):
+    """Per-section stock vs the JAMB blueprint need for a subject: a list of
+    ``{section, label, have, need, passage, short}`` plus the totals."""
+    from utils.jamb_blueprint import blueprint_for, sections_for
+    from models import MockJAMBQuestion
+    counts = dict(db.session.query(MockJAMBQuestion.section, func.count(MockJAMBQuestion.id))
+                  .filter(MockJAMBQuestion.subject_id == subject.id,
+                          MockJAMBQuestion.mock_exam_id.is_(None))
+                  .group_by(MockJAMBQuestion.section).all())
+    bp = {s['section']: s['count'] for s in blueprint_for(subject.name)['sections']}
+    rows = []
+    for s in sections_for(subject.name):
+        have = counts.get(s['section'], 0)
+        need = bp.get(s['section'], 0)
+        rows.append({'section': s['section'], 'label': s['label'], 'passage': s['passage'],
+                     'have': have, 'need': need, 'short': need > 0 and have < need})
+    untagged = counts.get(None, 0) + counts.get('', 0)
+    return {'rows': rows, 'total': sum(counts.values()), 'untagged': untagged,
+            'need': sum(bp.values())}
+
+
+@mock_jamb_bp.route('/bank')
+@login_required
+def bank():
+    """Central question bank: author section-tagged questions & passages per
+    subject that every mock draws from by the JAMB blueprint."""
+    from routes.cbt import _subject_topic_tree
+    from utils.jamb_blueprint import sections_for
+    subjects = _mock_subjects()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    section = (request.args.get('section') or '').strip() or None
+
+    passages, standalone, coverage, sections = [], [], None, []
+    if subject:
+        sections = sections_for(subject.name)
+        coverage = _bank_coverage(subject)
+        pq = MockJAMBPassage.query.filter_by(subject_id=subject_id).filter(
+            MockJAMBPassage.mock_exam_id.is_(None))
+        if section:
+            pq = pq.filter(MockJAMBPassage.section == section)
+        prows = pq.order_by(MockJAMBPassage.section, MockJAMBPassage.order, MockJAMBPassage.id).all()
+        passages = [{'p': p, 'questions': p.questions.order_by(
+            MockJAMBQuestion.order, MockJAMBQuestion.id).all()} for p in prows]
+        sq = MockJAMBQuestion.query.filter_by(subject_id=subject_id, passage_id=None).filter(
+            MockJAMBQuestion.mock_exam_id.is_(None))
+        if section:
+            sq = sq.filter(MockJAMBQuestion.section == section)
+        standalone = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
+                                 MockJAMBQuestion.id).all()
+    return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
+                           subject_id=subject_id, section=section, sections=sections,
+                           passages=passages, standalone=standalone, coverage=coverage,
+                           topic_tree=_subject_topic_tree(subject_id),
+                           syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
+                           index_url=url_for('mock_jamb.index'))
+
+
+def _valid_section(subject, section):
+    from utils.jamb_blueprint import sections_for
+    keys = {s['section'] for s in sections_for(subject.name)}
+    return section if section in keys else None
+
+
+@mock_jamb_bp.route('/bank/passage/add', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_add_passage():
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Choose a subject first.', 'error')
+        return redirect(_bank_url(subject_id))
+    kind = (request.form.get('kind') or 'comprehension').strip()
+    if kind not in MockJAMBPassage.KINDS:
+        kind = 'comprehension'
+    section = _valid_section(subject, (request.form.get('section') or '').strip())
+    body = (request.form.get('body') or '').strip()
+    if not body:
+        flash('The passage text is required.', 'error')
+        return redirect(_bank_url(subject_id))
+    nextord = (db.session.query(func.coalesce(func.max(MockJAMBPassage.order), 0))
+               .filter(MockJAMBPassage.mock_exam_id.is_(None),
+                       MockJAMBPassage.subject_id == subject_id).scalar()) + 1
+    db.session.add(MockJAMBPassage(
+        mock_exam_id=None, subject_id=subject_id, kind=kind, section=section,
+        title=(request.form.get('title') or '').strip() or None, body=body,
+        image_url=_save_mock_image(request.files.get('image')), order=nextord))
+    db.session.commit()
+    flash('Passage added to the bank — now add its questions.', 'success')
+    return redirect(_bank_url(subject_id, section))
+
+
+@mock_jamb_bp.route('/bank/passage/<int:passage_id>/edit', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_edit_passage(passage_id):
+    p = db.get_or_404(MockJAMBPassage, passage_id)
+    if p.mock_exam_id is not None:
+        flash('Not a bank passage.', 'error')
+        return redirect(_bank_url(p.subject_id))
+    p.title = (request.form.get('title') or '').strip() or None
+    if (request.form.get('body') or '').strip():
+        p.body = request.form.get('body').strip()
+    kind = (request.form.get('kind') or '').strip()
+    if kind in MockJAMBPassage.KINDS:
+        p.kind = kind
+    subject = db.session.get(Subject, p.subject_id)
+    sec = _valid_section(subject, (request.form.get('section') or '').strip())
+    if sec:
+        p.section = sec
+    img = _save_mock_image(request.files.get('image'))
+    if img:
+        p.image_url = img
+    db.session.commit()
+    flash('Passage updated.', 'success')
+    return redirect(_bank_url(p.subject_id, p.section))
+
+
+@mock_jamb_bp.route('/bank/passage/<int:passage_id>/delete', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_delete_passage(passage_id):
+    p = db.get_or_404(MockJAMBPassage, passage_id)
+    if p.mock_exam_id is not None:
+        flash('Not a bank passage.', 'error')
+        return redirect(_bank_url(p.subject_id))
+    sid = p.subject_id
+    MockJAMBQuestion.query.filter_by(passage_id=p.id).delete()
+    db.session.delete(p)
+    db.session.commit()
+    flash('Passage and its questions removed from the bank.', 'success')
+    return redirect(_bank_url(sid))
+
+
+def _read_bank_question(form, q, files, subject):
+    """Populate a bank MockJAMBQuestion (section/exam_body/difficulty in addition
+    to the shared fields). Returns an error string or None."""
+    err = _read_question(form, q, files)
+    if err:
+        return err
+    if not q.passage_id:   # a passage's questions inherit the passage section
+        q.section = _valid_section(subject, (form.get('section') or '').strip())
+    eb = (form.get('exam_body') or 'JAMB').strip()
+    q.exam_body = eb if eb in ('JAMB', 'WAEC', 'Both') else 'JAMB'
+    diff = (form.get('difficulty') or '').strip().lower()
+    q.difficulty = diff if diff in ('easy', 'medium', 'hard') else None
+    return None
+
+
+@mock_jamb_bp.route('/bank/question/add', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_add_question():
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Choose a subject first.', 'error')
+        return redirect(_bank_url(subject_id))
+    passage_id = request.form.get('passage_id', type=int)
+    passage = db.session.get(MockJAMBPassage, passage_id) if passage_id else None
+    if passage and (passage.mock_exam_id is not None or passage.subject_id != subject_id):
+        passage = None
+    q = MockJAMBQuestion(mock_exam_id=None, subject_id=subject_id,
+                         passage_id=(passage.id if passage else None))
+    if passage:
+        q.section = passage.section
+    err = _read_bank_question(request.form, q, request.files, subject)
+    if err:
+        flash(err, 'error')
+        return redirect(_bank_url(subject_id))
+    q.order = (db.session.query(func.coalesce(func.max(MockJAMBQuestion.order), 0))
+               .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                       MockJAMBQuestion.subject_id == subject_id).scalar()) + 1
+    db.session.add(q)
+    db.session.commit()
+    flash('Question added to the bank.', 'success')
+    return redirect(_bank_url(subject_id, q.section))
+
+
+@mock_jamb_bp.route('/bank/question/<int:question_id>/edit', methods=['GET', 'POST'])
+@login_required
+@csrf_protect
+def bank_edit_question(question_id):
+    from routes.cbt import _subject_topic_tree
+    from utils.jamb_blueprint import sections_for
+    q = db.get_or_404(MockJAMBQuestion, question_id)
+    if q.mock_exam_id is not None:
+        flash('Not a bank question.', 'error')
+        return redirect(_bank_url(q.subject_id))
+    subject = db.session.get(Subject, q.subject_id)
+    if request.method == 'POST':
+        err = _read_bank_question(request.form, q, request.files, subject)
+        if err:
+            flash(err, 'error')
+            return redirect(url_for('mock_jamb.bank_edit_question', question_id=question_id))
+        db.session.commit()
+        flash('Question updated.', 'success')
+        return redirect(_bank_url(q.subject_id, q.section))
+    return render_template('mock_jamb/bank_edit_question.html', q=q, subject=subject,
+                           sections=sections_for(subject.name),
+                           topic_tree=_subject_topic_tree(q.subject_id),
+                           back_url=_bank_url(q.subject_id, q.section))
+
+
+@mock_jamb_bp.route('/bank/question/<int:question_id>/delete', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_delete_question(question_id):
+    q = db.get_or_404(MockJAMBQuestion, question_id)
+    if q.mock_exam_id is not None:
+        flash('Not a bank question.', 'error')
+        return redirect(_bank_url(q.subject_id))
+    sid, sec = q.subject_id, q.section
+    db.session.delete(q)
+    db.session.commit()
+    flash('Question deleted from the bank.', 'success')
+    return redirect(_bank_url(sid, sec))
+
+
+@mock_jamb_bp.route('/bank/import', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_import():
+    """Bulk-add stand-alone bank questions from pasted rows. Each line:
+    ``question | A | B | C | D | correct | [section] | [topic] | [subtopic]``
+    (tab- or pipe-separated). A default section applies when a row omits it."""
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Choose a subject first.', 'error')
+        return redirect(_bank_url(subject_id))
+    default_section = _valid_section(subject, (request.form.get('default_section') or '').strip())
+    exam_body = (request.form.get('exam_body') or 'JAMB').strip()
+    if exam_body not in ('JAMB', 'WAEC', 'Both'):
+        exam_body = 'JAMB'
+    raw = request.form.get('rows') or ''
+    base = (db.session.query(func.coalesce(func.max(MockJAMBQuestion.order), 0))
+            .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                    MockJAMBQuestion.subject_id == subject_id).scalar())
+    added, skipped = 0, 0
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = [c.strip() for c in (line.split('\t') if '\t' in line else line.split('|'))]
+        if len(parts) < 6:
+            skipped += 1
+            continue
+        text, a, b, c, d, correct = parts[:6]
+        correct = correct.strip().upper()
+        if not text or correct not in ('A', 'B', 'C', 'D'):
+            skipped += 1
+            continue
+        section = _valid_section(subject, parts[6]) if len(parts) > 6 and parts[6] else default_section
+        topic = parts[7] if len(parts) > 7 and parts[7] else None
+        subtopic = parts[8] if len(parts) > 8 and parts[8] else None
+        base += 1
+        db.session.add(MockJAMBQuestion(
+            mock_exam_id=None, subject_id=subject_id, section=section, exam_body=exam_body,
+            question_text=text, option_a=a, option_b=b, option_c=c, option_d=d,
+            correct_option=correct, marks=1, topic=topic, subtopic=subtopic, order=base))
+        added += 1
+    db.session.commit()
+    msg = f'Imported {added} question(s).'
+    if skipped:
+        msg += f' Skipped {skipped} malformed line(s).'
+    flash(msg, 'success' if added else 'warning')
+    return redirect(_bank_url(subject_id, default_section))
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/questions')

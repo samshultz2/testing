@@ -120,3 +120,67 @@ def test_bank_comprehension_keeps_passages_whole(app):
         passage_items = [it for it in items if it['kind'] == 'passage']
         assert len(passage_items) == 2
         assert all(len(pi['questions']) == 5 for pi in passage_items)
+
+
+# --- bank management UI + bulk import ------------------------------------
+
+def _admin(app):
+    from config import Config
+    from tests.conftest import login_token
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    return c
+
+
+def _bank_csrf(c):
+    import re
+    html = c.get('/students').get_data(as_text=True)
+    m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', html)
+    return m.group(1) if m else None
+
+
+def test_bank_page_and_add_question(app):
+    with app.app_context():
+        _SEQ[0] += 1
+        subj = Subject.query.filter_by(name='Mathematics').first() or Subject(name='Mathematics', is_active=True)
+        db.session.add(subj); db.session.commit()
+        sid = subj.id
+    c = _admin(app); tok = _bank_csrf(c)
+    r = c.get(f'/mock-jamb/bank?subject_id={sid}')
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Question Bank' in body and 'Section coverage' in body
+    # add a bank question tagged to the 'algebra' section
+    r = c.post('/mock-jamb/bank/question/add', data={
+        '_csrf_token': tok, 'subject_id': sid, 'question_text': 'Solve x+1=3',
+        'option_a': '1', 'option_b': '2', 'option_c': '3', 'option_d': '4',
+        'correct_option': 'B', 'section': 'algebra', 'exam_body': 'JAMB', 'marks': '1',
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        q = (MockJAMBQuestion.query.filter_by(subject_id=sid, mock_exam_id=None,
+             question_text='Solve x+1=3').first())
+        assert q is not None and q.section == 'algebra' and q.exam_body == 'JAMB'
+
+
+def test_bank_bulk_import(app):
+    with app.app_context():
+        _SEQ[0] += 1
+        subj = Subject.query.filter_by(name='Mathematics').first() or Subject(name='Mathematics', is_active=True)
+        db.session.add(subj); db.session.commit()
+        sid = subj.id
+        before = MockJAMBQuestion.query.filter_by(subject_id=sid, mock_exam_id=None).count()
+    c = _admin(app); tok = _bank_csrf(c)
+    rows = ('What is 2+2? | 3 | 4 | 5 | 6 | B | number\n'
+            'What is 3x2? | 5 | 6 | 7 | 8 | B | algebra | Polynomials\n'
+            'malformed line only two | fields')
+    r = c.post('/mock-jamb/bank/import', data={
+        '_csrf_token': tok, 'subject_id': sid, 'default_section': 'number',
+        'exam_body': 'JAMB', 'rows': rows,
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        after = MockJAMBQuestion.query.filter_by(subject_id=sid, mock_exam_id=None).count()
+        assert after == before + 2                       # two good rows, one skipped
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, question_text='What is 3x2?').first()
+        assert q.section == 'algebra' and q.topic == 'Polynomials'
