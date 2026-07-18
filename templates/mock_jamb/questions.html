@@ -23,6 +23,7 @@
         <p class="text-muted text-sm">Author JAMB-standard questions students will sit in-app. Comprehension items live under a passage so they’re never served without it.</p>
     </div>
     <div class="page-header-actions">
+        <a href="{{ url_for('mock_jamb.items', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-microscope"></i> Item analysis</a>
         <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
     </div>
 </div>

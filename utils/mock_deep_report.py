@@ -463,3 +463,204 @@ def deep_xlsx(data):
         sheet('Recommendations', ['Audience', 'Headline', 'Detail'], rec_rows)
 
     out = io.BytesIO(); wb.save(out); return out.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# item & topic analysis (online sitting — utils.mock_jamb_item_analysis)
+# ---------------------------------------------------------------------------
+
+def items_stem(meta):
+    name = (meta.get('exam_name') or 'exam').replace(' ', '_')
+    return f"mock_jamb_items_{name}"
+
+
+def items_filename(meta, ext='pdf'):
+    return f"{items_stem(meta)}.{ext}"
+
+
+def items_pdf(data):
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
+                                    Spacer, KeepTogether)
+    from utils.web_exports import pdf_escape
+
+    primary, light, muted = _theme()
+    meta = data.get('meta') or {}
+    styles = getSampleStyleSheet()
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=16, textColor=primary, spaceAfter=1)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=10, textColor=muted)
+    hh = ParagraphStyle('hh', parent=styles['Heading2'], fontSize=12.5, textColor=primary,
+                        spaceBefore=10, spaceAfter=4)
+    body = ParagraphStyle('b', parent=styles['Normal'], fontSize=9, leading=12)
+    muted_s = ParagraphStyle('mu', parent=styles['Normal'], fontSize=9, textColor=muted)
+    cell = ParagraphStyle('cell', parent=styles['Normal'], fontSize=7.5, leading=9)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=13 * mm, bottomMargin=13 * mm,
+                            leftMargin=12 * mm, rightMargin=12 * mm,
+                            title=f"Mock JAMB item analysis — {meta.get('exam_name', '')}")
+    W = landscape(A4)[0] - 24 * mm
+    elems = [Paragraph(pdf_escape(_school_name()), h),
+             Paragraph(f"Mock JAMB · Item & Topic Analysis · <b>{pdf_escape(meta.get('exam_name', ''))}</b> · "
+                       f"{pdf_escape(meta.get('session_name', ''))} · {pdf_escape(meta.get('exam_date', ''))} · "
+                       f"{meta.get('sitters', 0)} online sitter(s)", sub),
+             Spacer(1, 8)]
+
+    kpis = data.get('kpis') or []
+    if kpis:
+        cells = [Paragraph(
+            f"<b><font size=13 color='#0D6A4E'>{pdf_escape(str(k['value']))}</font></b><br/>"
+            f"<font size=8 color='#14211C'>{pdf_escape(k['label'])}</font><br/>"
+            f"<font size=7 color='#6B7A74'>{pdf_escape(k.get('sub', ''))}</font>", muted_s) for k in kpis]
+        kt = Table([cells], colWidths=[W / len(cells)] * len(cells))
+        kt.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), light),
+                                ('INNERGRID', (0, 0), (-1, -1), 3, colors.white),
+                                ('BOX', (0, 0), (-1, -1), 3, colors.white),
+                                ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                                ('LEFTPADDING', (0, 0), (-1, -1), 9)]))
+        elems.append(kt)
+
+    def _tbl(head, rows, widths, aligns=None):
+        t = Table([head] + rows, colWidths=widths, repeatRows=1)
+        style = [('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
+                 ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                 ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+                 ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]
+        if aligns:
+            for col, al in aligns.items():
+                style.append(('ALIGN', (col, 0), (col, -1), al))
+        t.setStyle(TableStyle(style))
+        return t
+
+    subs = data.get('subject_mastery') or []
+    if subs:
+        rows = [[pdf_escape(s['subject']), str(s['items']), str(s['served']),
+                 f"{_val(s['mastery'])}%", s['band_label']] for s in subs]
+        elems.append(KeepTogether([Paragraph('Subject mastery — weakest first', hh),
+                     _tbl(['Subject', 'Items', 'Responses', 'Mastery', 'Verdict'], rows,
+                          [W * 0.34, W * 0.14, W * 0.18, W * 0.16, W * 0.18], {0: 'LEFT', 4: 'LEFT'})]))
+
+    topics = data.get('topics') or []
+    if topics:
+        rows = [[pdf_escape(t['subject']), pdf_escape(t['topic']), str(t['items']),
+                 str(t['served']), f"{_val(t['mastery'])}%", t['band_label']] for t in topics[:20]]
+        elems.append(KeepTogether([Paragraph('Topic mastery — weakest first (top 20)', hh),
+                     _tbl(['Subject', 'Topic', 'Items', 'Responses', 'Mastery', 'Verdict'], rows,
+                          [W * 0.2, W * 0.32, W * 0.1, W * 0.14, W * 0.12, W * 0.12],
+                          {0: 'LEFT', 1: 'LEFT', 5: 'LEFT'})]))
+
+    flagged = data.get('flagged') or []
+    if flagged:
+        rows = [[Paragraph(pdf_escape((it['text'] or '')[:120]), cell), pdf_escape(it['subject']),
+                 f"{_val(it['p_value'])}%", (str(it['discrimination']) if it['discrimination'] is not None else '—'),
+                 Paragraph(pdf_escape('; '.join(f[1] for f in it['flags'])[:140]), cell)]
+                for it in flagged[:24]]
+        elems.append(KeepTogether([Paragraph('Items to review — flawed / mis-keyed (top 24)', hh),
+                     _tbl(['Question', 'Subject', 'Difficulty', 'Discrim.', 'Why flagged'], rows,
+                          [W * 0.34, W * 0.14, W * 0.12, W * 0.1, W * 0.3], {0: 'LEFT', 1: 'LEFT', 4: 'LEFT'})]))
+
+    recs = data.get('recommendations') or {}
+    tone_hex = {'positive': '#0D6A4E', 'negative': '#B43A2E', 'warning': '#9A7B0A', 'insight': '#1F6FB2'}
+    for bucket, title in [('students', 'Recommendations · Students'),
+                          ('teachers', 'Recommendations · Teachers'),
+                          ('management', 'Recommendations · Management')]:
+        rlist = recs.get(bucket) or []
+        if rlist:
+            block = [Paragraph(title, hh)]
+            for r in rlist:
+                c = tone_hex.get(r['tone'], '#14211C')
+                block.append(Paragraph(f"<font color='{c}'><b>&#9632; {pdf_escape(r['title'])}.</b></font> "
+                                       f"{pdf_escape(r['text'])}", body))
+                block.append(Spacer(1, 3))
+            elems.append(KeepTogether(block))
+
+    elems.append(Spacer(1, 6))
+    elems.append(Paragraph(
+        "Method: difficulty is the p-value (share correct of those served); discrimination is the "
+        "upper-minus-lower 27% index using total score; distractor analysis compares option choices "
+        "by the strongest and weakest groups. A blank on a served question counts as wrong; a "
+        "question a candidate never saw does not. Read flagged items across the next mock before "
+        "retiring them.", muted_s))
+    doc.build(elems)
+    return buf.getvalue()
+
+
+def items_png(data, dpi=170):
+    from utils.analytics_org_pdf import _pdf_to_png
+    return _pdf_to_png(items_pdf(data), dpi)
+
+
+def items_xlsx(data):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    meta = data.get('meta') or {}
+    wb = Workbook()
+    head_fill = PatternFill('solid', fgColor='0D6A4E'); head_font = Font(bold=True, color='FFFFFF')
+
+    def sheet(title, headers, rows, first=False):
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = title[:31]
+        ws.append(headers)
+        for c in ws[1]:
+            c.fill = head_fill; c.font = head_font; c.alignment = Alignment(horizontal='center')
+        for r in rows:
+            ws.append(r)
+        for col in ws.columns:
+            width = max((len(str(c.value)) if c.value is not None else 0) for c in col) + 2
+            ws.column_dimensions[col[0].column_letter].width = min(max(width, 10), 60)
+        return ws
+
+    ws = wb.active
+    ws.title = 'Overview'
+    ws['A1'] = 'Mock JAMB — Item & Topic Analysis'
+    ws['A1'].font = Font(bold=True, size=14, color='0D6A4E')
+    ws['A2'] = f"{meta.get('exam_name', '')} · {meta.get('session_name', '')} · {meta.get('exam_date', '')}"
+    r = 4
+    for k in (data.get('kpis') or []):
+        ws[f'A{r}'] = k['label']; ws[f'A{r}'].font = Font(bold=True)
+        ws[f'B{r}'] = k['value']; ws[f'C{r}'] = k.get('sub', ''); r += 1
+    ws.column_dimensions['A'].width = 22; ws.column_dimensions['B'].width = 14
+    ws.column_dimensions['C'].width = 26
+
+    subs = data.get('subject_mastery') or []
+    if subs:
+        sheet('Subject mastery', ['Subject', 'Items', 'Responses', 'Correct', 'Mastery %', 'Verdict'],
+              [[s['subject'], s['items'], s['served'], s['correct'], s['mastery'], s['band_label']] for s in subs])
+
+    topics = data.get('topics') or []
+    if topics:
+        rows = []
+        for t in topics:
+            rows.append([t['subject'], t['topic'], '', t['items'], t['served'], t['correct'],
+                         t['mastery'], t['band_label']])
+            for s in t['subtopics']:
+                rows.append([t['subject'], t['topic'], s['subtopic'], s['items'], s['served'],
+                             s['correct'], s['mastery'], s['band_label']])
+        sheet('Topic mastery', ['Subject', 'Topic', 'Sub-topic', 'Items', 'Responses', 'Correct',
+                                'Mastery %', 'Verdict'], rows)
+
+    items = data.get('items') or []
+    if items:
+        sheet('Items', ['Subject', 'Topic', 'Sub-topic', 'Question', 'Key', 'Served', 'Answered',
+                        'Blank', 'Difficulty %', 'Difficulty band', 'Discrimination', 'Discrim. band',
+                        'Flags'],
+              [[it['subject'], it['topic'], it['subtopic'], (it['text'] or '')[:200], it['correct_option'],
+                it['served'], it['answered'], it['blank'], it['p_value'], it['diff_label'],
+                it['discrimination'], it['disc_label'], '; '.join(f[1] for f in it['flags'])]
+               for it in items])
+
+    recs = data.get('recommendations') or {}
+    rec_rows = []
+    for bucket in ('students', 'teachers', 'management'):
+        for r_ in (recs.get(bucket) or []):
+            rec_rows.append([bucket.capitalize(), r_['title'], r_['text']])
+    if rec_rows:
+        sheet('Recommendations', ['Audience', 'Headline', 'Detail'], rec_rows)
+
+    out = io.BytesIO(); wb.save(out); return out.getvalue()

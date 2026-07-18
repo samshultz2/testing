@@ -441,6 +441,7 @@ function ViewExam({ d, notify }) {
       <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i aria-hidden="true" className="fas fa-list" /></a>
       <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /></a>
       {d.urls.questions && <a href={d.urls.questions} className="btn btn-primary btn-sm" title="Question bank (online sitting)" data-native><i aria-hidden="true" className="fas fa-pen-to-square" /></a>}
+      {d.urls.items && <a href={d.urls.items} className="btn btn-info btn-sm" title="Item &amp; topic analysis (online sitting)" data-native><i aria-hidden="true" className="fas fa-microscope" /></a>}
       {d.urls.deep && <a href={d.urls.deep} className="btn btn-info btn-sm" title="Deep analytics"><i aria-hidden="true" className="fas fa-brain" /></a>}
       {d.results.length > 0 && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="HD Image"><i aria-hidden="true" className="fas fa-image" /></button>}
       <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
@@ -1085,6 +1086,7 @@ function Deep({ d }) {
       <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" title="PDF" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
       <a href={d.urls.export_excel} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
       <a href={d.urls.export_image} className="btn btn-info btn-sm" title="HD image" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>
+      {d.urls.items && <a href={d.urls.items} className="btn btn-outline btn-sm" title="Item &amp; topic analysis" data-native><i aria-hidden="true" className="fas fa-microscope" /> Items</a>}
       {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline btn-sm" title="Progress trends"><i aria-hidden="true" className="fas fa-chart-line" /> Trends</a>}
       <a href={d.urls.view} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
     </>

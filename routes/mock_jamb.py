@@ -290,6 +290,7 @@ def view_exam(exam_id):
                  'edit': url_for('mock_jamb.edit_exam', exam_id=exam.id),
                  'deep': url_for('mock_jamb.deep', exam_id=exam.id),
                  'questions': url_for('mock_jamb.questions', exam_id=exam.id),
+                 'items': url_for('mock_jamb.items', exam_id=exam.id),
                  'index': url_for('mock_jamb.index'),
                  'self': url_for('mock_jamb.view_exam', exam_id=exam.id),
                  'delete_exam': url_for('mock_jamb.delete_exam', exam_id=exam.id)},
@@ -737,6 +738,7 @@ def deep(exam_id):
         'urls': {'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
                  'index': url_for('mock_jamb.index'),
                  'analytics': url_for('mock_jamb.analytics'),
+                 'items': url_for('mock_jamb.items', exam_id=exam.id),
                  'trends': url_for('mock_jamb.trends', session_id=exam.session_id),
                  'self': url_for('mock_jamb.deep', exam_id=exam.id),
                  'export_pdf': url_for('mock_jamb.deep_export', exam_id=exam.id, format='pdf'),
@@ -829,6 +831,50 @@ def deep_export(exam_id):
     if fmt in ('image', 'png'):
         return png_response(deep_png(data), deep_filename(meta, 'png'), inline=False)
     return pdf_response(deep_pdf(data), deep_filename(meta, 'pdf'), inline=False)
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/items')
+@login_required
+def items(exam_id):
+    """Item- & topic-level analysis of the ONLINE sitting for one Mock JAMB —
+    per-question difficulty/discrimination, distractor analysis, topic and
+    sub-topic mastery, flagged items and audience recommendations."""
+    from utils.mock_jamb_item_analysis import item_analysis
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = item_analysis(exam_id)
+    return render_template(
+        'mock_jamb/items.html', exam=exam, data=data,
+        urls={'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
+              'questions': url_for('mock_jamb.questions', exam_id=exam.id),
+              'deep': url_for('mock_jamb.deep', exam_id=exam.id),
+              'index': url_for('mock_jamb.index'),
+              'self': url_for('mock_jamb.items', exam_id=exam.id),
+              'export_pdf': url_for('mock_jamb.items_export', exam_id=exam.id, format='pdf'),
+              'export_excel': url_for('mock_jamb.items_export', exam_id=exam.id, format='excel'),
+              'export_image': url_for('mock_jamb.items_export', exam_id=exam.id, format='image')})
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/items/export')
+@login_required
+def items_export(exam_id):
+    """Export the Mock JAMB item analysis. ``format`` = pdf | excel | image."""
+    from utils.mock_jamb_item_analysis import item_analysis
+    from utils.mock_deep_report import items_pdf, items_xlsx, items_png, items_filename
+    from utils.web_exports import pdf_response, xlsx_response, png_response
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = item_analysis(exam_id)
+    if not data or data['meta'].get('empty'):
+        flash('No online sittings yet — publish the mock and let students sit it to unlock item analysis.', 'warning')
+        return redirect(url_for('mock_jamb.items', exam_id=exam_id))
+    fmt = (request.args.get('format') or 'pdf').lower()
+    meta = data['meta']
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(items_xlsx(data), items_filename(meta, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(items_png(data), items_filename(meta, 'png'), inline=False)
+    return pdf_response(items_pdf(data), items_filename(meta, 'pdf'), inline=False)
 
 
 @mock_jamb_bp.route('/validation')
