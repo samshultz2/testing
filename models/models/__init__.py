@@ -257,11 +257,21 @@ def _ensure_student_exam_columns():
     except Exception:
         pass
 
-    # cbt_questions.topic (syllabus topic tag for topic-mastery analytics).
+    # cbt_questions.topic / subtopic (syllabus tags for topic-mastery analytics).
     try:
         cq_cols = {c['name'] for c in inspect(db.engine).get_columns('cbt_questions')}
         if 'topic' not in cq_cols:
             statements.append('ALTER TABLE cbt_questions ADD COLUMN topic VARCHAR(100)')
+        if 'subtopic' not in cq_cols:
+            statements.append('ALTER TABLE cbt_questions ADD COLUMN subtopic VARCHAR(120)')
+    except Exception:
+        pass
+
+    # question_bank.subtopic (finer-grained syllabus tag).
+    try:
+        qb_cols = {c['name'] for c in inspect(db.engine).get_columns('question_bank')}
+        if 'subtopic' not in qb_cols:
+            statements.append('ALTER TABLE question_bank ADD COLUMN subtopic VARCHAR(120)')
     except Exception:
         pass
 

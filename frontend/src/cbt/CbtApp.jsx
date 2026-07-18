@@ -22,6 +22,7 @@ function Tabs({ d }) {
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); nav.go(href); }}>
           <i aria-hidden="true" className={'fas ' + icon} /> {label}</a>;
       })}
+      {d.nav.syllabus && <a href={d.nav.syllabus} className="fin-tab"><i aria-hidden="true" className="fas fa-list-check" /> Syllabus</a>}
       <a href={d.nav.portal} target="_blank" rel="noopener" className="fin-tab"><i aria-hidden="true" className="fas fa-up-right-from-square" /> Test Portal</a>
     </div>
   );

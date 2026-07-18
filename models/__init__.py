@@ -39,7 +39,7 @@ from .models_website import (SiteSettings, SitePage, SiteMedia,
                              SiteViewDaily, SiteReferrerDaily, SiteVisitorDaily,
                              HolidayAssignment, NewsPost)
 from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
-                         QuestionBank, CBTLoginEvent, CBTDeviceSession)
+                         QuestionBank, CBTLoginEvent, CBTDeviceSession, SyllabusTopic)
 from .models_scratchcard import ScratchCard, ResultCheckLog
 from .models_branch import Branch
 from .models_sales import (Product, Sale, SaleItem, StockMovement, Supplier,
@@ -86,7 +86,8 @@ __all__ = [
     'SchoolEvent',
     'SiteSettings', 'SitePage', 'SiteMedia', 'HolidayAssignment', 'NewsPost',
     'SiteViewDaily', 'SiteReferrerDaily', 'SiteVisitorDaily',
-    'CBTExam', 'CBTQuestion', 'CBTAttempt', 'CBTAnswer', 'CBTViolation', 'QuestionBank'
+    'CBTExam', 'CBTQuestion', 'CBTAttempt', 'CBTAnswer', 'CBTViolation', 'QuestionBank',
+    'SyllabusTopic'
 ]
 
 # Analytics models

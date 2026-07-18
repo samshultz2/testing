@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Syllabus Topics - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ dashboard_url }}">CBT</a> / <span>Syllabus Topics</span>{% endblock %}
+{% block extra_css %}
+<style>
+.syl-topic{border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.8rem;overflow:hidden}
+.syl-topic-head{display:flex;align-items:center;gap:.6rem;padding:.7rem .9rem;background:var(--gray-50)}
+.syl-topic-head .t{font-weight:700;flex:1}
+.syl-badge{font-size:.65rem;font-weight:700;padding:.1rem .45rem;border-radius:var(--radius-full);background:rgba(37,99,235,.12);color:#2563eb}
+.syl-badge.waec{background:rgba(4,120,87,.12);color:#047857}.syl-badge.jamb{background:rgba(124,58,237,.12);color:#7c3aed}
+.syl-subs{padding:.4rem .9rem .7rem}
+.syl-sub{display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid var(--border-light);font-size:.88rem}
+.syl-sub:last-child{border-bottom:none}
+.syl-inline{display:inline-flex;gap:.3rem;align-items:center;margin:0}
+.syl-inline input[type=text]{width:auto;min-width:150px}
+.mini{font-size:.78rem;padding:.2rem .5rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Syllabus Topics &amp; Sub-topics</h1>
+        <p class="text-muted text-sm">The WAEC/JAMB curriculum vocabulary used when tagging CBT &amp; Mock JAMB questions.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ dashboard_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to CBT</a>
+    </div>
+</div>
+
+<form method="get" class="card" style="margin-bottom:1rem;">
+    <div class="card-body" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
+        <label class="form-label mb-0">Subject</label>
+        <select name="subject_id" class="form-control" style="max-width:280px;" data-autosubmit>
+            {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}
+        </select>
+        <noscript><button class="btn btn-primary btn-sm">Go</button></noscript>
+    </div>
+</form>
+
+{% if not subject %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subjects</h3><p>Add subjects first, then define their syllabus topics here.</p></div></div></div>
+{% else %}
+
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Add a topic to {{ subject.name }}</h3>
+        {% if can_seed %}
+        <form method="post" action="{{ url_for('cbt.syllabus_seed') }}" data-confirm="Add the starter WAEC/JAMB topics for {{ subject.name }}?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <button class="btn btn-info btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Seed starter syllabus</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('cbt.syllabus_add') }}" style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <div class="form-group mb-0" style="flex:1;min-width:220px;">
+                <label class="form-label">Topic title</label>
+                <input type="text" name="title" class="form-control" placeholder="e.g. Algebra" required>
+            </div>
+            <div class="form-group mb-0">
+                <label class="form-label">Exam body</label>
+                <select name="exam_body" class="form-control"><option>Both</option><option>WAEC</option><option>JAMB</option></select>
+            </div>
+            <button class="btn btn-primary"><i class="fas fa-plus"></i> Add topic</button>
+        </form>
+    </div>
+</div>
+
+{% if tree %}
+{% for t in tree %}
+<div class="syl-topic">
+    <div class="syl-topic-head">
+        <span class="t">{{ t.title }}</span>
+        <span class="syl-badge {{ t.exam_body|lower }}">{{ t.exam_body }}</span>
+        <span class="text-muted text-sm">{{ t.subtopics|length }} sub-topic{{ '' if t.subtopics|length == 1 else 's' }}</span>
+        <form method="post" action="{{ url_for('cbt.syllabus_delete', topic_id=t.id) }}" class="syl-inline" data-confirm="Delete “{{ t.title }}” and all its sub-topics?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-danger mini" title="Delete topic"><i class="fas fa-trash"></i></button>
+        </form>
+    </div>
+    <div class="syl-subs">
+        {% for c in t.subtopics %}
+        <div class="syl-sub">
+            <i class="fas fa-angle-right text-muted"></i>
+            <span style="flex:1;">{{ c.title }}</span>
+            <form method="post" action="{{ url_for('cbt.syllabus_delete', topic_id=c.id) }}" class="syl-inline" data-confirm="Delete sub-topic “{{ c.title }}”?">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-danger mini" title="Delete sub-topic"><i class="fas fa-times"></i></button>
+            </form>
+        </div>
+        {% endfor %}
+        <form method="post" action="{{ url_for('cbt.syllabus_add') }}" class="syl-inline" style="margin-top:.5rem;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <input type="hidden" name="parent_id" value="{{ t.id }}">
+            <input type="text" name="title" class="form-control mini" placeholder="Add sub-topic…" required>
+            <button class="btn btn-secondary mini"><i class="fas fa-plus"></i></button>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-list-check"></i><h3>No topics yet for {{ subject.name }}</h3>
+    <p>Add topics above{% if can_seed %}, or seed the WAEC/JAMB starter list{% endif %}. Topics and their sub-topics then appear as drop-downs when authoring questions.</p>
+</div></div></div>
+{% endif %}
+{% endif %}
+{% endblock %}

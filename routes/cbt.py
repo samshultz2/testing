@@ -66,7 +66,7 @@ def _nav_urls():
     return {'dashboard': url_for('cbt.dashboard'), 'add_exam': url_for('cbt.add_exam'),
             'bank': url_for('cbt.bank'), 'passwords': url_for('cbt.passwords'),
             'settings': url_for('cbt.settings'), 'lab_setup': url_for('cbt.lab_setup'),
-            'portal': url_for('cbt_portal.login')}
+            'syllabus': url_for('cbt.syllabus'), 'portal': url_for('cbt_portal.login')}
 
 PORTAL_KEY = 'cbt_student_id'
 MAX_VIOLATIONS = 3   # leave-page events allowed before the test auto-submits
@@ -277,7 +277,9 @@ def add_exam():
 def exam_detail(exam_id):
     e = _exam_403(exam_id)
     questions = e.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
-    return render_template('cbt/exam_detail.html', e=e, questions=questions)
+    return render_template('cbt/exam_detail.html', e=e, questions=questions,
+                           topic_tree=_subject_topic_tree(e.subject_id),
+                           syllabus_url=url_for('cbt.syllabus', subject_id=e.subject_id or ''))
 
 
 @cbt_bp.route('/exams/<int:exam_id>/edit', methods=['GET', 'POST'])
@@ -334,6 +336,7 @@ def add_question(exam_id):
     db.session.add(CBTQuestion(
         exam_id=exam_id, question_text=text, image_url=image_url,
         topic=(request.form.get('topic') or '').strip() or None,
+        subtopic=(request.form.get('subtopic') or '').strip() or None,
         option_a=(request.form.get('option_a') or '').strip(),
         option_b=(request.form.get('option_b') or '').strip(),
         option_c=(request.form.get('option_c') or '').strip(),
@@ -608,6 +611,193 @@ def item_analysis_export(exam_id):
     if fmt in ('excel', 'xlsx'):
         return xlsx_response(item_analysis_xlsx(data), f'{stem}.xlsx')
     return pdf_response(item_analysis_pdf(data), f'{stem}.pdf', inline=False)
+
+
+# =============================================================================
+# SYLLABUS TOPICS & SUB-TOPICS (WAEC / JAMB) — the curriculum vocabulary that
+# powers the topic drop-downs when authoring questions and the mastery analytics.
+# =============================================================================
+
+def _subject_topic_tree(subject_id):
+    """[{id, title, exam_body, subtopics: [{id, title}]}] of active topics for a
+    subject, ordered — the shape the authoring drop-downs and the API consume."""
+    from models import SyllabusTopic
+    if not subject_id:
+        return []
+    rows = (SyllabusTopic.query.filter_by(subject_id=subject_id, is_active=True)
+            .order_by(SyllabusTopic.order, SyllabusTopic.title).all())
+    tops = [t for t in rows if t.parent_id is None]
+    kids = {}
+    for t in rows:
+        if t.parent_id is not None:
+            kids.setdefault(t.parent_id, []).append(t)
+    return [{'id': t.id, 'title': t.title, 'exam_body': t.exam_body,
+             'subtopics': [{'id': c.id, 'title': c.title} for c in kids.get(t.id, [])]}
+            for t in tops]
+
+
+# Curated JAMB/WAEC starter syllabus for the core subjects — an admin can seed
+# these for a subject with one click, then edit/extend. Keys are matched on a
+# normalised subject name so 'Maths'/'Mathematics' both resolve.
+_STARTER_SYLLABUS = {
+    'mathematics': [
+        ('Number and Numeration', ['Number bases', 'Fractions & decimals', 'Indices & logarithms', 'Surds', 'Sets']),
+        ('Algebra', ['Polynomials', 'Variation', 'Inequalities', 'Progressions', 'Matrices & determinants']),
+        ('Geometry & Trigonometry', ['Angles & polygons', 'Circle theorems', 'Trigonometric ratios', 'Bearings', 'Mensuration']),
+        ('Calculus', ['Differentiation', 'Integration', 'Application of calculus']),
+        ('Statistics', ['Measures of central tendency', 'Measures of dispersion', 'Probability', 'Permutations & combinations']),
+    ],
+    'english language': [
+        ('Comprehension', ['Passage comprehension', 'Inference', 'Vocabulary in context']),
+        ('Summary', ['Main-idea summary', 'Note making']),
+        ('Lexis and Structure', ['Synonyms & antonyms', 'Sentence interpretation', 'Concord', 'Idioms']),
+        ('Oral English', ['Vowels', 'Consonants', 'Stress & intonation', 'Rhymes']),
+        ('Register', ['Sports', 'Legal', 'Medical', 'Commerce']),
+    ],
+    'physics': [
+        ('Mechanics', ['Motion', 'Newton’s laws', 'Work, energy & power', 'Momentum', 'Simple machines']),
+        ('Heat & Thermodynamics', ['Temperature & heat', 'Gas laws', 'Change of state']),
+        ('Waves & Optics', ['Wave properties', 'Reflection & refraction', 'Lenses', 'Sound']),
+        ('Electricity & Magnetism', ['Current electricity', 'Magnetism', 'Electromagnetic induction', 'Electronics']),
+        ('Modern Physics', ['Atomic structure', 'Radioactivity', 'Photoelectric effect']),
+    ],
+    'chemistry': [
+        ('Atomic Structure & Bonding', ['Atomic models', 'Electron configuration', 'Chemical bonding', 'Periodic table']),
+        ('Stoichiometry', ['Mole concept', 'Chemical equations', 'Volumetric analysis']),
+        ('Acids, Bases & Salts', ['pH & indicators', 'Salt preparation', 'Titration']),
+        ('Organic Chemistry', ['Hydrocarbons', 'Alkanols & alkanoic acids', 'Polymers']),
+        ('Electrochemistry & Energetics', ['Electrolysis', 'Redox reactions', 'Rates of reaction']),
+    ],
+    'biology': [
+        ('Cell Biology', ['Cell structure', 'Cell division', 'Cell physiology']),
+        ('Nutrition', ['Modes of nutrition', 'Digestive system', 'Food tests']),
+        ('Transport & Respiration', ['Circulatory system', 'Respiration', 'Excretion']),
+        ('Reproduction & Genetics', ['Reproduction', 'Heredity', 'Variation', 'Evolution']),
+        ('Ecology', ['Ecosystems', 'Food chains', 'Conservation', 'Pollution']),
+    ],
+}
+
+
+def _norm_subject_name(name):
+    import re
+    key = re.sub(r'[^a-z0-9]', '', (name or '').lower())
+    aliases = {'maths': 'mathematics', 'math': 'mathematics', 'english': 'english language',
+               'englishlanguage': 'english language', 'bio': 'biology', 'chem': 'chemistry',
+               'phy': 'physics', 'physic': 'physics'}
+    return aliases.get(key, ' '.join(re.findall(r'[a-z]+|[0-9]+', (name or '').lower())).strip())
+
+
+@cbt_bp.route('/syllabus')
+@login_required
+def syllabus():
+    """Curriculum manager: add/edit/remove a subject's WAEC/JAMB topics and
+    sub-topics. These feed the topic drop-downs when authoring questions."""
+    subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    tree = _subject_topic_tree(subject_id)
+    can_seed = bool(subject and not tree
+                    and _norm_subject_name(subject.name) in _STARTER_SYLLABUS)
+    return render_template('cbt/syllabus.html', subjects=subjects, subject=subject,
+                           subject_id=subject_id, tree=tree, can_seed=can_seed,
+                           dashboard_url=url_for('cbt.dashboard'))
+
+
+@cbt_bp.route('/syllabus/add', methods=['POST'])
+@admin_required
+def syllabus_add():
+    """Add a topic (parent_id blank) or a sub-topic (parent_id set)."""
+    from models import SyllabusTopic
+    subject_id = request.form.get('subject_id', type=int)
+    title = (request.form.get('title') or '').strip()
+    parent_id = request.form.get('parent_id', type=int)
+    exam_body = (request.form.get('exam_body') or 'Both').strip()
+    if exam_body not in ('WAEC', 'JAMB', 'Both'):
+        exam_body = 'Both'
+    if not subject_id or not title:
+        flash('A subject and a title are required.', 'error')
+        return redirect(url_for('cbt.syllabus', subject_id=subject_id or ''))
+    parent = db.session.get(SyllabusTopic, parent_id) if parent_id else None
+    if parent and parent.subject_id != subject_id:
+        parent = None
+    exists = SyllabusTopic.query.filter_by(
+        subject_id=subject_id, parent_id=(parent.id if parent else None), title=title).first()
+    if exists:
+        flash('That topic already exists here.', 'warning')
+        return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+    nextord = (db.session.query(func.coalesce(func.max(SyllabusTopic.order), 0))
+               .filter(SyllabusTopic.subject_id == subject_id,
+                       SyllabusTopic.parent_id == (parent.id if parent else None)).scalar()) + 1
+    db.session.add(SyllabusTopic(
+        subject_id=subject_id, parent_id=(parent.id if parent else None), title=title,
+        exam_body=(parent.exam_body if parent else exam_body), order=nextord))
+    db.session.commit()
+    flash('Sub-topic added.' if parent else 'Topic added.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+
+
+@cbt_bp.route('/syllabus/<int:topic_id>/edit', methods=['POST'])
+@admin_required
+def syllabus_edit(topic_id):
+    from models import SyllabusTopic
+    t = db.get_or_404(SyllabusTopic, topic_id)
+    title = (request.form.get('title') or '').strip()
+    if title:
+        t.title = title
+    eb = (request.form.get('exam_body') or '').strip()
+    if eb in ('WAEC', 'JAMB', 'Both'):
+        t.exam_body = eb
+    db.session.commit()
+    flash('Updated.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=t.subject_id))
+
+
+@cbt_bp.route('/syllabus/<int:topic_id>/delete', methods=['POST'])
+@admin_required
+def syllabus_delete(topic_id):
+    from models import SyllabusTopic
+    t = db.get_or_404(SyllabusTopic, topic_id)
+    sid = t.subject_id
+    db.session.delete(t)   # cascade removes sub-topics
+    db.session.commit()
+    flash('Removed.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=sid))
+
+
+@cbt_bp.route('/syllabus/seed', methods=['POST'])
+@admin_required
+def syllabus_seed():
+    """One-click starter WAEC/JAMB syllabus for a core subject."""
+    from models import SyllabusTopic
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Choose a subject first.', 'error')
+        return redirect(url_for('cbt.syllabus'))
+    starter = _STARTER_SYLLABUS.get(_norm_subject_name(subject.name))
+    if not starter:
+        flash('No starter syllabus for this subject yet — add topics manually.', 'warning')
+        return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+    added = 0
+    for i, (topic, subs) in enumerate(starter):
+        if SyllabusTopic.query.filter_by(subject_id=subject_id, parent_id=None, title=topic).first():
+            continue
+        t = SyllabusTopic(subject_id=subject_id, title=topic, order=i + 1, exam_body='Both')
+        db.session.add(t); db.session.flush(); added += 1
+        for j, sub in enumerate(subs):
+            db.session.add(SyllabusTopic(subject_id=subject_id, parent_id=t.id, title=sub,
+                                         order=j + 1, exam_body='Both')); added += 1
+    db.session.commit()
+    flash(f'Seeded {added} topics & sub-topics — edit or extend as needed.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+
+
+@cbt_bp.route('/api/subjects/<int:subject_id>/topics')
+@login_required
+def api_subject_topics(subject_id):
+    """JSON topic tree for a subject — consumed by the question-authoring
+    drop-downs (topic → filtered sub-topic)."""
+    return jsonify({'topics': _subject_topic_tree(subject_id)})
 
 
 @cbt_bp.route('/subject-topics')
