@@ -36,6 +36,7 @@ function Dashboard({ d }) {
     <>
       <div className="page-header"><h1>CBT / Online Tests</h1>
         <div className="page-header-actions">
+          {d.urls.subject_topics && <a href={d.urls.subject_topics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-diagram-project" /> Subject Topics</a>}
           <a href={d.urls.export_all} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> All Results</a>
           <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Exam</a>
         </div>
@@ -464,7 +465,81 @@ function ItemAnalysis({ d }) {
   );
 }
 
-const SCREENS = { dashboard: Dashboard, settings: Settings, lab_setup: LabSetup, exam_form: ExamForm, results: Results, item_analysis: ItemAnalysis };
+function SubjectTopics({ d }) {
+  const nav = useNav();
+  const a = d.analysis;
+  const meta = (a && a.meta) || {};
+  const s = (a && a.summary) || {};
+  const go = (extra) => navParams(nav.go, d.self_url, { subject_id: d.selected_subject_id, term_id: d.selected_term_id, ...extra });
+  return (
+    <>
+      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-diagram-project" /> Subject topic mastery</h1>
+        <div className="page-header-actions">
+          {a && !meta.insufficient && <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>}
+          <a href={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> CBT</a>
+        </div>
+      </div>
+      <div className="filter-bar mb-3">
+        <div className="form-group mb-0"><label className="form-label">Subject</label>
+          <select className="form-control" value={d.selected_subject_id} onChange={(e) => go({ subject_id: e.target.value })}>
+            {d.subjects.length === 0 && <option value="">No CBT subjects</option>}
+            {d.subjects.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+        <div className="form-group mb-0"><label className="form-label">Term</label>
+          <select className="form-control" value={d.selected_term_id} onChange={(e) => go({ term_id: e.target.value })}>
+            <option value="">All terms</option>
+            {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
+      </div>
+
+      {!a || meta.insufficient ? (
+        <div className="card"><div className="card-body"><Empty icon="fa-diagram-project" title="No topic data">
+          <p>{(meta && meta.reason) || 'Tag CBT questions with a syllabus topic to see mastery across a subject’s exams.'}</p></Empty></div></div>
+      ) : (<>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+          <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{s.mean_mastery}%</div><div className="text-muted text-sm">Mean topic mastery</div></div></div>
+          <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{s.topics}</div><div className="text-muted text-sm">Topics assessed</div></div></div>
+          <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{s.exams}</div><div className="text-muted text-sm">Exams</div></div></div>
+          <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}><span style={{ color: '#e74a3b' }}>{s.weak}</span> / <span style={{ color: 'var(--success)' }}>{s.secure}</span></div><div className="text-muted text-sm">Weak / Secure</div></div></div>
+        </div>
+        <div className="text-muted text-sm mb-2" style={{ marginTop: '-.4rem' }}>{meta.subject} · {s.submitted} submission(s) across {s.exams} exam(s)</div>
+
+        {a.recommendations && a.recommendations.length > 0 && (
+          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-lightbulb" /> Findings &amp; recommendations</h3></div>
+            <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '.6rem' }}>
+              {a.recommendations.map((r, i) => { const [ic, col] = TONE_ICON[r.tone] ? [TONE_ICON[r.tone], TONE_BORDER[r.tone]] : ['fa-lightbulb', 'var(--primary)']; return (
+                <div key={i} style={{ borderLeft: `4px solid ${col}`, background: 'var(--bg-secondary,#f8f9fb)', borderRadius: 6, padding: '.6rem .8rem' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '.2rem' }}><i aria-hidden="true" className={`fas ${ic}`} style={{ color: col, marginRight: '.4rem' }} />{r.title}</div>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary,#4a5568)' }}>{r.text}</div>
+                </div>); })}
+            </div></div>
+        )}
+
+        <div className="card"><div className="card-header"><h3>Topic league (weakest first)</h3></div>
+          <div className="card-body">
+            {a.topics.map((t) => {
+              const col = t.band === 'weak' ? '#e74a3b' : (t.band === 'secure' ? 'var(--success,#1c8c53)' : '#c9a227');
+              return (
+                <div key={t.topic} style={{ marginBottom: '.7rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+                    <span><strong>{t.topic}</strong> <span className="text-muted">· {t.items} item(s) · {t.exams} exam(s) · {t.students} student(s)</span></span>
+                    <span style={{ color: col, fontWeight: 700 }}>{t.mastery}%</span>
+                  </div>
+                  <div style={{ height: 12, background: 'var(--gray-100,#eef0f4)', borderRadius: 99, overflow: 'hidden', marginTop: '.2rem' }}>
+                    <div style={{ height: '100%', width: `${t.mastery}%`, background: col }} /></div>
+                  {t.trend && t.trend.length > 1 && (
+                    <div className="text-muted text-sm" style={{ marginTop: '.15rem' }}>
+                      trend: {t.trend.map((x, i) => <span key={i}>{i > 0 ? ' → ' : ''}{x.mastery}%</span>)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div></div>
+      </>)}
+    </>
+  );
+}
+
+const SCREENS = { dashboard: Dashboard, settings: Settings, lab_setup: LabSetup, exam_form: ExamForm, results: Results, item_analysis: ItemAnalysis, subject_topics: SubjectTopics };
 
 export default function CbtApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

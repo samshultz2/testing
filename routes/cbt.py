@@ -171,7 +171,8 @@ def dashboard():
                    'detail_url': url_for('cbt.exam_detail', exam_id=e.id),
                    'results_url': url_for('cbt.results', exam_id=e.id)} for e in exams],
         'self_url': url_for('cbt.dashboard'),
-        'urls': {'add': url_for('cbt.add_exam'), 'export_all': url_for('cbt.results_export_all')},
+        'urls': {'add': url_for('cbt.add_exam'), 'export_all': url_for('cbt.results_export_all'),
+                 'subject_topics': url_for('cbt.subject_topics')},
     })
 
 
@@ -607,6 +608,64 @@ def item_analysis_export(exam_id):
     if fmt in ('excel', 'xlsx'):
         return xlsx_response(item_analysis_xlsx(data), f'{stem}.xlsx')
     return pdf_response(item_analysis_pdf(data), f'{stem}.pdf', inline=False)
+
+
+@cbt_bp.route('/subject-topics')
+@login_required
+def subject_topics():
+    """Topic mastery aggregated across all of a subject's CBT exams."""
+    from utils.subject_topics import subject_topic_mastery
+    from utils.branch_scope import viewing_branch_id
+    from models import Subject, Term
+    # Subjects that actually have CBT exams (so the picker is never empty noise).
+    subj_ids = [s for (s,) in db.session.query(CBTExam.subject_id).filter(
+        CBTExam.subject_id.isnot(None)).distinct().all()]
+    subjects = (Subject.query.filter(Subject.id.in_(subj_ids)).order_by(Subject.name).all()
+                if subj_ids else [])
+    terms = Term.query.order_by(Term.id.desc()).all()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    term_id = request.args.get('term_id', type=int)
+    data = subject_topic_mastery(subject_id, term_id, viewing_branch_id()) if subject_id else None
+    return _render({
+        'page': 'subject_topics', 'nav': _nav_urls(),
+        'subjects': [{'id': s.id, 'name': s.name} for s in subjects],
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'selected_subject_id': subject_id or '', 'selected_term_id': term_id or '',
+        'analysis': data,
+        'self_url': url_for('cbt.subject_topics'),
+        'urls': {'dashboard': url_for('cbt.dashboard'),
+                 'export_excel': url_for('cbt.subject_topics_export',
+                                         subject_id=subject_id or '', term_id=term_id or '')},
+    })
+
+
+@cbt_bp.route('/subject-topics/export')
+@login_required
+def subject_topics_export():
+    """Excel export of subject topic mastery."""
+    from utils.subject_topics import subject_topic_mastery
+    from utils.branch_scope import viewing_branch_id
+    from utils.web_exports import xlsx_response
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    subject_id = request.args.get('subject_id', type=int)
+    term_id = request.args.get('term_id', type=int)
+    data = subject_topic_mastery(subject_id, term_id, viewing_branch_id()) if subject_id else None
+    if not data or data['meta'].get('insufficient'):
+        flash('No tagged topic data for that subject yet.', 'warning')
+        return redirect(url_for('cbt.subject_topics', subject_id=subject_id or ''))
+    wb = Workbook(); ws = wb.active; ws.title = 'Topic mastery'
+    ws.append(['Topic', 'Mastery %', 'Band', 'Items', 'Exams', 'Students'])
+    for c in ws[1]:
+        c.fill = PatternFill('solid', fgColor='0D6A4E'); c.font = Font(bold=True, color='FFFFFF')
+        c.alignment = Alignment(horizontal='center')
+    for t in data['topics']:
+        ws.append([t['topic'], t['mastery'], t['band'], t['items'], t['exams'], t['students']])
+    for col in ws.columns:
+        w = max((len(str(c.value)) if c.value is not None else 0) for c in col) + 2
+        ws.column_dimensions[col[0].column_letter].width = min(max(w, 12), 40)
+    stem = ('topic_mastery_' + (data['meta'].get('subject') or 'subject')).replace(' ', '_')
+    return xlsx_response(wb, f'{stem}.xlsx')
 
 
 @cbt_bp.route('/exams/<int:exam_id>/monitor')
