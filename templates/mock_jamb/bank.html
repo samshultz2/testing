@@ -61,6 +61,15 @@
             <div class="form-group" style="flex:1;min-width:180px;"><label class="form-label">Extra tokens (optional, one per line)</label>
                 <textarea id="hvTokens" class="form-control" rows="1" placeholder="{{ aloc_token_count ~ ' saved — add more for higher daily limits' if aloc_token_count else 'ALOC-xxxxxxxx' }}" style="font-family:monospace;"></textarea></div>
         </div>
+        <div class="form-group">
+            <label class="form-label">Subjects <span class="text-muted text-sm">— tick the ones to download (all selected by default)</span>
+                <a href="#" id="hvAll" class="text-sm" style="margin-left:.5rem;">all</a> · <a href="#" id="hvNone" class="text-sm">none</a></label>
+            <div id="hvSubjects" style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;">
+                {% for s in aloc_subjects %}
+                <label class="text-sm" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" class="hv-subj" value="{{ s.id }}" checked> {{ s.name }}</label>
+                {% endfor %}
+            </div>
+        </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;">
             <button type="button" id="hvStart" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start harvest</button>
             <button type="button" id="hvResume" class="btn btn-success btn-sm" style="display:none;"><i class="fas fa-play"></i> Resume</button>
@@ -100,6 +109,28 @@
         </div>
         {% if coverage.rows|selectattr('short')|list %}
         <p class="text-sm" style="margin-top:.6rem;color:#b45309;"><i class="fas fa-triangle-exclamation"></i> Sections in red have fewer questions than a single JAMB paper draws — add more so each student still gets a varied paper.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ---- ALOC download coverage by year (which years are fully downloaded) ---- #}
+{% if aloc_slug %}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-calendar-check"></i> ALOC download coverage <span class="text-muted text-sm">— {{ subject.name }}, by year</span></h3></div>
+    <div class="card-body">
+        {% if year_coverage %}
+        <div class="cov-grid">
+            {% for r in year_coverage %}
+            <div class="cov {{ '' if r.complete else 'short' }}" title="{{ 'Fully downloaded' if r.complete else 'Partly downloaded — keep harvesting this year' }}">
+                <div class="cl">{{ r.year }} {% if r.complete %}<i class="fas fa-circle-check" style="color:#047857;"></i>{% else %}<i class="fas fa-hourglass-half" style="color:#b45309;"></i>{% endif %}</div>
+                <div class="cn"><span class="have">{{ r.count }}</span> question(s){% if r.exam_type != 'utme' %} · {{ r.exam_type|upper }}{% endif %}</div>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="text-sm text-muted" style="margin-top:.6rem;"><i class="fas fa-circle-check" style="color:#047857;"></i> = every ALOC question for that year is downloaded · <i class="fas fa-hourglass-half" style="color:#b45309;"></i> = partly done, run the harvest again to finish it.</p>
+        {% else %}
+        <p class="text-muted text-sm">No ALOC downloads recorded for {{ subject.name }} yet. Use “Harvest ALL past questions” or “Import from ALOC” (with a year) — each year you complete is tracked here so you can see what’s left.</p>
         {% endif %}
     </div>
 </div>
@@ -353,11 +384,23 @@
             else { running = false; render(s); }
         }).catch(function(){ running = false; elError.textContent = 'Network error — will keep the progress; press Resume to continue.'; showButtons({status:'paused'}); });
     }
+    var subjBox = document.getElementById('hvSubjects');
+    document.getElementById('hvAll').addEventListener('click', function(e){ e.preventDefault();
+        subjBox.querySelectorAll('.hv-subj').forEach(function(x){ x.checked = true; }); });
+    document.getElementById('hvNone').addEventListener('click', function(e){ e.preventDefault();
+        subjBox.querySelectorAll('.hv-subj').forEach(function(x){ x.checked = false; }); });
+    function selectedSubjects(){
+        return Array.prototype.slice.call(subjBox.querySelectorAll('.hv-subj:checked'))
+            .map(function(x){ return x.value; }).join(',');
+    }
     elStart.addEventListener('click', function(){
+        var subs = selectedSubjects();
+        if(!subs){ elError.textContent = 'Pick at least one subject to harvest.'; return; }
         var body = '_csrf_token=' + encodeURIComponent(CSRF)
             + '&examtype=' + encodeURIComponent(document.getElementById('hvExamtype').value)
             + '&year_from=' + encodeURIComponent(document.getElementById('hvYearFrom').value || '')
             + '&year_to=' + encodeURIComponent(document.getElementById('hvYearTo').value || '')
+            + '&subject_ids=' + encodeURIComponent(subs)
             + '&remember=1&tokens=' + encodeURIComponent(document.getElementById('hvTokens').value || '');
         elError.textContent = '';
         post(U.start, body).then(function(s){

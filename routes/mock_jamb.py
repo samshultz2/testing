@@ -1033,7 +1033,8 @@ def bank():
             sq = sq.filter(MockJAMBQuestion.section == section)
         standalone = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
                                  MockJAMBQuestion.id).all()
-    from utils.aloc import aloc_slug, get_tokens, EXAM_TYPES, harvest_year_max
+    from utils.aloc import (aloc_slug, get_tokens, EXAM_TYPES, harvest_year_max,
+                            harvest_subjects, subject_coverage)
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
@@ -1042,6 +1043,8 @@ def bank():
                            aloc_slug=(aloc_slug(subject.name) if subject else None),
                            aloc_token_count=len(get_tokens()), aloc_examtypes=EXAM_TYPES,
                            aloc_year_max=harvest_year_max(),
+                           aloc_subjects=[{'id': i, 'name': n} for i, n in harvest_subjects()],
+                           year_coverage=(subject_coverage(subject_id) if (subject and aloc_slug(subject.name)) else []),
                            novel_section=any(s['section'] == 'novel' for s in sections),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
@@ -1239,6 +1242,9 @@ def bank_import_aloc():
     default_section = _valid_section(subject, (request.form.get('default_section') or '').strip())
     res = import_questions(subject_id, subject.name, tokens, examtype=examtype, year=year,
                            target=target, default_section=default_section)
+    if year and not (res.get('error') and not res.get('added')):
+        from utils.aloc import record_cell
+        record_cell(subject_id, examtype, year, res.get('saturated'))
     if res.get('error') and not res.get('added'):
         flash(f"ALOC import failed: {res['error']}", 'error')
     else:
@@ -1291,7 +1297,9 @@ def bank_harvest_start():
     y2 = request.form.get('year_to', type=int)
     if y1 and y2 and y1 > y2:
         y1, y2 = y2, y1
-    state = start_harvest(examtype=examtype, year_min=y1, year_max=y2)
+    raw_subjects = (request.form.get('subject_ids') or '').strip()
+    subject_ids = [int(x) for x in raw_subjects.split(',') if x.strip().isdigit()] or None
+    state = start_harvest(examtype=examtype, year_min=y1, year_max=y2, subject_ids=subject_ids)
     return jsonify(_harvest_public(state))
 
 

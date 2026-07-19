@@ -330,16 +330,52 @@ def harvest_subjects():
     return out
 
 
-def build_harvest_cells(examtype='utme', year_min=None, year_max=None):
-    """The full work queue: one (subject_id, subject_name, year) cell per subject
-    and year, newest year first so recent papers land first."""
+def build_harvest_cells(examtype='utme', year_min=None, year_max=None, subject_ids=None):
+    """The work queue: one (subject_id, subject_name, year) cell per selected
+    subject and year, newest year first. ``subject_ids`` (a set/list) limits it to
+    those subjects; None = every ALOC subject."""
     year_min = year_min or HARVEST_YEAR_MIN
     year_max = year_max or harvest_year_max()
+    want = set(subject_ids) if subject_ids else None
     cells = []
     for sid, name in harvest_subjects():
+        if want is not None and sid not in want:
+            continue
         for y in range(year_max, year_min - 1, -1):
             cells.append([sid, name, y])
     return cells
+
+
+def record_cell(subject_id, examtype, year, saturated):
+    """Upsert the coverage record for a (subject, exam type, year): the current
+    banked count and whether the ALOC pool is fully downloaded (``complete``).
+    Once complete it stays complete."""
+    from sqlalchemy import func
+    from models import db, MockJAMBQuestion, MockJAMBHarvestCell
+    y = str(year)
+    count = db.session.query(func.count(MockJAMBQuestion.id)).filter(
+        MockJAMBQuestion.subject_id == subject_id, MockJAMBQuestion.mock_exam_id.is_(None),
+        MockJAMBQuestion.source == 'aloc', MockJAMBQuestion.exam_year == y).scalar() or 0
+    cell = MockJAMBHarvestCell.query.filter_by(
+        subject_id=subject_id, exam_type=examtype, year=y).first()
+    if not cell:
+        cell = MockJAMBHarvestCell(subject_id=subject_id, exam_type=examtype, year=y)
+        db.session.add(cell)
+    cell.count = count
+    cell.complete = bool(cell.complete or saturated)
+    db.session.commit()
+
+
+def subject_coverage(subject_id, examtype=None):
+    """Per-year download coverage for a subject: ``[{year, exam_type, count,
+    complete}]`` newest year first."""
+    from models import MockJAMBHarvestCell
+    q = MockJAMBHarvestCell.query.filter_by(subject_id=subject_id)
+    if examtype:
+        q = q.filter_by(exam_type=examtype)
+    rows = q.order_by(MockJAMBHarvestCell.year.desc()).all()
+    return [{'year': r.year, 'exam_type': r.exam_type, 'count': r.count,
+             'complete': bool(r.complete)} for r in rows]
 
 
 def get_harvest_state():
@@ -373,10 +409,10 @@ def clear_harvest_state():
     save_harvest_state({})
 
 
-def start_harvest(examtype='utme', year_min=None, year_max=None):
+def start_harvest(examtype='utme', year_min=None, year_max=None, subject_ids=None):
     """Create (or restart) a harvest job and return its fresh state."""
     import datetime
-    cells = build_harvest_cells(examtype, year_min, year_max)
+    cells = build_harvest_cells(examtype, year_min, year_max, subject_ids)
     state = {
         'status': 'running', 'examtype': examtype,
         'cells': cells, 'pos': 0, 'total_cells': len(cells),
@@ -417,6 +453,9 @@ def harvest_step(tokens, max_cells=1):
         if res['added']:
             state['per_subject'][name] = state['per_subject'].get(name, 0) + res['added']
         state['current'] = {'subject': name, 'year': year}
+        # Record per-cell completeness (unless we bailed purely on token exhaustion).
+        if not res.get('exhausted') or res['added']:
+            record_cell(sid, state['examtype'], year, res.get('saturated'))
         if res.get('exhausted'):
             # Ran out of tokens mid-cell — pause WITHOUT advancing so we retry it.
             state['status'] = 'paused'; state['exhausted'] = True

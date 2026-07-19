@@ -179,3 +179,35 @@ def test_harvest_routes(app, monkeypatch):
     assert j['added'] == 2 and j['pos'] == 1
     r = c.post('/mock-jamb/bank/harvest/stop', data={'_csrf_token': tok})
     assert r.get_json()['status'] == 'paused'
+
+
+def test_harvest_subject_selection(app):
+    import utils.aloc as aloc
+    p = _subject(app, 'Physics'); m = _subject(app, 'Mathematics')
+    with app.app_context():
+        cells = aloc.build_harvest_cells('utme', year_min=2019, year_max=2020, subject_ids=[p])
+        subs = {c[0] for c in cells}
+        assert subs == {p}                       # only the chosen subject
+        assert m not in subs and len(cells) == 2  # 1 subject × 2 years
+
+
+def test_harvest_records_completeness(app, monkeypatch):
+    import utils.aloc as aloc
+    from models import MockJAMBHarvestCell
+    sid = _subject(app, 'Economics')          # untouched by other ALOC tests
+    # import 2 questions and report the year saturated (fully downloaded)
+    batch = [_raw(700 + i, f'C{i}?', 'a', 'b', 'c', 'd', 'a', year='2015') for i in range(2)]
+    seq = {'n': 0}
+    def fake_fetch(*a, **k):
+        seq['n'] += 1
+        return (list(batch) if seq['n'] == 1 else []), None, False
+    monkeypatch.setattr(aloc, 'fetch_batch', fake_fetch)
+    monkeypatch.setattr(aloc, 'import_image', lambda url, **k: url)
+    with app.app_context():
+        st = aloc.start_harvest('utme', year_min=2015, year_max=2015, subject_ids=[sid])
+        st = aloc.harvest_step(['ALOC-a'], max_cells=1)
+        cell = MockJAMBHarvestCell.query.filter_by(subject_id=sid, exam_type='utme', year='2015').first()
+        assert cell is not None and cell.count == 2 and cell.complete is True
+        assert st['status'] == 'done'
+        cov = aloc.subject_coverage(sid)
+        assert any(r['year'] == '2015' and r['complete'] and r['count'] == 2 for r in cov)
