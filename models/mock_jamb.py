@@ -25,6 +25,7 @@ class MockJAMBExam(db.Model):
     duration_minutes = db.Column(db.Integer, default=120)  # the in-app sitting timer
     questions_per_subject = db.Column(db.Integer)  # legacy cap (NULL = use blueprint / all)
     blueprint = db.Column(db.Text)   # optional JSON {subject_key: {section: count}} per-mock override
+    novel_title = db.Column(db.String(150))  # JAMB-approved novel for this mock's English paper
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

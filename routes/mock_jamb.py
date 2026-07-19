@@ -1033,7 +1033,7 @@ def bank():
             sq = sq.filter(MockJAMBQuestion.section == section)
         standalone = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
                                  MockJAMBQuestion.id).all()
-    from utils.aloc import aloc_slug, get_tokens, EXAM_TYPES
+    from utils.aloc import aloc_slug, get_tokens, EXAM_TYPES, harvest_year_max
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
@@ -1041,6 +1041,8 @@ def bank():
                            has_passage_sections=any(s['passage'] for s in sections),
                            aloc_slug=(aloc_slug(subject.name) if subject else None),
                            aloc_token_count=len(get_tokens()), aloc_examtypes=EXAM_TYPES,
+                           aloc_year_max=harvest_year_max(),
+                           novel_section=any(s['section'] == 'novel' for s in sections),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
 
@@ -1285,7 +1287,11 @@ def bank_harvest_start():
     examtype = (request.form.get('examtype') or 'utme').strip()
     if examtype not in ('utme', 'wassce', 'post-utme'):
         examtype = 'utme'
-    state = start_harvest(examtype=examtype)
+    y1 = request.form.get('year_from', type=int)
+    y2 = request.form.get('year_to', type=int)
+    if y1 and y2 and y1 > y2:
+        y1, y2 = y2, y1
+    state = start_harvest(examtype=examtype, year_min=y1, year_max=y2)
     return jsonify(_harvest_public(state))
 
 
@@ -1382,6 +1388,32 @@ def bank_import():
         msg += f' Skipped {skipped} malformed line(s).'
     flash(msg, 'success' if added else 'warning')
     return redirect(_bank_url(subject_id, default_section))
+
+
+@mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_assign_novel():
+    """Tag the bank's Novel-section questions for a subject with a novel title
+    (stored in ``topic``), so a mock naming that novel serves only these."""
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Choose a subject first.', 'error')
+        return redirect(_bank_url(subject_id))
+    novel = (request.form.get('novel_title') or '').strip()
+    q = MockJAMBQuestion.query.filter_by(
+        subject_id=subject_id, mock_exam_id=None, section='novel')
+    if request.form.get('scope') == 'untagged':
+        q = q.filter(db.or_(MockJAMBQuestion.topic.is_(None), MockJAMBQuestion.topic == ''))
+    n = 0
+    for row in q.all():
+        row.topic = novel or None
+        n += 1
+    db.session.commit()
+    flash(f'Tagged {n} novel question(s) with “{novel}”.' if novel
+          else f'Cleared the novel tag on {n} question(s).', 'success')
+    return redirect(_bank_url(subject_id, 'novel'))
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/questions')
@@ -1712,6 +1744,7 @@ def exam_blueprint(exam_id):
                 if n != s['count']:               # only store real deviations
                     override.setdefault(subj_key, {})[s['section']] = n
         exam.blueprint = json.dumps(override) if override else None
+        exam.novel_title = (request.form.get('novel_title') or '').strip() or None
         db.session.commit()
         flash('Blueprint saved.' if override else 'Reset to the JAMB default.', 'success')
         return redirect(url_for('mock_jamb.exam_blueprint', exam_id=exam_id))
@@ -1732,7 +1765,13 @@ def exam_blueprint(exam_id):
                               'total': sum(x['count'] for x in secs),
                               'default_total': sum(x['default'] for x in secs),
                               'sections': secs, 'customised': subj_key in current})
+    # Well-known JAMB recommended novels (suggestions; the field is free text).
+    known_novels = ['The Life Changer — Khadija Abubakar Jalli',
+                    'Sweet Sixteen — Bolaji Abdullahi',
+                    'In Dependence — Sarah Ladipo Manyika',
+                    'The Last Days at Forcados High School — A.H. Mohammed']
     return render_template('mock_jamb/blueprint.html', exam=exam, subjects=subjects_view,
+                           novel_title=exam.novel_title or '', known_novels=known_novels,
                            urls={'questions': url_for('mock_jamb.questions', exam_id=exam.id),
                                  'bank': url_for('mock_jamb.bank'),
                                  'view': url_for('mock_jamb.view_exam', exam_id=exam.id),

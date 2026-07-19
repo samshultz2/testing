@@ -149,6 +149,15 @@ def subject_items(exam, subject_id, attempt):
         questions_by_section = {}
         for q in standalone:
             questions_by_section.setdefault(q.section or '', []).append(q)
+        # Novel section: serve only questions from THIS mock's approved novel, so
+        # each year's paper tests the correct JAMB-recommended text. Questions are
+        # tagged with the novel in their ``topic``. If the mock names no novel, any
+        # novel question is eligible.
+        novel = (getattr(exam, 'novel_title', None) or '').strip().lower()
+        if novel and questions_by_section.get('novel'):
+            questions_by_section['novel'] = [
+                q for q in questions_by_section['novel']
+                if (q.topic or '').strip().lower() == novel]
         items, served = draw_paper(bp, passages_by_section, questions_by_section, rng)
         if served:
             return items, served

@@ -3624,6 +3624,13 @@
 ]
 ],
 [
+"mock_jamb.bank_assign_novel",
+"/mock-jamb/bank/assign-novel",
+[
+"POST"
+]
+],
+[
 "mock_jamb.bank_delete_passage",
 "/mock-jamb/bank/passage/<int:passage_id>/delete",
 [

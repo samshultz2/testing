@@ -286,6 +286,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN questions_per_subject INTEGER')
         if 'blueprint' not in mj_cols:
             statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN blueprint TEXT')
+        if 'novel_title' not in mj_cols:
+            statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN novel_title VARCHAR(150)')
     except Exception:
         pass
 

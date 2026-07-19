@@ -54,7 +54,11 @@
         <div class="form-row" style="align-items:flex-end;">
             <div class="form-group"><label class="form-label">Exam type</label>
                 <select id="hvExamtype" class="form-control">{% for t in aloc_examtypes %}<option value="{{ t }}">{{ t|upper }}</option>{% endfor %}</select></div>
-            <div class="form-group" style="flex:1;min-width:200px;"><label class="form-label">Extra tokens (optional, one per line)</label>
+            <div class="form-group"><label class="form-label">Start year</label>
+                <input type="number" id="hvYearFrom" class="form-control" value="2001" min="1990" max="2035" style="width:100px;"></div>
+            <div class="form-group"><label class="form-label">End year</label>
+                <input type="number" id="hvYearTo" class="form-control" value="{{ aloc_year_max }}" min="1990" max="2035" style="width:100px;"></div>
+            <div class="form-group" style="flex:1;min-width:180px;"><label class="form-label">Extra tokens (optional, one per line)</label>
                 <textarea id="hvTokens" class="form-control" rows="1" placeholder="{{ aloc_token_count ~ ' saved — add more for higher daily limits' if aloc_token_count else 'ALOC-xxxxxxxx' }}" style="font-family:monospace;"></textarea></div>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;">
@@ -262,6 +266,31 @@
 </div>
 {% endfor %}
 
+{# ---- Novel tagging (English Novel section) ---- #}
+{% if section == 'novel' %}
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
+    <div class="card-header"><h3><i class="fas fa-book"></i> Assign the approved novel</h3></div>
+    <div class="card-body">
+        <p class="text-sm text-muted">Tag these Novel-section questions with the JAMB-approved novel they belong to. A mock that names this novel (in its Paper blueprint) will draw its Novel questions <strong>only</strong> from the matching set — so each year's paper tests the correct text.</p>
+        <form method="post" action="{{ url_for('mock_jamb.bank_assign_novel') }}" style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <div class="form-group mb-0" style="flex:1;min-width:240px;"><label class="form-label">Novel title</label>
+                <input type="text" name="novel_title" list="novelList" class="form-control" placeholder="e.g. The Life Changer — Khadija Abubakar Jalli" required>
+                <datalist id="novelList">
+                    <option value="The Life Changer — Khadija Abubakar Jalli"></option>
+                    <option value="Sweet Sixteen — Bolaji Abdullahi"></option>
+                    <option value="In Dependence — Sarah Ladipo Manyika"></option>
+                    <option value="The Last Days at Forcados High School — A.H. Mohammed"></option>
+                </datalist></div>
+            <div class="form-group mb-0"><label class="form-label">Apply to</label>
+                <select name="scope" class="form-control"><option value="untagged">Untagged only</option><option value="all">All novel questions</option></select></div>
+            <button class="btn btn-primary"><i class="fas fa-tag"></i> Assign novel</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 {# ---- Stand-alone questions ---- #}
 <div class="card">
     <div class="card-header"><h3><i class="fas fa-list-ol"></i> Stand-alone questions ({{ standalone|length }}){% if section %} · {{ section|replace('_',' ')|title }}{% endif %}</h3></div>
@@ -327,6 +356,8 @@
     elStart.addEventListener('click', function(){
         var body = '_csrf_token=' + encodeURIComponent(CSRF)
             + '&examtype=' + encodeURIComponent(document.getElementById('hvExamtype').value)
+            + '&year_from=' + encodeURIComponent(document.getElementById('hvYearFrom').value || '')
+            + '&year_to=' + encodeURIComponent(document.getElementById('hvYearTo').value || '')
             + '&remember=1&tokens=' + encodeURIComponent(document.getElementById('hvTokens').value || '');
         elError.textContent = '';
         post(U.start, body).then(function(s){

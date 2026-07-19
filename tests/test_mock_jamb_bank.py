@@ -207,3 +207,32 @@ def test_blueprint_editor_saves_override(app):
         att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(att); db.session.flush()
         _items, served = subject_items(exam, subj_id, att)
         assert len(served) == 10
+
+
+def test_novel_section_draws_only_approved_novel(app):
+    """The English Novel section serves only questions tagged with the mock's
+    approved novel (novel_title), so each year tests the correct text."""
+    from utils.mock_jamb_sitting import subject_items
+    with app.app_context():
+        _SEQ[0] += 1
+        bid = Branch.get_default().id
+        eng = Subject.query.filter_by(name='English Language').first() or Subject(name='English Language', is_active=True)
+        db.session.add(eng); db.session.flush()
+        def nq(i, novel):
+            db.session.add(MockJAMBQuestion(
+                mock_exam_id=None, subject_id=eng.id, section='novel', topic=novel,
+                question_text=f'Novel Q{i} {novel}', option_a='a', option_b='b',
+                option_c='c', option_d='d', correct_option='A', marks=1, order=i))
+        for i in range(4): nq(i, 'The Life Changer')
+        for i in range(4, 8): nq(i, 'Sweet Sixteen')
+        s = AcademicSession(name=f'NOV-{_SEQ[0]}'); db.session.add(s); db.session.flush()
+        ex = MockJAMBExam(name='Novel mock', exam_number=1, session_id=s.id,
+                          exam_date=date(2025, 3, 1), branch_id=bid, is_published=True,
+                          novel_title='The Life Changer')
+        db.session.add(ex); db.session.flush()
+        att = MockJAMBAttempt(mock_exam_id=ex.id, student_id=1); db.session.add(att); db.session.flush()
+        _items, served = subject_items(ex, eng.id, att)
+        got = MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(served)).all()
+        novels = {q.topic for q in got if q.section == 'novel'}
+        assert novels == {'The Life Changer'}          # never serves Sweet Sixteen
+        assert len([q for q in got if q.section == 'novel']) == 4

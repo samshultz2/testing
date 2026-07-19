@@ -29,6 +29,17 @@
 
 <form method="post" action="{{ urls.self }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    <div class="bp-card" style="margin-bottom:1rem;">
+        <div class="bp-head"><span class="t"><i class="fas fa-book"></i> Recommended Novel (English)</span></div>
+        <div style="padding:.7rem .9rem;">
+            <input type="text" name="novel_title" list="novelList" value="{{ novel_title }}" class="form-control"
+                   placeholder="e.g. The Life Changer — Khadija Abubakar Jalli">
+            <datalist id="novelList">{% for n in known_novels %}<option value="{{ n }}"></option>{% endfor %}</datalist>
+            <p class="text-muted text-sm" style="margin:.4rem 0 0;">The JAMB-approved novel for this mock. The English paper's Novel section will draw <strong>only</strong> from bank questions tagged with this exact title (a novel question's tag is its <em>topic</em>). Leave blank to allow any novel question. Set the same title on the questions in the Question Bank (filter the Novel section → “Assign novel”).</p>
+        </div>
+    </div>
+
     <div class="bp-grid">
         {% for s in subjects %}
         <div class="bp-card">
