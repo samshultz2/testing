@@ -120,6 +120,14 @@
     <div class="card-header"><h3><i class="fas fa-calendar-check"></i> ALOC download coverage <span class="text-muted text-sm">— {{ subject.name }}, by year</span></h3></div>
     <div class="card-body">
         {% if year_coverage %}
+        {% set yc_complete = year_coverage|selectattr('complete')|list|length %}
+        {% set yc_questions = year_coverage|sum(attribute='count') %}
+        <div style="display:flex;gap:1.2rem;flex-wrap:wrap;align-items:baseline;margin-bottom:.7rem;padding:.5rem .7rem;background:var(--gray-50);border-radius:var(--radius-md);">
+            <span><strong style="font-size:1.15rem;">{{ subject.name }}</strong></span>
+            <span><strong style="color:#047857;">{{ yc_complete }}</strong> / {{ year_coverage|length }} year(s) complete</span>
+            <span><strong>{{ yc_questions }}</strong> ALOC question(s) downloaded</span>
+            {% if yc_complete < year_coverage|length %}<span class="text-sm" style="color:#b45309;"><i class="fas fa-hourglass-half"></i> {{ year_coverage|length - yc_complete }} year(s) still partial</span>{% endif %}
+        </div>
         <div class="cov-grid">
             {% for r in year_coverage %}
             <div class="cov {{ '' if r.complete else 'short' }}" title="{{ 'Fully downloaded' if r.complete else 'Partly downloaded — keep harvesting this year' }}">
