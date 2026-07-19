@@ -127,9 +127,38 @@
 </div>
 {%- endmacro %}
 
+{# ---- Import from ALOC questions API ---- #}
+{% if aloc_slug %}
+<details class="card" style="margin-bottom:1rem;" {{ 'open' if coverage and coverage.total == 0 else '' }}>
+    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-cloud-arrow-down"></i> Import from ALOC <span class="text-muted text-sm">— questions.aloc.com.ng</span></h3></summary>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('mock_jamb.bank_import_aloc') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <p class="text-sm text-muted">Pulls past-question objectives for <strong>{{ subject.name }}</strong> (ALOC subject: <code>{{ aloc_slug }}</code>) into the bank. ALOC has no topics/sub-topics, so imported questions come in untagged — set a default section below or tag them afterwards.</p>
+            <div class="form-row">
+                <div class="form-group" style="flex:2;min-width:220px;"><label class="form-label">ALOC access token {% if aloc_has_token %}<span class="text-success text-sm">(saved — leave blank to reuse)</span>{% endif %}</label>
+                    <input type="password" name="token" class="form-control" placeholder="{{ 'Using saved token' if aloc_has_token else 'ALOC-xxxxxxxx' }}" autocomplete="off"></div>
+                <div class="form-group"><label class="form-label">Exam type</label>
+                    <select name="examtype" class="form-control">{% for t in aloc_examtypes %}<option value="{{ t }}">{{ t|upper }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label class="form-label">Year (optional)</label><input type="number" name="year" class="form-control" placeholder="any" min="1990" max="2030"></div>
+                <div class="form-group"><label class="form-label">How many</label><input type="number" name="count" class="form-control" value="40" min="1" max="200"></div>
+                <div class="form-group"><label class="form-label">Default section</label>
+                    <select name="default_section" class="form-control"><option value="">— Untagged —</option>
+                        {% for s in sections %}<option value="{{ s.section }}" {{ 'selected' if section == s.section else '' }}>{{ s.label }}</option>{% endfor %}</select></div>
+            </div>
+            <label class="text-sm" style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.6rem;">
+                <input type="checkbox" name="remember" value="1" {{ 'checked' if not aloc_has_token else '' }}> Remember this token for future imports</label>
+            <div><button class="btn btn-primary"><i class="fas fa-cloud-arrow-down"></i> Import from ALOC</button></div>
+            <p class="text-sm text-muted" style="margin-top:.5rem;"><i class="fas fa-circle-info"></i> ALOC returns random batches; import may take a few seconds. Re-run to fetch more — already-imported questions are skipped. English mixes all sections in one feed, so import untagged and sort by section afterwards.</p>
+        </form>
+    </div>
+</details>
+{% endif %}
+
 {# ---- Bulk import ---- #}
 <details class="card" style="margin-bottom:1rem;">
-    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-file-import"></i> Bulk import questions</h3></summary>
+    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-file-import"></i> Bulk import questions <span class="text-muted text-sm">(paste)</span></h3></summary>
     <div class="card-body">
         <form method="post" action="{{ url_for('mock_jamb.bank_import') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -149,7 +178,8 @@
     </div>
 </details>
 
-{# ---- Add a passage ---- #}
+{# ---- Add a passage (only subjects that actually use passages, e.g. English) ---- #}
+{% if has_passage_sections %}
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-align-left"></i> Add a passage (comprehension / cloze / summary / oral)</h3></div>
     <div class="card-body">
@@ -175,6 +205,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 {# ---- Existing passages with their questions ---- #}
 {% for grp in passages %}

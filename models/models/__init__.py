@@ -298,6 +298,10 @@ def _ensure_student_exam_columns():
             statements.append("ALTER TABLE mock_jamb_questions ADD COLUMN exam_body VARCHAR(10) DEFAULT 'JAMB'")
         if 'difficulty' not in mq_cols:
             statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN difficulty VARCHAR(10)')
+        if 'source' not in mq_cols:
+            statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN source VARCHAR(20)')
+        if 'source_ref' not in mq_cols:
+            statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN source_ref VARCHAR(40)')
     except Exception:
         pass
     try:

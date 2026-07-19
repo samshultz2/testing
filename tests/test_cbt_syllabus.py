@@ -117,7 +117,9 @@ def test_seed_all_subjects(app):
 
 
 def test_delete_topic_cascades_subtopics(app):
-    sid = _subject(app, 'Biology')
+    # A subject with no bundled syllabus, so seed-all in another test can't add a
+    # colliding 'Ecology' topic (the DB is shared across tests).
+    sid = _subject(app, 'Further Mathematics')
     with app.app_context():
         t = SyllabusTopic(subject_id=sid, title='Ecology'); db.session.add(t); db.session.flush()
         db.session.add(SyllabusTopic(subject_id=sid, parent_id=t.id, title='Food chains'))
@@ -126,7 +128,7 @@ def test_delete_topic_cascades_subtopics(app):
     r = c.post(f'/cbt/syllabus/{tid}/delete', data={'_csrf_token': tok}, follow_redirects=True)
     assert r.status_code == 200
     with app.app_context():
-        assert SyllabusTopic.query.filter_by(subject_id=sid, title='Ecology').first() is None
+        assert db.session.get(SyllabusTopic, tid) is None            # topic gone
         assert SyllabusTopic.query.filter_by(subject_id=sid, title='Food chains').first() is None
 
 

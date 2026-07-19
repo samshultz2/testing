@@ -3660,6 +3660,13 @@
 ]
 ],
 [
+"mock_jamb.bank_import_aloc",
+"/mock-jamb/bank/import-aloc",
+[
+"POST"
+]
+],
+[
 "mock_jamb.bulk_entry",
 "/mock-jamb/exam/<int:exam_id>/results/bulk",
 [

@@ -418,6 +418,8 @@ class MockJAMBQuestion(db.Model):
     section = db.Column(db.String(40))           # JAMB paper section (drives the blueprint draw)
     exam_body = db.Column(db.String(10), default='JAMB')   # JAMB / WAEC / Both
     difficulty = db.Column(db.String(10))        # optional: easy / medium / hard
+    source = db.Column(db.String(20))            # provenance, e.g. 'aloc' / 'manual' / 'import'
+    source_ref = db.Column(db.String(40))        # external id (dedupe imports, e.g. ALOC question id)
     topic = db.Column(db.String(100))
     subtopic = db.Column(db.String(120))
     question_text = db.Column(db.Text, nullable=False)
