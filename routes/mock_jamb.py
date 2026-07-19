@@ -1033,14 +1033,14 @@ def bank():
             sq = sq.filter(MockJAMBQuestion.section == section)
         standalone = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
                                  MockJAMBQuestion.id).all()
-    from utils.aloc import aloc_slug, get_token, EXAM_TYPES
+    from utils.aloc import aloc_slug, get_tokens, EXAM_TYPES
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
                            topic_tree=_subject_topic_tree(subject_id),
                            has_passage_sections=any(s['passage'] for s in sections),
                            aloc_slug=(aloc_slug(subject.name) if subject else None),
-                           aloc_has_token=bool(get_token()), aloc_examtypes=EXAM_TYPES,
+                           aloc_token_count=len(get_tokens()), aloc_examtypes=EXAM_TYPES,
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
 
@@ -1211,8 +1211,9 @@ def bank_delete_question(question_id):
 @login_required
 @csrf_protect
 def bank_import_aloc():
-    """Pull questions for one subject from the ALOC questions API into the bank."""
-    from utils.aloc import import_questions, save_token, get_token, aloc_slug, EXAM_TYPES
+    """Pull questions for one subject from the ALOC questions API into the bank,
+    rotating across one or more access tokens on exhaustion."""
+    from utils.aloc import import_questions, save_tokens, get_tokens, parse_tokens, aloc_slug, EXAM_TYPES
     subject_id = request.form.get('subject_id', type=int)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     if not subject:
@@ -1221,20 +1222,20 @@ def bank_import_aloc():
     if not aloc_slug(subject.name):
         flash(f'ALOC does not serve {subject.name}. Use bulk paste import instead.', 'warning')
         return redirect(_bank_url(subject_id))
-    token = (request.form.get('token') or '').strip() or get_token()
-    if not token:
-        flash('Enter your ALOC access token to import.', 'error')
+    tokens = parse_tokens(request.form.get('tokens') or '') or get_tokens()
+    if not tokens:
+        flash('Enter at least one ALOC access token to import.', 'error')
         return redirect(_bank_url(subject_id))
     if request.form.get('remember'):
-        save_token(token)
+        save_tokens(tokens)
     examtype = (request.form.get('examtype') or 'utme').strip()
     if examtype not in EXAM_TYPES:
         examtype = 'utme'
     year = (request.form.get('year') or '').strip() or None
     target = request.form.get('count', type=int) or 40
-    target = max(1, min(target, 200))
+    target = max(1, min(target, 300))
     default_section = _valid_section(subject, (request.form.get('default_section') or '').strip())
-    res = import_questions(subject_id, subject.name, token, examtype=examtype, year=year,
+    res = import_questions(subject_id, subject.name, tokens, examtype=examtype, year=year,
                            target=target, default_section=default_section)
     if res.get('error') and not res.get('added'):
         flash(f"ALOC import failed: {res['error']}", 'error')
@@ -1245,10 +1246,12 @@ def bank_import_aloc():
             extra.append(f"{res['duplicates']} already in bank")
         if res.get('skipped'):
             extra.append(f"{res['skipped']} skipped (5-option/incomplete)")
+        if res.get('tokens_total', 0) > 1:
+            extra.append(f"{res['tokens_used']}/{res['tokens_total']} token(s) used")
         if extra:
             msg += ' (' + ', '.join(extra) + ')'
         if res.get('error'):
-            msg += f". Stopped early: {res['error']}"
+            msg += f". Note: {res['error']}"
         flash(msg + '.', 'success' if res['added'] else 'info')
     return redirect(_bank_url(subject_id, default_section))
 

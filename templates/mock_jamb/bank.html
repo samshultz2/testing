@@ -123,7 +123,7 @@
     </div>
     {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure" style="max-height:130px;margin:.4rem 0;border-radius:var(--radius-sm);">{% endif %}
     {% for opt, val in q.options %}{% if val %}<div class="qopt {{ 'correct' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
-    <div class="mjq-meta">{{ q.marks }} mark(s){% if q.section %} · <span class="badge-sec">{{ q.section|replace('_',' ')|title }}</span>{% endif %}{% if q.exam_body %} · {{ q.exam_body }}{% endif %}{% if q.difficulty %} · {{ q.difficulty|title }}{% endif %}{% if q.topic %} · <span class="badge-topic">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}</div>
+    <div class="mjq-meta">{{ q.marks }} mark(s){% if q.section %} · <span class="badge-sec">{{ q.section|replace('_',' ')|title }}</span>{% endif %}{% if q.exam_body %} · {{ q.exam_body }}{% endif %}{% if q.exam_year %} · {{ q.exam_year }}{% endif %}{% if q.source %} · <span class="badge-topic">{{ q.source|upper }}</span>{% endif %}{% if q.difficulty %} · {{ q.difficulty|title }}{% endif %}{% if q.topic %} · <span class="badge-topic">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}</div>
 </div>
 {%- endmacro %}
 
@@ -135,22 +135,25 @@
         <form method="post" action="{{ url_for('mock_jamb.bank_import_aloc') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
-            <p class="text-sm text-muted">Pulls past-question objectives for <strong>{{ subject.name }}</strong> (ALOC subject: <code>{{ aloc_slug }}</code>) into the bank. ALOC has no topics/sub-topics, so imported questions come in untagged — set a default section below or tag them afterwards.</p>
+            <p class="text-sm text-muted">Pulls past-question objectives for <strong>{{ subject.name }}</strong> (ALOC subject: <code>{{ aloc_slug }}</code>) into the bank. Each question keeps its <strong>year</strong>, any <strong>image</strong> is re-hosted here, and duplicates are skipped. ALOC has no topics/sub-topics, so imports come in untagged — set a default section below or tag them afterwards (topic/sub-topic are optional; the JAMB draw uses the section).</p>
+            <div class="form-group">
+                <label class="form-label">ALOC access token(s) — one per line {% if aloc_token_count %}<span class="text-success text-sm">({{ aloc_token_count }} saved — leave blank to reuse)</span>{% endif %}</label>
+                <textarea name="tokens" class="form-control" rows="2" placeholder="{{ 'Using saved token(s)' if aloc_token_count else 'ALOC-xxxxxxxx' }}&#10;ALOC-another-token (optional, used if the first is exhausted)" autocomplete="off" style="font-family:monospace;"></textarea>
+                <span class="text-muted text-sm">Add several tokens to fail over automatically when one hits its daily limit.</span>
+            </div>
             <div class="form-row">
-                <div class="form-group" style="flex:2;min-width:220px;"><label class="form-label">ALOC access token {% if aloc_has_token %}<span class="text-success text-sm">(saved — leave blank to reuse)</span>{% endif %}</label>
-                    <input type="password" name="token" class="form-control" placeholder="{{ 'Using saved token' if aloc_has_token else 'ALOC-xxxxxxxx' }}" autocomplete="off"></div>
                 <div class="form-group"><label class="form-label">Exam type</label>
                     <select name="examtype" class="form-control">{% for t in aloc_examtypes %}<option value="{{ t }}">{{ t|upper }}</option>{% endfor %}</select></div>
                 <div class="form-group"><label class="form-label">Year (optional)</label><input type="number" name="year" class="form-control" placeholder="any" min="1990" max="2030"></div>
-                <div class="form-group"><label class="form-label">How many</label><input type="number" name="count" class="form-control" value="40" min="1" max="200"></div>
+                <div class="form-group"><label class="form-label">How many</label><input type="number" name="count" class="form-control" value="40" min="1" max="300"></div>
                 <div class="form-group"><label class="form-label">Default section</label>
                     <select name="default_section" class="form-control"><option value="">— Untagged —</option>
                         {% for s in sections %}<option value="{{ s.section }}" {{ 'selected' if section == s.section else '' }}>{{ s.label }}</option>{% endfor %}</select></div>
             </div>
             <label class="text-sm" style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.6rem;">
-                <input type="checkbox" name="remember" value="1" {{ 'checked' if not aloc_has_token else '' }}> Remember this token for future imports</label>
+                <input type="checkbox" name="remember" value="1" {{ 'checked' if not aloc_token_count else '' }}> Remember these tokens for future imports</label>
             <div><button class="btn btn-primary"><i class="fas fa-cloud-arrow-down"></i> Import from ALOC</button></div>
-            <p class="text-sm text-muted" style="margin-top:.5rem;"><i class="fas fa-circle-info"></i> ALOC returns random batches; import may take a few seconds. Re-run to fetch more — already-imported questions are skipped. English mixes all sections in one feed, so import untagged and sort by section afterwards.</p>
+            <p class="text-sm text-muted" style="margin-top:.5rem;"><i class="fas fa-circle-info"></i> ALOC returns random batches; import may take a few seconds. Re-run to fetch more — already-imported questions (by id and by text) are skipped. English mixes all sections in one feed, so import untagged and sort by section afterwards.</p>
         </form>
     </div>
 </details>

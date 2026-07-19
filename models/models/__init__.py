@@ -302,6 +302,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN source VARCHAR(20)')
         if 'source_ref' not in mq_cols:
             statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN source_ref VARCHAR(40)')
+        if 'exam_year' not in mq_cols:
+            statements.append('ALTER TABLE mock_jamb_questions ADD COLUMN exam_year VARCHAR(8)')
     except Exception:
         pass
     try:

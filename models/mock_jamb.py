@@ -420,6 +420,7 @@ class MockJAMBQuestion(db.Model):
     difficulty = db.Column(db.String(10))        # optional: easy / medium / hard
     source = db.Column(db.String(20))            # provenance, e.g. 'aloc' / 'manual' / 'import'
     source_ref = db.Column(db.String(40))        # external id (dedupe imports, e.g. ALOC question id)
+    exam_year = db.Column(db.String(8))          # the past-question year, when known (e.g. '2018')
     topic = db.Column(db.String(100))
     subtopic = db.Column(db.String(120))
     question_text = db.Column(db.Text, nullable=False)
