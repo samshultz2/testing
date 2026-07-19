@@ -1256,6 +1256,83 @@ def bank_import_aloc():
     return redirect(_bank_url(subject_id, default_section))
 
 
+def _harvest_public(state):
+    """Trim the internal state to what the UI needs (drops the big cells list)."""
+    if not state:
+        return {'status': 'none'}
+    total = state.get('total_cells') or 0
+    pos = state.get('pos') or 0
+    return {'status': state.get('status', 'none'), 'examtype': state.get('examtype'),
+            'total_cells': total, 'pos': pos,
+            'percent': (round(100 * pos / total, 1) if total else 0),
+            'added': state.get('added', 0), 'duplicates': state.get('duplicates', 0),
+            'skipped': state.get('skipped', 0), 'current': state.get('current'),
+            'per_subject': state.get('per_subject', {}), 'exhausted': state.get('exhausted', False),
+            'last_error': state.get('last_error', ''), 'updated_at': state.get('updated_at')}
+
+
+@mock_jamb_bp.route('/bank/harvest/start', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_harvest_start():
+    """Begin (or restart) a full ALOC harvest across every ALOC subject & year."""
+    from utils.aloc import start_harvest, get_tokens, save_tokens, parse_tokens
+    tokens = parse_tokens(request.form.get('tokens') or '')
+    if tokens and request.form.get('remember'):
+        save_tokens(tokens)
+    if not (tokens or get_tokens()):
+        return jsonify({'error': 'Add at least one ALOC access token first.'}), 400
+    examtype = (request.form.get('examtype') or 'utme').strip()
+    if examtype not in ('utme', 'wassce', 'post-utme'):
+        examtype = 'utme'
+    state = start_harvest(examtype=examtype)
+    return jsonify(_harvest_public(state))
+
+
+@mock_jamb_bp.route('/bank/harvest/step', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_harvest_step():
+    """Advance the harvest by one (subject, year) cell. The JS chunker calls this
+    repeatedly until status is 'done' or 'paused'."""
+    from utils.aloc import harvest_step, get_tokens
+    state = harvest_step(get_tokens(), max_cells=1)
+    return jsonify(_harvest_public(state))
+
+
+@mock_jamb_bp.route('/bank/harvest/stop', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_harvest_stop():
+    from utils.aloc import get_harvest_state, save_harvest_state
+    state = get_harvest_state()
+    if state and state.get('status') == 'running':
+        state['status'] = 'paused'
+        save_harvest_state(state)
+    return jsonify(_harvest_public(state))
+
+
+@mock_jamb_bp.route('/bank/harvest/resume', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_harvest_resume():
+    from utils.aloc import get_harvest_state, save_harvest_state, get_tokens
+    if not get_tokens():
+        return jsonify({'error': 'Add at least one ALOC access token first.'}), 400
+    state = get_harvest_state()
+    if state and state.get('status') == 'paused':
+        state['status'] = 'running'; state['exhausted'] = False; state['last_error'] = ''
+        save_harvest_state(state)
+    return jsonify(_harvest_public(state))
+
+
+@mock_jamb_bp.route('/bank/harvest/status')
+@login_required
+def bank_harvest_status():
+    from utils.aloc import get_harvest_state
+    return jsonify(_harvest_public(get_harvest_state()))
+
+
 @mock_jamb_bp.route('/bank/import', methods=['POST'])
 @login_required
 @csrf_protect

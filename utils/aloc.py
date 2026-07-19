@@ -206,13 +206,20 @@ def fetch_batch(token, slug, examtype='utme', year=None, timeout=45):
 # ---------------------------------------------------------------------------
 
 def import_questions(subject_id, subject_name, tokens, examtype='utme', year=None,
-                     target=40, default_section=None, max_batches=12):
+                     target=40, default_section=None, max_batches=12, saturation=3,
+                     fetch_images=True, time_budget=None):
     """Import up to ``target`` new ALOC questions for a subject into the bank,
     rotating across ``tokens`` on rejection/exhaustion.
 
-    Returns ``{added, skipped, duplicates, tokens_used, tokens_total, slug, error}``.
-    De-dupes by ALOC id and by question text, against the existing bank and within
-    this run.
+    Because ALOC returns a random batch each poll, we keep polling until we have
+    ``target`` new questions OR ``saturation`` consecutive batches add nothing new
+    (the pool is exhausted) OR ``max_batches`` is hit. Set a large ``target`` +
+    saturation to harvest a whole (subject, year) exhaustively.
+
+    Returns ``{added, skipped, duplicates, tokens_used, tokens_total, slug,
+    error, exhausted}``; ``exhausted`` is True when every token was rejected
+    (so a caller can pause and resume with fresh tokens). De-dupes by ALOC id and
+    by question text, against the existing bank and within this run.
     """
     from sqlalchemy import func
     from models import db, MockJAMBQuestion
@@ -220,11 +227,13 @@ def import_questions(subject_id, subject_name, tokens, examtype='utme', year=Non
     slug = aloc_slug(subject_name)
     if not slug:
         return {'added': 0, 'skipped': 0, 'duplicates': 0, 'tokens_used': 0,
-                'tokens_total': 0, 'slug': None, 'error': f'ALOC does not serve “{subject_name}”.'}
+                'tokens_total': 0, 'slug': None, 'exhausted': False,
+                'error': f'ALOC does not serve “{subject_name}”.'}
     tokens = [t for t in (tokens if isinstance(tokens, list) else parse_tokens(tokens)) if t]
     if not tokens:
         return {'added': 0, 'skipped': 0, 'duplicates': 0, 'tokens_used': 0,
-                'tokens_total': 0, 'slug': slug, 'error': 'No ALOC access token provided.'}
+                'tokens_total': 0, 'slug': slug, 'exhausted': False,
+                'error': 'No ALOC access token provided.'}
 
     existing = MockJAMBQuestion.query.filter_by(
         subject_id=subject_id, mock_exam_id=None).all()
@@ -233,27 +242,32 @@ def import_questions(subject_id, subject_name, tokens, examtype='utme', year=Non
     order = db.session.query(func.coalesce(func.max(MockJAMBQuestion.order), 0)).filter(
         MockJAMBQuestion.mock_exam_id.is_(None), MockJAMBQuestion.subject_id == subject_id).scalar()
 
+    import time as _time
     added = skipped = duplicates = 0
     exam_body = 'WAEC' if examtype == 'wassce' else 'JAMB'
     ti = 0                       # current token index
     tokens_used = set()
     error = None
     batches = 0
+    no_new_streak = 0
+    pool_exhausted = False
+    t0 = _time.monotonic()
     while added < target and ti < len(tokens) and batches < max_batches:
         batches += 1
         token = tokens[ti]
         tokens_used.add(ti)
         items, err, token_bad = fetch_batch(token, slug, examtype, year)
         if token_bad:
-            ti += 1              # rotate to the next token
+            ti += 1              # rotate to the next token (does not count as a poll)
             error = err
             continue
         if err:
             error = err
             break
         if not items:
+            pool_exhausted = True
             break
-        progressed = False
+        added_this = 0
         for raw in items:
             if added >= target:
                 break
@@ -270,19 +284,153 @@ def import_questions(subject_id, subject_name, tokens, examtype='utme', year=Non
             seen_texts.add(ntext)
             order += 1
             added += 1
-            progressed = True
+            added_this += 1
             db.session.add(MockJAMBQuestion(
                 mock_exam_id=None, subject_id=subject_id, section=default_section,
                 exam_body=exam_body, source='aloc', source_ref=norm['ext_id'],
                 exam_year=norm['exam_year'], question_text=norm['question'],
                 option_a=norm['a'], option_b=norm['b'], option_c=norm['c'],
                 option_d=norm['d'], correct_option=norm['correct'],
-                image_url=import_image(norm['image']), marks=1, order=order))
-        # A batch that yielded nothing genuinely new (all dup/skip) still means the
-        # token works; keep polling for fresh random batches until max_batches.
-        if not progressed and duplicates == 0 and skipped == 0:
+                image_url=(import_image(norm['image']) if fetch_images else norm['image']),
+                marks=1, order=order))
+        # Stop once the pool looks exhausted: N consecutive batches added nothing new.
+        no_new_streak = no_new_streak + 1 if added_this == 0 else 0
+        if no_new_streak >= saturation:
+            pool_exhausted = True
             break
+        if time_budget and (_time.monotonic() - t0) > time_budget:
+            break                # bail this request; caller re-runs the same cell
     db.session.commit()
+    exhausted = ti >= len(tokens) and added < target   # rotated past the last token
+    # "saturated" = this (subject, year) pool is fully harvested (nothing left).
+    saturated = pool_exhausted or added >= target
     return {'added': added, 'skipped': skipped, 'duplicates': duplicates,
             'tokens_used': len(tokens_used), 'tokens_total': len(tokens),
-            'slug': slug, 'error': error}
+            'slug': slug, 'error': error, 'exhausted': exhausted, 'saturated': saturated}
+
+
+# ---------------------------------------------------------------------------
+# bulk harvest — pull EVERY question for every subject/year, resumably
+# ---------------------------------------------------------------------------
+HARVEST_STATE_KEY = 'aloc_harvest_state'
+HARVEST_YEAR_MIN = 2001
+
+
+def harvest_year_max():
+    import datetime
+    return datetime.datetime.now().year
+
+
+def harvest_subjects():
+    """Active subjects (id, name) that ALOC serves, ordered — English first."""
+    from models import Subject
+    rows = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+    out = [(s.id, s.name) for s in rows if aloc_slug(s.name)]
+    out.sort(key=lambda t: (aloc_slug(t[1]) != 'english', t[1].lower()))
+    return out
+
+
+def build_harvest_cells(examtype='utme', year_min=None, year_max=None):
+    """The full work queue: one (subject_id, subject_name, year) cell per subject
+    and year, newest year first so recent papers land first."""
+    year_min = year_min or HARVEST_YEAR_MIN
+    year_max = year_max or harvest_year_max()
+    cells = []
+    for sid, name in harvest_subjects():
+        for y in range(year_max, year_min - 1, -1):
+            cells.append([sid, name, y])
+    return cells
+
+
+def get_harvest_state():
+    from models import SchoolSettings
+    try:
+        return SchoolSettings.get(HARVEST_STATE_KEY) if False else _load_harvest()
+    except Exception:
+        return None
+
+
+def _load_harvest():
+    import json
+    from models import SchoolSettings
+    raw = SchoolSettings.get(HARVEST_STATE_KEY)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def save_harvest_state(state):
+    from models import SchoolSettings
+    import json
+    SchoolSettings.set(HARVEST_STATE_KEY, json.dumps(state), 'string',
+                       'Progress of the ALOC bulk question harvest')
+
+
+def clear_harvest_state():
+    save_harvest_state({})
+
+
+def start_harvest(examtype='utme', year_min=None, year_max=None):
+    """Create (or restart) a harvest job and return its fresh state."""
+    import datetime
+    cells = build_harvest_cells(examtype, year_min, year_max)
+    state = {
+        'status': 'running', 'examtype': examtype,
+        'cells': cells, 'pos': 0, 'total_cells': len(cells),
+        'added': 0, 'duplicates': 0, 'skipped': 0,
+        'per_subject': {}, 'exhausted': False, 'last_error': '',
+        'started_at': datetime.datetime.now().isoformat(timespec='seconds'),
+        'updated_at': datetime.datetime.now().isoformat(timespec='seconds'),
+    }
+    save_harvest_state(state)
+    return state
+
+
+def harvest_step(tokens, max_cells=1):
+    """Process the next ``max_cells`` (subject, year) cell(s) of the harvest,
+    updating and persisting the state. Returns the state. Pauses (status=paused)
+    if all tokens are exhausted so the caller can resume later with fresh tokens."""
+    import datetime
+    state = _load_harvest()
+    if not state or state.get('status') not in ('running',):
+        return state or {}
+    tokens = [t for t in (tokens if isinstance(tokens, list) else parse_tokens(tokens)) if t]
+    if not tokens:
+        state['status'] = 'paused'; state['last_error'] = 'No ALOC access token available.'
+        save_harvest_state(state); return state
+
+    cells = state['cells']
+    done_cells = 0
+    while done_cells < max_cells and state['pos'] < len(cells):
+        sid, name, year = cells[state['pos']]
+        # Each request is bounded (time_budget) so it can't outlast a web timeout;
+        # a cell that isn't fully harvested yet is retried on the next step.
+        res = import_questions(sid, name, tokens, examtype=state['examtype'],
+                               year=str(year), target=200, saturation=3, max_batches=8,
+                               time_budget=25)
+        state['added'] += res['added']
+        state['duplicates'] += res['duplicates']
+        state['skipped'] += res['skipped']
+        if res['added']:
+            state['per_subject'][name] = state['per_subject'].get(name, 0) + res['added']
+        state['current'] = {'subject': name, 'year': year}
+        if res.get('exhausted'):
+            # Ran out of tokens mid-cell — pause WITHOUT advancing so we retry it.
+            state['status'] = 'paused'; state['exhausted'] = True
+            state['last_error'] = 'All access tokens are exhausted — add more tokens or resume later.'
+            state['updated_at'] = datetime.datetime.now().isoformat(timespec='seconds')
+            save_harvest_state(state); return state
+        if res.get('saturated'):
+            state['pos'] += 1        # this (subject, year) is fully harvested
+            done_cells += 1
+        else:
+            break                    # ran out of time budget — resume same cell next step
+
+    state['updated_at'] = datetime.datetime.now().isoformat(timespec='seconds')
+    if state['pos'] >= len(cells):
+        state['status'] = 'done'
+    save_harvest_state(state)
+    return state

@@ -117,3 +117,65 @@ def test_import_route_saves_multiple_tokens(app, monkeypatch):
         assert MockJAMBQuestion.query.filter_by(subject_id=sid, source='aloc').count() == 4
         from utils.aloc import get_tokens
         assert get_tokens() == ['ALOC-one', 'ALOC-two']
+
+
+# --- bulk harvest ---------------------------------------------------------
+
+def test_harvest_cells_and_step(app, monkeypatch):
+    import utils.aloc as aloc
+    _subject(app, 'Physics'); _subject(app, 'Mathematics')
+    with app.app_context():
+        cells = aloc.build_harvest_cells('utme', year_min=2018, year_max=2020)
+        # subjects-with-slug × 3 years each; both Physics & Maths have slugs
+        subs = {c[1] for c in cells}
+        assert 'Physics' in subs and 'Mathematics' in subs
+        per_subject_years = [c for c in cells if c[1] == 'Physics']
+        assert [c[2] for c in per_subject_years] == [2020, 2019, 2018]   # newest first
+
+    # a cell that saturates advances the cursor; each import returns a small pool once
+    calls = {'n': 0}
+    def fake_import(subject_id, subject_name, tokens, **kw):
+        calls['n'] += 1
+        return {'added': 3, 'duplicates': 0, 'skipped': 0, 'tokens_used': 1,
+                'tokens_total': 1, 'slug': 's', 'error': None, 'exhausted': False,
+                'saturated': True}
+    monkeypatch.setattr(aloc, 'import_questions', fake_import)
+    with app.app_context():
+        n = len(aloc.harvest_subjects())              # every ALOC subject in the (shared) DB
+        st = aloc.start_harvest('utme', year_min=2020, year_max=2020)   # n subjects × 1 year
+        assert st['total_cells'] == n and st['pos'] == 0 and n >= 2
+        st = aloc.harvest_step(['ALOC-a'], max_cells=1)
+        assert st['pos'] == 1 and st['added'] == 3 and st['status'] == 'running'
+        for _ in range(n - 1):
+            st = aloc.harvest_step(['ALOC-a'], max_cells=1)
+        assert st['pos'] == n and st['added'] == 3 * n and st['status'] == 'done'
+
+
+def test_harvest_pauses_when_tokens_exhausted(app, monkeypatch):
+    import utils.aloc as aloc
+    _subject(app, 'Physics')
+    monkeypatch.setattr(aloc, 'import_questions', lambda *a, **k: {
+        'added': 0, 'duplicates': 0, 'skipped': 0, 'tokens_used': 1, 'tokens_total': 1,
+        'slug': 's', 'error': 'exhausted', 'exhausted': True, 'saturated': False})
+    with app.app_context():
+        aloc.start_harvest('utme', year_min=2020, year_max=2020)
+        st = aloc.harvest_step(['ALOC-dead'], max_cells=1)
+        assert st['status'] == 'paused' and st['exhausted'] is True
+        assert st['pos'] == 0                       # cell NOT advanced — retried on resume
+
+
+def test_harvest_routes(app, monkeypatch):
+    import utils.aloc as aloc
+    _subject(app, 'Physics')
+    monkeypatch.setattr(aloc, 'import_questions', lambda *a, **k: {
+        'added': 2, 'duplicates': 0, 'skipped': 0, 'tokens_used': 1, 'tokens_total': 1,
+        'slug': 's', 'error': None, 'exhausted': False, 'saturated': True})
+    c = _admin(app); tok = _csrf(c)
+    r = c.post('/mock-jamb/bank/harvest/start', data={
+        '_csrf_token': tok, 'examtype': 'utme', 'tokens': 'ALOC-x', 'remember': '1'})
+    assert r.status_code == 200 and r.get_json()['status'] == 'running'
+    r = c.post('/mock-jamb/bank/harvest/step', data={'_csrf_token': tok})
+    j = r.get_json()
+    assert j['added'] == 2 and j['pos'] == 1
+    r = c.post('/mock-jamb/bank/harvest/stop', data={'_csrf_token': tok})
+    assert r.get_json()['status'] == 'paused'

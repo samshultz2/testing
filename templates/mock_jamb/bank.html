@@ -46,6 +46,35 @@
     </div>
 </form>
 
+{# ---- Bulk harvest: pull every ALOC past question, all subjects & years ---- #}
+<details class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
+    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-warehouse"></i> Harvest ALL past questions <span class="text-muted text-sm">— every ALOC subject &amp; year, resumable</span></h3></summary>
+    <div class="card-body">
+        <p class="text-sm text-muted">Pulls every available ALOC question across all supported subjects and years into the bank, de-duplicated. It runs in resumable steps in your browser — you can stop and resume any time (progress is saved), and it pauses automatically when your tokens hit their daily limit so you can add more or continue tomorrow. Keep this tab open while it runs.</p>
+        <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group"><label class="form-label">Exam type</label>
+                <select id="hvExamtype" class="form-control">{% for t in aloc_examtypes %}<option value="{{ t }}">{{ t|upper }}</option>{% endfor %}</select></div>
+            <div class="form-group" style="flex:1;min-width:200px;"><label class="form-label">Extra tokens (optional, one per line)</label>
+                <textarea id="hvTokens" class="form-control" rows="1" placeholder="{{ aloc_token_count ~ ' saved — add more for higher daily limits' if aloc_token_count else 'ALOC-xxxxxxxx' }}" style="font-family:monospace;"></textarea></div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;">
+            <button type="button" id="hvStart" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start harvest</button>
+            <button type="button" id="hvResume" class="btn btn-success btn-sm" style="display:none;"><i class="fas fa-play"></i> Resume</button>
+            <button type="button" id="hvStop" class="btn btn-danger btn-sm" style="display:none;"><i class="fas fa-pause"></i> Stop</button>
+        </div>
+        <div id="hvProgressWrap" style="display:none;">
+            <div style="height:12px;border-radius:6px;background:var(--gray-100);overflow:hidden;">
+                <i id="hvBar" style="display:block;height:100%;width:0;background:#7c3aed;transition:width .3s;"></i>
+            </div>
+            <div class="text-sm" style="margin-top:.4rem;">
+                <strong id="hvStatus">—</strong> · <span id="hvCounts">0 added</span>
+                <span id="hvCurrent" class="text-muted"></span>
+            </div>
+            <div id="hvError" class="text-sm" style="color:#b45309;margin-top:.3rem;"></div>
+        </div>
+    </div>
+</details>
+
 {% if not subject %}
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subjects</h3><p>Add subjects first.</p></div></div></div>
 {% else %}
@@ -243,6 +272,82 @@
         </details>
     </div>
 </div>
+
+<script nonce="{{ csp_nonce }}">
+(function(){
+    // ---- ALOC bulk-harvest chunker ----
+    var CSRF = document.querySelector('meta[name=csrf-token]').content;
+    var U = {
+        start: '{{ url_for("mock_jamb.bank_harvest_start") }}',
+        step: '{{ url_for("mock_jamb.bank_harvest_step") }}',
+        stop: '{{ url_for("mock_jamb.bank_harvest_stop") }}',
+        resume: '{{ url_for("mock_jamb.bank_harvest_resume") }}',
+        status: '{{ url_for("mock_jamb.bank_harvest_status") }}'
+    };
+    var elStart = document.getElementById('hvStart'), elResume = document.getElementById('hvResume'),
+        elStop = document.getElementById('hvStop'), elWrap = document.getElementById('hvProgressWrap'),
+        elBar = document.getElementById('hvBar'), elStatus = document.getElementById('hvStatus'),
+        elCounts = document.getElementById('hvCounts'), elCurrent = document.getElementById('hvCurrent'),
+        elError = document.getElementById('hvError');
+    if(!elStart) return;
+    var running = false;
+
+    function post(url, body){
+        return fetch(url, {method:'POST', headers:{'X-CSRFToken':CSRF,
+            'Content-Type':'application/x-www-form-urlencoded'},
+            body: body || ('_csrf_token=' + encodeURIComponent(CSRF))}).then(function(r){ return r.json(); });
+    }
+    function render(s){
+        if(!s || s.status === 'none' || !s.total_cells){ elWrap.style.display='none'; showButtons(s); return; }
+        elWrap.style.display = 'block';
+        elBar.style.width = (s.percent || 0) + '%';
+        elStatus.textContent = ({running:'Running…', paused:'Paused', done:'Done ✓'}[s.status] || s.status);
+        elCounts.textContent = (s.added||0) + ' added · ' + (s.duplicates||0) + ' dupes skipped · '
+            + (s.pos||0) + '/' + (s.total_cells||0) + ' subject-years';
+        elCurrent.textContent = s.current ? (' · now: ' + s.current.subject + ' ' + s.current.year) : '';
+        elError.textContent = s.last_error || '';
+        showButtons(s);
+    }
+    function showButtons(s){
+        var st = s ? s.status : 'none';
+        elStart.style.display = (st === 'running') ? 'none' : 'inline-block';
+        elStart.innerHTML = (st === 'done') ? '<i class="fas fa-rotate"></i> Restart harvest'
+            : '<i class="fas fa-play"></i> Start harvest';
+        elResume.style.display = (st === 'paused') ? 'inline-block' : 'none';
+        elStop.style.display = (st === 'running') ? 'inline-block' : 'none';
+    }
+    function loop(){
+        if(!running) return;
+        post(U.step).then(function(s){
+            render(s);
+            if(s.status === 'running' && running){ setTimeout(loop, 300); }
+            else { running = false; render(s); }
+        }).catch(function(){ running = false; elError.textContent = 'Network error — will keep the progress; press Resume to continue.'; showButtons({status:'paused'}); });
+    }
+    elStart.addEventListener('click', function(){
+        var body = '_csrf_token=' + encodeURIComponent(CSRF)
+            + '&examtype=' + encodeURIComponent(document.getElementById('hvExamtype').value)
+            + '&remember=1&tokens=' + encodeURIComponent(document.getElementById('hvTokens').value || '');
+        elError.textContent = '';
+        post(U.start, body).then(function(s){
+            if(s.error){ elError.textContent = s.error; return; }
+            running = true; render(s); loop();
+        });
+    });
+    elResume.addEventListener('click', function(){
+        post(U.resume).then(function(s){
+            if(s.error){ elError.textContent = s.error; return; }
+            running = true; render(s); loop();
+        });
+    });
+    elStop.addEventListener('click', function(){
+        running = false;
+        post(U.stop).then(render);
+    });
+    // reflect any in-progress harvest on load
+    fetch(U.status).then(function(r){ return r.json(); }).then(render).catch(function(){});
+})();
+</script>
 
 <script type="application/json" id="mjq-topics">{{ topic_tree|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
