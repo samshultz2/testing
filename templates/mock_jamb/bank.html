@@ -365,7 +365,9 @@
             'Content-Type':'application/x-www-form-urlencoded'},
             body: body || ('_csrf_token=' + encodeURIComponent(CSRF))}).then(function(r){ return r.json(); });
     }
+    var lastState = null, tick = null, workStart = 0;
     function render(s){
+        lastState = s;
         if(!s || s.status === 'none' || !s.total_cells){ elWrap.style.display='none'; showButtons(s); return; }
         elWrap.style.display = 'block';
         elBar.style.width = (s.percent || 0) + '%';
@@ -384,13 +386,31 @@
         elResume.style.display = (st === 'paused') ? 'inline-block' : 'none';
         elStop.style.display = (st === 'running') ? 'inline-block' : 'none';
     }
+    // Keep a live "downloading… (Ns)" heartbeat while a step is in flight so the
+    // panel never looks frozen, even when ALOC is slow between count updates.
+    function startTick(){
+        workStart = Date.now();
+        if(tick) clearInterval(tick);
+        tick = setInterval(function(){
+            if(!running) return;
+            var secs = Math.round((Date.now() - workStart)/1000);
+            elStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Downloading… (' + secs + 's)';
+        }, 1000);
+    }
+    function stopTick(){ if(tick){ clearInterval(tick); tick = null; } }
     function loop(){
-        if(!running) return;
+        if(!running){ stopTick(); return; }
+        startTick();
         post(U.step).then(function(s){
+            if(!running){ stopTick(); render(s); return; }
             render(s);
-            if(s.status === 'running' && running){ setTimeout(loop, 300); }
-            else { running = false; render(s); }
-        }).catch(function(){ running = false; elError.textContent = 'Network error — will keep the progress; press Resume to continue.'; showButtons({status:'paused'}); });
+            if(s.status === 'running'){ setTimeout(loop, 250); }
+            else { running = false; stopTick(); render(s); }
+        }).catch(function(){
+            running = false; stopTick();
+            elError.textContent = 'Network hiccup — progress is saved; press Resume to continue.';
+            showButtons({status: (lastState && lastState.status === 'done') ? 'done' : 'paused'});
+        });
     }
     var subjBox = document.getElementById('hvSubjects');
     document.getElementById('hvAll').addEventListener('click', function(e){ e.preventDefault();

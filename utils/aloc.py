@@ -207,7 +207,7 @@ def fetch_batch(token, slug, examtype='utme', year=None, timeout=45):
 
 def import_questions(subject_id, subject_name, tokens, examtype='utme', year=None,
                      target=40, default_section=None, max_batches=12, saturation=3,
-                     fetch_images=True, time_budget=None):
+                     fetch_images=True, time_budget=None, fetch_timeout=45):
     """Import up to ``target`` new ALOC questions for a subject into the bank,
     rotating across ``tokens`` on rejection/exhaustion.
 
@@ -256,7 +256,7 @@ def import_questions(subject_id, subject_name, tokens, examtype='utme', year=Non
         batches += 1
         token = tokens[ti]
         tokens_used.add(ti)
-        items, err, token_bad = fetch_batch(token, slug, examtype, year)
+        items, err, token_bad = fetch_batch(token, slug, examtype, year, timeout=fetch_timeout)
         if token_bad:
             ti += 1              # rotate to the next token (does not count as a poll)
             error = err
@@ -444,9 +444,13 @@ def harvest_step(tokens, max_cells=1):
         sid, name, year = cells[state['pos']]
         # Each request is bounded (time_budget) so it can't outlast a web timeout;
         # a cell that isn't fully harvested yet is retried on the next step.
+        # Keep each step short & responsive: a small number of polls, a tight time
+        # budget and a shorter per-fetch timeout, and DON'T download images inline
+        # (that was the big stall — each image is a separate slow request). The
+        # remote image URL is stored now; images can be re-hosted later.
         res = import_questions(sid, name, tokens, examtype=state['examtype'],
-                               year=str(year), target=200, saturation=3, max_batches=8,
-                               time_budget=25)
+                               year=str(year), target=200, saturation=3, max_batches=3,
+                               time_budget=12, fetch_images=False, fetch_timeout=25)
         state['added'] += res['added']
         state['duplicates'] += res['duplicates']
         state['skipped'] += res['skipped']
