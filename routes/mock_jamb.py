@@ -1330,12 +1330,15 @@ def bank_import():
         topic = parts[7] if len(parts) > 7 and parts[7] else None
         subtopic = parts[8] if len(parts) > 8 and parts[8] else None
         year = (parts[9].strip()[:8] if len(parts) > 9 and parts[9].strip() else default_year)
+        # optional 11th column: a figure URL (kept as-is; may be hotlink-blocked).
+        image = (parts[10].strip()[:300] if len(parts) > 10 and parts[10].strip()
+                 and parts[10].strip().lower().startswith(('http://', 'https://', '/')) else None)
         base += 1
         db.session.add(MockJAMBQuestion(
             mock_exam_id=None, subject_id=subject_id, section=section, exam_body=exam_body,
             question_text=text, option_a=a, option_b=b, option_c=c, option_d=d,
             correct_option=correct, marks=1, topic=topic, subtopic=subtopic,
-            exam_year=year, source='paste', order=base))
+            exam_year=year, image_url=image, source='paste', order=base))
         added += 1
     db.session.commit()
     msg = f'Imported {added} question(s).'
@@ -1348,6 +1351,60 @@ def bank_import():
         msg += ' (' + ', '.join(extra) + ')'
     flash(msg, 'success' if added else 'warning')
     return redirect(_bank_url(subject_id, default_section))
+
+
+# ---------------------------------------------------------------------------
+# One-click myschool.ng harvest: scrape questions server-side into the bank.
+# Resumable, chunked (the browser calls /step repeatedly).
+# ---------------------------------------------------------------------------
+@mock_jamb_bp.route('/bank/scrape/start', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_scrape_start():
+    from utils.myschool_harvest import start_harvest
+    raw = (request.form.get('subject_ids') or '').strip()
+    ids = [int(x) for x in raw.split(',') if x.strip().isdigit()]
+    subjects = [{'id': s.id, 'name': s.name}
+                for s in Subject.query.filter(Subject.id.in_(ids or [-1])).all()]
+    if not subjects:
+        return jsonify({'error': 'Pick at least one subject to download.'}), 400
+    exam = (request.form.get('exam') or 'jamb').strip().lower()
+    if exam not in ('jamb', 'waec', 'neco', 'post-utme'):
+        exam = 'jamb'
+    y1 = request.form.get('year_from', type=int)
+    y2 = request.form.get('year_to', type=int)
+    return jsonify(start_harvest(subjects, exam=exam, year_min=y1, year_max=y2))
+
+
+@mock_jamb_bp.route('/bank/scrape/step', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_scrape_step():
+    from utils.myschool_harvest import harvest_step
+    return jsonify(harvest_step(max_questions=6))
+
+
+@mock_jamb_bp.route('/bank/scrape/stop', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_scrape_stop():
+    from utils.myschool_harvest import pause_harvest
+    return jsonify(pause_harvest())
+
+
+@mock_jamb_bp.route('/bank/scrape/resume', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_scrape_resume():
+    from utils.myschool_harvest import resume_harvest
+    return jsonify(resume_harvest())
+
+
+@mock_jamb_bp.route('/bank/scrape/status')
+@login_required
+def bank_scrape_status():
+    from utils.myschool_harvest import _public, get_state
+    return jsonify(_public(get_state()))
 
 
 @mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])

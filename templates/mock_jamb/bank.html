@@ -46,6 +46,42 @@
     </div>
 </form>
 
+{# ---- One-click download from myschool.ng ---- #}
+<details class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
+    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-cloud-arrow-down"></i> Download questions from myschool.ng <span class="text-muted text-sm">— pick subjects &amp; years, it saves straight to the bank</span></h3></summary>
+    <div class="card-body">
+        <p class="text-sm text-muted">Scrapes past questions for the ticked subjects across the chosen years and saves them here, de-duplicated. Each question is auto-tagged with its section/topic and year. It runs in resumable steps in your browser — you can stop and resume any time. Tables are kept as text; questions that rely on a diagram we can't fetch are skipped and counted. Keep this tab open while it runs.</p>
+        <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group"><label class="form-label">Exam</label>
+                <select id="scExam" class="form-control"><option value="jamb">JAMB</option><option value="waec">WAEC</option><option value="neco">NECO</option><option value="post-utme">Post-UTME</option></select></div>
+            <div class="form-group"><label class="form-label">Start year</label>
+                <input type="number" id="scYearFrom" class="form-control" value="2010" min="1990" max="2035" style="width:100px;"></div>
+            <div class="form-group"><label class="form-label">End year</label>
+                <input type="number" id="scYearTo" class="form-control" value="2023" min="1990" max="2035" style="width:100px;"></div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Subjects <span class="text-muted text-sm">— tick the ones to download</span>
+                <a href="#" id="scAll" class="text-sm" style="margin-left:.5rem;">all</a> · <a href="#" id="scNone" class="text-sm">none</a></label>
+            <div id="scSubjects" style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;">
+                {% for s in subjects %}
+                <label class="text-sm" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" class="sc-subj" value="{{ s.id }}" {{ 'checked' if s.id == subject_id else '' }}> {{ s.name }}</label>
+                {% endfor %}
+            </div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;">
+            <button type="button" id="scStart" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start download</button>
+            <button type="button" id="scResume" class="btn btn-success btn-sm" style="display:none;"><i class="fas fa-play"></i> Resume</button>
+            <button type="button" id="scStop" class="btn btn-danger btn-sm" style="display:none;"><i class="fas fa-pause"></i> Stop</button>
+        </div>
+        <div id="scProgressWrap" style="display:none;">
+            <div style="height:12px;border-radius:6px;background:var(--gray-100);overflow:hidden;">
+                <i id="scBar" style="display:block;height:100%;width:0;background:#7c3aed;transition:width .3s;"></i></div>
+            <div class="text-sm" style="margin-top:.4rem;"><strong id="scStatus">—</strong> · <span id="scCounts">0 added</span> <span id="scCurrent" class="text-muted"></span></div>
+            <div id="scError" class="text-sm" style="color:#b45309;margin-top:.3rem;"></div>
+        </div>
+    </div>
+</details>
+
 {% if not subject %}
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subjects</h3><p>Add subjects first.</p></div></div></div>
 {% else %}
@@ -136,7 +172,8 @@
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             <p class="text-sm text-muted">One question per line, fields separated by a <strong>tab</strong> or <strong>|</strong>:<br>
-                <code>question | Option A | Option B | Option C | Option D | correct(A–D) | [section] | [topic] | [subtopic] | [year]</code></p>
+                <code>question | Option A | Option B | Option C | Option D | correct(A–D) | [section] | [topic] | [subtopic] | [year] | [image URL]</code></p>
+            <p class="text-sm text-muted" style="margin-top:-.3rem;">The last <strong>image URL</strong> column is optional — paste a link to a figure and it shows on the question (note: some sites block hotlinking). For most needs, use the <em>Download from myschool</em> panel above, which fetches and saves everything for you.</p>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">Default section (if a row omits it)</label>
                     <select name="default_section" class="form-control"><option value="">— None —</option>
@@ -257,6 +294,106 @@
         </details>
     </div>
 </div>
+
+<script nonce="{{ csp_nonce }}">
+(function(){
+    // ---- myschool.ng harvest chunker ----
+    var CSRF = document.querySelector('meta[name=csrf-token]').content;
+    var U = {
+        start: '{{ url_for("mock_jamb.bank_scrape_start") }}',
+        step: '{{ url_for("mock_jamb.bank_scrape_step") }}',
+        stop: '{{ url_for("mock_jamb.bank_scrape_stop") }}',
+        resume: '{{ url_for("mock_jamb.bank_scrape_resume") }}',
+        status: '{{ url_for("mock_jamb.bank_scrape_status") }}'
+    };
+    var elStart = document.getElementById('scStart');
+    if(!elStart) return;
+    var elResume = document.getElementById('scResume'), elStop = document.getElementById('scStop'),
+        elWrap = document.getElementById('scProgressWrap'), elBar = document.getElementById('scBar'),
+        elStatus = document.getElementById('scStatus'), elCounts = document.getElementById('scCounts'),
+        elCurrent = document.getElementById('scCurrent'), elError = document.getElementById('scError');
+    var running = false, tick = null, workStart = 0, lastState = null;
+
+    function post(url, body){
+        return fetch(url, {method:'POST', headers:{'X-CSRFToken':CSRF,
+            'Content-Type':'application/x-www-form-urlencoded'},
+            body: body || ('_csrf_token=' + encodeURIComponent(CSRF))}).then(function(r){ return r.json(); });
+    }
+    function counts(s){
+        var parts = [(s.added||0) + ' added'];
+        if(s.duplicates) parts.push(s.duplicates + ' already banked');
+        if(s.skipped_figure) parts.push(s.skipped_figure + ' need a diagram (skipped)');
+        if(s.skipped) parts.push(s.skipped + ' skipped');
+        if(s.tables) parts.push(s.tables + ' with tables');
+        if(s.images) parts.push(s.images + ' with images');
+        return parts.join(' · ');
+    }
+    function render(s){
+        lastState = s;
+        if(!s || s.status === 'none'){ elWrap.style.display='none'; buttons(s); return; }
+        elWrap.style.display = 'block';
+        elBar.style.width = (s.percent || 0) + '%';
+        elStatus.textContent = ({running:'Downloading…', paused:'Paused', done:'Done ✓'}[s.status] || s.status);
+        elCounts.textContent = counts(s) + '  (' + (s.cells_done||0) + '/' + (s.cells_total||0) + ' subject-years)';
+        elCurrent.textContent = s.current ? (' · now: ' + s.current.subject + ' ' + s.current.year) : '';
+        elError.textContent = s.last_error || '';
+        buttons(s);
+    }
+    function buttons(s){
+        var st = s ? s.status : 'none';
+        elStart.style.display = (st === 'running') ? 'none' : 'inline-block';
+        elStart.innerHTML = (st === 'done') ? '<i class="fas fa-rotate"></i> Restart' : '<i class="fas fa-play"></i> Start download';
+        elResume.style.display = (st === 'paused') ? 'inline-block' : 'none';
+        elStop.style.display = (st === 'running') ? 'inline-block' : 'none';
+    }
+    function heartbeat(){
+        workStart = Date.now();
+        if(tick) clearInterval(tick);
+        tick = setInterval(function(){
+            if(!running) return;
+            var secs = Math.round((Date.now() - workStart)/1000);
+            elStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Downloading… (' + secs + 's)';
+        }, 1000);
+    }
+    function stopTick(){ if(tick){ clearInterval(tick); tick = null; } }
+    function loop(){
+        if(!running){ stopTick(); return; }
+        heartbeat();
+        post(U.step).then(function(s){
+            if(!running){ stopTick(); render(s); return; }
+            render(s);
+            if(s.status === 'running'){ setTimeout(loop, 200); }
+            else { running = false; stopTick(); render(s); }
+        }).catch(function(){
+            running = false; stopTick();
+            elError.textContent = 'Network hiccup — progress is saved; press Resume to continue.';
+            buttons({status: (lastState && lastState.status === 'done') ? 'done' : 'paused'});
+        });
+    }
+    var box = document.getElementById('scSubjects');
+    document.getElementById('scAll').addEventListener('click', function(e){ e.preventDefault();
+        box.querySelectorAll('.sc-subj').forEach(function(x){ x.checked = true; }); });
+    document.getElementById('scNone').addEventListener('click', function(e){ e.preventDefault();
+        box.querySelectorAll('.sc-subj').forEach(function(x){ x.checked = false; }); });
+    function chosen(){
+        return Array.prototype.slice.call(box.querySelectorAll('.sc-subj:checked')).map(function(x){ return x.value; }).join(',');
+    }
+    elStart.addEventListener('click', function(){
+        var subs = chosen();
+        if(!subs){ elError.textContent = 'Pick at least one subject.'; return; }
+        var body = '_csrf_token=' + encodeURIComponent(CSRF)
+            + '&subject_ids=' + encodeURIComponent(subs)
+            + '&exam=' + encodeURIComponent(document.getElementById('scExam').value)
+            + '&year_from=' + encodeURIComponent(document.getElementById('scYearFrom').value || '')
+            + '&year_to=' + encodeURIComponent(document.getElementById('scYearTo').value || '');
+        elError.textContent = '';
+        post(U.start, body).then(function(s){ if(s.error){ elError.textContent = s.error; return; } running = true; render(s); loop(); });
+    });
+    elResume.addEventListener('click', function(){ post(U.resume).then(function(s){ if(s.error){ elError.textContent = s.error; return; } running = true; render(s); loop(); }); });
+    elStop.addEventListener('click', function(){ running = false; post(U.stop).then(render); });
+    fetch(U.status).then(function(r){ return r.json(); }).then(render).catch(function(){});
+})();
+</script>
 
 <script type="application/json" id="mjq-topics">{{ topic_tree|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
