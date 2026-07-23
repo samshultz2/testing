@@ -673,11 +673,25 @@ function BlankSheetButton({ url }) {
 
 function Broadsheet({ d, notify }) {
   const nav = useNav();
+  const [filterField, setFilterField] = useState('average');
+  const [minScore, setMinScore] = useState('');
   const compute = async () => {
     if (!await confirm("Compute and save term results and class positions for this class? This updates each student's report card.")) return;
     const r = await submitJson(d.urls.compute, { term_id: d.term_id, assignment_id: d.assignment_id });
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not compute.');
   };
+  // Client-side "who scored X and above" filter: by a subject, the class
+  // Average (%) or the Total. Non-scored cells never match.
+  const minVal = parseFloat(minScore);
+  const hasFilter = !Number.isNaN(minVal);
+  const valueFor = (r) => {
+    if (filterField === 'average') return r.average;
+    if (filterField === 'total') return r.total;
+    return r.subjects[String(filterField)];
+  };
+  const rows = hasFilter ? d.rows.filter((r) => { const v = valueFor(r); return v != null && v >= minVal; }) : d.rows;
+  const filterLabel = filterField === 'average' ? 'Average (%)' : filterField === 'total' ? 'Total'
+    : (d.class_subjects.find((cs) => String(cs.id) === String(filterField)) || {}).name || 'Subject';
   // Frozen first columns (Pos + Student). bg must be opaque so scrolled cells
   // don't bleed through — use real theme tokens (the old var(--bg-primary) didn't exist).
   const sticky = (left) => ({ position: 'sticky', left, background: 'var(--bg-card)', whiteSpace: 'nowrap', zIndex: 1 });
@@ -696,6 +710,20 @@ function Broadsheet({ d, notify }) {
       </form></div></div>
 
       {d.rows.length ? (<>
+        <div className="card mb-3"><div className="card-body"><form className="filter-form" onSubmit={(e) => e.preventDefault()} style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-group"><label className="form-label">Show students scoring in</label>
+            <select className="form-control" value={filterField} onChange={(e) => setFilterField(e.target.value)}>
+              <option value="average">Average (%)</option>
+              <option value="total">Total</option>
+              {d.class_subjects.map((cs) => <option key={cs.id} value={cs.id}>{cs.name}</option>)}
+            </select></div>
+          <div className="form-group"><label className="form-label">at or above</label>
+            <input type="number" className="form-control" style={{ maxWidth: 120 }} value={minScore} min="0" step="0.1"
+              placeholder="e.g. 50" onChange={(e) => setMinScore(e.target.value)} /></div>
+          {hasFilter && <div className="form-group"><button type="button" className="btn btn-secondary" onClick={() => setMinScore('')}><i aria-hidden="true" className="fas fa-times" /> Clear</button></div>}
+          {hasFilter && <div className="form-group"><span className="text-muted text-sm">{rows.length} of {d.rows.length} student(s) with {filterLabel} ≥ {minVal}</span></div>}
+        </form></div></div>
+
         <div className="card">
           <div className="card-header"><h3>{d.selected_assignment}</h3>
             <div className="page-header-actions">
@@ -706,7 +734,7 @@ function Broadsheet({ d, notify }) {
               {d.urls.analytics && <a href={d.urls.analytics} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-column" /> Analytics</a>}
               <ExportMenu urls={d.urls} />
               <BlankSheetButton url={d.urls.blank_sheet} />
-              <span className="badge badge-info">{d.rows.length} Students</span>
+              <span className="badge badge-info">{hasFilter ? `${rows.length} of ${d.rows.length}` : d.rows.length} Students</span>
             </div>
           </div>
           <div className="card-body" style={{ padding: 0, overflow: 'auto', maxHeight: '70vh' }}>
@@ -717,7 +745,7 @@ function Broadsheet({ d, notify }) {
                 {d.class_subjects.map((cs) => <th key={cs.id} style={{ ...headCell, textAlign: 'center', fontSize: 'var(--text-xs)' }}>{cs.short}</th>)}
                 <th style={{ ...headCell, textAlign: 'center' }}>Total</th><th style={{ ...headCell, textAlign: 'center' }}>Avg</th><th style={{ ...headCell, textAlign: 'center' }}>P/F</th>
               </tr></thead>
-              <tbody>{d.rows.map((r, i) => (
+              <tbody>{rows.length ? rows.map((r, i) => (
                 <tr key={i}>
                   <td style={{ ...sticky(0), fontWeight: 'bold' }}>{r.position}</td>
                   <td style={sticky(40)}>{r.student}</td>
@@ -725,7 +753,9 @@ function Broadsheet({ d, notify }) {
                   <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{fmtNum(r.total)}</td>
                   <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{fmtNum(r.average)}</td>
                   <td style={{ textAlign: 'center' }}><span className="badge badge-success">{r.passed}</span> <span className="badge badge-danger">{r.failed}</span></td>
-                </tr>))}</tbody>
+                </tr>)) : (
+                <tr><td colSpan={d.class_subjects.length + 5} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No students with {filterLabel} ≥ {minVal}.</td></tr>
+              )}</tbody>
             </table>
           </div>
         </div>
