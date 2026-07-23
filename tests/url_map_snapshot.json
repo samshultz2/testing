@@ -3639,6 +3639,13 @@
 ]
 ],
 [
+"mock_jamb.bank_delete_bulk",
+"/mock-jamb/bank/delete-bulk",
+[
+"POST"
+]
+],
+[
 "mock_jamb.bank_delete_passage",
 "/mock-jamb/bank/passage/<int:passage_id>/delete",
 [

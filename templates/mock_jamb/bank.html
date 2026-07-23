@@ -306,6 +306,54 @@
     </div>
 </div>
 
+{# ---- Danger zone: bulk-delete a subject's bank questions ---- #}
+{% if subject %}
+<details class="card" style="margin-bottom:1rem;border-left:4px solid #dc2626;">
+    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;color:#dc2626;"><i class="fas fa-trash"></i> Delete questions <span class="text-muted text-sm">— clear this subject and start again</span></h3></summary>
+    <div class="card-body">
+        <p class="text-sm text-muted">Permanently deletes stand-alone bank questions for <strong>{{ subject.name }}</strong>. Use this to clear old imports (e.g. untagged ALOC questions) and re-download cleanly. This can't be undone.</p>
+        {% if bank_sources %}
+        <p class="text-sm" style="margin:.2rem 0 .6rem;">This subject's bank:
+            {% for r in bank_sources %}<span class="badge-topic">{{ r.label|upper }}: {{ r.count }}</span> {% endfor %}
+            {% if bank_untagged %}· <span style="color:#b45309;">{{ bank_untagged }} with no topic</span>{% endif %}</p>
+        {% endif %}
+        <form method="post" action="{{ url_for('mock_jamb.bank_delete_bulk') }}" data-confirm="Delete the selected {{ subject.name }} questions from the bank? This cannot be undone.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <div class="form-row" style="align-items:flex-end;">
+                <div class="form-group"><label class="form-label">What to delete</label>
+                    <select name="scope" class="form-control" id="delScope">
+                        <option value="all">Everything in {{ subject.name }}</option>
+                        <option value="untagged">Only untagged (no topic){% if bank_untagged %} — {{ bank_untagged }}{% endif %}</option>
+                        <option value="source">Only from a source…</option>
+                        <option value="year">Only a year…</option>
+                    </select></div>
+                <div class="form-group del-src" style="display:none;"><label class="form-label">Source</label>
+                    <select name="source" class="form-control">
+                        {% for r in bank_sources %}<option value="{{ r.source }}">{{ r.label|upper }} ({{ r.count }})</option>{% endfor %}</select></div>
+                <div class="form-group del-year" style="display:none;"><label class="form-label">Year</label>
+                    <input type="text" name="year" class="form-control" placeholder="e.g. 2019" style="max-width:120px;"></div>
+                <div class="form-group"><button class="btn btn-danger"><i class="fas fa-trash"></i> Delete matching</button></div>
+            </div>
+        </form>
+    </div>
+</details>
+{% endif %}
+
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var sel = document.getElementById('delScope');
+    if(sel){
+        var box = sel.closest('form');
+        function upd(){
+            box.querySelector('.del-src').style.display = sel.value === 'source' ? '' : 'none';
+            box.querySelector('.del-year').style.display = sel.value === 'year' ? '' : 'none';
+        }
+        sel.addEventListener('change', upd); upd();
+    }
+})();
+</script>
+
 <script nonce="{{ csp_nonce }}">
 (function(){
     // ---- myschool.ng harvest chunker ----

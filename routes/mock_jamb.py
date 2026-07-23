@@ -1108,6 +1108,21 @@ def bank():
     needs_image_count = MockJAMBQuestion.query.filter(
         MockJAMBQuestion.mock_exam_id.is_(None),
         MockJAMBQuestion.needs_image.is_(True)).count()
+    # per-subject provenance breakdown for the bulk-delete panel
+    bank_sources, bank_untagged = [], 0
+    if subject:
+        src_rows = (db.session.query(MockJAMBQuestion.source, func.count(MockJAMBQuestion.id))
+                    .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                            MockJAMBQuestion.subject_id == subject_id,
+                            MockJAMBQuestion.passage_id.is_(None))
+                    .group_by(MockJAMBQuestion.source).all())
+        bank_sources = [{'source': s or '', 'label': (s or 'unknown'), 'count': n}
+                        for s, n in sorted(src_rows, key=lambda r: -r[1])]
+        bank_untagged = (MockJAMBQuestion.query
+                         .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                                 MockJAMBQuestion.subject_id == subject_id,
+                                 MockJAMBQuestion.passage_id.is_(None),
+                                 (MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == '')).count())
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            needs_image_count=needs_image_count,
                            subject_id=subject_id, section=section, sections=sections,
@@ -1411,6 +1426,57 @@ def bank_scrape_resume():
 def bank_scrape_status():
     from utils.myschool_harvest import _public, get_state
     return jsonify(_public(get_state()))
+
+
+@mock_jamb_bp.route('/bank/delete-bulk', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_delete_bulk():
+    """Bulk-delete stand-alone bank questions for one subject, optionally scoped
+    to a source (e.g. old 'aloc' imports), the untagged ones (no topic), or a
+    year — so you can clear a subject and re-download cleanly."""
+    from models import MockJAMBAnswer
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Choose a subject first.', 'error')
+        return redirect(_bank_url(subject_id))
+    scope = (request.form.get('scope') or 'all').strip()
+    base = MockJAMBQuestion.query.filter(
+        MockJAMBQuestion.mock_exam_id.is_(None),
+        MockJAMBQuestion.subject_id == subject_id,
+        MockJAMBQuestion.passage_id.is_(None))
+    label = 'all bank'
+    if scope == 'untagged':
+        base = base.filter((MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == ''))
+        label = 'untagged (no topic)'
+    elif scope == 'source':
+        src = (request.form.get('source') or '').strip()
+        base = base.filter(MockJAMBQuestion.source == (src or None))
+        label = f"'{src or 'unknown'}'-source"
+    elif scope == 'year':
+        yr = (request.form.get('year') or '').strip()
+        base = base.filter(MockJAMBQuestion.exam_year == yr)
+        label = f'year {yr}'
+
+    ids = [qid for (qid,) in base.with_entities(MockJAMBQuestion.id).all()]
+    if not ids:
+        flash('No matching questions to delete.', 'warning')
+        return redirect(_bank_url(subject_id))
+    # Delete in chunks (SQLite caps bound variables), clearing dependent answers
+    # first so a question served in a past attempt can still be removed.
+    deleted = 0
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        MockJAMBAnswer.query.filter(MockJAMBAnswer.question_id.in_(chunk)).delete(synchronize_session=False)
+        deleted += MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(chunk)).delete(synchronize_session=False)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('mock_jamb.bank_delete_bulk',
+               detail=f'subject={subject_id} scope={label} deleted={deleted}',
+               target_type='subject', target_id=subject_id)
+    flash(f'Deleted {deleted} {label} question(s) from {subject.name}.', 'success')
+    return redirect(_bank_url(subject_id))
 
 
 @mock_jamb_bp.route('/bank/needs-images')
