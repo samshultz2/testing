@@ -43,6 +43,45 @@ def test_parse_detail_figure_dependent_flagged():
     assert p['figure_dependent'] and p['needs_review'] and 'figure' in p['flags']
 
 
+def test_parse_detail_captures_figure_image():
+    from utils import myschool as ms
+    # a stem figure delivered via a lazy-load attr + a site-relative URL
+    html = """
+    <div class="card">
+      <div class="qwrap"><h1>Use the circuit shown to find the current.</h1>
+        <img data-original="/storage/questions/circuit123.png"></div>
+      <div class="opts">
+        <div><span class="uppercase">a</span><p>1A</p></div>
+        <div><span class="uppercase">b</span><p>2A</p></div>
+        <div><span class="uppercase">c</span><p>3A</p></div>
+        <div><span class="uppercase">d</span><p>4A</p></div>
+      </div>
+      <div class="ans">Correct Option <span class="uppercase">c</span></div>
+    </div>"""
+    p = ms.parse_detail(html)
+    assert p['image_url'] == 'https://myschool.ng/storage/questions/circuit123.png'
+    assert 'image' in p['flags']
+    assert not p['figure_dependent']            # we have the figure → answerable
+
+
+def test_parse_detail_ignores_avatar_images():
+    from utils import myschool as ms
+    html = """
+    <div class="card">
+      <div class="qwrap"><h1>Plain text question with no figure.</h1>
+        <img src="https://myschool.ng/storage/members/avatar123.jpg"></div>
+      <div class="opts">
+        <div><span class="uppercase">a</span><p>x</p></div>
+        <div><span class="uppercase">b</span><p>y</p></div>
+        <div><span class="uppercase">c</span><p>z</p></div>
+        <div><span class="uppercase">d</span><p>w</p></div>
+      </div>
+      <div class="ans">Correct Option <span class="uppercase">a</span></div>
+    </div>"""
+    p = ms.parse_detail(html)
+    assert p['image_url'] is None               # avatars are not question figures
+
+
 def test_classify_maps_to_taxonomy():
     from utils import myschool as ms
     sec, top, sub = ms.classify('commerce', 'A cheque drawn on a bank is an instrument of banking')

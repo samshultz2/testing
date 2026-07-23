@@ -364,14 +364,36 @@ _FIGURE_WORDS = re.compile(
     r"the (?:map|chart) (?:above|below))\b", re.I)
 
 
+_IMG_REJECT = ("placeholder", "emojione", "emoji", "/members/", "/comments/",
+               "avatar", "logo", "/icons/", "sprite", "gravatar", "flag")
+
+
 def _real_image_src(src):
-    """True for a genuine question figure, not an avatar / placeholder / emoji."""
-    s = (src or "").lower()
-    if not s:
+    """True for a genuine question figure, not an avatar / placeholder / emoji /
+    comment attachment / logo."""
+    s = (src or "").strip().lower()
+    if not s or s.startswith("data:"):
         return False
-    if "placeholder" in s or "emojione" in s or "/members/" in s or "avatar" in s:
+    if any(bad in s for bad in _IMG_REJECT):
         return False
-    return s.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp"))
+    # a myschool question figure lives under /storage/… (but not the rejected
+    # sub-folders above); otherwise accept any real image URL.
+    base = s.split("?", 1)[0].split(" ", 1)[0]
+    return base.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"))
+
+
+def _img_src(im):
+    """The best URL from an <img>, trying eager + common lazy-load attributes and
+    the first candidate of a srcset."""
+    for attr in ("src", "data-src", "data-original", "data-lazy", "data-echo",
+                 "data-lazy-src", "data-image"):
+        v = (im.get(attr) or "").strip()
+        if v:
+            return v
+    srcset = (im.get("srcset") or im.get("data-srcset") or "").strip()
+    if srcset:
+        return srcset.split(",")[0].strip().split(" ")[0]
+    return ""
 
 
 def _serialize_table(table):
@@ -439,13 +461,18 @@ def parse_detail(html):
     if not stem:
         return None
 
-    # a genuine figure image in the stem, if any (usually absent on myschool).
+    # a genuine figure image in the stem, if any. myschool injects most figures
+    # client-side, so this is usually populated only from browser-rendered HTML
+    # (e.g. the CLI's --images / Playwright mode).
     image_url = None
     if container is not None:
         for im in container.find_all("img"):
-            if _real_image_src(im.get("src") or im.get("data-src")):
-                image_url = im.get("src") or im.get("data-src")
+            cand = _img_src(im)
+            if _real_image_src(cand):
+                image_url = cand
                 break
+    if image_url and image_url.startswith("/"):        # absolutise site-relative
+        image_url = "https://myschool.ng" + image_url
 
     # correct answer badge.
     correct = ""
@@ -507,14 +534,19 @@ def question_url(slug, exam, year, qid):
     return f"{BASE}/{slug}/{qid}?exam_type={exam}&exam_year={year}"
 
 
-def scrape_year(subject, exam, year, session=None, max_pages=60, delay=0.6):
+def scrape_year(subject, exam, year, session=None, max_pages=60, delay=0.6,
+                detail_fetch=None):
     """Yield parsed question dicts for one subject/exam/year, each augmented with
     ``subject``, ``year`` and the classified ``section/topic/subtopic``. Skips
-    unparseable pages. The caller de-duplicates and decides what to store."""
+    unparseable pages. The caller de-duplicates and decides what to store.
+
+    ``detail_fetch(url) -> html`` overrides how detail pages are fetched (e.g. a
+    Playwright renderer that also exposes JS-injected figure images)."""
     sess = session or _session()
     slug = subject_slug(subject)
     for qid in list_question_ids(slug, exam, year, sess, max_pages, delay):
-        html = fetch(question_url(slug, exam, year, qid), sess)
+        html = (detail_fetch(question_url(slug, exam, year, qid)) if detail_fetch
+                else fetch(question_url(slug, exam, year, qid), sess))
         if not html:
             continue
         parsed = parse_detail(html)
