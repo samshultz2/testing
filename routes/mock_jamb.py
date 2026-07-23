@@ -1144,6 +1144,7 @@ def _read_bank_question(form, q, files, subject):
     q.exam_body = eb if eb in ('JAMB', 'WAEC', 'Both') else 'JAMB'
     diff = (form.get('difficulty') or '').strip().lower()
     q.difficulty = diff if diff in ('easy', 'medium', 'hard') else None
+    q.exam_year = (form.get('exam_year') or '').strip()[:8] or None
     return None
 
 

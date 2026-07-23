@@ -34,6 +34,7 @@
         <div class="form-group"><label class="form-label">Difficulty</label>
             <select name="difficulty" class="form-control"><option value="">—</option>
                 {% for d in ['easy','medium','hard'] %}<option value="{{ d }}" {{ 'selected' if q.difficulty == d else '' }}>{{ d|title }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Year</label><input type="text" name="exam_year" value="{{ q.exam_year or '' }}" placeholder="e.g. 2019" maxlength="8" class="form-control"></div>
         <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" step="0.5" value="{{ q.marks }}" class="form-control"></div>
         <div class="form-group"><label class="form-label">Topic</label>
             <select name="topic" id="etopic" class="form-control"><option value="">— Topic —</option>
