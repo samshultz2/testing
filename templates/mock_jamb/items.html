@@ -208,6 +208,7 @@
                 {% endfor %}
             </tbody>
         </table></div>
+        <div id="iaPager" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;"></div>
     </div>
 </div>
 
@@ -237,23 +238,49 @@
 <script nonce="{{ csp_nonce }}" id="ia-data" type="application/json">{{ {'difficulty': data.distribution.difficulty, 'discrimination': data.distribution.discrimination, 'topics': data.topics[:12]}|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
 (function(){
-    // item table filter
+    // item table: filter + client-side pagination
     var filter = document.getElementById('iaFilter');
+    var pager = document.getElementById('iaPager');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#itemsTable tbody tr'));
+    var PER = 25, curFilter = 'all', curPage = 1;
+    function matches(tr, f){
+        return f === 'all' ||
+            (f === 'flagged' && tr.dataset.flagged === '1') ||
+            (f === 'hard' && tr.dataset.diff === 'hard') ||
+            (f === 'easy' && tr.dataset.diff === 'easy');
+    }
+    function render(){
+        var visible = rows.filter(function(tr){ return matches(tr, curFilter); });
+        var pages = Math.max(1, Math.ceil(visible.length / PER));
+        if(curPage > pages) curPage = pages;
+        var start = (curPage - 1) * PER, end = start + PER;
+        rows.forEach(function(tr){ tr.style.display = 'none'; });
+        visible.slice(start, end).forEach(function(tr){ tr.style.display = ''; });
+        if(pager){
+            if(visible.length <= PER){ pager.innerHTML = ''; return; }
+            pager.innerHTML = '<button type="button" class="btn btn-secondary btn-sm" data-p="prev"'
+                + (curPage <= 1 ? ' disabled' : '') + '>&#8249; Prev</button>'
+                + '<span class="text-sm text-muted" style="margin:0 .6rem;">Page ' + curPage + ' of ' + pages
+                + ' · ' + visible.length + ' item(s)</span>'
+                + '<button type="button" class="btn btn-secondary btn-sm" data-p="next"'
+                + (curPage >= pages ? ' disabled' : '') + '>Next &#8250;</button>';
+        }
+    }
     if(filter){
         filter.addEventListener('click', function(e){
             var b = e.target.closest('button'); if(!b) return;
             filter.querySelectorAll('button').forEach(function(x){ x.classList.remove('active'); });
             b.classList.add('active');
-            var f = b.dataset.f;
-            document.querySelectorAll('#itemsTable tbody tr').forEach(function(tr){
-                var show = f === 'all' ||
-                    (f === 'flagged' && tr.dataset.flagged === '1') ||
-                    (f === 'hard' && tr.dataset.diff === 'hard') ||
-                    (f === 'easy' && tr.dataset.diff === 'easy');
-                tr.style.display = show ? '' : 'none';
-            });
+            curFilter = b.dataset.f; curPage = 1; render();
         });
     }
+    if(pager){
+        pager.addEventListener('click', function(e){
+            var b = e.target.closest('button'); if(!b || b.disabled) return;
+            curPage += (b.dataset.p === 'next') ? 1 : -1; render();
+        });
+    }
+    if(rows.length) render();
 
     function draw(){
         if(!window.Chart){ return; }

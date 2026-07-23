@@ -1028,7 +1028,11 @@ def bank():
     subject = db.session.get(Subject, subject_id) if subject_id else None
     section = (request.args.get('section') or '').strip() or None
 
+    q_search = (request.args.get('q') or '').strip()
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = 25
     passages, standalone, coverage, sections = [], [], None, []
+    pagination = None
     if subject:
         sections = sections_for(subject.name)
         coverage = _bank_coverage(subject)
@@ -1043,11 +1047,16 @@ def bank():
             MockJAMBQuestion.mock_exam_id.is_(None))
         if section:
             sq = sq.filter(MockJAMBQuestion.section == section)
-        standalone = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
-                                 MockJAMBQuestion.id).all()
+        if q_search:
+            sq = sq.filter(MockJAMBQuestion.question_text.ilike(f'%{q_search}%'))
+        sq = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
+                         MockJAMBQuestion.id)
+        pagination = sq.paginate(page=page, per_page=per_page, error_out=False)
+        standalone = pagination.items
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
+                           pagination=pagination, q_search=q_search,
                            topic_tree=_subject_topic_tree(subject_id),
                            has_passage_sections=any(s['passage'] for s in sections),
                            novel_section=any(s['section'] == 'novel' for s in sections),
@@ -1328,20 +1337,23 @@ def questions(exam_id):
     subjects = _mock_subjects()
     subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
     subject = db.session.get(Subject, subject_id) if subject_id else None
-    passages, standalone, qcount = [], [], 0
+    page = max(1, request.args.get('page', 1, type=int))
+    passages, standalone, qcount, pagination = [], [], 0, None
     if subject_id:
         prows = (MockJAMBPassage.query.filter_by(mock_exam_id=exam_id, subject_id=subject_id)
                  .order_by(MockJAMBPassage.order, MockJAMBPassage.id).all())
         passages = [{'p': p, 'questions': p.questions.order_by(
             MockJAMBQuestion.order, MockJAMBQuestion.id).all()} for p in prows]
-        standalone = (MockJAMBQuestion.query.filter_by(
+        pagination = (MockJAMBQuestion.query.filter_by(
             mock_exam_id=exam_id, subject_id=subject_id, passage_id=None)
-            .order_by(MockJAMBQuestion.order, MockJAMBQuestion.id).all())
+            .order_by(MockJAMBQuestion.order, MockJAMBQuestion.id)
+            .paginate(page=page, per_page=25, error_out=False))
+        standalone = pagination.items
         qcount = MockJAMBQuestion.query.filter_by(
             mock_exam_id=exam_id, subject_id=subject_id).count()
     return render_template('mock_jamb/questions.html', exam=exam, subjects=subjects,
                            subject=subject, subject_id=subject_id, passages=passages,
-                           standalone=standalone, qcount=qcount,
+                           standalone=standalone, qcount=qcount, pagination=pagination,
                            topic_tree=_subject_topic_tree(subject_id),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''))
 

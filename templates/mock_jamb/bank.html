@@ -231,10 +231,28 @@
 
 {# ---- Stand-alone questions ---- #}
 <div class="card">
-    <div class="card-header"><h3><i class="fas fa-list-ol"></i> Stand-alone questions ({{ standalone|length }}){% if section %} · {{ section|replace('_',' ')|title }}{% endif %}</h3></div>
+    <div class="card-header" style="flex-wrap:wrap;gap:.5rem;">
+        <h3><i class="fas fa-list-ol"></i> Stand-alone questions ({{ pagination.total if pagination else standalone|length }}){% if section %} · {{ section|replace('_',' ')|title }}{% endif %}</h3>
+        <form method="get" style="display:flex;gap:.4rem;align-items:center;margin-left:auto;">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            {% if section %}<input type="hidden" name="section" value="{{ section }}">{% endif %}
+            <input type="search" name="q" value="{{ q_search or '' }}" placeholder="Search question text…" class="form-control" style="max-width:240px;height:34px;">
+            <button class="btn btn-secondary btn-sm"><i class="fas fa-search"></i></button>
+            {% if q_search %}<a href="{{ url_for('mock_jamb.bank', subject_id=subject_id, section=section) }}" class="btn btn-secondary btn-sm">Clear</a>{% endif %}
+        </form>
+    </div>
     <div class="card-body" style="padding:.3rem 0;">
-        {% for q in standalone %}{{ show_q(q, loop.index) }}{% else %}<p class="text-muted text-sm" style="padding:0 .9rem;">No stand-alone questions yet{{ ' in this section' if section else '' }}.</p>{% endfor %}
-        <details open style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a stand-alone question</summary>
+        {% set offset = ((pagination.page - 1) * pagination.per_page) if pagination else 0 %}
+        {% for q in standalone %}{{ show_q(q, offset + loop.index) }}{% else %}<p class="text-muted text-sm" style="padding:0 .9rem;">{{ 'No questions match your search.' if q_search else 'No stand-alone questions yet' ~ (' in this section' if section else '') ~ '.' }}</p>{% endfor %}
+        {% if pagination and pagination.pages > 1 %}
+        <div class="pager" style="display:flex;gap:.4rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;">
+            {% set args = {'subject_id': subject_id, 'section': section, 'q': q_search or none} %}
+            {% if pagination.has_prev %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank', page=pagination.prev_num, **args) }}"><i class="fas fa-chevron-left"></i> Prev</a>{% endif %}
+            <span class="text-sm text-muted">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+            {% if pagination.has_next %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right"></i></a>{% endif %}
+        </div>
+        {% endif %}
+        <details {{ 'open' if not standalone else '' }} style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a stand-alone question</summary>
             {{ qform(url_for('mock_jamb.bank_add_question'), none, false) }}
         </details>
     </div>

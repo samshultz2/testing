@@ -169,9 +169,17 @@
 
 {# ---- Stand-alone questions ---- #}
 <div class="card">
-    <div class="card-header"><h3><i class="fas fa-list-ol"></i> Stand-alone questions ({{ standalone|length }})</h3></div>
+    <div class="card-header"><h3><i class="fas fa-list-ol"></i> Stand-alone questions ({{ pagination.total if pagination else standalone|length }})</h3></div>
     <div class="card-body" style="padding:.3rem 0;">
-        {% for q in standalone %}{{ show_q(q, loop.index) }}{% else %}<p class="text-muted text-sm" style="padding:0 .9rem;">No stand-alone questions yet.</p>{% endfor %}
+        {% set offset = ((pagination.page - 1) * pagination.per_page) if pagination else 0 %}
+        {% for q in standalone %}{{ show_q(q, offset + loop.index) }}{% else %}<p class="text-muted text-sm" style="padding:0 .9rem;">No stand-alone questions yet.</p>{% endfor %}
+        {% if pagination and pagination.pages > 1 %}
+        <div style="display:flex;gap:.4rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;">
+            {% if pagination.has_prev %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.questions', exam_id=exam.id, subject_id=subject_id, page=pagination.prev_num) }}"><i class="fas fa-chevron-left"></i> Prev</a>{% endif %}
+            <span class="text-sm text-muted">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+            {% if pagination.has_next %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.questions', exam_id=exam.id, subject_id=subject_id, page=pagination.next_num) }}">Next <i class="fas fa-chevron-right"></i></a>{% endif %}
+        </div>
+        {% endif %}
         <details open style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a stand-alone question</summary>
             {{ qform(url_for('mock_jamb.add_mock_question', exam_id=exam.id), none) }}
         </details>
