@@ -167,6 +167,51 @@ def test_harvest_saves_and_dedupes(app, monkeypatch):
         assert MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').count() == 2
 
 
+def test_harvest_flags_figure_questions_and_holds_them_out(app, monkeypatch):
+    """A figure-dependent question is saved with needs_image=True, kept out of the
+    exam pool, and re-enters once an image is set (or the flag is dismissed)."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+    from utils.mock_jamb_sitting import _subject_pool
+
+    figure_html = _fixture("In the diagram above, find the marked angle.")
+    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['201'])
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: figure_html)
+
+    with app.app_context():
+        s = Subject(name='HarvestFigSubj', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        mh.start_harvest([{'id': sid, 'name': 'Physics'}], exam='jamb', year_min=2019, year_max=2019)
+        for _ in range(3):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        assert st['added'] == 1 and st['needs_image'] == 1
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
+        assert q.needs_image is True
+
+        # held out of the draw pool
+        class _Exam:  # minimal stand-in; a bank-source exam owns no questions
+            id = -999
+        _passages, qrows = _subject_pool(_Exam(), sid)
+        assert q.id not in {x.id for x in qrows}
+
+        # dismissing the flag returns it to the pool
+        from config import Config
+        from tests.conftest import login_token
+        c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    import re
+    tok = re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                    c.get('/students').get_data(as_text=True)).group(1)
+    c.post(f'/mock-jamb/bank/question/{q.id}/set-image',
+           data={'_csrf_token': tok, 'dismiss': '1'}, follow_redirects=True)
+    with app.app_context():
+        q2 = db.session.get(MockJAMBQuestion, q.id)
+        assert q2.needs_image is False
+
+
 def test_harvest_reports_empty_subjects(app, monkeypatch):
     """A subject myschool has no questions for is reported in empty_subjects so
     the user learns why nothing was saved (e.g. not offered under that exam)."""

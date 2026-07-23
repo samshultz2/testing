@@ -46,11 +46,21 @@
     </div>
 </form>
 
+{% if needs_image_count %}
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #b45309;">
+    <div class="card-body" style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
+        <i class="fas fa-image" style="color:#b45309;font-size:1.2rem;"></i>
+        <span><strong>{{ needs_image_count }}</strong> question(s) need a figure image and are held out of exams until you add it.</span>
+        <a href="{{ url_for('mock_jamb.bank_needs_images') }}" class="btn btn-warning btn-sm" style="margin-left:auto;"><i class="fas fa-list-check"></i> Review &amp; add images</a>
+    </div>
+</div>
+{% endif %}
+
 {# ---- One-click download from myschool.ng ---- #}
 <details class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
     <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-cloud-arrow-down"></i> Download questions from myschool.ng <span class="text-muted text-sm">— pick subjects &amp; years, it saves straight to the bank</span></h3></summary>
     <div class="card-body">
-        <p class="text-sm text-muted">Scrapes past questions for the ticked subjects across the chosen years and saves them here, de-duplicated. Each question is auto-tagged with its section/topic and year. It runs in resumable steps in your browser — you can stop and resume any time. Tables are kept as text; a figure image is saved when the page exposes one, and questions that <em>rely</em> on a diagram we can't fetch are skipped and counted. Keep this tab open while it runs.</p>
+        <p class="text-sm text-muted">Scrapes past questions for the ticked subjects across the chosen years and saves them here, de-duplicated. Each question is auto-tagged with its section/topic and year. It runs in resumable steps in your browser — you can stop and resume any time. Tables are kept as text; a figure image is saved when the page exposes one, and questions that <em>rely</em> on a diagram we can't fetch are saved but <strong>held out of exams</strong> until you add the image (see the “needs images” review queue). Keep this tab open while it runs.</p>
         <p class="text-sm text-muted" style="margin-top:-.4rem;"><i class="fas fa-circle-info"></i> myschool draws most diagrams with JavaScript, so this server-side download rarely captures them. For diagram-heavy subjects, run the local <code>waec_scraper.py --images</code> (a real browser) and paste its output — captured figures show on the platform automatically.</p>
         <div class="form-row" style="align-items:flex-end;">
             <div class="form-group"><label class="form-label">Exam</label>
@@ -323,7 +333,7 @@
     function counts(s){
         var parts = [(s.added||0) + ' added'];
         if(s.duplicates) parts.push(s.duplicates + ' already banked');
-        if(s.skipped_figure) parts.push(s.skipped_figure + ' need a diagram (skipped)');
+        if(s.needs_image) parts.push(s.needs_image + ' need a figure (held for review)');
         if(s.skipped) parts.push(s.skipped + ' skipped');
         if(s.tables) parts.push(s.tables + ' with tables');
         if(s.images) parts.push(s.images + ' with images');

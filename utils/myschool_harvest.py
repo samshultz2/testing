@@ -31,7 +31,7 @@ def save_state(state):
 
 
 def _blank_counters():
-    return dict(added=0, duplicates=0, skipped=0, skipped_figure=0,
+    return dict(added=0, duplicates=0, skipped=0, needs_image=0,
                 tables=0, images=0)
 
 
@@ -118,15 +118,15 @@ def _process_one(cell, qid, state, session):
     if not p:
         state['skipped'] += 1
         return
-    if p['figure_dependent']:              # unanswerable without the diagram
-        state['skipped_figure'] += 1
-        return
 
     sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']))
     sec = _valid_section(cell['subject'], sec)
     image_url = _rehost_image(p['image_url']) if p.get('image_url') else None
     if image_url:
         state['images'] += 1
+    # A figure-dependent question with no image we could fetch is saved but held
+    # out of exams (needs_image) until an admin supplies the diagram.
+    needs_image = bool(p['figure_dependent']) and not image_url
 
     base = (db.session.query(func.coalesce(func.max(MockJAMBQuestion.order), 0))
             .filter(MockJAMBQuestion.mock_exam_id.is_(None),
@@ -136,10 +136,13 @@ def _process_one(cell, qid, state, session):
         question_text=p['stem'], option_a=p['options'][0], option_b=p['options'][1],
         option_c=p['options'][2], option_d=p['options'][3], correct_option=p['correct'],
         marks=1, topic=top, subtopic=sub, exam_year=str(cell['year']),
-        source='myschool', source_ref=str(qid), image_url=image_url, order=base + 1))
+        source='myschool', source_ref=str(qid), image_url=image_url,
+        needs_image=needs_image, order=base + 1))
     db.session.commit()
     state['added'] += 1
     state['per_subject'][cell['subject']] = state['per_subject'].get(cell['subject'], 0) + 1
+    if needs_image:
+        state['needs_image'] = state.get('needs_image', 0) + 1
     if p['has_table']:
         state['tables'] += 1
 
@@ -220,7 +223,7 @@ def _public(state):
         'percent': (round(100 * done_cells / total, 1) if total else 0),
         'added': state.get('added', 0), 'duplicates': state.get('duplicates', 0),
         'skipped': state.get('skipped', 0),
-        'skipped_figure': state.get('skipped_figure', 0),
+        'needs_image': state.get('needs_image', 0),
         'tables': state.get('tables', 0), 'images': state.get('images', 0),
         'current': state.get('current'), 'per_subject': state.get('per_subject', {}),
         'empty_subjects': empty,

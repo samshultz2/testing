@@ -1105,7 +1105,11 @@ def bank():
         standalone = pagination.items
     from utils.myschool import on_jamb
     jamb_ok_ids = {s.id for s in subjects if on_jamb(s.name)}
+    needs_image_count = MockJAMBQuestion.query.filter(
+        MockJAMBQuestion.mock_exam_id.is_(None),
+        MockJAMBQuestion.needs_image.is_(True)).count()
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
+                           needs_image_count=needs_image_count,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
                            pagination=pagination, q_search=q_search, jamb_ok_ids=jamb_ok_ids,
@@ -1407,6 +1411,76 @@ def bank_scrape_resume():
 def bank_scrape_status():
     from utils.myschool_harvest import _public, get_state
     return jsonify(_public(get_state()))
+
+
+@mock_jamb_bp.route('/bank/needs-images')
+@login_required
+def bank_needs_images():
+    """Review queue of bank questions that refer to a figure we couldn't fetch.
+    Filterable by subject, year and exam body; upload the diagram (or dismiss the
+    flag) inline. Flagged questions are held out of exams until resolved."""
+    subjects = _mock_subjects()
+    subject_id = request.args.get('subject_id', type=int)
+    year = (request.args.get('year') or '').strip()
+    exam_body = (request.args.get('exam_body') or '').strip()
+    page = max(1, request.args.get('page', 1, type=int))
+
+    def _flagged():
+        return MockJAMBQuestion.query.filter(
+            MockJAMBQuestion.mock_exam_id.is_(None),
+            MockJAMBQuestion.needs_image.is_(True))
+
+    q = _flagged()
+    if subject_id:
+        q = q.filter(MockJAMBQuestion.subject_id == subject_id)
+    if year:
+        q = q.filter(MockJAMBQuestion.exam_year == year)
+    if exam_body:
+        q = q.filter(MockJAMBQuestion.exam_body == exam_body)
+    q = q.order_by(MockJAMBQuestion.subject_id, MockJAMBQuestion.exam_year,
+                   MockJAMBQuestion.id)
+    pagination = q.paginate(page=page, per_page=20, error_out=False)
+
+    years = [y for (y,) in db.session.query(MockJAMBQuestion.exam_year)
+             .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                     MockJAMBQuestion.needs_image.is_(True),
+                     MockJAMBQuestion.exam_year.isnot(None))
+             .distinct().order_by(MockJAMBQuestion.exam_year.desc()).all() if y]
+    subj_name = {s.id: s.name for s in subjects}
+    total = _flagged().count()
+    return render_template('mock_jamb/needs_images.html',
+                           subjects=subjects, subject_id=subject_id, year=year,
+                           exam_body=exam_body, years=years, subj_name=subj_name,
+                           pagination=pagination, questions=pagination.items,
+                           total=total, index_url=url_for('mock_jamb.index'),
+                           bank_url=url_for('mock_jamb.bank'))
+
+
+@mock_jamb_bp.route('/bank/question/<int:question_id>/set-image', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_set_question_image(question_id):
+    """Attach a figure to a flagged bank question (clearing needs_image so it
+    re-enters the pool), or dismiss the flag when no image is actually needed."""
+    q = db.get_or_404(MockJAMBQuestion, question_id)
+    if q.mock_exam_id is not None:
+        flash('Not a bank question.', 'error')
+        return redirect(url_for('mock_jamb.bank_needs_images'))
+    back = request.referrer or url_for('mock_jamb.bank_needs_images')
+    if request.form.get('dismiss'):
+        q.needs_image = False
+        db.session.commit()
+        flash('Marked as not needing an image — it can now be used in exams.', 'success')
+        return redirect(back)
+    url = _save_mock_image(request.files.get('image'))
+    if not url:
+        flash('Choose an image file to upload.', 'error')
+        return redirect(back)
+    q.image_url = url
+    q.needs_image = False
+    db.session.commit()
+    flash('Image added — the question is now in the exam pool.', 'success')
+    return redirect(back)
 
 
 @mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])

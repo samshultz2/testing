@@ -140,7 +140,8 @@ def _subject_pool(exam, subject_id):
                 .order_by(MockJAMBPassage.order, MockJAMBPassage.id).all())
     qrows = (MockJAMBQuestion.query
              .filter(MockJAMBQuestion.subject_id == subject_id,
-                     _pool_condition(MockJAMBQuestion, exam))
+                     _pool_condition(MockJAMBQuestion, exam),
+                     MockJAMBQuestion.needs_image.isnot(True))   # hold out figure-less questions
              .order_by(MockJAMBQuestion.order, MockJAMBQuestion.id).all())
     return passages, qrows
 

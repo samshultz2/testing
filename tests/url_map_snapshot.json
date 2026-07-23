@@ -3675,6 +3675,13 @@
 ]
 ],
 [
+"mock_jamb.bank_needs_images",
+"/mock-jamb/bank/needs-images",
+[
+"GET"
+]
+],
+[
 "mock_jamb.bank_scrape_resume",
 "/mock-jamb/bank/scrape/resume",
 [
@@ -3705,6 +3712,13 @@
 [
 "mock_jamb.bank_scrape_stop",
 "/mock-jamb/bank/scrape/stop",
+[
+"POST"
+]
+],
+[
+"mock_jamb.bank_set_question_image",
+"/mock-jamb/bank/question/<int:question_id>/set-image",
 [
 "POST"
 ]

@@ -62,6 +62,7 @@ def ensure_mock_jamb_schema():
             'section': 'VARCHAR(40)', 'exam_body': "VARCHAR(10) DEFAULT 'JAMB'",
             'difficulty': 'VARCHAR(10)', 'source': 'VARCHAR(20)',
             'source_ref': 'VARCHAR(40)', 'exam_year': 'VARCHAR(8)',
+            'needs_image': 'BOOLEAN DEFAULT 0',
         }
         for col, ddl in add.items():
             if col not in mq:
