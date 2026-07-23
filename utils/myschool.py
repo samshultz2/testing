@@ -93,6 +93,28 @@ def on_jamb(subject_name):
     return norm_subject(subject_name) in JAMB_SUBJECTS
 
 
+# JAMB's recommended English novel rotates by year. myschool doesn't label the
+# novel on a question, but the year is known, so English Novel-section questions
+# can be tagged with the correct book automatically. (title — author, matching
+# the blueprint editor's suggestions.) Edit/extend as JAMB announces new texts.
+JAMB_ENGLISH_NOVELS = [
+    ((2016, 2020), "The Last Days at Forcados High School — A.H. Mohammed"),
+    ((2021, 2025), "The Life Changer — Khadija Abubakar Jalli"),
+]
+
+
+def novel_for_year(year):
+    """The JAMB-recommended English novel for a UTME year, or None if unknown."""
+    try:
+        y = int(str(year)[:4])
+    except (TypeError, ValueError):
+        return None
+    for (lo, hi), title in JAMB_ENGLISH_NOVELS:
+        if lo <= y <= hi:
+            return title
+    return None
+
+
 def norm_subject(name):
     """Casefold + de-alias to the taxonomy keys (mirror of
     utils.jamb_blueprint.norm_subject, duplicated so this stays importable
@@ -329,8 +351,13 @@ def _build_index(subject):
     return index
 
 
-def classify(subject, text):
-    """Keyword-match a question to (section, topic, subtopic)."""
+def classify(subject, text, year=None):
+    """Keyword-match a question to (section, topic, subtopic).
+
+    For English, a question confidently classified into the Novel section has its
+    ``topic`` set to the JAMB-recommended novel for ``year`` (when known), so it
+    lines up with a mock that names that novel — the app serves Novel questions
+    whose topic matches the mock's ``novel_title``."""
     index = _build_index(subject)
     if not index:
         return (None, None, None)
@@ -348,7 +375,13 @@ def classify(subject, text):
         if score > best_score:
             best_score, best = score, (section, topic, sub)
     if best and best_score > 0:
-        return best
+        section, topic, sub = best
+        # tag the actual novel by year (only on a genuine novel match)
+        if section == "novel" and topic == "Recommended Novel":
+            nv = novel_for_year(year)
+            if nv:
+                topic = nv
+        return (section, topic, sub)
     sections = []
     for section, _t, _s, _k in index:
         if section and section not in sections:
@@ -584,7 +617,7 @@ def scrape_year(subject, exam, year, session=None, max_pages=60, delay=0.6,
         if not parsed:
             continue
         section, topic, subtopic = classify(
-            subject, parsed["stem"] + " " + " ".join(parsed["options"]))
+            subject, parsed["stem"] + " " + " ".join(parsed["options"]), year=year)
         parsed.update(subject=subject, year=str(year), qid=qid,
                       section=section, topic=topic, subtopic=subtopic)
         yield parsed

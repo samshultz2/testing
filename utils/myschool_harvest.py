@@ -119,7 +119,8 @@ def _process_one(cell, qid, state, session):
         state['skipped'] += 1
         return
 
-    sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']))
+    sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']),
+                                year=cell['year'])
     sec = _valid_section(cell['subject'], sec)
     image_url = _rehost_image(p['image_url']) if p.get('image_url') else None
     if image_url:

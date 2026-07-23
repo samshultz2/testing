@@ -82,6 +82,21 @@ def test_parse_detail_ignores_avatar_images():
     assert p['image_url'] is None               # avatars are not question figures
 
 
+def test_english_novel_tagged_by_year():
+    from utils import myschool as ms
+    q = "Which character in the recommended novel is the protagonist?"
+    sec, top, _ = ms.classify('english language', q, year=2019)
+    assert sec == 'novel' and 'Forcados' in top          # 2016-2020 novel
+    sec, top, _ = ms.classify('english language', q, year=2023)
+    assert sec == 'novel' and 'Life Changer' in top      # 2021-2025 novel
+    # unknown year keeps the generic label (assign manually)
+    sec, top, _ = ms.classify('english language', q, year=1990)
+    assert sec == 'novel' and top == 'Recommended Novel'
+    # a non-novel English question is unaffected by the year
+    sec, top, _ = ms.classify('english language', "Choose the nearest in meaning to 'candid'", year=2023)
+    assert sec != 'novel'
+
+
 def test_on_jamb_flags_school_only_subjects():
     from utils import myschool as ms
     for s in ('Commerce', 'Mathematics', 'Physics', 'Literature in English',

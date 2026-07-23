@@ -192,9 +192,14 @@ def subject_items(exam, subject_id, attempt):
         # novel question is eligible.
         novel = (getattr(exam, 'novel_title', None) or '').strip().lower()
         if novel and questions_by_section.get('novel'):
+            def _novel_match(q):
+                # tolerant match: the mock's title and the question's novel tag
+                # line up if either contains the other (so "The Life Changer"
+                # matches "The Life Changer — Khadija Abubakar Jalli").
+                t = (q.topic or '').strip().lower()
+                return bool(t) and (novel in t or t in novel)
             questions_by_section['novel'] = [
-                q for q in questions_by_section['novel']
-                if (q.topic or '').strip().lower() == novel]
+                q for q in questions_by_section['novel'] if _novel_match(q)]
         items, served = draw_paper(bp, passages_by_section, questions_by_section, rng)
         if served:
             return items, served
