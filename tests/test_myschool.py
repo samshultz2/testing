@@ -146,3 +146,23 @@ def test_harvest_saves_and_dedupes(app, monkeypatch):
                 break
         assert st2['added'] == 0 and st2['duplicates'] == 2
         assert MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').count() == 2
+
+
+def test_harvest_reports_empty_subjects(app, monkeypatch):
+    """A subject myschool has no questions for is reported in empty_subjects so
+    the user learns why nothing was saved (e.g. not offered under that exam)."""
+    from models import db, Subject
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: [])   # nothing found
+    with app.app_context():
+        s = Subject(name='Civic Education', is_active=True); db.session.add(s); db.session.commit()
+        mh.start_harvest([{'id': s.id, 'name': 'Civic Education'}], exam='jamb',
+                         year_min=2018, year_max=2019)
+        for _ in range(6):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        assert st['status'] == 'done' and st['added'] == 0
+        assert st['empty_subjects'] == ['Civic Education']

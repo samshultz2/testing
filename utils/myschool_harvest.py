@@ -56,7 +56,8 @@ def start_harvest(subjects, exam='jamb', year_min=None, year_max=None, max_pages
         'status': 'running' if cells else 'done',
         'exam': exam, 'cells': cells, 'ci': 0, 'ids': None,
         'max_pages': int(max_pages), 'current': None,
-        'per_subject': {}, 'last_error': '',
+        'per_subject': {}, 'found': {}, 'last_error': '',
+        'subjects': sorted({c['subject'] for c in cells}),
         'updated_at': datetime.now().isoformat(timespec='seconds'),
     }
     state.update(_blank_counters())
@@ -163,6 +164,8 @@ def harvest_step(max_questions=6):
                 state['ids'] = ms.list_question_ids(
                     cell['slug'], state['exam'], cell['year'], session,
                     max_pages=state.get('max_pages', 60), delay=0.3)
+                found = state.setdefault('found', {})
+                found[cell['subject']] = found.get(cell['subject'], 0) + len(state['ids'])
             if not state['ids']:
                 state['ci'] += 1
                 state['ids'] = None
@@ -204,6 +207,12 @@ def _public(state):
         return {'status': 'none'}
     total = len(state.get('cells') or [])
     done_cells = min(state.get('ci', 0), total)
+    # subjects that turned up no questions at all — usually not offered under the
+    # chosen exam on myschool (only surfaced once we've looked at them).
+    found = state.get('found', {})
+    empty = []
+    if state.get('status') == 'done':
+        empty = [s for s in state.get('subjects', []) if found.get(s, 0) == 0]
     return {
         'status': state.get('status', 'none'),
         'exam': state.get('exam'),
@@ -214,5 +223,6 @@ def _public(state):
         'skipped_figure': state.get('skipped_figure', 0),
         'tables': state.get('tables', 0), 'images': state.get('images', 0),
         'current': state.get('current'), 'per_subject': state.get('per_subject', {}),
+        'empty_subjects': empty,
         'last_error': state.get('last_error', ''), 'updated_at': state.get('updated_at'),
     }

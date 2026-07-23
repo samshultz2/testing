@@ -337,7 +337,13 @@
         elStatus.textContent = ({running:'Downloading…', paused:'Paused', done:'Done ✓'}[s.status] || s.status);
         elCounts.textContent = counts(s) + '  (' + (s.cells_done||0) + '/' + (s.cells_total||0) + ' subject-years)';
         elCurrent.textContent = s.current ? (' · now: ' + s.current.subject + ' ' + s.current.year) : '';
-        elError.textContent = s.last_error || '';
+        var msg = s.last_error || '';
+        if(!msg && s.status === 'done' && s.empty_subjects && s.empty_subjects.length){
+            msg = 'No ' + (s.exam||'JAMB').toUpperCase() + ' questions on myschool for: '
+                + s.empty_subjects.join(', ') + '. These may only be offered under a different exam — '
+                + 'try switching Exam (e.g. WAEC/NECO), or these subjects simply aren’t on myschool.';
+        }
+        elError.textContent = msg;
         buttons(s);
     }
     function buttons(s){
