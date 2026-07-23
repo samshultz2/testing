@@ -71,7 +71,7 @@
             <div class="student-info-item"><span>Term:</span><strong>{{ selected_term.name }}</strong></div>
             <div class="student-info-item"><span>Session:</span><strong>{{ selected_term.session.name }}</strong></div>
             <div class="student-info-item"><span>No. in Class:</span><strong>{{ report_data.no_in_class }}</strong></div>
-            <div class="student-info-item"><span>Class Position:</span><strong>{{ report_data.term_summary.position_in_class if report_data.term_summary and report_data.term_summary.position_in_class else '—' }}</strong></div>
+            <div class="student-info-item"><span>Class Position:</span><strong>{{ (report_data.term_summary.position_in_arm or report_data.term_summary.position_in_class) if report_data.term_summary and (report_data.term_summary.position_in_arm or report_data.term_summary.position_in_class) else '—' }}</strong></div>
             <div class="student-info-item"><span>Attendance:</span><strong>{% if report_data.attendance_present is not none %}{{ report_data.attendance_present|num }}{% if report_data.attendance_days_opened %} / {{ (report_data.attendance_days_opened * 2)|num }}{% endif %}{% if report_data.attendance_pct is not none %} ({{ report_data.attendance_pct|num }}%){% endif %}{% else %}—{% endif %}</strong></div>
         </div>
     </div>

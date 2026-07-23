@@ -19,8 +19,8 @@
         <div class="kpi"><div class="v">{{ report_data.subjects_failed }}</div><div class="l">Failed</div></div>
     </div>
 
-    {% if report_data.term_summary and report_data.term_summary.position_in_class %}
-    <p style="margin:.2rem 0;"><strong>Position in class:</strong> {{ report_data.term_summary.position_in_class }}</p>
+    {% if report_data.term_summary and (report_data.term_summary.position_in_arm or report_data.term_summary.position_in_class) %}
+    <p style="margin:.2rem 0;"><strong>Position in class:</strong> {{ report_data.term_summary.position_in_arm or report_data.term_summary.position_in_class }}</p>
     {% endif %}
 
     <div style="overflow-x:auto;">

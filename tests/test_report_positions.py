@@ -52,6 +52,55 @@ def test_compute_positions(app):
         assert ts_hi.subjects_passed == 1 and ts_lo.subjects_failed == 1
 
 
+def test_position_in_arm_is_per_arm(app):
+    """A class with two arms ranks each arm independently: every arm has its own
+    #1, while position_in_class spans the whole class."""
+    from utils.report_card import compute_term_summaries
+    with app.app_context():
+        bid = Branch.get_default().id
+        sess = AcademicSession(name='ARM-Sess'); db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name='ARM-Term'); db.session.add(term); db.session.flush()
+        sc = SchoolClass(name='ARM-Class', level=99); db.session.add(sc); db.session.flush()
+        arm_a = ClassArm(name='ARM-A'); arm_b = ClassArm(name='ARM-B')
+        db.session.add_all([arm_a, arm_b]); db.session.flush()
+        subj = Subject(name='ARM-Maths', is_active=True); db.session.add(subj); db.session.flush()
+        # reuse an existing active assessment type — creating a new global one
+        # would leak into other tests' report-card columns.
+        at = AssessmentType.query.filter_by(is_active=True).first()
+        if not at:
+            at = AssessmentType(name='ARM-Exam', short_name='AX', max_score=100, order=1, is_active=True)
+            db.session.add(at); db.session.flush()
+        # class-wide subject (arm_id NULL) so both arms take it
+        cs = ClassSubject(subject_id=subj.id, class_id=sc.id, arm_id=None, term_id=term.id, is_active=True)
+        db.session.add(cs); db.session.flush()
+        marks = {}
+        for arm, scores in ((arm_a, (70, 40)), (arm_b, (90, 30))):
+            caa = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+            db.session.add(caa); db.session.flush()
+            for i, score in enumerate(scores):
+                s = Student(student_id=f'ARM-{arm.name}-{i}', first_name='A', surname=arm.name,
+                            gender='Male', is_active=True, branch_id=bid)
+                db.session.add(s); db.session.flush()
+                db.session.add(StudentEnrollment(student_id=s.id, class_arm_assignment_id=caa.id, is_active=True))
+                db.session.add(StudentScore(student_id=s.id, class_subject_id=cs.id,
+                                            assessment_type_id=at.id, score=score))
+                marks[(arm.name, score)] = s.id
+        db.session.commit()
+
+        compute_term_summaries(term.id, sc.id)
+
+        def ts(sid):
+            return TermSummary.query.filter_by(student_id=sid, term_id=term.id).first()
+        # Each arm's top scorer is 1st IN ITS ARM…
+        assert ts(marks[('ARM-A', 70)]).position_in_arm == 1
+        assert ts(marks[('ARM-A', 40)]).position_in_arm == 2
+        assert ts(marks[('ARM-B', 90)]).position_in_arm == 1
+        assert ts(marks[('ARM-B', 30)]).position_in_arm == 2
+        # …but class-wide the 90 beats the 70 (positions span both arms).
+        assert ts(marks[('ARM-B', 90)]).position_in_class == 1
+        assert ts(marks[('ARM-A', 70)]).position_in_class == 2
+
+
 def test_competition_ranking_ties():
     from utils.report_card import _assign_ranks
     rows = [{'average': 90}, {'average': 80}, {'average': 80}, {'average': 50}]

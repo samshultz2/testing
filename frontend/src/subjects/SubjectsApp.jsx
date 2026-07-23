@@ -616,15 +616,23 @@ function BulkEntry({ d, notify }) {
 }
 
 // ---- Broadsheet ------------------------------------------------------------
-function ExportMenu({ urls }) {
+function ExportMenu({ urls, extraParams }) {
   const [pos, setPos] = useState(null);        // null = closed; {top,left} = open
   const btnRef = React.useRef(null);
   const MENU_W = 180;
+  const withParams = (href) => {
+    if (!href || !extraParams) return href;
+    const qs = Object.entries(extraParams)
+      .filter(([, v]) => v !== '' && v != null)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+    if (!qs) return href;
+    return href + (href.includes('?') ? '&' : '?') + qs;
+  };
   const items = [
-    { href: urls.export, icon: 'fa-file-excel', label: 'Excel' },
-    { href: urls.export_pdf, icon: 'fa-file-pdf', label: 'PDF' },
-    { href: urls.export_word, icon: 'fa-file-word', label: 'Word' },
-    { href: urls.export_image, icon: 'fa-file-image', label: 'HD Image' },
+    { href: withParams(urls.export), icon: 'fa-file-excel', label: 'Excel' },
+    { href: withParams(urls.export_pdf), icon: 'fa-file-pdf', label: 'PDF' },
+    { href: withParams(urls.export_word), icon: 'fa-file-word', label: 'Word' },
+    { href: withParams(urls.export_image), icon: 'fa-file-image', label: 'HD Image' },
   ].filter((i) => i.href);
   const toggle = () => {
     if (pos) { setPos(null); return; }
@@ -732,7 +740,7 @@ function Broadsheet({ d, notify }) {
               <a href={d.urls.affective} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-star-half-stroke" /> Behaviour</a>
               <a href={d.urls.comments} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-comment-dots" /> Comments</a>
               {d.urls.analytics && <a href={d.urls.analytics} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-column" /> Analytics</a>}
-              <ExportMenu urls={d.urls} />
+              <ExportMenu urls={d.urls} extraParams={hasFilter ? { min_score: minVal, filter_field: filterField } : null} />
               <BlankSheetButton url={d.urls.blank_sheet} />
               <span className="badge badge-info">{hasFilter ? `${rows.length} of ${d.rows.length}` : d.rows.length} Students</span>
             </div>

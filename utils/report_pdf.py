@@ -106,7 +106,7 @@ def _particulars(student, report_data, term, width):
     level = _sheet_level(report_data['assignment'].display_name)
     title = (f'{level} Report Sheet' if level else 'Terminal Report Sheet')
     pos = report_data.get('term_summary')
-    pos = pos.position_in_class if (pos and pos.position_in_class) else '—'
+    pos = (pos.position_in_arm or pos.position_in_class) if pos and (pos.position_in_arm or pos.position_in_class) else '—'
     ap = report_data.get('attendance_present')
     if ap is not None:
         att = _n(ap)
@@ -199,7 +199,7 @@ def _summary_block(report_data, width):
         return Paragraph(f'<b>{_esc(label)}:</b> {_esc(value)}', s['lbl'])
 
     pos = report_data.get('term_summary')
-    pos = pos.position_in_class if (pos and pos.position_in_class) else '—'
+    pos = (pos.position_in_arm or pos.position_in_class) if pos and (pos.position_in_arm or pos.position_in_class) else '—'
     rows = [
         (pair('No. of Subjects', report_data['total_subjects']), pair('Class Position', pos)),
         (pair('Scores Obtainable', _n(report_data.get('scores_obtainable'), blank='—')),

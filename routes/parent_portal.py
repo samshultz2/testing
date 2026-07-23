@@ -45,7 +45,7 @@ def _report_payload(report, affective_traits, rating_labels):
                       'total': row['total'], 'grade': row['grade'], 'remark': row['remark']}
                      for row in report['subjects']],
         'average': report['average'], 'overall_grade': report['overall_grade'],
-        'position': (ts.position_in_class if ts else None),
+        'position': ((ts.position_in_arm or ts.position_in_class) if ts else None),
         'teacher_comment': (ts.teacher_comment if ts else None),
         'principal_comment': (ts.principal_comment if ts else None),
         'affective': [{'label': label, 'rating': aff.get(key),

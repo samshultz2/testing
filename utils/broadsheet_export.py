@@ -86,9 +86,28 @@ def score_columns():
 # Shared filled-broadsheet model
 # --------------------------------------------------------------------------- #
 
-def build_model(term_id, assignment_id):
+def _passes_filter(row, field, min_val):
+    """Whether a broadsheet row meets a ``field >= min_val`` threshold. ``field``
+    is 'average', 'total' or a class-subject id (int/str). Missing cells fail."""
+    if field == 'average':
+        v = row['average']
+    elif field == 'total':
+        v = row['total']
+    else:
+        try:
+            v = row['subjects'].get(int(field))
+        except (TypeError, ValueError):
+            v = None
+    return v is not None and v >= min_val
+
+
+def build_model(term_id, assignment_id, min_score=None, filter_field=None):
     """Shared broadsheet data: ranked students × subject totals. Returns a dict
-    with ``term``, ``assignment``, ``subjects`` and ``rows`` (already ranked)."""
+    with ``term``, ``assignment``, ``subjects`` and ``rows`` (already ranked).
+
+    When ``min_score`` is given, rows are filtered to those scoring at or above it
+    in ``filter_field`` ('average' default, 'total' or a subject id) — applied
+    AFTER ranking so each shown student keeps their true arm position."""
     term = db.session.get(Term, term_id)
     asg = db.session.get(ClassArmAssignment, assignment_id)
     if not (term and asg):
@@ -124,6 +143,9 @@ def build_model(term_id, assignment_id):
     rows.sort(key=lambda r: r['average'], reverse=True)
     for i, r in enumerate(rows, 1):
         r['position'] = i
+    if min_score is not None:
+        field = filter_field or 'average'
+        rows = [r for r in rows if _passes_filter(r, field, min_score)]
     return {'term': term, 'assignment': asg, 'subjects': subjects, 'rows': rows,
             'pass_mark': pass_mark}
 
@@ -150,7 +172,7 @@ def _theme():
     return HexColor('#0D6A4E'), HexColor('#C9A227'), HexColor('#F4F7F5'), HexColor('#14211C')
 
 
-def broadsheet_pdf(term_id, assignment_id, mono=True):
+def broadsheet_pdf(term_id, assignment_id, mono=True, min_score=None, filter_field=None):
     """Filled broadsheet as a PDF.
 
     ``mono=True`` (the downloadable PDF) is plain black-on-white — no colour or
@@ -163,7 +185,7 @@ def broadsheet_pdf(term_id, assignment_id, mono=True):
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer)
     from utils.web_exports import pdf_escape
 
-    m = build_model(term_id, assignment_id)
+    m = build_model(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
     if not m:
         return None
     primary, accent, light, ink = _theme()
@@ -231,13 +253,13 @@ def broadsheet_pdf(term_id, assignment_id, mono=True):
 # Filled broadsheet — Word (.docx)
 # --------------------------------------------------------------------------- #
 
-def broadsheet_docx(term_id, assignment_id):
+def broadsheet_docx(term_id, assignment_id, min_score=None, filter_field=None):
     from docx import Document
     from docx.shared import Pt, RGBColor, Inches
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.section import WD_ORIENT
 
-    m = build_model(term_id, assignment_id)
+    m = build_model(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
     if not m:
         return None
     subjects = m['subjects']
@@ -289,14 +311,14 @@ def broadsheet_docx(term_id, assignment_id):
 # Filled broadsheet — high-resolution PNG (render the PDF at high DPI)
 # --------------------------------------------------------------------------- #
 
-def broadsheet_png(term_id, assignment_id, dpi=200):
+def broadsheet_png(term_id, assignment_id, dpi=200, min_score=None, filter_field=None):
     """Render the broadsheet PDF to a single high-resolution PNG.
 
     Every page is rendered and the pages are stacked vertically into one image,
     so a broadsheet whose roster spills onto several pages exports in full
     (previously only the first page was captured). Keeps the branded colour
     design — only the downloadable PDF is monochrome."""
-    pdf = broadsheet_pdf(term_id, assignment_id, mono=False)
+    pdf = broadsheet_pdf(term_id, assignment_id, mono=False, min_score=min_score, filter_field=filter_field)
     if not pdf:
         return None
     import fitz

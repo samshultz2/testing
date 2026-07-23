@@ -715,6 +715,8 @@ def export_broadsheet():
     term_id = request.args.get('term_id', type=int)
     assignment_id = request.args.get('assignment_id', type=int)
     fmt = (request.args.get('format') or 'excel').lower()
+    min_score = request.args.get('min_score', type=float)
+    filter_field = (request.args.get('filter_field') or 'average').strip() or 'average'
 
     if not term_id or not assignment_id:
         flash('Select term and class first.', 'error')
@@ -737,12 +739,12 @@ def export_broadsheet():
         base = (selected_assignment.display_name or 'broadsheet').replace(' ', '_')
         stem = f"broadsheet_{base}_{selected_term.name.replace(' ', '_')}"
         if fmt == 'pdf':
-            data = bx.broadsheet_pdf(term_id, assignment_id)
+            data = bx.broadsheet_pdf(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
             return pdf_response(data, f'{stem}.pdf', inline=False)
         if fmt in ('word', 'docx'):
-            data = bx.broadsheet_docx(term_id, assignment_id)
+            data = bx.broadsheet_docx(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
             return docx_response(data, f'{stem}.docx')
-        data = bx.broadsheet_png(term_id, assignment_id)
+        data = bx.broadsheet_png(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
         return png_response(data, f'{stem}.png', inline=False)
 
     # Get data (same as broadsheet view)
@@ -788,9 +790,25 @@ def export_broadsheet():
         
         broadsheet_data.append(student_row)
     
-    # Sort by average
+    # Sort by average and stamp the (arm) position BEFORE any filtering so a
+    # filtered export still shows each student's true position in the arm.
     broadsheet_data.sort(key=lambda x: x['average'], reverse=True)
-    
+    for i, r in enumerate(broadsheet_data, 1):
+        r['position'] = i
+    if min_score is not None:
+        def _passes(r):
+            if filter_field == 'average':
+                v = r['average']
+            elif filter_field == 'total':
+                v = r['total']
+            else:
+                try:
+                    v = r['subjects'].get(int(filter_field))
+                except (TypeError, ValueError):
+                    v = None
+            return v is not None and v >= min_score
+        broadsheet_data = [r for r in broadsheet_data if _passes(r)]
+
     # Create Excel
     wb = Workbook()
     ws = wb.active
@@ -827,7 +845,7 @@ def export_broadsheet():
     # Data rows
     for idx, data in enumerate(broadsheet_data, 1):
         row += 1
-        ws.cell(row=row, column=1, value=idx).border = thin_border
+        ws.cell(row=row, column=1, value=data.get('position', idx)).border = thin_border
         ws.cell(row=row, column=2, value=data['student'].full_name).border = thin_border
         ws.cell(row=row, column=3, value=data['student'].student_id).border = thin_border
         
