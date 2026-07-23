@@ -1045,18 +1045,11 @@ def bank():
             sq = sq.filter(MockJAMBQuestion.section == section)
         standalone = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
                                  MockJAMBQuestion.id).all()
-    from utils.aloc import (aloc_slug, get_tokens, EXAM_TYPES, harvest_year_max,
-                            harvest_subjects, subject_coverage)
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
                            topic_tree=_subject_topic_tree(subject_id),
                            has_passage_sections=any(s['passage'] for s in sections),
-                           aloc_slug=(aloc_slug(subject.name) if subject else None),
-                           aloc_token_count=len(get_tokens()), aloc_examtypes=EXAM_TYPES,
-                           aloc_year_max=harvest_year_max(),
-                           aloc_subjects=[{'id': i, 'name': n} for i, n in harvest_subjects()],
-                           year_coverage=(subject_coverage(subject_id) if (subject and aloc_slug(subject.name)) else []),
                            novel_section=any(s['section'] == 'novel' for s in sections),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
@@ -1222,141 +1215,6 @@ def bank_delete_question(question_id):
     db.session.commit()
     flash('Question deleted from the bank.', 'success')
     return redirect(_bank_url(sid, sec))
-
-
-@mock_jamb_bp.route('/bank/import-aloc', methods=['POST'])
-@login_required
-@csrf_protect
-def bank_import_aloc():
-    """Pull questions for one subject from the ALOC questions API into the bank,
-    rotating across one or more access tokens on exhaustion."""
-    from utils.aloc import import_questions, save_tokens, get_tokens, parse_tokens, aloc_slug, EXAM_TYPES
-    subject_id = request.form.get('subject_id', type=int)
-    subject = db.session.get(Subject, subject_id) if subject_id else None
-    if not subject:
-        flash('Choose a subject first.', 'error')
-        return redirect(_bank_url(subject_id))
-    if not aloc_slug(subject.name):
-        flash(f'ALOC does not serve {subject.name}. Use bulk paste import instead.', 'warning')
-        return redirect(_bank_url(subject_id))
-    tokens = parse_tokens(request.form.get('tokens') or '') or get_tokens()
-    if not tokens:
-        flash('Enter at least one ALOC access token to import.', 'error')
-        return redirect(_bank_url(subject_id))
-    if request.form.get('remember'):
-        save_tokens(tokens)
-    examtype = (request.form.get('examtype') or 'utme').strip()
-    if examtype not in EXAM_TYPES:
-        examtype = 'utme'
-    year = (request.form.get('year') or '').strip() or None
-    target = request.form.get('count', type=int) or 40
-    target = max(1, min(target, 300))
-    default_section = _valid_section(subject, (request.form.get('default_section') or '').strip())
-    res = import_questions(subject_id, subject.name, tokens, examtype=examtype, year=year,
-                           target=target, default_section=default_section)
-    if year and not (res.get('error') and not res.get('added')):
-        from utils.aloc import record_cell
-        record_cell(subject_id, examtype, year, res.get('saturated'))
-    if res.get('error') and not res.get('added'):
-        flash(f"ALOC import failed: {res['error']}", 'error')
-    else:
-        msg = f"Imported {res['added']} question(s) from ALOC"
-        extra = []
-        if res.get('duplicates'):
-            extra.append(f"{res['duplicates']} already in bank")
-        if res.get('skipped'):
-            extra.append(f"{res['skipped']} skipped (5-option/incomplete)")
-        if res.get('tokens_total', 0) > 1:
-            extra.append(f"{res['tokens_used']}/{res['tokens_total']} token(s) used")
-        if extra:
-            msg += ' (' + ', '.join(extra) + ')'
-        if res.get('error'):
-            msg += f". Note: {res['error']}"
-        flash(msg + '.', 'success' if res['added'] else 'info')
-    return redirect(_bank_url(subject_id, default_section))
-
-
-def _harvest_public(state):
-    """Trim the internal state to what the UI needs (drops the big cells list)."""
-    if not state:
-        return {'status': 'none'}
-    total = state.get('total_cells') or 0
-    pos = state.get('pos') or 0
-    return {'status': state.get('status', 'none'), 'examtype': state.get('examtype'),
-            'total_cells': total, 'pos': pos,
-            'percent': (round(100 * pos / total, 1) if total else 0),
-            'added': state.get('added', 0), 'duplicates': state.get('duplicates', 0),
-            'skipped': state.get('skipped', 0), 'current': state.get('current'),
-            'per_subject': state.get('per_subject', {}), 'exhausted': state.get('exhausted', False),
-            'last_error': state.get('last_error', ''), 'updated_at': state.get('updated_at')}
-
-
-@mock_jamb_bp.route('/bank/harvest/start', methods=['POST'])
-@login_required
-@csrf_protect
-def bank_harvest_start():
-    """Begin (or restart) a full ALOC harvest across every ALOC subject & year."""
-    from utils.aloc import start_harvest, get_tokens, save_tokens, parse_tokens
-    tokens = parse_tokens(request.form.get('tokens') or '')
-    if tokens and request.form.get('remember'):
-        save_tokens(tokens)
-    if not (tokens or get_tokens()):
-        return jsonify({'error': 'Add at least one ALOC access token first.'}), 400
-    examtype = (request.form.get('examtype') or 'utme').strip()
-    if examtype not in ('utme', 'wassce', 'post-utme'):
-        examtype = 'utme'
-    y1 = request.form.get('year_from', type=int)
-    y2 = request.form.get('year_to', type=int)
-    if y1 and y2 and y1 > y2:
-        y1, y2 = y2, y1
-    raw_subjects = (request.form.get('subject_ids') or '').strip()
-    subject_ids = [int(x) for x in raw_subjects.split(',') if x.strip().isdigit()] or None
-    state = start_harvest(examtype=examtype, year_min=y1, year_max=y2, subject_ids=subject_ids)
-    return jsonify(_harvest_public(state))
-
-
-@mock_jamb_bp.route('/bank/harvest/step', methods=['POST'])
-@login_required
-@csrf_protect
-def bank_harvest_step():
-    """Advance the harvest by one (subject, year) cell. The JS chunker calls this
-    repeatedly until status is 'done' or 'paused'."""
-    from utils.aloc import harvest_step, get_tokens
-    state = harvest_step(get_tokens(), max_cells=1)
-    return jsonify(_harvest_public(state))
-
-
-@mock_jamb_bp.route('/bank/harvest/stop', methods=['POST'])
-@login_required
-@csrf_protect
-def bank_harvest_stop():
-    from utils.aloc import get_harvest_state, save_harvest_state
-    state = get_harvest_state()
-    if state and state.get('status') == 'running':
-        state['status'] = 'paused'
-        save_harvest_state(state)
-    return jsonify(_harvest_public(state))
-
-
-@mock_jamb_bp.route('/bank/harvest/resume', methods=['POST'])
-@login_required
-@csrf_protect
-def bank_harvest_resume():
-    from utils.aloc import get_harvest_state, save_harvest_state, get_tokens
-    if not get_tokens():
-        return jsonify({'error': 'Add at least one ALOC access token first.'}), 400
-    state = get_harvest_state()
-    if state and state.get('status') == 'paused':
-        state['status'] = 'running'; state['exhausted'] = False; state['last_error'] = ''
-        save_harvest_state(state)
-    return jsonify(_harvest_public(state))
-
-
-@mock_jamb_bp.route('/bank/harvest/status')
-@login_required
-def bank_harvest_status():
-    from utils.aloc import get_harvest_state
-    return jsonify(_harvest_public(get_harvest_state()))
 
 
 @mock_jamb_bp.route('/bank/import', methods=['POST'])

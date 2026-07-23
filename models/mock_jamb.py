@@ -420,8 +420,8 @@ class MockJAMBQuestion(db.Model):
     section = db.Column(db.String(40))           # JAMB paper section (drives the blueprint draw)
     exam_body = db.Column(db.String(10), default='JAMB')   # JAMB / WAEC / Both
     difficulty = db.Column(db.String(10))        # optional: easy / medium / hard
-    source = db.Column(db.String(20))            # provenance, e.g. 'aloc' / 'manual' / 'import'
-    source_ref = db.Column(db.String(40))        # external id (dedupe imports, e.g. ALOC question id)
+    source = db.Column(db.String(20))            # provenance, e.g. 'paste' / 'manual' / 'import'
+    source_ref = db.Column(db.String(40))        # external id (dedupe imports)
     exam_year = db.Column(db.String(8))          # the past-question year, when known (e.g. '2018')
     topic = db.Column(db.String(100))
     subtopic = db.Column(db.String(120))
@@ -492,22 +492,3 @@ class MockJAMBAnswer(db.Model):
     )
 
 
-class MockJAMBHarvestCell(db.Model):
-    """Records how completely a (subject, exam type, year) has been pulled from the
-    ALOC API: how many questions are banked and whether the pool was exhausted
-    (``complete``), so the UI can say "all 2010 Physics questions downloaded"."""
-    __tablename__ = 'mock_jamb_harvest_cells'
-
-    id = db.Column(db.Integer, primary_key=True)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
-    exam_type = db.Column(db.String(15), default='utme')   # utme / wassce / post-utme
-    year = db.Column(db.String(8), nullable=False)
-    count = db.Column(db.Integer, default=0)               # questions banked for this cell
-    complete = db.Column(db.Boolean, default=False)        # ALOC pool exhausted (nothing left)
-    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
-
-    subject = db.relationship('Subject')
-
-    __table_args__ = (
-        db.UniqueConstraint('subject_id', 'exam_type', 'year', name='unique_harvest_cell'),
-    )

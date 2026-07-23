@@ -46,48 +46,6 @@
     </div>
 </form>
 
-{# ---- Bulk harvest: pull every ALOC past question, all subjects & years ---- #}
-<details class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
-    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-warehouse"></i> Harvest ALL past questions <span class="text-muted text-sm">— every ALOC subject &amp; year, resumable</span></h3></summary>
-    <div class="card-body">
-        <p class="text-sm text-muted">Pulls every available ALOC question across all supported subjects and years into the bank, de-duplicated. It runs in resumable steps in your browser — you can stop and resume any time (progress is saved), and it pauses automatically when your tokens hit their daily limit so you can add more or continue tomorrow. Keep this tab open while it runs.</p>
-        <div class="form-row" style="align-items:flex-end;">
-            <div class="form-group"><label class="form-label">Exam type</label>
-                <select id="hvExamtype" class="form-control">{% for t in aloc_examtypes %}<option value="{{ t }}">{{ t|upper }}</option>{% endfor %}</select></div>
-            <div class="form-group"><label class="form-label">Start year</label>
-                <input type="number" id="hvYearFrom" class="form-control" value="2001" min="1990" max="2035" style="width:100px;"></div>
-            <div class="form-group"><label class="form-label">End year</label>
-                <input type="number" id="hvYearTo" class="form-control" value="{{ aloc_year_max }}" min="1990" max="2035" style="width:100px;"></div>
-            <div class="form-group" style="flex:1;min-width:180px;"><label class="form-label">Extra tokens (optional, one per line)</label>
-                <textarea id="hvTokens" class="form-control" rows="1" placeholder="{{ aloc_token_count ~ ' saved — add more for higher daily limits' if aloc_token_count else 'ALOC-xxxxxxxx' }}" style="font-family:monospace;"></textarea></div>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Subjects <span class="text-muted text-sm">— tick the ones to download (all selected by default)</span>
-                <a href="#" id="hvAll" class="text-sm" style="margin-left:.5rem;">all</a> · <a href="#" id="hvNone" class="text-sm">none</a></label>
-            <div id="hvSubjects" style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;">
-                {% for s in aloc_subjects %}
-                <label class="text-sm" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" class="hv-subj" value="{{ s.id }}" checked> {{ s.name }}</label>
-                {% endfor %}
-            </div>
-        </div>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;">
-            <button type="button" id="hvStart" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start harvest</button>
-            <button type="button" id="hvResume" class="btn btn-success btn-sm" style="display:none;"><i class="fas fa-play"></i> Resume</button>
-            <button type="button" id="hvStop" class="btn btn-danger btn-sm" style="display:none;"><i class="fas fa-pause"></i> Stop</button>
-        </div>
-        <div id="hvProgressWrap" style="display:none;">
-            <div style="height:12px;border-radius:6px;background:var(--gray-100);overflow:hidden;">
-                <i id="hvBar" style="display:block;height:100%;width:0;background:#7c3aed;transition:width .3s;"></i>
-            </div>
-            <div class="text-sm" style="margin-top:.4rem;">
-                <strong id="hvStatus">—</strong> · <span id="hvCounts">0 added</span>
-                <span id="hvCurrent" class="text-muted"></span>
-            </div>
-            <div id="hvError" class="text-sm" style="color:#b45309;margin-top:.3rem;"></div>
-        </div>
-    </div>
-</details>
-
 {% if not subject %}
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subjects</h3><p>Add subjects first.</p></div></div></div>
 {% else %}
@@ -109,36 +67,6 @@
         </div>
         {% if coverage.rows|selectattr('short')|list %}
         <p class="text-sm" style="margin-top:.6rem;color:#b45309;"><i class="fas fa-triangle-exclamation"></i> Sections in red have fewer questions than a single JAMB paper draws — add more so each student still gets a varied paper.</p>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
-
-{# ---- ALOC download coverage by year (which years are fully downloaded) ---- #}
-{% if aloc_slug %}
-<div class="card" style="margin-bottom:1rem;">
-    <div class="card-header"><h3><i class="fas fa-calendar-check"></i> ALOC download coverage <span class="text-muted text-sm">— {{ subject.name }}, by year</span></h3></div>
-    <div class="card-body">
-        {% if year_coverage %}
-        {% set yc_complete = year_coverage|selectattr('complete')|list|length %}
-        {% set yc_questions = year_coverage|sum(attribute='count') %}
-        <div style="display:flex;gap:1.2rem;flex-wrap:wrap;align-items:baseline;margin-bottom:.7rem;padding:.5rem .7rem;background:var(--gray-50);border-radius:var(--radius-md);">
-            <span><strong style="font-size:1.15rem;">{{ subject.name }}</strong></span>
-            <span><strong style="color:#047857;">{{ yc_complete }}</strong> / {{ year_coverage|length }} year(s) complete</span>
-            <span><strong>{{ yc_questions }}</strong> ALOC question(s) downloaded</span>
-            {% if yc_complete < year_coverage|length %}<span class="text-sm" style="color:#b45309;"><i class="fas fa-hourglass-half"></i> {{ year_coverage|length - yc_complete }} year(s) still partial</span>{% endif %}
-        </div>
-        <div class="cov-grid">
-            {% for r in year_coverage %}
-            <div class="cov {{ '' if r.complete else 'short' }}" title="{{ 'Fully downloaded' if r.complete else 'Partly downloaded — keep harvesting this year' }}">
-                <div class="cl">{{ r.year }} {% if r.complete %}<i class="fas fa-circle-check" style="color:#047857;"></i>{% else %}<i class="fas fa-hourglass-half" style="color:#b45309;"></i>{% endif %}</div>
-                <div class="cn"><span class="have">{{ r.count }}</span> question(s){% if r.exam_type != 'utme' %} · {{ r.exam_type|upper }}{% endif %}</div>
-            </div>
-            {% endfor %}
-        </div>
-        <p class="text-sm text-muted" style="margin-top:.6rem;"><i class="fas fa-circle-check" style="color:#047857;"></i> = every ALOC question for that year is downloaded · <i class="fas fa-hourglass-half" style="color:#b45309;"></i> = partly done, run the harvest again to finish it.</p>
-        {% else %}
-        <p class="text-muted text-sm">No ALOC downloads recorded for {{ subject.name }} yet. Use “Harvest ALL past questions” or “Import from ALOC” (with a year) — each year you complete is tracked here so you can see what’s left.</p>
         {% endif %}
     </div>
 </div>
@@ -198,38 +126,6 @@
     <div class="mjq-meta">{{ q.marks }} mark(s){% if q.section %} · <span class="badge-sec">{{ q.section|replace('_',' ')|title }}</span>{% endif %}{% if q.exam_body %} · {{ q.exam_body }}{% endif %}{% if q.exam_year %} · {{ q.exam_year }}{% endif %}{% if q.source %} · <span class="badge-topic">{{ q.source|upper }}</span>{% endif %}{% if q.difficulty %} · {{ q.difficulty|title }}{% endif %}{% if q.topic %} · <span class="badge-topic">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}</div>
 </div>
 {%- endmacro %}
-
-{# ---- Import from ALOC questions API ---- #}
-{% if aloc_slug %}
-<details class="card" style="margin-bottom:1rem;" {{ 'open' if coverage and coverage.total == 0 else '' }}>
-    <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-cloud-arrow-down"></i> Import from ALOC <span class="text-muted text-sm">— questions.aloc.com.ng</span></h3></summary>
-    <div class="card-body">
-        <form method="post" action="{{ url_for('mock_jamb.bank_import_aloc') }}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="subject_id" value="{{ subject_id }}">
-            <p class="text-sm text-muted">Pulls past-question objectives for <strong>{{ subject.name }}</strong> (ALOC subject: <code>{{ aloc_slug }}</code>) into the bank. Each question keeps its <strong>year</strong>, any <strong>image</strong> is re-hosted here, and duplicates are skipped. ALOC has no topics/sub-topics, so imports come in untagged — set a default section below or tag them afterwards (topic/sub-topic are optional; the JAMB draw uses the section).</p>
-            <div class="form-group">
-                <label class="form-label">ALOC access token(s) — one per line {% if aloc_token_count %}<span class="text-success text-sm">({{ aloc_token_count }} saved — leave blank to reuse)</span>{% endif %}</label>
-                <textarea name="tokens" class="form-control" rows="2" placeholder="{{ 'Using saved token(s)' if aloc_token_count else 'ALOC-xxxxxxxx' }}&#10;ALOC-another-token (optional, used if the first is exhausted)" autocomplete="off" style="font-family:monospace;"></textarea>
-                <span class="text-muted text-sm">Add several tokens to fail over automatically when one hits its daily limit.</span>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">Exam type</label>
-                    <select name="examtype" class="form-control">{% for t in aloc_examtypes %}<option value="{{ t }}">{{ t|upper }}</option>{% endfor %}</select></div>
-                <div class="form-group"><label class="form-label">Year (optional)</label><input type="number" name="year" class="form-control" placeholder="any" min="1990" max="2030"></div>
-                <div class="form-group"><label class="form-label">How many</label><input type="number" name="count" class="form-control" value="40" min="1" max="300"></div>
-                <div class="form-group"><label class="form-label">Default section</label>
-                    <select name="default_section" class="form-control"><option value="">— Untagged —</option>
-                        {% for s in sections %}<option value="{{ s.section }}" {{ 'selected' if section == s.section else '' }}>{{ s.label }}</option>{% endfor %}</select></div>
-            </div>
-            <label class="text-sm" style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.6rem;">
-                <input type="checkbox" name="remember" value="1" {{ 'checked' if not aloc_token_count else '' }}> Remember these tokens for future imports</label>
-            <div><button class="btn btn-primary"><i class="fas fa-cloud-arrow-down"></i> Import from ALOC</button></div>
-            <p class="text-sm text-muted" style="margin-top:.5rem;"><i class="fas fa-circle-info"></i> ALOC returns random batches; import may take a few seconds. Re-run to fetch more — already-imported questions (by id and by text) are skipped. English mixes all sections in one feed, so import untagged and sort by section afterwards.</p>
-        </form>
-    </div>
-</details>
-{% endif %}
 
 {# ---- Bulk import ---- #}
 <details class="card" style="margin-bottom:1rem;">
@@ -342,116 +238,6 @@
         </details>
     </div>
 </div>
-
-<script nonce="{{ csp_nonce }}">
-(function(){
-    // ---- ALOC bulk-harvest chunker ----
-    var CSRF = document.querySelector('meta[name=csrf-token]').content;
-    var U = {
-        start: '{{ url_for("mock_jamb.bank_harvest_start") }}',
-        step: '{{ url_for("mock_jamb.bank_harvest_step") }}',
-        stop: '{{ url_for("mock_jamb.bank_harvest_stop") }}',
-        resume: '{{ url_for("mock_jamb.bank_harvest_resume") }}',
-        status: '{{ url_for("mock_jamb.bank_harvest_status") }}'
-    };
-    var elStart = document.getElementById('hvStart'), elResume = document.getElementById('hvResume'),
-        elStop = document.getElementById('hvStop'), elWrap = document.getElementById('hvProgressWrap'),
-        elBar = document.getElementById('hvBar'), elStatus = document.getElementById('hvStatus'),
-        elCounts = document.getElementById('hvCounts'), elCurrent = document.getElementById('hvCurrent'),
-        elError = document.getElementById('hvError');
-    if(!elStart) return;
-    var running = false;
-
-    function post(url, body){
-        return fetch(url, {method:'POST', headers:{'X-CSRFToken':CSRF,
-            'Content-Type':'application/x-www-form-urlencoded'},
-            body: body || ('_csrf_token=' + encodeURIComponent(CSRF))}).then(function(r){ return r.json(); });
-    }
-    var lastState = null, tick = null, workStart = 0;
-    function render(s){
-        lastState = s;
-        if(!s || s.status === 'none' || !s.total_cells){ elWrap.style.display='none'; showButtons(s); return; }
-        elWrap.style.display = 'block';
-        elBar.style.width = (s.percent || 0) + '%';
-        elStatus.textContent = ({running:'Running…', paused:'Paused', done:'Done ✓'}[s.status] || s.status);
-        elCounts.textContent = (s.added||0) + ' added · ' + (s.duplicates||0) + ' dupes skipped · '
-            + (s.pos||0) + '/' + (s.total_cells||0) + ' subject-years';
-        elCurrent.textContent = s.current ? (' · now: ' + s.current.subject + ' ' + s.current.year) : '';
-        elError.textContent = s.last_error || '';
-        showButtons(s);
-    }
-    function showButtons(s){
-        var st = s ? s.status : 'none';
-        elStart.style.display = (st === 'running') ? 'none' : 'inline-block';
-        elStart.innerHTML = (st === 'done') ? '<i class="fas fa-rotate"></i> Restart harvest'
-            : '<i class="fas fa-play"></i> Start harvest';
-        elResume.style.display = (st === 'paused') ? 'inline-block' : 'none';
-        elStop.style.display = (st === 'running') ? 'inline-block' : 'none';
-    }
-    // Keep a live "downloading… (Ns)" heartbeat while a step is in flight so the
-    // panel never looks frozen, even when ALOC is slow between count updates.
-    function startTick(){
-        workStart = Date.now();
-        if(tick) clearInterval(tick);
-        tick = setInterval(function(){
-            if(!running) return;
-            var secs = Math.round((Date.now() - workStart)/1000);
-            elStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Downloading… (' + secs + 's)';
-        }, 1000);
-    }
-    function stopTick(){ if(tick){ clearInterval(tick); tick = null; } }
-    function loop(){
-        if(!running){ stopTick(); return; }
-        startTick();
-        post(U.step).then(function(s){
-            if(!running){ stopTick(); render(s); return; }
-            render(s);
-            if(s.status === 'running'){ setTimeout(loop, 250); }
-            else { running = false; stopTick(); render(s); }
-        }).catch(function(){
-            running = false; stopTick();
-            elError.textContent = 'Network hiccup — progress is saved; press Resume to continue.';
-            showButtons({status: (lastState && lastState.status === 'done') ? 'done' : 'paused'});
-        });
-    }
-    var subjBox = document.getElementById('hvSubjects');
-    document.getElementById('hvAll').addEventListener('click', function(e){ e.preventDefault();
-        subjBox.querySelectorAll('.hv-subj').forEach(function(x){ x.checked = true; }); });
-    document.getElementById('hvNone').addEventListener('click', function(e){ e.preventDefault();
-        subjBox.querySelectorAll('.hv-subj').forEach(function(x){ x.checked = false; }); });
-    function selectedSubjects(){
-        return Array.prototype.slice.call(subjBox.querySelectorAll('.hv-subj:checked'))
-            .map(function(x){ return x.value; }).join(',');
-    }
-    elStart.addEventListener('click', function(){
-        var subs = selectedSubjects();
-        if(!subs){ elError.textContent = 'Pick at least one subject to harvest.'; return; }
-        var body = '_csrf_token=' + encodeURIComponent(CSRF)
-            + '&examtype=' + encodeURIComponent(document.getElementById('hvExamtype').value)
-            + '&year_from=' + encodeURIComponent(document.getElementById('hvYearFrom').value || '')
-            + '&year_to=' + encodeURIComponent(document.getElementById('hvYearTo').value || '')
-            + '&subject_ids=' + encodeURIComponent(subs)
-            + '&remember=1&tokens=' + encodeURIComponent(document.getElementById('hvTokens').value || '');
-        elError.textContent = '';
-        post(U.start, body).then(function(s){
-            if(s.error){ elError.textContent = s.error; return; }
-            running = true; render(s); loop();
-        });
-    });
-    elResume.addEventListener('click', function(){
-        post(U.resume).then(function(s){
-            if(s.error){ elError.textContent = s.error; return; }
-            running = true; render(s); loop();
-        });
-    });
-    elStop.addEventListener('click', function(){
-        running = false;
-        post(U.stop).then(render);
-    });
-    // reflect any in-progress harvest on load
-    fetch(U.status).then(function(r){ return r.json(); }).then(render).catch(function(){});
-})();
-</script>
 
 <script type="application/json" id="mjq-topics">{{ topic_tree|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
