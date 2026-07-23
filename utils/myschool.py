@@ -39,18 +39,26 @@ SUBJECT_SLUGS = {
     "use of english": "english-language",
     "physics": "physics", "chemistry": "chemistry", "biology": "biology",
     "economics": "economics", "commerce": "commerce", "government": "government",
-    "accounting": "principles-of-accounts", "principles of accounts": "principles-of-accounts",
-    "financial accounting": "principles-of-accounts",
+    # myschool spells these with the subject abbreviation in the slug.
+    "accounting": "accounts-principles-of-accounts",
+    "principles of accounts": "accounts-principles-of-accounts",
+    "financial accounting": "accounts-principles-of-accounts",
     "literature": "literature-in-english", "literature in english": "literature-in-english",
     "geography": "geography", "agricultural science": "agricultural-science",
     "agriculture": "agricultural-science", "agric": "agricultural-science",
-    "christian religious studies": "christian-religious-knowledge",
-    "crs": "christian-religious-knowledge", "crk": "christian-religious-knowledge",
+    "christian religious studies": "christian-religious-knowledge-crk",
+    "christian religious knowledge": "christian-religious-knowledge-crk",
+    "crs": "christian-religious-knowledge-crk", "crk": "christian-religious-knowledge-crk",
+    "islamic studies": "islamic-religious-knowledge-irk",
+    "islamic religious studies": "islamic-religious-knowledge-irk",
+    "islamic religious knowledge": "islamic-religious-knowledge-irk",
+    "irs": "islamic-religious-knowledge-irk", "irk": "islamic-religious-knowledge-irk",
     "civic education": "civic-education", "civics": "civic-education",
     "further mathematics": "further-mathematics",
     "computer studies": "computer-studies", "computer science": "computer-studies",
     "data processing": "data-processing", "history": "history",
-    "islamic studies": "islamic-religious-knowledge",
+    "fine art": "fine-arts", "fine arts": "fine-arts",
+    "home economics": "home-economics", "physical education": "physical-education",
     "marketing": "marketing", "insurance": "insurance",
     "book keeping": "book-keeping", "office practice": "office-practice",
 }
@@ -63,18 +71,20 @@ def subject_slug(name):
     return re.sub(r"[^a-z0-9]+", "-", key).strip("-")
 
 
-# Subjects myschool actually carries under JAMB/UTME (normalised names). Used to
-# flag school-only subjects (Civic Education, Digital Technologies, Phonetics,
-# Project Work, …) that would otherwise download nothing under JAMB.
+# Subjects myschool actually carries under JAMB/UTME (normalised names), verified
+# against the live site. Used to flag subjects that would download nothing under
+# JAMB — Civic Education, Further Maths, Data Processing and the trade subjects
+# (Insurance, Book-keeping, Office Practice, Marketing, …) are WAEC-only on
+# myschool, or not there at all.
 JAMB_SUBJECTS = {
     "english language", "mathematics", "physics", "chemistry", "biology",
-    "agricultural science", "economics", "commerce", "accounting", "government",
-    "geography", "literature in english", "christian religious studies",
-    "islamic religious studies", "history", "further mathematics",
-    "computer studies", "home economics", "french", "hausa", "igbo", "yoruba",
-    "arabic", "music", "fine art", "physical education", "insurance",
-    "book keeping", "office practice", "store management", "marketing",
-    "principles of accounts",
+    "agricultural science", "economics", "commerce", "government", "geography",
+    "literature in english", "history",
+    "accounting", "principles of accounts",
+    "christian religious studies", "christian religious knowledge",
+    "islamic religious studies", "islamic studies", "islamic religious knowledge",
+    "computer studies", "home economics", "physical education", "fine art",
+    "music", "french", "hausa", "igbo", "yoruba",
 }
 
 

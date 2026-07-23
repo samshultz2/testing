@@ -85,11 +85,20 @@ def test_parse_detail_ignores_avatar_images():
 def test_on_jamb_flags_school_only_subjects():
     from utils import myschool as ms
     for s in ('Commerce', 'Mathematics', 'Physics', 'Literature in English',
-              'Further Mathematics', 'Accounting'):
+              'Accounting', 'Christian Religious Studies', 'Islamic Studies', 'Fine Art'):
         assert ms.on_jamb(s), s
-    for s in ('Civic Education', 'Digital Technologies', 'Phonetics',
-              'Project Work', 'Livestock Farming'):
+    # not offered under JAMB on myschool (WAEC-only, or not there at all)
+    for s in ('Civic Education', 'Digital Technologies', 'Phonetics', 'Project Work',
+              'Livestock Farming', 'Further Mathematics', 'Insurance', 'Marketing'):
         assert not ms.on_jamb(s), s
+
+
+def test_subject_slugs_match_myschool():
+    from utils import myschool as ms
+    assert ms.subject_slug('Christian Religious Studies') == 'christian-religious-knowledge-crk'
+    assert ms.subject_slug('Islamic Studies') == 'islamic-religious-knowledge-irk'
+    assert ms.subject_slug('Accounting') == 'accounts-principles-of-accounts'
+    assert ms.subject_slug('Fine Art') == 'fine-arts'
 
 
 def test_classify_maps_to_taxonomy():
