@@ -45,6 +45,42 @@ def _pool_condition(model, exam):
     return model.mock_exam_id.is_(None)
 
 
+def eligible_class_ids(exam):
+    """SchoolClass ids allowed to sit this mock online. An empty
+    ``exam.eligible_levels`` means the graduating SSS3 class only (the JAMB
+    cohort) — the default. Returns an empty set only when the target class(es)
+    can't be resolved, in which case the caller should not lock anyone out."""
+    from models import SchoolClass
+    raw = (getattr(exam, 'eligible_levels', None) or '').strip()
+    if raw:
+        wanted = {n.strip().lower() for n in raw.split(',') if n.strip()}
+        return {c.id for c in SchoolClass.query.all()
+                if (c.name or '').strip().lower() in wanted}
+    from utils.helpers import get_sss3_class
+    c = get_sss3_class()
+    return {c.id} if c else set()
+
+
+def student_eligible(exam, student):
+    """True if the student's current class is allowed to sit this mock. Unknown
+    placements (no active enrolment) are allowed so a mis-configured term never
+    silently locks every student out — the branch guard still applies."""
+    if not student:
+        return False
+    ids = eligible_class_ids(exam)
+    if not ids:
+        return True
+    try:
+        from routes.cbt import _student_placement
+        from utils.helpers import get_active_term
+        class_id, _arm = _student_placement(student.id, get_active_term())
+    except Exception:
+        return True
+    if class_id is None:
+        return True
+    return class_id in ids
+
+
 def candidate_subject_ids(exam, student):
     """Ordered subject ids the student sits for this mock (English first, ≤ 4).
 

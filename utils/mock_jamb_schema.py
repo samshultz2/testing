@@ -50,6 +50,7 @@ def ensure_mock_jamb_schema():
             'blueprint': 'TEXT',
             'novel_title': 'VARCHAR(150)',
             'source_mode': "VARCHAR(10) DEFAULT 'bank'",
+            'eligible_levels': 'VARCHAR(200)',
         }
         for col, ddl in add.items():
             if col not in ex:

@@ -27,6 +27,9 @@ class MockJAMBExam(db.Model):
     blueprint = db.Column(db.Text)   # optional JSON {subject_key: {section: count}} per-mock override
     novel_title = db.Column(db.String(150))  # JAMB-approved novel for this mock's English paper
     source_mode = db.Column(db.String(10), default='bank')  # 'bank' (draw from bank) | 'manual'
+    # Comma-separated SchoolClass names allowed to sit online. Empty/NULL = the
+    # graduating SSS3 class only (the JAMB cohort) — the default.
+    eligible_levels = db.Column(db.String(200))
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

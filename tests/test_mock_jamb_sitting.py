@@ -57,8 +57,10 @@ def test_publish_requires_questions(app):
         _SEQ[0] += 1
         bid = Branch.get_default().id
         s = AcademicSession(name=f'PUB-{_SEQ[0]}'); db.session.add(s); db.session.flush()
+        # source_mode='manual' → must have its own questions to publish (a
+        # bank-source mock may instead publish off the shared bank).
         ex = MockJAMBExam(name='Empty', exam_number=1, session_id=s.id,
-                          exam_date=date(2025, 3, 1), branch_id=bid)
+                          exam_date=date(2025, 3, 1), branch_id=bid, source_mode='manual')
         db.session.add(ex); db.session.commit(); eid = ex.id
     c = _admin(app); tok = _csrf(c)
     c.post(f'/mock-jamb/exam/{eid}/publish', data={'_csrf_token': tok}, follow_redirects=True)

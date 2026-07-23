@@ -31,6 +31,30 @@
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
     <div class="bp-card" style="margin-bottom:1rem;">
+        <div class="bp-head"><span class="t"><i class="fas fa-database"></i> Question source</span></div>
+        <div style="padding:.7rem .9rem;">
+            <label style="display:block;margin-bottom:.5rem;"><input type="radio" name="source_mode" value="bank" {{ 'checked' if source_mode != 'manual' else '' }}>
+                <strong>Draw from the central question bank</strong> — every student gets a completely different, JAMB-shaped paper for the subjects on their profile, drawn at random per attempt. (Recommended)</label>
+            <label style="display:block;"><input type="radio" name="source_mode" value="manual" {{ 'checked' if source_mode == 'manual' else '' }}>
+                <strong>Use this mock's own questions</strong> — everyone sits the exact questions you author into this mock under “Manage questions”.</label>
+            <p class="text-muted text-sm" style="margin:.5rem 0 0;">A mock that already has its own authored questions always serves those; “Draw from the bank” applies when the mock has none of its own.</p>
+        </div>
+    </div>
+
+    <div class="bp-card" style="margin-bottom:1rem;">
+        <div class="bp-head"><span class="t"><i class="fas fa-user-graduate"></i> Who can sit this mock</span></div>
+        <div style="padding:.7rem .9rem;">
+            <p class="text-muted text-sm" style="margin:0 0 .5rem;">By default only <strong>{{ default_level }}</strong> (the JAMB cohort) can sit online. Tick classes to override — leave all unticked for {{ default_level }}-only.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;">
+                {% for c in all_classes %}
+                <label class="text-sm" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" name="eligible_levels" value="{{ c.name }}" {{ 'checked' if c.name in selected_levels else '' }}> {{ c.name }}</label>
+                {% endfor %}
+            </div>
+            <p class="text-muted text-sm" style="margin:.6rem 0 0;"><i class="fas fa-circle-info"></i> <strong>Where students sit it:</strong> once you publish the online sitting, eligible students log in at the student CBT portal (<code>{{ url_for('cbt_portal.login', _external=True) }}</code>) with their Student ID &amp; portal password, then open <strong>Mock JAMB</strong> to see and take any open mock for their class.</p>
+        </div>
+    </div>
+
+    <div class="bp-card" style="margin-bottom:1rem;">
         <div class="bp-head"><span class="t"><i class="fas fa-book"></i> Recommended Novel (English)</span></div>
         <div style="padding:.7rem .9rem;">
             <input type="text" name="novel_title" list="novelList" value="{{ novel_title }}" class="form-control"

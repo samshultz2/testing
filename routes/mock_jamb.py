@@ -1658,6 +1658,10 @@ def exam_blueprint(exam_id):
                     override.setdefault(subj_key, {})[s['section']] = n
         exam.blueprint = json.dumps(override) if override else None
         exam.novel_title = (request.form.get('novel_title') or '').strip() or None
+        sm = (request.form.get('source_mode') or 'bank').strip()
+        exam.source_mode = sm if sm in ('bank', 'manual') else 'bank'
+        levels = request.form.getlist('eligible_levels')
+        exam.eligible_levels = ','.join(x.strip() for x in levels if x.strip()) or None
         db.session.commit()
         flash('Blueprint saved.' if override else 'Reset to the JAMB default.', 'success')
         return redirect(url_for('mock_jamb.exam_blueprint', exam_id=exam_id))
@@ -1683,8 +1687,16 @@ def exam_blueprint(exam_id):
                     'Sweet Sixteen — Bolaji Abdullahi',
                     'In Dependence — Sarah Ladipo Manyika',
                     'The Last Days at Forcados High School — A.H. Mohammed']
+    from models import SchoolClass
+    from utils.helpers import get_sss3_class
+    all_classes = SchoolClass.query.order_by(SchoolClass.level, SchoolClass.name).all()
+    selected_levels = [x.strip() for x in (exam.eligible_levels or '').split(',') if x.strip()]
+    sss3 = get_sss3_class()
     return render_template('mock_jamb/blueprint.html', exam=exam, subjects=subjects_view,
                            novel_title=exam.novel_title or '', known_novels=known_novels,
+                           source_mode=exam.source_mode or 'bank',
+                           all_classes=all_classes, selected_levels=selected_levels,
+                           default_level=(sss3.name if sss3 else 'SSS3'),
                            urls={'questions': url_for('mock_jamb.questions', exam_id=exam.id),
                                  'bank': url_for('mock_jamb.bank'),
                                  'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
@@ -1698,8 +1710,13 @@ def toggle_publish(exam_id):
     exam = db.get_or_404(MockJAMBExam, exam_id)
     require_branch_access(exam.branch_id)
     if not exam.is_published and exam.questions.count() == 0:
-        flash('Add questions before publishing the online sitting.', 'error')
-        return redirect(url_for('mock_jamb.questions', exam_id=exam_id))
+        # A bank-source mock owns no questions — it draws from the central bank —
+        # so it can publish as long as the bank actually holds questions.
+        bank_has = db.session.query(MockJAMBQuestion.id).filter(
+            MockJAMBQuestion.mock_exam_id.is_(None)).first() is not None
+        if not (exam.source_mode == 'bank' and bank_has):
+            flash('Add questions (or bank questions) before publishing the online sitting.', 'error')
+            return redirect(url_for('mock_jamb.questions', exam_id=exam_id))
     dur = request.form.get('duration_minutes', type=int)
     if dur and 5 <= dur <= 300:
         exam.duration_minutes = dur
@@ -1718,14 +1735,18 @@ def toggle_publish(exam_id):
 # =============================================================================
 
 def _portal_guard(exam):
-    """Ensure the exam is published and the student may sit it (same branch)."""
+    """Ensure the exam is published and the student may sit it: same branch and
+    an eligible class (SSS3 by default, configurable per mock)."""
     from routes.cbt import _current_student
+    from utils.mock_jamb_sitting import student_eligible
     student = _current_student()
     if not student:
         return None, None
     if not exam or not exam.is_published or not exam.is_active:
         return student, None
     if exam.branch_id and student.branch_id and exam.branch_id != student.branch_id:
+        return student, None
+    if not student_eligible(exam, student):
         return student, None
     return student, exam
 
@@ -1736,13 +1757,15 @@ def portal_list():
     @cbt_login_required
     def _inner():
         from models import MockJAMBAttempt
-        from utils.mock_jamb_sitting import candidate_subject_ids
+        from utils.mock_jamb_sitting import candidate_subject_ids, student_eligible
         student = _current_student()
         exams = (MockJAMBExam.query.filter_by(is_published=True, is_active=True)
                  .order_by(MockJAMBExam.exam_date.desc()).all())
         rows = []
         for e in exams:
             if e.branch_id and student.branch_id and e.branch_id != student.branch_id:
+                continue
+            if not student_eligible(e, student):
                 continue
             subs = candidate_subject_ids(e, student)
             if not subs:

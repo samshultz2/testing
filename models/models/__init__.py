@@ -290,6 +290,8 @@ def _ensure_student_exam_columns():
             statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN novel_title VARCHAR(150)')
         if 'source_mode' not in mj_cols:
             statements.append("ALTER TABLE mock_jamb_exams ADD COLUMN source_mode VARCHAR(10) DEFAULT 'bank'")
+        if 'eligible_levels' not in mj_cols:
+            statements.append('ALTER TABLE mock_jamb_exams ADD COLUMN eligible_levels VARCHAR(200)')
     except Exception:
         pass
 
