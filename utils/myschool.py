@@ -63,6 +63,26 @@ def subject_slug(name):
     return re.sub(r"[^a-z0-9]+", "-", key).strip("-")
 
 
+# Subjects myschool actually carries under JAMB/UTME (normalised names). Used to
+# flag school-only subjects (Civic Education, Digital Technologies, Phonetics,
+# Project Work, …) that would otherwise download nothing under JAMB.
+JAMB_SUBJECTS = {
+    "english language", "mathematics", "physics", "chemistry", "biology",
+    "agricultural science", "economics", "commerce", "accounting", "government",
+    "geography", "literature in english", "christian religious studies",
+    "islamic religious studies", "history", "further mathematics",
+    "computer studies", "home economics", "french", "hausa", "igbo", "yoruba",
+    "arabic", "music", "fine art", "physical education", "insurance",
+    "book keeping", "office practice", "store management", "marketing",
+    "principles of accounts",
+}
+
+
+def on_jamb(subject_name):
+    """Whether myschool offers this subject under JAMB (best-effort, by name)."""
+    return norm_subject(subject_name) in JAMB_SUBJECTS
+
+
 def norm_subject(name):
     """Casefold + de-alias to the taxonomy keys (mirror of
     utils.jamb_blueprint.norm_subject, duplicated so this stays importable

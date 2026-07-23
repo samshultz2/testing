@@ -82,6 +82,16 @@ def test_parse_detail_ignores_avatar_images():
     assert p['image_url'] is None               # avatars are not question figures
 
 
+def test_on_jamb_flags_school_only_subjects():
+    from utils import myschool as ms
+    for s in ('Commerce', 'Mathematics', 'Physics', 'Literature in English',
+              'Further Mathematics', 'Accounting'):
+        assert ms.on_jamb(s), s
+    for s in ('Civic Education', 'Digital Technologies', 'Phonetics',
+              'Project Work', 'Livestock Farming'):
+        assert not ms.on_jamb(s), s
+
+
 def test_classify_maps_to_taxonomy():
     from utils import myschool as ms
     sec, top, sub = ms.classify('commerce', 'A cheque drawn on a bank is an instrument of banking')

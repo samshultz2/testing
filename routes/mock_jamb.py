@@ -1103,10 +1103,12 @@ def bank():
                          MockJAMBQuestion.id)
         pagination = sq.paginate(page=page, per_page=per_page, error_out=False)
         standalone = pagination.items
+    from utils.myschool import on_jamb
+    jamb_ok_ids = {s.id for s in subjects if on_jamb(s.name)}
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
-                           pagination=pagination, q_search=q_search,
+                           pagination=pagination, q_search=q_search, jamb_ok_ids=jamb_ok_ids,
                            topic_tree=_subject_topic_tree(subject_id),
                            has_passage_sections=any(s['passage'] for s in sections),
                            novel_section=any(s['section'] == 'novel' for s in sections),

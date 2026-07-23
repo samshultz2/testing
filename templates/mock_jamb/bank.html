@@ -65,7 +65,7 @@
                 <a href="#" id="scAll" class="text-sm" style="margin-left:.5rem;">all</a> · <a href="#" id="scNone" class="text-sm">none</a></label>
             <div id="scSubjects" style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;">
                 {% for s in subjects %}
-                <label class="text-sm" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" class="sc-subj" value="{{ s.id }}" {{ 'checked' if s.id == subject_id else '' }}> {{ s.name }}</label>
+                <label class="sc-lbl text-sm" data-jamb="{{ '1' if s.id in jamb_ok_ids else '0' }}" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" class="sc-subj" value="{{ s.id }}" {{ 'checked' if s.id == subject_id else '' }}> {{ s.name }}<span class="sc-na text-muted" style="display:none;font-size:.72rem;">(not on JAMB)</span></label>
                 {% endfor %}
             </div>
         </div>
@@ -378,8 +378,26 @@
         });
     }
     var box = document.getElementById('scSubjects');
+    var elExam = document.getElementById('scExam');
+    // Grey out + flag subjects myschool doesn't carry under JAMB (only for JAMB;
+    // for other exams we don't have a reliable list, so nothing is flagged).
+    function applyAvail(){
+        var jamb = elExam.value === 'jamb';
+        box.querySelectorAll('.sc-lbl').forEach(function(lbl){
+            var na = jamb && lbl.dataset.jamb === '0';
+            lbl.style.opacity = na ? '0.5' : '';
+            var note = lbl.querySelector('.sc-na');
+            if(note) note.style.display = na ? 'inline' : 'none';
+            var cb = lbl.querySelector('.sc-subj');
+            if(na && cb.checked) cb.checked = false;   // don't submit a subject that yields nothing
+        });
+    }
+    elExam.addEventListener('change', applyAvail);
+    applyAvail();
     document.getElementById('scAll').addEventListener('click', function(e){ e.preventDefault();
-        box.querySelectorAll('.sc-subj').forEach(function(x){ x.checked = true; }); });
+        box.querySelectorAll('.sc-lbl').forEach(function(lbl){
+            var cb = lbl.querySelector('.sc-subj');
+            cb.checked = !(elExam.value === 'jamb' && lbl.dataset.jamb === '0'); }); });
     document.getElementById('scNone').addEventListener('click', function(e){ e.preventDefault();
         box.querySelectorAll('.sc-subj').forEach(function(x){ x.checked = false; }); });
     function chosen(){
