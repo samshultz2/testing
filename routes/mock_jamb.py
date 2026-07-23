@@ -31,6 +31,18 @@ mock_jamb_bp = Blueprint('mock_jamb', __name__, url_prefix='/mock-jamb')
 mock_jamb_portal_bp = Blueprint('mock_jamb_portal', __name__, url_prefix='/exam/mock-jamb')
 
 
+@mock_jamb_bp.before_request
+@mock_jamb_portal_bp.before_request
+def _ensure_schema():
+    """Self-heal the tenant DB's Mock JAMB columns (once per engine), so a DB that
+    is behind on Alembic migrations doesn't 500 on pages that load a mock exam."""
+    try:
+        from utils.mock_jamb_schema import ensure_mock_jamb_schema
+        ensure_mock_jamb_schema()
+    except Exception:
+        pass
+
+
 def _read_subject_scores(form, suffix=''):
     """
     Read the four subject rows from a submitted form and return a normalised
@@ -1351,15 +1363,19 @@ def bank_harvest_status():
 @login_required
 @csrf_protect
 def bank_import():
-    """Bulk-add stand-alone bank questions from pasted rows. Each line:
-    ``question | A | B | C | D | correct | [section] | [topic] | [subtopic]``
-    (tab- or pipe-separated). A default section applies when a row omits it."""
+    """Bulk-add stand-alone bank questions from pasted rows. Each line (tab- or
+    pipe-separated):
+    ``question | A | B | C | D | correct | [section] | [topic] | [subtopic] | [year]``
+    A default section / year applies when a row omits it. Duplicate questions
+    (by text, within this subject's bank) are skipped."""
+    import re as _re
     subject_id = request.form.get('subject_id', type=int)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     if not subject:
         flash('Choose a subject first.', 'error')
         return redirect(_bank_url(subject_id))
     default_section = _valid_section(subject, (request.form.get('default_section') or '').strip())
+    default_year = (request.form.get('default_year') or '').strip()[:8] or None
     exam_body = (request.form.get('exam_body') or 'JAMB').strip()
     if exam_body not in ('JAMB', 'WAEC', 'Both'):
         exam_body = 'JAMB'
@@ -1367,7 +1383,13 @@ def bank_import():
     base = (db.session.query(func.coalesce(func.max(MockJAMBQuestion.order), 0))
             .filter(MockJAMBQuestion.mock_exam_id.is_(None),
                     MockJAMBQuestion.subject_id == subject_id).scalar())
-    added, skipped = 0, 0
+
+    def _norm(t):
+        return _re.sub(r'\s+', ' ', (t or '').lower()).strip()
+    seen = {_norm(q.question_text) for q in MockJAMBQuestion.query.filter_by(
+        subject_id=subject_id, mock_exam_id=None).all()}
+
+    added = skipped = duplicates = 0
     for line in raw.splitlines():
         line = line.strip()
         if not line:
@@ -1381,19 +1403,31 @@ def bank_import():
         if not text or correct not in ('A', 'B', 'C', 'D'):
             skipped += 1
             continue
+        nt = _norm(text)
+        if nt in seen:
+            duplicates += 1
+            continue
+        seen.add(nt)
         section = _valid_section(subject, parts[6]) if len(parts) > 6 and parts[6] else default_section
         topic = parts[7] if len(parts) > 7 and parts[7] else None
         subtopic = parts[8] if len(parts) > 8 and parts[8] else None
+        year = (parts[9].strip()[:8] if len(parts) > 9 and parts[9].strip() else default_year)
         base += 1
         db.session.add(MockJAMBQuestion(
             mock_exam_id=None, subject_id=subject_id, section=section, exam_body=exam_body,
             question_text=text, option_a=a, option_b=b, option_c=c, option_d=d,
-            correct_option=correct, marks=1, topic=topic, subtopic=subtopic, order=base))
+            correct_option=correct, marks=1, topic=topic, subtopic=subtopic,
+            exam_year=year, source='paste', order=base))
         added += 1
     db.session.commit()
     msg = f'Imported {added} question(s).'
+    extra = []
+    if duplicates:
+        extra.append(f'{duplicates} duplicate(s) skipped')
     if skipped:
-        msg += f' Skipped {skipped} malformed line(s).'
+        extra.append(f'{skipped} malformed line(s)')
+    if extra:
+        msg += ' (' + ', '.join(extra) + ')'
     flash(msg, 'success' if added else 'warning')
     return redirect(_bank_url(subject_id, default_section))
 

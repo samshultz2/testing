@@ -239,11 +239,13 @@
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             <p class="text-sm text-muted">One question per line, fields separated by a <strong>tab</strong> or <strong>|</strong>:<br>
-                <code>question | Option A | Option B | Option C | Option D | correct(A–D) | [section] | [topic] | [subtopic]</code></p>
+                <code>question | Option A | Option B | Option C | Option D | correct(A–D) | [section] | [topic] | [subtopic] | [year]</code></p>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">Default section (if a row omits it)</label>
                     <select name="default_section" class="form-control"><option value="">— None —</option>
                         {% for s in sections %}<option value="{{ s.section }}" {{ 'selected' if section == s.section else '' }}>{{ s.label }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label class="form-label">Default year (if a row omits it)</label>
+                    <input type="text" name="default_year" class="form-control" placeholder="e.g. 2019" maxlength="8"></div>
                 <div class="form-group"><label class="form-label">Exam body</label>
                     <select name="exam_body" class="form-control"><option>JAMB</option><option>WAEC</option><option>Both</option></select></div>
             </div>
