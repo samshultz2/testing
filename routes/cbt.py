@@ -411,6 +411,70 @@ def import_from_bank(exam_id):
                            subjects=subjects, subject_id=subject_id, topic=topic)
 
 
+@cbt_bp.route('/exams/<int:exam_id>/fill-from-jamb', methods=['GET', 'POST'])
+@login_required
+def fill_from_jamb_bank(exam_id):
+    """Fill a CBT exam with questions drawn from the central Mock JAMB question
+    bank for the exam's subject — the teacher picks topics and a count, and the
+    system copies a random sample (de-duplicated against the exam) as CBT
+    questions. Great for a quick class test off the banked past questions."""
+    import random as _random
+    from models import MockJAMBQuestion
+    e = _exam_403(exam_id)
+    if not e.subject_id:
+        flash('Set the exam\'s subject first, then fill from the bank.', 'error')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+
+    base = (MockJAMBQuestion.query
+            .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                    MockJAMBQuestion.subject_id == e.subject_id,
+                    MockJAMBQuestion.passage_id.is_(None)))   # standalone only
+
+    if request.method == 'POST':
+        topics = [t for t in request.form.getlist('topics') if t.strip()]
+        count = max(1, min(request.form.get('count', type=int) or 20, 200))
+        marks = request.form.get('marks', type=float) or 1
+        q = base
+        if topics:
+            q = q.filter(MockJAMBQuestion.topic.in_(topics))
+        pool = q.all()
+        # de-dup against what the exam already has (by normalised text)
+        import re as _re
+        def _norm(t):
+            return _re.sub(r'\s+', ' ', (t or '').lower()).strip()
+        have = {_norm(x.question_text) for x in e.questions}
+        pool = [bq for bq in pool if _norm(bq.question_text) not in have]
+        _random.shuffle(pool)
+        chosen = pool[:count]
+        nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
+                   .filter(CBTQuestion.exam_id == exam_id).scalar())
+        for bq in chosen:
+            nextord += 1
+            db.session.add(CBTQuestion(
+                exam_id=exam_id, order=nextord, question_text=bq.question_text,
+                image_url=bq.image_url, topic=bq.topic, subtopic=bq.subtopic,
+                option_a=bq.option_a, option_b=bq.option_b, option_c=bq.option_c,
+                option_d=bq.option_d, correct_option=bq.correct_option, marks=marks))
+        db.session.commit()
+        if chosen:
+            flash(f'Added {len(chosen)} question(s) from the bank'
+                  + (f' ({len(pool) - len(chosen)} more available)' if len(pool) > len(chosen) else '') + '.',
+                  'success')
+        else:
+            flash('No new bank questions matched — the bank may be empty for this '
+                  'subject/topics, or you already have them all.', 'warning')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+
+    # GET: per-topic availability for the picker
+    from sqlalchemy import func as _f
+    rows = (base.with_entities(MockJAMBQuestion.topic, _f.count(MockJAMBQuestion.id))
+            .group_by(MockJAMBQuestion.topic).all())
+    topics = sorted(({'topic': t or '(untagged)', 'value': t or '', 'count': n}
+                     for t, n in rows), key=lambda x: (-x['count'], x['topic']))
+    total = sum(t['count'] for t in topics)
+    return render_template('cbt/fill_from_jamb.html', e=e, topics=topics, total=total)
+
+
 @cbt_bp.route('/questions/<int:question_id>/delete', methods=['POST'])
 @login_required
 def delete_question(question_id):

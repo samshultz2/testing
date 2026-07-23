@@ -34,6 +34,7 @@
     <div class="card-header"><h3><i class="fas fa-plus"></i> Add Question</h3>
         <div class="d-flex gap-1">
             <a href="{{ url_for('cbt.import_from_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-layer-group"></i> From bank</a>
+            <a href="{{ url_for('cbt.fill_from_jamb_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Fill from JAMB bank</a>
             <form method="POST" action="{{ url_for('cbt.import_questions_file', exam_id=e.id) }}" enctype="multipart/form-data" style="display:inline-flex;gap:.3rem;align-items:center;">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required style="max-width:160px;font-size:.8rem;">

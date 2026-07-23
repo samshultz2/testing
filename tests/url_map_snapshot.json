@@ -842,6 +842,14 @@
 ]
 ],
 [
+"cbt.fill_from_jamb_bank",
+"/cbt/exams/<int:exam_id>/fill-from-jamb",
+[
+"GET",
+"POST"
+]
+],
+[
 "cbt.force_submit",
 "/cbt/attempts/<int:attempt_id>/force-submit",
 [
