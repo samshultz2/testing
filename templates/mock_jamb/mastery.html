@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Topic Mastery — Mock JAMB - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ urls.index }}">Mock JAMB</a> / <span>Topic mastery</span>{% endblock %}
+{% block extra_css %}<style>
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem}
+.mrow{display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px solid var(--border-color)}
+.mrow:last-child{border-bottom:0}
+.mrow .n{flex:1;font-size:.86rem}
+.mrow .bar{width:96px;height:8px;border-radius:4px;background:var(--gray-100);overflow:hidden;flex-shrink:0}
+.mrow .bar i{display:block;height:100%}
+.mrow .p{width:44px;text-align:right;font-weight:600;font-size:.82rem}
+.b-strong i{background:#059669}.b-fair i{background:#d97706}.b-weak i{background:#dc2626}
+.b-strong .p{color:#059669}.b-fair .p{color:#b45309}.b-weak .p{color:#dc2626}
+.mstat{display:flex;gap:1.4rem;flex-wrap:wrap;margin-bottom:1rem}
+.mstat .s{background:var(--gray-50);border-radius:var(--radius-md);padding:.6rem .9rem}
+.mstat .s b{font-size:1.3rem;display:block}
+.rost input{max-width:260px}
+.rost a{display:flex;justify-content:space-between;gap:.6rem;padding:.5rem .7rem;border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.35rem;text-decoration:none;color:inherit}
+.rost a:hover{background:var(--gray-50)}
+</style>{% endblock %}
+{% macro bar(row) -%}
+<div class="mrow b-{{ row.band }}">
+    <span class="n">{{ row.topic }}{% if row.subtopic %} <span class="text-muted">/ {{ row.subtopic }}</span>{% endif %}</span>
+    <span class="bar"><i style="width:{{ row.rate or 0 }}%;"></i></span>
+    <span class="p">{{ row.rate if row.rate is not none else '—' }}%</span>
+    <span class="text-muted text-sm" style="width:70px;text-align:right;">{{ row.correct }}/{{ row.total }}</span>
+</div>
+{%- endmacro %}
+{% block content %}
+<div class="page-header"><h1>Topic mastery <span class="text-muted" style="font-weight:400;font-size:1rem;">— across all online mocks</span></h1></div>
+
+{% if data.has_data %}
+<div class="mstat">
+    <div class="s"><b>{{ data.meta.students }}</b><span class="text-muted text-sm">students</span></div>
+    <div class="s"><b>{{ data.meta.mocks }}</b><span class="text-muted text-sm">mocks sat</span></div>
+    <div class="s"><b>{{ data.meta.attempts }}</b><span class="text-muted text-sm">attempts analysed</span></div>
+</div>
+
+<div class="mgrid">
+    <div class="card"><div class="card-header"><h3><i class="fas fa-triangle-exclamation" style="color:#dc2626;"></i> Most-missed topics</h3></div>
+        <div class="card-body">
+            {% for r in data.weak_topics %}{{ bar(r) }}{% else %}<p class="text-muted text-sm">Not enough answers yet.</p>{% endfor %}
+            <p class="text-muted text-sm" style="margin-top:.6rem;">Lowest cohort correct-rate first — the topics to reteach.</p>
+        </div>
+    </div>
+    <div class="card"><div class="card-header"><h3><i class="fas fa-award" style="color:#059669;"></i> Strongest topics</h3></div>
+        <div class="card-body">
+            {% for r in data.strong_topics %}{{ bar(r) }}{% else %}<p class="text-muted text-sm">Not enough answers yet.</p>{% endfor %}
+        </div>
+    </div>
+</div>
+
+{% if data.weak_subtopics %}
+<div class="card mt-3"><div class="card-header"><h3><i class="fas fa-magnifying-glass-chart"></i> Most-missed sub-topics</h3></div>
+    <div class="card-body">
+        {% for r in data.weak_subtopics %}{{ bar(r) }}{% endfor %}
+    </div>
+</div>
+{% endif %}
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-simple"></i>
+    <h3>No online sittings yet</h3><p>Once students take mocks online, this page shows the topics they most struggle with — and lets you drill into any student.</p></div></div></div>
+{% endif %}
+
+<div class="card mt-3"><div class="card-header"><h3><i class="fas fa-user-graduate"></i> Students <span class="text-muted text-sm">— open one to see their topic mastery &amp; progress</span></h3></div>
+    <div class="card-body rost">
+        <input type="search" id="rsearch" class="form-control" placeholder="Search student name or ID…" style="margin-bottom:.7rem;">
+        <div id="rlist">
+            {% for s in roster %}
+            <a href="{{ url_for('mock_jamb.student_mastery_view', student_id=s.id) }}" data-n="{{ (s.name ~ ' ' ~ s.code)|lower }}">
+                <span>{{ s.name }} <span class="text-muted text-sm">({{ s.code }})</span></span>
+                <span class="text-muted text-sm">{{ s.mocks }} mock{{ '' if s.mocks == 1 else 's' }} <i class="fas fa-chevron-right"></i></span>
+            </a>
+            {% else %}<p class="text-muted text-sm">No students have sat a mock online yet.</p>{% endfor %}
+        </div>
+    </div>
+</div>
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var s=document.getElementById('rsearch'); if(!s) return;
+    s.addEventListener('input', function(){
+        var v=this.value.toLowerCase();
+        document.querySelectorAll('#rlist a').forEach(function(a){
+            a.style.display = a.dataset.n.indexOf(v) > -1 ? '' : 'none';
+        });
+    });
+})();
+</script>
+{% endblock %}

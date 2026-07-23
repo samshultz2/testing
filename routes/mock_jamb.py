@@ -862,10 +862,60 @@ def items(exam_id):
               'questions': url_for('mock_jamb.questions', exam_id=exam.id),
               'deep': url_for('mock_jamb.deep', exam_id=exam.id),
               'index': url_for('mock_jamb.index'),
+              'mastery': url_for('mock_jamb.mastery'),
               'self': url_for('mock_jamb.items', exam_id=exam.id),
               'export_pdf': url_for('mock_jamb.items_export', exam_id=exam.id, format='pdf'),
               'export_excel': url_for('mock_jamb.items_export', exam_id=exam.id, format='excel'),
               'export_image': url_for('mock_jamb.items_export', exam_id=exam.id, format='image')})
+
+
+def _mastery_allowed_ids():
+    """Branch-scoped student ids for cohort mastery — None (all) for central."""
+    from utils.branch_scope import is_central
+    if is_central():
+        return None
+    from models import Student
+    return [s.id for s in scope_query(Student.query, Student).all()]
+
+
+@mock_jamb_bp.route('/mastery')
+@login_required
+def mastery():
+    """Cohort topic/sub-topic mastery across all online Mock JAMB sittings: the
+    topics most students get wrong (and excel at), plus a searchable roster to
+    drill into any one student's topic mastery and improvement across mocks."""
+    from utils.mock_student_mastery import cohort_topic_gaps
+    from models import Student, MockJAMBAttempt
+    allowed = _mastery_allowed_ids()
+    data = cohort_topic_gaps(allowed_ids=allowed)
+    # roster of students who have sat at least one online mock
+    q = (db.session.query(Student.id, Student.first_name, Student.surname,
+                          Student.student_id, func.count(MockJAMBAttempt.id))
+         .join(MockJAMBAttempt, MockJAMBAttempt.student_id == Student.id)
+         .filter(MockJAMBAttempt.status == 'Submitted'))
+    if allowed is not None:
+        q = q.filter(Student.id.in_(allowed or [-1]))
+    roster = [{'id': i, 'name': f'{sn or ""} {fn or ""}'.strip(), 'code': code, 'mocks': n}
+              for (i, fn, sn, code, n) in
+              q.group_by(Student.id).order_by(Student.surname, Student.first_name).all()]
+    return render_template('mock_jamb/mastery.html', data=data, roster=roster,
+                           urls={'index': url_for('mock_jamb.index')})
+
+
+@mock_jamb_bp.route('/student/<int:student_id>/mastery')
+@login_required
+def student_mastery_view(student_id):
+    """One student's topic/sub-topic mastery across every mock they have sat:
+    strengths, weaknesses, per-subject topic tables, and their improvement or
+    decline over successive mocks."""
+    from utils.mock_student_mastery import student_mastery
+    from models import Student
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
+    data = student_mastery(student_id)
+    return render_template('mock_jamb/student_mastery.html', data=data, student=student,
+                           urls={'index': url_for('mock_jamb.index'),
+                                 'mastery': url_for('mock_jamb.mastery')})
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/items/export')
