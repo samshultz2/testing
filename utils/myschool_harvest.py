@@ -120,7 +120,7 @@ def _process_one(cell, qid, state, session):
         return
 
     sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']),
-                                year=cell['year'])
+                                year=cell['year'], novel_title=cell.get('novel'))
     sec = _valid_section(cell['subject'], sec)
     image_url = _rehost_image(p['image_url']) if p.get('image_url') else None
     if image_url:
@@ -168,6 +168,11 @@ def harvest_step(max_questions=6):
                 state['ids'] = ms.list_question_ids(
                     cell['slug'], state['exam'], cell['year'], session,
                     max_pages=state.get('max_pages', 60), delay=0.3)
+                # English: read this year's recommended-novel badge off the listing
+                # page so novel-section questions get the correct set text.
+                if ms.norm_subject(cell['subject']) == 'english language':
+                    cell['novel'] = ms.scrape_novel_title(
+                        cell['subject'], state['exam'], cell['year'], session)
                 found = state.setdefault('found', {})
                 found[cell['subject']] = found.get(cell['subject'], 0) + len(state['ids'])
             if not state['ids']:

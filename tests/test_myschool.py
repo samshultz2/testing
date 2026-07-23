@@ -88,13 +88,49 @@ def test_english_novel_tagged_by_year():
     sec, top, _ = ms.classify('english language', q, year=2019)
     assert sec == 'novel' and 'Forcados' in top          # 2016-2020 novel
     sec, top, _ = ms.classify('english language', q, year=2023)
-    assert sec == 'novel' and 'Life Changer' in top      # 2021-2025 novel
+    assert sec == 'novel' and 'Life Changer' in top      # 2021-2024 novel
+    sec, top, _ = ms.classify('english language', q, year=2025)
+    assert sec == 'novel' and 'Lekki Headmaster' in top  # 2025 has its own text
     # unknown year keeps the generic label (assign manually)
     sec, top, _ = ms.classify('english language', q, year=1990)
     assert sec == 'novel' and top == 'Recommended Novel'
     # a non-novel English question is unaffected by the year
     sec, top, _ = ms.classify('english language', "Choose the nearest in meaning to 'candid'", year=2023)
     assert sec != 'novel'
+
+
+def test_english_novel_title_overrides_year_map():
+    """The name scraped off the listing page wins over the hardcoded year map, so
+    a year whose set text changed (or a fresh year) is tagged correctly."""
+    from utils import myschool as ms
+    q = "Which character in the recommended novel is the protagonist?"
+    sec, top, _ = ms.classify('english language', q, year=2024,
+                              novel_title='The Lekki Headmaster')
+    assert sec == 'novel' and top == 'The Lekki Headmaster'   # override, not 'Life Changer'
+    # a blank/absent scrape falls back to the year map
+    sec, top, _ = ms.classify('english language', q, year=2023, novel_title=None)
+    assert sec == 'novel' and 'Life Changer' in top
+
+
+def test_scrape_novel_title_reads_listing_badge(monkeypatch):
+    """The recommended novel is read from the listing-page badge
+    ``div.bg-primary_accent strong`` (myschool labels each year's set text there)."""
+    from utils import myschool as ms
+    listing = """
+    <div class="row">
+      <div class="mb-2 inline-block bg-primary_accent rounded-2xl p-3 prevent-copy">
+        <strong>The Lekki Headmaster</strong>
+      </div>
+      <a href="/classroom/english-language/501?exam_type=jamb">Q</a>
+    </div>"""
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: listing)
+    assert ms.scrape_novel_title('English Language', 'jamb', 2025, session=object()) \
+        == 'The Lekki Headmaster'
+    # non-English subjects never carry a novel badge → None (and no fetch needed)
+    assert ms.scrape_novel_title('Mathematics', 'jamb', 2025, session=object()) is None
+    # a listing without the badge (older years) → None
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: '<div>no badge here</div>')
+    assert ms.scrape_novel_title('English Language', 'jamb', 2018, session=object()) is None
 
 
 def test_on_jamb_flags_school_only_subjects():
@@ -225,6 +261,34 @@ def test_harvest_flags_figure_questions_and_holds_them_out(app, monkeypatch):
     with app.app_context():
         q2 = db.session.get(MockJAMBQuestion, q.id)
         assert q2.needs_image is False
+
+
+def test_harvest_tags_english_novel_from_listing_badge(app, monkeypatch):
+    """A harvested English novel question is tagged with the novel scraped off the
+    listing page (``scrape_novel_title``), not the stale hardcoded year map."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    novel_q = _fixture("Which character in the recommended novel is the protagonist?")
+    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['301'])
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: novel_q)
+    # the listing scrape returns 2025's real set text
+    monkeypatch.setattr(ms, 'scrape_novel_title', lambda *a, **k: 'The Lekki Headmaster')
+
+    with app.app_context():
+        s = Subject(name='HarvestEnglishNovel', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        # name it 'English Language' so classify builds the English index
+        mh.start_harvest([{'id': sid, 'name': 'English Language'}], exam='jamb',
+                         year_min=2025, year_max=2025)
+        for _ in range(3):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
+        assert q is not None and q.section == 'novel'
+        assert q.topic == 'The Lekki Headmaster'      # from the badge, not the year map
 
 
 def test_harvest_reports_empty_subjects(app, monkeypatch):

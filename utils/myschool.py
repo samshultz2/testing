@@ -93,13 +93,15 @@ def on_jamb(subject_name):
     return norm_subject(subject_name) in JAMB_SUBJECTS
 
 
-# JAMB's recommended English novel rotates by year. myschool doesn't label the
-# novel on a question, but the year is known, so English Novel-section questions
-# can be tagged with the correct book automatically. (title — author, matching
-# the blueprint editor's suggestions.) Edit/extend as JAMB announces new texts.
+# JAMB's recommended English novel rotates by year. myschool DOES label the text
+# on each year's listing page (a badge — see ``scrape_novel_title``), which is the
+# authoritative source; this table is only a fallback for years whose badge is
+# absent (e.g. older papers). (title — author, matching the blueprint editor's
+# suggestions.) Edit/extend as JAMB announces new texts.
 JAMB_ENGLISH_NOVELS = [
     ((2016, 2020), "The Last Days at Forcados High School — A.H. Mohammed"),
-    ((2021, 2025), "The Life Changer — Khadija Abubakar Jalli"),
+    ((2021, 2024), "The Life Changer — Khadija Abubakar Jalli"),
+    ((2025, 2025), "The Lekki Headmaster"),
 ]
 
 
@@ -113,6 +115,38 @@ def novel_for_year(year):
         if lo <= y <= hi:
             return title
     return None
+
+
+def _novel_from_listing_html(html):
+    """The JAMB recommended-novel name off a myschool listing page: it renders the
+    year's set text in a badge — ``<div class="… bg-primary_accent …"><strong>Title
+    </strong></div>``. Returns the title, or None when the badge isn't present
+    (e.g. older years, or a non-English subject)."""
+    if not html:
+        return None
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    for div in soup.select("div.bg-primary_accent"):
+        strong = div.find("strong")
+        if strong:
+            txt = clean(strong.get_text(" ", strip=True))
+            if txt:
+                return txt
+    return None
+
+
+def scrape_novel_title(subject, exam, year, session=None):
+    """Read the recommended-novel badge off the English listing page for a year,
+    so novel-section questions can be tagged with the actual set text even when
+    the hardcoded ``JAMB_ENGLISH_NOVELS`` map is stale (e.g. 2025 → "The Lekki
+    Headmaster"). Only meaningful for English; returns None for other subjects or
+    when the badge is absent."""
+    if norm_subject(subject) != "english language":
+        return None
+    sess = session or _session()
+    slug = subject_slug(subject)
+    html = fetch(f"{BASE}/{slug}?exam_type={exam}&exam_year={year}&page=1", sess)
+    return _novel_from_listing_html(html)
 
 
 def norm_subject(name):
@@ -351,13 +385,15 @@ def _build_index(subject):
     return index
 
 
-def classify(subject, text, year=None):
+def classify(subject, text, year=None, novel_title=None):
     """Keyword-match a question to (section, topic, subtopic).
 
     For English, a question confidently classified into the Novel section has its
-    ``topic`` set to the JAMB-recommended novel for ``year`` (when known), so it
-    lines up with a mock that names that novel — the app serves Novel questions
-    whose topic matches the mock's ``novel_title``."""
+    ``topic`` set to the JAMB-recommended novel, so it lines up with a mock that
+    names that novel — the app serves Novel questions whose topic matches the
+    mock's ``novel_title``. The novel is taken from ``novel_title`` when supplied
+    (the name scraped off the listing page, authoritative), else from the
+    hardcoded ``year`` map."""
     index = _build_index(subject)
     if not index:
         return (None, None, None)
@@ -376,9 +412,10 @@ def classify(subject, text, year=None):
             best_score, best = score, (section, topic, sub)
     if best and best_score > 0:
         section, topic, sub = best
-        # tag the actual novel by year (only on a genuine novel match)
+        # tag the actual novel (only on a genuine novel match): prefer the name
+        # scraped off the listing page, fall back to the year map.
         if section == "novel" and topic == "Recommended Novel":
-            nv = novel_for_year(year)
+            nv = (novel_title or "").strip() or novel_for_year(year)
             if nv:
                 topic = nv
         return (section, topic, sub)
@@ -607,6 +644,7 @@ def scrape_year(subject, exam, year, session=None, max_pages=60, delay=0.6,
     Playwright renderer that also exposes JS-injected figure images)."""
     sess = session or _session()
     slug = subject_slug(subject)
+    novel_title = scrape_novel_title(subject, exam, year, sess)   # English only
     for qid in list_question_ids(slug, exam, year, sess, max_pages, delay):
         html = (detail_fetch(question_url(slug, exam, year, qid)) if detail_fetch
                 else fetch(question_url(slug, exam, year, qid), sess))
@@ -617,7 +655,8 @@ def scrape_year(subject, exam, year, session=None, max_pages=60, delay=0.6,
         if not parsed:
             continue
         section, topic, subtopic = classify(
-            subject, parsed["stem"] + " " + " ".join(parsed["options"]), year=year)
+            subject, parsed["stem"] + " " + " ".join(parsed["options"]),
+            year=year, novel_title=novel_title)
         parsed.update(subject=subject, year=str(year), qid=qid,
                       section=section, topic=topic, subtopic=subtopic)
         yield parsed
