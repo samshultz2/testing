@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
 // pick them up promptly. Static assets also use stale-while-revalidate below,
 // so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v152';
+const CACHE_VERSION = 'v153';
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
@@ -65,6 +65,10 @@ const ASSETS = [
   '/static/js/react/scratchcards-app.js',
   '/static/js/react/parent-app.js',
   '/static/js/spa-nav.js',
+  // Self-hosted MathJax so exam maths renders with no CDN (fonts load on demand
+  // via stale-while-revalidate and are then available offline too).
+  '/static/js/mathjax-setup.js',
+  '/static/vendor/mathjax/tex-mml-chtml.js',
   '/static/manifest.webmanifest',
   OFFLINE_URL
 ];

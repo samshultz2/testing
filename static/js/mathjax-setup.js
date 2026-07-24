@@ -20,7 +20,10 @@
   if (!window.MathJax) {
     window.MathJax = {
       tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
-      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
+      // Self-hosted fonts (see /static/vendor/mathjax) so the exam never depends
+      // on a CDN — works offline and on networks that block jsdelivr.
+      chtml: { fontURL: '/static/vendor/mathjax/output/chtml/fonts/woff-v2' }
     };
   }
 
@@ -46,10 +49,11 @@
 
   if (!document.getElementById('MathJax-script')) {
     // First time on a maths page: load the library (it auto-typesets on startup).
+    // Served from our own origin — no CDN dependency (CSP 'self' covers it).
     var s = document.createElement('script');
     s.id = 'MathJax-script';
     s.async = true;
-    s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+    s.src = '/static/vendor/mathjax/tex-mml-chtml.js';
     document.head.appendChild(s);
   } else {
     // Already loaded on a previous page → typeset the just-swapped content now.
