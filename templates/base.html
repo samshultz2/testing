@@ -1107,6 +1107,17 @@
     <script nonce="{{ csp_nonce }}">
     // Register the PWA service worker (installable + offline page caching).
     if ('serviceWorker' in navigator) {
+        // If a NEW service worker takes control (e.g. after a deploy bumps the
+        // cache version), reload once so the page and its CSS/JS come from the
+        // fresh caches instead of the previous version's stale copies. Guarded so
+        // it never loops, and skipped on the very first install (no prior worker).
+        var swHadController = !!navigator.serviceWorker.controller;
+        var swReloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+            if (swReloaded || !swHadController) return;
+            swReloaded = true;
+            window.location.reload();
+        });
         window.addEventListener('load', function () {
             navigator.serviceWorker.register('/sw.js').catch(function () {});
         });
