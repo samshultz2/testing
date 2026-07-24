@@ -61,6 +61,7 @@
 </form>
 {% endblock %}
 {% block scripts %}
+{% include 'mock_jamb/_mathjax.html' %}
 <script nonce="{{ csp_nonce }}">
 (function(){
     var SAVE_URL = '{{ url_for("mock_jamb_portal.portal_save", exam_id=exam.id) }}';

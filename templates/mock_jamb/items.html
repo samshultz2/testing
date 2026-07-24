@@ -235,6 +235,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{% include 'mock_jamb/_mathjax.html' %}
 {% if data and not data.meta.empty %}
 <script nonce="{{ csp_nonce }}" id="ia-data" type="application/json">{{ {'difficulty': data.distribution.difficulty, 'discrimination': data.distribution.discrimination, 'topics': data.topics[:12]}|tojson }}</script>
 <script nonce="{{ csp_nonce }}">

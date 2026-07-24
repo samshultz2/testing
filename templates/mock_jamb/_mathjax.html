@@ -1,0 +1,21 @@
+{# MathJax loader for Mock JAMB question text, options and passages. myschool
+   (and manually-added questions) write inline math as \( ... \) and display math
+   as \[ ... \] — e.g. \(\frac{-b\pm\sqrt{b^2-4ac}}{2a}\) or \(3x^2+2x-5\).
+
+   We deliberately do NOT register $ ... $ as a delimiter, so a currency amount in
+   a stem (e.g. "a good costs $5") is never mis-parsed as maths. Content is
+   server-rendered, so MathJax's on-load auto-typeset covers every question; the
+   helper below also re-typesets on demand for any dynamically inserted markup. #}
+<script nonce="{{ csp_nonce }}">
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+// Re-typeset a node (or the whole page) after client-side DOM changes.
+window.renderMath = function (el) {
+  if (window.MathJax && MathJax.typesetPromise) {
+    try { MathJax.typesetPromise(el ? [el] : undefined).catch(function () {}); } catch (e) {}
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
