@@ -866,7 +866,9 @@ def items(exam_id):
               'self': url_for('mock_jamb.items', exam_id=exam.id),
               'export_pdf': url_for('mock_jamb.items_export', exam_id=exam.id, format='pdf'),
               'export_excel': url_for('mock_jamb.items_export', exam_id=exam.id, format='excel'),
-              'export_image': url_for('mock_jamb.items_export', exam_id=exam.id, format='image')})
+              'export_image': url_for('mock_jamb.items_export', exam_id=exam.id, format='image'),
+              'weakness_pdf': url_for('mock_jamb.weakness_export', exam_id=exam.id, format='pdf'),
+              'weakness_excel': url_for('mock_jamb.weakness_export', exam_id=exam.id, format='excel')})
 
 
 def _mastery_allowed_ids():
@@ -938,6 +940,30 @@ def items_export(exam_id):
     if fmt in ('image', 'png'):
         return png_response(items_png(data), items_filename(meta, 'png'), inline=False)
     return pdf_response(items_pdf(data), items_filename(meta, 'pdf'), inline=False)
+
+
+@mock_jamb_bp.route('/exam/<int:exam_id>/weakness/export')
+@login_required
+def weakness_export(exam_id):
+    """Printable failure report — the questions, topics and sub-topics the cohort
+    got wrong (weakest first). ``format`` = pdf | excel | image."""
+    from utils.mock_jamb_item_analysis import item_analysis
+    from utils.mock_deep_report import (weakness_pdf, weakness_xlsx, weakness_png,
+                                        weakness_filename)
+    from utils.web_exports import pdf_response, xlsx_response, png_response
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    data = item_analysis(exam_id)
+    if not data or data['meta'].get('empty'):
+        flash('No online sittings yet — publish the mock and let students sit it to unlock the failure report.', 'warning')
+        return redirect(url_for('mock_jamb.items', exam_id=exam_id))
+    fmt = (request.args.get('format') or 'pdf').lower()
+    meta = data['meta']
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(weakness_xlsx(data), weakness_filename(meta, 'xlsx'))
+    if fmt in ('image', 'png'):
+        return png_response(weakness_png(data), weakness_filename(meta, 'png'), inline=False)
+    return pdf_response(weakness_pdf(data), weakness_filename(meta, 'pdf'), inline=False)
 
 
 @mock_jamb_bp.route('/validation')

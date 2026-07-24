@@ -664,3 +664,203 @@ def items_xlsx(data):
         sheet('Recommendations', ['Audience', 'Headline', 'Detail'], rec_rows)
 
     out = io.BytesIO(); wb.save(out); return out.getvalue()
+
+
+# ===========================================================================
+# Failure / weakness report — the questions, topics and sub-topics the cohort
+# got wrong (a teaching lens, distinct from the item-quality "items to review").
+# ===========================================================================
+def weakness_stem(meta):
+    name = (meta.get('exam_name') or 'exam').replace(' ', '_')
+    return f"mock_jamb_weaknesses_{name}"
+
+
+def weakness_filename(meta, ext='pdf'):
+    return f"{weakness_stem(meta)}.{ext}"
+
+
+def _weakness_lists(data, fail_below=55, q_limit=40, t_limit=25, s_limit=30):
+    """Derive the three failure views from an item_analysis payload:
+    most-failed questions (lowest % correct), weakest topics and weakest
+    sub-topics (both below ~fair mastery, weakest first)."""
+    items = data.get('items') or []
+    topics = data.get('topics') or []
+    scored = [it for it in items if it.get('p_value') is not None]
+    scored.sort(key=lambda it: (it['p_raw'] if it.get('p_raw') is not None else 1,
+                                -(it.get('blank_rate') or 0)))
+    most_failed = [it for it in scored if it['p_value'] < fail_below][:q_limit] or scored[:q_limit]
+    weak_topics = [t for t in topics if t.get('mastery') is not None and t['mastery'] < 70][:t_limit] \
+        or topics[:t_limit]
+    subs = []
+    for t in topics:
+        for s in (t.get('subtopics') or []):
+            if s.get('mastery') is not None:
+                subs.append({**s, 'subject': t['subject'], 'topic': t['topic']})
+    subs.sort(key=lambda s: s['mastery'])
+    weak_subs = [s for s in subs if s['mastery'] < 70][:s_limit] or subs[:s_limit]
+    return most_failed, weak_topics, weak_subs
+
+
+def weakness_pdf(data):
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
+                                    Spacer, KeepTogether)
+    from utils.web_exports import pdf_escape
+    from utils.mathtext import latex_to_text
+
+    primary, light, muted = _theme()
+    meta = data.get('meta') or {}
+    most_failed, weak_topics, weak_subs = _weakness_lists(data)
+
+    styles = getSampleStyleSheet()
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=16, textColor=primary, spaceAfter=1)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=10, textColor=muted)
+    hh = ParagraphStyle('hh', parent=styles['Heading2'], fontSize=12.5, textColor=primary,
+                        spaceBefore=10, spaceAfter=4)
+    body = ParagraphStyle('b', parent=styles['Normal'], fontSize=9, leading=12)
+    muted_s = ParagraphStyle('mu', parent=styles['Normal'], fontSize=9, textColor=muted)
+    cell = ParagraphStyle('cell', parent=styles['Normal'], fontSize=7.5, leading=9)
+
+    def q_text(it):
+        return pdf_escape(latex_to_text(it.get('text') or '')[:150])
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=13 * mm, bottomMargin=13 * mm,
+                            leftMargin=12 * mm, rightMargin=12 * mm,
+                            title=f"Mock JAMB weakness report — {meta.get('exam_name', '')}")
+    W = landscape(A4)[0] - 24 * mm
+    elems = [Paragraph(pdf_escape(_school_name()), h),
+             Paragraph(f"Mock JAMB · What the cohort got wrong · <b>{pdf_escape(meta.get('exam_name', ''))}</b> · "
+                       f"{pdf_escape(meta.get('session_name', ''))} · {pdf_escape(meta.get('exam_date', ''))} · "
+                       f"{meta.get('sitters', 0)} online sitter(s)", sub),
+             Spacer(1, 8)]
+
+    # focused KPI strip
+    weakest_subject = (data.get('subject_mastery') or [{}])[0]
+    weakest_topic = (weak_topics or [{}])[0]
+    failed_majority = sum(1 for it in (data.get('items') or []) if (it.get('p_value') or 100) < 50)
+    kpi = [('Cohort mastery', f"{_val(meta.get('cohort_mastery'))}%", 'correct of attempted'),
+           ('Questions failed by most', str(failed_majority), 'under 50% correct'),
+           ('Weakest subject', pdf_escape(weakest_subject.get('subject', '—')),
+            f"{_val(weakest_subject.get('mastery'))}% mastery"),
+           ('Weakest topic', pdf_escape((weakest_topic.get('topic') or '—')[:28]),
+            f"{_val(weakest_topic.get('mastery'))}% · {pdf_escape(weakest_topic.get('subject', ''))}")]
+    cells = [Paragraph(f"<b><font size=12 color='#B43A2E'>{v}</font></b><br/>"
+                       f"<font size=8 color='#14211C'>{lbl}</font><br/>"
+                       f"<font size=7 color='#6B7A74'>{s}</font>", muted_s) for lbl, v, s in kpi]
+    kt = Table([cells], colWidths=[W / len(cells)] * len(cells))
+    kt.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), light),
+                            ('INNERGRID', (0, 0), (-1, -1), 3, colors.white),
+                            ('BOX', (0, 0), (-1, -1), 3, colors.white),
+                            ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 9)]))
+    elems.append(kt)
+
+    def _tbl(head, rows, widths, aligns=None):
+        t = Table([head] + rows, colWidths=widths, repeatRows=1)
+        style = [('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
+                 ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                 ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+                 ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]
+        if aligns:
+            for col, al in aligns.items():
+                style.append(('ALIGN', (col, 0), (col, -1), al))
+        t.setStyle(TableStyle(style))
+        return t
+
+    if most_failed:
+        rows = [[pdf_escape(it['subject']),
+                 Paragraph(pdf_escape(it['topic'] + (' › ' + it['subtopic'] if it['subtopic'] else '')), cell),
+                 f"{_val(it['p_value'])}%", f"{_val(it.get('blank_rate'))}%", it['correct_option'],
+                 Paragraph(q_text(it), cell)] for it in most_failed]
+        elems.append(KeepTogether([Paragraph('Questions most students failed — weakest first', hh)]))
+        elems.append(_tbl(['Subject', 'Topic › Sub-topic', '% correct', '% blank', 'Key', 'Question'], rows,
+                          [W * 0.13, W * 0.24, W * 0.09, W * 0.08, W * 0.05, W * 0.41],
+                          {0: 'LEFT', 1: 'LEFT', 5: 'LEFT'}))
+
+    if weak_topics:
+        rows = [[pdf_escape(t['subject']), Paragraph(pdf_escape(t['topic']), cell), str(t['items']),
+                 str(t['served']), f"{_val(t['mastery'])}%", t['band_label']] for t in weak_topics]
+        elems.append(KeepTogether([Paragraph('Topics the cohort failed — weakest first', hh),
+                     _tbl(['Subject', 'Topic', 'Items', 'Responses', 'Mastery', 'Verdict'], rows,
+                          [W * 0.2, W * 0.34, W * 0.1, W * 0.14, W * 0.1, W * 0.12],
+                          {0: 'LEFT', 1: 'LEFT', 5: 'LEFT'})]))
+
+    if weak_subs:
+        rows = [[pdf_escape(s['subject']), Paragraph(pdf_escape(s['topic']), cell),
+                 Paragraph(pdf_escape(s['subtopic']), cell), str(s['items']), str(s['served']),
+                 f"{_val(s['mastery'])}%", s['band_label']] for s in weak_subs]
+        elems.append(KeepTogether([Paragraph('Sub-topics the cohort failed — drill-down, weakest first', hh),
+                     _tbl(['Subject', 'Topic', 'Sub-topic', 'Items', 'Responses', 'Mastery', 'Verdict'], rows,
+                          [W * 0.16, W * 0.26, W * 0.24, W * 0.08, W * 0.1, W * 0.08, W * 0.08],
+                          {0: 'LEFT', 1: 'LEFT', 2: 'LEFT', 6: 'LEFT'})]))
+
+    recs = data.get('recommendations') or {}
+    tone_hex = {'positive': '#0D6A4E', 'negative': '#B43A2E', 'warning': '#9A7B0A', 'insight': '#1F6FB2'}
+    for bucket, title in [('students', 'What students should do'),
+                          ('teachers', 'What teachers should re-teach')]:
+        rlist = recs.get(bucket) or []
+        if rlist:
+            block = [Paragraph(title, hh)]
+            for r in rlist:
+                c = tone_hex.get(r['tone'], '#14211C')
+                block.append(Paragraph(f"<font color='{c}'><b>&#9632; {pdf_escape(r['title'])}.</b></font> "
+                                       f"{pdf_escape(r['text'])}", body))
+                block.append(Spacer(1, 3))
+            elems.append(KeepTogether(block))
+
+    elems.append(Spacer(1, 6))
+    elems.append(Paragraph(
+        "Method: a question is 'failed' when few of the candidates served it answered correctly "
+        "(% correct = correct ÷ served; a blank counts as wrong). Topic and sub-topic mastery roll "
+        "those results up over attempted responses. Weakest items/areas are listed first so revision "
+        "can target them.", muted_s))
+    doc.build(elems)
+    return buf.getvalue()
+
+
+def weakness_png(data, dpi=170):
+    from utils.analytics_org_pdf import _pdf_to_png
+    return _pdf_to_png(weakness_pdf(data), dpi)
+
+
+def weakness_xlsx(data):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from utils.mathtext import latex_to_text
+
+    most_failed, weak_topics, weak_subs = _weakness_lists(data)
+    wb = Workbook()
+    head_fill = PatternFill('solid', fgColor='B43A2E'); head_font = Font(bold=True, color='FFFFFF')
+
+    def sheet(title, headers, rows, first=False):
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = title[:31]
+        ws.append(headers)
+        for c in ws[1]:
+            c.fill = head_fill; c.font = head_font; c.alignment = Alignment(horizontal='center')
+        for r in rows:
+            ws.append(r)
+        for col in ws.columns:
+            width = max((len(str(c.value)) if c.value is not None else 0) for c in col) + 2
+            ws.column_dimensions[col[0].column_letter].width = min(max(width, 10), 60)
+        return ws
+
+    sheet('Questions failed',
+          ['Subject', 'Topic', 'Sub-topic', '% correct', '% blank', 'Key', 'Question'],
+          [[it['subject'], it['topic'], it['subtopic'], it['p_value'], it.get('blank_rate'),
+            it['correct_option'], latex_to_text(it.get('text') or '')[:200]] for it in most_failed],
+          first=True)
+    sheet('Topics failed', ['Subject', 'Topic', 'Items', 'Responses', 'Correct', 'Mastery %', 'Verdict'],
+          [[t['subject'], t['topic'], t['items'], t['served'], t['correct'], t['mastery'], t['band_label']]
+           for t in weak_topics])
+    sheet('Sub-topics failed',
+          ['Subject', 'Topic', 'Sub-topic', 'Items', 'Responses', 'Correct', 'Mastery %', 'Verdict'],
+          [[s['subject'], s['topic'], s['subtopic'], s['items'], s['served'], s['correct'],
+            s['mastery'], s['band_label']] for s in weak_subs])
+    out = io.BytesIO(); wb.save(out); return out.getvalue()
