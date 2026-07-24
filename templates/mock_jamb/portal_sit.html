@@ -100,13 +100,68 @@
         });
     }
 
+    // ---- resilient autosave: a retry queue + a localStorage mirror, so a network
+    // blip (or a refresh) never loses an answer. Each choice saves to the server;
+    // if that fails it stays queued and is retried on a timer and on reconnect,
+    // and it's also written to localStorage and re-synced on the next load. ----
+    var ATTEMPT = '{{ attempt.id }}';
+    var LSKEY = 'mjmock:' + ATTEMPT;
+    var queue = {};                 // qid -> option awaiting a confirmed save
+    var saving = false;
+    function lsGet(){ try { return JSON.parse(localStorage.getItem(LSKEY) || '{}'); } catch(_){ return {}; } }
+    function lsSet(m){ try { localStorage.setItem(LSKEY, JSON.stringify(m)); } catch(_){} }
+
+    var pill = document.createElement('span');
+    pill.style.cssText = 'font-size:.78rem;font-weight:600;color:#fff;opacity:.85;';
+    var bar = document.querySelector('.mjs-bar'); if(bar) bar.appendChild(pill);
+    function status(s){
+        var map = {saving:'Saving…', saved:'✓ All answers saved', offline:'Offline — will keep retrying'};
+        pill.textContent = map[s] || ''; pill.style.opacity = (s === 'saved') ? '.85' : '1';
+    }
+    function enqueue(qid, opt){
+        queue[qid] = opt;
+        var m = lsGet(); m[qid] = opt; lsSet(m);
+        flush();
+    }
+    function flush(){
+        var ids = Object.keys(queue);
+        if(!ids.length){ status('saved'); return; }
+        if(saving) return;
+        saving = true; status(navigator.onLine === false ? 'offline' : 'saving');
+        var qid = ids[0], opt = queue[qid];
+        fetch(SAVE_URL, {method:'POST', body: new URLSearchParams({_csrf_token: CSRF, question_id: qid, option: opt})})
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(j){
+                saving = false;
+                if(j && j.ok){ if(queue[qid] === opt){ delete queue[qid]; } flush(); }
+                else { status('offline'); setTimeout(flush, 3000); }
+            })
+            .catch(function(){ saving = false; status('offline'); setTimeout(flush, 3000); });
+    }
+    window.addEventListener('online', flush);
+    setInterval(flush, 5000);       // safety-net retry
+
     document.addEventListener('change', function(e){
         var r = e.target; if(r.type !== 'radio' || !r.name.startsWith('q')) return;
         var q = r.closest('.mjs-q'); markChosen(q);
         answered.add(q.dataset.qid); updateCount();
-        var body = new URLSearchParams({ _csrf_token: CSRF, question_id: q.dataset.qid, option: r.value });
-        fetch(SAVE_URL, { method:'POST', body: body }).catch(function(){});
+        enqueue(q.dataset.qid, r.value);
     });
+
+    // On load, re-apply any answer that was buffered locally but never confirmed
+    // saved to the server (e.g. a save that failed before a refresh).
+    (function reconcile(){
+        var m = lsGet();
+        Object.keys(m).forEach(function(qid){
+            var q = document.querySelector('.mjs-q[data-qid="' + qid + '"]');
+            if(!q) return;
+            var input = q.querySelector('input[type=radio][value="' + m[qid] + '"]');
+            if(input && !input.checked){
+                input.checked = true; markChosen(q); answered.add(qid); enqueue(qid, m[qid]);
+            }
+        });
+        updateCount();
+    })();
 
     // timer
     var timer = document.getElementById('timer');
@@ -125,6 +180,15 @@
         if(submitted) return;
         if(!auto && !window.confirm('Submit your answers? You will not be able to change them.')) return;
         submitted = true;
+        // Best-effort final flush of anything still queued, using sendBeacon so it
+        // survives the navigation that submitting triggers.
+        try {
+            Object.keys(queue).forEach(function(qid){
+                var body = new URLSearchParams({_csrf_token: CSRF, question_id: qid, option: queue[qid]});
+                if(navigator.sendBeacon){ navigator.sendBeacon(SAVE_URL, body); }
+            });
+        } catch(_){}
+        try { localStorage.removeItem(LSKEY); } catch(_){}
         document.getElementById('submitForm').submit();
     }
     document.getElementById('submitBtn').addEventListener('click', function(){ doSubmit(false); });

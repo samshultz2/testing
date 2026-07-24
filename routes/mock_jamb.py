@@ -2113,7 +2113,16 @@ def portal_save(exam_id):
         qid = request.form.get('question_id', type=int)
         opt = (request.form.get('option') or '').strip().upper()
         q = db.session.get(MockJAMBQuestion, qid)
-        if not q or q.mock_exam_id != exam.id or opt not in ('A', 'B', 'C', 'D'):
+        if not q or opt not in ('A', 'B', 'C', 'D'):
+            return jsonify({'error': 'bad'}), 400
+        # The question must belong to THIS mock's pool — its own rows for a legacy
+        # mock, or the shared bank (mock_exam_id NULL) for a bank-drawn mock. (The
+        # earlier `q.mock_exam_id == exam.id` check silently rejected every
+        # bank-drawn answer, since those questions are owned by no exam.)
+        from utils.mock_jamb_sitting import _pool_condition
+        in_pool = db.session.query(MockJAMBQuestion.id).filter(
+            MockJAMBQuestion.id == qid, _pool_condition(MockJAMBQuestion, exam)).first()
+        if not in_pool:
             return jsonify({'error': 'bad'}), 400
         ans = MockJAMBAnswer.query.filter_by(attempt_id=att.id, question_id=qid).first()
         if not ans:
