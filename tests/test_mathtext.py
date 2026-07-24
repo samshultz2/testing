@@ -6,6 +6,7 @@ from utils.mathtext import question_html, latex_to_text
 def test_question_html_renders_table_marker():
     out = str(question_html('Study the data [table: Price | Qty ; 8 | 10 ; 6 | 12] and answer.'))
     assert '<table class="mjq-table">' in out
+    assert '<div class="mjq-tablewrap">' in out          # responsive scroll wrapper
     assert '<th>Price</th><th>Qty</th>' in out          # first row is the header
     assert '<td>8</td><td>10</td>' in out
     assert out.startswith('Study the data ') and out.endswith(' and answer.')

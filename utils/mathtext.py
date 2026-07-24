@@ -24,12 +24,14 @@ def _render_table(body):
     rows = [r.strip() for r in body.split(";") if r.strip()]
     if not rows:
         return ""
-    out = ['<table class="mjq-table">']
+    # Wrap in a scroll container so a wide table scrolls on its own on small
+    # screens instead of stretching the page (see .mjq-tablewrap styling).
+    out = ['<div class="mjq-tablewrap"><table class="mjq-table">']
     for i, row in enumerate(rows):
         cells = [c.strip() for c in row.split("|")]
         tag = "th" if i == 0 else "td"
         out.append("<tr>" + "".join(f"<{tag}>{escape(c)}</{tag}>" for c in cells) + "</tr>")
-    out.append("</table>")
+    out.append("</table></div>")
     return "".join(out)
 
 
