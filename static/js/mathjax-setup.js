@@ -35,19 +35,8 @@
     }
   };
 
-  // Table styling for questions rendered from a scraped [table: …] marker
-  // (see utils.mathtext.question_html). Injected once; style-src allows this.
-  if (!document.getElementById('mjq-style')) {
-    var st = document.createElement('style');
-    st.id = 'mjq-style';
-    st.textContent =
-      // wrapper makes a wide table scroll on its own on phones (no page overflow)
-      '.mjq-tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:.5rem 0}' +
-      '.mjq-table{border-collapse:collapse;font-size:.9em}' +
-      '.mjq-table th,.mjq-table td{border:1px solid var(--border-color,#cbd5e1);padding:.28rem .6rem;text-align:left;white-space:nowrap}' +
-      '.mjq-table th{background:var(--gray-50,#f1f5f9);font-weight:700}';
-    document.head.appendChild(st);
-  }
+  // (Question-table styling lives in static/css/style.css so it applies even if
+  // this script hasn't run.)
 
   if (!document.getElementById('MathJax-script')) {
     // First time on a maths page: load the library (it auto-typesets on startup).

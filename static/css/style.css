@@ -2995,3 +2995,12 @@ body.cmdk-lock { overflow: hidden; }
     .cmdk-panel { animation: none !important; }
     .toast-progress { display: none; }
 }
+
+/* Mock JAMB question data-tables (rendered from a [table: …] marker by
+   utils.mathtext.question_html). The wrapper scrolls a wide table on its own on
+   small screens instead of stretching the page. Lives here (not in JS) so it
+   applies even if the MathJax setup script hasn't run. */
+.mjq-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; margin: .5rem 0; }
+.mjq-table { border-collapse: collapse; font-size: .9em; }
+.mjq-table th, .mjq-table td { border: 1px solid var(--border-color, #cbd5e1); padding: .28rem .6rem; text-align: left; white-space: nowrap; }
+.mjq-table th { background: var(--gray-50, #f1f5f9); font-weight: 700; }
