@@ -160,7 +160,7 @@
 {% macro show_q(q, n) -%}
 <div class="mjq">
     <div style="display:flex;justify-content:space-between;gap:.5rem;">
-        <div class="qtxt">{{ n }}. {{ q.question_text }}</div>
+        <div class="qtxt">{{ n }}. {{ q.question_text | question_html }}</div>
         <div style="white-space:nowrap;">
             <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-pen"></i></a>
             <form method="post" action="{{ url_for('mock_jamb.bank_delete_question', question_id=q.id) }}" style="display:inline;" data-confirm="Delete this question?">
@@ -170,7 +170,7 @@
         </div>
     </div>
     {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure" style="max-height:130px;margin:.4rem 0;border-radius:var(--radius-sm);">{% endif %}
-    {% for opt, val in q.options %}{% if val %}<div class="qopt {{ 'correct' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
+    {% for opt, val in q.options %}{% if val %}<div class="qopt {{ 'correct' if q.correct_option == opt else '' }}">{{ opt }}. {{ val | question_html }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
     <div class="mjq-meta">{{ q.marks }} mark(s){% if q.section %} · <span class="badge-sec">{{ q.section|replace('_',' ')|title }}</span>{% endif %}{% if q.exam_body %} · {{ q.exam_body }}{% endif %}{% if q.exam_year %} · {{ q.exam_year }}{% endif %}{% if q.source %} · <span class="badge-topic">{{ q.source|upper }}</span>{% endif %}{% if q.difficulty %} · {{ q.difficulty|title }}{% endif %}{% if q.topic %} · <span class="badge-topic">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}</div>
 </div>
 {%- endmacro %}
@@ -244,7 +244,7 @@
         </form>
     </div>
     {% if p.image_url %}<img src="{{ p.image_url }}" alt="passage figure" style="max-height:150px;margin:.6rem .9rem;border-radius:var(--radius-sm);">{% endif %}
-    <div class="mjq-body">{{ p.body }}</div>
+    <div class="mjq-body">{{ p.body | question_html }}</div>
     {% for q in grp.questions %}{{ show_q(q, loop.index) }}{% endfor %}
     <details style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a question to this passage</summary>
         {{ qform(url_for('mock_jamb.bank_add_question'), p.id, true) }}

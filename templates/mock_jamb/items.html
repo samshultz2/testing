@@ -158,7 +158,7 @@
     <div class="card-body">
         {% for it in data.flagged %}
         <div class="item-card flagged">
-            <div class="item-q">{{ it.text }}</div>
+            <div class="item-q">{{ it.text | question_html }}</div>
             <div class="item-meta">
                 <span class="tag">{{ it.subject }}</span>
                 {% if it.topic %}<span class="tag">{{ it.topic }}</span>{% endif %}

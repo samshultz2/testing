@@ -43,7 +43,7 @@
         <div class="mjs-passage">
             {% if g.passage.title %}<div class="ptitle">{{ g.passage.title }} <span style="font-weight:400;font-size:.75rem;">({{ g.passage.kind_label }})</span></div>{% endif %}
             {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" style="max-height:180px;border-radius:8px;display:block;margin-bottom:.4rem;">{% endif %}
-            {{ g.passage.body }}
+            {{ g.passage.body | question_html }}
         </div>
         {% for qd in g.questions %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
         {% endfor %}

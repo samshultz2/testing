@@ -622,6 +622,14 @@ def create_app(config_class=None):
         except (ValueError, TypeError):
             return []
 
+    @app.template_filter('question_html')
+    def question_html_filter(value):
+        """Render a Mock JAMB question/passage/option for the browser: HTML-safe,
+        with ``[table: …]`` markers turned into real tables and ``\\( … \\)`` maths
+        left for MathJax."""
+        from utils.mathtext import question_html
+        return question_html(value)
+
     @app.template_filter('num')
     def num_filter(value, dp=2):
         """Whole numbers without a trailing .0 (34 not 34.0); genuine decimals to

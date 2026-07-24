@@ -619,14 +619,19 @@ def parse_detail(html):
         stem = clean(h1.get_text(" ", strip=True))
         container = h1.parent
 
-    # a data table inside the stem → fold it into the stem text (readably).
+    # a data table inside the stem → serialise it, remove it from the stem (so its
+    # cells don't leak in as flattened run-on text), and append a structured
+    # ``[table: …]`` marker the UI renders as a real table.
     has_table = False
     if container is not None:
         table = container.find("table")
         if table is not None:
             has_table = True
             table_text = _serialize_table(table)
-            if table_text and table_text not in stem:
+            table.extract()                                  # drop the table node…
+            if h1 is not None:                               # …then re-read a clean stem
+                stem = clean(h1.get_text(" ", strip=True))
+            if table_text:
                 stem = (stem + " [table: " + table_text + "]").strip()
     if not stem:
         return None

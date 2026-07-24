@@ -47,6 +47,30 @@ def test_parse_detail_table_folded_into_stem():
     assert not p['figure_dependent']            # tables are kept, not skipped
 
 
+def test_parse_detail_extracts_nested_table_from_stem():
+    """A table nested in the stem is pulled out (its cells don't leak in as
+    run-on text) and kept as a structured [table: …] marker."""
+    from utils import myschool as ms
+    html = """
+    <div class="card">
+      <div class="qwrap"><h1><table><tr><th>Price</th><th>Qty</th></tr>
+        <tr><td>8</td><td>10</td></tr></table> If we move from 8 to 6, find elasticity</h1></div>
+      <div class="opts">
+        <div><span class="uppercase">a</span><p>1</p></div>
+        <div><span class="uppercase">b</span><p>2</p></div>
+        <div><span class="uppercase">c</span><p>3</p></div>
+        <div><span class="uppercase">d</span><p>4</p></div>
+      </div>
+      <div class="ans">Correct Option <span class="uppercase">b</span></div>
+    </div>"""
+    p = ms.parse_detail(html)
+    assert p['has_table']
+    before = p['stem'].split('[table:')[0]
+    assert 'If we move from 8 to 6' in before
+    assert '8 10' not in before and 'Price Qty' not in before      # not duplicated
+    assert '[table: Price | Qty ; 8 | 10]' in p['stem']
+
+
 def test_parse_detail_figure_dependent_flagged():
     from utils import myschool as ms
     p = ms.parse_detail(_fixture("In the diagram above, find the marked angle."))

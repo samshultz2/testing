@@ -106,7 +106,7 @@
 {% macro show_q(q, n) -%}
 <div class="mjq">
     <div style="display:flex;justify-content:space-between;gap:.5rem;">
-        <div class="qtxt">{{ n }}. {{ q.question_text }}</div>
+        <div class="qtxt">{{ n }}. {{ q.question_text | question_html }}</div>
         <div style="white-space:nowrap;">
             <a href="{{ url_for('mock_jamb.edit_mock_question', question_id=q.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-pen"></i></a>
             <form method="post" action="{{ url_for('mock_jamb.delete_mock_question', question_id=q.id) }}" style="display:inline;" data-confirm="Delete this question?">
@@ -116,7 +116,7 @@
         </div>
     </div>
     {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure" style="max-height:130px;margin:.4rem 0;border-radius:var(--radius-sm);">{% endif %}
-    {% for opt, val in q.options %}{% if val %}<div class="qopt {{ 'correct' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
+    {% for opt, val in q.options %}{% if val %}<div class="qopt {{ 'correct' if q.correct_option == opt else '' }}">{{ opt }}. {{ val | question_html }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
     <div class="mjq-meta">{{ q.marks }} mark(s){% if q.topic %} · <span class="badge-topic">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}</div>
 </div>
 {%- endmacro %}

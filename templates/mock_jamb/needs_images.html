@@ -39,7 +39,7 @@
         {% if q.section %}<span class="ni-badge">{{ q.section|replace('_',' ')|title }}</span>{% endif %}
         {% if q.topic %}<span class="ni-badge">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
     </div>
-    <div style="font-weight:600;">{{ q.question_text }}</div>
+    <div style="font-weight:600;">{{ q.question_text | question_html }}</div>
     {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'c' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
     <div class="ni-act">
         <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data" style="display:flex;gap:.4rem;align-items:center;">
