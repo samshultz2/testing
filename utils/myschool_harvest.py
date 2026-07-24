@@ -99,6 +99,26 @@ def _valid_section(subject_name, section):
         return None
 
 
+def _get_or_create_passage(subject_id, kind, body):
+    """Find (or create) the shared bank passage for a comprehension/cloze stimulus,
+    de-duplicated by its text so every question that quotes the same passage links
+    to one ``MockJAMBPassage`` (mock_exam_id NULL = bank)."""
+    from models import db, MockJAMBPassage
+    from sqlalchemy import func
+    p = MockJAMBPassage.query.filter_by(
+        subject_id=subject_id, mock_exam_id=None, body=body).first()
+    if p:
+        return p
+    base = (db.session.query(func.coalesce(func.max(MockJAMBPassage.order), 0))
+            .filter(MockJAMBPassage.mock_exam_id.is_(None),
+                    MockJAMBPassage.subject_id == subject_id).scalar())
+    p = MockJAMBPassage(mock_exam_id=None, subject_id=subject_id,
+                        section=kind, kind=kind, body=body, order=base + 1)
+    db.session.add(p)
+    db.session.flush()
+    return p
+
+
 def _process_one(cell, qid, state, session):
     from models import db, MockJAMBQuestion
     from sqlalchemy import func
@@ -119,8 +139,22 @@ def _process_one(cell, qid, state, session):
         state['skipped'] += 1
         return
 
-    sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']),
-                                year=cell['year'], novel_title=cell.get('novel'))
+    # English (and any passage subject): myschool's own instruction block is a more
+    # reliable signal than keyword classification, so trust it — group passage
+    # questions under a shared passage, and tag novel questions with the real book.
+    passage = None
+    if p.get('is_novel'):
+        sec = 'novel'
+        top = (p.get('novel_title') or cell.get('novel')
+               or ms.novel_for_year(cell['year']) or 'Recommended Novel')
+        sub = None
+    elif p.get('passage_text'):
+        sec = ms.passage_kind(p['passage_text'], p['stem'])   # 'comprehension' | 'cloze'
+        top, sub = None, None
+        passage = _get_or_create_passage(sid, sec, p['passage_text'])
+    else:
+        sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']),
+                                    year=cell['year'], novel_title=cell.get('novel'))
     sec = _valid_section(cell['subject'], sec)
     image_url = _rehost_image(p['image_url']) if p.get('image_url') else None
     if image_url:
@@ -134,6 +168,7 @@ def _process_one(cell, qid, state, session):
                     MockJAMBQuestion.subject_id == sid).scalar())
     db.session.add(MockJAMBQuestion(
         mock_exam_id=None, subject_id=sid, section=sec, exam_body='JAMB',
+        passage_id=(passage.id if passage else None),
         question_text=p['stem'], option_a=p['options'][0], option_b=p['options'][1],
         option_c=p['options'][2], option_d=p['options'][3], correct_option=p['correct'],
         marks=1, topic=top, subtopic=sub, exam_year=str(cell['year']),

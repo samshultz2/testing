@@ -117,6 +117,53 @@ def novel_for_year(year):
     return None
 
 
+# myschool renders a per-question instruction block (a ``div.prevent-copy``) above
+# the stem: for a Novel question it reads "…based on <author>'s novel, <title>";
+# for Comprehension/Cloze it holds the shared reading passage. Both let us tag and
+# group English questions faithfully, server-side.
+_NOVEL_NOTE = re.compile(r"based on .*\bnovel\b|from the novel|recommended (?:novel|text)", re.I)
+_CLOZE_GAP = re.compile(r"_{3,}|\(\s*\d{1,2}\s*\)")
+
+
+def _novel_title_from_note(text):
+    """Pull the book title out of a novel instruction note, preferring the quoted
+    title (``…novel, "The Life Changer"``)."""
+    m = re.search(r'[\"“”]([^\"“”]{2,140}?)[\"“”]', text or "")
+    if m:
+        return clean(m.group(1))
+    m = re.search(r"novel[,;:]?\s+(.{2,80})$", text or "", re.I)
+    return clean(m.group(1)) if m else None
+
+
+def passage_kind(passage_text, stem=""):
+    """Classify a reading stimulus as a JAMB ``cloze`` passage (gaps to fill) or
+    ordinary ``comprehension``. A cloze question's stem is itself a sentence with
+    a blank, so a blank in the stem is the surest per-question signal; a passage
+    body dense with numbered gaps counts too."""
+    if re.search(r"_{3,}|\.\.\.\.+", stem or ""):
+        return "cloze"
+    gaps = len(_CLOZE_GAP.findall(passage_text or ""))
+    return "cloze" if gaps >= 3 else "comprehension"
+
+
+_PASSAGE_LEADIN = re.compile(
+    r"^\s*(?:use the (?:passage|following)[^:]*?below\b[:.]?\s*"
+    r"|read the (?:passage|following)[^:]*?follows?\b[:.]?\s*)", re.I)
+
+
+def _clean_passage(text):
+    """Drop the repeated instructional lead-in ("Use the passage… Read the passage
+    carefully and answer the questions that follow:") so the stored passage is the
+    text itself and dedupes cleanly."""
+    t = clean(text or "")
+    for _ in range(3):
+        new = _PASSAGE_LEADIN.sub("", t)
+        if new == t:
+            break
+        t = new.strip()
+    return t
+
+
 def _novel_from_listing_html(html):
     """The JAMB recommended-novel name off a myschool listing page: it renders the
     year's set text in a badge — ``<div class="… bg-primary_accent …"><strong>Title
@@ -594,6 +641,27 @@ def parse_detail(html):
     if any(not o for o in ordered):
         return None
 
+    # instruction / reading passage / recommended-novel note — the shared stimulus
+    # myschool renders in a ``prevent-copy`` block (never the stem or an option row).
+    instruction, passage_text, novel_title, is_novel = "", "", None, False
+    for d in soup.select("div.prevent-copy"):
+        if d.select_one("span.uppercase"):       # an option row → not an instruction
+            continue
+        t = clean(d.get_text(" ", strip=True))
+        if not t or t == stem:
+            continue
+        if _NOVEL_NOTE.search(t):
+            is_novel = True
+            instruction = instruction or t
+            novel_title = novel_title or _novel_title_from_note(t)
+        elif len(t) > len(passage_text):
+            passage_text = t                     # keep the longest = the passage
+    if len(passage_text) < 120:                  # too short to be a real passage
+        passage_text = ""
+    else:
+        passage_text = _clean_passage(passage_text)
+    instruction = instruction or passage_text
+
     flags = []
     if has_table:
         flags.append("table")
@@ -603,12 +671,18 @@ def parse_detail(html):
         flags.append("figure")
     if image_url:
         flags.append("image")
+    if is_novel:
+        flags.append("novel")
+    if passage_text:
+        flags.append("passage")
 
     return {
         "stem": stem, "options": ordered, "correct": correct,
         "image_url": image_url, "has_table": has_table,
         "figure_dependent": figure_dependent,
         "needs_review": figure_dependent, "flags": flags,
+        "instruction": instruction, "passage_text": passage_text,
+        "is_novel": is_novel, "novel_title": novel_title,
     }
 
 
@@ -654,9 +728,19 @@ def scrape_year(subject, exam, year, session=None, max_pages=60, delay=0.6,
         time.sleep(delay)
         if not parsed:
             continue
-        section, topic, subtopic = classify(
-            subject, parsed["stem"] + " " + " ".join(parsed["options"]),
-            year=year, novel_title=novel_title)
+        # trust myschool's own instruction block (novel note / reading passage)
+        # over keyword classification, exactly as the in-app harvest does.
+        if parsed.get("is_novel"):
+            section, topic, subtopic = "novel", (
+                parsed.get("novel_title") or novel_title or novel_for_year(year)
+                or "Recommended Novel"), None
+        elif parsed.get("passage_text"):
+            section = passage_kind(parsed["passage_text"], parsed["stem"])
+            topic, subtopic = None, None
+        else:
+            section, topic, subtopic = classify(
+                subject, parsed["stem"] + " " + " ".join(parsed["options"]),
+                year=year, novel_title=novel_title)
         parsed.update(subject=subject, year=str(year), qid=qid,
                       section=section, topic=topic, subtopic=subtopic)
         yield parsed

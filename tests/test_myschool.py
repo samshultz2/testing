@@ -5,20 +5,30 @@ from config import Config
 from tests.conftest import login_token
 
 
-def _fixture(stem, correct='b', with_table=False):
+def _fixture(stem, correct='b', with_table=False, instruction=None):
     table = ('<table><tr><th>City</th><th>Pop</th></tr>'
              '<tr><td>Lagos</td><td>20</td></tr></table>') if with_table else ''
+    # myschool renders the shared novel-note / reading passage in a prevent-copy div
+    instr = (f'<div class="mb-2 bg-white rounded-2xl p-3 prevent-copy">{instruction}</div>'
+             if instruction else '')
     return f"""
     <div class="card">
+      {instr}
       <div class="qwrap"><h1>{stem}</h1>{table}</div>
       <div class="opts">
-        <div><span class="uppercase">a</span><p>Lagos</p></div>
-        <div><span class="uppercase">b</span><p>Abuja</p></div>
-        <div><span class="uppercase">c</span><p>Kano</p></div>
-        <div><span class="uppercase">d</span><p>Ibadan</p></div>
+        <div class="prevent-copy"><span class="uppercase">a</span><p>Lagos</p></div>
+        <div class="prevent-copy"><span class="uppercase">b</span><p>Abuja</p></div>
+        <div class="prevent-copy"><span class="uppercase">c</span><p>Kano</p></div>
+        <div class="prevent-copy"><span class="uppercase">d</span><p>Ibadan</p></div>
       </div>
       <div class="ans">Correct Option <span class="uppercase">{correct}</span></div>
     </div>"""
+
+
+_PASSAGE = ("The victory of the small Greek democracy of Athens over the mighty "
+            "Persian Empire is one of the most inspiring events in history. It "
+            "showed how a free people could rise against tyranny and prevail "
+            "against overwhelming odds, and it shaped the culture that followed.")
 
 
 def test_parse_detail_basic():
@@ -131,6 +141,31 @@ def test_scrape_novel_title_reads_listing_badge(monkeypatch):
     # a listing without the badge (older years) → None
     monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: '<div>no badge here</div>')
     assert ms.scrape_novel_title('English Language', 'jamb', 2018, session=object()) is None
+
+
+def test_parse_detail_reads_novel_note():
+    """A Novel question is flagged from myschool's instruction note, and the book
+    title is extracted from it — the authoritative per-question signal."""
+    from utils import myschool as ms
+    note = 'This question is based on Khadijat Abubakar Jalli\'s novel , "The Life Changer"'
+    p = ms.parse_detail(_fixture("Who was Omar's immediate sister?", instruction=note))
+    assert p['is_novel'] and p['novel_title'] == 'The Life Changer'
+    assert 'novel' in p['flags'] and not p['passage_text']
+
+
+def test_parse_detail_captures_passage_and_kind():
+    from utils import myschool as ms
+    # comprehension: the passage is captured, lead-in stripped, kind=comprehension
+    lead = 'Read the passage carefully and answer the questions that follow: '
+    p = ms.parse_detail(_fixture("What is the main idea of the passage?",
+                                 instruction=lead + _PASSAGE))
+    assert 'passage' in p['flags']
+    assert p['passage_text'].startswith('The victory of the small Greek')  # lead-in gone
+    assert ms.passage_kind(p['passage_text'], p['stem']) == 'comprehension'
+    # cloze: a blank in the stem makes it a cloze passage
+    q = ms.parse_detail(_fixture("Athens had ________ the Greek states.",
+                                 instruction=lead + _PASSAGE))
+    assert ms.passage_kind(q['passage_text'], q['stem']) == 'cloze'
 
 
 def test_on_jamb_flags_school_only_subjects():
@@ -289,6 +324,66 @@ def test_harvest_tags_english_novel_from_listing_badge(app, monkeypatch):
         q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
         assert q is not None and q.section == 'novel'
         assert q.topic == 'The Lekki Headmaster'      # from the badge, not the year map
+
+
+def test_harvest_groups_comprehension_under_one_passage(app, monkeypatch):
+    """Two comprehension questions quoting the same passage are grouped under a
+    single shared MockJAMBPassage (deduped by body), section='comprehension'."""
+    from models import db, Subject, MockJAMBQuestion, MockJAMBPassage
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    lead = 'Read the passage carefully and answer the questions that follow: '
+    pages = {
+        '401': _fixture('What is the main idea of the passage?', instruction=lead + _PASSAGE),
+        '402': _fixture('What does the writer admire most?', correct='c', instruction=lead + _PASSAGE),
+    }
+    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['401', '402'])
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: pages[url.split('/')[-1].split('?')[0]])
+    monkeypatch.setattr(ms, 'scrape_novel_title', lambda *a, **k: None)
+
+    with app.app_context():
+        s = Subject(name='HarvestEnglishPassage', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        mh.start_harvest([{'id': sid, 'name': 'English Language'}], exam='jamb',
+                         year_min=2023, year_max=2023)
+        for _ in range(4):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        qs = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').all()
+        assert len(qs) == 2 and all(q.section == 'comprehension' for q in qs)
+        pids = {q.passage_id for q in qs}
+        assert len(pids) == 1 and None not in pids            # one shared passage
+        passage = db.session.get(MockJAMBPassage, pids.pop())
+        assert passage.kind == 'comprehension'
+        assert passage.body.startswith('The victory of the small Greek')
+
+
+def test_harvest_tags_novel_from_question_note(app, monkeypatch):
+    """A harvested Novel question is detected from myschool's own note and tagged
+    with the book title, regardless of the keyword classifier."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    note = 'This question is based on the recommended novel , "The Lekki Headmaster"'
+    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['501'])
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k:
+                        _fixture("Who is the headmaster's confidant?", instruction=note))
+    monkeypatch.setattr(ms, 'scrape_novel_title', lambda *a, **k: None)
+
+    with app.app_context():
+        s = Subject(name='HarvestEnglishNote', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        mh.start_harvest([{'id': sid, 'name': 'English Language'}], exam='jamb',
+                         year_min=2025, year_max=2025)
+        for _ in range(3):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
+        assert q.section == 'novel' and q.topic == 'The Lekki Headmaster'
 
 
 def test_harvest_reports_empty_subjects(app, monkeypatch):
