@@ -1985,12 +1985,21 @@ def toggle_publish(exam_id):
     exam = db.get_or_404(MockJAMBExam, exam_id)
     require_branch_access(exam.branch_id)
     if not exam.is_published and exam.questions.count() == 0:
-        # A bank-source mock owns no questions — it draws from the central bank —
-        # so it can publish as long as the bank actually holds questions.
+        # A bank-source mock owns no questions — it draws a unique paper per student
+        # from the central bank — so it can publish as long as the bank holds
+        # questions. Only a 'manual' mock (or an empty bank) blocks publishing.
         bank_has = db.session.query(MockJAMBQuestion.id).filter(
             MockJAMBQuestion.mock_exam_id.is_(None)).first() is not None
         if not (exam.source_mode == 'bank' and bank_has):
-            flash('Add questions (or bank questions) before publishing the online sitting.', 'error')
+            if exam.source_mode != 'bank' and bank_has:
+                msg = ('This mock is set to use its OWN questions but has none. Set its source to '
+                       '"Question bank" so it draws a different paper per student from the bank, '
+                       'or add questions to the mock.')
+            else:
+                msg = ('The question bank has no questions yet — add or download questions in the '
+                       'Question Bank first, then publish. The mock draws each student a unique '
+                       'paper from the bank.')
+            flash(msg, 'error')
             return redirect(url_for('mock_jamb.questions', exam_id=exam_id))
     dur = request.form.get('duration_minutes', type=int)
     if dur and 5 <= dur <= 300:
