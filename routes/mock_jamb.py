@@ -2091,8 +2091,12 @@ def portal_sit(exam_id):
         import datetime as _dt
         elapsed = (_dt.datetime.now() - att.started_at).total_seconds() if att.started_at else 0
         remaining = max(0, int((att.duration_minutes or 120) * 60 - elapsed))
+        from utils.mock_jamb_sitting import is_calculation_subject
+        payload = sitting_payload(exam, subject_ids, att)
+        show_calc = any(s.get('subject') and is_calculation_subject(s['subject'].name)
+                        for s in payload)
         return render_template('mock_jamb/portal_sit.html', exam=exam, student=student,
-                               subjects=sitting_payload(exam, subject_ids, att), saved=saved,
+                               subjects=payload, saved=saved, show_calc=show_calc,
                                attempt=att, remaining=remaining)
     return _inner()
 

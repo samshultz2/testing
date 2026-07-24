@@ -23,6 +23,19 @@
 /* Discourage copying exam content (best-effort; screenshots can't be blocked). */
 .mjs-subject,.mjs-passage,.mjs-q,.mjs-tabs,.mjs-bar{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
 .mjs-opt input{user-select:auto}
+/* On-screen basic (JAMB-style) calculator: draggable, toggled, no sci functions. */
+.mjcalc{position:fixed;right:18px;bottom:18px;z-index:60;width:236px;background:var(--bg-card,#fff);border:1px solid var(--border-color,#cbd5e1);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.28);display:none;user-select:none}
+.mjcalc.open{display:block}
+.mjcalc-head{display:flex;justify-content:space-between;align-items:center;padding:.45rem .7rem;background:#0d6a4e;color:#fff;border-radius:14px 14px 0 0;cursor:move;font-size:.82rem;font-weight:600}
+.mjcalc-head button{background:none;border:none;color:#fff;font-size:1.2rem;line-height:1;cursor:pointer;padding:0 .2rem}
+.mjcalc-scr{font-family:'Space Grotesk',monospace;text-align:right;font-size:1.5rem;padding:.55rem .7rem;background:var(--gray-50,#f4f7f5);border-bottom:1px solid var(--border-color,#e5e7eb);min-height:2.4rem;overflow:hidden;word-break:break-all}
+.mjcalc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:7px}
+.mjcalc-keys button{padding:.75rem 0;font-size:1.02rem;border:1px solid var(--border-color,#e5e7eb);border-radius:9px;background:#fff;cursor:pointer;font-weight:700;color:#14211c}
+.mjcalc-keys button:active{transform:translateY(1px)}
+.mjcalc-keys .op{background:#eef7f3;color:#0d6a4e}
+.mjcalc-keys .fn{background:#fdecea;color:#b43a2e}
+.mjcalc-keys .eq{background:#0d6a4e;color:#fff}
+.mjcalc-keys .zero{grid-column:span 2}
 </style>
 {% endblock %}
 {% block content %}
@@ -30,6 +43,7 @@
     <div class="mjs-bar">
         <div style="flex:1;min-width:130px;"><strong>{{ exam.display_name }}</strong><div class="mjs-answered"><span id="ansCount">0</span> answered</div></div>
         <div class="timer" id="timer" data-remaining="{{ remaining }}">--:--</div>
+        {% if show_calc %}<button type="button" class="btn btn-secondary btn-sm" id="calcToggle"><i class="fas fa-calculator"></i> Calculator</button>{% endif %}
         <button type="button" class="btn btn-warning btn-sm" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit</button>
     </div>
 
@@ -62,6 +76,35 @@
 <form method="post" id="submitForm" action="{{ url_for('mock_jamb_portal.portal_submit', exam_id=exam.id) }}" style="display:none;">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 </form>
+
+{% if show_calc %}
+<div class="mjcalc" id="mjCalc" aria-label="Calculator">
+    <div class="mjcalc-head" id="mjCalcHead"><span><i class="fas fa-calculator"></i> Calculator</span>
+        <button type="button" id="mjCalcClose" aria-label="Hide calculator">&times;</button></div>
+    <div class="mjcalc-scr" id="mjCalcScr">0</div>
+    <div class="mjcalc-keys">
+        <button type="button" class="fn" data-k="ac">AC</button>
+        <button type="button" class="fn" data-k="back">&#9003;</button>
+        <button type="button" class="op" data-k="pm">&plusmn;</button>
+        <button type="button" class="op" data-k="/">&divide;</button>
+        <button type="button" data-k="7">7</button>
+        <button type="button" data-k="8">8</button>
+        <button type="button" data-k="9">9</button>
+        <button type="button" class="op" data-k="*">&times;</button>
+        <button type="button" data-k="4">4</button>
+        <button type="button" data-k="5">5</button>
+        <button type="button" data-k="6">6</button>
+        <button type="button" class="op" data-k="-">&minus;</button>
+        <button type="button" data-k="1">1</button>
+        <button type="button" data-k="2">2</button>
+        <button type="button" data-k="3">3</button>
+        <button type="button" class="op" data-k="+">+</button>
+        <button type="button" class="zero" data-k="0">0</button>
+        <button type="button" data-k=".">.</button>
+        <button type="button" class="eq" data-k="=">=</button>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 {% include 'mock_jamb/_mathjax.html' %}
@@ -222,4 +265,79 @@
     });
 })();
 </script>
+{% if show_calc %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    // Basic JAMB-style calculator: digits, + - * /, =, clear, backspace, sign.
+    // No square-root, trig, memory or scientific functions by design.
+    var el = document.getElementById('mjCalc'); if(!el) return;
+    var toggle = document.getElementById('calcToggle');
+    var scr = document.getElementById('mjCalcScr');
+    var cur = '0', prev = null, op = null, fresh = true;
+
+    function show(){ scr.textContent = cur; }
+    function clearAll(){ cur='0'; prev=null; op=null; fresh=true; show(); }
+    function num(d){
+        if(cur==='Error'){ cur='0'; fresh=true; }
+        if(fresh || cur==='0'){ cur = (d==='.' ? '0.' : d); fresh=false; }
+        else { if(d==='.' && cur.indexOf('.')>=0) return; cur += d; }
+        show();
+    }
+    function compute(a,b,o){
+        a=parseFloat(a); b=parseFloat(b); var r;
+        if(o==='+') r=a+b; else if(o==='-') r=a-b; else if(o==='*') r=a*b;
+        else if(o==='/') r=(b===0?NaN:a/b); else return b;
+        if(!isFinite(r)) return 'Error';
+        return String(Math.round((r+Number.EPSILON)*1e10)/1e10);
+    }
+    function setOp(o){
+        if(cur==='Error') return;
+        if(op!==null && !fresh){ cur = compute(prev,cur,op); show(); if(cur==='Error'){ op=null; prev=null; return; } }
+        prev = cur; op = o; fresh = true;
+    }
+    function equals(){
+        if(op===null || cur==='Error') return;
+        cur = compute(prev,cur,op); op=null; prev=null; fresh=true; show();
+    }
+    function back(){
+        if(fresh || cur==='Error') return;
+        cur = (cur.length>1) ? cur.slice(0,-1) : '0';
+        if(cur==='-' || cur===''){ cur='0'; }
+        show();
+    }
+    function sign(){
+        if(cur==='0' || cur==='Error') return;
+        cur = (cur.charAt(0)==='-') ? cur.slice(1) : '-'+cur; show();
+    }
+    el.querySelectorAll('button[data-k]').forEach(function(b){
+        b.addEventListener('click', function(){
+            var k = b.getAttribute('data-k');
+            if(k==='ac') clearAll();
+            else if(k==='back') back();
+            else if(k==='pm') sign();
+            else if(k==='=') equals();
+            else if(k==='+'||k==='-'||k==='*'||k==='/') setOp(k);
+            else num(k);
+        });
+    });
+
+    if(toggle) toggle.addEventListener('click', function(){ el.classList.toggle('open'); });
+    document.getElementById('mjCalcClose').addEventListener('click', function(){ el.classList.remove('open'); });
+
+    // draggable by its header (mouse + touch)
+    var head = document.getElementById('mjCalcHead'), drag=false, dx=0, dy=0;
+    function begin(x,y){ var r=el.getBoundingClientRect(); drag=true; dx=x-r.left; dy=y-r.top;
+        el.style.right='auto'; el.style.bottom='auto'; el.style.left=r.left+'px'; el.style.top=r.top+'px'; }
+    function move(x,y){ if(!drag) return;
+        el.style.left=Math.max(0,Math.min(window.innerWidth-el.offsetWidth, x-dx))+'px';
+        el.style.top=Math.max(0,Math.min(window.innerHeight-el.offsetHeight, y-dy))+'px'; }
+    head.addEventListener('mousedown', function(e){ if(e.target.tagName==='BUTTON') return; begin(e.clientX,e.clientY); e.preventDefault(); });
+    document.addEventListener('mousemove', function(e){ move(e.clientX,e.clientY); });
+    document.addEventListener('mouseup', function(){ drag=false; });
+    head.addEventListener('touchstart', function(e){ if(e.target.tagName==='BUTTON') return; var t=e.touches[0]; begin(t.clientX,t.clientY); }, {passive:true});
+    document.addEventListener('touchmove', function(e){ if(drag){ var t=e.touches[0]; move(t.clientX,t.clientY); } }, {passive:true});
+    document.addEventListener('touchend', function(){ drag=false; });
+})();
+</script>
+{% endif %}
 {% endblock %}

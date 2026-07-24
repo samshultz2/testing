@@ -28,6 +28,19 @@ def _is_english(name):
     return 'english' in (name or '').lower()
 
 
+# Subjects whose papers involve calculation — the on-screen JAMB-style basic
+# calculator is offered when a candidate sits any of these.
+_CALC_SUBJECTS = {
+    'mathematics', 'furthermathematics', 'physics', 'chemistry', 'economics',
+    'accounting', 'accounts', 'principlesofaccounts', 'financialaccounting',
+    'geography',
+}
+
+
+def is_calculation_subject(name):
+    return _norm(name) in _CALC_SUBJECTS
+
+
 def _exam_owns_questions(exam):
     """True if this mock has its own authored questions (a legacy mock). Such a
     mock serves ONLY its own questions; a mock with none draws from the bank."""

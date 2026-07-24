@@ -23,8 +23,10 @@ def _setup(app, name):
                           exam_date=datetime.date.today(), is_published=True, is_active=True,
                           source_mode='bank', duration_minutes=90)
         db.session.add(ex); db.session.flush()
+        # register the student for exactly this subject, so the drawn paper is
+        # deterministic even when a shared test DB holds other subjects too.
         st = Student(first_name='Test', surname='Sitter', student_id=name + '-STU',
-                     gender='Female', is_active=True)
+                     gender='Female', is_active=True, jamb_subjects=name)
         st.set_portal_password('pass123'); db.session.add(st); db.session.commit()
         return q.id, ex.id, st.student_id
 
@@ -35,6 +37,39 @@ def _portal_login(c, student_id):
          or re.search(r'csrf-token" content="([0-9a-f]+)"', lp))
     c.post('/exam/login', data={'student_id': student_id, 'password': 'pass123',
                                 '_csrf_token': m.group(1) if m else ''})
+
+
+def test_calculation_subject_detection():
+    from utils.mock_jamb_sitting import is_calculation_subject as ic
+    for s in ('Mathematics', 'Physics', 'Chemistry', 'Economics',
+              'Principles of Accounts', 'Geography', 'Further Mathematics'):
+        assert ic(s), s
+    for s in ('English Language', 'Literature in English', 'Government', 'Biology', 'CRS'):
+        assert not ic(s), s
+
+
+def test_calculator_offered_only_for_calc_subjects(app):
+    from models import db, Student
+    # a calc subject → calculator button + panel present
+    _qid, exid, student_id = _setup(app, 'Mathematics')   # subject name IS a calc subject
+    c = app.test_client()
+    _portal_login(c, student_id)
+    html = c.get(f'/exam/mock-jamb/{exid}').get_data(as_text=True)
+    assert 'id="calcToggle"' in html and 'id="mjCalc"' in html
+    assert 'data-k="="' in html and 'data-k="ac"' in html                # basic keys
+    low = html.lower()
+    assert not any(fn in low for fn in ('sqrt', 'sin(', 'cos(', 'tan(', 'log(', '√'))  # no sci fns
+
+    # a student registered for a non-calc subject only → no calculator
+    _qid2, exid2, sid2 = _setup(app, 'Literature in English')
+    with app.app_context():
+        st = Student.query.filter_by(student_id=sid2).first()
+        st.jamb_subjects = 'Literature in English'
+        db.session.commit()
+    c2 = app.test_client()
+    _portal_login(c2, sid2)
+    html2 = c2.get(f'/exam/mock-jamb/{exid2}').get_data(as_text=True)
+    assert 'id="calcToggle"' not in html2
 
 
 def test_batch_save_persists_all_answers(app):
@@ -89,5 +124,5 @@ def test_bank_drawn_answer_saves_and_resumes(app):
 
     # refresh → the saved option is pre-checked, so the student continues where they left off
     page2 = c.get(f'/exam/mock-jamb/{exid}').get_data(as_text=True)
-    seg = re.search(r'<input[^>]*value="B"[^>]*>', page2)
+    seg = re.search(r'<input[^>]*name="q%d"[^>]*value="B"[^>]*>' % qid, page2)
     assert seg and 'checked' in seg.group(0)
