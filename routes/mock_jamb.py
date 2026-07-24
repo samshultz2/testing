@@ -2135,6 +2135,68 @@ def portal_save(exam_id):
     return _inner()
 
 
+@mock_jamb_portal_bp.route('/<int:exam_id>/save-batch', methods=['POST'])
+def portal_save_batch(exam_id):
+    """Save several answers in one request (the sitting batches queued changes).
+    Accepts ``answers`` as ``qid:opt,qid:opt`` (form) or a JSON ``{qid: opt}`` map.
+    Each question is validated against THIS mock's pool (own rows or the bank)."""
+    from routes.cbt import cbt_login_required
+    @cbt_login_required
+    def _inner():
+        from models import MockJAMBAttempt, MockJAMBAnswer, MockJAMBQuestion
+        from utils.mock_jamb_sitting import _pool_condition
+        exam = db.session.get(MockJAMBExam, exam_id)
+        student, ok = _portal_guard(exam)
+        if not ok:
+            return jsonify({'error': 'closed'}), 403
+        att = MockJAMBAttempt.query.filter_by(mock_exam_id=exam.id, student_id=student.id).first()
+        if not att or att.status == 'Submitted':
+            return jsonify({'error': 'not-active'}), 400
+
+        raw = {}
+        payload = request.get_json(silent=True) if request.is_json else None
+        if isinstance(payload, dict):
+            raw = payload.get('answers') if isinstance(payload.get('answers'), dict) else payload
+        else:
+            for tok in (request.form.get('answers') or '').split(','):
+                if ':' in tok:
+                    k, v = tok.split(':', 1)
+                    raw[k.strip()] = v.strip()
+
+        norm = {}
+        for k, v in (raw or {}).items():
+            try:
+                qid = int(k)
+            except (TypeError, ValueError):
+                continue
+            opt = (str(v) or '').strip().upper()
+            if opt in ('A', 'B', 'C', 'D'):
+                norm[qid] = opt
+        if not norm:
+            return jsonify({'ok': True, 'saved': 0})
+
+        qs = {q.id: q for q in MockJAMBQuestion.query.filter(
+            MockJAMBQuestion.id.in_(list(norm)), _pool_condition(MockJAMBQuestion, exam)).all()}
+        existing = {a.question_id: a for a in MockJAMBAnswer.query.filter(
+            MockJAMBAnswer.attempt_id == att.id,
+            MockJAMBAnswer.question_id.in_(list(norm))).all()}
+        saved = 0
+        for qid, opt in norm.items():
+            q = qs.get(qid)
+            if not q:
+                continue
+            ans = existing.get(qid)
+            if not ans:
+                ans = MockJAMBAnswer(attempt_id=att.id, question_id=qid)
+                db.session.add(ans)
+            ans.selected_option = opt
+            ans.is_correct = (opt == (q.correct_option or '').upper())
+            saved += 1
+        db.session.commit()
+        return jsonify({'ok': True, 'saved': saved})
+    return _inner()
+
+
 @mock_jamb_portal_bp.route('/<int:exam_id>/submit', methods=['POST'])
 def portal_submit(exam_id):
     from routes.cbt import cbt_login_required

@@ -37,6 +37,38 @@ def _portal_login(c, student_id):
                                 '_csrf_token': m.group(1) if m else ''})
 
 
+def test_batch_save_persists_all_answers(app):
+    from models import db, MockJAMBQuestion, Subject
+    qid, exid, student_id = _setup(app, 'SitBatch')
+    # add two more bank questions in the same subject
+    with app.app_context():
+        sub_id = db.session.get(MockJAMBQuestion, qid).subject_id
+        more = []
+        for i in range(2):
+            q = MockJAMBQuestion(mock_exam_id=None, subject_id=sub_id, question_text=f'More {i}?',
+                                 option_a='a', option_b='b', option_c='c', option_d='d',
+                                 correct_option='C', marks=1, source='myschool')
+            db.session.add(q); db.session.flush(); more.append(q.id)
+        db.session.commit()
+    c = app.test_client()
+    _portal_login(c, student_id)
+    page = c.get(f'/exam/mock-jamb/{exid}').get_data(as_text=True)
+    csrf = re.search(r'name="csrf-token" content="([0-9a-f]+)"', page).group(1)
+
+    answers = f'{qid}:B,{more[0]}:C,{more[1]}:A'
+    r = c.post(f'/exam/mock-jamb/{exid}/save-batch', data={'_csrf_token': csrf, 'answers': answers})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['ok'] is True and body['saved'] == 3
+
+    from models import MockJAMBAnswer
+    with app.app_context():
+        by_q = {a.question_id: a for a in MockJAMBAnswer.query.all()}
+        assert by_q[qid].selected_option == 'B' and by_q[qid].is_correct is True
+        assert by_q[more[0]].selected_option == 'C' and by_q[more[0]].is_correct is True
+        assert by_q[more[1]].selected_option == 'A' and by_q[more[1]].is_correct is False
+
+
 def test_bank_drawn_answer_saves_and_resumes(app):
     qid, exid, student_id = _setup(app, 'SitBankSave')
     c = app.test_client()

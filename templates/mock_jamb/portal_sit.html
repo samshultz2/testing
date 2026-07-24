@@ -18,8 +18,11 @@
 .mjs-opt:hover{background:#f0fbf6}
 .mjs-opt input{accent-color:#0d6a4e;width:18px;height:18px}
 .mjs-opt.chosen{border-color:#0d6a4e;background:#eafaf3}
-.mjs-q img{max-height:180px;border-radius:8px;margin:.3rem 0}
+.mjs-q img{max-height:180px;border-radius:8px;margin:.3rem 0;pointer-events:none;-webkit-user-drag:none;user-drag:none}
 .mjs-answered{font-size:.85rem}
+/* Discourage copying exam content (best-effort; screenshots can't be blocked). */
+.mjs-subject,.mjs-passage,.mjs-q,.mjs-tabs,.mjs-bar{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+.mjs-opt input{user-select:auto}
 </style>
 {% endblock %}
 {% block content %}
@@ -65,6 +68,7 @@
 <script nonce="{{ csp_nonce }}">
 (function(){
     var SAVE_URL = '{{ url_for("mock_jamb_portal.portal_save", exam_id=exam.id) }}';
+    var BATCH_URL = '{{ url_for("mock_jamb_portal.portal_save_batch", exam_id=exam.id) }}';
     var CSRF = document.querySelector('meta[name=csrf-token]').content;
     var answered = new Set();
 
@@ -118,23 +122,31 @@
         var map = {saving:'Saving…', saved:'✓ All answers saved', offline:'Offline — will keep retrying'};
         pill.textContent = map[s] || ''; pill.style.opacity = (s === 'saved') ? '.85' : '1';
     }
+    var flushTimer = null;
     function enqueue(qid, opt){
         queue[qid] = opt;
         var m = lsGet(); m[qid] = opt; lsSet(m);
-        flush();
+        status('saving');
+        // debounce: batch a burst of quick answers into one request.
+        if(flushTimer) clearTimeout(flushTimer);
+        flushTimer = setTimeout(flush, 800);
     }
     function flush(){
+        if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
         var ids = Object.keys(queue);
         if(!ids.length){ status('saved'); return; }
         if(saving) return;
         saving = true; status(navigator.onLine === false ? 'offline' : 'saving');
-        var qid = ids[0], opt = queue[qid];
-        fetch(SAVE_URL, {method:'POST', body: new URLSearchParams({_csrf_token: CSRF, question_id: qid, option: opt})})
+        var batch = {};
+        var answers = ids.map(function(qid){ batch[qid] = queue[qid]; return qid + ':' + queue[qid]; }).join(',');
+        fetch(BATCH_URL, {method:'POST', body: new URLSearchParams({_csrf_token: CSRF, answers: answers})})
             .then(function(r){ return r.ok ? r.json() : null; })
             .then(function(j){
                 saving = false;
-                if(j && j.ok){ if(queue[qid] === opt){ delete queue[qid]; } flush(); }
-                else { status('offline'); setTimeout(flush, 3000); }
+                if(j && j.ok){
+                    ids.forEach(function(qid){ if(queue[qid] === batch[qid]) delete queue[qid]; });
+                    flush();
+                } else { status('offline'); setTimeout(flush, 3000); }
             })
             .catch(function(){ saving = false; status('offline'); setTimeout(flush, 3000); });
     }
@@ -180,19 +192,34 @@
         if(submitted) return;
         if(!auto && !window.confirm('Submit your answers? You will not be able to change them.')) return;
         submitted = true;
-        // Best-effort final flush of anything still queued, using sendBeacon so it
-        // survives the navigation that submitting triggers.
+        // Best-effort final flush of anything still queued, as ONE batch via
+        // sendBeacon so it survives the navigation that submitting triggers.
         try {
-            Object.keys(queue).forEach(function(qid){
-                var body = new URLSearchParams({_csrf_token: CSRF, question_id: qid, option: queue[qid]});
-                if(navigator.sendBeacon){ navigator.sendBeacon(SAVE_URL, body); }
-            });
+            var ids = Object.keys(queue);
+            if(ids.length && navigator.sendBeacon){
+                var answers = ids.map(function(qid){ return qid + ':' + queue[qid]; }).join(',');
+                navigator.sendBeacon(BATCH_URL, new URLSearchParams({_csrf_token: CSRF, answers: answers}));
+            }
         } catch(_){}
         try { localStorage.removeItem(LSKEY); } catch(_){}
         document.getElementById('submitForm').submit();
     }
     document.getElementById('submitBtn').addEventListener('click', function(){ doSubmit(false); });
     document.getElementById('submitBtn2').addEventListener('click', function(){ doSubmit(false); });
+
+    // ---- discourage copying during the exam (best-effort — cannot stop a
+    // screenshot, but blocks copy/cut/paste, right-click and text selection so a
+    // candidate can't lift the question text). ----
+    var examRoot = document.querySelector('.portal-card') || document;
+    ['copy','cut','paste','contextmenu','selectstart','dragstart'].forEach(function(ev){
+        examRoot.addEventListener(ev, function(e){ e.preventDefault(); return false; });
+    });
+    document.addEventListener('keydown', function(e){
+        var k = (e.key || '').toLowerCase();
+        if((e.ctrlKey || e.metaKey) && ['c','x','v','a','s','p','u'].indexOf(k) !== -1){
+            e.preventDefault(); return false;
+        }
+    });
 })();
 </script>
 {% endblock %}
