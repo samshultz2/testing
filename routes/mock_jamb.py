@@ -1036,7 +1036,9 @@ def validation_export():
 # topics/sub-topics and diagrams) that students will sit in-app (Phase 3).
 # =============================================================================
 
-_MOCK_IMG_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+# ext_ok compares against file_ext(), which returns the extension WITH its dot
+# (".jpg"), so these must be dotted too — otherwise every upload is rejected.
+_MOCK_IMG_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
 
 
 def _save_mock_image(file):
