@@ -72,3 +72,54 @@ def test_upload_rejects_non_image(app):
     from models import db, MockJAMBQuestion
     with app.app_context():
         assert db.session.get(MockJAMBQuestion, qid).needs_image is True   # still flagged
+
+
+def _make_flagged(app, name, n):
+    from models import db, Subject, MockJAMBQuestion
+    with app.app_context():
+        s = Subject(name=name, is_active=True); db.session.add(s); db.session.flush()
+        ids = []
+        for i in range(n):
+            q = MockJAMBQuestion(mock_exam_id=None, subject_id=s.id, needs_image=True,
+                                 question_text=f'q{i}', option_a='a', option_b='b',
+                                 option_c='c', option_d='d', correct_option='A', marks=1, source='ms')
+            db.session.add(q); db.session.flush(); ids.append(q.id)
+        db.session.commit()
+        return s.id, ids
+
+
+def _flagged_count(app, ids):
+    from models import MockJAMBQuestion
+    with app.app_context():
+        return MockJAMBQuestion.query.filter(
+            MockJAMBQuestion.needs_image.is_(True), MockJAMBQuestion.id.in_(ids)).count()
+
+
+def test_bulk_dismiss_selected(app):
+    sid, ids = _make_flagged(app, 'NIBulkDismiss', 4)
+    c = _admin(app)
+    c.post('/mock-jamb/bank/needs-images/bulk',
+           data={'_csrf_token': _csrf(c), 'action': 'dismiss',
+                 'question_ids': f'{ids[0]},{ids[1]}'}, follow_redirects=True)
+    assert _flagged_count(app, ids) == 2                 # only the 2 selected cleared
+
+
+def test_bulk_dismiss_all_filtered(app):
+    sid, ids = _make_flagged(app, 'NIBulkAll', 3)
+    c = _admin(app)
+    c.post('/mock-jamb/bank/needs-images/bulk',
+           data={'_csrf_token': _csrf(c), 'action': 'dismiss_all', 'subject_id': sid},
+           follow_redirects=True)
+    assert _flagged_count(app, ids) == 0
+
+
+def test_bulk_delete_selected(app):
+    from models import db, MockJAMBQuestion
+    sid, ids = _make_flagged(app, 'NIBulkDel', 3)
+    c = _admin(app)
+    c.post('/mock-jamb/bank/needs-images/bulk',
+           data={'_csrf_token': _csrf(c), 'action': 'delete',
+                 'question_ids': f'{ids[0]},{ids[1]}'}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(MockJAMBQuestion, ids[0]) is None
+        assert db.session.get(MockJAMBQuestion, ids[2]) is not None   # unselected kept

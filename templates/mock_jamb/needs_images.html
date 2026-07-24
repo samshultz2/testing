@@ -8,6 +8,8 @@
 .ni-opt{font-size:.85rem;color:var(--text-secondary);margin:.1rem 0}
 .ni-opt.c{color:var(--success);font-weight:600}
 .ni-act{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:.6rem}
+.ni-check-lbl{float:right;display:inline-flex;gap:.3rem;align-items:center;font-size:.72rem;color:var(--text-muted);cursor:pointer;user-select:none}
+.ni-check{width:17px;height:17px;accent-color:var(--primary,#0d6a4e)}
 </style>{% endblock %}
 {% block content %}
 <div class="page-header"><h1>Questions needing images <span class="text-muted" style="font-weight:400;font-size:1rem;">— {{ total }} flagged</span></h1>
@@ -30,8 +32,30 @@
     </form>
 </div></div>
 
+{% if questions %}
+<div class="card mb-3"><div class="card-body" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;">
+    <label style="display:flex;align-items:center;gap:.4rem;font-weight:600;font-size:.85rem;cursor:pointer;">
+        <input type="checkbox" id="niSelectAll"> Select all on this page</label>
+    <span id="niCount" class="text-muted text-sm">0 selected</span>
+    <span style="flex:1;min-width:8px;"></span>
+    <form method="post" id="niBulkForm" action="{{ url_for('mock_jamb.bank_needs_images_bulk') }}"
+          style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:0;">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" id="niAction" value="dismiss">
+        <input type="hidden" name="question_ids" id="niIds" value="">
+        <input type="hidden" name="subject_id" value="{{ subject_id or '' }}">
+        <input type="hidden" name="year" value="{{ year or '' }}">
+        <input type="hidden" name="exam_body" value="{{ exam_body or '' }}">
+        <button type="button" class="btn btn-primary btn-sm" data-bulk="dismiss"><i class="fas fa-check-double"></i> Selected: no image needed</button>
+        <button type="button" class="btn btn-danger btn-sm" data-bulk="delete"><i class="fas fa-trash"></i> Delete selected</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-bulk="dismiss_all"><i class="fas fa-check-double"></i> All {{ total }} matching: no image</button>
+    </form>
+</div></div>
+{% endif %}
+
 {% for q in questions %}
 <div class="ni-q">
+    <label class="ni-check-lbl"><input type="checkbox" class="ni-check" value="{{ q.id }}"> select</label>
     <div class="ni-meta">
         <span class="ni-badge">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
         {% if q.exam_year %}<span class="ni-badge">{{ q.exam_year }}</span>{% endif %}
@@ -70,4 +94,41 @@
 {% endif %}
 {% endblock %}
 
-{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{% endblock %}
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var form = document.getElementById('niBulkForm'); if(!form) return;
+    var selectAll = document.getElementById('niSelectAll');
+    var countEl = document.getElementById('niCount');
+    function boxes(){ return Array.prototype.slice.call(document.querySelectorAll('.ni-check')); }
+    function selected(){ return boxes().filter(function(c){ return c.checked; }); }
+    function update(){
+        var n = selected().length;
+        countEl.textContent = n + ' selected';
+        if(selectAll){ var all = boxes(); selectAll.checked = all.length > 0 && n === all.length; }
+    }
+    document.addEventListener('change', function(e){
+        if(e.target && e.target.classList && e.target.classList.contains('ni-check')) update();
+    });
+    if(selectAll) selectAll.addEventListener('change', function(){
+        boxes().forEach(function(c){ c.checked = selectAll.checked; }); update();
+    });
+    form.querySelectorAll('[data-bulk]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var action = btn.getAttribute('data-bulk');
+            if(action === 'dismiss_all'){
+                if(!window.confirm('Mark ALL {{ total }} flagged question(s) matching the current filters as not needing an image?')) return;
+            } else {
+                var ids = selected().map(function(c){ return c.value; });
+                if(!ids.length){ window.alert('Select at least one question first.'); return; }
+                if(action === 'delete' && !window.confirm('Delete ' + ids.length + ' selected question(s)? This cannot be undone.')) return;
+                document.getElementById('niIds').value = ids.join(',');
+            }
+            document.getElementById('niAction').value = action;
+            form.submit();
+        });
+    });
+    update();
+})();
+</script>
+{% endblock %}

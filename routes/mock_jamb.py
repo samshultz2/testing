@@ -1577,6 +1577,60 @@ def bank_set_question_image(question_id):
     return redirect(back)
 
 
+@mock_jamb_bp.route('/bank/needs-images/bulk', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_needs_images_bulk():
+    """Act on several flagged questions at once from the needs-images queue:
+    ``action`` = ``dismiss`` (mark selected as not needing an image),
+    ``dismiss_all`` (every flagged question matching the current filters) or
+    ``delete`` (remove the selected questions)."""
+    from models import MockJAMBAnswer
+    action = (request.form.get('action') or '').strip()
+    back = request.referrer or url_for('mock_jamb.bank_needs_images')
+    base = MockJAMBQuestion.query.filter(
+        MockJAMBQuestion.mock_exam_id.is_(None),
+        MockJAMBQuestion.needs_image.is_(True))
+
+    if action == 'dismiss_all':
+        subject_id = request.form.get('subject_id', type=int)
+        year = (request.form.get('year') or '').strip()
+        exam_body = (request.form.get('exam_body') or '').strip()
+        if subject_id:
+            base = base.filter(MockJAMBQuestion.subject_id == subject_id)
+        if year:
+            base = base.filter(MockJAMBQuestion.exam_year == year)
+        if exam_body:
+            base = base.filter(MockJAMBQuestion.exam_body == exam_body)
+        ids = [qid for (qid,) in base.with_entities(MockJAMBQuestion.id).all()]
+    else:
+        raw = request.form.get('question_ids') or ''
+        ids = [int(x) for x in raw.split(',') if x.strip().isdigit()]
+        ids = [qid for (qid,) in base.filter(MockJAMBQuestion.id.in_(ids))
+               .with_entities(MockJAMBQuestion.id).all()] if ids else []
+
+    if not ids:
+        flash('Select at least one question first.', 'error')
+        return redirect(back)
+
+    if action == 'delete':
+        deleted = 0
+        for i in range(0, len(ids), 400):
+            chunk = ids[i:i + 400]
+            MockJAMBAnswer.query.filter(MockJAMBAnswer.question_id.in_(chunk)).delete(synchronize_session=False)
+            deleted += MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(chunk)).delete(synchronize_session=False)
+        db.session.commit()
+        flash(f'Deleted {deleted} question(s).', 'success')
+    else:
+        n = 0
+        for i in range(0, len(ids), 400):
+            n += (MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(ids[i:i + 400]))
+                  .update({MockJAMBQuestion.needs_image: False}, synchronize_session=False))
+        db.session.commit()
+        flash(f'Marked {n} question(s) as not needing an image — they can now be used in exams.', 'success')
+    return redirect(back)
+
+
 @mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])
 @login_required
 @csrf_protect
