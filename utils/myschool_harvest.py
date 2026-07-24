@@ -66,26 +66,38 @@ def start_harvest(subjects, exam='jamb', year_min=None, year_max=None, max_pages
 
 
 def _rehost_image(url):
-    """Download a genuine question figure and re-host it locally as PNG; returns
-    its static URL, or None. myschool rarely exposes these server-side, so this
-    is best-effort and never fatal."""
+    """Re-host a genuine question figure locally as PNG; returns its static URL, or
+    None. Handles both a hosted URL (``/storage/classroom/…`` NuxtImg) and an inline
+    ``data:image/…;base64`` figure embedded straight in the page. Best-effort and
+    never fatal."""
     try:
         import os
         import secrets
         from io import BytesIO
-        import requests
         from PIL import Image
-        from flask import current_app, url_for
-        r = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
-        if r.status_code != 200 or len(r.content) > 8 * 1024 * 1024:
+        from flask import current_app
+        if url.startswith('data:'):
+            import base64
+            b64 = url.split(',', 1)[1] if ',' in url else ''
+            content = base64.b64decode(b64)
+        else:
+            import requests
+            r = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+            if r.status_code != 200:
+                return None
+            content = r.content
+        if not content or len(content) > 8 * 1024 * 1024:
             return None
-        im = Image.open(BytesIO(r.content)).convert('RGB')
+        im = Image.open(BytesIO(content)).convert('RGB')
         im.thumbnail((1400, 1400))
         name = secrets.token_hex(8) + '.png'
         folder = os.path.join(current_app.root_path, 'static', 'uploads', 'mock_jamb')
         os.makedirs(folder, exist_ok=True)
         im.save(os.path.join(folder, name), 'PNG')
-        return url_for('static', filename='uploads/mock_jamb/' + name)
+        # build the static URL directly (works in a request, a background job or a
+        # test) — same result as url_for('static', …), no request context needed.
+        static_path = (current_app.static_url_path or '/static').rstrip('/')
+        return f'{static_path}/uploads/mock_jamb/{name}'
     except Exception:
         return None
 

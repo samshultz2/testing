@@ -529,18 +529,41 @@ def _real_image_src(src):
     return base.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"))
 
 
-def _img_src(im):
-    """The best URL from an <img>, trying eager + common lazy-load attributes and
-    the first candidate of a srcset."""
+def _img_candidates(im):
+    """Every URL an <img> exposes — eager/lazy attributes plus each srcset entry —
+    so a real hosted figure can be preferred over a base64 placeholder that a
+    NuxtImg often carries in ``src`` while the real image sits in ``srcset``."""
+    out = []
     for attr in ("src", "data-src", "data-original", "data-lazy", "data-echo",
                  "data-lazy-src", "data-image"):
         v = (im.get(attr) or "").strip()
         if v:
-            return v
-    srcset = (im.get("srcset") or im.get("data-srcset") or "").strip()
-    if srcset:
-        return srcset.split(",")[0].strip().split(" ")[0]
-    return ""
+            out.append(v)
+    for key in ("srcset", "data-srcset"):
+        ss = (im.get(key) or "").strip()
+        if ss:
+            for part in ss.split(","):
+                u = part.strip().split(" ")[0]
+                if u:
+                    out.append(u)
+    return out
+
+
+def _img_src(im):
+    """The best single URL from an <img> (compat shim over _img_candidates)."""
+    cands = _img_candidates(im)
+    return cands[0] if cands else ""
+
+
+def _real_data_uri(src):
+    """True for an inline base64 raster that is an actual figure — myschool embeds
+    some diagrams straight into the HTML as ``data:image/…;base64,…``. Tiny blur /
+    LQIP placeholders and 1×1 spacers are excluded by payload size."""
+    s = (src or "").strip()
+    if not s.lower().startswith("data:image/"):
+        return False
+    payload = s.split(",", 1)[1] if "," in s else ""
+    return len(payload) > 3000                # ~2KB+ decoded → a genuine figure
 
 
 def _serialize_table(table):
@@ -608,18 +631,26 @@ def parse_detail(html):
     if not stem:
         return None
 
-    # a genuine figure image in the stem, if any. myschool injects most figures
-    # client-side, so this is usually populated only from browser-rendered HTML
-    # (e.g. the CLI's --images / Playwright mode).
-    image_url = None
+    # a genuine figure image in the stem, if any. myschool server-renders these as
+    # a NuxtImg (``<img data-nuxt-img srcset/src>``) pointing at /storage/classroom/…,
+    # or embeds the diagram inline as a base64 data URI. Prefer a real hosted URL;
+    # fall back to a substantial inline image (re-hosted at save time).
+    image_url, data_uri = None, None
     if container is not None:
         for im in container.find_all("img"):
-            cand = _img_src(im)
-            if _real_image_src(cand):
-                image_url = cand
+            for cand in _img_candidates(im):
+                if cand.startswith("data:"):
+                    if data_uri is None and _real_data_uri(cand):
+                        data_uri = cand
+                elif _real_image_src(cand):
+                    image_url = cand
+                    break
+            if image_url:
                 break
     if image_url and image_url.startswith("/"):        # absolutise site-relative
         image_url = "https://myschool.ng" + image_url
+    if not image_url:                                  # inline base64 figure
+        image_url = data_uri
 
     # correct answer badge.
     correct = ""

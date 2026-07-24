@@ -74,6 +74,59 @@ def test_parse_detail_captures_figure_image():
     assert not p['figure_dependent']            # we have the figure → answerable
 
 
+def _data_uri_png(w=120, h=90):
+    """A real (non-trivial) inline PNG data URI, above the placeholder threshold."""
+    from io import BytesIO
+    import base64
+    from PIL import Image
+    im = Image.new('RGB', (w, h), (30, 160, 90))
+    for x in range(0, w, 2):
+        for y in range(0, h, 2):
+            im.putpixel((x, y), ((x * 7) % 256, (y * 9) % 256, (x + y) % 256))
+    buf = BytesIO(); im.save(buf, 'PNG')
+    return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+
+def _img_fixture(stem, img_tag, correct='c'):
+    return f"""
+    <div class="card">
+      <div class="qwrap"><h1>{stem}</h1>{img_tag}</div>
+      <div class="opts">
+        <div class="prevent-copy"><span class="uppercase">a</span><p>1A</p></div>
+        <div class="prevent-copy"><span class="uppercase">b</span><p>2A</p></div>
+        <div class="prevent-copy"><span class="uppercase">c</span><p>3A</p></div>
+        <div class="prevent-copy"><span class="uppercase">d</span><p>4A</p></div>
+      </div>
+      <div class="ans">Correct Option <span class="uppercase">{correct}</span></div>
+    </div>"""
+
+
+def test_parse_detail_captures_nuxt_img_and_prefers_real_url():
+    """myschool serves figures as a NuxtImg. When it inlines a base64 placeholder in
+    ``src`` and the real figure in ``srcset``, the real hosted URL wins."""
+    from utils import myschool as ms
+    img = ('<img data-nuxt-img src="data:image/png;base64,AAAA" '
+           'srcset="https://myschool.ng/storage/classroom/fig9.jpeg 1x, '
+           'https://myschool.ng/storage/classroom/fig9.jpeg 2x">')
+    p = ms.parse_detail(_img_fixture('Find the resistance of the circuit shown.', img))
+    assert p['image_url'] == 'https://myschool.ng/storage/classroom/fig9.jpeg'
+    assert 'image' in p['flags'] and not p['figure_dependent']
+
+
+def test_parse_detail_captures_inline_base64_figure():
+    """Some diagrams are embedded straight into the page as a base64 data URI —
+    they are real figures, so the question is answerable (not needs_image)."""
+    from utils import myschool as ms
+    uri = _data_uri_png()
+    p = ms.parse_detail(_img_fixture('The value of T in the figure above is', f'<img src="{uri}">'))
+    assert p['image_url'] == uri and 'image' in p['flags']
+    assert not p['figure_dependent']
+    # a tiny inline blur/placeholder is NOT treated as a figure
+    q = ms.parse_detail(_img_fixture('In the diagram above, find the angle.',
+                                     '<img src="data:image/png;base64,AAAABBBB">'))
+    assert q['image_url'] is None and q['figure_dependent']   # still needs a real image
+
+
 def test_parse_detail_ignores_avatar_images():
     from utils import myschool as ms
     html = """
@@ -384,6 +437,31 @@ def test_harvest_tags_novel_from_question_note(app, monkeypatch):
                 break
         q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
         assert q.section == 'novel' and q.topic == 'The Lekki Headmaster'
+
+
+def test_harvest_rehosts_inline_base64_figure(app, monkeypatch):
+    """A figure delivered as an inline base64 data URI is decoded, re-hosted
+    locally, and the question is kept in the pool (not flagged needs_image)."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    html = _img_fixture('In the diagram above, find the marked angle.', f'<img src="{_data_uri_png()}">')
+    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['701'])
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: html)
+
+    with app.app_context():
+        s = Subject(name='HarvestInlineFig', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        mh.start_harvest([{'id': sid, 'name': 'Physics'}], exam='jamb', year_min=2019, year_max=2019)
+        for _ in range(3):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        assert st['images'] == 1 and st['needs_image'] == 0
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
+        assert q.needs_image is False
+        assert q.image_url and q.image_url.endswith('.png') and 'uploads/mock_jamb/' in q.image_url
 
 
 def test_harvest_reports_empty_subjects(app, monkeypatch):
