@@ -264,6 +264,25 @@ def test_subject_slugs_match_myschool():
     assert ms.subject_slug('Fine Art') == 'fine-arts'
 
 
+def test_literature_sections_including_novels():
+    """JAMB Literature is a blueprint subject with genre sections; its novel/prose
+    questions land in the Prose section (drama→drama, poetry→poetry)."""
+    from utils import myschool as ms
+    from utils.jamb_blueprint import JAMB_BLUEPRINT, norm_subject, sections_for
+    assert norm_subject('Literature in English') in JAMB_BLUEPRINT
+    assert {s['section'] for s in sections_for('Literature in English')} == \
+        {'appreciation', 'prose', 'drama', 'poetry'}
+    sec, _t, _s = ms.classify('literature in english',
+                              'Which narrative technique does the novelist use in the prose novel')
+    assert sec == 'prose'                                   # the novels
+    sec, _t, _s = ms.classify('literature in english',
+                              'Identify the tragic hero and the comedy in the drama play')
+    assert sec == 'drama'
+    sec, _t, _s = ms.classify('literature in english',
+                              'The rhyme scheme and meter of the poem build imagery')
+    assert sec == 'poetry'
+
+
 def test_classify_maps_to_taxonomy():
     from utils import myschool as ms
     sec, top, sub = ms.classify('commerce', 'A cheque drawn on a bank is an instrument of banking')

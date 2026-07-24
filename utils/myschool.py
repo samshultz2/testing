@@ -292,6 +292,11 @@ TOPIC_SECTION = {
         "Practical Geography": "practical", "Physical Geography": "physical",
         "Human Geography": "human", "Regional Geography of Nigeria": "regional",
     },
+    "literature in english": {
+        # Prose covers the recommended novels; Drama the plays; Poetry the poems.
+        "Literary Terms & Appreciation": "appreciation",
+        "Drama": "drama", "Prose": "prose", "Poetry": "poetry",
+    },
 }
 
 ENGLISH_SUBTOPIC_SECTION = {

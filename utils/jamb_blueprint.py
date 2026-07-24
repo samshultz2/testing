@@ -120,6 +120,18 @@ JAMB_BLUEPRINT = {
             _sec('genetics_evolution', 'Genetics & evolution', 5),
         ],
     },
+    # JAMB Literature in English (50): literary appreciation/theory plus the
+    # recommended texts across the three genres — Prose (the novels), Drama (the
+    # plays) and Poetry. Counts are indicative and editable per mock.
+    'literature in english': {
+        'total': 50,
+        'sections': [
+            _sec('appreciation', 'Literary appreciation & terms', 14),
+            _sec('prose', 'Prose (novels)', 12),
+            _sec('drama', 'Drama (plays)', 12),
+            _sec('poetry', 'Poetry', 12),
+        ],
+    },
 }
 
 DEFAULT_BLUEPRINT = {'total': 40, 'sections': [_sec('general', 'General', 40)]}
