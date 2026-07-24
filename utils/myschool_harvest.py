@@ -154,10 +154,13 @@ def _process_one(cell, qid, state, session):
     # English (and any passage subject): myschool's own instruction block is a more
     # reliable signal than keyword classification, so trust it — group passage
     # questions under a shared passage, and tag novel questions with the real book.
+    # ``set_text`` is the recommended text named in the listing badge for THIS
+    # question (English: the novel; Literature: the prose/drama/poetry text).
+    set_text = (cell.get('texts') or {}).get(str(qid))
     passage = None
     if p.get('is_novel'):
         sec = 'novel'
-        top = (p.get('novel_title') or cell.get('novel')
+        top = (p.get('novel_title') or set_text
                or ms.novel_for_year(cell['year']) or 'Recommended Novel')
         sub = None
     elif p.get('passage_text'):
@@ -166,7 +169,11 @@ def _process_one(cell, qid, state, session):
         passage = _get_or_create_passage(sid, sec, p['passage_text'])
     else:
         sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']),
-                                    year=cell['year'], novel_title=cell.get('novel'))
+                                    year=cell['year'], novel_title=set_text)
+        # Literature: tag a text-based question (prose/drama/poetry) with the actual
+        # set text, mirroring how English novel questions carry the book title.
+        if set_text and sec in ('prose', 'drama', 'poetry'):
+            top = set_text
     sec = _valid_section(cell['subject'], sec)
     image_url = _rehost_image(p['image_url']) if p.get('image_url') else None
     if image_url:
@@ -212,14 +219,18 @@ def harvest_step(max_questions=6):
             cell = state['cells'][state['ci']]
             if state.get('ids') is None:
                 state['current'] = {'subject': cell['subject'], 'year': cell['year']}
-                state['ids'] = ms.list_question_ids(
-                    cell['slug'], state['exam'], cell['year'], session,
-                    max_pages=state.get('max_pages', 60), delay=0.3)
-                # English: read this year's recommended-novel badge off the listing
-                # page so novel-section questions get the correct set text.
-                if ms.norm_subject(cell['subject']) == 'english language':
-                    cell['novel'] = ms.scrape_novel_title(
-                        cell['subject'], state['exam'], cell['year'], session)
+                # English & Literature: the listing badge names the year's set text
+                # (English: the novel; Literature: the prose/drama/poetry text, which
+                # varies by page) — capture it per question so the right title tags
+                # each question.
+                if ms.norm_subject(cell['subject']) in ('english language', 'literature in english'):
+                    state['ids'], cell['texts'] = ms.list_ids_and_texts(
+                        cell['slug'], state['exam'], cell['year'], session,
+                        max_pages=state.get('max_pages', 60), delay=0.3)
+                else:
+                    state['ids'] = ms.list_question_ids(
+                        cell['slug'], state['exam'], cell['year'], session,
+                        max_pages=state.get('max_pages', 60), delay=0.3)
                 found = state.setdefault('found', {})
                 found[cell['subject']] = found.get(cell['subject'], 0) + len(state['ids'])
             if not state['ids']:

@@ -402,10 +402,9 @@ def test_harvest_tags_english_novel_from_listing_badge(app, monkeypatch):
     from utils import myschool_harvest as mh
 
     novel_q = _fixture("Which character in the recommended novel is the protagonist?")
-    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['301'])
+    # English harvest reads ids + per-question set-text off the listing badge
+    monkeypatch.setattr(ms, 'list_ids_and_texts', lambda *a, **k: (['301'], {'301': 'The Lekki Headmaster'}))
     monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: novel_q)
-    # the listing scrape returns 2025's real set text
-    monkeypatch.setattr(ms, 'scrape_novel_title', lambda *a, **k: 'The Lekki Headmaster')
 
     with app.app_context():
         s = Subject(name='HarvestEnglishNovel', is_active=True); db.session.add(s); db.session.commit()
@@ -434,9 +433,8 @@ def test_harvest_groups_comprehension_under_one_passage(app, monkeypatch):
         '401': _fixture('What is the main idea of the passage?', instruction=lead + _PASSAGE),
         '402': _fixture('What does the writer admire most?', correct='c', instruction=lead + _PASSAGE),
     }
-    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['401', '402'])
+    monkeypatch.setattr(ms, 'list_ids_and_texts', lambda *a, **k: (['401', '402'], {}))
     monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: pages[url.split('/')[-1].split('?')[0]])
-    monkeypatch.setattr(ms, 'scrape_novel_title', lambda *a, **k: None)
 
     with app.app_context():
         s = Subject(name='HarvestEnglishPassage', is_active=True); db.session.add(s); db.session.commit()
@@ -464,10 +462,10 @@ def test_harvest_tags_novel_from_question_note(app, monkeypatch):
     from utils import myschool_harvest as mh
 
     note = 'This question is based on the recommended novel , "The Lekki Headmaster"'
-    monkeypatch.setattr(ms, 'list_question_ids', lambda *a, **k: ['501'])
+    # no listing badge — the novel title comes from myschool's own in-question note
+    monkeypatch.setattr(ms, 'list_ids_and_texts', lambda *a, **k: (['501'], {}))
     monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k:
                         _fixture("Who is the headmaster's confidant?", instruction=note))
-    monkeypatch.setattr(ms, 'scrape_novel_title', lambda *a, **k: None)
 
     with app.app_context():
         s = Subject(name='HarvestEnglishNote', is_active=True); db.session.add(s); db.session.commit()
@@ -480,6 +478,62 @@ def test_harvest_tags_novel_from_question_note(app, monkeypatch):
                 break
         q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
         assert q.section == 'novel' and q.topic == 'The Lekki Headmaster'
+
+
+def _listing(slug, exam, ids, badge=None):
+    """A synthetic myschool listing page: the set-text badge plus the per-question
+    detail links the id-scraper matches on."""
+    b = f'<div class="bg-primary_accent"><strong>{badge}</strong></div>' if badge else ''
+    links = ''.join(
+        f'<a href="/classroom/{slug}/{i}?exam_type={exam}&exam_year=2022">Q{i}</a>' for i in ids)
+    return f'<div class="list">{b}{links}</div>'
+
+
+def test_list_ids_and_texts_tags_per_page_badge(monkeypatch):
+    """``list_ids_and_texts`` returns the ids AND a {qid: set-text} map read from
+    each page's badge — Literature's text varies page to page, so the badge is
+    applied per question, not once for the whole year."""
+    from utils import myschool as ms
+    slug, exam = 'literature-in-english', 'jamb'
+    pages = {
+        1: _listing(slug, exam, ['801', '802'], badge='Kossoh Town Boy'),
+        2: _listing(slug, exam, ['803'], badge='Faceless'),
+        3: None,   # end of pagination
+    }
+    import re as _re
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k:
+                        pages.get(int(_re.search(r'page=(\d+)', url).group(1))))
+    ids, texts = ms.list_ids_and_texts(slug, exam, 2022, None, max_pages=10, delay=0)
+    assert ids == ['801', '802', '803']
+    assert texts == {'801': 'Kossoh Town Boy', '802': 'Kossoh Town Boy',
+                     '803': 'Faceless'}
+
+
+def test_harvest_tags_literature_prose_with_set_text(app, monkeypatch):
+    """A harvested Literature prose question is tagged (topic) with the set text
+    named in the listing badge, mirroring how English novel questions carry the
+    book title."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    prose_q = _fixture('In the novel, what motivates the protagonist to leave home?')
+    monkeypatch.setattr(ms, 'list_ids_and_texts', lambda *a, **k: (['901'], {'901': 'Kossoh Town Boy'}))
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k: prose_q)
+
+    with app.app_context():
+        s = Subject(name='HarvestLitProse', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        mh.start_harvest([{'id': sid, 'name': 'Literature in English'}], exam='jamb',
+                         year_min=2022, year_max=2022)
+        for _ in range(3):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
+        assert q is not None
+        assert q.section in ('prose', 'drama', 'poetry')
+        assert q.topic == 'Kossoh Town Boy'
 
 
 def test_harvest_rehosts_inline_base64_figure(app, monkeypatch):

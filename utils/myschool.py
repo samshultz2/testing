@@ -745,6 +745,30 @@ def list_question_ids(slug, exam, year, session, max_pages=60, delay=0.6):
     return ids
 
 
+def list_ids_and_texts(slug, exam, year, session, max_pages=60, delay=0.6):
+    """Like ``list_question_ids`` but also returns ``{qid: recommended-text}`` — the
+    set-text name shown in the listing badge on each page. English has one novel a
+    year (the same badge on every page); Literature's badge is the specific
+    prose/drama/poetry text for that page, so the map is per-question."""
+    ids, seen, texts = [], set(), {}
+    for page in range(1, max_pages + 1):
+        html = fetch(f"{BASE}/{slug}?exam_type={exam}&exam_year={year}&page={page}", session)
+        if not html:
+            break
+        badge = _novel_from_listing_html(html)
+        found = re.findall(rf"/classroom/{re.escape(slug)}/(\d+)\?exam_type={exam}", html)
+        new = [i for i in found if i not in seen]
+        if not new:
+            break
+        for i in new:
+            seen.add(i)
+            ids.append(i)
+            if badge:
+                texts[i] = badge
+        time.sleep(delay)
+    return ids, texts
+
+
 def question_url(slug, exam, year, qid):
     return f"{BASE}/{slug}/{qid}?exam_type={exam}&exam_year={year}"
 

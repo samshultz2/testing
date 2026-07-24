@@ -64,10 +64,11 @@ JAMB_BLUEPRINT = {
         'sections': [
             _sec('comprehension', 'Comprehension', 15, passage=True, per_passage=5),
             _sec('cloze', 'Cloze passage', 10, passage=True, per_passage=10),
-            _sec('sentence_interpretation', 'Sentence Interpretation', 8),
+            _sec('sentence_interpretation', 'Sentence Interpretation', 6),
             _sec('antonyms', 'Antonyms', 4),
             _sec('synonyms', 'Synonyms', 4),
-            _sec('lexis_structure', 'Lexis & Structure', 4),
+            _sec('lexis_structure', 'Lexis & Structure', 3),
+            _sec('registers', 'Registers', 3),
             _sec('oral', 'Test of Orals', 5),
             _sec('novel', 'Recommended Novel', 10),
         ],
@@ -141,7 +142,7 @@ DEFAULT_BLUEPRINT = {'total': 40, 'sections': [_sec('general', 'General', 40)]}
 # richer catalogue than their (flat) draw blueprint so questions can still be
 # tagged meaningfully.
 _EXTRA_SECTIONS = {
-    'english language': [_sec('registers', 'Registers', 0), _sec('summary', 'Summary', 0)],
+    'english language': [_sec('summary', 'Summary', 0)],   # registers now a real blueprint section
     'economics': [_sec('micro', 'Microeconomics', 0), _sec('macro', 'Macroeconomics', 0),
                   _sec('development', 'Development & public finance', 0),
                   _sec('international', 'International economics', 0)],
