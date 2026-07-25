@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Setup - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Setup</span>{% endblock %}
+{% block extra_css %}
+<style>
+.sw-prog{height:12px;border-radius:8px;background:var(--gray-100);overflow:hidden;margin:.4rem 0 1rem}
+.sw-prog > i{display:block;height:100%;background:linear-gradient(90deg,#4f46e5,#0d9488);transition:width .4s}
+.sw-step{display:flex;gap:.9rem;align-items:flex-start;border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.9rem 1rem;margin-bottom:.7rem}
+.sw-step.done{border-left:4px solid #059669;background:rgba(5,150,105,.04)}
+.sw-step.todo{border-left:4px solid #b45309}
+.sw-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;background:var(--gray-100);color:var(--text-muted)}
+.sw-step.done .sw-ico{background:rgba(5,150,105,.12);color:#059669}
+.sw-body{flex:1;min-width:0}
+.sw-body h3{margin:0;font-size:1rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.sw-badge{font-size:.66rem;font-weight:700;padding:.08rem .5rem;border-radius:999px}
+.sw-badge.on{background:rgba(5,150,105,.14);color:#059669}.sw-badge.off{background:rgba(180,83,9,.14);color:#b45309}
+.sw-body p{margin:.25rem 0 .55rem;font-size:.85rem;color:var(--text-muted)}
+.sw-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Set up your school</h1>
+        <p class="text-muted text-sm">A short checklist to get going. Do them top to bottom — most are a click or two, and you can come back any time.</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-body">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <strong>{{ done }} of {{ total }} done</strong>
+            <span class="text-muted text-sm">{{ percent }}%</span>
+        </div>
+        <div class="sw-prog"><i style="width:{{ percent }}%;"></i></div>
+        {% if done == total %}
+        <p class="text-sm" style="margin:0;color:#059669;"><i class="fas fa-circle-check"></i> Your school is set up. You can edit anything from its page any time.</p>
+        {% else %}
+        <p class="text-sm text-muted" style="margin:0;">Finish the highlighted steps below to be fully ready for the term.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% for s in steps %}
+<div class="sw-step {{ 'done' if s.done else 'todo' }}">
+    <div class="sw-ico"><i class="fas fa-{{ s.icon }}"></i></div>
+    <div class="sw-body">
+        <h3>{{ s.title }}
+            <span class="sw-badge {{ 'on' if s.done else 'off' }}">{{ 'Done' if s.done else 'To do' }}</span>
+            <span class="text-muted text-sm" style="font-weight:400;">· {{ s.detail }}</span>
+        </h3>
+        <p>{{ s.blurb }}</p>
+        <div class="sw-actions">
+            {% if s.seed %}
+            <form method="post" action="{{ s.seed }}" style="display:inline;">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-primary btn-sm"><i class="fas fa-bolt"></i> {{ s.seed_label }}</button>
+            </form>
+            {% endif %}
+            <a href="{{ s.url }}" class="btn {{ 'btn-secondary' if s.seed else ('btn-secondary' if s.done else 'btn-primary') }} btn-sm">
+                <i class="fas fa-arrow-right"></i> {{ s.cta }}</a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<p class="text-muted text-sm" style="margin-top:1rem;">
+    <i class="fas fa-circle-info"></i> Running more than one campus? <a href="{{ branches_url }}">Set up branches</a> ({{ extra.branches }} so far), then use branch-pinned staff invite links.
+</p>
+{% endblock %}

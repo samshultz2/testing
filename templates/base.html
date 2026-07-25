@@ -630,6 +630,11 @@
 
                     {% if session.get('role') in ('super_admin', 'admin') %}
                     <li class="nav-section">Settings</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('setup.wizard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('setup.') %}active{% endif %}">
+                            <i class="fas fa-wand-magic-sparkles"></i><span>Setup wizard</span>
+                        </a>
+                    </li>
                     {% if can_manage_users %}
                     <li class="nav-item">
                         <a href="{{ url_for('users.index') }}" class="nav-link">
