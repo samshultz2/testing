@@ -174,6 +174,16 @@ def _process_one(cell, qid, state, session):
         # set text, mirroring how English novel questions carry the book title.
         if set_text and sec in ('prose', 'drama', 'poetry'):
             top = set_text
+    # Literature's paper has no novel/comprehension/cloze section (those are English).
+    # myschool's own note occasionally flags a Literature recommended-text question as a
+    # "novel", or wraps an unseen extract as a passage — remap those to a real Literature
+    # section (its novels are prose; any extract is appreciation) so the draw can serve
+    # them, instead of _valid_section dropping the question to section=None (never shown).
+    if ms.norm_subject(cell['subject']) == 'literature in english' and \
+            sec in ('novel', 'comprehension', 'cloze'):
+        if sec == 'novel' and not top:
+            top = set_text or p.get('novel_title')
+        sec = 'prose' if sec == 'novel' else 'appreciation'
     sec = _valid_section(cell['subject'], sec)
     image_url = _rehost_image(p['image_url']) if p.get('image_url') else None
     if image_url:

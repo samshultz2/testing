@@ -536,6 +536,34 @@ def test_harvest_tags_literature_prose_with_set_text(app, monkeypatch):
         assert q.topic == 'Kossoh Town Boy'
 
 
+def test_harvest_literature_novel_note_maps_to_prose(app, monkeypatch):
+    """Literature has no 'novel' section (that's English) — a Literature question
+    myschool flags as a recommended-novel question must be remapped to 'prose' and
+    tagged with the text, not dropped to section=None (unservable)."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    note = 'This question is based on the recommended text , "Kossoh Town Boy"'
+    monkeypatch.setattr(ms, 'list_ids_and_texts', lambda *a, **k: (['601'], {}))
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k:
+                        _fixture('Who narrates the story?', instruction=note))
+
+    with app.app_context():
+        s = Subject(name='HarvestLitNovelNote', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        mh.start_harvest([{'id': sid, 'name': 'Literature in English'}], exam='jamb',
+                         year_min=2022, year_max=2022)
+        for _ in range(3):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
+        assert q is not None
+        assert q.section == 'prose'                 # remapped from 'novel'
+        assert q.topic == 'Kossoh Town Boy'
+
+
 def test_harvest_rehosts_inline_base64_figure(app, monkeypatch):
     """A figure delivered as an inline base64 data URI is decoded, re-hosted
     locally, and the question is kept in the pool (not flagged needs_image)."""
