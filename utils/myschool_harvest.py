@@ -187,9 +187,14 @@ def _process_one(cell, qid, state, session):
     else:
         sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']),
                                     year=cell['year'], novel_title=set_text)
-        # Literature: tag a text-based question (prose/drama/poetry) with the actual
-        # set text, mirroring how English novel questions carry the book title.
-        if set_text and sec in ('prose', 'drama', 'poetry'):
+        # Tag with the recommended text named in the listing badge. For Literature the
+        # badge is page-level and groups a text's questions, so any Literature question
+        # carrying it (prose/drama/poetry OR a literary-appreciation question about the
+        # text) is tagged with that title — mirroring how English novel questions carry
+        # the book title. For English the badge is the novel, so it only applies to
+        # genre questions (never to comprehension/cloze/oral).
+        if set_text and (sec in ('prose', 'drama', 'poetry')
+                         or ms.norm_subject(cell['subject']) == 'literature in english'):
             top = set_text
     # Literature's paper has no novel/comprehension/cloze section (those are English).
     # myschool's own note occasionally flags a Literature recommended-text question as a

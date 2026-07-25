@@ -532,7 +532,9 @@ def test_harvest_tags_literature_prose_with_set_text(app, monkeypatch):
                 break
         q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
         assert q is not None
-        assert q.section in ('prose', 'drama', 'poetry')
+        # a Literature question carrying the page set-text badge is tagged with the
+        # text (its section may be a genre or literary-appreciation)
+        assert q.section in ('prose', 'drama', 'poetry', 'appreciation')
         assert q.topic == 'Kossoh Town Boy'
 
 
@@ -575,6 +577,22 @@ def test_classify_agric_cultural_practices_keywords():
         sec, top, sub = ms.classify_confident('Agricultural Science', stem)
         assert top is not None, stem
         assert sub == 'Land preparation & cultural practices'
+
+
+def test_classify_government_civic_literature_boosts():
+    """Coverage pass for the remaining subjects: Government, Civic Education and
+    Literature (appreciation/terms) now classify their typical questions."""
+    from utils import myschool as ms
+    cases = [
+        ('Government', 'The bill passed its second reading in the legislature'),
+        ('Government', 'ECOWAS is an example of a regional organisation'),
+        ('Civic Education', 'The abuse of hard drugs and narcotics among youths'),
+        ('Civic Education', 'Corruption such as bribery and embezzlement in public office'),
+        ('Literature in English', 'Identify the figure of speech: the wind whispered softly'),
+        ('Literature in English', 'A sonnet has fourteen lines and a set rhyme scheme'),
+    ]
+    for subj, stem in cases:
+        assert ms.classify_confident(subj, stem)[1] is not None, (subj, stem)
 
 
 def test_harvest_caps_overlong_topic(app, monkeypatch):
