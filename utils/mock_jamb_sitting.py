@@ -298,6 +298,48 @@ def sitting_payload(exam, subject_ids, attempt):
     return out
 
 
+# Server-side grace after the timer before the safety net force-submits, so a
+# candidate whose client is mid-flush (or briefly offline at the buzzer) still lands
+# their own submission first. The client auto-submits at 0; this only catches the
+# "tab was closed and never came back" case.
+AUTO_SUBMIT_GRACE_SECONDS = 120
+
+
+def attempt_expired(attempt, grace_seconds=AUTO_SUBMIT_GRACE_SECONDS):
+    """True if this in-progress attempt is past its deadline
+    (started_at + duration + grace)."""
+    from datetime import datetime, timedelta
+    if not attempt or attempt.submitted_at or not attempt.started_at:
+        return False
+    dur = attempt.duration_minutes or 120
+    deadline = attempt.started_at + timedelta(minutes=dur, seconds=grace_seconds)
+    return datetime.now() >= deadline
+
+
+def auto_submit_expired(exam=None, student=None, grace_seconds=AUTO_SUBMIT_GRACE_SECONDS):
+    """Server-side safety net: grade any in-progress attempt whose time has fully
+    elapsed but that was never submitted (e.g. the student closed the tab so the
+    client-side auto-submit never fired). Scoped to one exam and/or one student when
+    given. Idempotent — only touches attempts with no ``submitted_at`` that are past
+    the deadline. Returns the number graded. Never raises (best-effort)."""
+    from models import db, MockJAMBAttempt
+    q = MockJAMBAttempt.query.filter(MockJAMBAttempt.submitted_at.is_(None))
+    if exam is not None:
+        q = q.filter(MockJAMBAttempt.mock_exam_id == exam.id)
+    if student is not None:
+        q = q.filter(MockJAMBAttempt.student_id == student.id)
+    graded = 0
+    for att in q.all():
+        if not attempt_expired(att, grace_seconds):
+            continue
+        try:
+            grade_attempt(att)          # commits; marks submitted + writes the result
+            graded += 1
+        except Exception:
+            db.session.rollback()
+    return graded
+
+
 def grade_attempt(attempt):
     """Grade a submitted attempt over the served subset only (blanks = 0): scale
     each subject to /100, total /400, and upsert the MockJAMBResult so analytics

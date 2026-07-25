@@ -211,6 +211,9 @@ def view_exam(exam_id):
     """View a specific mock exam with detailed statistics"""
     exam = db.get_or_404(MockJAMBExam, exam_id)
     require_branch_access(exam.branch_id)   # no cross-branch exam data
+    # finalise any timed-out-but-unsubmitted sittings so their scores show here
+    from utils.mock_jamb_sitting import auto_submit_expired
+    auto_submit_expired(exam=exam)
     statistics = MockJAMBAnalytics.get_exam_statistics(exam_id)
     
     # Get sort and filter parameters
@@ -853,8 +856,10 @@ def items(exam_id):
     per-question difficulty/discrimination, distractor analysis, topic and
     sub-topic mastery, flagged items and audience recommendations."""
     from utils.mock_jamb_item_analysis import item_analysis
+    from utils.mock_jamb_sitting import auto_submit_expired
     exam = db.get_or_404(MockJAMBExam, exam_id)
     require_branch_access(exam.branch_id)
+    auto_submit_expired(exam=exam)          # finalise any timed-out sittings first
     data = item_analysis(exam_id)
     return render_template(
         'mock_jamb/items.html', exam=exam, data=data,
@@ -2262,8 +2267,12 @@ def portal_sit(exam_id):
         if not subject_ids:
             flash('You have no subjects to sit in this mock.', 'error')
             return redirect(url_for('mock_jamb_portal.portal_list'))
+        # Safety net: if the student's timer already elapsed while the tab was
+        # closed, force-submit (grade) it now instead of resuming a dead attempt.
+        from utils.mock_jamb_sitting import auto_submit_expired
+        auto_submit_expired(exam=exam, student=student)
         att = MockJAMBAttempt.query.filter_by(mock_exam_id=exam.id, student_id=student.id).first()
-        if att and att.status == 'Submitted':
+        if att and (att.status == 'Submitted' or att.submitted_at):
             return redirect(url_for('mock_jamb_portal.portal_done', exam_id=exam.id))
         if not att:
             att = MockJAMBAttempt(mock_exam_id=exam.id, student_id=student.id,

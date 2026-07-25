@@ -162,6 +162,42 @@ def test_draw_paper_arrange_keeps_section_order():
     assert secs == ['a', 'a', 'a', 'b', 'b', 'b']       # all of A, then all of B
 
 
+def test_auto_submit_expired_finalises_abandoned_attempt(app):
+    """Server-side safety net: an in-progress attempt whose time fully elapsed
+    (tab closed, client auto-submit never fired) is graded on the next admin view."""
+    from datetime import datetime, timedelta
+    from utils.mock_jamb_sitting import auto_submit_expired, attempt_expired
+    from models import MockJAMBResult
+    eid, sid, subj_id = _bank_maths(app)
+    with app.app_context():
+        ex = db.session.get(MockJAMBExam, eid)
+        att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid, duration_minutes=30,
+                              started_at=datetime.now() - timedelta(minutes=45))
+        db.session.add(att); db.session.commit()
+        assert attempt_expired(att) is True
+        assert auto_submit_expired(exam=ex) == 1
+        att = db.session.get(MockJAMBAttempt, att.id)
+        assert att.submitted_at is not None and att.status == 'Submitted'
+        assert MockJAMBResult.query.filter_by(mock_exam_id=eid, student_id=sid).first() is not None
+        # idempotent: a second sweep does nothing (already submitted)
+        assert auto_submit_expired(exam=ex) == 0
+
+
+def test_auto_submit_leaves_live_attempt_alone(app):
+    """An attempt still within its time (plus grace) is NOT force-submitted."""
+    from datetime import datetime, timedelta
+    from utils.mock_jamb_sitting import auto_submit_expired, attempt_expired
+    eid, sid, subj_id = _bank_maths(app)
+    with app.app_context():
+        ex = db.session.get(MockJAMBExam, eid)
+        att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid, duration_minutes=120,
+                              started_at=datetime.now() - timedelta(minutes=5))
+        db.session.add(att); db.session.commit()
+        assert attempt_expired(att) is False
+        assert auto_submit_expired(exam=ex) == 0
+        assert db.session.get(MockJAMBAttempt, att.id).submitted_at is None
+
+
 # --- bank management UI + bulk import ------------------------------------
 
 def _admin(app):
