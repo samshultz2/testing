@@ -77,7 +77,11 @@
                     </td>
                     <td>
                         <div class="subject-actions">
-                            <a href="{{ url_for('generator.edit_gen_subject', subject_id=item.subject.id) }}" 
+                            <a href="{{ url_for('generator.subject_rules', subject_id=item.subject.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Rules (periods, first/last period, doubles, per-class)">
+                                <i class="fas fa-sliders"></i> Rules
+                            </a>
+                            <a href="{{ url_for('generator.edit_gen_subject', subject_id=item.subject.id) }}"
                                class="btn btn-sm btn-outline-primary" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </a>

@@ -812,4 +812,4 @@ def _apply_batch(batch_id):
 
 __all__ = [_n for _n in dir() if not _n.startswith('__')]
 
-from . import teachers, subjects, structure, rules, generation, exports, api  # noqa: E402,F401  (registers routes)
+from . import teachers, subjects, structure, rules, generation, exports, api, subject_rules  # noqa: E402,F401  (registers routes)
