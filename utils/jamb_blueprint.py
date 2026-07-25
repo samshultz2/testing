@@ -182,6 +182,16 @@ def blueprint_for(subject_name, override=None):
     return {'total': total, 'sections': sections}
 
 
+def blueprint_total(subject_name, override=None):
+    """The number of questions a full paper for this subject should have (sum of
+    the blueprint section counts, honouring any per-mock override). 0 if the
+    subject has no JAMB blueprint. Used as the hard cap so a paper never serves
+    the whole bank when the questions aren't section-tagged."""
+    if norm_subject(subject_name) not in JAMB_BLUEPRINT:
+        return 0
+    return blueprint_for(subject_name, override)['total']
+
+
 def sections_for(subject_name):
     """The taggable sections for a subject in the bank UI: its blueprint sections
     (plus any extra catalogue entries), each ``{section, label, passage}``."""
@@ -237,6 +247,14 @@ def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrang
                     break
                 qs = list(g['questions'])
                 rng.shuffle(qs)
+                # keep the passage, but never overshoot the section target — trim the
+                # last passage's questions to the remaining need (e.g. a scraped
+                # 10-blank cloze passage under a 5-question cloze section serves 5).
+                remaining = want - taken
+                if len(qs) > remaining:
+                    qs = qs[:remaining]
+                if not qs:
+                    break
                 items.append({'kind': 'passage', 'passage': g['passage'], 'questions': qs})
                 taken += len(qs)
         else:

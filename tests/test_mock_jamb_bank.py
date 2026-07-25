@@ -312,3 +312,59 @@ def test_novel_section_draws_only_approved_novel(app):
         novels = {q.topic for q in got if q.section == 'novel'}
         assert novels == {'The Life Changer'}          # never serves Sweet Sixteen
         assert len([q for q in got if q.section == 'novel']) == 4
+
+
+def test_cloze_passage_trimmed_to_section_count(app):
+    """A scraped cloze passage with more blanks than the blueprint's cloze count is
+    trimmed to the target (5) instead of overshooting the paper (regression: 65)."""
+    from utils.mock_jamb_sitting import subject_items
+    with app.app_context():
+        _SEQ[0] += 1
+        bid = Branch.get_default().id
+        eng = Subject.query.filter_by(name='English Language').first() or Subject(name='English Language', is_active=True)
+        db.session.add(eng); db.session.flush()
+        # one cloze passage carrying TEN blanks (older scraped format)
+        pas = MockJAMBPassage(mock_exam_id=None, subject_id=eng.id, section='cloze',
+                              kind='cloze', title='Cloze', body='text', order=0)
+        db.session.add(pas); db.session.flush()
+        for i in range(10):
+            db.session.add(MockJAMBQuestion(
+                mock_exam_id=None, subject_id=eng.id, section='cloze', passage_id=pas.id,
+                question_text=f'blank {i}', option_a='a', option_b='b', option_c='c',
+                option_d='d', correct_option='A', marks=1, order=i))
+        s = AcademicSession(name=f'CLZ-{_SEQ[0]}'); db.session.add(s); db.session.flush()
+        ex = MockJAMBExam(name='Cloze mock', exam_number=1, session_id=s.id,
+                          exam_date=date(2025, 3, 1), branch_id=bid, is_published=True)
+        db.session.add(ex); db.session.flush()
+        att = MockJAMBAttempt(mock_exam_id=ex.id, student_id=1); db.session.add(att); db.session.flush()
+        items, served = subject_items(ex, eng.id, att)
+        # cloze section target is 5 -> only 5 of the 10 blanks are served
+        assert len(served) == 5
+        MockJAMBQuestion.query.filter_by(subject_id=eng.id).delete()
+        MockJAMBPassage.query.filter_by(subject_id=eng.id).delete()
+        db.session.commit()
+
+
+def test_untagged_subject_capped_to_blueprint_total(app):
+    """An untagged pool (no section tags) must NOT dump the whole bank — the legacy
+    fallback caps to the subject's blueprint total (Maths = 40)."""
+    from utils.mock_jamb_sitting import subject_items
+    with app.app_context():
+        _SEQ[0] += 1
+        bid = Branch.get_default().id
+        subj = Subject(name='Mathematics', is_active=True); db.session.add(subj); db.session.flush()
+        # 120 untagged bank questions (section left NULL) -> paper must cap at 40
+        for i in range(120):
+            db.session.add(MockJAMBQuestion(
+                mock_exam_id=None, subject_id=subj.id, section=None,
+                question_text=f'Q{i}', option_a='a', option_b='b', option_c='c',
+                option_d='d', correct_option='A', marks=1, order=i))
+        s = AcademicSession(name=f'UNT-{_SEQ[0]}'); db.session.add(s); db.session.flush()
+        ex = MockJAMBExam(name='Untagged mock', exam_number=1, session_id=s.id,
+                          exam_date=date(2025, 3, 1), branch_id=bid, is_published=True)
+        db.session.add(ex); db.session.flush()
+        att = MockJAMBAttempt(mock_exam_id=ex.id, student_id=1); db.session.add(att); db.session.flush()
+        items, served = subject_items(ex, subj.id, att)
+        assert len(served) == 40
+        MockJAMBQuestion.query.filter_by(subject_id=subj.id).delete()
+        db.session.delete(db.session.get(Subject, subj.id)); db.session.commit()
