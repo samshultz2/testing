@@ -14,6 +14,7 @@ from utils.access_control import (manage_users_required, current_manage_scope,
                                   get_current_user)
 from utils import staff_invite as svc
 from utils.audit import log_action
+from utils.security import rate_limited
 
 staff_onb_bp = Blueprint('staff_onboarding', __name__)
 
@@ -171,6 +172,8 @@ def join(token):
 
 
 @staff_onb_bp.route('/join/<token>', methods=['POST'])
+@rate_limited('staff_join', max_requests=10, window_minutes=15,
+              global_max=300, global_window_minutes=15)
 def join_submit(token):
     inv = _load_invite(token)
     if not inv or not inv.usable:
