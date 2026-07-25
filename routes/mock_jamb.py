@@ -1755,17 +1755,32 @@ def bank_assign_novel():
         flash('Choose a subject first.', 'error')
         return redirect(_bank_url(subject_id))
     novel = (request.form.get('novel_title') or '').strip()
-    q = MockJAMBQuestion.query.filter_by(
-        subject_id=subject_id, mock_exam_id=None, section='novel')
-    if request.form.get('scope') == 'untagged':
-        q = q.filter(db.or_(MockJAMBQuestion.topic.is_(None), MockJAMBQuestion.topic == ''))
+    scope = request.form.get('scope')
+    empty_topic = db.or_(MockJAMBQuestion.topic.is_(None), MockJAMBQuestion.topic == '')
+    make_novel = (scope == 'untagged_any')
+    if make_novel:
+        # Recover the note-less novel questions: any stand-alone question with no
+        # topic (e.g. "Who makes this statement?") is treated as a Novel question —
+        # move it into the Novel section and tag it with the recommended text.
+        q = (MockJAMBQuestion.query.filter_by(subject_id=subject_id, mock_exam_id=None)
+             .filter(MockJAMBQuestion.passage_id.is_(None), empty_topic))
+    else:
+        q = MockJAMBQuestion.query.filter_by(
+            subject_id=subject_id, mock_exam_id=None, section='novel')
+        if scope == 'untagged':
+            q = q.filter(empty_topic)
     n = 0
     for row in q.all():
         row.topic = novel or None
+        if make_novel:
+            row.section = 'novel'
         n += 1
     db.session.commit()
-    flash(f'Tagged {n} novel question(s) with “{novel}”.' if novel
-          else f'Cleared the novel tag on {n} question(s).', 'success')
+    if make_novel:
+        flash(f'Moved {n} untagged question(s) into the Novel section and tagged them "{novel}".', 'success')
+    else:
+        flash(f'Tagged {n} novel question(s) with "{novel}".' if novel
+              else f'Cleared the novel tag on {n} question(s).', 'success')
     return redirect(_bank_url(subject_id, 'novel'))
 
 

@@ -113,7 +113,7 @@
             {% for s in data.subject_mastery %}
             <tr>
                 <td><strong>{{ s.subject }}</strong></td>
-                <td>{{ s.items }}</td>
+                <td>{{ s["items"] }}</td>
                 <td>{{ s.served }}</td>
                 <td>{{ s.correct }}</td>
                 <td><div class="mastery-cell"><div class="mbar"><i style="width:{{ s.mastery or 0 }}%;background:{{ '#dc2626' if s.band in ('critical','weak') else '#0d9488' if s.band=='fair' else '#047857' }};"></i></div><span class="band-{{ s.band }}">{{ s.mastery if s.mastery is not none else '—' }}%</span></div></td>
@@ -133,7 +133,7 @@
             <tr>
                 <td>{{ t.subject }}</td>
                 <td><strong>{{ t.topic }}</strong></td>
-                <td>{{ t.items }}</td>
+                <td>{{ t["items"] }}</td>
                 <td>{{ t.served }}</td>
                 <td><div class="mastery-cell"><div class="mbar"><i style="width:{{ t.mastery or 0 }}%;background:{{ '#dc2626' if t.band in ('critical','weak') else '#0d9488' if t.band=='fair' else '#047857' }};"></i></div><span class="band-{{ t.band }}">{{ t.mastery if t.mastery is not none else '—' }}%</span></div></td>
                 <td><span class="band-{{ t.band }}">{{ t.band_label }}</span></td>
@@ -142,7 +142,7 @@
             <tr class="sub-row">
                 <td></td>
                 <td class="stopic"><i class="fas fa-turn-up fa-rotate-90" style="opacity:.5;"></i> {{ s.subtopic }}</td>
-                <td>{{ s.items }}</td>
+                <td>{{ s["items"] }}</td>
                 <td>{{ s.served }}</td>
                 <td><div class="mastery-cell"><div class="mbar"><i style="width:{{ s.mastery or 0 }}%;background:{{ '#dc2626' if s.band in ('critical','weak') else '#0d9488' if s.band=='fair' else '#047857' }};"></i></div><span class="band-{{ s.band }}">{{ s.mastery if s.mastery is not none else '—' }}%</span></div></td>
                 <td><span class="band-{{ s.band }}">{{ s.band_label }}</span></td>

@@ -115,11 +115,51 @@ def test_bank_comprehension_keeps_passages_whole(app):
         db.session.add(ex); db.session.flush()
         att = MockJAMBAttempt(mock_exam_id=ex.id, student_id=1); db.session.add(att); db.session.flush()
         items, served = subject_items(ex, eng.id, att)
-        # blueprint wants 15 comprehension Qs but only 10 exist → both passages drawn whole
-        assert len(served) == 10
+        # JAMB draws ONE comprehension passage (5 Qs) — one whole passage satisfies it
+        assert len(served) == 5
         passage_items = [it for it in items if it['kind'] == 'passage']
-        assert len(passage_items) == 2
+        assert len(passage_items) == 1
         assert all(len(pi['questions']) == 5 for pi in passage_items)
+
+
+def test_bank_novel_defaults_to_one_recommended_text(app):
+    """With no novel named on the mock, the draw serves questions from only ONE
+    novel (the most recent), never mixing novels from several years."""
+    from utils.mock_jamb_sitting import subject_items
+    with app.app_context():
+        _SEQ[0] += 1
+        bid = Branch.get_default().id
+        eng = Subject.query.filter_by(name='English Language').first() or Subject(name='English Language', is_active=True)
+        db.session.add(eng); db.session.flush()
+        for title, yr in [('Old Novel', '2016'), ('The Life Changer', '2024')]:
+            for i in range(10):
+                db.session.add(MockJAMBQuestion(
+                    mock_exam_id=None, subject_id=eng.id, section='novel', topic=title,
+                    exam_year=yr, question_text=f'{title} Q{i}', option_a='a', option_b='b',
+                    option_c='c', option_d='d', correct_option='A', marks=1, order=i))
+        s = AcademicSession(name=f'NOV-{_SEQ[0]}'); db.session.add(s); db.session.flush()
+        ex = MockJAMBExam(name='Nov mock', exam_number=1, session_id=s.id,
+                          exam_date=date(2025, 3, 1), branch_id=bid, is_published=True)
+        db.session.add(ex); db.session.flush()
+        att = MockJAMBAttempt(mock_exam_id=ex.id, student_id=1); db.session.add(att); db.session.flush()
+        items, served = subject_items(ex, eng.id, att)
+        topics = {db.session.get(MockJAMBQuestion, qid).topic for qid in served}
+        assert topics == {'The Life Changer'}          # only the most recent novel, not both
+
+
+def test_draw_paper_arrange_keeps_section_order():
+    """arrange=True emits sections in blueprint order (JAMB English layout) instead
+    of shuffling them together."""
+    import random
+    from utils.jamb_blueprint import draw_paper, _sec
+
+    class Q:
+        def __init__(self, s): self.id = id(self); self.section = s
+    bp = {'sections': [_sec('a', 'A', 3), _sec('b', 'B', 3)]}
+    qbs = {'a': [Q('a') for _ in range(3)], 'b': [Q('b') for _ in range(3)]}
+    items, _ = draw_paper(bp, {}, qbs, random.Random(1), arrange=True)
+    secs = [it['q'].section for it in items]
+    assert secs == ['a', 'a', 'a', 'b', 'b', 'b']       # all of A, then all of B
 
 
 # --- bank management UI + bulk import ------------------------------------

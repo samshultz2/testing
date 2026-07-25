@@ -59,18 +59,22 @@ JAMB_BLUEPRINT = {
     # Structure (sentence completion) + Test of Orals + questions on the
     # recommended Novel/reading text. Counts vary slightly by year and are
     # editable per mock; they sum to 60 here.
+    # Real UTME Use of English (60), in the order JAMB presents them:
+    # Section A — Comprehension (1 passage, 5) + Cloze (1 passage, 10) + the
+    # Reading text / recommended Novel (10); Section B — Lexis & Structure:
+    # Sentence Interpretation (5), Antonyms (5), Synonyms (5), Sentence Completion
+    # (10); Section C — Test of Orals (10). (Confirmed against the JAMB syllabus.)
     'english language': {
         'total': 60,
         'sections': [
-            _sec('comprehension', 'Comprehension', 15, passage=True, per_passage=5),
+            _sec('comprehension', 'Comprehension', 5, passage=True, per_passage=5),
             _sec('cloze', 'Cloze passage', 10, passage=True, per_passage=10),
-            _sec('sentence_interpretation', 'Sentence Interpretation', 6),
-            _sec('antonyms', 'Antonyms', 4),
-            _sec('synonyms', 'Synonyms', 4),
-            _sec('lexis_structure', 'Lexis & Structure', 3),
-            _sec('registers', 'Registers', 3),
-            _sec('oral', 'Test of Orals', 5),
-            _sec('novel', 'Recommended Novel', 10),
+            _sec('novel', 'Recommended Novel / reading text', 10),
+            _sec('sentence_interpretation', 'Sentence Interpretation', 5),
+            _sec('antonyms', 'Antonyms', 5),
+            _sec('synonyms', 'Synonyms', 5),
+            _sec('lexis_structure', 'Sentence Completion (Lexis & Structure)', 10),
+            _sec('oral', 'Test of Orals', 10),
         ],
     },
     'mathematics': {
@@ -142,7 +146,10 @@ DEFAULT_BLUEPRINT = {'total': 40, 'sections': [_sec('general', 'General', 40)]}
 # richer catalogue than their (flat) draw blueprint so questions can still be
 # tagged meaningfully.
 _EXTRA_SECTIONS = {
-    'english language': [_sec('summary', 'Summary', 0)],   # registers now a real blueprint section
+    # JAMB folds register vocabulary into Lexis & Structure (no separate slot), so
+    # 'registers' and 'summary' are taggable extras at count 0 — give them a per-mock
+    # count if you want them drawn as their own section.
+    'english language': [_sec('summary', 'Summary', 0), _sec('registers', 'Registers', 0)],
     'economics': [_sec('micro', 'Microeconomics', 0), _sec('macro', 'Macroeconomics', 0),
                   _sec('development', 'Development & public finance', 0),
                   _sec('international', 'International economics', 0)],
@@ -200,15 +207,19 @@ def section_label(subject_name, section):
     return (section or 'General').replace('_', ' ').title()
 
 
-def draw_paper(blueprint, passages_by_section, questions_by_section, rng):
+def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrange=False):
     """Draw a JAMB-shaped paper for one subject.
 
     ``passages_by_section``: ``{section: [{'passage': p, 'questions': [q,...]}]}``
     ``questions_by_section``: ``{section: [q, ...]}`` (stand-alone questions)
     ``rng``: a seeded ``random.Random`` (per candidate → per-student papers).
+    ``arrange``: keep the paper in blueprint *section order* (Comprehension →
+    Cloze → … → Orals) instead of shuffling sections together — JAMB presents Use
+    of English this way. Per-candidate variety still comes from which questions are
+    sampled and the per-question option shuffle, so papers stay unique.
 
     Returns ``(items, served_ids)`` where items are ``{'kind':'passage', 'passage', 'questions'}``
-    or ``{'kind':'question', 'q'}`` in a shuffled order (passages kept whole).
+    or ``{'kind':'question', 'q'}`` (passages kept whole).
     Sections short of stock draw whatever is available.
     """
     items = []
@@ -232,7 +243,8 @@ def draw_paper(blueprint, passages_by_section, questions_by_section, rng):
             rng.shuffle(pool)
             for q in pool[:want]:
                 items.append({'kind': 'question', 'q': q})
-    rng.shuffle(items)
+    if not arrange:
+        rng.shuffle(items)
     served = set()
     for it in items:
         if it['kind'] == 'passage':

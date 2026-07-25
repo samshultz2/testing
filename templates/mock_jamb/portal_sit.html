@@ -44,7 +44,6 @@
         <div style="flex:1;min-width:130px;"><strong>{{ exam.display_name }}</strong><div class="mjs-answered"><span id="ansCount">0</span> answered</div></div>
         <div class="timer" id="timer" data-remaining="{{ remaining }}">--:--</div>
         {% if show_calc %}<button type="button" class="btn btn-secondary btn-sm" id="calcToggle"><i class="fas fa-calculator"></i> Calculator</button>{% endif %}
-        <button type="button" class="btn btn-warning btn-sm" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit</button>
     </div>
 
     <div class="mjs-tabs" id="tabs">
@@ -65,12 +64,17 @@
         {% for qd in g.questions %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
         {% endfor %}
         {% for qd in s.standalone %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+
+        {# JAMB flow: advance through subjects; Submit appears only on the last one #}
+        <div style="text-align:center;margin-top:1.2rem;">
+        {% if loop.last %}
+            <button type="button" class="btn btn-primary mjs-submit" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit my answers</button>
+        {% else %}
+            <button type="button" class="btn btn-primary mjs-next" data-next="s{{ subjects[loop.index].subject.id }}">Next: {{ subjects[loop.index].subject.name }} <i class="fas fa-arrow-right"></i></button>
+        {% endif %}
+        </div>
     </div>
     {% endfor %}
-
-    <div style="text-align:center;margin-top:1rem;">
-        <button type="button" class="btn btn-primary" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit my answers</button>
-    </div>
 </div>
 
 <form method="post" id="submitForm" action="{{ url_for('mock_jamb_portal.portal_submit', exam_id=exam.id) }}" style="display:none;">
@@ -247,8 +251,16 @@
         try { localStorage.removeItem(LSKEY); } catch(_){}
         document.getElementById('submitForm').submit();
     }
-    document.getElementById('submitBtn').addEventListener('click', function(){ doSubmit(false); });
-    document.getElementById('submitBtn2').addEventListener('click', function(){ doSubmit(false); });
+    var sb2 = document.getElementById('submitBtn2');
+    if(sb2) sb2.addEventListener('click', function(){ doSubmit(false); });
+    // "Next subject" buttons advance the active tab (Submit shows only on the last)
+    function activateTab(id){
+        var t = document.querySelector('.mjs-tab[data-subject="' + id + '"]');
+        if(t) t.click();
+    }
+    document.querySelectorAll('.mjs-next').forEach(function(b){
+        b.addEventListener('click', function(){ activateTab(b.dataset.next); });
+    });
 
     // ---- discourage copying during the exam (best-effort — cannot stop a
     // screenshot, but blocks copy/cut/paste, right-click and text selection so a

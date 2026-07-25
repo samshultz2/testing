@@ -143,6 +143,25 @@ def _blueprint_override(exam, subject_name):
     return ov if isinstance(ov, dict) else None
 
 
+def _default_novel(novel_questions):
+    """When a mock doesn't name a novel, pick ONE recommended text so a paper never
+    mixes novels: the title (question ``topic``) with the most recent ``exam_year``,
+    tie-broken by how many questions carry it."""
+    agg = {}
+    for q in novel_questions:
+        title = (q.topic or '').strip()
+        if not title:
+            continue
+        y = str(q.exam_year or '').strip()[:4]
+        yr = int(y) if y.isdigit() else 0
+        a = agg.setdefault(title, {'max_year': 0, 'count': 0})
+        a['max_year'] = max(a['max_year'], yr)
+        a['count'] += 1
+    if not agg:
+        return None
+    return max(agg.items(), key=lambda kv: (kv[1]['max_year'], kv[1]['count']))[0]
+
+
 def _subject_pool(exam, subject_id):
     """(passages, questions) available to this mock for one subject — the shared
     bank plus any legacy in-exam rows — ordered deterministically."""
@@ -204,7 +223,12 @@ def subject_items(exam, subject_id, attempt):
         # tagged with the novel in their ``topic``. If the mock names no novel, any
         # novel question is eligible.
         novel = (getattr(exam, 'novel_title', None) or '').strip().lower()
-        if novel and questions_by_section.get('novel'):
+        nq = questions_by_section.get('novel')
+        # never mix novels from several years: use the mock's named novel, else
+        # default to the most recent recommended text present in the pool.
+        if not novel and nq:
+            novel = (_default_novel(nq) or '').strip().lower()
+        if novel and nq:
             def _novel_match(q):
                 # tolerant match: the mock's title and the question's novel tag
                 # line up if either contains the other (so "The Life Changer"
@@ -213,7 +237,8 @@ def subject_items(exam, subject_id, attempt):
                 return bool(t) and (novel in t or t in novel)
             questions_by_section['novel'] = [
                 q for q in questions_by_section['novel'] if _novel_match(q)]
-        items, served = draw_paper(bp, passages_by_section, questions_by_section, rng)
+        items, served = draw_paper(bp, passages_by_section, questions_by_section, rng,
+                                   arrange=_is_english(subj_name))
         if served:
             return items, served
         # blueprint drew nothing (mis-tagged) → fall through to legacy
