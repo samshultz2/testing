@@ -564,6 +564,33 @@ def test_harvest_literature_novel_note_maps_to_prose(app, monkeypatch):
         assert q.topic == 'Kossoh Town Boy'
 
 
+def test_harvest_caps_overlong_topic(app, monkeypatch):
+    """A very long novel/set-text title is trimmed to the topic column's limit so
+    the INSERT never overflows VARCHAR(100) and pauses the whole harvest."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import myschool_harvest as mh
+
+    long_title = 'A ' + 'Very ' * 40 + 'Long Novel Title'   # > 100 chars
+    note = f'This question is based on the recommended novel , "{long_title}"'
+    monkeypatch.setattr(ms, 'list_ids_and_texts', lambda *a, **k: (['811'], {}))
+    monkeypatch.setattr(ms, 'fetch', lambda url, sess, **k:
+                        _fixture('Who is the protagonist?', instruction=note))
+
+    with app.app_context():
+        s = Subject(name='HarvestCapTopic', is_active=True); db.session.add(s); db.session.commit()
+        sid = s.id
+        mh.start_harvest([{'id': sid, 'name': 'English Language'}], exam='jamb',
+                         year_min=2025, year_max=2025)
+        for _ in range(3):
+            st = mh.harvest_step(max_questions=6)
+            if st['status'] == 'done':
+                break
+        assert st['status'] == 'done' and not st['last_error']    # no truncation crash
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, source='myschool').first()
+        assert q is not None and len(q.topic) <= 100
+
+
 def test_harvest_rehosts_inline_base64_figure(app, monkeypatch):
     """A figure delivered as an inline base64 data URI is decoded, re-hosted
     locally, and the question is kept in the pool (not flagged needs_image)."""

@@ -20,6 +20,23 @@ from datetime import datetime
 _KEY = 'mj_myschool_harvest'
 
 
+def _cap(value, n):
+    """Trim a string to a column's length so a long title (e.g. a Literature set
+    text or a note-derived novel name up to ~140 chars) never blows up an INSERT
+    into a bounded VARCHAR and pauses the whole harvest."""
+    return value[:n] if isinstance(value, str) else value
+
+
+# The exam-body label stored on each question, so the bank's exam-type filter can
+# tell a JAMB download from a WAEC/NECO one (the scraper's exam key -> a label).
+_EXAM_BODY = {'jamb': 'JAMB', 'waec': 'WAEC', 'neco': 'NECO', 'post-utme': 'Post-UTME'}
+
+
+def _exam_body(exam):
+    key = (exam or 'jamb').strip().lower()
+    return _EXAM_BODY.get(key, key.upper() or 'JAMB')
+
+
 def get_state():
     from models import SchoolSettings
     return SchoolSettings.get(_KEY, None)
@@ -196,12 +213,16 @@ def _process_one(cell, qid, state, session):
             .filter(MockJAMBQuestion.mock_exam_id.is_(None),
                     MockJAMBQuestion.subject_id == sid).scalar())
     db.session.add(MockJAMBQuestion(
-        mock_exam_id=None, subject_id=sid, section=sec, exam_body='JAMB',
+        mock_exam_id=None, subject_id=sid, section=_cap(sec, 40),
+        exam_body=_exam_body(state.get('exam')),
         passage_id=(passage.id if passage else None),
-        question_text=p['stem'], option_a=p['options'][0], option_b=p['options'][1],
-        option_c=p['options'][2], option_d=p['options'][3], correct_option=p['correct'],
-        marks=1, topic=top, subtopic=sub, exam_year=str(cell['year']),
-        source='myschool', source_ref=str(qid), image_url=image_url,
+        question_text=p['stem'],
+        option_a=_cap(p['options'][0], 400), option_b=_cap(p['options'][1], 400),
+        option_c=_cap(p['options'][2], 400), option_d=_cap(p['options'][3], 400),
+        correct_option=_cap(p['correct'], 1),
+        marks=1, topic=_cap(top, 100), subtopic=_cap(sub, 120),
+        exam_year=_cap(str(cell['year']), 8),
+        source='myschool', source_ref=_cap(str(qid), 40), image_url=_cap(image_url, 300),
         needs_image=needs_image, order=base + 1))
     db.session.commit()
     state['added'] += 1

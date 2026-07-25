@@ -1241,6 +1241,31 @@ def bank_analytics():
                            index_url=url_for('mock_jamb.index'))
 
 
+@mock_jamb_bp.route('/bank/retag', methods=['POST'])
+@login_required
+def bank_retag():
+    """Auto-tag a subject's untagged bank questions: run the keyword classifier and
+    fill in topic/sub-topic (and a missing section) wherever it's confident."""
+    from utils.mock_bank_retag import retag_untagged
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Pick a subject first.', 'error')
+        return redirect(url_for('mock_jamb.bank_analytics'))
+    res = retag_untagged(subject)
+    if res['topic_set']:
+        msg = f"Auto-tagged {res['topic_set']} question(s) in {subject.name}"
+        if res['section_set']:
+            msg += f" ({res['section_set']} also got a section)"
+        if res['still_untagged']:
+            msg += f". {res['still_untagged']} still can't be matched — extend the subject's syllabus keywords or tag them by hand."
+        flash(msg + '.', 'success')
+    else:
+        flash(f"No untagged {subject.name} question matched the syllabus keywords — "
+              f"nothing changed. These need richer syllabus keywords or manual tagging.", 'info')
+    return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
+
+
 def _valid_section(subject, section):
     from utils.jamb_blueprint import sections_for
     keys = {s['section'] for s in sections_for(subject.name)}

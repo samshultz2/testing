@@ -416,6 +416,10 @@ def _tokens(text):
     return out
 
 
+from functools import lru_cache
+
+
+@lru_cache(maxsize=64)
 def _build_index(subject):
     key = norm_subject(subject)
     syl = FULL_SYLLABUS.get(key)
@@ -478,6 +482,37 @@ def classify(subject, text, year=None, novel_title=None):
     if not sections:
         return (None, None, None)
     return (sections[sum(ord(c) for c in (text or "")) % len(sections)], None, None)
+
+
+def classify_confident(subject, text, year=None, novel_title=None):
+    """Like ``classify`` but returns a match ONLY on a genuine keyword hit — no
+    hash-based section fallback. Returns ``(section, topic, subtopic)`` or
+    ``(None, None, None)`` when nothing matched. Used by the bank auto-tagger so a
+    question is never given a made-up topic/section it doesn't actually belong to."""
+    index = _build_index(subject)
+    if not index:
+        return (None, None, None)
+    low = (text or "").lower()
+    toks = set(_tokens(text))
+    best, best_score = None, 0
+    for section, topic, sub, kws in index:
+        score = 0
+        for kw in kws:
+            if " " in kw:
+                if kw in low:
+                    score += 3
+            elif kw in toks:
+                score += 1
+        if score > best_score:
+            best_score, best = score, (section, topic, sub)
+    if not (best and best_score > 0):
+        return (None, None, None)
+    section, topic, sub = best
+    if section == "novel" and topic == "Recommended Novel":
+        nv = (novel_title or "").strip() or novel_for_year(year)
+        if nv:
+            topic = nv
+    return (section, topic, sub)
 
 
 # ===========================================================================
