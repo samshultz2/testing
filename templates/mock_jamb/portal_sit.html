@@ -222,23 +222,30 @@
         updateCount();
     })();
 
-    // timer
+    // timer — driven by a wall-clock deadline, not a decrementing counter, so it
+    // stays accurate even if the tab is backgrounded (setInterval/Timeout throttles
+    // while hidden). The moment real time elapses, the paper submits itself.
     var timer = document.getElementById('timer');
-    var remaining = parseInt(timer.dataset.remaining, 10) || 0;
+    var deadline = Date.now() + (parseInt(timer.dataset.remaining, 10) || 0) * 1000;
     function tick(){
+        var remaining = Math.round((deadline - Date.now()) / 1000);
+        if(remaining <= 0){ timer.textContent = '00:00'; doSubmit(true); return; }
         var m = Math.floor(remaining/60), s = remaining%60;
         timer.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
         if(remaining <= 60) timer.classList.add('warn');
-        if(remaining <= 0){ doSubmit(true); return; }
-        remaining--; setTimeout(tick, 1000);
     }
     tick();
+    var timerInt = setInterval(tick, 1000);
+    // when the tab regains focus after being hidden, re-check immediately (a
+    // throttled background timer may not have fired at the true deadline)
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) tick(); });
 
     var submitted = false;
     function doSubmit(auto){
         if(submitted) return;
         if(!auto && !window.confirm('Submit your answers? You will not be able to change them.')) return;
         submitted = true;
+        try { clearInterval(timerInt); } catch(_){}
         // Best-effort final flush of anything still queued, as ONE batch via
         // sendBeacon so it survives the navigation that submitting triggers.
         try {
