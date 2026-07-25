@@ -42,6 +42,7 @@ from .models_cbt import (CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolati
                          QuestionBank, CBTLoginEvent, CBTDeviceSession, SyllabusTopic)
 from .models_scratchcard import ScratchCard, ResultCheckLog
 from .models_branch import Branch
+from .staff_onboarding import StaffInvite, StaffSignup
 from .models_sales import (Product, Sale, SaleItem, StockMovement, Supplier,
                            PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                            StockAudit, StockAuditItem, FixedAsset, StockBatch)

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Staff Invite Links - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('users.index') }}">Users</a> / <span>Invite links</span>{% endblock %}
+{% block extra_css %}
+<style>
+.inv-link{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.inv-link input{flex:1;min-width:220px;font-size:.82rem;font-family:monospace;padding:.35rem .5rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--gray-50)}
+.pill{font-size:.68rem;font-weight:700;padding:.08rem .5rem;border-radius:var(--radius-full)}
+.pill-on{background:rgba(4,120,87,.12);color:#047857}.pill-off{background:var(--gray-100);color:var(--text-muted)}
+.pend{border:1px solid var(--border-color);border-left:4px solid #b45309;border-radius:var(--radius-md);padding:.6rem .8rem;margin-bottom:.6rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Staff invite links</h1>
+        <p class="text-muted text-sm">Generate a link and send it to your staff (e.g. one link to all your branch principals). They fill in their details &amp; password; you approve, and they get their role's permissions over their branch — no manual account creation.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('users.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Users</a>
+    </div>
+</div>
+
+{# ---- Pending approvals ---- #}
+<div class="card" style="margin-bottom:1rem;{% if pending %}border-left:4px solid #b45309;{% endif %}">
+    <div class="card-header"><h3><i class="fas fa-user-clock"></i> Pending approvals ({{ pending|length }})</h3></div>
+    <div class="card-body">
+        {% for s in pending %}
+        <div class="pend" style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+                <strong>{{ s.full_name or s.username }}</strong> <span class="text-muted text-sm">@{{ s.username }}</span>
+                <div class="text-sm text-muted">
+                    {{ s.position or (s.invite.role if s.invite else 'staff')|title }}
+                    {% if s.branch %} · {{ s.branch.name }}{% endif %}
+                    {% if s.invite and s.invite.permission_group %} · group: {{ s.invite.permission_group.name }}{% endif %}
+                    {% if s.email %} · {{ s.email }}{% endif %}{% if s.phone %} · {{ s.phone }}{% endif %}
+                </div>
+            </div>
+            <form method="post" action="{{ url_for('staff_onboarding.review_signup', signup_id=s.id, action='approve') }}" style="display:inline;">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-success btn-sm"><i class="fas fa-check"></i> Approve</button>
+            </form>
+            <form method="post" action="{{ url_for('staff_onboarding.review_signup', signup_id=s.id, action='reject') }}" style="display:inline;" data-confirm="Reject this signup?">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-danger btn-sm"><i class="fas fa-xmark"></i> Reject</button>
+            </form>
+        </div>
+        {% else %}
+        <p class="text-muted text-sm" style="margin:0;">No one is waiting for approval.</p>
+        {% endfor %}
+    </div>
+</div>
+
+{# ---- Create a link ---- #}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-link"></i> Create an invite link</h3></div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('staff_onboarding.create_invite') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group" style="flex:1;min-width:200px;"><label class="form-label">Label <span class="text-muted text-sm">(for you)</span></label>
+                    <input type="text" name="label" class="form-control" placeholder="e.g. Branch Principals 2026"></div>
+                <div class="form-group"><label class="form-label">Role granted</label>
+                    <select name="role" class="form-control">
+                        {% for r in roles %}<option value="{{ r }}">{{ r|replace('_',' ')|title }}</option>{% endfor %}
+                    </select></div>
+                <div class="form-group"><label class="form-label">Permission group</label>
+                    <select name="permission_group_id" class="form-control">
+                        <option value="">— None (role default) —</option>
+                        {% for g in groups %}<option value="{{ g.id }}">{{ g.name }}{% if g.branch_id %} (branch){% endif %}</option>{% endfor %}
+                    </select></div>
+            </div>
+            <div class="form-row" style="align-items:flex-end;">
+                {% if is_central %}
+                <div class="form-group"><label class="form-label">Branch</label>
+                    <select name="branch_id" class="form-control" id="invBranch">
+                        <option value="">— Joiner chooses —</option>
+                        {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+                    </select></div>
+                <div class="form-group"><label class="form-label">Scope</label>
+                    <select name="scope" class="form-control">
+                        <option value="branch">Branch (limited to their branch)</option>
+                        <option value="central">Central (sees all branches)</option>
+                    </select></div>
+                {% endif %}
+                <div class="form-group"><label class="form-label">Max uses <span class="text-muted text-sm">(blank = ∞)</span></label>
+                    <input type="number" name="max_uses" class="form-control" min="1" style="max-width:110px;" placeholder="∞"></div>
+                <div class="form-group"><label class="form-label">Expires in (days)</label>
+                    <input type="number" name="expires_days" class="form-control" min="1" value="14" style="max-width:120px;"></div>
+                <div class="form-group"><button class="btn btn-primary"><i class="fas fa-plus"></i> Generate link</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ---- Existing links ---- #}
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-list"></i> Your invite links</h3></div>
+    <div class="card-body">
+        {% for i in invites %}
+        <div style="padding:.6rem 0;border-bottom:1px solid var(--border-color);">
+            <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.35rem;">
+                <strong>{{ i.label or (i.role|replace('_',' ')|title + ' invite') }}</strong>
+                <span class="pill {{ 'pill-on' if i.usable else 'pill-off' }}">{{ 'Active' if i.usable else ('Inactive' if not i.is_active else ('Expired' if i.expired else 'Used up')) }}</span>
+                <span class="text-sm text-muted">{{ i.role|replace('_',' ')|title }}{% if i.branch %} · {{ i.branch.name }}{% else %} · joiner picks branch{% endif %}{% if i.permission_group %} · {{ i.permission_group.name }}{% endif %}</span>
+                <span class="text-sm text-muted" style="margin-left:auto;">{{ i.uses or 0 }}{% if i.max_uses %}/{{ i.max_uses }}{% endif %} used{% if i.expires_at %} · expires {{ i.expires_at.strftime('%d %b %Y') }}{% endif %}</span>
+            </div>
+            <div class="inv-link">
+                <input type="text" readonly value="{{ url_for('staff_onboarding.join', token=i.token, _external=True) }}" data-copy>
+                <button type="button" class="btn btn-secondary btn-sm mjs-copy" data-token="{{ i.token }}"><i class="fas fa-copy"></i> Copy</button>
+                <form method="post" action="{{ url_for('staff_onboarding.toggle_invite', invite_id=i.id) }}" style="display:inline;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn {{ 'btn-danger' if i.is_active else 'btn-success' }} btn-sm">{{ 'Deactivate' if i.is_active else 'Activate' }}</button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted text-sm" style="margin:0;">No invite links yet — create one above.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+document.querySelectorAll('.mjs-copy').forEach(function(b){
+    b.addEventListener('click', function(){
+        var inp = b.parentNode.querySelector('input[data-copy]');
+        inp.select();
+        try { navigator.clipboard.writeText(inp.value); } catch(_) { document.execCommand('copy'); }
+        var t = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> Copied';
+        setTimeout(function(){ b.innerHTML = t; }, 1500);
+    });
+});
+</script>
+{% endblock %}

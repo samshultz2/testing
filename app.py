@@ -7,7 +7,7 @@ import secrets
 from flask import Flask, session, Response
 from config import Config, get_config
 from models import db, init_db
-from routes import auth_bp, main_bp, academics_bp, attendance_bp, results_bp, reports_bp, settings_bp, subjects_bp, timetable_bp, promotion_bp, users_bp
+from routes import auth_bp, main_bp, academics_bp, attendance_bp, results_bp, reports_bp, settings_bp, subjects_bp, timetable_bp, promotion_bp, users_bp, staff_onb_bp
 from routes.generator import generator_bp
 from routes.contributions import contributions_bp
 from routes.mock_jamb import mock_jamb_bp, mock_jamb_portal_bp
@@ -214,6 +214,7 @@ def create_app(config_class=None):
     app.register_blueprint(mock_jamb_portal_bp)
     app.register_blueprint(mock_waec_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(staff_onb_bp)
     app.register_blueprint(finance_bp)
     app.register_blueprint(comms_bp)
     app.register_blueprint(hr_bp)

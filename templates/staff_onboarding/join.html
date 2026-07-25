@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Join {{ school }} — Staff sign-up</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+  <style>
+    .join-wrap{max-width:520px;margin:2.2rem auto;padding:0 1rem}
+    .join-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:1.4rem 1.5rem;box-shadow:0 8px 30px rgba(0,0,0,.06)}
+    .join-card h1{font-size:1.35rem;margin:0 0 .2rem}
+    .role-chip{display:inline-block;background:#eef2ff;color:#4338ca;font-weight:700;font-size:.75rem;padding:.15rem .6rem;border-radius:999px;margin-bottom:.8rem}
+    .fg{margin-bottom:.7rem}
+    .fg label{display:block;font-size:.82rem;font-weight:600;margin-bottom:.25rem}
+    .fg input,.fg select{width:100%;padding:.55rem .65rem;border:1px solid #d1d5db;border-radius:9px;font-size:.95rem}
+    .flash{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:.5rem .7rem;border-radius:9px;font-size:.85rem;margin-bottom:.8rem}
+    .muted{color:#6b7280;font-size:.82rem}
+    .btn-go{width:100%;background:#4f46e5;color:#fff;border:0;padding:.7rem;border-radius:10px;font-weight:700;font-size:1rem;cursor:pointer;margin-top:.3rem}
+  </style>
+</head>
+<body style="background:#f6f7fb;">
+  <div class="join-wrap">
+    <div class="join-card">
+      <span class="role-chip"><i class="fas fa-id-badge"></i> {{ invite.role|replace('_',' ')|title }}{% if invite.branch %} · {{ invite.branch.name }}{% endif %}</span>
+      <h1>Join {{ school }}</h1>
+      <p class="muted" style="margin-top:.1rem;">Fill in your details and choose a password. Your access is granted once an administrator approves you.</p>
+      {% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
+      <form method="post" action="{{ url_for('staff_onboarding.join', token=invite.token) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="fg"><label>Full name</label><input name="full_name" required value="{{ (form.full_name if form else '') or '' }}"></div>
+        <div class="fg"><label>Position / title <span class="muted">(optional)</span></label><input name="position" placeholder="e.g. Principal" value="{{ (form.position if form else '') or '' }}"></div>
+        {% if not invite.branch %}
+        <div class="fg"><label>Your branch</label>
+          <select name="branch_id" {{ 'required' if invite.scope != 'central' else '' }}>
+            <option value="">— Select your branch —</option>
+            {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if form and form.branch_id == b.id|string else '' }}>{{ b.name }}</option>{% endfor %}
+          </select></div>
+        {% endif %}
+        <div class="fg"><label>Username <span class="muted">(you'll log in with this)</span></label><input name="username" required value="{{ (form.username if form else '') or '' }}"></div>
+        <div class="fg"><label>Email <span class="muted">(optional)</span></label><input type="email" name="email" value="{{ (form.email if form else '') or '' }}"></div>
+        <div class="fg"><label>Phone <span class="muted">(optional)</span></label><input name="phone" value="{{ (form.phone if form else '') or '' }}"></div>
+        <div class="fg"><label>Password <span class="muted">(min 8 characters)</span></label><input type="password" name="password" required minlength="8"></div>
+        <button type="submit" class="btn-go">Submit for approval</button>
+      </form>
+    </div>
+    <p class="muted" style="text-align:center;margin-top:1rem;">Powered by EduSyncra</p>
+  </div>
+</body>
+</html>

@@ -359,7 +359,7 @@ def ensure_tables(bind=None):
                         SiteViewDaily, SiteReferrerDaily, SiteVisitorDaily,
                         HolidayAssignment, NewsPost,
                         StaffLoan, LoanGuarantor, LoanRepayment)
-    from models import TermAssessmentSetting
+    from models import TermAssessmentSetting, StaffInvite, StaffSignup
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
@@ -378,7 +378,8 @@ def ensure_tables(bind=None):
               SiteViewDaily.__table__, SiteReferrerDaily.__table__,
               SiteVisitorDaily.__table__, HolidayAssignment.__table__,
               NewsPost.__table__, StaffLoan.__table__, LoanGuarantor.__table__,
-              LoanRepayment.__table__, TermAssessmentSetting.__table__]
+              LoanRepayment.__table__, TermAssessmentSetting.__table__,
+              StaffInvite.__table__, StaffSignup.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

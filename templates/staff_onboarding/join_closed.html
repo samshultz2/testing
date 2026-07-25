@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invite link unavailable</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <style>
+    body{background:#f6f7fb;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:0}
+    .wrap{max-width:460px;margin:3rem auto;padding:0 1rem;text-align:center}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:2rem 1.5rem;box-shadow:0 8px 30px rgba(0,0,0,.06)}
+    .ico{width:64px;height:64px;border-radius:50%;background:#fef2f2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:1.7rem;margin:0 auto 1rem}
+    h1{font-size:1.25rem;margin:.2rem 0}
+    p{color:#4b5563;line-height:1.5}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="ico"><i class="fas fa-link-slash"></i></div>
+      <h1>This invite link is {{ reason }}</h1>
+      <p>Please ask your administrator for a new sign-up link.</p>
+    </div>
+  </div>
+</body>
+</html>
