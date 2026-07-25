@@ -20,15 +20,18 @@ def _cap(v, n):
     return v[:n] if isinstance(v, str) else v
 
 
-def _base_query(subject, mode):
-    from models import MockJAMBQuestion
-    q = MockJAMBQuestion.query.filter(
+def _target_ids(subject, mode):
+    """Primary keys of the bank questions to (re)tag, fully materialised up front —
+    so we never hold a server-side cursor open across the per-chunk commits (which
+    would invalidate it: psycopg InvalidCursorName)."""
+    from models import db, MockJAMBQuestion
+    q = db.session.query(MockJAMBQuestion.id).filter(
         MockJAMBQuestion.subject_id == subject.id,
         MockJAMBQuestion.mock_exam_id.is_(None),
         MockJAMBQuestion.passage_id.is_(None))       # never re-tag passage-bound questions
     if mode != 'all':
         q = q.filter((MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == ''))
-    return q.order_by(MockJAMBQuestion.id)
+    return [row[0] for row in q.order_by(MockJAMBQuestion.id).all()]
 
 
 def untagged_count(subject):
@@ -62,31 +65,30 @@ def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=F
     valid_sections = {s['section'] for s in sections_for(subject.name)}
     draw_sections = _drawable_sections(subject)
 
+    ids = _target_ids(subject, mode)
     scanned = topic_set = section_set = section_ensured = 0
-    pending = 0
-    for row in _base_query(subject, mode).yield_per(batch):
-        scanned += 1
-        text = ' '.join(filter(None, [
-            row.question_text, row.option_a, row.option_b, row.option_c, row.option_d]))
-        sec, top, sub = ms.classify_confident(subject.name, text, year=row.exam_year)
-        if top:
-            row.topic = _cap(top, 100)
-            row.subtopic = _cap(sub, 120) if sub else None
-            topic_set += 1
-            if fill_section and (row.section not in valid_sections) and sec in valid_sections:
-                row.section = sec
-                section_set += 1
-            pending += 1
-        # last resort (opt-in): make an unmatched question drawable by giving it a
-        # valid section, chosen deterministically so re-runs are stable
-        if ensure_section and (row.section not in valid_sections) and draw_sections:
-            row.section = draw_sections[sum(ord(c) for c in text) % len(draw_sections)]
-            section_ensured += 1
-            pending += 1
-        if pending >= batch:
-            db.session.commit()
-            pending = 0
-    if pending:
+    # Process in id-chunks, committing after each — never stream a server-side
+    # cursor across commits (that invalidates it on Postgres).
+    for start in range(0, len(ids), batch):
+        chunk = ids[start:start + batch]
+        rows = MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(chunk)).all()
+        for row in rows:
+            scanned += 1
+            text = ' '.join(filter(None, [
+                row.question_text, row.option_a, row.option_b, row.option_c, row.option_d]))
+            sec, top, sub = ms.classify_confident(subject.name, text, year=row.exam_year)
+            if top:
+                row.topic = _cap(top, 100)
+                row.subtopic = _cap(sub, 120) if sub else None
+                topic_set += 1
+                if fill_section and (row.section not in valid_sections) and sec in valid_sections:
+                    row.section = sec
+                    section_set += 1
+            # last resort (opt-in): make an unmatched question drawable by giving it a
+            # valid section, chosen deterministically so re-runs are stable
+            if ensure_section and (row.section not in valid_sections) and draw_sections:
+                row.section = draw_sections[sum(ord(c) for c in text) % len(draw_sections)]
+                section_ensured += 1
         db.session.commit()
 
     return {'scanned': scanned, 'topic_set': topic_set, 'section_set': section_set,
