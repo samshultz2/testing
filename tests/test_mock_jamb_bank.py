@@ -115,10 +115,10 @@ def test_bank_comprehension_keeps_passages_whole(app):
         db.session.add(ex); db.session.flush()
         att = MockJAMBAttempt(mock_exam_id=ex.id, student_id=1); db.session.add(att); db.session.flush()
         items, served = subject_items(ex, eng.id, att)
-        # JAMB draws ONE comprehension passage (5 Qs) — one whole passage satisfies it
-        assert len(served) == 5
+        # JAMB comprehension is 10 questions = TWO whole passages of 5, kept intact.
+        assert len(served) == 10
         passage_items = [it for it in items if it['kind'] == 'passage']
-        assert len(passage_items) == 1
+        assert len(passage_items) == 2
         assert all(len(pi['questions']) == 5 for pi in passage_items)
 
 

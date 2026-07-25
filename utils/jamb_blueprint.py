@@ -60,19 +60,20 @@ JAMB_BLUEPRINT = {
     # recommended Novel/reading text. Counts vary slightly by year and are
     # editable per mock; they sum to 60 here.
     # Real UTME Use of English (60), in the order JAMB presents them:
-    # Section A — Comprehension (1 passage, 5) + Cloze (1 passage, 10) + the
-    # Reading text / recommended Novel (10); Section B — Lexis & Structure:
-    # Sentence Interpretation (5), Antonyms (5), Synonyms (5), Sentence Completion
-    # (10); Section C — Test of Orals (10). (Confirmed against the JAMB syllabus.)
+    # Section A — Comprehension & Summary (25): Comprehension (2 passages, 10) +
+    # Cloze (1 passage, 5) + the Prescribed Reading text / recommended Novel (10).
+    # Section B — Lexis & Structure (25): Sentence Interpretation (5), Synonyms (5),
+    # Antonyms (5), Sentence Completion (10, where register questions now live).
+    # Section C — Oral English / Test of Orals (10).
     'english language': {
         'total': 60,
         'sections': [
-            _sec('comprehension', 'Comprehension', 5, passage=True, per_passage=5),
-            _sec('cloze', 'Cloze passage', 10, passage=True, per_passage=10),
+            _sec('comprehension', 'Comprehension', 10, passage=True, per_passage=5),
+            _sec('cloze', 'Cloze passage', 5, passage=True, per_passage=5),
             _sec('novel', 'Recommended Novel / reading text', 10),
             _sec('sentence_interpretation', 'Sentence Interpretation', 5),
-            _sec('antonyms', 'Antonyms', 5),
             _sec('synonyms', 'Synonyms', 5),
+            _sec('antonyms', 'Antonyms', 5),
             _sec('lexis_structure', 'Sentence Completion (Lexis & Structure)', 10),
             _sec('oral', 'Test of Orals', 10),
         ],
