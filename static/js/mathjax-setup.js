@@ -38,18 +38,27 @@
   // (Question-table styling lives in static/css/style.css so it applies even if
   // this script hasn't run.)
 
-  if (!document.getElementById('MathJax-script')) {
-    // First time on a maths page: load the library (it auto-typesets on startup).
-    // Served from our own origin — no CDN dependency (CSP 'self' covers it).
+  // Load the library at most once per page. Guard on the actual MathJax runtime
+  // (window.MathJax.startup) and a persistent "loading" flag — NOT just the DOM
+  // <script> node. A soft-navigation can remove a #MathJax-script that lived in
+  // .page-content (e.g. a CBT page's) while the library stays loaded in memory;
+  // re-adding it then re-runs MathJax's startup against an already-initialised
+  // instance and throws "Cannot set property Package … has only a getter".
+  if (window.MathJax && window.MathJax.startup) {
+    // Fully loaded already → just typeset the freshly-swapped content.
+    window.renderMath();
+  } else if (!window.__mjLoading) {
+    // First time (or the in-flight load hasn't finished): load it once. Into
+    // <head> so it survives .page-content swaps. It auto-typesets on startup.
+    window.__mjLoading = true;
     var s = document.createElement('script');
     s.id = 'MathJax-script';
     s.async = true;
     s.src = '/static/vendor/mathjax/tex-mml-chtml.js';
     document.head.appendChild(s);
-  } else {
-    // Already loaded on a previous page → typeset the just-swapped content now.
-    window.renderMath();
   }
+  // else: a load kicked off by an earlier navigation is still in flight; it will
+  // auto-typeset when it finishes — do nothing (adding it again would double-load).
 
   // After any soft navigation, re-typeset (installed once).
   if (!window.__mjSpaHook) {

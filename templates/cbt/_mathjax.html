@@ -1,13 +1,11 @@
-{# Shared MathJax loader: renders LaTeX in questions/options.
-   Teachers can write inline math as \( ... \) or $ ... $ and display
-   math as \[ ... \] — e.g. \( \sqrt{b^2-4ac} \) or $x^2+y^2=r^2$. #}
-<script nonce="{{ csp_nonce }}">
-window.MathJax = {
-  tex: { inlineMath: [['\\(', '\\)'], ['$', '$']], displayMath: [['\\[', '\\]'], ['$$', '$$']] },
-  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
-  chtml: { fontURL: '/static/vendor/mathjax/output/chtml/fonts/woff-v2' }
-};
-</script>
-{# Self-hosted MathJax (see /static/vendor/mathjax) — no CDN dependency, so it
-   works offline and on networks that block jsdelivr. #}
-<script id="MathJax-script" async src="{{ url_for('static', filename='vendor/mathjax/tex-mml-chtml.js') }}"></script>
+{# Shared MathJax loader for CBT: renders LaTeX in questions/options. Teachers can
+   write inline math as \( ... \) or $ ... $ and display math as \[ ... \] or
+   $$ ... $$ — e.g. \( \sqrt{b^2-4ac} \) or $x^2+y^2=r^2$.
+
+   All logic lives in an external 'self' script so it survives the admin's
+   soft-navigation SPA (an inline <script nonce> re-added after a .page-content
+   swap loses its nonce and is CSP-blocked) and loads the heavy library exactly
+   once — re-executing a static <script id="MathJax-script"> on a soft nav
+   re-initialises MathJax and throws "Cannot set property Package". See
+   static/js/mathjax-setup-cbt.js. #}
+<script src="{{ url_for('static', filename='js/mathjax-setup-cbt.js') }}"></script>
