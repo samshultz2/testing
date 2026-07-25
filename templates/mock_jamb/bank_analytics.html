@@ -58,19 +58,25 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
     {% if data.untagged %}<div class="ba-kpi"><div class="v" style="color:#b45309;">{{ data.untagged }}</div><div class="l">Untagged (no topic)</div></div>{% endif %}
 </div>
 
-{% if data.untagged %}
-<div class="card" style="margin-bottom:1rem;border-left:4px solid #b45309;">
-    <div class="card-body" style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
-        <i class="fas fa-wand-magic-sparkles" style="color:#b45309;font-size:1.15rem;"></i>
-        <span class="text-sm"><strong>{{ data.untagged }}</strong> {{ subject.name }} question(s) have no topic. Auto-tag runs the syllabus keyword classifier and fills in the topic/sub-topic (and a missing section) wherever it's a confident match — it never invents a tag or overwrites an existing one.</span>
-        <form method="post" action="{{ url_for('mock_jamb.bank_retag') }}" style="margin-left:auto;">
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
+    <div class="card-header"><h3><i class="fas fa-wand-magic-sparkles"></i> Auto-tag with the syllabus classifier</h3></div>
+    <div class="card-body">
+        <p class="text-sm text-muted" style="margin-top:0;">Runs the keyword classifier over {{ subject.name }}'s bank and fills topic/sub-topic (and a missing section) on a confident match. {% if data.untagged %}<strong>{{ data.untagged }}</strong> question(s) currently have no topic.{% else %}Every question currently has a topic.{% endif %}</p>
+        <form method="post" action="{{ url_for('mock_jamb.bank_retag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
-            <button class="btn btn-warning btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Auto-tag untagged</button>
+            <div class="form-group mb-0"><label class="form-label">Scope</label>
+                <select name="mode" class="form-control" style="max-width:320px;">
+                    <option value="untagged">Untagged only — fill in the blanks (safe)</option>
+                    <option value="all">Re-classify all — upgrade existing tags with improved keywords</option>
+                </select></div>
+            <label class="text-sm" style="display:inline-flex;align-items:center;gap:.4rem;padding-bottom:.5rem;">
+                <input type="checkbox" name="ensure_section" value="1"> Make still-unmatched questions drawable (assign a section)</label>
+            <button class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Run auto-tag</button>
         </form>
+        <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> The classifier never invents a topic. Notation-only, figure-only or out-of-syllabus questions may stay untagged; ticking “make drawable” still lets them be used in exams (they just won't carry a topic label).</p>
     </div>
 </div>
-{% endif %}
 
 {# ---- Topic breakdown ---- #}
 <div class="card" style="margin-bottom:1rem;">

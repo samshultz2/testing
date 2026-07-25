@@ -1,11 +1,17 @@
-"""Auto-tag untagged central-bank questions.
+"""Auto-tag / re-tag central-bank questions with the keyword classifier.
 
-Runs the keyword classifier over the bank questions that carry no topic (usually
-pasted / imported / legacy rows, or harvested questions that reached the bank
-before their subject's syllabus keywords were rich enough) and fills in the
-topic/sub-topic — and a missing section — but ONLY on a genuine keyword match, so
-a question is never given a made-up tag. Safe to re-run; it only ever adds tags,
-never overwrites an existing one.
+Modes:
+* ``untagged`` (default, safe): only fills in questions that have no topic.
+* ``all``: re-classifies every stand-alone bank question so improved syllabus
+  keywords upgrade existing auto-tags — but only overwrites when the classifier
+  is confident, so a question is never blanked or given a made-up topic.
+
+Passage-bound questions (comprehension/cloze/novel) are never touched — their
+section is structural and their topic is legitimately empty.
+
+``ensure_section`` (opt-in) additionally gives any still-unmatched question a
+valid, deterministic blueprint section so it is drawable in exams — reaching
+full *usable* coverage even where a precise topic can't truthfully be assigned.
 """
 from __future__ import annotations
 
@@ -14,57 +20,74 @@ def _cap(v, n):
     return v[:n] if isinstance(v, str) else v
 
 
+def _base_query(subject, mode):
+    from models import MockJAMBQuestion
+    q = MockJAMBQuestion.query.filter(
+        MockJAMBQuestion.subject_id == subject.id,
+        MockJAMBQuestion.mock_exam_id.is_(None),
+        MockJAMBQuestion.passage_id.is_(None))       # never re-tag passage-bound questions
+    if mode != 'all':
+        q = q.filter((MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == ''))
+    return q.order_by(MockJAMBQuestion.id)
+
+
 def untagged_count(subject):
     """How many stand-alone bank questions for a subject have no topic."""
     from models import MockJAMBQuestion
     return (MockJAMBQuestion.query
             .filter(MockJAMBQuestion.subject_id == subject.id,
                     MockJAMBQuestion.mock_exam_id.is_(None),
+                    MockJAMBQuestion.passage_id.is_(None),
                     (MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == ''))
             .count())
 
 
-def retag_untagged(subject, fill_section=True, batch=500):
-    """Classify every untagged bank question for ``subject`` and set its topic /
-    sub-topic (and a missing section) where the classifier is confident.
+def _drawable_sections(subject):
+    """Valid, non-passage blueprint sections a stand-alone question can be filed
+    under (so a fallback never dumps a question into a comprehension/cloze slot)."""
+    from utils.jamb_blueprint import sections_for
+    return [s['section'] for s in sections_for(subject.name) if not s['passage']] \
+        or [s['section'] for s in sections_for(subject.name)]
 
-    Returns ``{scanned, topic_set, section_set, still_untagged}``.
+
+def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=False, batch=500):
+    """Classify a subject's bank questions and set topic/sub-topic (and section)
+    where confident. Returns
+    ``{scanned, topic_set, section_set, section_ensured, still_untagged}``.
     """
     from models import db, MockJAMBQuestion
     from utils import myschool as ms
     from utils.jamb_blueprint import sections_for
 
     valid_sections = {s['section'] for s in sections_for(subject.name)}
-    q = (MockJAMBQuestion.query
-         .filter(MockJAMBQuestion.subject_id == subject.id,
-                 MockJAMBQuestion.mock_exam_id.is_(None),
-                 (MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == ''))
-         .order_by(MockJAMBQuestion.id))
+    draw_sections = _drawable_sections(subject)
 
-    scanned = topic_set = section_set = 0
+    scanned = topic_set = section_set = section_ensured = 0
     pending = 0
-    for row in q.yield_per(batch):
+    for row in _base_query(subject, mode).yield_per(batch):
         scanned += 1
         text = ' '.join(filter(None, [
             row.question_text, row.option_a, row.option_b, row.option_c, row.option_d]))
         sec, top, sub = ms.classify_confident(subject.name, text, year=row.exam_year)
-        if not top:
-            continue                       # no confident match → leave untouched
-        row.topic = _cap(top, 100)
-        if sub:
-            row.subtopic = _cap(sub, 120)
-        topic_set += 1
-        # fill a missing/invalid section from the same confident match so the
-        # question also becomes drawable under the JAMB blueprint
-        if fill_section and (row.section not in valid_sections) and sec in valid_sections:
-            row.section = sec
-            section_set += 1
-        pending += 1
+        if top:
+            row.topic = _cap(top, 100)
+            row.subtopic = _cap(sub, 120) if sub else None
+            topic_set += 1
+            if fill_section and (row.section not in valid_sections) and sec in valid_sections:
+                row.section = sec
+                section_set += 1
+            pending += 1
+        # last resort (opt-in): make an unmatched question drawable by giving it a
+        # valid section, chosen deterministically so re-runs are stable
+        if ensure_section and (row.section not in valid_sections) and draw_sections:
+            row.section = draw_sections[sum(ord(c) for c in text) % len(draw_sections)]
+            section_ensured += 1
+            pending += 1
         if pending >= batch:
             db.session.commit()
             pending = 0
     if pending:
         db.session.commit()
 
-    return {'scanned': scanned, 'topic_set': topic_set,
-            'section_set': section_set, 'still_untagged': scanned - topic_set}
+    return {'scanned': scanned, 'topic_set': topic_set, 'section_set': section_set,
+            'section_ensured': section_ensured, 'still_untagged': scanned - topic_set}

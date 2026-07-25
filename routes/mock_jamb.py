@@ -1244,25 +1244,34 @@ def bank_analytics():
 @mock_jamb_bp.route('/bank/retag', methods=['POST'])
 @login_required
 def bank_retag():
-    """Auto-tag a subject's untagged bank questions: run the keyword classifier and
-    fill in topic/sub-topic (and a missing section) wherever it's confident."""
+    """Auto-tag / re-tag a subject's bank questions with the keyword classifier.
+    ``mode=all`` re-classifies already-tagged questions too (upgrading them with
+    improved keywords); ``ensure_section`` makes still-unmatched questions drawable."""
     from utils.mock_bank_retag import retag_untagged
     subject_id = request.form.get('subject_id', type=int)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     if not subject:
         flash('Pick a subject first.', 'error')
         return redirect(url_for('mock_jamb.bank_analytics'))
-    res = retag_untagged(subject)
-    if res['topic_set']:
-        msg = f"Auto-tagged {res['topic_set']} question(s) in {subject.name}"
+    mode = 'all' if request.form.get('mode') == 'all' else 'untagged'
+    ensure_section = bool(request.form.get('ensure_section'))
+    res = retag_untagged(subject, mode=mode, ensure_section=ensure_section)
+    verb = 'Re-classified' if mode == 'all' else 'Auto-tagged'
+    if res['topic_set'] or res['section_ensured']:
+        parts = []
+        if res['topic_set']:
+            parts.append(f"{verb} {res['topic_set']} question(s)")
         if res['section_set']:
-            msg += f" ({res['section_set']} also got a section)"
-        if res['still_untagged']:
-            msg += f". {res['still_untagged']} still can't be matched — extend the subject's syllabus keywords or tag them by hand."
-        flash(msg + '.', 'success')
+            parts.append(f"{res['section_set']} got a section from the match")
+        if res['section_ensured']:
+            parts.append(f"{res['section_ensured']} unmatched made drawable")
+        msg = ' · '.join(parts) + f" in {subject.name}."
+        if res['still_untagged'] and not ensure_section:
+            msg += (f" {res['still_untagged']} still have no topic (notation-only, figure-only "
+                    f"or out-of-syllabus) — tick 'make drawable' or tag them by hand.")
+        flash(msg, 'success')
     else:
-        flash(f"No untagged {subject.name} question matched the syllabus keywords — "
-              f"nothing changed. These need richer syllabus keywords or manual tagging.", 'info')
+        flash(f"No {subject.name} question matched the syllabus keywords — nothing changed.", 'info')
     return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
 
 

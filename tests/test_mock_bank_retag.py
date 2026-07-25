@@ -49,7 +49,7 @@ def test_retag_sets_topic_on_confident_match(app):
         db.session.delete(db.session.get(Subject, sid)); db.session.commit()
 
 
-def test_retag_does_not_overwrite_existing_topic(app):
+def test_retag_untagged_leaves_tagged_alone(app):
     from models import db, Subject, MockJAMBQuestion
     from utils.mock_bank_retag import retag_untagged
     with app.app_context():
@@ -57,9 +57,57 @@ def test_retag_does_not_overwrite_existing_topic(app):
         sid = s.id
         db.session.add(_q(sid, 'Solve the quadratic equation', topic='Hand-picked', section='geometry'))
         db.session.commit()
-        res = retag_untagged(s)
+        res = retag_untagged(s)                          # default mode='untagged'
         assert res['scanned'] == 0                      # already tagged -> not scanned
         q = MockJAMBQuestion.query.filter_by(subject_id=sid).first()
         assert q.topic == 'Hand-picked' and q.section == 'geometry'
         MockJAMBQuestion.query.filter_by(subject_id=sid).delete()
         db.session.delete(db.session.get(Subject, sid)); db.session.commit()
+
+
+def test_retag_all_upgrades_existing_tag(app):
+    """mode='all' re-classifies already-tagged questions so improved keywords
+    replace a stale/generic tag (but only on a confident match)."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils.mock_bank_retag import retag_untagged
+    with app.app_context():
+        s = Subject(name='Mathematics', is_active=True); db.session.add(s); db.session.flush()
+        sid = s.id
+        db.session.add(_q(sid, 'Solve the quadratic equation x^2 - 5x + 6 = 0',
+                          topic='Wrong', section='statistics'))
+        db.session.commit()
+        res = retag_untagged(s, mode='all')
+        assert res['scanned'] == 1 and res['topic_set'] == 1
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid).first()
+        assert q.topic == 'Algebra'                     # upgraded from 'Wrong'
+        MockJAMBQuestion.query.filter_by(subject_id=sid).delete()
+        db.session.delete(db.session.get(Subject, sid)); db.session.commit()
+
+
+def test_retag_ensure_section_makes_unmatched_drawable(app):
+    """ensure_section gives an unmatched question a valid, non-passage blueprint
+    section so it's usable in exams even without a topic."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils.mock_bank_retag import retag_untagged
+    from utils.jamb_blueprint import sections_for
+    with app.app_context():
+        s = Subject(name='Mathematics', is_active=True); db.session.add(s); db.session.flush()
+        sid = s.id
+        db.session.add(_q(sid, 'zzz qqq no keywords here', section=None))
+        db.session.commit()
+        res = retag_untagged(s, mode='all', ensure_section=True)
+        assert res['topic_set'] == 0 and res['section_ensured'] == 1
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid).first()
+        valid = {x['section'] for x in sections_for('Mathematics') if not x['passage']}
+        assert q.section in valid                        # now drawable
+        assert q.topic in (None, '')                     # but no invented topic
+        MockJAMBQuestion.query.filter_by(subject_id=sid).delete()
+        db.session.delete(db.session.get(Subject, sid)); db.session.commit()
+
+
+def test_retag_apostrophe_boost_matches(app):
+    """The curly/straight apostrophe fold means an Ohm's-law question tags (its
+    boost key uses a straight apostrophe, the syllabus a curly one)."""
+    from utils import myschool as ms
+    sec, top, sub = ms.classify_confident('Physics', 'Find the resistance using Ohm law: V = IR')
+    assert top is not None

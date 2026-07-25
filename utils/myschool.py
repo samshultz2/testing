@@ -310,7 +310,8 @@ KEYWORD_BOOSTS = {
             ["base", "binary", "octal", "denary", "convert to base", "in base"],
         "Indices, logarithms & standard form": ["log", "antilog", "index", "exponent", "standard form"],
         "Sets: notation, operations, Venn diagrams & applications":
-            ["set", "venn", "union", "intersection", "subset", "complement", "universal set"],
+            ["set", "venn", "union", "intersection", "subset", "complement", "universal set",
+             "offered", "class of", "at least", "neither", "how many students"],
         "Surds (radicals)": ["surd", "rationalize", "rationalise", "sqrt", "root of"],
         "Binary operations": ["binary operation", "defined by", "otimes", "oplus", "ast"],
         "Fractions, decimals, approximations & percentages":
@@ -345,6 +346,24 @@ KEYWORD_BOOSTS = {
         "Lenses & optical instruments": ["lens", "focal length", "magnification"],
         "Latent heat & change of state": ["latent heat", "melting", "boiling", "fusion", "vaporisation"],
         "Quantity of heat: heat capacity & specific heat": ["specific heat", "heat capacity", "calorimeter"],
+        "Resistance & networks of resistors": ["resistor", "parallel", "series", "network", "combination"],
+        "Electrical energy & power": ["domestic lighting", "power rating", "kilowatt", "watt",
+                                      "consumption", "mains", "fuse", "electrical energy"],
+        "Machines (levers, pulleys, inclined plane)": ["machine", "lever", "pulley", "mechanical advantage",
+                                                       "velocity ratio", "efficiency", "inclined plane"],
+        "Work done & energy": ["work done", "kinetic energy", "potential energy", "joule"],
+        "Types & properties of waves": ["wavelength", "frequency", "amplitude", "transverse", "longitudinal"],
+        "Semiconductors, diodes & transistors": ["semiconductor", "diode", "transistor", "doping",
+                                                 "n-type", "p-type", "rectifier"],
+        "Energy quantisation & the photoelectric effect": ["photoelectric", "photon", "work function", "threshold"],
+        "Magnets & magnetic fields": ["magnet", "magnetic field", "flux", "magnetic pole"],
+        "Electromagnetic induction & generators": ["induction", "generator", "dynamo", "lenz", "induced e.m.f"],
+        "Electrostatics & capacitors": ["charge", "capacitor", "capacitance", "electrostatic", "coulomb"],
+        "Archimedes’ principle & floatation": ["archimedes", "upthrust", "floatation", "buoyancy", "density"],
+        "Pressure in solids, liquids & gases": ["pressure", "pascal", "barometer", "manometer"],
+        "Types of motion & rectilinear motion (equations)": ["velocity", "acceleration", "displacement",
+                                                             "uniform motion", "retardation"],
+        "Elasticity & Hooke’s law": ["hooke", "elastic", "extension", "spring", "elastic limit"],
     },
     "chemistry": {
         "Mole concept & Avogadro's number": ["mole", "avogadro", "molar mass", "moles"],
@@ -356,6 +375,27 @@ KEYWORD_BOOSTS = {
         "Alkanes, alkenes & alkynes": ["alkane", "alkene", "alkyne", "hydrocarbon", "saturated", "unsaturated"],
         "Alkanols (alcohols) & alkanoic acids": ["alcohol", "alkanol", "ethanol", "carboxylic", "alkanoic"],
         "Rates of chemical reaction & factors": ["rate of reaction", "catalyst", "collision"],
+        "Esters, fats & oils": ["ester", "iupac", "esterification", "fat", "oil", "saponification", "-oate"],
+        "Polymers & petrochemicals": ["polymer", "polymerisation", "polymerization", "rubber", "monomer",
+                                      "nylon", "plastic", "petrochemical", "condensation polymer", "addition polymer"],
+        "Properties of acids, bases & salts": ["precipitate", "acid", "base", "salt", "alkali", "soluble"],
+        "Preparation of salts": ["precipitate", "preparation of salt", "insoluble salt", "double decomposition"],
+        "Oxidation numbers & redox reactions": ["oxidation number", "redox", "oxidising agent",
+                                                "reducing agent", "oxidation state"],
+        "Electrochemical cells & the reactivity series": ["reactivity series", "electrochemical cell",
+                                                          "galvanic", "half cell", "electrode potential"],
+        "Nitrogen & its compounds": ["nitrogen", "ammonia", "nitrate", "nitric acid", "haber process"],
+        "Oxygen & sulphur": ["oxygen", "sulphur", "sulphuric acid", "sulphur dioxide", "contact process"],
+        "Halogens": ["halogen", "chlorine", "chloride", "bromine", "iodine", "fluorine"],
+        "Carbon & its oxides": ["carbon", "carbon dioxide", "carbon monoxide", "allotrope"],
+        "Iron & the transition metals": ["iron", "transition metal", "rust", "complex ion", "coloured ion"],
+        "Extraction of metals & alloys": ["extraction", "alloy", "ore", "smelting", "blast furnace"],
+        "Environmental pollution & control": ["pollution", "pollutant", "acid rain", "greenhouse", "effluent"],
+        "Chemical bonding: ionic, covalent & metallic": ["ionic", "covalent", "metallic bond", "bonding",
+                                                         "dative", "coordinate bond", "electrovalent"],
+        "Solubility & solubility curves": ["solubility", "saturated solution", "solubility curve", "solute"],
+        "Chemical equilibrium & Le Chatelier’s principle": ["equilibrium", "le chatelier", "reversible",
+                                                            "forward reaction", "backward reaction"],
     },
     "biology": {
         "Autotrophic nutrition & photosynthesis": ["photosynthesis", "chlorophyll", "chloroplast"],
@@ -363,7 +403,33 @@ KEYWORD_BOOSTS = {
         "The kidney & osmoregulation": ["kidney", "nephron", "osmoregulation", "urine"],
         "Circulatory system & blood": ["blood", "heart", "artery", "vein", "circulation"],
         "Energy flow & food chains/webs": ["food chain", "food web", "trophic", "producer", "consumer"],
-        "Classification of living organisms": ["classification", "kingdom", "phylum", "taxonomy", "species"],
+        "Classification of living organisms": ["classification", "kingdom", "phylum", "taxonomy", "species",
+                                               "mollusc", "snail", "arthropod", "invertebrate", "vertebrate",
+                                               "annelid", "coelenterate", "nematode", "protozoa"],
+        "Asexual & sexual reproduction": ["mitosis", "meiosis", "cell division", "chromosome", "equator",
+                                          "asexual", "sexual reproduction", "binary fission"],
+        "Sex determination & applications of genetics": ["sex determination", "chromosome", "xx", "xy",
+                                                         "genetics application"],
+        "Pollution & conservation of natural resources": ["pollution", "pollutant", "air pollution",
+                                                          "conservation", "sewage", "deforestation"],
+        "Ecological factors & the ecosystem": ["ecosystem", "habitat", "succession", "biome", "savanna",
+                                               "vegetation zone", "rainforest", "ecological factor"],
+        "Excretory products & organs": ["excretion", "skin", "sweat", "metabolic waste", "urea", "excretory"],
+        "The skeleton & types": ["skeleton", "bone", "exoskeleton", "endoskeleton", "vertebral column"],
+        "Digestion in mammals": ["digestion", "enzyme", "alimentary canal", "intestine", "absorption"],
+        "Circulatory system & blood": ["blood", "heart", "artery", "vein", "circulation", "haemoglobin"],
+        "Reproduction in plants (flowers, pollination, fertilisation)": ["pollination", "flower", "stamen",
+                                                                        "pistil", "fertilisation", "ovule", "pollen"],
+        "Transport in plants": ["xylem", "phloem", "transpiration", "translocation", "root pressure"],
+        "Nervous coordination": ["nerve", "neurone", "reflex", "synapse", "central nervous"],
+        "Hormonal coordination": ["hormone", "endocrine", "insulin", "adrenaline", "gland"],
+        "Carriers & vectors of disease": ["vector", "mosquito", "tsetse", "housefly", "carrier of disease"],
+        "Common diseases & their control": ["disease", "malaria", "cholera", "tuberculosis", "pathogen", "infection"],
+        "Micro-organisms in action": ["micro-organism", "bacteria", "fungi", "virus", "microbe", "decay"],
+        "Variation in populations": ["variation", "continuous variation", "discontinuous", "phenotype"],
+        "Theories of evolution & evidence": ["evolution", "darwin", "lamarck", "natural selection", "adaptation"],
+        "Aerobic & anaerobic respiration": ["respiration", "aerobic", "anaerobic", "fermentation", "glycolysis"],
+        "Autotrophic nutrition & photosynthesis": ["photosynthesis", "chlorophyll", "chloroplast", "autotrophic"],
     },
     "commerce": {
         "Banking & finance": ["bank", "cheque", "overdraft", "central bank", "loan"],
@@ -549,7 +615,10 @@ def _build_index(subject):
     if not syl:
         return []
     tsec = TOPIC_SECTION.get(key, {})
-    boosts = KEYWORD_BOOSTS.get(key, {})
+    # normalise curly/straight apostrophes so a boost keyed "Ohm's law" still matches
+    # the syllabus's "Ohm’s law" (and vice-versa) — otherwise the boost silently
+    # never applies and that sub-topic's recall quietly drops.
+    boosts = {_norm_apos(k): v for k, v in KEYWORD_BOOSTS.get(key, {}).items()}
     index = []
     for topic, subs in syl:
         for sub in subs:
@@ -557,11 +626,17 @@ def _build_index(subject):
             if key == "english language":
                 section = ENGLISH_SUBTOPIC_SECTION.get(sub, section)
             kws = set(_tokens(sub)) | set(_tokens(topic))
-            for phrase in boosts.get(sub, []):
+            for phrase in boosts.get(_norm_apos(sub), []):
                 kws.add(phrase.lower())
                 kws.update(_tokens(phrase))
             index.append((section, topic, sub, kws))
     return index
+
+
+def _norm_apos(s):
+    """Fold curly apostrophes/quotes to straight so boost keys match syllabus
+    strings regardless of which style either was typed with."""
+    return (s or "").replace("’", "'").replace("‘", "'")
 
 
 def classify(subject, text, year=None, novel_title=None):
