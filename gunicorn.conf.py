@@ -1,23 +1,35 @@
 """
 Gunicorn configuration for PosyHub.
 
-Defaults are tuned for a single-machine deployment (Termux/proot or a small
-VPS): ONE worker process with several threads. This matters because the app
-runs an in-process background thread (scheduled-message dispatch + daily
-backup); multiple worker processes would each start their own copy and send
-duplicates. Scale with threads here, and move background jobs to a separate
-process before scaling to multiple workers.
+Concurrency model
+-----------------
+Multiple worker processes are SAFE. The in-process background loop
+(scheduled-message dispatch + the daily jobs: backups, stock alerts, analytics
+refresh, board packs) elects a single runner per tick with a PostgreSQL advisory
+lock and guards each job with a per-day DB marker, so N workers never duplicate
+work (see ``app._start_scheduled_messages_worker`` / ``_tick_dispatch``). You can
+also set ``RUN_INPROCESS_JOBS=0`` on the web workers and run the loop in a
+dedicated process instead.
+
+Scaling for a mass exam sitting (e.g. 1000 students starting at once):
+* Raise ``WEB_CONCURRENCY`` to ~ (2 × CPU cores) so the web tier isn't the
+  bottleneck. Each worker keeps its own SQLAlchemy pool, so size Postgres
+  ``max_connections`` >= workers × (DB_POOL_SIZE + DB_MAX_OVERFLOW), or front the
+  DB with PgBouncer.
+* The default stays 1 worker so a tiny box (Termux/proot) isn't surprised by the
+  memory of extra workers — bump it explicitly in the environment.
 
 Override anything via environment variables (see below).
 
-    gunicorn -c gunicorn.conf.py wsgi:app
+    WEB_CONCURRENCY=4 gunicorn -c gunicorn.conf.py wsgi:app
 """
 import os
 
 # Network
 bind = os.environ.get('GUNICORN_BIND', f"0.0.0.0:{os.environ.get('PORT', '5000')}")
 
-# Concurrency — keep workers=1 unless background jobs are moved out of process.
+# Concurrency — multi-worker is safe (advisory-locked background loop). Default 1
+# for small boxes; set WEB_CONCURRENCY to ~2×cores for a mass sitting.
 workers = int(os.environ.get('WEB_CONCURRENCY', '1'))
 threads = int(os.environ.get('GUNICORN_THREADS', '4'))
 worker_class = os.environ.get('GUNICORN_WORKER_CLASS', 'gthread')

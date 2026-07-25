@@ -230,6 +230,8 @@ def _reverse_by_origin(connection, origin_type, origin_id):
 _ADDED_COLUMNS = {
     'staff_signups': {'gender': 'VARCHAR(10)', 'staff_type': 'VARCHAR(20)',
                       'department_id': 'INTEGER', 'qualification': 'VARCHAR(200)'},
+    # Cache of each candidate's drawn paper so the expensive pool draw runs once.
+    'mock_jamb_attempts': {'paper': 'TEXT'},
     'site_media': {'storage': "VARCHAR(10) DEFAULT 'db'", 'storage_key': 'VARCHAR(300)'},
     'gen_teachers': {'user_id': 'INTEGER'},   # link a generator-teacher to a login account
     'parent_contacts': {'email': 'VARCHAR(120)'},
@@ -293,6 +295,10 @@ _DROP_NOT_NULL = {'library_loans': ['student_id'],
 # Postgres and is a no-op once present.
 _ADDED_INDEXES = {
     'ix_parent_contacts_student_id': ('parent_contacts', 'student_id'),
+    # Mock-JAMB sitting draws the pool by (subject_id, mock_exam_id) on every paper
+    # render; index it so a mass start does index scans, not full-table scans.
+    'ix_mock_jamb_questions_subject_pool': ('mock_jamb_questions', 'subject_id, mock_exam_id'),
+    'ix_mock_jamb_passages_subject_pool': ('mock_jamb_passages', 'subject_id, mock_exam_id'),
 }
 
 

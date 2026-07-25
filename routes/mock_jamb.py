@@ -2285,6 +2285,12 @@ def portal_sit(exam_id):
         remaining = max(0, int((att.duration_minutes or 120) * 60 - elapsed))
         from utils.mock_jamb_sitting import is_calculation_subject
         payload = sitting_payload(exam, subject_ids, att)
+        # Persist the freshly-drawn paper (cached on the attempt) so reloads/resume
+        # and grading reuse it instead of re-scanning the bank on every load.
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         show_calc = any(s.get('subject') and is_calculation_subject(s['subject'].name)
                         for s in payload)
         return render_template('mock_jamb/portal_sit.html', exam=exam, student=student,

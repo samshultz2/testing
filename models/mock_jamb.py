@@ -399,6 +399,12 @@ class MockJAMBPassage(db.Model):
         'passages', lazy='dynamic', cascade='all, delete-orphan'))
     subject = db.relationship('Subject')
 
+    # The sitting draws the pool by (subject_id, mock_exam_id); index it so a burst
+    # of students starting an exam does index scans, not full-table scans.
+    __table_args__ = (
+        db.Index('ix_mock_jamb_passages_subject_pool', 'subject_id', 'mock_exam_id'),
+    )
+
     KINDS = ('comprehension', 'cloze', 'summary', 'oral', 'general')
 
     @property
@@ -448,6 +454,13 @@ class MockJAMBQuestion(db.Model):
     passage = db.relationship('MockJAMBPassage', backref=db.backref(
         'questions', lazy='dynamic'))
 
+    # The sitting draws the pool by (subject_id, mock_exam_id); index it so a burst
+    # of students starting an exam does index scans, not full-table scans of a
+    # multi-thousand-row bank.
+    __table_args__ = (
+        db.Index('ix_mock_jamb_questions_subject_pool', 'subject_id', 'mock_exam_id'),
+    )
+
     @property
     def options(self):
         return [('A', self.option_a), ('B', self.option_b),
@@ -468,6 +481,11 @@ class MockJAMBAttempt(db.Model):
     status = db.Column(db.String(15), default='In progress')   # In progress / Submitted
     total_score = db.Column(db.Integer, default=0)             # out of 400
     duration_minutes = db.Column(db.Integer, default=120)      # snapshot of the exam's timer
+    # The candidate's drawn paper, cached once at first render as JSON
+    # {subject_id: [{"p": passage_id, "q": [qid,...]} | {"q": qid}, ...]}. Reused on
+    # every reload/resume and at grading so the expensive pool draw runs ONCE per
+    # student instead of on every page load — the key to surviving a mass start.
+    paper = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     exam = db.relationship('MockJAMBExam', backref=db.backref(

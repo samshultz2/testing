@@ -369,3 +369,27 @@ def test_untagged_non_blueprint_subject_capped_to_default(app):
         assert len(served) == 40
         MockJAMBQuestion.query.filter_by(subject_id=subj.id).delete()
         db.session.delete(db.session.get(Subject, subj.id)); db.session.commit()
+
+
+def test_paper_is_cached_and_stable_across_reloads(app):
+    """The drawn paper is cached on the attempt: a second call returns the SAME
+    served set (rebuilt from the cache) even after the bank grows — proving the
+    pool isn't re-drawn on every reload (the mass-start scaling win)."""
+    from utils.mock_jamb_sitting import subject_items
+    eid, sid, subj_id = _bank_maths(app, n_per_section=8)   # 40 in bank -> 40 drawn
+    with app.app_context():
+        ex = db.session.get(MockJAMBExam, eid)
+        att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(att); db.session.commit()
+        _items1, served1 = subject_items(ex, subj_id, att)
+        db.session.commit()
+        att = db.session.get(MockJAMBAttempt, att.id)
+        assert att.paper                                   # cached JSON was stored
+        # grow the bank a lot; a cached paper must ignore the new questions
+        for i in range(50):
+            db.session.add(MockJAMBQuestion(
+                mock_exam_id=None, subject_id=subj_id, section='number',
+                question_text=f'new {i}', option_a='a', option_b='b', option_c='c',
+                option_d='d', correct_option='A', marks=1, order=100 + i))
+        db.session.commit()
+        _items2, served2 = subject_items(ex, subj_id, att)
+        assert served2 == served1                          # same paper, rebuilt from cache

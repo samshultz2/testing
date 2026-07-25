@@ -178,15 +178,103 @@ def _subject_pool(exam, subject_id):
     return passages, qrows
 
 
+def _load_paper(attempt):
+    """The cached paper map ``{subject_id(str): [entries]}`` for this attempt, or {}."""
+    import json
+    raw = getattr(attempt, 'paper', None)
+    if not raw:
+        return {}
+    try:
+        d = json.loads(raw)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _store_paper_subject(attempt, subject_id, items):
+    """Record the drawn paper for one subject on the attempt so reloads/resume/
+    grading reuse it instead of re-drawing the pool. Sets the attribute only — the
+    caller's own commit (portal_sit after rendering, grade_attempt at the end)
+    persists it, so this never commits as a side effect of a read (which would
+    break request/transaction boundaries). No-op if the ``paper`` column isn't
+    present yet or the attempt is unsaved."""
+    if not hasattr(attempt, 'paper') or not getattr(attempt, 'id', None):
+        return
+    import json
+    enc = []
+    for it in items:
+        if it['kind'] == 'passage':
+            enc.append({'p': it['passage'].id, 'q': [q.id for q in it['questions']]})
+        else:
+            enc.append({'q': it['q'].id})
+    data = _load_paper(attempt)
+    data[str(subject_id)] = enc
+    try:
+        attempt.paper = json.dumps(data)
+    except Exception:
+        pass
+
+
+def _rebuild_from_paper(attempt, subject_id):
+    """Rebuild ``(items, served)`` for a subject from the cached paper using cheap
+    primary-key lookups (no pool scan). Returns None if nothing is cached, or if
+    the cache no longer resolves to any live question (bank edited) so the caller
+    re-draws. Silently drops questions/passages that were since deleted."""
+    enc = _load_paper(attempt).get(str(subject_id))
+    if not enc:
+        return None
+    from models import MockJAMBQuestion, MockJAMBPassage
+    qids, pids = set(), set()
+    for e in enc:
+        if 'p' in e:
+            pids.add(e['p']); qids.update(e.get('q') or [])
+        elif 'q' in e:
+            qids.add(e['q'])
+    qmap = {q.id: q for q in MockJAMBQuestion.query.filter(
+        MockJAMBQuestion.id.in_(qids)).all()} if qids else {}
+    pmap = {p.id: p for p in MockJAMBPassage.query.filter(
+        MockJAMBPassage.id.in_(pids)).all()} if pids else {}
+    items, served = [], set()
+    for e in enc:
+        if 'p' in e:
+            p = pmap.get(e['p'])
+            qs = [qmap[qid] for qid in (e.get('q') or []) if qid in qmap]
+            if p and qs:
+                items.append({'kind': 'passage', 'passage': p, 'questions': qs})
+                served.update(q.id for q in qs)
+        elif 'q' in e:
+            q = qmap.get(e['q'])
+            if q:
+                items.append({'kind': 'question', 'q': q})
+                served.add(q.id)
+    if not served:
+        return None
+    return items, served
+
+
 def subject_items(exam, subject_id, attempt):
     """Deterministic served paper for one subject: an ordered list of items, each
     a passage-group (passage + its questions) or a stand-alone question.
 
-    Draws a JAMB-shaped, per-candidate random paper from the subject's pool: for
-    a subject with a JAMB blueprint whose questions are section-tagged, it samples
-    each section to the blueprint counts (comprehension/cloze passages kept
+    The paper is drawn ONCE per candidate (first render) and cached on the attempt
+    (``paper`` JSON); every later reload/resume and grading rebuilds it from that
+    cache with cheap primary-key lookups — so a mass simultaneous start doesn't
+    re-scan the whole question bank on every page load. Returns (items, served)."""
+    cached = _rebuild_from_paper(attempt, subject_id)
+    if cached is not None:
+        return cached
+    items, served = _draw_subject_items(exam, subject_id, attempt)
+    if served:
+        _store_paper_subject(attempt, subject_id, items)
+    return items, served
+
+
+def _draw_subject_items(exam, subject_id, attempt):
+    """Draw a fresh JAMB-shaped, per-candidate random paper from the subject's pool:
+    for a subject with a JAMB blueprint whose questions are section-tagged, it
+    samples each section to the blueprint counts (comprehension/cloze passages kept
     whole). Untagged pools or non-JAMB subjects fall back to the legacy behaviour
-    (optional ``questions_per_subject`` cap + shuffle). Returns (items, served)."""
+    (per-subject / blueprint-total cap + shuffle). Returns (items, served)."""
     from models import db, Subject
     from utils.jamb_blueprint import blueprint_for, draw_paper, JAMB_BLUEPRINT, norm_subject
     passages, qrows = _subject_pool(exam, subject_id)
