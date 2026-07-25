@@ -31,18 +31,45 @@
         <p class="text-muted text-sm">One central, section-tagged bank per subject. Every Mock JAMB draws a different, JAMB-shaped paper per student from here — no need to author questions into each mock.</p>
     </div>
     <div class="page-header-actions">
+        <a href="{{ analytics_url }}" class="btn btn-primary btn-sm"><i class="fas fa-chart-pie"></i> Topic analytics</a>
         <a href="{{ syllabus_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-list-check"></i> Syllabus topics</a>
         <a href="{{ index_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Mock JAMB</a>
     </div>
 </div>
 
-<form method="get" class="card" style="margin-bottom:1rem;">
-    <div class="card-body" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
-        <label class="form-label mb-0">Subject</label>
-        <select name="subject_id" class="form-control" style="max-width:260px;" data-autosubmit>
-            {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}
-        </select>
-        {% if coverage %}<span class="text-muted text-sm">{{ coverage.total }} question(s) banked{% if coverage.untagged %} · {{ coverage.untagged }} untagged{% endif %}</span>{% endif %}
+<form method="get" class="card" id="bankFilters" style="margin-bottom:1rem;">
+    <div class="card-body" style="display:flex;gap:.6rem .8rem;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group mb-0"><label class="form-label">Subject</label>
+            <select name="subject_id" class="form-control" style="max-width:220px;" data-autosubmit>
+                {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}
+            </select></div>
+        {% if filter_options %}
+        {% if section %}<input type="hidden" name="section" value="{{ section }}">{% endif %}
+        <div class="form-group mb-0"><label class="form-label">Exam type</label>
+            <select name="exam_body" class="form-control" data-autosubmit style="max-width:130px;">
+                <option value="">All</option>
+                {% for b in filter_options.exam_bodies %}<option value="{{ b }}" {{ 'selected' if f_body == b else '' }}>{{ b }}</option>{% endfor %}
+            </select></div>
+        <div class="form-group mb-0"><label class="form-label">Year</label>
+            <select name="year" class="form-control" data-autosubmit style="max-width:110px;">
+                <option value="">All</option>
+                {% for y in filter_options.years %}<option value="{{ y }}" {{ 'selected' if f_year == y else '' }}>{{ y }}</option>{% endfor %}
+            </select></div>
+        <div class="form-group mb-0"><label class="form-label">Topic</label>
+            <select name="topic" id="fTopic" class="form-control" data-autosubmit style="max-width:220px;">
+                <option value="">All topics</option>
+                {% for t in filter_options.topics %}<option value="{{ t }}" {{ 'selected' if f_topic == t else '' }}>{{ t }}</option>{% endfor %}
+            </select></div>
+        <div class="form-group mb-0"><label class="form-label">Sub-topic</label>
+            <select name="subtopic" id="fSubtopic" class="form-control" data-autosubmit style="max-width:220px;">
+                <option value="">All sub-topics</option>
+                {% for st in filter_options.all_subtopics %}<option value="{{ st }}" {{ 'selected' if f_subtopic == st else '' }}>{{ st }}</option>{% endfor %}
+            </select></div>
+        {% if f_topic or f_subtopic or f_year or f_body %}
+        <a href="{{ url_for('mock_jamb.bank', subject_id=subject_id, section=section or none) }}" class="btn btn-secondary btn-sm">Clear filters</a>
+        {% endif %}
+        {% endif %}
+        {% if coverage %}<span class="text-muted text-sm" style="margin-left:auto;">{{ coverage.total }} banked{% if coverage.untagged %} · {{ coverage.untagged }} untagged{% endif %}</span>{% endif %}
     </div>
 </form>
 
@@ -284,9 +311,13 @@
         <form method="get" style="display:flex;gap:.4rem;align-items:center;margin-left:auto;">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             {% if section %}<input type="hidden" name="section" value="{{ section }}">{% endif %}
+            {% if f_topic %}<input type="hidden" name="topic" value="{{ f_topic }}">{% endif %}
+            {% if f_subtopic %}<input type="hidden" name="subtopic" value="{{ f_subtopic }}">{% endif %}
+            {% if f_year %}<input type="hidden" name="year" value="{{ f_year }}">{% endif %}
+            {% if f_body %}<input type="hidden" name="exam_body" value="{{ f_body }}">{% endif %}
             <input type="search" name="q" value="{{ q_search or '' }}" placeholder="Search question text…" class="form-control" style="max-width:240px;height:34px;">
             <button class="btn btn-secondary btn-sm"><i class="fas fa-search"></i></button>
-            {% if q_search %}<a href="{{ url_for('mock_jamb.bank', subject_id=subject_id, section=section) }}" class="btn btn-secondary btn-sm">Clear</a>{% endif %}
+            {% if q_search %}<a href="{{ url_for('mock_jamb.bank', subject_id=subject_id, section=section, topic=f_topic, subtopic=f_subtopic, year=f_year, exam_body=f_body) }}" class="btn btn-secondary btn-sm">Clear</a>{% endif %}
         </form>
     </div>
     <div class="card-body" style="padding:.3rem 0;">
@@ -294,7 +325,7 @@
         {% for q in standalone %}{{ show_q(q, offset + loop.index) }}{% else %}<p class="text-muted text-sm" style="padding:0 .9rem;">{{ 'No questions match your search.' if q_search else 'No stand-alone questions yet' ~ (' in this section' if section else '') ~ '.' }}</p>{% endfor %}
         {% if pagination and pagination.pages > 1 %}
         <div class="pager" style="display:flex;gap:.4rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;">
-            {% set args = {'subject_id': subject_id, 'section': section, 'q': q_search or none} %}
+            {% set args = {'subject_id': subject_id, 'section': section, 'q': q_search or none, 'topic': f_topic or none, 'subtopic': f_subtopic or none, 'year': f_year or none, 'exam_body': f_body or none} %}
             {% if pagination.has_prev %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank', page=pagination.prev_num, **args) }}"><i class="fas fa-chevron-left"></i> Prev</a>{% endif %}
             <span class="text-sm text-muted">Page {{ pagination.page }} of {{ pagination.pages }}</span>
             {% if pagination.has_next %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right"></i></a>{% endif %}
@@ -477,6 +508,27 @@
     fetch(U.status).then(function(r){ return r.json(); }).then(render).catch(function(){});
 })();
 </script>
+
+{% if filter_options %}
+<script type="application/json" id="bank-subs-by-topic">{{ filter_options.subtopics_by_topic|tojson }}</script>
+<script nonce="{{ csp_nonce }}">
+(function(){
+    // Filter bar: narrow the sub-topic list to the chosen topic (blank topic = all).
+    var byTopic = JSON.parse(document.getElementById('bank-subs-by-topic').textContent);
+    var all = {{ filter_options.all_subtopics|tojson }};
+    var topic = document.getElementById('fTopic'), sub = document.getElementById('fSubtopic');
+    if(!topic || !sub) return;
+    var current = sub.value;
+    topic.addEventListener('change', function(){
+        var list = topic.value ? (byTopic[topic.value] || []) : all;
+        var keep = list.indexOf(current) >= 0 ? current : '';
+        sub.innerHTML = '<option value="">All sub-topics</option>' + list.map(function(s){
+            return '<option value="'+s.replace(/"/g,'&quot;')+'"'+(s===keep?' selected':'')+'>'+s+'</option>'; }).join('');
+        // topic changed by the user → drop a stale sub-topic so it doesn't over-filter
+    });
+})();
+</script>
+{% endif %}
 
 <script type="application/json" id="mjq-topics">{{ topic_tree|tojson }}</script>
 <script nonce="{{ csp_nonce }}">

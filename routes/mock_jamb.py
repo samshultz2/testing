@@ -1094,6 +1094,37 @@ def _bank_coverage(subject):
             'need': sum(bp.values())}
 
 
+def _bank_filter_options(subject_id):
+    """Distinct topics / sub-topics / years / exam bodies present in a subject's
+    bank — the option lists that drive the filter drop-downs. Sub-topics are
+    grouped by their topic so the picker can narrow as the topic changes."""
+    from models import MockJAMBQuestion
+    rows = (db.session.query(MockJAMBQuestion.topic, MockJAMBQuestion.subtopic)
+            .filter(MockJAMBQuestion.subject_id == subject_id,
+                    MockJAMBQuestion.mock_exam_id.is_(None)).distinct().all())
+    topics, subs_by_topic = set(), {}
+    for topic, sub in rows:
+        t = (topic or '').strip()
+        if t:
+            topics.add(t)
+            if (sub or '').strip():
+                subs_by_topic.setdefault(t, set()).add(sub.strip())
+    years = sorted({(y or '').strip() for (y,) in db.session.query(MockJAMBQuestion.exam_year)
+                    .filter(MockJAMBQuestion.subject_id == subject_id,
+                            MockJAMBQuestion.mock_exam_id.is_(None)).distinct().all()
+                    if (y or '').strip()}, reverse=True)
+    bodies = sorted({(b or '').strip() for (b,) in db.session.query(MockJAMBQuestion.exam_body)
+                     .filter(MockJAMBQuestion.subject_id == subject_id,
+                             MockJAMBQuestion.mock_exam_id.is_(None)).distinct().all()
+                     if (b or '').strip()})
+    return {
+        'topics': sorted(topics, key=str.lower),
+        'subtopics_by_topic': {t: sorted(v, key=str.lower) for t, v in subs_by_topic.items()},
+        'all_subtopics': sorted({s for v in subs_by_topic.values() for s in v}, key=str.lower),
+        'years': years, 'exam_bodies': bodies,
+    }
+
+
 @mock_jamb_bp.route('/bank')
 @login_required
 def bank():
@@ -1107,26 +1138,53 @@ def bank():
     section = (request.args.get('section') or '').strip() or None
 
     q_search = (request.args.get('q') or '').strip()
+    # extra bank filters (all optional): topic, sub-topic, past-question year, exam body
+    f_topic = (request.args.get('topic') or '').strip() or None
+    f_subtopic = (request.args.get('subtopic') or '').strip() or None
+    f_year = (request.args.get('year') or '').strip() or None
+    f_body = (request.args.get('exam_body') or '').strip() or None
     page = max(1, request.args.get('page', 1, type=int))
     per_page = 25
     passages, standalone, coverage, sections = [], [], None, []
     pagination = None
+    filter_options = None
     if subject:
         sections = sections_for(subject.name)
         coverage = _bank_coverage(subject)
+        filter_options = _bank_filter_options(subject_id)
+
+        def _apply(query):
+            """Apply the shared bank filters (section/topic/subtopic/year/body/text)
+            to a MockJAMBQuestion query."""
+            if section:
+                query = query.filter(MockJAMBQuestion.section == section)
+            if f_topic:
+                query = query.filter(MockJAMBQuestion.topic == f_topic)
+            if f_subtopic:
+                query = query.filter(MockJAMBQuestion.subtopic == f_subtopic)
+            if f_year:
+                query = query.filter(MockJAMBQuestion.exam_year == f_year)
+            if f_body:
+                query = query.filter(MockJAMBQuestion.exam_body == f_body)
+            if q_search:
+                query = query.filter(MockJAMBQuestion.question_text.ilike(f'%{q_search}%'))
+            return query
+
         pq = MockJAMBPassage.query.filter_by(subject_id=subject_id).filter(
             MockJAMBPassage.mock_exam_id.is_(None))
         if section:
             pq = pq.filter(MockJAMBPassage.section == section)
         prows = pq.order_by(MockJAMBPassage.section, MockJAMBPassage.order, MockJAMBPassage.id).all()
-        passages = [{'p': p, 'questions': p.questions.order_by(
-            MockJAMBQuestion.order, MockJAMBQuestion.id).all()} for p in prows]
-        sq = MockJAMBQuestion.query.filter_by(subject_id=subject_id, passage_id=None).filter(
-            MockJAMBQuestion.mock_exam_id.is_(None))
-        if section:
-            sq = sq.filter(MockJAMBQuestion.section == section)
-        if q_search:
-            sq = sq.filter(MockJAMBQuestion.question_text.ilike(f'%{q_search}%'))
+        for p in prows:
+            pqs = _apply(p.questions).order_by(
+                MockJAMBQuestion.order, MockJAMBQuestion.id).all()
+            # when a question-level filter is active, only show passages that still
+            # have matching questions (so a topic/year filter doesn't list empty passages)
+            if pqs or not (f_topic or f_subtopic or f_year or f_body or q_search):
+                passages.append({'p': p, 'questions': pqs})
+        sq = _apply(MockJAMBQuestion.query.filter_by(
+            subject_id=subject_id, passage_id=None).filter(
+            MockJAMBQuestion.mock_exam_id.is_(None)))
         sq = sq.order_by(MockJAMBQuestion.section, MockJAMBQuestion.order,
                          MockJAMBQuestion.id)
         pagination = sq.paginate(page=page, per_page=per_page, error_out=False)
@@ -1157,9 +1215,29 @@ def bank():
                            passages=passages, standalone=standalone, coverage=coverage,
                            pagination=pagination, q_search=q_search, jamb_ok_ids=jamb_ok_ids,
                            topic_tree=_subject_topic_tree(subject_id),
+                           filter_options=filter_options,
+                           f_topic=f_topic, f_subtopic=f_subtopic, f_year=f_year, f_body=f_body,
                            has_passage_sections=any(s['passage'] for s in sections),
                            novel_section=any(s['section'] == 'novel' for s in sections),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
+                           analytics_url=url_for('mock_jamb.bank_analytics', subject_id=subject_id or ''),
+                           index_url=url_for('mock_jamb.index'))
+
+
+@mock_jamb_bp.route('/bank/analytics')
+@login_required
+def bank_analytics():
+    """Per-subject breakdown of the question bank: how questions distribute across
+    topics, sub-topics, years and exam bodies, plus the cold/never-tested syllabus
+    areas — so teachers can see what to focus students on."""
+    from utils.mock_bank_analytics import subject_breakdown
+    subjects = _mock_subjects()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    data = subject_breakdown(subject) if subject else None
+    return render_template('mock_jamb/bank_analytics.html', subjects=subjects,
+                           subject=subject, subject_id=subject_id, data=data,
+                           bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
 
 
