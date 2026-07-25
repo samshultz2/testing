@@ -93,6 +93,15 @@ class Config:
     # the app honours X-Forwarded-For/-Proto (correct client IPs + https).
     TRUST_PROXY = _as_bool(os.environ.get('TRUST_PROXY'), default=False)
 
+    # Canonical external URL scheme. Behind a TLS-terminating proxy (Cloudflare,
+    # nginx) the origin sees plain HTTP, so external links (staff invite links,
+    # emailed URLs) would come out as http:// unless we say otherwise.
+    PREFERRED_URL_SCHEME = os.environ.get('PREFERRED_URL_SCHEME', 'http')
+    # Redirect proxied HTTP requests to HTTPS. Loop-safe: the redirect fires ONLY
+    # when the forwarded proto is *explicitly* http (never on a real HTTPS request
+    # whose X-Forwarded-Proto is https), so it can't cause a redirect loop.
+    FORCE_HTTPS = _as_bool(os.environ.get('FORCE_HTTPS'), default=False)
+
     # Security headers. CSP is opt-in because a too-strict policy can break
     # inline scripts/styles in existing templates — enable once verified.
     SECURITY_HEADERS = _as_bool(os.environ.get('SECURITY_HEADERS'), default=True)
@@ -364,6 +373,11 @@ class ProductionConfig(Config):
     # The password-reset link carries its own token (not the session), so it is
     # unaffected; an inbound deep link just shows the login page on first hit.
     SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Strict')
+    # In production the app is served over HTTPS at the edge, so make that the
+    # canonical scheme for external links and send HTTP visitors to HTTPS. (For a
+    # plain-HTTP LAN/Termux box, set PREFERRED_URL_SCHEME=http and FORCE_HTTPS=0.)
+    PREFERRED_URL_SCHEME = os.environ.get('PREFERRED_URL_SCHEME', 'https')
+    FORCE_HTTPS = _as_bool(os.environ.get('FORCE_HTTPS'), default=True)
 
 
 class TestingConfig(Config):

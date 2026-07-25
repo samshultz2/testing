@@ -106,7 +106,7 @@
                 <span class="text-sm text-muted" style="margin-left:auto;">{{ i.uses or 0 }}{% if i.max_uses %}/{{ i.max_uses }}{% endif %} used{% if i.expires_at %} · expires {{ i.expires_at.strftime('%d %b %Y') }}{% endif %}</span>
             </div>
             <div class="inv-link">
-                <input type="text" readonly value="{{ url_for('staff_onboarding.join', token=i.token, _external=True) }}" data-copy>
+                <input type="text" readonly value="{{ secure_external_url('staff_onboarding.join', token=i.token) }}" data-copy>
                 <button type="button" class="btn btn-secondary btn-sm mjs-copy" data-token="{{ i.token }}"><i class="fas fa-copy"></i> Copy</button>
                 <form method="post" action="{{ url_for('staff_onboarding.toggle_invite', invite_id=i.id) }}" style="display:inline;">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

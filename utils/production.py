@@ -27,12 +27,46 @@ def apply_proxy_fix(app):
     app.logger.info('ProxyFix enabled (trusting X-Forwarded-* headers).')
 
 
-# NOTE: HTTPS enforcement is intentionally done at the edge (Cloudflare
-# "Always Use HTTPS" / the reverse proxy), NOT in the app. An origin-side
-# `before_request` redirect based on `request.is_secure` caused an infinite
-# redirect loop (ERR_TOO_MANY_REDIRECTS) whenever the tunnel/proxy didn't
-# surface X-Forwarded-Proto to the app: every HTTPS request looked "insecure"
-# and was redirected to HTTPS again. HSTS below still upgrades future requests.
+def forwarded_scheme():
+    """The scheme the *client* actually used, read from the proxy's forwarded
+    headers (works even without ProxyFix). Falls back to the app-perceived scheme.
+
+    Reading the header directly is what makes the HTTPS redirect below loop-safe:
+    a real HTTPS request forwarded by Cloudflare/nginx carries
+    ``X-Forwarded-Proto: https`` (or ``CF-Visitor: {"scheme":"https"}``), so it is
+    never mistaken for insecure — unlike the old ``request.is_secure`` check that
+    saw every request as http when the header wasn't surfaced.
+    """
+    xfp = request.headers.get('X-Forwarded-Proto')
+    if xfp:
+        return xfp.split(',')[0].strip().lower()
+    cf = request.headers.get('CF-Visitor') or ''
+    if '"scheme":"https"' in cf.replace(' ', ''):
+        return 'https'
+    if '"scheme":"http"' in cf.replace(' ', ''):
+        return 'http'
+    return request.scheme
+
+
+def register_https_redirect(app):
+    """Send proxied HTTP visitors to HTTPS — but ONLY when the forwarded proto is
+    explicitly 'http', so a real HTTPS request can never be redirected (no loop).
+    Enabled by FORCE_HTTPS. Skips health checks and non-idempotent methods (we
+    redirect navigations, not form POSTs)."""
+    if not app.config.get('FORCE_HTTPS'):
+        return
+    from flask import redirect
+
+    @app.before_request
+    def _https_redirect():
+        if request.method not in ('GET', 'HEAD'):
+            return None
+        if request.path == '/healthz':
+            return None
+        if forwarded_scheme() != 'http':
+            return None                       # already https (or unknown) → leave it
+        target = request.url.replace('http://', 'https://', 1)
+        return redirect(target, code=301)
 
 
 def register_security_headers(app):
@@ -54,7 +88,7 @@ def register_security_headers(app):
         resp = add_security_headers(resp)
         if csp_override:
             resp.headers['Content-Security-Policy'] = csp_override
-        if hsts and request.is_secure:
+        if hsts and (request.is_secure or forwarded_scheme() == 'https'):
             resp.headers.setdefault(
                 'Strict-Transport-Security',
                 'max-age=31536000; includeSubDomains')
@@ -128,13 +162,36 @@ def enable_compression(app):
     Compress(app)
 
 
+def secure_external_url(endpoint, **values):
+    """``url_for(..., _external=True)`` but forced to the canonical HTTPS scheme
+    when appropriate — so a link built inside a request (e.g. a staff invite link)
+    is https even though the origin sees the request as http behind the proxy.
+
+    Uses HTTPS when the client came in over https (forwarded header), or when the
+    app's PREFERRED_URL_SCHEME is https; otherwise falls back to a normal external
+    URL (so local http dev is unaffected)."""
+    from flask import url_for, current_app
+    try:
+        secure = (forwarded_scheme() == 'https'
+                  or current_app.config.get('PREFERRED_URL_SCHEME') == 'https'
+                  or request.is_secure)
+    except Exception:
+        secure = False
+    if secure:
+        return url_for(endpoint, _external=True, _scheme='https', **values)
+    return url_for(endpoint, _external=True, **values)
+
+
 def harden(app, config_class=None):
     """Apply all production hardening. Safe to call in every environment."""
     configure_logging(app)
     apply_proxy_fix(app)
+    register_https_redirect(app)
     enable_compression(app)
     register_security_headers(app)
     register_healthcheck(app)
+    # expose the https-aware external-URL helper to templates
+    app.jinja_env.globals.setdefault('secure_external_url', secure_external_url)
 
     # Surface production-readiness warnings once at startup.
     if config_class is not None and hasattr(config_class, 'warnings'):
