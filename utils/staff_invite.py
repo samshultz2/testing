@@ -52,9 +52,12 @@ def create_invite(*, label, role, permission_group_id, branch_id, scope,
     return inv
 
 
-def submit_signup(invite, *, full_name, username, email, phone, password, branch_id, position):
+def submit_signup(invite, *, full_name, username, email, phone, password, branch_id,
+                  position, gender=None, staff_type=None, department_id=None, qualification=None):
     """Record a pending signup against an invite. Returns (signup, error). Never
-    creates a User. ``branch_id`` is ignored when the invite pins a branch."""
+    creates a User. ``branch_id`` is ignored when the invite pins a branch. The
+    extra bio (gender/staff_type/department/qualification) is kept so approval can
+    also create the joiner's HR staff record."""
     from werkzeug.security import generate_password_hash
     from models import db, StaffSignup
     full_name = (full_name or '').strip()
@@ -77,11 +80,26 @@ def submit_signup(invite, *, full_name, username, email, phone, password, branch
         phone=(phone or '').strip() or None,
         password_hash=generate_password_hash(password),
         branch_id=chosen_branch, position=(position or '').strip() or None,
+        gender=(gender or '').strip() or None,
+        staff_type=(staff_type or '').strip() or None,
+        department_id=(int(department_id) if department_id else None),
+        qualification=(qualification or '').strip() or None,
         status='pending')
     db.session.add(s)
     invite.uses = (invite.uses or 0) + 1
     db.session.commit()
     return s, None
+
+
+def _split_name(full_name):
+    """Best-effort split of a single "full name" into (first, surname, middle) for
+    the HR record — editable in HR afterwards if the guess is off."""
+    parts = [p for p in (full_name or '').split() if p]
+    if not parts:
+        return '', '', None
+    if len(parts) == 1:
+        return parts[0], parts[0], None
+    return parts[0], parts[-1], (' '.join(parts[1:-1]) or None)
 
 
 def approve_signup(signup, reviewer_username):
@@ -105,12 +123,43 @@ def approve_signup(signup, reviewer_username):
     u.password_hash = signup.password_hash        # reuse the password they set
     db.session.add(u)
     db.session.flush()
+
+    # Also register them in HR as a staff member, linked to this login account, so
+    # they appear in HR immediately (no separate manual entry).
+    _create_staff_member(signup, u)
+
     signup.status = 'approved'
     signup.reviewed_by = reviewer_username
     signup.reviewed_at = datetime.now()
     signup.user_id = u.id
     db.session.commit()
     return u, None
+
+
+def _create_staff_member(signup, user):
+    """Create the HR StaffMember record for an approved signup (best-effort — an HR
+    hiccup must not block account creation). Skips if one is already linked."""
+    from datetime import date
+    from models import db, StaffMember
+    if StaffMember.query.filter_by(user_id=user.id).first():
+        return
+    first, surname, middle = _split_name(signup.full_name)
+    try:
+        # a SAVEPOINT so an HR failure rolls back ONLY the staff insert — the new
+        # User (already flushed in the outer transaction) is never lost.
+        with db.session.begin_nested():
+            db.session.add(StaffMember(
+                staff_id=StaffMember.generate_staff_id(),
+                branch_id=signup.branch_id or user.branch_id,
+                first_name=first, surname=surname, middle_name=middle,
+                gender=signup.gender, phone=signup.phone, email=signup.email,
+                department_id=signup.department_id,
+                designation=signup.position or (user.role or 'staff').replace('_', ' ').title(),
+                staff_type=(signup.staff_type or 'Teaching'),
+                date_employed=date.today(), qualification=signup.qualification,
+                status='Active', is_active=True, user_id=user.id))
+    except Exception:
+        pass                              # savepoint rolled back; account stands
 
 
 def reject_signup(signup, reviewer_username):

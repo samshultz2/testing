@@ -68,6 +68,11 @@ class StaffSignup(db.Model):
     password_hash = db.Column(db.String(256))         # already hashed at submit time
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     position = db.Column(db.String(80))               # free-text title the joiner enters
+    # Extra bio the joiner supplies so approval can create their HR record too.
+    gender = db.Column(db.String(10))
+    staff_type = db.Column(db.String(20))             # Teaching / Non-teaching
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'))
+    qualification = db.Column(db.String(200))
     status = db.Column(db.String(12), default='pending')   # pending / approved / rejected
     created_at = db.Column(db.DateTime, default=local_now)
     reviewed_by = db.Column(db.String(80))

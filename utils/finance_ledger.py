@@ -228,6 +228,8 @@ def _reverse_by_origin(connection, origin_type, origin_id):
 # column to an existing table, so bring older tenant DBs up to date in place with
 # a tiny, dialect-portable ADD COLUMN (no defaults/constraints beyond the type).
 _ADDED_COLUMNS = {
+    'staff_signups': {'gender': 'VARCHAR(10)', 'staff_type': 'VARCHAR(20)',
+                      'department_id': 'INTEGER', 'qualification': 'VARCHAR(200)'},
     'site_media': {'storage': "VARCHAR(10) DEFAULT 'db'", 'storage_key': 'VARCHAR(300)'},
     'gen_teachers': {'user_id': 'INTEGER'},   # link a generator-teacher to a login account
     'parent_contacts': {'email': 'VARCHAR(120)'},

@@ -39,6 +39,32 @@ def test_invite_signup_approve_flow(app):
         assert db.session.get(StaffSignup, s.id).status == 'approved'
 
 
+def test_approval_creates_hr_staff_member(app):
+    """Approving a signup also files the joiner in HR, linked to their new login."""
+    from models import db, StaffMember
+    from utils import staff_invite as svc
+    with app.app_context():
+        bid, gid = _branch_and_group(app)
+        inv = svc.create_invite(label='Teachers', role='teacher', permission_group_id=None,
+                                branch_id=bid, scope='branch', max_uses=None, expires_days=None,
+                                created_by='root')
+        s, err = svc.submit_signup(inv, full_name='Ada N. Okeke', username='ada',
+                                   email='ada@x.com', phone='0801', password='secret12',
+                                   branch_id=None, position='Senior Teacher',
+                                   gender='Female', staff_type='Teaching',
+                                   qualification='B.Ed')
+        assert err is None
+        u, err = svc.approve_signup(s, 'root')
+        assert err is None
+
+        sm = StaffMember.query.filter_by(user_id=u.id).first()
+        assert sm is not None
+        assert sm.first_name == 'Ada' and sm.surname == 'Okeke' and sm.middle_name == 'N.'
+        assert sm.gender == 'Female' and sm.qualification == 'B.Ed'
+        assert sm.designation == 'Senior Teacher' and sm.branch_id == bid
+        assert (sm.staff_type or 'Teaching') == 'Teaching'
+
+
 def test_signup_validation(app):
     from models import db, User
     from utils import staff_invite as svc

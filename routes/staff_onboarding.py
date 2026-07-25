@@ -9,7 +9,7 @@ signup — never a live account or any permission.
 from flask import (Blueprint, render_template, request, redirect, url_for, flash,
                    session, abort)
 
-from models import db, StaffInvite, StaffSignup, PermissionGroup, Branch, User
+from models import db, StaffInvite, StaffSignup, PermissionGroup, Branch, User, Department
 from utils.access_control import (manage_users_required, current_manage_scope,
                                   get_current_user)
 from utils import staff_invite as svc
@@ -151,6 +151,13 @@ def _load_invite(token):
     return StaffInvite.query.filter_by(token=token).first()
 
 
+def _active_departments():
+    q = Department.query
+    if hasattr(Department, 'is_active'):
+        q = q.filter(Department.is_active.isnot(False))
+    return q.order_by(Department.name).all()
+
+
 @staff_onb_bp.route('/join/<token>', methods=['GET'])
 def join(token):
     inv = _load_invite(token)
@@ -159,6 +166,7 @@ def join(token):
                                reason=('expired or fully used' if inv else 'invalid'))
     branches = Branch.query.order_by(Branch.name).all() if not inv.branch_id else []
     return render_template('staff_onboarding/join.html', invite=inv, branches=branches,
+                           departments=_active_departments(),
                            school=(session.get('school_name') or 'the school'))
 
 
@@ -171,11 +179,14 @@ def join_submit(token):
         inv, full_name=request.form.get('full_name'),
         username=request.form.get('username'), email=request.form.get('email'),
         phone=request.form.get('phone'), password=request.form.get('password'),
-        branch_id=request.form.get('branch_id'), position=request.form.get('position'))
+        branch_id=request.form.get('branch_id'), position=request.form.get('position'),
+        gender=request.form.get('gender'), staff_type=request.form.get('staff_type'),
+        department_id=request.form.get('department_id'),
+        qualification=request.form.get('qualification'))
     if err:
         flash(err, 'error')
         branches = Branch.query.order_by(Branch.name).all() if not inv.branch_id else []
         return render_template('staff_onboarding/join.html', invite=inv, branches=branches,
-                               form=request.form,
+                               form=request.form, departments=_active_departments(),
                                school=(session.get('school_name') or 'the school')), 400
     return render_template('staff_onboarding/join_done.html', signup=signup)
