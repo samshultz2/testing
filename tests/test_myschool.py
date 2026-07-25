@@ -564,6 +564,19 @@ def test_harvest_literature_novel_note_maps_to_prose(app, monkeypatch):
         assert q.topic == 'Kossoh Town Boy'
 
 
+def test_classify_agric_cultural_practices_keywords():
+    """Agricultural Science keyword boosts: germination/seedbed/transplanting-style
+    questions now classify (they used to miss — the vocabulary isn't in the bare
+    syllabus titles)."""
+    from utils import myschool as ms
+    for stem in ('The young plants that emerge during germination are called seedlings',
+                 'The removal of excess seedlings from a seedbed is known as thinning',
+                 'The sowing of seed by drilling and later transplanting to the field'):
+        sec, top, sub = ms.classify_confident('Agricultural Science', stem)
+        assert top is not None, stem
+        assert sub == 'Land preparation & cultural practices'
+
+
 def test_harvest_caps_overlong_topic(app, monkeypatch):
     """A very long novel/set-text title is trimmed to the topic column's limit so
     the INSERT never overflows VARCHAR(100) and pauses the whole harvest."""
