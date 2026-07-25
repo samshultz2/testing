@@ -336,7 +336,65 @@ KEYWORD_BOOSTS = {
                                         "arrangement", "ways can", "nPr", "nCr", "selected"],
         "Probability: single & combined events": ["probability", "dice", "coin", "at random", "chance"],
         "Differentiation of algebraic & trigonometric functions": ["differentiate", "derivative", "dy/dx"],
-        "Integration of algebraic & trigonometric functions": ["integrate", "integral"],
+        "Integration of algebraic & trigonometric functions": ["integrate", "integral", "with respect to"],
+        "Polynomials: factorisation, remainder & factor theorem":
+            ["factorize", "factorise", "factor theorem", "remainder theorem", "polynomial", "expand"],
+        "Change of subject of formula": ["subject of the formula", "subject of formula", "make", "in terms of"],
+        "Simultaneous linear/quadratic equations": ["simultaneous", "simultaneously"],
+        "Variation: direct, inverse, joint & partial":
+            ["varies", "variation", "proportional", "directly proportional", "inversely proportional",
+             "jointly", "partly"],
+        "Inequalities: linear & quadratic":
+            ["inequality", "inequalities", "greater than or equal", "less than or equal", "shaded region"],
+        "Angles, triangles & polygons":
+            ["polygon", "triangle", "interior angle", "exterior angle", "isosceles", "quadrilateral",
+             "parallelogram", "trapezium", "sum of angles", "pentagon", "hexagon"],
+        "Similarity & congruence": ["similar triangles", "congruent", "similar figures"],
+        "Loci": ["locus", "loci", "equidistant"],
+        "Angles of elevation & depression": ["elevation", "depression", "angle of elevation", "angle of depression"],
+        "Ratio, proportion & rates":
+            ["ratio", "proportion", "in the ratio", "divided in the ratio", "shared", "rate"],
+        "Number sequences": ["sequence", "next term", "the pattern"],
+        "Collection, tabulation & representation of data":
+            ["pie chart", "bar chart", "histogram", "frequency table", "pictogram", "frequency distribution"],
+        "Cumulative frequency & percentiles":
+            ["cumulative frequency", "percentile", "quartile", "ogive", "interquartile"],
+        "Application of differentiation: rate, maxima & minima":
+            ["maximum value", "minimum value", "rate of change", "stationary point", "maxima", "minima"],
+        "Application of integration: area under a curve": ["area under", "area bounded", "under the curve"],
+    },
+    "commerce": {
+        "Meaning & scope of commerce": ["commerce", "commercial", "auxiliaries", "aids to trade"],
+        "Occupations & production": ["production", "extractive", "manufacturing", "primary production",
+                                     "secondary production", "tertiary", "occupation"],
+        "Home trade: retail & wholesale": ["retail", "wholesale", "retailer", "wholesaler", "home trade",
+                                           "middlemen", "chain store", "supermarket", "hire purchase"],
+        "Foreign trade: import, export & documents":
+            ["import", "export", "foreign trade", "balance of trade", "balance of payment", "bill of lading",
+             "invoice", "indent", "customs", "tariff", "entrepot", "quota", "letter of credit"],
+        "Transportation": ["transport", "transportation", "carriage", "haulage", "pipeline", "containerisation",
+                           "containerization"],
+        "Communication": ["postal", "telecommunication", "courier", "e-mail", "telephone"],
+        "Warehousing": ["warehouse", "warehousing", "storage", "bonded"],
+        "Advertising & sales promotion": ["advertising", "advertisement", "sales promotion", "publicity",
+                                          "branding", "trademark"],
+        "Insurance": ["insurance", "premium", "policy", "underwriter", "indemnity", "assurance", "actuary",
+                     "utmost good faith", "subrogation", "insurable interest"],
+        "Banking & finance": ["bank", "banking", "cheque", "overdraft", "current account", "savings account",
+                             "central bank", "clearing"],
+        "Sole proprietorship & partnership": ["sole proprietor", "sole trader", "partnership", "partner",
+                                              "one-man business"],
+        "Limited liability companies": ["limited liability", "shareholder", "dividend", "shares", "debenture",
+                                        "prospectus", "annual general meeting", "board of directors"],
+        "Co-operatives & public enterprises": ["co-operative", "cooperative", "public enterprise",
+                                               "public corporation", "nationalisation", "privatisation"],
+        "Sources of business finance": ["capital", "loan", "equity", "trade credit", "retained profit",
+                                        "working capital"],
+        "Money & capital markets": ["money market", "capital market", "treasury bill", "treasury certificate"],
+        "Stock exchange": ["stock exchange", "stockbroker", "securities", "bull", "bear", "speculator"],
+        "Trade associations & chambers of commerce": ["chamber of commerce", "trade association"],
+        "Business ethics & social responsibility": ["business ethics", "social responsibility"],
+        "Government & business": ["subsidy", "subvention", "nationalised", "regulation of business"],
     },
     "physics": {
         "Newton's laws of motion": ["newton", "force", "acceleration", "f = ma"],
@@ -829,6 +887,35 @@ def classify_confident(subject, text, year=None, novel_title=None):
         if nv:
             topic = nv
     return (section, topic, sub)
+
+
+def english_vocab_fallback(question_text, options):
+    """A truthful umbrella tag for the bare English *vocabulary* items that carry
+    no directive text.
+
+    JAMB's antonym / synonym / lexis sections are scraped as a short headword plus
+    four one-word options, while the "choose the word opposite/nearest in meaning"
+    instruction sits in a section header that isn't repeated on each row. With no
+    directive, antonym vs synonym is genuinely indistinguishable — but the item is
+    unambiguously an English *Lexis and Structure* (vocabulary) question, so we can
+    file it there confidently. That makes it both drawable and no-longer-"untagged"
+    without inventing a precise sub-type it doesn't state.
+
+    Returns ``("lexis_structure", "Lexis and Structure", None)`` for a vocabulary-
+    shaped item, else ``None`` (so a normal sentence-length question is left to the
+    keyword classifier / ensure-section fallback).
+    """
+    words = (question_text or "").split()
+    if not words or len(words) > 6:              # sentence-length -> not a bare headword
+        return None
+    opts = [o.strip() for o in (options or []) if o and o.strip()]
+    if len(opts) < 3:                            # need a real option set to be a lexis item
+        return None
+    # options are short words/phrases (the shape of a synonym/antonym choice list)
+    shortish = sum(1 for o in opts if len(o.split()) <= 3)
+    if shortish < 3:
+        return None
+    return ("lexis_structure", "Lexis and Structure", None)
 
 
 # ===========================================================================

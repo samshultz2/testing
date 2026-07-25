@@ -684,3 +684,33 @@ def test_harvest_reports_empty_subjects(app, monkeypatch):
                 break
         assert st['status'] == 'done' and st['added'] == 0
         assert st['empty_subjects'] == ['Civic Education']
+
+
+def test_english_vocab_fallback_shapes():
+    """Bare vocabulary items (headword + one-word options, no directive) get the
+    truthful Lexis & Structure umbrella; sentence-length questions do not."""
+    from utils import myschool as ms
+    assert ms.english_vocab_fallback('NOTORIOUS',
+                                     ['infamous', 'famous', 'popular', 'unknown']) \
+        == ('lexis_structure', 'Lexis and Structure', None)
+    # too few options -> not a lexis item
+    assert ms.english_vocab_fallback('NOTORIOUS', ['infamous']) is None
+    # sentence-length stem -> left for the keyword classifier / ensure-section
+    assert ms.english_vocab_fallback(
+        'Which of the following countries is the largest producer of crude oil in the world',
+        ['a', 'b', 'c', 'd']) is None
+
+
+def test_new_maths_and_commerce_boosts():
+    """Coverage-pass keywords for previously-missed Maths & Commerce topics."""
+    from utils import myschool as ms
+    assert ms.classify_confident('Mathematics', 'Factorize x^2 - 5x + 6')[1] == 'Algebra'
+    assert ms.classify_confident('Mathematics',
+                                 'Find the angle of elevation of the tower')[0] == 'geometry'
+    assert ms.classify_confident('Mathematics', 'Solve the inequality 3x > 9')[2] \
+        == 'Inequalities: linear & quadratic'
+    assert ms.classify_confident('Commerce',
+                                 'The bill of lading is used in foreign trade')[2] \
+        == 'Foreign trade: import, export & documents'
+    assert ms.classify_confident('Commerce',
+                                 'Utmost good faith is a principle of insurance')[2] == 'Insurance'

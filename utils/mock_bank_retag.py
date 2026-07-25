@@ -64,6 +64,7 @@ def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=F
 
     valid_sections = {s['section'] for s in sections_for(subject.name)}
     draw_sections = _drawable_sections(subject)
+    is_english = ms.norm_subject(subject.name) == 'english language'
 
     ids = _target_ids(subject, mode)
     scanned = topic_set = section_set = section_ensured = 0
@@ -77,6 +78,15 @@ def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=F
             text = ' '.join(filter(None, [
                 row.question_text, row.option_a, row.option_b, row.option_c, row.option_d]))
             sec, top, sub = ms.classify_confident(subject.name, text, year=row.exam_year)
+            # English bare-vocabulary items (headword + one-word options, no directive)
+            # carry no keywords; file them under the truthful Lexis & Structure umbrella
+            # so they're tagged + drawable rather than left permanently untagged.
+            if not top and is_english:
+                fb = ms.english_vocab_fallback(
+                    row.question_text,
+                    [row.option_a, row.option_b, row.option_c, row.option_d])
+                if fb:
+                    sec, top, sub = fb
             if top:
                 row.topic = _cap(top, 100)
                 row.subtopic = _cap(sub, 120) if sub else None

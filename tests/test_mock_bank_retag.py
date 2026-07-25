@@ -111,3 +111,25 @@ def test_retag_apostrophe_boost_matches(app):
     from utils import myschool as ms
     sec, top, sub = ms.classify_confident('Physics', 'Find the resistance using Ohm law: V = IR')
     assert top is not None
+
+
+def test_retag_tags_bare_english_vocab_items(app):
+    """English antonym/synonym rows scrape as a headword + one-word options with no
+    directive; the retagger files them under Lexis & Structure instead of leaving
+    them permanently untagged."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils.mock_bank_retag import retag_untagged, untagged_count
+    with app.app_context():
+        s = Subject(name='English Language', is_active=True)
+        db.session.add(s); db.session.flush()
+        sid = s.id
+        db.session.add(_q(sid, 'NOTORIOUS', option_a='infamous', option_b='famous',
+                          option_c='popular', option_d='unknown'))
+        db.session.commit()
+        assert untagged_count(s) == 1
+        res = retag_untagged(s)
+        assert res['topic_set'] == 1 and res['still_untagged'] == 0
+        row = MockJAMBQuestion.query.filter_by(subject_id=sid).first()
+        assert row.topic == 'Lexis and Structure' and row.section == 'lexis_structure'
+        MockJAMBQuestion.query.filter_by(subject_id=sid).delete()
+        db.session.delete(db.session.get(Subject, sid)); db.session.commit()
