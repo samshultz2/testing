@@ -244,13 +244,15 @@ def subject_items(exam, subject_id, attempt):
         # blueprint drew nothing (mis-tagged) → fall through to legacy
 
     # Legacy fallback: passages kept whole; cap trims stand-alone. The cap is the
-    # mock's own per-subject cap when set, else the subject's JAMB blueprint total
-    # (e.g. 60 for English, 40 for Maths) — so an untagged pool never dumps the
-    # ENTIRE bank on the student. Only truly non-JAMB, uncapped subjects serve all.
-    from utils.jamb_blueprint import blueprint_total
+    # mock's own per-subject cap when set, else the subject's JAMB paper size —
+    # blueprint_for() returns the subject's own total (English 60, Literature 50)
+    # or the DEFAULT_BLUEPRINT (40) for every other JAMB subject that has no
+    # bespoke blueprint (Commerce, Government, Economics, ...). This guarantees an
+    # untagged pool never dumps the ENTIRE bank on the student.
+    from utils.jamb_blueprint import blueprint_for
     passage_groups = [{'passage': p, 'questions': by_passage[p.id]}
                       for p in passages if by_passage.get(p.id)]
-    cap = exam.questions_per_subject or blueprint_total(subj_name) or 0
+    cap = exam.questions_per_subject or blueprint_for(subj_name)['total'] or 0
     if cap:
         passage_q = sum(len(g['questions']) for g in passage_groups)
         rem = max(0, cap - passage_q)

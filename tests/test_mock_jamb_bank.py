@@ -345,14 +345,15 @@ def test_cloze_passage_trimmed_to_section_count(app):
         db.session.commit()
 
 
-def test_untagged_subject_capped_to_blueprint_total(app):
-    """An untagged pool (no section tags) must NOT dump the whole bank — the legacy
-    fallback caps to the subject's blueprint total (Maths = 40)."""
+def test_untagged_non_blueprint_subject_capped_to_default(app):
+    """A JAMB subject with NO bespoke blueprint (Commerce, Government, ...) and an
+    untagged pool must cap to the DEFAULT JAMB paper size (40), not dump the whole
+    bank. This is the exact case that was still serving every question."""
     from utils.mock_jamb_sitting import subject_items
     with app.app_context():
         _SEQ[0] += 1
         bid = Branch.get_default().id
-        subj = Subject(name='Mathematics', is_active=True); db.session.add(subj); db.session.flush()
+        subj = Subject(name='Commerce', is_active=True); db.session.add(subj); db.session.flush()
         # 120 untagged bank questions (section left NULL) -> paper must cap at 40
         for i in range(120):
             db.session.add(MockJAMBQuestion(
