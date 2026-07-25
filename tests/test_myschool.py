@@ -595,6 +595,25 @@ def test_classify_government_civic_literature_boosts():
         assert ms.classify_confident(subj, stem)[1] is not None, (subj, stem)
 
 
+def test_classify_systematic_stem_patterns():
+    """Common JAMB stem patterns that carry the topic in phrasing, not vocabulary:
+    lexis 'nearest/opposite in meaning', permutations 'arranged', significant
+    figures, atomic-discovery, isomers, implantation — all now classify."""
+    from utils import myschool as ms
+    cases = [
+        ('English Language', 'Choose the option nearest in meaning to BENEVOLENT', 'synonyms'),
+        ('English Language', 'Select the word opposite in meaning to ABUNDANT', 'antonyms'),
+        ('English Language', 'Choose the option that best completes the sentence', 'lexis_structure'),
+        ('Mathematics', 'In how many ways can the letters of ZOOLOGY be arranged', 'statistics'),
+        ('Mathematics', 'Correct 241.34 to 4 significant figures', 'number'),
+        ('Chemistry', '2-methylprop-1-ene is an isomer of', 'organic'),
+        ('Biology', 'The attachment of the embryo to the wall of the uterus is called', 'reproduction'),
+    ]
+    for subj, stem, sec in cases:
+        got = ms.classify_confident(subj, stem)
+        assert got[0] == sec, (subj, stem, got)
+
+
 def test_harvest_caps_overlong_topic(app, monkeypatch):
     """A very long novel/set-text title is trimmed to the topic column's limit so
     the INSERT never overflows VARCHAR(100) and pauses the whole harvest."""
