@@ -46,7 +46,8 @@ class GraduateAudit(db.Model):
     student = db.relationship('Student')
 
 
-# Document types the school can issue to a graduate (Phase 2).
+# Document types the school can issue to a graduate. The original seven (Phase 2)
+# plus the certificate/award family (Academic Documents & Publishing system).
 GRADUATE_DOC_TYPES = {
     'slc': 'School Leaving Certificate',
     'statement': 'Statement of Result',
@@ -55,9 +56,26 @@ GRADUATE_DOC_TYPES = {
     'recommendation': 'Recommendation Letter',
     'conduct': 'Conduct Report',
     'notification': 'Result Notification Slip',
+    # Graduation & completion
+    'graduation': 'Graduation Certificate',
+    'completion': 'Completion Certificate',
+    'attendance_cert': 'Attendance Certificate',
+    # Character
+    'character_cert': 'Character Certificate',
+    # Awards & recognition
+    'merit_award': 'Merit Award Certificate',
+    'best_graduating': 'Best Graduating Student Certificate',
+    'best_subject': 'Best in Subject Certificate',
+    'leadership_award': 'Leadership Award',
+    'sports_award': 'Sports Award',
+    'excellence_award': 'Academic Excellence Certificate',
 }
 _DOC_ABBR = {'slc': 'SLC', 'statement': 'SOR', 'transcript': 'TRN', 'testimonial': 'TST',
-             'recommendation': 'REC', 'conduct': 'CDT', 'notification': 'RNS'}
+             'recommendation': 'REC', 'conduct': 'CDT', 'notification': 'RNS',
+             'graduation': 'GRD', 'completion': 'CMP', 'attendance_cert': 'ATT',
+             'character_cert': 'CHR', 'merit_award': 'MRT', 'best_graduating': 'BGS',
+             'best_subject': 'BIS', 'leadership_award': 'LDR', 'sports_award': 'SPT',
+             'excellence_award': 'AEX'}
 
 
 class GraduateDocument(db.Model):

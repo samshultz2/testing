@@ -101,13 +101,37 @@ def _watermark(school_name):
 
 
 # Document types whose layout is chosen from a per-school design catalog.
-DESIGNED_DOCS = ('transcript', 'slc', 'statement')
+# Driven by the central document catalog so new designed types register once.
+def _designed_docs():
+    from utils import document_catalog
+    return tuple(document_catalog.designed_types())
+
+
+class _DesignedDocs:
+    """Back-compat: ``doc_type in DESIGNED_DOCS`` stays valid while the set of
+    designed document types is sourced from the catalog."""
+    def __contains__(self, doc_type):
+        return _is_designed(doc_type)
+
+    def __iter__(self):
+        return iter(_designed_docs())
+
+
+DESIGNED_DOCS = _DesignedDocs()
+
+
+def _is_designed(doc_type):
+    from utils import document_catalog
+    return document_catalog.is_designed(doc_type)
 
 
 def _design_module(doc_type):
-    from utils import transcript_templates, slc_templates, sor_templates
-    return {'transcript': transcript_templates, 'slc': slc_templates,
-            'statement': sor_templates}.get(doc_type)
+    from utils import document_catalog as cat
+    from utils import (transcript_templates, slc_templates, sor_templates,
+                       certificate_templates)
+    return {cat.ENGINE_TRANSCRIPT: transcript_templates, cat.ENGINE_SLC: slc_templates,
+            cat.ENGINE_STATEMENT: sor_templates,
+            cat.ENGINE_CERTIFICATE: certificate_templates}.get(cat.engine(doc_type))
 
 
 def design_key_for(doc_type):
@@ -205,7 +229,7 @@ def _doc_ctx(student, doc, school, rec):
     ctx = {'student': student, 'academic': rec.get('academic') or {}, 'bio': rec.get('bio') or {},
            'school': school, 'grad_when': grad_when, 'grad_session': grad_session,
            'admission_session': rec.get('admission_session') or '', 'doc': doc,
-           'waec': _waec(student)}
+           'doc_type': getattr(doc, 'doc_type', None), 'waec': _waec(student)}
     return _slc_fields(ctx)
 
 
@@ -266,6 +290,7 @@ def preview_document(doc_type, template_key):
         raise ValueError('Unknown document type')
     school = school_profile()
     ctx = mod.sample_ctx(school)
+    ctx['doc_type'] = doc_type            # certificate engine renders per doc type
     _slc_fields(ctx)                      # sample gets SLC prose fields too
     land = mod.is_landscape(template_key)
     pagesize = landscape(A4) if land else A4

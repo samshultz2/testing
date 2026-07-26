@@ -333,8 +333,14 @@ def bulk_documents():
 # DOCUMENT DESIGNS (Phase 2 — per-school templates)
 # ============================================================================
 
-_DESIGN_DOC_LABELS = {'transcript': 'Transcript', 'slc': 'School Leaving Certificate',
-                      'statement': 'Statement of Result'}
+def _design_doc_labels():
+    """Every designed document type (school-selectable collection), sourced from
+    the central catalogue so new document types appear automatically."""
+    from utils import document_catalog as cat
+    return {dt: cat.label(dt) for dt in cat.designed_types()}
+
+
+_DESIGN_DOC_LABELS = _design_doc_labels()
 
 
 @promotion_bp.route('/doc-templates')
@@ -342,8 +348,9 @@ _DESIGN_DOC_LABELS = {'transcript': 'Transcript', 'slc': 'School Leaving Certifi
 def doc_templates():
     """Gallery of document designs a school can choose from + set a default."""
     from utils import graduate_docs
+    labels = _design_doc_labels()
     doc_type = (request.args.get('doc_type') or 'transcript').strip()
-    if doc_type not in _DESIGN_DOC_LABELS:
+    if doc_type not in labels:
         doc_type = 'transcript'
     current = graduate_docs.design_key_for(doc_type)
     templates = [{
@@ -352,12 +359,20 @@ def doc_templates():
         'set_url': url_for('promotion.set_doc_template', doc_type=doc_type),
         'is_default': t['key'] == current,
     } for t in graduate_docs.list_designs(doc_type)]
+    from utils import document_catalog as cat
+    doc_types_grouped = [{
+        'category': category,
+        'items': [{'key': dt, 'label': lbl,
+                   'url': url_for('promotion.doc_templates', doc_type=dt)}
+                  for dt, lbl, designed in items if designed],
+    } for category, items in cat.by_category()]
     return _render({
         'page': 'doc_templates', 'graduates': url_for('promotion.graduates_list'),
-        'doc_type': doc_type, 'doc_type_label': _DESIGN_DOC_LABELS[doc_type],
+        'doc_type': doc_type, 'doc_type_label': labels[doc_type],
         'doc_types': [{'key': k, 'label': v,
                        'url': url_for('promotion.doc_templates', doc_type=k)}
-                      for k, v in _DESIGN_DOC_LABELS.items()],
+                      for k, v in labels.items()],
+        'doc_types_grouped': [g for g in doc_types_grouped if g['items']],
         'templates': templates, 'current': current,
     })
 

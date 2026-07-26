@@ -76,6 +76,21 @@ def school_profile():
     }
 
 
+def document_branding():
+    """Per-tenant document branding (colours, motto, verification prefs) used by the
+    Academic Documents system. Stored in the same per-school ``SchoolSettings`` KV
+    store, so it is automatically tenant-isolated. All keys are optional; designs
+    fall back to their collection defaults when a key is blank."""
+    g = SchoolSettings.get
+    return {
+        'primary_color': g('doc_primary_color', '') or '',
+        'accent_color': g('doc_accent_color', '') or '',
+        'secondary_color': g('doc_secondary_color', '') or '',
+        'motto': g('school_motto', '') or '',
+        'verify_enabled': (g('doc_verify_enabled', '1') or '1') != '0',
+    }
+
+
 def logo_header_flowable(logo, items, gap_mm=4):
     """A centred letterhead row: the ``logo`` immediately to the left of a text
     block, with the whole logo+text unit centred on the page.
