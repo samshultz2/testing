@@ -119,6 +119,28 @@ def test_graduate_profile_includes_permanent_record(app):
     assert 'academic' in j['record'] and 'attendance' in j['record']
 
 
+def test_graduate_profile_with_waec_and_jamb_results(app):
+    """Regression: the profile must not crash on external-exam fields that live on
+    the Student (jamb_reg_number) rather than the result rows."""
+    from models import WAECResult, JAMBResult
+    with app.app_context():
+        s = Student(student_id='GEXT1', first_name='Ext', surname='Ernal',
+                    gender='Male', is_active=True, is_graduated=True,
+                    graduate_status='Graduated', jamb_reg_number='2024123ABC')
+        db.session.add(s); db.session.flush()
+        db.session.add(WAECResult(student_id=s.id, exam_year=2024, subject='Mathematics', grade='B3'))
+        db.session.add(JAMBResult(student_id=s.id, exam_year=2024, total_score=250,
+                                  subject1='English', subject1_score=70))
+        db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    r = c.get(f'/promotion/graduates/{sid}', headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['jamb_results'][0]['registration_number'] == '2024123ABC'
+    assert j['waec_by_year'][0]['subjects'][0]['grade'] == 'B3'
+
+
 def test_graduate_document_issue_and_public_verify(app):
     from models import db, GraduateDocument
     with app.app_context():

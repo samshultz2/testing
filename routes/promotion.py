@@ -768,7 +768,7 @@ def graduate_profile(student_id):
         if key not in waec_by_year:
             waec_by_year[key] = {
                 'exam_year': result.exam_year,
-                'exam_number': result.exam_number,
+                'exam_number': None,      # WAECResult has no exam-number column
                 'subjects': []
             }
         waec_by_year[key]['subjects'].append(result)
@@ -836,7 +836,7 @@ def graduate_profile(student_id):
                           'subjects': [{'subject': r.subject, 'grade': r.grade} for r in v['subjects']]}
                          for v in waec_by_year.values()],
         'jamb_results': [{'exam_year': j.exam_year, 'total_score': j.total_score,
-                          'registration_number': j.registration_number,
+                          'registration_number': student.jamb_reg_number,
                           'subjects': [{'name': j.subject1, 'score': j.subject1_score},
                                        {'name': j.subject2, 'score': j.subject2_score},
                                        {'name': j.subject3, 'score': j.subject3_score},
