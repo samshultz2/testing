@@ -86,3 +86,18 @@ HOST=... EXAM_ID=7 USERS=500 RUN_TIME=3m THRESHOLD=0.02 ./loadtest/run_mock_jamb
 Env: `HOST` (required, staging only), `USERS` (1000), `SPAWN` (40/s),
 `RUN_TIME` (5m), `THRESHOLD` (0.01), `EXAM_ID` (skip seeding), `N`/`BANK` (seed
 sizes). Results land in `loadtest/results/mockjamb-<timestamp>_stats.csv`.
+
+### Prerequisites (the script does NOT start the app)
+
+- The app must already be **running and reachable at `HOST`** (your normal
+  gunicorn service) — the script drives it over HTTP and preflight-checks
+  `HOST/healthz`, aborting with a clear error if it can't connect.
+- **Run the script on the staging box** (or anywhere with the app's env +
+  DB access): the seed step imports the app and writes straight to the DB, so it
+  needs the same `DATABASE_URL`/`SECRET_KEY`/deps the app uses.
+- `pip install locust`.
+- **Single-school staging is simplest.** In multi-tenant mode the seed writes to
+  the DB the app's default config points at, while locust hits the tenant that
+  `HOST`'s subdomain resolves to — they must be the same DB. Use a single-school
+  staging copy, or seed the specific tenant DB explicitly.
+- Staging only, in a quiet window (it generates heavy load).

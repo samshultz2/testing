@@ -40,6 +40,23 @@ if ! command -v locust >/dev/null 2>&1; then
   exit 2
 fi
 
+# ---- preflight: the app must already be up and reachable at HOST ------------
+# (this script drives the app over HTTP; it does NOT start it for you.)
+if command -v curl >/dev/null 2>&1; then
+  echo "==> Checking the app is up at $HOST ..."
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${HOST%/}/healthz" || true)"
+  if [ "$code" != "200" ]; then
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HOST" || true)"
+  fi
+  if [ "$code" = "000" ] || [ -z "$code" ]; then
+    echo "ERROR: cannot reach $HOST — start the app (gunicorn) first, or fix HOST." >&2
+    exit 2
+  fi
+  echo "    reachable (HTTP $code)."
+else
+  echo "WARN: curl not found — skipping the reachability check. Make sure the app is running at $HOST." >&2
+fi
+
 RESULTS_DIR="loadtest/results"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 PREFIX="${RESULTS_DIR}/mockjamb-${STAMP}"
