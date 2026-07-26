@@ -34,3 +34,38 @@ loops: batched answer autosave, heartbeat, and occasional submit.
   and Postgres `max_connections` (see `docs/SCALING.md`).
 
 Ramp up (200 → 400 → 800) and find where it breaks; that's your real headroom.
+
+---
+
+# Mock-JAMB sitting load test
+
+The CBT harness above targets the CBT module. For the **Mock-JAMB** online
+sitting (the 4-subjects-in-one paper drawn from the shared bank), use the
+dedicated harness:
+
+```bash
+# 1. seed staging: N students + a bank + one published mock for today
+N=1000 BANK=600 python loadtest/seed_mock_jamb.py       # prints EXAM_ID
+
+# 2. run locust against the real VPS
+EXAM_ID=<id> locust -f loadtest/locustfile_mock_jamb.py --host https://<staging-url>
+```
+
+Each simulated student logs in, opens the sitting (which draws + caches their
+paper), then loops batched autosave + occasional reload/submit. Watch failure %
+and p95 for `open`, `save-batch`, and `reload`.
+
+## Quick local sanity benchmark (no VPS)
+
+`bench_mock_jamb.py` times the hardened server-side hot paths on a throwaway
+SQLite DB — useful to confirm the paper draw is indexed and the cache is working
+before booking VPS time:
+
+```bash
+N=500 BANK=500 python loadtest/bench_mock_jamb.py
+```
+
+It reports cold-draw vs cached-rebuild vs no-cache cost, the SQLite query plan
+(should show the `ix_mock_jamb_questions_subject_pool` index), and full HTTP
+page-render timings. NOTE: SQLite serialises writes, so its write numbers are
+pessimistic vs Postgres — use the locust run on the VPS for the true ceiling.
