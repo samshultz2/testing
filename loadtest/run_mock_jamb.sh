@@ -30,6 +30,14 @@
 #   EXAM_ID     reuse an existing seeded mock (mode B only; skips the seed step)
 #   N, BANK     seed sizes when seeding       (default N=USERS, BANK=600)
 #
+# Do NOT 'source' this script. Sourcing applies its `set -e`/`exit` to your
+# interactive shell, which closes the terminal on the first exit. Detect a sourced
+# invocation and bail out safely (return, not exit) before enabling set -e.
+if (return 0 2>/dev/null); then
+  echo "Don't source this — run it:  ./loadtest/run_mock_jamb.sh   (or: bash loadtest/run_mock_jamb.sh)" >&2
+  return 1 2>/dev/null
+fi
+
 set -euo pipefail
 
 cd "$(dirname "$0")/.."                       # repo root
