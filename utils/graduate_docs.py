@@ -167,8 +167,25 @@ def _doc_ctx(student, doc, school, rec):
         pass
     ctx = {'student': student, 'academic': rec.get('academic') or {}, 'bio': rec.get('bio') or {},
            'school': school, 'grad_when': grad_when, 'grad_session': grad_session,
-           'admission_session': rec.get('admission_session') or '', 'doc': doc}
+           'admission_session': rec.get('admission_session') or '', 'doc': doc,
+           'waec': _waec(student)}
     return _slc_fields(ctx)
+
+
+def _waec(student):
+    """The student's WAEC result (latest exam year): [{'subject','grade'}], plus the
+    year. Empty when none recorded."""
+    try:
+        from models import WAECResult
+        rows = WAECResult.query.filter_by(student_id=student.id).all()
+    except Exception:
+        return {}
+    if not rows:
+        return {}
+    year = max(r.exam_year for r in rows if r.exam_year) if any(r.exam_year for r in rows) else None
+    subs = sorted([{'subject': r.subject, 'grade': r.grade} for r in rows
+                   if r.exam_year == year], key=lambda s: s['subject'] or '')
+    return {'year': year, 'subjects': subs}
 
 
 def _verification_footer(doc, verify_url, small):

@@ -123,6 +123,28 @@ def _sig(S, labels=('Principal', 'Registrar')):
     return [Spacer(1, 22), t]
 
 
+def _waec_block(ctx, S, accent):
+    """WAEC result table (subject + grade), when the student has one on record."""
+    waec = ctx.get('waec') or {}
+    subs = waec.get('subjects') or []
+    if not subs:
+        return []
+    yr = waec.get('year')
+    title = 'WAEC Result' + (f' — {yr}' if yr else '')
+    rows = [['S/N', 'Subject', 'Grade']]
+    for i, s in enumerate(subs, 1):
+        rows.append([str(i), Paragraph(_esc(s.get('subject')), S['cell']), s.get('grade') or '—'])
+    t = Table(rows, colWidths=[12 * mm, 113 * mm, 40 * mm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, 0), (-1, 0), accent), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])]))
+    return [Spacer(1, 10), Paragraph(f'<b>{_esc(title)}</b>', S['left']), Spacer(1, 3), t]
+
+
 def _summary_line(cum, S):
     if cum is None:
         return []
@@ -149,6 +171,7 @@ def _t_classic(ctx):
     el.append(_result_table(rows, S, accent) if rows
               else Paragraph('No internal results are on record for this student.', S['body']))
     el += _summary_line(cum, S)
+    el += _waec_block(ctx, S, accent)
     el += [Spacer(1, 8)] + _grade_key(S) + _sig(S)
     return el
 
@@ -176,6 +199,8 @@ def _t_official(ctx):
     el.append(_result_table(rows, S, accent) if rows
               else Paragraph('No internal results are on record.', S['body']))
     el += _summary_line(cum, S)
+    el += _waec_block(ctx, S, accent)
+    el.append(Spacer(1, 6))
     el.append(Paragraph("This statement is issued as a summary of the candidate's internal academic "
                         "record and does not replace the certificate.", S['small']))
     el += _sig(S)
@@ -205,7 +230,9 @@ def _t_sessional(ctx):
                 rows.append((subj, sc, _tt._grade(sc)))
         el.append(_result_table(rows, S, accent) if rows
                   else Paragraph('No results recorded for this session.', S['small']))
-    el += _summary_line(m['cumulative'], S) + _sig(S)
+    el += _summary_line(m['cumulative'], S)
+    el += _waec_block(ctx, S, accent)
+    el += _sig(S)
     return el
 
 

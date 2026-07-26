@@ -687,6 +687,9 @@ def sample_ctx(school):
                                for i, sub in enumerate(subjects)}}
     academic = {'cumulative': round(sum(allscores) / len(allscores), 1),
                 'terms_count': len(terms), 'terms': terms, 'competence': competence}
+    waec = {'year': 2024, 'subjects': [{'subject': s, 'grade': g} for s, g in [
+        ('English Language', 'B3'), ('Mathematics', 'C4'), ('Biology', 'B2'),
+        ('Chemistry', 'C5'), ('Physics', 'B3'), ('Economics', 'A1'), ('Civic Education', 'B2')]]}
     student = SimpleNamespace(full_name='Adaeze N. Okoro (SAMPLE)', student_id='STU-SAMPLE',
                               gender='Female', graduation_date=date(2024, 7, 1))
     return {'student': student, 'academic': academic, 'bio': {}, 'school': school,

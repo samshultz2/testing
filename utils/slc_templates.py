@@ -131,22 +131,35 @@ def _border_gold(canvas, doc):
 
 
 def _bg_corners_blue(canvas, doc):
-    """Blue + gold angular corner blocks (BOSS / modern style)."""
+    """Blue + gold angular corner accents (BOSS / modern style). Kept in the
+    margins (top-left / bottom-right) so they never sit under the content."""
     w, h = doc.pagesize
     navy = colors.HexColor('#1e3a8a')
     gold = colors.HexColor('#c99700')
     canvas.saveState()
     canvas.setFillColor(navy)
-    canvas.setStrokeColor(navy)
-    canvas.drawPath(_poly(canvas, [(0, h), (70 * mm, h), (0, h - 55 * mm)]), fill=1, stroke=0)
-    canvas.drawPath(_poly(canvas, [(w, 0), (w - 70 * mm, 0), (w, 55 * mm)]), fill=1, stroke=0)
+    canvas.drawPath(_poly(canvas, [(0, h), (46 * mm, h), (0, h - 34 * mm)]), fill=1, stroke=0)
+    canvas.drawPath(_poly(canvas, [(w, 0), (w - 46 * mm, 0), (w, 34 * mm)]), fill=1, stroke=0)
     canvas.setFillColor(gold)
-    canvas.drawPath(_poly(canvas, [(0, h), (52 * mm, h), (0, h - 40 * mm)]), fill=1, stroke=0)
-    canvas.drawPath(_poly(canvas, [(w, 0), (w - 52 * mm, 0), (w, 40 * mm)]), fill=1, stroke=0)
+    canvas.drawPath(_poly(canvas, [(0, h), (30 * mm, h), (0, h - 22 * mm)]), fill=1, stroke=0)
+    canvas.drawPath(_poly(canvas, [(w, 0), (w - 30 * mm, 0), (w, 22 * mm)]), fill=1, stroke=0)
     canvas.setStrokeColor(navy)
-    canvas.setLineWidth(1.5)
-    canvas.rect(10 * mm, 10 * mm, w - 20 * mm, h - 20 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(2)
+    canvas.rect(9 * mm, 9 * mm, w - 18 * mm, h - 18 * mm, stroke=1, fill=0)
+    canvas.setStrokeColor(gold)
+    canvas.setLineWidth(0.8)
+    canvas.rect(11.5 * mm, 11.5 * mm, w - 23 * mm, h - 23 * mm, stroke=1, fill=0)
     canvas.restoreState()
+
+
+def _frame(inner, side=32 * mm, top=16 * mm):
+    """Centre a certificate's content in a column inset from the decorated page
+    edges, so text never overlaps the border or corner art."""
+    t = Table([[inner]], colWidths=[L_W - 2 * side], hAlign='CENTER')
+    t.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                           ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                           ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    return [Spacer(1, top), t]
 
 
 def _draw_medal(c, cx, cy):
@@ -351,22 +364,30 @@ def _t_awarded(ctx):
     S = _styles()
     navy = colors.HexColor('#1e3a8a')
     gold = colors.HexColor('#b7791f')
+    W = L_W - 64 * mm
     name, _, _ = _header_lines(ctx['school'])
-    el = [Spacer(1, 6),
-          Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
-              'ti', parent=S['center'], fontSize=24, fontName='Helvetica-Bold', textColor=navy, spaceAfter=2)),
-          Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12, textColor=gold, spaceAfter=10)),
-          Paragraph('This certificate is awarded to', S['bodyc'])]
-    el.append(Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
-        'nm', parent=S['center'], fontSize=26, fontName='Times-BoldItalic', textColor=colors.HexColor('#111827'),
-        spaceBefore=4, spaceAfter=6)))
-    el.append(Paragraph(
-        f"A bona fide student of this school {_career_line(ctx)} who successfully completed the "
-        f"senior secondary programme with good moral character, maintaining a good relationship with "
-        f"teachers and peers.", ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)))
-    el.append(Paragraph(f"Given on {_esc(ctx.get('issued'))}.", S['bodyc']))
-    el += [Spacer(1, 18), _sig_row(['Chairman, Board of Governors', 'Principal'], L_W, S, seal=True)]
-    return el
+    p = ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)
+    inner = [
+        Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12,
+                                             fontName='Helvetica-Bold', textColor=gold, spaceAfter=4)),
+        Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
+            'ti', parent=S['center'], fontSize=23, leading=30, fontName='Helvetica-Bold',
+            textColor=navy, spaceAfter=16)),
+        Paragraph('This certificate is proudly awarded to',
+                  ParagraphStyle('st', parent=S['bodyc'], spaceBefore=2, spaceAfter=6)),
+        Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
+            'nm', parent=S['center'], fontSize=27, leading=33, fontName='Times-BoldItalic',
+            textColor=colors.HexColor('#111827'), spaceBefore=8, spaceAfter=8)),
+        HRFlowable(width='70%', thickness=0.6, color=colors.HexColor('#cbd5e1')),
+        Spacer(1, 10),
+        Paragraph(f"A bona fide student of {_esc(name)} {_career_line(ctx)} who successfully completed "
+                  f"the senior secondary programme with good moral character and conduct.", p),
+        Spacer(1, 6),
+        Paragraph(f"Given on {_esc(ctx.get('issued'))}", S['bodyc']),
+        Spacer(1, 26),
+        _sig_row(['Chairman, Board of Governors', 'Principal'], W, S, seal=True),
+    ]
+    return _frame(inner, top=18 * mm)
 
 
 def _t_vintage(ctx):
@@ -374,43 +395,60 @@ def _t_vintage(ctx):
     S = _styles()
     teal = colors.HexColor('#0f766e')
     gold = colors.HexColor('#b7791f')
+    W = L_W - 64 * mm
     name, _, _ = _header_lines(ctx['school'])
-    el = [Spacer(1, 4),
-          Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12, textColor=gold,
-                                               fontName='Helvetica-Bold', spaceAfter=2)),
-          Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
-              'ti', parent=S['center'], fontSize=22, fontName='Times-Bold', textColor=teal, spaceAfter=8))]
-    el += _cert_intro(ctx, S, colors.HexColor('#111827'))
-    el.append(Paragraph(
-        f"has officially completed the final year of study at {_esc(name)} and is granted this "
-        f"certificate in recognition of satisfactory academic achievement and good conduct, "
-        f"having attended {_career_line(ctx)}.", ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)))
-    el.append(Paragraph(f"Presented on {_esc(ctx.get('issued'))}.", S['bodyc']))
-    el += [Spacer(1, 16), _sig_row(['Head Teacher', 'Registrar'], L_W, S, seal=True)]
-    return el
+    p = ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)
+    inner = [
+        Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12, textColor=gold,
+                                             fontName='Helvetica-Bold', spaceAfter=2)),
+        Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
+            'ti', parent=S['center'], fontSize=22, leading=28, fontName='Times-Bold',
+            textColor=teal, spaceAfter=16)),
+        Paragraph('This is to certify that',
+                  ParagraphStyle('st', parent=S['bodyc'], spaceBefore=2, spaceAfter=6)),
+        Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
+            'nm', parent=S['center'], fontSize=26, leading=32, fontName='Times-BoldItalic',
+            textColor=colors.HexColor('#111827'), spaceBefore=8, spaceAfter=8)),
+        HRFlowable(width='60%', thickness=0.6, color=colors.HexColor('#cbd5e1')),
+        Spacer(1, 10),
+        Paragraph(f"has officially completed the final year of study at {_esc(name)} and is granted "
+                  f"this certificate in recognition of satisfactory academic achievement and good "
+                  f"conduct, having attended {_career_line(ctx)}.", p),
+        Spacer(1, 6),
+        Paragraph(f"Presented on {_esc(ctx.get('issued'))}", S['bodyc']),
+        Spacer(1, 24),
+        _sig_row(['Head Teacher', 'Registrar'], W, S, seal=True),
+    ]
+    return _frame(inner, top=16 * mm)
 
 
 def _t_modern(ctx):
     """Landscape blue + gold geometric certificate."""
     S = _styles()
     navy = colors.HexColor('#1e3a8a')
+    W = L_W - 64 * mm
     name, _, _ = _header_lines(ctx['school'])
-    el = [Spacer(1, 8),
-          Paragraph('SCHOOL LEAVING<br/>CERTIFICATE', ParagraphStyle(
-              'ti', parent=S['center'], fontSize=24, leading=26, fontName='Helvetica-Bold', textColor=navy, spaceAfter=8)),
-          Paragraph('ISSUED TO', ParagraphStyle('it', parent=S['center'], fontSize=10,
-                                                textColor=colors.HexColor('#b7791f'), spaceAfter=2)),
-          Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
-              'nm', parent=S['center'], fontSize=24, fontName='Times-BoldItalic', spaceAfter=4)),
-          Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12,
-                                               fontName='Helvetica-Bold', textColor=navy, spaceAfter=8))]
-    el.append(Paragraph(
-        f"has officially completed the final year of study and is granted this certificate in "
-        f"recognition of satisfactory academic fulfilment, having attended {_career_line(ctx)}.",
-        ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)))
-    el.append(Paragraph(f"Dated: {_esc(ctx.get('issued'))}", S['bodyc']))
-    el += [Spacer(1, 16), _sig_row(['Principal', 'Registrar'], L_W, S, seal=True)]
-    return el
+    p = ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)
+    inner = [
+        Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
+            'ti', parent=S['center'], fontSize=23, leading=30, fontName='Helvetica-Bold',
+            textColor=navy, spaceAfter=16)),
+        Paragraph('ISSUED TO', ParagraphStyle('it', parent=S['center'], fontSize=10,
+                                              textColor=colors.HexColor('#b7791f'), spaceAfter=4)),
+        Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
+            'nm', parent=S['center'], fontSize=26, leading=32, fontName='Times-BoldItalic', spaceAfter=6)),
+        HRFlowable(width='60%', thickness=0.6, color=colors.HexColor('#cbd5e1')),
+        Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12,
+                                             fontName='Helvetica-Bold', textColor=navy, spaceBefore=8, spaceAfter=10)),
+        Paragraph(f"has officially completed the final year of study and is granted this certificate "
+                  f"in recognition of satisfactory academic fulfilment, having attended "
+                  f"{_career_line(ctx)}.", p),
+        Spacer(1, 6),
+        Paragraph(f"Dated: {_esc(ctx.get('issued'))}", S['bodyc']),
+        Spacer(1, 26),
+        _sig_row(['Principal', 'Registrar'], W, S, seal=True),
+    ]
+    return _frame(inner, top=18 * mm)
 
 
 def _t_elegant(ctx):
@@ -418,27 +456,28 @@ def _t_elegant(ctx):
     S = _styles()
     green = colors.HexColor('#14532d')
     name, _, _ = _header_lines(ctx['school'])
-    rp = ParagraphStyle('rp', parent=S['bodyc'], fontSize=12, leading=17)
-    content = [
-        Spacer(1, 2),
+    left, right = 72 * mm, 24 * mm            # clear the left ribbon band
+    contentW = L_W - left - right
+    rp = ParagraphStyle('rp', parent=S['bodyc'], fontSize=11.5, leading=17)
+    inner = [
         Paragraph('This certificate is proudly presented for honourable achievement to', rp),
         Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
-            'nm', parent=S['center'], fontSize=26, fontName='Times-BoldItalic', textColor=green,
-            spaceBefore=8, spaceAfter=2)),
-        HRFlowable(width='80%', thickness=0.6, color=colors.HexColor('#94a3b8')),
+            'nm', parent=S['center'], fontSize=25, leading=31, fontName='Times-BoldItalic', textColor=green,
+            spaceBefore=8, spaceAfter=6)),
+        HRFlowable(width='85%', thickness=0.6, color=colors.HexColor('#cbd5e1')),
         Paragraph(f"a graduate of {_esc(name)}", ParagraphStyle(
             'hl', parent=S['center'], fontSize=12, fontName='Times-Italic', textColor=green,
-            spaceBefore=6, spaceAfter=6)),
-        Paragraph(
-            f"who successfully completed the senior secondary programme {_career_line(ctx)} with good "
-            f"conduct and {_esc((ctx.get('performance') or 'satisfactory')).lower()} academic performance.", rp),
-        Spacer(1, 18),
-        _sig_row(['Principal', 'Registrar'], L_W - 80 * mm, S),
+            spaceBefore=8, spaceAfter=6)),
+        Paragraph(f"who successfully completed the senior secondary programme {_career_line(ctx)} with "
+                  f"good conduct and {_esc((ctx.get('performance') or 'satisfactory')).lower()} "
+                  f"academic performance.", rp),
+        Spacer(1, 22),
+        _sig_row(['Principal', 'Registrar'], contentW, S),
     ]
-    outer = Table([['', content]], colWidths=[80 * mm, L_W - 80 * mm])
-    outer.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                               ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
-    return [Spacer(1, 30 * mm), outer]
+    outer = Table([['', inner]], colWidths=[left - 18 * mm, contentW], hAlign='LEFT')
+    outer.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                               ('TOPPADDING', (0, 0), (-1, -1), 0), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    return [Spacer(1, 40 * mm), outer]
 
 
 # ---------------------------------------------------------------------------
