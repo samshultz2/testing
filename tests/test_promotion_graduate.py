@@ -144,3 +144,57 @@ def test_graduate_document_issue_and_public_verify(app):
     assert v2.status_code == 200 and b'Could not verify' in v2.data
     # unknown doc type -> 404
     assert c.get(f'/promotion/graduates/{sid}/document/bogus').status_code == 404
+
+
+def test_graduate_document_revoke_and_reinstate(app):
+    from models import db, GraduateDocument
+    with app.app_context():
+        s = Student(student_id='GREV1', first_name='Rev', surname='Oke',
+                    gender='Male', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    tok = _csrf(c)
+    # issue first, then grab the verification code
+    assert c.get(f'/promotion/graduates/{sid}/document/testimonial').status_code == 200
+    with app.app_context():
+        code = GraduateDocument.query.filter_by(
+            student_id=sid, doc_type='testimonial').first().verification_code
+    pub = app.test_client()
+    assert b'Genuine' in pub.get(f'/verify/{code}').data
+    # revoke -> verifies as invalid
+    r = c.post(f'/promotion/graduates/{sid}/document/testimonial/revoke',
+               data={'_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        assert GraduateDocument.query.filter_by(
+            student_id=sid, doc_type='testimonial').first().revoked is True
+    assert b'Document revoked' in pub.get(f'/verify/{code}').data
+    # reinstate -> genuine again
+    r = c.post(f'/promotion/graduates/{sid}/document/testimonial/revoke',
+               data={'_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    assert b'Genuine' in pub.get(f'/verify/{code}').data
+    # revoking a not-yet-issued doc reports an error, not a crash
+    r = c.post(f'/promotion/graduates/{sid}/document/conduct/revoke',
+               data={'_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 400 and r.get_json()['ok'] is False
+
+
+def test_graduate_bulk_documents_zip(app):
+    import io, zipfile
+    with app.app_context():
+        for i in range(3):
+            db.session.add(Student(student_id=f'GBULK{i}', first_name=f'Bulk{i}',
+                                   surname='Grad', gender='Male', is_active=True,
+                                   is_graduated=True, graduate_status='Graduated'))
+        db.session.commit()
+    c = _admin(app)
+    r = c.get('/promotion/graduates/documents/bulk?doc_type=slc')
+    assert r.status_code == 200 and r.mimetype == 'application/zip'
+    z = zipfile.ZipFile(io.BytesIO(r.data))
+    assert len(z.namelist()) >= 3
+    assert all(z.read(n)[:4] == b'%PDF' for n in z.namelist())
+    # unknown doc type -> 404
+    assert c.get('/promotion/graduates/documents/bulk?doc_type=bogus').status_code == 404

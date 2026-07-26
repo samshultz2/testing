@@ -15,6 +15,7 @@ from utils.access_control import (
 from utils.branch_scope import scope_query, scope_by_student
 from utils.db_tx import safe_transaction
 from utils.audit import log_action
+from utils.security import rate_limited
 from datetime import date
 import json
 
@@ -60,7 +61,7 @@ def _sessions_json():
 @graduates_access_required
 def graduates_list():
     """List all graduated students"""
-    from models import GRADUATE_STATUSES
+    from models import GRADUATE_STATUSES, GRADUATE_DOC_TYPES
     session_id = request.args.get('session_id', type=int)
     status = (request.args.get('status') or '').strip()
 
@@ -82,6 +83,8 @@ def graduates_list():
     return _render({
         'page': 'graduates', 'session_id': session_id or '', 'sessions': _sessions_json(),
         'status': status, 'statuses': GRADUATE_STATUSES,
+        'doc_types': [{'type': k, 'label': v} for k, v in GRADUATE_DOC_TYPES.items()],
+        'bulk_url': url_for('promotion.bulk_documents'),
         'preview_url': url_for('promotion.graduate_sss3_preview'),
         'compare_url': url_for('promotion.graduate_compare'),
         'graduates': [{
@@ -246,6 +249,82 @@ def graduate_document(student_id, doc_type):
     return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=fname)
 
 
+@promotion_bp.route('/graduates/<int:student_id>/document/<doc_type>/revoke', methods=['POST'])
+@admin_required
+def revoke_document(student_id, doc_type):
+    """Toggle a document's revoked flag. A revoked document verifies as invalid on
+    the public portal. Logged + audited."""
+    from utils.branch_scope import require_branch_access
+    from utils.access_control import get_current_user
+    from models import GraduateDocument, GraduateAudit
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
+    prof_url = url_for('promotion.graduate_profile', student_id=student.id)
+    doc = GraduateDocument.query.filter_by(student_id=student.id, doc_type=doc_type).first()
+    if not doc:
+        return _err('That document has not been issued yet.', prof_url)
+    was = bool(doc.revoked)
+    doc.revoked = not was
+    me = get_current_user()
+    db.session.add(GraduateAudit(
+        student_id=student.id, field='document_revoke',
+        old_value=('revoked' if was else 'active'),
+        new_value=('revoked' if doc.revoked else 'active'),
+        reason=(request.form.get('reason') or '').strip() or None,
+        actor=(me.username if me else 'admin')))
+    db.session.commit()
+    log_action('graduate_document_revoke',
+               f'{student.full_name}: {doc.label} -> {"revoked" if doc.revoked else "reinstated"}')
+    return _ok(f'{doc.label} {"revoked" if doc.revoked else "reinstated"}.', prof_url)
+
+
+@promotion_bp.route('/graduates/documents/bulk')
+@admin_required
+@rate_limited('grad_bulk_docs', max_requests=6, window_minutes=15)
+def bulk_documents():
+    """Generate one document type for a whole graduating cohort as a ZIP of PDFs.
+    Capped per run to keep memory/time bounded."""
+    import io, zipfile
+    from flask import send_file
+    from utils.branch_scope import scope_query
+    from utils.access_control import get_current_user
+    from utils.production import secure_external_url
+    from utils import graduate_docs
+    from models import GRADUATE_DOC_TYPES, GRADUATE_STATUSES
+    doc_type = (request.args.get('doc_type') or '').strip()
+    if doc_type not in GRADUATE_DOC_TYPES:
+        abort(404)
+    session_id = request.args.get('session_id', type=int)
+    status = (request.args.get('status') or '').strip()
+    q = scope_query(Student.query.filter_by(is_graduated=True), Student)
+    if session_id:
+        q = q.filter_by(graduation_session_id=session_id)
+    if status in GRADUATE_STATUSES:
+        if status == 'Graduated':
+            q = q.filter((Student.graduate_status == 'Graduated') | (Student.graduate_status.is_(None)))
+        else:
+            q = q.filter(Student.graduate_status == status)
+    students = q.order_by(Student.surname, Student.first_name).limit(300).all()
+    if not students:
+        return _err('No graduates match that filter.', url_for('promotion.graduates_list'))
+    me = get_current_user()
+    actor = me.username if me else 'admin'
+    memzip = io.BytesIO()
+    with zipfile.ZipFile(memzip, 'w', zipfile.ZIP_DEFLATED) as z:
+        for s in students:
+            try:
+                doc = graduate_docs.issue(s, doc_type, actor=actor)
+                verify_url = secure_external_url('graduate_verify.verify', code=doc.verification_code)
+                buf, fname = graduate_docs.render(s, doc, verify_url)
+                z.writestr(f"{s.surname}_{s.first_name}_{fname}".replace(' ', '_'), buf.getvalue())
+            except Exception:
+                db.session.rollback()
+    memzip.seek(0)
+    log_action('graduate_documents_bulk', f'{doc_type} x{len(students)}')
+    return send_file(memzip, mimetype='application/zip', as_attachment=True,
+                     download_name=f'{doc_type}_documents.zip')
+
+
 @promotion_bp.route('/graduates/<int:student_id>')
 @graduates_access_required
 def graduate_profile(student_id):
@@ -295,8 +374,10 @@ def graduate_profile(student_id):
         documents.append({
             'type': dt, 'label': dlabel,
             'download_url': url_for('promotion.graduate_document', student_id=student.id, doc_type=dt),
+            'revoke_url': url_for('promotion.revoke_document', student_id=student.id, doc_type=dt),
             'number': d.document_number if d else None,
             'reprint_count': d.reprint_count if d else 0,
+            'revoked': bool(d.revoked) if d else False,
             'verify_url': secure_external_url('graduate_verify.verify', code=d.verification_code) if d else None,
         })
     return _render({

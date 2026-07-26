@@ -300,8 +300,13 @@ function Process({ d, notify }) {
 // ---- Graduates -------------------------------------------------------------
 function Graduates({ d }) {
   const nav = useNav();
+  const docTypes = d.doc_types || [];
+  const [bulkType, setBulkType] = useState(docTypes.length ? docTypes[0].type : '');
   const males = d.graduates.filter((g) => g.gender === 'Male').length;
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
+  const bulkHref = d.bulk_url && bulkType
+    ? `${d.bulk_url}?doc_type=${encodeURIComponent(bulkType)}${d.session_id ? `&session_id=${d.session_id}` : ''}${d.status ? `&status=${encodeURIComponent(d.status)}` : ''}`
+    : null;
   return (
     <>
       <PageHeader title="Graduates" actions={<>
@@ -403,6 +408,15 @@ function GraduateProfile({ d, notify }) {
     if (r.ok) { notify && notify('success', r.message || 'Status updated.'); setReason(''); nav.refresh && nav.refresh(); }
     else notify && notify('error', r.error || 'Could not update status.');
   };
+  const revokeDoc = async (doc) => {
+    const verb = doc.revoked ? 'Reinstate' : 'Revoke';
+    if (!await confirm(`${verb} ${doc.label}? ` + (doc.revoked
+      ? 'It will verify as genuine again.'
+      : 'It will verify as INVALID on the public portal.'))) return;
+    const r = await submitJson(doc.revoke_url, {});
+    if (r.ok) { notify && notify('success', r.message || 'Done.'); nav.refresh && nav.refresh(); }
+    else notify && notify('error', r.error || 'Could not update the document.');
+  };
   return (
     <>
       <div className="profile-header">
@@ -448,13 +462,19 @@ function GraduateProfile({ d, notify }) {
           {d.documents.map((doc) => (
             <div className="data-card" key={doc.type}>
               <div className="data-card-header"><div className="data-card-title">{doc.label}</div>
-                {doc.number ? <span className="badge badge-success">Issued</span> : <span className="badge badge-secondary">Not issued</span>}</div>
+                {doc.revoked ? <span className="badge badge-danger">Revoked</span>
+                  : doc.number ? <span className="badge badge-success">Issued</span>
+                  : <span className="badge badge-secondary">Not issued</span>}</div>
               {doc.number && <div className="data-card-row"><span className="data-card-label">No.</span><span>{doc.number}</span></div>}
               {doc.reprint_count > 0 && <div className="data-card-row"><span className="data-card-label">Reprints</span><span>{doc.reprint_count}</span></div>}
               {doc.verify_url && <div className="data-card-row"><span className="data-card-label">Verify</span><span><a href={doc.verify_url} target="_blank" rel="noopener noreferrer">link</a></span></div>}
               <div className="data-card-actions">
                 <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">
                   <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> {doc.number ? 'Re-issue / Download' : 'Generate & Download'}</a>
+                {doc.number && doc.revoke_url && <button type="button"
+                  className={'btn btn-sm w-100 ' + (doc.revoked ? 'btn-secondary' : 'btn-danger')}
+                  style={{ marginTop: '.4rem' }} onClick={() => revokeDoc(doc)}>
+                  <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-rotate-left' : 'fa-ban')} /> {doc.revoked ? 'Reinstate' : 'Revoke'}</button>}
               </div>
             </div>))}
         </div>

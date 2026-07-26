@@ -236,6 +236,67 @@ def _body_for(doc_type, student, rec, school, grad_when, grad_session, pron, bod
             els.append(Paragraph("No internal academic results are on record for this "
                                  "student.", body))
 
+    elif doc_type == 'recommendation':
+        els.append(Paragraph("To whom it may concern,", body))
+        els.append(Paragraph(
+            f"I write to recommend <b>{_esc(name)}</b> (Admission No. {_esc(adm)}), "
+            f"a graduate of <b>{_esc(school_name)}</b>"
+            + (f" ({_esc(grad_when)})" if grad_when else "") + ". "
+            f"Throughout {sp} time with us, {s_} distinguished {s_}self through "
+            f"dedication, integrity and a strong work ethic.", body))
+        ac = rec.get('academic') or {}
+        if ac.get('cumulative') is not None:
+            els.append(Paragraph(
+                f"{S} maintained a cumulative average of {ac['cumulative']}%, and "
+                f"consistently applied {s_}self to both academic and co-curricular life.", body))
+        els.append(Paragraph(
+            f"I am confident {s_} will be a valuable addition to any institution or "
+            f"organisation, and I recommend {s_} without reservation.", body))
+
+    elif doc_type == 'conduct':
+        els.append(Paragraph(
+            f"This report certifies the conduct of <b>{_esc(name)}</b> "
+            f"(Admission No. {_esc(adm)}), a graduate of <b>{_esc(school_name)}</b>"
+            + (f" who left in {_esc(grad_when)}" if grad_when else "") + ".", body))
+        disc = rec.get('discipline') or []
+        if not disc:
+            els.append(Paragraph(
+                f"The school has <b>no record of any disciplinary infraction</b> against "
+                f"this student. {S} was of good behaviour throughout {sp} stay.", body))
+        else:
+            els.append(Paragraph(f"The following {len(disc)} conduct record(s) are on file:", body))
+            rows = [['Date', 'Category', 'Severity', 'Action taken']]
+            for r in disc:
+                rows.append([r.get('date', ''), r.get('category', ''),
+                             r.get('severity') or '—', r.get('action') or '—'])
+            t = Table(rows, colWidths=[28 * mm, 45 * mm, 30 * mm, 57 * mm], repeatRows=1)
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), _PRIMARY), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+                ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+                ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+            els.append(t)
+
+    elif doc_type == 'notification':
+        els.append(Paragraph(
+            f"This slip notifies the results of <b>{_esc(name)}</b> "
+            f"(Admission No. {_esc(adm)}) of <b>{_esc(school_name)}</b>"
+            + (f", {_esc(grad_when)}" if grad_when else "") + ".", body))
+        ac = rec.get('academic') or {}
+        terms = ac.get('terms') or []
+        last = terms[-1] if terms else None
+        if last and last.get('subjects'):
+            els.append(Paragraph(f"{_esc(last.get('session'))} · {_esc(last.get('term'))}"
+                                 + (f" — average {last['average']}%" if last.get('average') is not None else ''), small))
+            els.append(_subject_table(last['subjects']))
+        elif ac.get('cumulative') is not None:
+            els.append(Paragraph(f"Cumulative average: <b>{ac['cumulative']}%</b>.", body))
+        else:
+            els.append(Paragraph("No internal results are on record for this student.", body))
+        els.append(Spacer(1, 4))
+        els.append(Paragraph("This is a preliminary notification and does not replace the "
+                             "official statement of result or certificate.", small))
+
     elif doc_type == 'transcript':
         els.append(Paragraph(
             f"Academic transcript for <b>{_esc(name)}</b> (Admission No. {_esc(adm)}) — "

@@ -52,8 +52,12 @@ GRADUATE_DOC_TYPES = {
     'statement': 'Statement of Result',
     'transcript': 'Academic Transcript',
     'testimonial': 'Testimonial / Character Certificate',
+    'recommendation': 'Recommendation Letter',
+    'conduct': 'Conduct Report',
+    'notification': 'Result Notification Slip',
 }
-_DOC_ABBR = {'slc': 'SLC', 'statement': 'SOR', 'transcript': 'TRN', 'testimonial': 'TST'}
+_DOC_ABBR = {'slc': 'SLC', 'statement': 'SOR', 'transcript': 'TRN', 'testimonial': 'TST',
+             'recommendation': 'REC', 'conduct': 'CDT', 'notification': 'RNS'}
 
 
 class GraduateDocument(db.Model):
