@@ -43,33 +43,63 @@ def _class_history(sid):
 
 
 def _academic(sid):
-    from models import TermResult, ClassSubject, Subject, Term, AcademicSession
-    results = TermResult.query.filter_by(student_id=sid).all()
-    cs = {c.id: c for c in ClassSubject.query.filter(
-        ClassSubject.id.in_({r.class_subject_id for r in results if r.class_subject_id})).all()} if results else {}
+    """Per-term subject results, computed from the raw ``StudentScore`` rows the
+    same way the broadsheet / report cards do: the subject total for a term is the
+    sum of that subject's assessment scores. (The aggregated ``TermResult`` table
+    is not populated in normal use, which is why the transcript used to be blank.)
+    Each term is tagged with the class the subject belonged to (SSS1/SSS2/SSS3)."""
+    from models import (StudentScore, ClassSubject, Subject, Term, AcademicSession,
+                        SchoolClass, GradeScale)
+    scores = StudentScore.query.filter_by(student_id=sid).all()
+    if not scores:
+        return {'cumulative': None, 'terms_count': 0, 'terms': []}
+    cs_ids = {s.class_subject_id for s in scores if s.class_subject_id}
+    cs = {c.id: c for c in ClassSubject.query.filter(ClassSubject.id.in_(cs_ids)).all()} if cs_ids else {}
     subjects = {s.id: s.name for s in Subject.query.filter(
         Subject.id.in_({c.subject_id for c in cs.values()})).all()} if cs else {}
     terms = {t.id: t for t in Term.query.filter(
-        Term.id.in_({r.term_id for r in results if r.term_id})).all()} if results else {}
+        Term.id.in_({c.term_id for c in cs.values() if c.term_id})).all()} if cs else {}
     sessions = {s.id: s.name for s in AcademicSession.query.filter(
         AcademicSession.id.in_({t.session_id for t in terms.values()})).all()} if terms else {}
+    classes = {c.id: c.name for c in SchoolClass.query.filter(
+        SchoolClass.id.in_({c.class_id for c in cs.values() if c.class_id})).all()} if cs else {}
+    # subject total for a (student, class_subject) = sum of its assessment scores
+    totals = {}
+    for s in scores:
+        if s.class_subject_id:
+            totals[s.class_subject_id] = totals.get(s.class_subject_id, 0) + (s.score or 0)
+    # grade cache (one query per distinct rounded score)
+    grade_cache = {}
+
+    def grade_of(v):
+        key = round(v)
+        if key not in grade_cache:
+            try:
+                grade_cache[key] = GradeScale.get_grade(v)
+            except Exception:
+                grade_cache[key] = ''
+        return grade_cache[key]
+
     by_term, all_scores = {}, []
-    for r in results:
-        c = cs.get(r.class_subject_id)
-        subj = subjects.get(c.subject_id, 'Subject') if c else 'Subject'
-        t = terms.get(r.term_id)
-        g = by_term.setdefault(r.term_id, {
+    for cs_id, total in totals.items():
+        c = cs.get(cs_id)
+        if not c:
+            continue
+        t = terms.get(c.term_id)
+        g = by_term.setdefault(c.term_id, {
             'term': t.name if t else '', 'term_number': t.term_number if t else 0,
-            'session': (sessions.get(t.session_id) if t else '') or '', 'subjects': [], 'scores': []})
-        g['subjects'].append({'subject': subj, 'score': r.total_score, 'grade': r.grade,
-                              'position': r.position_in_subject, 'remark': r.remark,
-                              'comment': r.teacher_comment})
-        if r.total_score is not None:
-            g['scores'].append(r.total_score); all_scores.append(r.total_score)
+            'session': (sessions.get(t.session_id) if t else '') or '',
+            'klass': classes.get(c.class_id, ''), 'subjects': [], 'scores': []})
+        total = round(total, 1)
+        g['subjects'].append({'subject': subjects.get(c.subject_id, 'Subject'), 'score': total,
+                              'grade': grade_of(total), 'position': None, 'remark': None, 'comment': None})
+        g['scores'].append(total)
+        all_scores.append(total)
     out = []
     for g in by_term.values():
         g['subjects'].sort(key=lambda s: s['subject'])
         out.append({'term': g['term'], 'session': g['session'], 'term_number': g['term_number'],
+                    'klass': g['klass'],
                     'average': round(sum(g['scores']) / len(g['scores']), 1) if g['scores'] else None,
                     'subjects': g['subjects']})
     out.sort(key=lambda x: (x['session'], x['term_number']))
@@ -138,7 +168,8 @@ def build_record(student):
     for h in history:
         klass_by_session.setdefault(h['session'], h['klass'])
     for t in academic.get('terms', []):
-        t['klass'] = klass_by.get((t['session'], t['term_number'])) or klass_by_session.get(t['session']) or ''
+        if not t.get('klass'):
+            t['klass'] = klass_by.get((t['session'], t['term_number'])) or klass_by_session.get(t['session']) or ''
     return {
         'bio': bio,
         # admission (earliest) + graduation sessions bracket the school career

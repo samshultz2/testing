@@ -141,6 +141,57 @@ def test_graduate_profile_with_waec_and_jamb_results(app):
     assert j['waec_by_year'][0]['subjects'][0]['grade'] == 'B3'
 
 
+def test_transcript_fills_from_student_scores_senior_only(app):
+    """The transcript/record must draw real results from StudentScore, and scope
+    to the senior-secondary years."""
+    from models import (db, Branch, AcademicSession, Term, SchoolClass, ClassArm,
+                        ClassArmAssignment, StudentEnrollment, Subject, ClassSubject,
+                        AssessmentType, StudentScore, GradeScale)
+    from utils.graduate_record import build_record
+    with app.app_context():
+        if not GradeScale.query.first():
+            db.session.add_all([
+                GradeScale(grade='A', min_score=70, max_score=100, remark='Excellent'),
+                GradeScale(grade='C', min_score=50, max_score=69, remark='Credit'),
+                GradeScale(grade='F', min_score=0, max_score=49, remark='Fail')])
+        bid = Branch.get_default().id
+        sess = AcademicSession(name='TRSESS'); db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name='TR-T1'); db.session.add(term); db.session.flush()
+        sss1 = SchoolClass.query.filter_by(name='SSS1').first() or SchoolClass(name='SSS1', level=4)
+        jss3 = SchoolClass.query.filter_by(name='JSS3').first() or SchoolClass(name='JSS3', level=3)
+        for k in (sss1, jss3):
+            if k.id is None:
+                db.session.add(k)
+        db.session.flush()
+        arm = ClassArm.query.first() or ClassArm(name='A', is_active=True)
+        if arm.id is None:
+            db.session.add(arm); db.session.flush()
+        subj = Subject(name='TR-Maths', is_active=True); db.session.add(subj); db.session.flush()
+        at = AssessmentType.query.filter_by(is_active=True).first() or \
+            AssessmentType(name='TR-Exam', max_score=100, order=1, is_active=True)
+        if at.id is None:
+            db.session.add(at); db.session.flush()
+        s = Student(student_id='TRSTU', first_name='Tra', surname='Nscript', gender='Male',
+                    is_active=True, is_graduated=True, graduate_status='Graduated', branch_id=bid)
+        db.session.add(s); db.session.flush()
+        for klass in (sss1, jss3):
+            cs = ClassSubject(subject_id=subj.id, class_id=klass.id, arm_id=arm.id,
+                              term_id=term.id, is_active=True)
+            db.session.add(cs); db.session.flush()
+            db.session.add(StudentScore(student_id=s.id, class_subject_id=cs.id,
+                                        assessment_type_id=at.id, score=82))
+        db.session.commit()
+        rec = build_record(s)
+        terms = rec['academic']['terms']
+        assert terms, 'academic terms should be populated from StudentScore'
+        assert any(t['subjects'] and t['subjects'][0]['score'] == 82 for t in terms)
+        # transcript matrix keeps only the senior (SSS1) class, not JSS3
+        from utils import transcript_templates as tt
+        m = tt._matrix(rec['academic'])
+        assert 'SSS1' in m['ss_labels'].values()
+        assert not any('JSS' in v for v in m['ss_labels'].values())
+
+
 def test_graduate_document_issue_and_public_verify(app):
     from models import db, GraduateDocument
     with app.app_context():
