@@ -101,3 +101,29 @@ sizes). Results land in `loadtest/results/mockjamb-<timestamp>_stats.csv`.
   `HOST`'s subdomain resolves to — they must be the same DB. Use a single-school
   staging copy, or seed the specific tenant DB explicitly.
 - Staging only, in a quiet window (it generates heavy load).
+
+## Ephemeral tenant mode (create a throwaway subdomain, then destroy it)
+
+Instead of a fixed HOST, the runner can spin up a **real throwaway tenant** (its
+own subdomain + its own database), seed it, test it, and **destroy it afterwards
+— even on failure or ctrl-C**. This exercises the true multi-tenant routing path.
+
+```bash
+TENANT=loadtest ./loadtest/run_mock_jamb.sh
+TENANT=loadtest USERS=1000 SPAWN=40 RUN_TIME=5m ./loadtest/run_mock_jamb.sh
+TENANT=loadtest KEEP_TENANT=1 ./loadtest/run_mock_jamb.sh    # keep it for inspection
+```
+
+It maps to `https://<TENANT>.<base-domain>` and requires: control-plane DB access
+(run it on the server) and wildcard DNS + TLS for `*.<base-domain>` — already how
+your tenant subdomains work, so no new DNS is needed.
+
+**Safety guard:** `TENANT` must start with `LOADTEST_TENANT_PREFIX` (default
+`loadtest`). `tenant_ctl.py` refuses to provision-over or destroy any subdomain
+that doesn't, so it can never touch a real school. You can also drive the
+lifecycle by hand:
+
+```bash
+N=1000 python loadtest/tenant_ctl.py create  loadtest   # prints TENANT_URL + EXAM_ID
+python loadtest/tenant_ctl.py destroy loadtest          # drop DB + registry row
+```
