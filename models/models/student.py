@@ -58,6 +58,9 @@ class Student(db.Model):
     is_graduated = db.Column(db.Boolean, default=False)
     graduation_date = db.Column(db.Date)
     graduation_session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
+    # Graduate lifecycle status (see models_graduate.GRADUATE_STATUSES). NULL until
+    # graduated; set to 'Graduated' when marked, then advanced by admins (logged).
+    graduate_status = db.Column(db.String(40))
 
     # CBT / student portal login password — stored HASH-ONLY (one-way scrypt).
     # The raw PIN is shown/printed once at generation and is NOT recoverable:

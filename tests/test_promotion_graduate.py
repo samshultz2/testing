@@ -58,3 +58,46 @@ def test_graduate_sss3_marks_enrolled_student(app):
         g = db.session.get(Student, sid)
         assert g.is_graduated is True
         assert g.graduation_date is not None
+
+
+def _csrf(c):
+    return re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                     c.get('/students').get_data(as_text=True)).group(1)
+
+
+def test_graduate_status_lifecycle_and_audit(app):
+    from models import GraduateAudit
+    with app.app_context():
+        s = Student(student_id='GSTAT1', first_name='Sta', surname='Tus',
+                    gender='Female', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+
+    c = _admin(app)
+    tok = _csrf(c)
+    # advance the lifecycle status with a reason -> writes an audit row
+    r = c.post(f'/promotion/graduates/{sid}/status',
+               data={'status': 'Certificate Issued', 'reason': 'Collected 12 Aug',
+                     '_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+
+    with app.app_context():
+        g = db.session.get(Student, sid)
+        assert g.graduate_status == 'Certificate Issued'
+        a = GraduateAudit.query.filter_by(student_id=sid).order_by(GraduateAudit.id.desc()).first()
+        assert a and a.old_value == 'Graduated' and a.new_value == 'Certificate Issued'
+        assert a.reason == 'Collected 12 Aug' and a.actor
+
+    # an invalid status is rejected
+    r = c.post(f'/promotion/graduates/{sid}/status',
+               data={'status': 'Nonsense', '_csrf_token': tok},
+               headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 400
+
+    # un-graduate returns JSON (redirect to the graduates list) and clears the flag
+    r = c.post(f'/promotion/ungraduate/{sid}', data={'_csrf_token': tok},
+               headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        assert db.session.get(Student, sid).is_graduated is False

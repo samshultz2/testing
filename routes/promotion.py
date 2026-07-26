@@ -60,24 +60,33 @@ def _sessions_json():
 @graduates_access_required
 def graduates_list():
     """List all graduated students"""
+    from models import GRADUATE_STATUSES
     session_id = request.args.get('session_id', type=int)
-
-    sessions = AcademicSession.query.order_by(AcademicSession.id.desc()).all()
+    status = (request.args.get('status') or '').strip()
 
     from utils.branch_scope import scope_query
     query = scope_query(Student.query.filter_by(is_graduated=True), Student)
 
     if session_id:
         query = query.filter_by(graduation_session_id=session_id)
+    if status in GRADUATE_STATUSES:
+        # older graduates may have a NULL status but are effectively 'Graduated'
+        if status == 'Graduated':
+            query = query.filter((Student.graduate_status == 'Graduated')
+                                 | (Student.graduate_status.is_(None)))
+        else:
+            query = query.filter(Student.graduate_status == status)
 
     graduates = query.order_by(Student.surname, Student.first_name).all()
 
     return _render({
         'page': 'graduates', 'session_id': session_id or '', 'sessions': _sessions_json(),
+        'status': status, 'statuses': GRADUATE_STATUSES,
         'preview_url': url_for('promotion.graduate_sss3_preview'),
         'compare_url': url_for('promotion.graduate_compare'),
         'graduates': [{
             'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id, 'gender': s.gender,
+            'status': s.graduate_status or 'Graduated',
             'graduation_date': s.graduation_date.strftime('%d %b %Y') if s.graduation_date else None,
             'graduation_session': s.graduation_session.name if s.graduation_session else None,
             'has_waec': s.waec_results.count() > 0, 'has_jamb': s.jamb_results.count() > 0,
@@ -97,6 +106,7 @@ def mark_graduate(student_id):
     try:
         student.is_graduated = True
         student.graduation_date = date.today()
+        student.graduate_status = student.graduate_status or 'Graduated'
         if active_session:
             student.graduation_session_id = active_session.id
         db.session.commit()
@@ -128,6 +138,41 @@ def unmark_graduate(student_id):
                url_for('promotion.graduates_list'))
 
 
+@promotion_bp.route('/graduates/<int:student_id>/status', methods=['POST'])
+@admin_required
+def change_graduate_status(student_id):
+    """Advance a graduate's lifecycle status. Elevated (admin) only, and every
+    change is written to the GraduateAudit trail with old/new value + reason."""
+    from utils.branch_scope import require_branch_access
+    from models import GraduateAudit, GRADUATE_STATUSES
+    from utils.access_control import get_current_user
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
+    prof_url = url_for('promotion.graduate_profile', student_id=student.id)
+    if not student.is_graduated:
+        return _err('This student is not a graduate.', prof_url)
+    new_status = (request.form.get('status') or '').strip()
+    reason = (request.form.get('reason') or '').strip()
+    if new_status not in GRADUATE_STATUSES:
+        return _err('Choose a valid graduate status.', prof_url)
+    old_status = student.graduate_status or 'Graduated'
+    if new_status == old_status:
+        return _ok('Status is already set to that.', prof_url)
+    me = get_current_user()
+    try:
+        student.graduate_status = new_status
+        db.session.add(GraduateAudit(
+            student_id=student.id, field='graduate_status',
+            old_value=old_status, new_value=new_status, reason=reason or None,
+            actor=(me.username if me else 'admin')))
+        db.session.commit()
+        log_action('graduate_status', f'{student.full_name}: {old_status} -> {new_status}')
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', prof_url)
+    return _ok(f'Status updated to "{new_status}".', prof_url)
+
+
 @promotion_bp.route('/graduate-sss3/preview')
 @admin_required
 def graduate_sss3_preview():
@@ -156,6 +201,7 @@ def graduate_sss3():
             if not student.is_graduated:
                 student.is_graduated = True
                 student.graduation_date = date.today()
+                student.graduate_status = student.graduate_status or 'Graduated'
                 if active_session:
                     student.graduation_session_id = active_session.id
                 graduated += 1
@@ -205,10 +251,20 @@ def graduate_profile(student_id):
     if student.graduation_session_id:
         graduation_session = db.session.get(AcademicSession, student.graduation_session_id)
     
+    from models import GraduateAudit, GRADUATE_STATUSES
+    history = (GraduateAudit.query
+               .filter_by(student_id=student.id, field='graduate_status')
+               .order_by(GraduateAudit.created_at.desc()).limit(50).all())
     return _render({
         'page': 'graduate_profile',
         'student': {'id': student.id, 'full_name': student.full_name,
                     'student_id': student.student_id, 'gender': student.gender},
+        'status': student.graduate_status or 'Graduated',
+        'statuses': GRADUATE_STATUSES,
+        'status_history': [{'old': h.old_value, 'new': h.new_value, 'reason': h.reason,
+                            'actor': h.actor,
+                            'at': h.created_at.strftime('%d %b %Y %H:%M') if h.created_at else ''}
+                           for h in history],
         'graduation_session': graduation_session.name if graduation_session else None,
         'graduation_date': student.graduation_date.strftime('%d %B %Y') if student.graduation_date else None,
         'waec_by_year': [{'exam_year': v['exam_year'], 'exam_number': v['exam_number'],
@@ -225,6 +281,7 @@ def graduate_profile(student_id):
         'urls': {'graduates': url_for('promotion.graduates_list'),
                  'full_profile': url_for('main.view_student', student_id=student.id),
                  'ungraduate': url_for('promotion.unmark_graduate', student_id=student.id),
+                 'change_status': url_for('promotion.change_graduate_status', student_id=student.id),
                  'add_waec': url_for('results.add_waec') + f'?student_id={student.id}',
                  'add_jamb': url_for('results.add_jamb') + f'?student_id={student.id}'},
     })

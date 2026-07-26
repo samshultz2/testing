@@ -232,6 +232,8 @@ _ADDED_COLUMNS = {
                       'department_id': 'INTEGER', 'qualification': 'VARCHAR(200)'},
     # Cache of each candidate's drawn paper so the expensive pool draw runs once.
     'mock_jamb_attempts': {'paper': 'TEXT'},
+    # Graduate lifecycle status on the student.
+    'students': {'graduate_status': 'VARCHAR(40)'},
     'site_media': {'storage': "VARCHAR(10) DEFAULT 'db'", 'storage_key': 'VARCHAR(300)'},
     'gen_teachers': {'user_id': 'INTEGER'},   # link a generator-teacher to a login account
     'parent_contacts': {'email': 'VARCHAR(120)'},
@@ -367,7 +369,7 @@ def ensure_tables(bind=None):
                         SiteViewDaily, SiteReferrerDaily, SiteVisitorDaily,
                         HolidayAssignment, NewsPost,
                         StaffLoan, LoanGuarantor, LoanRepayment)
-    from models import TermAssessmentSetting, StaffInvite, StaffSignup
+    from models import TermAssessmentSetting, StaffInvite, StaffSignup, GraduateAudit
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
@@ -387,7 +389,7 @@ def ensure_tables(bind=None):
               SiteVisitorDaily.__table__, HolidayAssignment.__table__,
               NewsPost.__table__, StaffLoan.__table__, LoanGuarantor.__table__,
               LoanRepayment.__table__, TermAssessmentSetting.__table__,
-              StaffInvite.__table__, StaffSignup.__table__]
+              StaffInvite.__table__, StaffSignup.__table__, GraduateAudit.__table__]
     engine = bind if bind is not None else db.engine
     db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     _ensure_columns(engine)

@@ -310,8 +310,11 @@ function Graduates({ d }) {
       </>} />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">Graduation Session</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value })}>
+          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value, status: d.status || '' })}>
             <option value="">All Sessions</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+        <div className="form-group"><label className="form-label">Status</label>
+          <select className="form-control" value={d.status || ''} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: d.session_id || '', status: e.target.value })}>
+            <option value="">All Statuses</option>{(d.statuses || []).map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
       </div></div></div>
       {d.graduates.length ? (<>
         <div className="stats-grid mb-3">
@@ -323,7 +326,7 @@ function Graduates({ d }) {
           <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
             {d.graduates.map((s) => (
               <div className="data-card" key={s.id}>
-                <div className="data-card-header"><div className="data-card-title">{s.full_name}</div><span className="badge badge-success"><i aria-hidden="true" className="fas fa-graduation-cap" /></span></div>
+                <div className="data-card-header"><div className="data-card-title">{s.full_name}</div><span className="badge badge-info">{s.status || 'Graduated'}</span></div>
                 <div className="data-card-row"><span className="data-card-label">ID</span><span>{s.student_id}</span></div>
                 <div className="data-card-row"><span className="data-card-label">Gender</span><span>{s.gender}</span></div>
                 {s.graduation_date && <div className="data-card-row"><span className="data-card-label">Graduated</span><span>{s.graduation_date}</span></div>}
@@ -376,6 +379,8 @@ function GraduateProfile({ d, notify }) {
   const s = d.student;
   const nav = useNav();
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(d.status || 'Graduated');
+  const [reason, setReason] = useState('');
   const undoGraduate = async () => {
     if (!await confirm(`Un-graduate ${s.full_name}? They will move back to active students and leave the Graduates list. Their records are kept.`)) return;
     setBusy(true);
@@ -383,6 +388,14 @@ function GraduateProfile({ d, notify }) {
     setBusy(false);
     if (r.ok) nav.go(r.redirect);
     else notify && notify('error', r.error || 'Could not un-graduate this student.');
+  };
+  const saveStatus = async () => {
+    if (status === (d.status || 'Graduated')) { notify && notify('error', 'Pick a different status first.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.urls.change_status, { status, reason });
+    setBusy(false);
+    if (r.ok) { notify && notify('success', r.message || 'Status updated.'); setReason(''); nav.refresh && nav.refresh(); }
+    else notify && notify('error', r.error || 'Could not update status.');
   };
   return (
     <>
@@ -399,10 +412,29 @@ function GraduateProfile({ d, notify }) {
       </div>
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> Graduation Info</h3></div>
         <div className="card-body"><div className="info-grid">
-          <div className="info-row"><span className="text-muted">Status</span><strong><span className="badge badge-success">Graduated</span></strong></div>
+          <div className="info-row"><span className="text-muted">Status</span><strong><span className="badge badge-info">{d.status || 'Graduated'}</span></strong></div>
           {d.graduation_date && <div className="info-row"><span className="text-muted">Graduation Date</span><strong>{d.graduation_date}</strong></div>}
           {d.graduation_session && <div className="info-row"><span className="text-muted">Session</span><strong>{d.graduation_session}</strong></div>}
         </div></div></div>
+
+      {d.urls.change_status && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-arrows-turn-right" /> Update Graduate Status</h3></div>
+        <div className="card-body">
+          <div className="form-row">
+            <div className="form-group" style={{ flex: 1, minWidth: '180px' }}><label className="form-label">Status</label>
+              <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)}>
+                {(d.statuses || []).map((st) => <option key={st} value={st}>{st}</option>)}</select></div>
+            <div className="form-group" style={{ flex: 2, minWidth: '220px' }}><label className="form-label">Reason <span className="text-muted">(recorded in the audit trail)</span></label>
+              <input className="form-control" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Certificate collected on 12 Aug" /></div>
+          </div>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={saveStatus}><i aria-hidden="true" className="fas fa-save" /> Update status</button>
+        </div></div>}
+
+      {(d.status_history && d.status_history.length > 0) && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Status History</h3></div>
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <thead><tr><th>When</th><th>Change</th><th>Reason</th><th>By</th></tr></thead>
+          <tbody>{d.status_history.map((h, i) => (
+            <tr key={i}><td>{h.at}</td><td>{h.old} → <strong>{h.new}</strong></td><td>{h.reason || '—'}</td><td>{h.actor || '—'}</td></tr>))}</tbody>
+        </table></div></div></div>}
 
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Results</h3>
         <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
