@@ -25,6 +25,22 @@ def _has_col(engine, table, column):
         return None                           # table/DB not reachable
 
 
+def _direct_add_graduate_status(engine):
+    """Last-resort, fully transparent add of students.graduate_status. Uses the
+    database's own idempotency (ADD COLUMN IF NOT EXISTS on Postgres) and prints
+    the real exception if it fails, so the true blocker (e.g. permissions) is
+    visible instead of hidden."""
+    from sqlalchemy import text
+    ddl = ('ALTER TABLE students ADD COLUMN IF NOT EXISTS graduate_status VARCHAR(40)'
+           if engine.dialect.name == 'postgresql'
+           else 'ALTER TABLE students ADD COLUMN graduate_status VARCHAR(40)')
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(ddl))
+    except Exception as e:
+        print(f'      direct ALTER failed: {type(e).__name__}: {e}')
+
+
 def main():
     from app import create_app
     from utils.finance_ledger import ensure_tables
@@ -47,7 +63,13 @@ def main():
                     ensure_tables(bind=eng)
                     # verify the column that has been 500ing dashboards
                     col = _has_col(eng, 'students', 'graduate_status')
-                    mark = 'graduate_status ✓' if col else ('no students table' if col is None else 'graduate_status STILL MISSING')
+                    if col is False:
+                        # Still missing — attempt a direct, transparent repair and
+                        # print the REAL reason if it fails (permissions, etc.).
+                        _direct_add_graduate_status(eng)
+                        col = _has_col(eng, 'students', 'graduate_status')
+                    mark = ('graduate_status ✓' if col else
+                            ('no students table' if col is None else 'graduate_status STILL MISSING'))
                     ok += 1
                     print(f'  ✓ {t.subdomain}  ({mark})')
                 except Exception as e:

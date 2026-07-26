@@ -324,24 +324,38 @@ def _ensure_indexes(engine):
 
 def _ensure_columns(engine):
     from sqlalchemy import inspect, text
+    is_pg = engine.dialect.name == 'postgresql'
     insp = inspect(engine)
     last_error = None                       # a real ALTER failure to surface
     for table, cols in _ADDED_COLUMNS.items():
+        # Only skip a table that genuinely isn't on this DB. We do NOT use the
+        # per-column reflection to decide whether to add a column — on Postgres
+        # we let the database itself be the source of truth via ADD COLUMN IF NOT
+        # EXISTS, because reflection has proved unreliable here (it reported a
+        # column present that the live table didn't have, so the ALTER was never
+        # issued and every request 500'd).
         try:
-            existing = {c['name'] for c in insp.get_columns(table)}
+            table_names = set(insp.get_table_names())
         except Exception:
-            continue                       # table not present on this DB — skip
+            table_names = None
+        if table_names is not None and table not in table_names:
+            continue
         for name, ddl in cols.items():
-            if name in existing:
-                continue
             try:
                 with engine.begin() as conn:
-                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
+                    if is_pg:
+                        conn.execute(text(
+                            f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {ddl}'))
+                    else:
+                        # SQLite has no ADD COLUMN IF NOT EXISTS — check first.
+                        have = {c['name'] for c in inspect(engine).get_columns(table)}
+                        if name not in have:
+                            conn.execute(text(
+                                f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
             except Exception as e:
-                # Could be a benign race (another worker added it) or a real
-                # failure (e.g. permissions). Re-check: if the column is now
-                # present it was a race — ignore; otherwise remember the error so
-                # the caller doesn't mark this DB "healed" and can log the reason.
+                # Verify against the live DB: if it's now present it was a race —
+                # ignore; otherwise remember the real error so the caller logs the
+                # reason and does NOT mark this DB healed.
                 try:
                     now = {c['name'] for c in inspect(engine).get_columns(table)}
                 except Exception:
