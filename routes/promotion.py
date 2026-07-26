@@ -220,7 +220,7 @@ def graduate_profile(student_id):
                                        {'name': j.subject2, 'score': j.subject2_score},
                                        {'name': j.subject3, 'score': j.subject3_score},
                                        {'name': j.subject4, 'score': j.subject4_score}]} for j in jamb_results],
-        'contacts': [{'name': c.contact_name or c.relationship, 'relationship': c.relationship,
+        'contacts': [{'name': c.name or c.relationship, 'relationship': c.relationship,
                       'phone': c.phone_number} for c in student.parent_contacts],
         'urls': {'graduates': url_for('promotion.graduates_list'),
                  'full_profile': url_for('main.view_student', student_id=student.id),
