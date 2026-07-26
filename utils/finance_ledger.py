@@ -391,7 +391,17 @@ def ensure_tables(bind=None):
               LoanRepayment.__table__, TermAssessmentSetting.__table__,
               StaffInvite.__table__, StaffSignup.__table__, GraduateAudit.__table__]
     engine = bind if bind is not None else db.engine
-    db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
+    # Never let a failure creating one newer TABLE stop the column/index self-heal
+    # that follows — the added COLUMNS (e.g. students.graduate_status) sit on hot,
+    # always-queried tables, so skipping them would 500 the dashboard.
+    try:
+        db.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
+    except Exception:
+        try:
+            from flask import current_app
+            current_app.logger.exception('ensure_tables: create_all failed; continuing to column/index heal')
+        except Exception:
+            pass
     _ensure_columns(engine)
     _ensure_indexes(engine)
 
