@@ -27,6 +27,9 @@
 # knobs. Override SPAWN / RUN_TIME directly if you must.
 #
 # Env:
+#   PHONE=1      shortcut: small conservative load for running the server AND the
+#                generator on one phone (Termux). Sets USERS=15, SEAT_WINDOW=90,
+#                EXAM_MINUTES=3, BANK=300 unless you override them.
 #   TENANT       ephemeral subdomain to create+seed+destroy (mode A). Must start
 #                with LOADTEST_TENANT_PREFIX (default "loadtest") — a safety guard.
 #   KEEP_TENANT  set to 1 to skip teardown (debug); default tears the tenant down.
@@ -53,6 +56,15 @@ cd "$(dirname "$0")/.."                       # repo root
 
 HOST="${HOST:-}"
 TENANT="${TENANT:-}"
+
+# PHONE=1: conservative defaults for running the server AND the generator on ONE
+# device (Termux). They share the phone's CPU/RAM, so keep the load small — and
+# read the results as a floor, not the true server capacity (see README).
+if [ "${PHONE:-0}" = "1" ]; then
+  : "${USERS:=15}"; : "${SEAT_WINDOW:=90}"; : "${EXAM_MINUTES:=3}"; : "${BANK:=300}"
+  echo "==> PHONE mode: small on-device load (server + generator share this phone)." >&2
+fi
+
 USERS="${USERS:-100}"
 SEAT_WINDOW="${SEAT_WINDOW:-120}"            # seconds to seat the whole cohort
 EXAM_MINUTES="${EXAM_MINUTES:-10}"           # per-student exam length

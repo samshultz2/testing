@@ -159,3 +159,19 @@ HOST=https://loadtest.edusyncra.site EXAM_ID=<id> \
 # 4. PHONE — tear the tenant down
 python loadtest/tenant_ctl.py destroy loadtest
 ```
+
+### PHONE=1 shortcut (server + generator on one phone)
+
+If you have no separate machine and must run everything in Termux:
+
+```bash
+PHONE=1 TENANT=loadtest ./loadtest/run_mock_jamb.sh          # ~15 students, short exam
+PHONE=1 TENANT=loadtest USERS=30 ./loadtest/run_mock_jamb.sh # push it up
+```
+
+`PHONE=1` sets small conservative defaults (USERS=15, SEAT_WINDOW=90,
+EXAM_MINUTES=3, BANK=300). **Read on-device results as a floor, not the true
+capacity:** the generator and server fight for the same CPU/RAM, so latencies are
+inflated well above what real students (on their own devices) would see. If a
+number looks bad here, the server alone is likely faster — confirm from a second
+machine when you can.
