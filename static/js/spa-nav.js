@@ -32,6 +32,17 @@
     else { bar.style.width = '100%'; setTimeout(function () { bar.style.opacity = '0'; bar.style.width = '0'; }, 200); }
   }
 
+  function inlineBody(text) {
+    // Run re-executed inline scripts in their OWN function scope. A classic inline
+    // script runs in global scope, and removing its <script> element does NOT undo
+    // its top-level `const`/`let`/`class` declarations — so re-running the same page
+    // on a later soft navigation threw "Identifier already declared", which aborted
+    // that page's script and left its buttons dead until a hard refresh. Wrapping
+    // makes every re-run independent. (Module scripts already have their own scope,
+    // so those are left untouched by the caller.)
+    return '(function(){\n' + text + '\n})();';
+  }
+
   function reexec(container) {
     // Scripts inserted via innerHTML don't execute; recreate executable ones so
     // the section's bundle runs and mounts. Non-JS scripts (the JSON data block)
@@ -42,7 +53,9 @@
       var type = (old.getAttribute('type') || '').toLowerCase();
       if (type && type !== 'text/javascript' && type !== 'application/javascript' && type !== 'module') continue;
       var s = document.createElement('script');
-      if (old.src) s.src = old.src; else s.textContent = old.textContent;
+      if (old.src) s.src = old.src;
+      else if (type === 'module') s.textContent = old.textContent;   // module = own scope
+      else s.textContent = inlineBody(old.textContent);
       if (old.type) s.type = old.type;
       old.parentNode.replaceChild(s, old);
     }
@@ -92,8 +105,11 @@
     doc.body.querySelectorAll('script').forEach(function (node) {
       if (node.closest('.page-content')) return;   // section bundle — handled by reexec()
       if (live[node.outerHTML]) return;            // a base script, already running
+      var type = (node.getAttribute('type') || '').toLowerCase();
       var s = document.createElement('script');
-      if (node.src) s.src = node.src; else s.textContent = node.textContent;
+      if (node.src) s.src = node.src;
+      else if (type === 'module') s.textContent = node.textContent;   // module = own scope
+      else s.textContent = inlineBody(node.textContent);              // scope per re-run
       if (node.type) s.type = node.type;
       s.setAttribute('data-spa-extra', '1');
       document.body.appendChild(s);
