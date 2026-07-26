@@ -127,3 +127,35 @@ lifecycle by hand:
 N=1000 python loadtest/tenant_ctl.py create  loadtest   # prints TENANT_URL + EXAM_ID
 python loadtest/tenant_ctl.py destroy loadtest          # drop DB + registry row
 ```
+
+## Realistic model + phone-hosted split
+
+The load model is a real cohort, not a stampede: students are **seated gradually**
+over `SEAT_WINDOW`, answer for `EXAM_MINUTES`, then each **submits once** near its
+deadline. You give real-world inputs; the runner derives locust's spawn-rate
+(`USERS/SEAT_WINDOW`) and duration (`SEAT_WINDOW + EXAM_MINUTES + tail`).
+
+```bash
+# 100 students seated over 2 min, 10-min exam (defaults)
+TENANT=loadtest ./loadtest/run_mock_jamb.sh
+# 100 students seated over 3 min, 20-min exam
+TENANT=loadtest USERS=100 SEAT_WINDOW=180 EXAM_MINUTES=20 ./loadtest/run_mock_jamb.sh
+```
+
+**If the app is hosted on a phone (Termux),** never run the generator on the phone
+— it competes for RAM and Android kills the server. Split it: seed on the phone,
+generate load from a laptop.
+
+```bash
+# 1. PHONE — create + seed the throwaway tenant (writes loadtest/students.csv)
+N=100 python loadtest/tenant_ctl.py create loadtest      # note TENANT_URL + EXAM_ID
+
+# 2. copy loadtest/students.csv from the phone to the laptop (same path)
+
+# 3. LAPTOP — drive the realistic load (mode B: HOST + EXAM_ID, no control-plane)
+HOST=https://loadtest.edusyncra.site EXAM_ID=<id> \
+  USERS=100 SEAT_WINDOW=120 EXAM_MINUTES=10 ./loadtest/run_mock_jamb.sh
+
+# 4. PHONE — tear the tenant down
+python loadtest/tenant_ctl.py destroy loadtest
+```

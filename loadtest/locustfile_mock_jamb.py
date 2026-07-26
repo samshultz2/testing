@@ -1,15 +1,18 @@
-"""Mock-JAMB online sitting load test — the full student flow against the real
-routes we hardened for a mass start:
+"""Mock-JAMB online sitting load test — REALISTIC single-cohort model.
 
-    login (/exam/login) -> open sitting (/exam/mock-jamb/<id>, draws + caches the
-    paper) -> loop: batched answer autosave (/save-batch) -> occasional submit.
+Models a real exam, not a stampede:
+  * students are SEATED gradually (locust spawn-rate = cohort / seating-window),
+  * each opens the paper once (draws + caches it), then answers at a human pace
+    (batched autosave + the occasional reload),
+  * near their personal deadline each submits ONCE and leaves (StopUser), so the
+    submits cluster at the end the way a real timer expiry does.
 
-Setup once (against staging):  N=1000 python loadtest/seed_mock_jamb.py
-Then:                          EXAM_ID=<id> locust -f loadtest/locustfile_mock_jamb.py \
-                               --host https://<staging-url>
+The run ends naturally when the last student submits. Drive it from the runner
+(loadtest/run_mock_jamb.sh), which computes the spawn-rate + duration for you, or
+directly:
 
-Open http://localhost:8089, set users (e.g. 1000) + spawn rate (e.g. 40/s), and
-watch failure % and p95. Run on the actual VPS, not a laptop.
+    EXAM_ID=<id> EXAM_MINUTES=10 locust -f loadtest/locustfile_mock_jamb.py \
+        --host https://<url> --headless -u 100 -r 0.8 -t 12m --csv out
 """
 import csv
 import itertools
@@ -17,10 +20,13 @@ import os
 import random
 import re
 import threading
+import time
 
 from locust import HttpUser, task, between, events
+from locust.exception import StopUser
 
 EXAM_ID = os.environ.get('EXAM_ID')
+EXAM_MINUTES = float(os.environ.get('EXAM_MINUTES', '10'))   # per-student exam length
 _CSRF_META = re.compile(r'name="csrf-token" content="([0-9a-f]+)"')
 _CSRF_INPUT = re.compile(r'name="_csrf_token" value="([0-9a-f]+)"')
 _QID = re.compile(r'data-qid="(\d+)"')
@@ -39,7 +45,7 @@ def _load_creds():
 def _on_start(environment, **kw):
     global _creds
     if not EXAM_ID:
-        raise SystemExit('Set EXAM_ID (see loadtest/seed_mock_jamb.py output).')
+        raise SystemExit('Set EXAM_ID (see loadtest/seed_mock_jamb.py / tenant_ctl.py).')
     _creds = itertools.cycle(_load_creds())
 
 
@@ -49,7 +55,8 @@ def _next():
 
 
 class MockJambStudent(HttpUser):
-    wait_time = between(3, 9)          # students think between actions
+    # think time between answering actions (a human reading + choosing)
+    wait_time = between(4, 12)
 
     def on_start(self):
         self.qids = []
@@ -61,17 +68,29 @@ class MockJambStudent(HttpUser):
         self.client.post('/exam/login',
                          data={'student_id': sid, 'password': pw, '_csrf_token': tok},
                          name='/exam/login')
-        # open the sitting: this draws + caches the paper and renders the page
-        sit = self.client.get(f'/exam/mock-jamb/{EXAM_ID}', name='/exam/mock-jamb/[id] (open)')
+        sit = self.client.get(f'/exam/mock-jamb/{EXAM_ID}',
+                              name='/exam/mock-jamb/[id] (open)')
         m = _CSRF_META.search(sit.text)
         self.csrf = m.group(1) if m else ''
         self.qids = list(dict.fromkeys(_QID.findall(sit.text)))
         self.started = bool(self.qids)
+        # personal deadline: finish somewhere in the last ~15% of the window, so
+        # submits cluster near the end (like a real timer) instead of all at once.
+        self.deadline = time.time() + EXAM_MINUTES * 60 * random.uniform(0.85, 1.0)
+
+    def _finish_if_due(self):
+        if time.time() >= self.deadline:
+            self.client.post(f'/exam/mock-jamb/{EXAM_ID}/submit',
+                             data={'_csrf_token': self.csrf},
+                             headers={'X-CSRFToken': self.csrf},
+                             name='/exam/mock-jamb/[id]/submit')
+            raise StopUser()          # done — this student leaves the hall
 
     @task(12)
     def autosave(self):
         if not self.started:
-            return
+            raise StopUser()
+        self._finish_if_due()
         picks = random.sample(self.qids, min(5, len(self.qids)))
         answers = ','.join(f'{q}:{random.choice("ABCD")}' for q in picks)
         self.client.post(f'/exam/mock-jamb/{EXAM_ID}/save-batch',
@@ -79,20 +98,10 @@ class MockJambStudent(HttpUser):
                          headers={'X-CSRFToken': self.csrf},
                          name='/exam/mock-jamb/[id]/save-batch')
 
-    @task(3)
+    @task(2)
     def reload(self):
-        # a resume/refresh — should be cheap (paper served from the cache)
         if not self.started:
-            return
-        self.client.get(f'/exam/mock-jamb/{EXAM_ID}', name='/exam/mock-jamb/[id] (reload)')
-
-    @task(1)
-    def submit(self):
-        if not self.started:
-            return
-        self.client.post(f'/exam/mock-jamb/{EXAM_ID}/submit',
-                         data={'_csrf_token': self.csrf},
-                         headers={'X-CSRFToken': self.csrf},
-                         name='/exam/mock-jamb/[id]/submit')
-        self.started = False
-        self.on_start()               # re-enter for continued load
+            raise StopUser()
+        self._finish_if_due()
+        self.client.get(f'/exam/mock-jamb/{EXAM_ID}',
+                        name='/exam/mock-jamb/[id] (reload)')

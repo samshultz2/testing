@@ -10,25 +10,34 @@
 #     base domain (already how tenant subdomains work).
 #
 #       TENANT=loadtest ./loadtest/run_mock_jamb.sh
-#       TENANT=loadtest USERS=1000 SPAWN=40 RUN_TIME=5m ./loadtest/run_mock_jamb.sh
+#       TENANT=loadtest USERS=100 SEAT_WINDOW=120 EXAM_MINUTES=10 ./loadtest/run_mock_jamb.sh
 #       TENANT=loadtest KEEP_TENANT=1 ./loadtest/run_mock_jamb.sh   # don't tear down
 #
-#  B) Fixed HOST — you point it at an already-running non-prod app yourself.
+#  B) Fixed HOST — you point it at an already-running non-prod app yourself. This
+#     is how you drive load from a LAPTOP while the server runs elsewhere (e.g. a
+#     phone): seed once with tenant_ctl.py, copy students.csv over, then run this
+#     with HOST + EXAM_ID (no control-plane needed, no teardown here).
 #
-#       HOST=http://127.0.0.1:5001 ./loadtest/run_mock_jamb.sh
-#       HOST=... EXAM_ID=7 USERS=500 RUN_TIME=3m ./loadtest/run_mock_jamb.sh  # skip seeding
+#       HOST=https://loadtest.edusyncra.site EXAM_ID=7 USERS=100 ./loadtest/run_mock_jamb.sh
+#
+# Realistic model: students are SEATED gradually over SEAT_WINDOW (not all at
+# once), answer for EXAM_MINUTES, then each submits once near its deadline. The
+# spawn-rate and run duration are DERIVED from those, so you think in real terms
+# (how many students, how long to seat them, how long the exam is) — not in locust
+# knobs. Override SPAWN / RUN_TIME directly if you must.
 #
 # Env:
-#   TENANT      ephemeral subdomain to create+seed+destroy (mode A). Must start
-#               with LOADTEST_TENANT_PREFIX (default "loadtest") — a safety guard.
-#   KEEP_TENANT set to 1 to skip teardown (debug); default tears the tenant down.
-#   HOST        base URL of a running non-prod app (mode B; ignored if TENANT set)
-#   USERS       concurrent students           (default 1000)
-#   SPAWN       ramp rate, users/sec          (default 40)
-#   RUN_TIME    locust -t duration            (default 5m)
-#   THRESHOLD   max acceptable failure ratio  (default 0.01 = 1%)
-#   EXAM_ID     reuse an existing seeded mock (mode B only; skips the seed step)
-#   N, BANK     seed sizes when seeding       (default N=USERS, BANK=600)
+#   TENANT       ephemeral subdomain to create+seed+destroy (mode A). Must start
+#                with LOADTEST_TENANT_PREFIX (default "loadtest") — a safety guard.
+#   KEEP_TENANT  set to 1 to skip teardown (debug); default tears the tenant down.
+#   HOST         base URL of a running non-prod app (mode B; ignored if TENANT set)
+#   USERS        number of students             (default 100)
+#   SEAT_WINDOW  seconds to seat them all       (default 120) -> sets the spawn rate
+#   EXAM_MINUTES per-student exam length        (default 10)  -> sets the duration
+#   THRESHOLD    max acceptable failure ratio   (default 0.01 = 1%)
+#   EXAM_ID      reuse an existing seeded mock  (mode B only; skips the seed step)
+#   N, BANK      seed sizes when seeding        (default N=USERS, BANK=600)
+#   SPAWN, RUN_TIME  advanced: override the derived ramp/duration directly
 #
 # Do NOT 'source' this script. Sourcing applies its `set -e`/`exit` to your
 # interactive shell, which closes the terminal on the first exit. Detect a sourced
@@ -44,12 +53,19 @@ cd "$(dirname "$0")/.."                       # repo root
 
 HOST="${HOST:-}"
 TENANT="${TENANT:-}"
-USERS="${USERS:-1000}"
-SPAWN="${SPAWN:-40}"
-RUN_TIME="${RUN_TIME:-5m}"
+USERS="${USERS:-100}"
+SEAT_WINDOW="${SEAT_WINDOW:-120}"            # seconds to seat the whole cohort
+EXAM_MINUTES="${EXAM_MINUTES:-10}"           # per-student exam length
 THRESHOLD="${THRESHOLD:-0.01}"
 N="${N:-$USERS}"
 BANK="${BANK:-600}"
+
+# Derive the realistic ramp + duration from real-world inputs (override by
+# exporting SPAWN / RUN_TIME). Spawn rate = students / seating-window; the run
+# lasts the seating window + a full exam + a 90s tail so the last submit lands.
+SPAWN="${SPAWN:-$(awk "BEGIN{r=$USERS/$SEAT_WINDOW; if(r<0.1)r=0.1; printf \"%.3f\", r}")}"
+RUN_TIME="${RUN_TIME:-$(awk "BEGIN{printf \"%ds\", $SEAT_WINDOW + $EXAM_MINUTES*60 + 90}")}"
+export EXAM_MINUTES                           # the locustfile reads this
 
 if ! command -v locust >/dev/null 2>&1; then
   echo "ERROR: locust not installed.  pip install locust" >&2
@@ -118,7 +134,8 @@ else
 fi
 
 # ---- 2. run locust headless --------------------------------------------------
-echo "==> Load test: $USERS users, spawn $SPAWN/s, for $RUN_TIME against $HOST (exam $EXAM_ID)"
+echo "==> Realistic run: $USERS students seated over ${SEAT_WINDOW}s (~$SPAWN/s),"
+echo "    each sits ~${EXAM_MINUTES} min then submits; total $RUN_TIME against $HOST (exam $EXAM_ID)."
 set +e
 EXAM_ID="$EXAM_ID" locust \
   -f loadtest/locustfile_mock_jamb.py \
