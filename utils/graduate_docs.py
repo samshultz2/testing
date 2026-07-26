@@ -122,6 +122,30 @@ def design_key_for(doc_type):
     return mod.DEFAULT_TEMPLATE
 
 
+def _margins_for(mod, key, land):
+    """(top, bottom, left, right) page margins in mm. A design module may expose a
+    ``page_margins(key)`` hook to request tighter margins (e.g. a statement that
+    should fill the page); otherwise the standard document margins apply."""
+    fn = getattr(mod, 'page_margins', None)
+    if fn:
+        try:
+            m = fn(key)
+            if m:
+                return m
+        except Exception:
+            pass
+    return (16, 18, 18, 18) if land else (16, 20, 20, 20)
+
+
+def _apply_layout(mod, key, ctx, pagesize):
+    """Attach the usable body height (page minus margins minus footer reserve) to
+    the ctx so designs that fill the page know how much room they have."""
+    land = mod.is_landscape(key)
+    mt, mb, _ml, _mr = _margins_for(mod, key, land)
+    ctx['_avail'] = (pagesize[1] - (mt + mb) * mm) - 46 * mm
+    return ctx
+
+
 def list_designs(doc_type):
     mod = _design_module(doc_type)
     return mod.list_templates() if mod else []
@@ -231,13 +255,15 @@ def preview_document(doc_type, template_key):
     ctx = mod.sample_ctx(school)
     _slc_fields(ctx)                      # sample gets SLC prose fields too
     land = mod.is_landscape(template_key)
-    margin = 18 * mm if land else 20 * mm
+    pagesize = landscape(A4) if land else A4
+    mt, mb, ml, mr = _margins_for(mod, template_key, land)
     buf = io.BytesIO()
-    pdf = SimpleDocTemplate(buf, pagesize=landscape(A4) if land else A4,
-                            leftMargin=margin, rightMargin=margin,
-                            topMargin=16 * mm, bottomMargin=18 * mm, title='Document preview')
+    pdf = SimpleDocTemplate(buf, pagesize=pagesize,
+                            leftMargin=ml * mm, rightMargin=mr * mm,
+                            topMargin=mt * mm, bottomMargin=mb * mm, title='Document preview')
     ss = getSampleStyleSheet()
     small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
+    _apply_layout(mod, template_key, ctx, pagesize)
     el = mod.build_flowables(template_key, ctx)
     el += [Spacer(1, 12), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
            Paragraph('<b>PREVIEW — sample data.</b> A QR code and verification code '
@@ -268,13 +294,15 @@ def render(student, doc, verify_url):
         mod = _design_module(doc.doc_type)
         key = design_key_for(doc.doc_type)
         land = mod.is_landscape(key)
-        margin = 18 * mm if land else 20 * mm
+        pagesize = landscape(A4) if land else A4
+        mt, mb, ml, mr = _margins_for(mod, key, land)
         buf = io.BytesIO()
-        pdf = SimpleDocTemplate(buf, pagesize=landscape(A4) if land else A4,
-                                leftMargin=margin, rightMargin=margin,
-                                topMargin=16 * mm, bottomMargin=18 * mm,
+        pdf = SimpleDocTemplate(buf, pagesize=pagesize,
+                                leftMargin=ml * mm, rightMargin=mr * mm,
+                                topMargin=mt * mm, bottomMargin=mb * mm,
                                 title=f'{label} — {student.full_name}')
-        el = mod.build_flowables(key, _doc_ctx(student, doc, school, rec))
+        ctx = _apply_layout(mod, key, _doc_ctx(student, doc, school, rec), pagesize)
+        el = mod.build_flowables(key, ctx)
         el += _verification_footer(doc, verify_url, small)
         on_page = _page_painter(school['name'], mod.page_decorator(key))
         pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
