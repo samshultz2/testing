@@ -252,6 +252,7 @@ def graduate_profile(student_id):
         graduation_session = db.session.get(AcademicSession, student.graduation_session_id)
     
     from models import GraduateAudit, GRADUATE_STATUSES
+    from utils.graduate_record import build_record
     history = (GraduateAudit.query
                .filter_by(student_id=student.id, field='graduate_status')
                .order_by(GraduateAudit.created_at.desc()).limit(50).all())
@@ -259,6 +260,7 @@ def graduate_profile(student_id):
         'page': 'graduate_profile',
         'student': {'id': student.id, 'full_name': student.full_name,
                     'student_id': student.student_id, 'gender': student.gender},
+        'record': build_record(student),
         'status': student.graduate_status or 'Graduated',
         'statuses': GRADUATE_STATUSES,
         'status_history': [{'old': h.old_value, 'new': h.new_value, 'reason': h.reason,

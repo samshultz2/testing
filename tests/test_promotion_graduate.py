@@ -101,3 +101,19 @@ def test_graduate_status_lifecycle_and_audit(app):
     assert r.status_code == 200 and r.get_json()['ok'] is True
     with app.app_context():
         assert db.session.get(Student, sid).is_graduated is False
+
+
+def test_graduate_profile_includes_permanent_record(app):
+    with app.app_context():
+        s = Student(student_id='GREC1', first_name='Per', surname='Manent',
+                    gender='Male', is_active=True, is_graduated=True,
+                    graduate_status='Graduated', house='Green', blood_group='AB+')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    r = c.get(f'/promotion/graduates/{sid}', headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert 'record' in j and 'bio' in j['record']
+    assert j['record']['bio']['house'] == 'Green'
+    assert 'academic' in j['record'] and 'attendance' in j['record']

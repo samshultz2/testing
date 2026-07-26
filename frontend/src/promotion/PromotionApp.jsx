@@ -375,8 +375,14 @@ function GraduatePreview({ d, notify }) {
 }
 
 // ---- Graduate profile ------------------------------------------------------
+const NGN = (n) => '₦' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+const InfoRow = ({ label, value }) => (value || value === 0)
+  ? <div className="info-row"><span className="text-muted">{label}</span><strong>{value}</strong></div> : null;
+
 function GraduateProfile({ d, notify }) {
   const s = d.student;
+  const rec = d.record || {};
+  const bio = rec.bio || {};
   const nav = useNav();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(d.status || 'Graduated');
@@ -434,6 +440,65 @@ function GraduateProfile({ d, notify }) {
           <thead><tr><th>When</th><th>Change</th><th>Reason</th><th>By</th></tr></thead>
           <tbody>{d.status_history.map((h, i) => (
             <tr key={i}><td>{h.at}</td><td>{h.old} → <strong>{h.new}</strong></td><td>{h.reason || '—'}</td><td>{h.actor || '—'}</td></tr>))}</tbody>
+        </table></div></div></div>}
+
+      {/* ---- Permanent record (read-only) ---- */}
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-card" /> Biodata</h3></div>
+        <div className="card-body" style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap' }}>
+          {bio.photo_url ? <img src={bio.photo_url} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border-color)' }} /> : null}
+          <div className="info-grid" style={{ flex: 1, minWidth: 240 }}>
+            <InfoRow label="Date of Birth" value={bio.date_of_birth} />
+            <InfoRow label="Admission Session" value={rec.admission_session} />
+            <InfoRow label="House" value={bio.house} />
+            <InfoRow label="Boarding" value={bio.boarding_status} />
+            <InfoRow label="Stream" value={bio.stream} />
+            <InfoRow label="Blood Group" value={bio.blood_group} />
+            <InfoRow label="Genotype" value={bio.genotype} />
+            <InfoRow label="Allergies" value={bio.allergies} />
+            <InfoRow label="Religion" value={bio.religion} />
+            <InfoRow label="Address" value={bio.home_address} />
+            <InfoRow label="WAEC Subjects" value={bio.waec_subjects} />
+            <InfoRow label="JAMB Subjects" value={bio.jamb_subjects} />
+            <InfoRow label="JAMB Reg. No." value={bio.jamb_reg_number} />
+          </div>
+        </div></div>
+
+      {rec.class_history && rec.class_history.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-timeline" /> Class &amp; Arm History</h3></div>
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <thead><tr><th>Session</th><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
+          <tbody>{rec.class_history.map((h, i) => <tr key={i}><td>{h.session}</td><td>{h.term}</td><td>{h.klass}</td><td>{h.arm}</td></tr>)}</tbody>
+        </table></div></div></div>}
+
+      {rec.academic && (rec.academic.terms_count > 0) && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Academic History</h3>
+        {rec.academic.cumulative != null && <span className="badge badge-primary">Cumulative avg: {rec.academic.cumulative}%</span>}</div>
+        <div className="card-body">{rec.academic.terms.map((t, i) => (
+          <div className="card" style={{ marginBottom: '1rem' }} key={i}>
+            <div className="card-header"><span><strong>{t.session}</strong> · {t.term}</span>{t.average != null && <span className="text-muted">Term avg: {t.average}%</span>}</div>
+            <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+              <thead><tr><th>Subject</th><th>Score</th><th>Grade</th><th>Position</th><th>Remark</th></tr></thead>
+              <tbody>{t.subjects.map((sub, j) => <tr key={j}><td>{sub.subject}</td><td>{sub.score}</td><td>{sub.grade || '—'}</td><td>{sub.position || '—'}</td><td>{sub.remark || sub.comment || '—'}</td></tr>)}</tbody>
+            </table></div></div>
+          </div>))}</div></div>}
+
+      <div className="stats-grid mb-3">
+        {rec.attendance && rec.attendance.total > 0 && <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-calendar-check" /></div>
+          <div className="stat-content"><h3>{rec.attendance.percent}%</h3><p>Attendance ({rec.attendance.present}/{rec.attendance.total})</p></div></div>}
+        {rec.finance && <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-coins" /></div>
+          <div className="stat-content"><h3>{NGN(rec.finance.total_paid)}</h3><p>Total fees paid ({rec.finance.count})</p></div></div>}
+        {typeof rec.clinic_visits === 'number' && rec.clinic_visits > 0 && <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-notes-medical" /></div>
+          <div className="stat-content"><h3>{rec.clinic_visits}</h3><p>Clinic visits</p></div></div>}
+      </div>
+
+      {rec.finance && rec.finance.recent && rec.finance.recent.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-receipt" /> Recent Fee Payments</h3></div>
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead>
+          <tbody>{rec.finance.recent.map((p, i) => <tr key={i}><td>{p.date}</td><td>{NGN(p.amount)}</td><td>{p.method || '—'}</td><td>{p.receipt || '—'}</td></tr>)}</tbody>
+        </table></div></div></div>}
+
+      {rec.discipline && rec.discipline.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-gavel" /> Discipline Records</h3></div>
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <thead><tr><th>Date</th><th>Category</th><th>Severity</th><th>Description</th><th>Action</th></tr></thead>
+          <tbody>{rec.discipline.map((r, i) => <tr key={i}><td>{r.date}</td><td>{r.category}</td><td>{r.severity || '—'}</td><td>{r.description || '—'}</td><td>{r.action || '—'}</td></tr>)}</tbody>
         </table></div></div></div>}
 
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Results</h3>
