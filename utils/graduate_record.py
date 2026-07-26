@@ -107,6 +107,24 @@ def _academic(sid):
     return {'cumulative': cumulative, 'terms_count': len(out), 'terms': out}
 
 
+def _competence(sid):
+    """The student's Mock WAEC (a.k.a. competence exam) results — per subject
+    score + WAEC grade — taken from their latest/most-advanced mock exam. This is
+    the SS3 'competence' column shown on transcripts."""
+    from models import MockWAECResult, MockWAECExam
+    rows = MockWAECResult.query.filter_by(student_id=sid).all()
+    if not rows:
+        return None
+    exam_ids = {r.mock_exam_id for r in rows}
+    exams = {e.id: e for e in MockWAECExam.query.filter(MockWAECExam.id.in_(exam_ids)).all()}
+    if not exams:
+        return None
+    best = max(exams.values(), key=lambda e: (e.exam_number or 0, e.id))
+    subjects = {r.subject: {'score': r.score, 'grade': r.grade}
+                for r in rows if r.mock_exam_id == best.id}
+    return {'label': getattr(best, 'display_name', 'Competence'), 'subjects': subjects}
+
+
 def _attendance(sid):
     from models import db, StudentEnrollment, Attendance
     enr_ids = [e.id for e in StudentEnrollment.query.filter_by(student_id=sid).all()]
@@ -170,6 +188,8 @@ def build_record(student):
     for t in academic.get('terms', []):
         if not t.get('klass'):
             t['klass'] = klass_by.get((t['session'], t['term_number'])) or klass_by_session.get(t['session']) or ''
+    # SS3 competence (Mock WAEC) results, surfaced on the transcript alongside terms
+    academic['competence'] = _safe(lambda: _competence(sid), None)
     return {
         'bio': bio,
         # admission (earliest) + graduation sessions bracket the school career

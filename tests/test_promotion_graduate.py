@@ -181,15 +181,28 @@ def test_transcript_fills_from_student_scores_senior_only(app):
             db.session.add(StudentScore(student_id=s.id, class_subject_id=cs.id,
                                         assessment_type_id=at.id, score=82))
         db.session.commit()
+        # a Mock WAEC (competence) result for this student
+        from models import MockWAECExam, MockWAECResult
+        mex = MockWAECExam(name='2nd Mock', exam_number=2, session_id=sess.id,
+                           exam_date=__import__('datetime').date(2024, 3, 1), branch_id=bid,
+                           is_active=True)
+        db.session.add(mex); db.session.flush()
+        db.session.add(MockWAECResult(student_id=s.id, mock_exam_id=mex.id,
+                                      subject='TR-Maths', score=78, grade='A1'))
+        db.session.commit()
         rec = build_record(s)
         terms = rec['academic']['terms']
         assert terms, 'academic terms should be populated from StudentScore'
         assert any(t['subjects'] and t['subjects'][0]['score'] == 82 for t in terms)
-        # transcript matrix keeps only the senior (SSS1) class, not JSS3
+        # competence (Mock WAEC) is attached
+        comp = rec['academic'].get('competence')
+        assert comp and comp['subjects'].get('TR-Maths', {}).get('grade') == 'A1'
+        # transcript matrix keeps only the senior (SSS1) class, not JSS3, and exposes competence
         from utils import transcript_templates as tt
         m = tt._matrix(rec['academic'])
         assert 'SSS1' in m['ss_labels'].values()
         assert not any('JSS' in v for v in m['ss_labels'].values())
+        assert m['competence'].get('TR-Maths', {}).get('grade') == 'A1'
 
 
 def test_graduate_document_issue_and_public_verify(app):

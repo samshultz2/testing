@@ -88,6 +88,9 @@ def _matrix(academic):
             sessions.append(t['session'])
     sessions.sort()
     term_nums = sorted({t.get('term_number') or 0 for t in terms if t.get('term_number')}) or [1, 2, 3]
+    # SS3 competence (Mock WAEC) results shown as their own column
+    comp = (academic or {}).get('competence') or {}
+    comp_subjects = comp.get('subjects') or {}
     subjects = []
     grid = {}
     for t in terms:
@@ -96,6 +99,9 @@ def _matrix(academic):
             if name not in subjects:
                 subjects.append(name)
             grid.setdefault(name, {})[(t['session'], t.get('term_number') or 0)] = s
+    for name in comp_subjects:                       # include competence-only subjects
+        if name not in subjects:
+            subjects.append(name)
     subjects.sort()
     # per (subject, session) average across that session's terms
     sess_scores = {}
@@ -113,6 +119,7 @@ def _matrix(academic):
         'sessions': sessions, 'ss_labels': ss_labels, 'term_nums': term_nums,
         'subjects': subjects, 'grid': grid, 'sess_scores': sess_scores,
         'cumulative': (academic or {}).get('cumulative'),
+        'competence': comp_subjects, 'competence_label': comp.get('label') or 'Competence',
     }
 
 
@@ -191,14 +198,19 @@ def _signatures(S, labels=('Principal', 'Registrar')):
 
 
 def _term_grid(m, S, accent, two_line_group=False):
-    """Wide grid: SUBJECT × (each session grouped into its terms). Includes an
-    Average row. ``two_line_group`` stacks the session name over its SS label."""
+    """Wide grid: SUBJECT × (each session grouped into its terms), plus a
+    Competence (Mock WAEC) column when available. Includes an Average row.
+    ``two_line_group`` stacks the session name over its SS label."""
     sessions, tnums = m['sessions'], m['term_nums']
+    comp = m.get('competence') or {}
+    has_comp = bool(comp)
     ncols = len(sessions) * len(tnums)
+    total_cols = ncols + (1 if has_comp else 0)
     subj_w = 38 * mm
-    col_w = max(9 * mm, (USABLE_W - subj_w) / max(1, ncols))
+    col_w = max(9 * mm, (USABLE_W - subj_w) / max(1, total_cols))
     grp = ParagraphStyle('grp', parent=S['cellc'], textColor=colors.white,
                          fontName='Helvetica-Bold', fontSize=7)
+    comp_col = 1 + ncols                              # index of the competence column
     # header rows
     top = ['SUBJECT']
     for sess in sessions:
@@ -210,6 +222,9 @@ def _term_grid(m, S, accent, two_line_group=False):
     for _ in sessions:
         for tn in tnums:
             sub.append(tlabels.get(tn, f'T{tn}'))
+    if has_comp:
+        top.append(Paragraph(_esc(m.get('competence_label') or 'Competence'), grp))
+        sub.append('')
     rows = [top, sub]
     for name in m['subjects']:
         r = [Paragraph(_esc(name), S['cell'])]
@@ -217,6 +232,9 @@ def _term_grid(m, S, accent, two_line_group=False):
             for tn in tnums:
                 cell = m['grid'].get(name, {}).get((sess, tn))
                 r.append(_fmt(cell.get('score')) if cell else '—')
+        if has_comp:
+            cc = comp.get(name)
+            r.append((cc.get('grade') or _fmt(cc.get('score'))) if cc else '—')
         rows.append(r)
     # average row
     avg_row = ['Average']
@@ -225,9 +243,11 @@ def _term_grid(m, S, accent, two_line_group=False):
             vals = [m['grid'][s2][(sess, tn)].get('score') for s2 in m['subjects']
                     if (sess, tn) in m['grid'].get(s2, {}) and m['grid'][s2][(sess, tn)].get('score') is not None]
             avg_row.append(str(round(sum(vals) / len(vals), 1)) if vals else '—')
+    if has_comp:
+        avg_row.append('—')
     rows.append(avg_row)
 
-    t = Table(rows, colWidths=[subj_w] + [col_w] * ncols, repeatRows=2)
+    t = Table(rows, colWidths=[subj_w] + [col_w] * total_cols, repeatRows=2)
     style = [
         ('FONTSIZE', (0, 0), (-1, -1), 7),
         ('FONTNAME', (0, 0), (-1, 1), 'Helvetica-Bold'),
@@ -246,29 +266,44 @@ def _term_grid(m, S, accent, two_line_group=False):
         c += len(tnums)
     # merge the SUBJECT header cell down two rows
     style.append(('SPAN', (0, 0), (0, 1)))
+    if has_comp:                                       # competence header spans both rows
+        style.append(('SPAN', (comp_col, 0), (comp_col, 1)))
     t.setStyle(TableStyle(style))
     return t
 
 
 def _year_grid(m, S, accent):
-    """Compact grid: S/N · SUBJECT × per-session (Score + Grade)."""
+    """Compact grid: S/N · SUBJECT × per-session (Score + Grade), plus a
+    Competence (Mock WAEC) grade column when available."""
     sessions = m['sessions']
+    comp = m.get('competence') or {}
+    has_comp = bool(comp)
     head1 = ['S/N', 'SUBJECT']
     for sess in sessions:
         head1 += [m['ss_labels'].get(sess, sess)] + ['']
     head2 = ['', '']
     for _ in sessions:
         head2 += ['Score', 'Grade']
+    if has_comp:
+        head1.append(Paragraph(_esc(m.get('competence_label') or 'Competence'),
+                               ParagraphStyle('ch', parent=S['cellc'], textColor=colors.white,
+                                              fontName='Helvetica-Bold', fontSize=7)))
+        head2.append('')
     rows = [head1, head2]
     for i, name in enumerate(m['subjects'], 1):
         r = [str(i), Paragraph(_esc(name), S['cell'])]
         for sess in sessions:
             sc = m['sess_scores'].get((name, sess))
             r += [_fmt(sc), _grade(sc)]
+        if has_comp:
+            cc = comp.get(name)
+            r.append((cc.get('grade') or _fmt(cc.get('score'))) if cc else '—')
         rows.append(r)
     sn_w, subj_w = 10 * mm, 46 * mm
-    pair_w = (USABLE_W - sn_w - subj_w) / max(1, len(sessions))
-    widths = [sn_w, subj_w] + [pair_w / 2, pair_w / 2] * len(sessions)
+    comp_w = 18 * mm if has_comp else 0
+    pair_w = (USABLE_W - sn_w - subj_w - comp_w) / max(1, len(sessions))
+    widths = [sn_w, subj_w] + [pair_w / 2, pair_w / 2] * len(sessions) + ([comp_w] if has_comp else [])
+    comp_col = 2 + 2 * len(sessions)
     t = Table(rows, colWidths=widths, repeatRows=2)
     style = [
         ('FONTSIZE', (0, 0), (-1, -1), 7.5),
@@ -285,6 +320,8 @@ def _year_grid(m, S, accent):
     for _ in sessions:
         style.append(('SPAN', (c, 0), (c + 1, 0)))
         c += 2
+    if has_comp:
+        style.append(('SPAN', (comp_col, 0), (comp_col, 1)))
     t.setStyle(TableStyle(style))
     return t
 
@@ -462,6 +499,23 @@ def _t_govsci(ctx):
             ('ALIGN', (1, 0), (2, -1), 'CENTER'),
             ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
         el += [t, Spacer(1, 6)]
+    # competence (Mock WAEC) block
+    comp = m.get('competence') or {}
+    if comp:
+        cap = ParagraphStyle('cap', parent=S['small'], fontName='Helvetica-Bold', textColor=accent)
+        el.append(Paragraph(_esc(m.get('competence_label') or 'Competence (Mock WAEC)'), cap))
+        rows = [['Course Title', 'Score', 'Grade']]
+        for name2 in m['subjects']:
+            cc = comp.get(name2)
+            if cc:
+                rows.append([Paragraph(_esc(name2), S['cell']), _fmt(cc.get('score')), cc.get('grade') or '—'])
+        t = Table(rows, colWidths=[100 * mm, 30 * mm, 40 * mm], repeatRows=1)
+        t.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 8), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
+            ('ALIGN', (1, 0), (2, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
+        el += [t, Spacer(1, 6)]
     el += _signatures(S, labels=('Principal',))
     return el
 
@@ -623,8 +677,16 @@ def sample_ctx(school):
             terms.append({'term': f'Term {tn}', 'term_number': tn, 'session': sess,
                           'klass': klass, 'average': avg, 'subjects': subs})
     allscores = [s['score'] for t in terms for s in t['subjects']]
+    # SS3 competence (Mock WAEC) grades per subject
+    def _waec_grade(sc):
+        return ('A1' if sc >= 75 else 'B2' if sc >= 70 else 'B3' if sc >= 65 else 'C4'
+                if sc >= 60 else 'C6' if sc >= 50 else 'D7' if sc >= 45 else 'F9')
+    competence = {'label': 'Second Mock WAEC',
+                  'subjects': {sub: {'score': min(96, 68 + (i % 5) * 4),
+                                     'grade': _waec_grade(min(96, 68 + (i % 5) * 4))}
+                               for i, sub in enumerate(subjects)}}
     academic = {'cumulative': round(sum(allscores) / len(allscores), 1),
-                'terms_count': len(terms), 'terms': terms}
+                'terms_count': len(terms), 'terms': terms, 'competence': competence}
     student = SimpleNamespace(full_name='Adaeze N. Okoro (SAMPLE)', student_id='STU-SAMPLE',
                               gender='Female', graduation_date=date(2024, 7, 1))
     return {'student': student, 'academic': academic, 'bio': {}, 'school': school,
