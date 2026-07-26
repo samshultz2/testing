@@ -144,6 +144,20 @@ def _verification_footer(doc, verify_url, small):
     return els
 
 
+def _page_painter(school_name, decorator=None):
+    """Combine the watermark with an optional per-design page decorator (border)."""
+    wm = _watermark(school_name)
+
+    def paint(canvas, doc):
+        wm(canvas, doc)
+        if decorator is not None:
+            try:
+                decorator(canvas, doc)
+            except Exception:
+                pass
+    return paint
+
+
 def preview_transcript(template_key):
     """Render a sample transcript with the given design (no real student needed)."""
     from utils.school import school_profile
@@ -159,7 +173,8 @@ def preview_transcript(template_key):
     el += [Spacer(1, 14), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
            Paragraph('<b>PREVIEW — sample data.</b> On a real transcript a QR code and '
                      'verification code appear here.', small)]
-    pdf.build(el, onFirstPage=_watermark(school['name']), onLaterPages=_watermark(school['name']))
+    on_page = _page_painter(school['name'], transcript_templates.page_decorator(template_key))
+    pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
     buf.seek(0)
     return buf
 
@@ -191,10 +206,11 @@ def render(student, doc, verify_url):
     # Transcripts use a school-chosen design; everything else uses the standard body.
     if doc.doc_type == 'transcript':
         from utils import transcript_templates
-        el = transcript_templates.build_flowables(
-            transcript_template_key(), _transcript_ctx(student, doc, school, rec))
+        key = transcript_template_key()
+        el = transcript_templates.build_flowables(key, _transcript_ctx(student, doc, school, rec))
         el += _verification_footer(doc, verify_url, small)
-        pdf.build(el, onFirstPage=_watermark(school['name']), onLaterPages=_watermark(school['name']))
+        on_page = _page_painter(school['name'], transcript_templates.page_decorator(key))
+        pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
         buf.seek(0)
         return buf, f"transcript_{(student.student_id or student.id)}.pdf"
 

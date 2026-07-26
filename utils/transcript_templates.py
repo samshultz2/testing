@@ -169,17 +169,21 @@ def _signatures(S, labels=('Principal', 'Registrar')):
     return [Spacer(1, 22), t]
 
 
-def _term_grid(m, S, accent, show_grades=False):
-    """Wide grid: SUBJECT × (each session grouped into its terms). Optionally a
-    grade sub-column. Includes an Average row."""
+def _term_grid(m, S, accent, two_line_group=False):
+    """Wide grid: SUBJECT × (each session grouped into its terms). Includes an
+    Average row. ``two_line_group`` stacks the session name over its SS label."""
     sessions, tnums = m['sessions'], m['term_nums']
     ncols = len(sessions) * len(tnums)
     subj_w = 38 * mm
     col_w = max(9 * mm, (USABLE_W - subj_w) / max(1, ncols))
+    grp = ParagraphStyle('grp', parent=S['cellc'], textColor=colors.white,
+                         fontName='Helvetica-Bold', fontSize=7)
     # header rows
     top = ['SUBJECT']
     for sess in sessions:
-        top += [m['ss_labels'][sess]] + [''] * (len(tnums) - 1)
+        label = (Paragraph(f'{_esc(sess)}<br/>{_esc(m["ss_labels"][sess])}', grp)
+                 if two_line_group else m['ss_labels'][sess])
+        top += [label] + [''] * (len(tnums) - 1)
     sub = ['']
     tlabels = {1: '1st', 2: '2nd', 3: '3rd'}
     for _ in sessions:
@@ -475,6 +479,60 @@ def _t_modern(ctx):
     return el
 
 
+def _pioneer_border(canvas, doc):
+    """A decorative double frame with corner diamonds (drawn on the page)."""
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    navy = colors.HexColor('#1e293b')
+    gold = colors.HexColor('#b45309')
+    canvas.saveState()
+    m = 9 * mm
+    canvas.setStrokeColor(navy)
+    canvas.setLineWidth(5)
+    canvas.roundRect(m, m, w - 2 * m, h - 2 * m, 6, stroke=1, fill=0)
+    canvas.setStrokeColor(gold)
+    canvas.setLineWidth(1.2)
+    inset = m + 3 * mm
+    canvas.roundRect(inset, inset, w - 2 * inset, h - 2 * inset, 4, stroke=1, fill=0)
+    canvas.setFillColor(gold)
+    for x, y in [(m, m), (w - m, m), (m, h - m), (w - m, h - m)]:
+        canvas.saveState()
+        canvas.translate(x, y)
+        canvas.rotate(45)
+        canvas.rect(-2.2 * mm, -2.2 * mm, 4.4 * mm, 4.4 * mm, fill=1, stroke=0)
+        canvas.restoreState()
+    canvas.restoreState()
+
+
+def _t_pioneer(ctx):
+    """Ornamental bordered certificate: centred letterhead, underlined TRANSCRIPT
+    / FOR <name>, Reg-No fields, and a per-term SS1–SS3 grid."""
+    S = _styles()
+    accent = colors.HexColor('#1e293b')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el.append(Spacer(1, 10))
+    tstyle = ParagraphStyle('ti', parent=S['center'], fontSize=14, fontName='Helvetica-Bold',
+                            spaceAfter=4)
+    el.append(Paragraph('<u>TRANSCRIPT</u>', tstyle))
+    el.append(Paragraph(f"<u>FOR {_esc((ctx['student'].full_name or '').upper())}</u>",
+                        ParagraphStyle('fn', parent=S['center'], fontSize=12,
+                                       fontName='Helvetica-Bold', spaceAfter=8)))
+    el += _header_fields([
+        ('Reg. No.', ctx['student'].student_id),
+        ('PIN', (ctx.get('bio') or {}).get('jamb_profile_code') or (ctx.get('bio') or {}).get('jamb_reg_number')),
+        ('Graduation', ctx['grad_when']),
+    ], S)
+    el.append(Spacer(1, 8))
+    el.append(_term_grid(m, S, accent, two_line_group=True) if m['subjects']
+              else Paragraph('No internal results are on record.', S['body']))
+    if m['cumulative'] is not None:
+        el.append(Spacer(1, 4))
+        el.append(Paragraph(f"<b>Cumulative Average:</b> {m['cumulative']}%", S['left']))
+    el += _signatures(S, labels=('HOD', 'Principal'))
+    return el
+
+
 # ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
@@ -491,9 +549,16 @@ TRANSCRIPT_TEMPLATES = {
                'description': 'Boxed student & school panels with a per-session academic record.'},
     'modern': {'name': 'Modern Banner', 'render': _t_modern,
                'description': 'Contemporary coloured header bar with a per-term results grid.'},
+    'pioneer': {'name': 'Bordered Certificate', 'render': _t_pioneer, 'decorator': _pioneer_border,
+                'description': 'Ornamental full-page border, centred letterhead, per-term SS1–SS3 grid with year + SS labels.'},
 }
 
 DEFAULT_TEMPLATE = 'classic'
+
+
+def page_decorator(key):
+    """Optional per-design canvas decorator (e.g. a printed border)."""
+    return resolve(key).get('decorator')
 
 
 def list_templates():
