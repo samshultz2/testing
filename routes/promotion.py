@@ -1,7 +1,7 @@
 """
 Student Promotion Management routes
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
 from utils.helpers import get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, PromotionRule, PromotionRecord,
@@ -215,6 +215,37 @@ def graduate_sss3():
         return _err(f'Error: {str(e)}', url_for('promotion.graduates_list'))
 
 
+@promotion_bp.route('/graduates/<int:student_id>/document/<doc_type>')
+@admin_required
+def graduate_document(student_id, doc_type):
+    """Issue (or reprint) a graduate document and return the PDF. Records the
+    issuance in the GraduateAudit trail and logs the action."""
+    from flask import send_file
+    from utils.branch_scope import require_branch_access
+    from utils.access_control import get_current_user
+    from utils.production import secure_external_url
+    from utils import graduate_docs
+    from models import GraduateAudit, GRADUATE_DOC_TYPES
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
+    if not student.is_graduated:
+        abort(404)
+    if doc_type not in GRADUATE_DOC_TYPES:
+        abort(404)
+    me = get_current_user()
+    doc = graduate_docs.issue(student, doc_type, actor=(me.username if me else 'admin'))
+    verify_url = secure_external_url('graduate_verify.verify', code=doc.verification_code)
+    buf, fname = graduate_docs.render(student, doc, verify_url)
+    db.session.add(GraduateAudit(
+        student_id=student.id, field='document',
+        old_value=None, new_value=f'{doc_type}:{doc.document_number}',
+        reason=('reprint' if doc.reprint_count else 'issued'),
+        actor=(me.username if me else 'admin')))
+    db.session.commit()
+    log_action('graduate_document', f'{student.full_name}: {doc.label} ({doc.document_number})')
+    return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=fname)
+
+
 @promotion_bp.route('/graduates/<int:student_id>')
 @graduates_access_required
 def graduate_profile(student_id):
@@ -251,16 +282,29 @@ def graduate_profile(student_id):
     if student.graduation_session_id:
         graduation_session = db.session.get(AcademicSession, student.graduation_session_id)
     
-    from models import GraduateAudit, GRADUATE_STATUSES
+    from models import GraduateAudit, GRADUATE_STATUSES, GRADUATE_DOC_TYPES, GraduateDocument
     from utils.graduate_record import build_record
+    from utils.production import secure_external_url
     history = (GraduateAudit.query
                .filter_by(student_id=student.id, field='graduate_status')
                .order_by(GraduateAudit.created_at.desc()).limit(50).all())
+    issued = {d.doc_type: d for d in GraduateDocument.query.filter_by(student_id=student.id).all()}
+    documents = []
+    for dt, dlabel in GRADUATE_DOC_TYPES.items():
+        d = issued.get(dt)
+        documents.append({
+            'type': dt, 'label': dlabel,
+            'download_url': url_for('promotion.graduate_document', student_id=student.id, doc_type=dt),
+            'number': d.document_number if d else None,
+            'reprint_count': d.reprint_count if d else 0,
+            'verify_url': secure_external_url('graduate_verify.verify', code=d.verification_code) if d else None,
+        })
     return _render({
         'page': 'graduate_profile',
         'student': {'id': student.id, 'full_name': student.full_name,
                     'student_id': student.student_id, 'gender': student.gender},
         'record': build_record(student),
+        'documents': documents,
         'status': student.graduate_status or 'Graduated',
         'statuses': GRADUATE_STATUSES,
         'status_history': [{'old': h.old_value, 'new': h.new_value, 'reason': h.reason,

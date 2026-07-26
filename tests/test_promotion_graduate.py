@@ -117,3 +117,30 @@ def test_graduate_profile_includes_permanent_record(app):
     assert 'record' in j and 'bio' in j['record']
     assert j['record']['bio']['house'] == 'Green'
     assert 'academic' in j['record'] and 'attendance' in j['record']
+
+
+def test_graduate_document_issue_and_public_verify(app):
+    from models import db, GraduateDocument
+    with app.app_context():
+        s = Student(student_id='GDOC1', first_name='Cert', surname='Holder',
+                    gender='Female', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    # issue + download the School Leaving Certificate (PDF)
+    r = c.get(f'/promotion/graduates/{sid}/document/slc')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    with app.app_context():
+        doc = GraduateDocument.query.filter_by(student_id=sid, doc_type='slc').first()
+        assert doc and doc.document_number and doc.verification_code
+        code = doc.verification_code
+    # public verify (no login) confirms it's genuine
+    pub = app.test_client()
+    v = pub.get(f'/verify/{code}')
+    assert v.status_code == 200 and b'Genuine' in v.data
+    # a bad code reports could-not-verify, not an error
+    v2 = pub.get('/verify/NOPENOPE00')
+    assert v2.status_code == 200 and b'Could not verify' in v2.data
+    # unknown doc type -> 404
+    assert c.get(f'/promotion/graduates/{sid}/document/bogus').status_code == 404

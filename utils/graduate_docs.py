@@ -1,0 +1,276 @@
+"""Graduate document generation (Phase 2) — School Leaving Certificate, Statement
+of Result, Academic Transcript, and Testimonial / Character Certificate.
+
+Each document is a reportlab PDF carrying the school letterhead, a unique document
+number, the issue date, a QR code + verification code that resolve to a PUBLIC
+verification page (/verify/<code>), a light watermark, and signature lines. The
+issue record lives in ``GraduateDocument``; the PDF is rendered on demand from the
+permanent record so a reprint always reflects the stored history.
+"""
+import io
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
+                                TableStyle, Image as RLImage, HRFlowable)
+
+_PRIMARY = colors.HexColor('#0e3a2f')
+_ACCENT = colors.HexColor('#0e8a64')
+_MUTED = colors.HexColor('#64748b')
+
+
+def _esc(v):
+    from utils.web_exports import pdf_escape
+    return pdf_escape(str(v or ''))
+
+
+def _pronouns(gender):
+    g = (gender or '').strip().lower()
+    if g.startswith('m'):
+        return ('He', 'he', 'his')
+    if g.startswith('f'):
+        return ('She', 'she', 'her')
+    return ('They', 'they', 'their')
+
+
+def issue(student, doc_type, actor=None):
+    """Get-or-create the GraduateDocument for (student, doc_type). On a repeat
+    issue it bumps reprint_count. Returns the row (committed)."""
+    from models import db, GraduateDocument, GRADUATE_DOC_TYPES
+    if doc_type not in GRADUATE_DOC_TYPES:
+        raise ValueError('Unknown document type')
+    doc = GraduateDocument.query.filter_by(student_id=student.id, doc_type=doc_type).first()
+    year = (student.graduation_date.year if student.graduation_date
+            else __import__('datetime').date.today().year)
+    if doc is None:
+        # unique verification code (retry on the astronomically-rare collision)
+        for _ in range(5):
+            code = GraduateDocument.new_code()
+            if not GraduateDocument.query.filter_by(verification_code=code).first():
+                break
+        doc = GraduateDocument(
+            student_id=student.id, doc_type=doc_type,
+            document_number=GraduateDocument.make_number(doc_type, student, year),
+            verification_code=code, issued_by=actor, reprint_count=0)
+        db.session.add(doc)
+    else:
+        doc.reprint_count = (doc.reprint_count or 0) + 1
+        if actor:
+            doc.issued_by = actor
+    db.session.commit()
+    return doc
+
+
+def _qr_flowable(url, size_mm=26):
+    try:
+        import qrcode
+        img = qrcode.make(url)
+        buf = io.BytesIO()
+        img.save(buf, 'PNG')
+        buf.seek(0)
+        return RLImage(buf, width=size_mm * mm, height=size_mm * mm)
+    except Exception:
+        return None
+
+
+def _watermark(school_name):
+    text = (school_name or 'CERTIFIED').upper()
+
+    def draw(canvas, doc):
+        canvas.saveState()
+        canvas.translate(A4[0] / 2, A4[1] / 2)
+        canvas.rotate(45)
+        canvas.setFont('Helvetica-Bold', 60)
+        canvas.setFillColor(colors.Color(0.06, 0.54, 0.39, alpha=0.06))
+        canvas.drawCentredString(0, 0, text[:28])
+        canvas.restoreState()
+    return draw
+
+
+def render(student, doc, verify_url):
+    """Return (BytesIO, filename) for a graduate document PDF."""
+    from utils.school import school_profile, logo_flowable, logo_header_flowable
+    from utils.graduate_record import build_record
+    from models import GRADUATE_DOC_TYPES
+
+    school = school_profile()
+    rec = build_record(student)
+    label = GRADUATE_DOC_TYPES.get(doc.doc_type, 'Document')
+
+    buf = io.BytesIO()
+    pdf = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
+                            topMargin=16 * mm, bottomMargin=20 * mm,
+                            title=f'{label} — {student.full_name}')
+    ss = getSampleStyleSheet()
+    center = ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER)
+    sch = ParagraphStyle('sch', parent=center, fontSize=17, leading=20, textColor=_PRIMARY)
+    muted = ParagraphStyle('m', parent=center, fontSize=8.5, textColor=_MUTED)
+    title = ParagraphStyle('t', parent=center, fontSize=15, leading=18, spaceBefore=8,
+                           spaceAfter=8, textColor=_ACCENT, fontName='Helvetica-Bold')
+    body = ParagraphStyle('b', parent=ss['Normal'], fontSize=11.5, leading=18,
+                          alignment=TA_JUSTIFY, spaceAfter=6)
+    small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
+
+    el = []
+    # ---- letterhead ----
+    head_items = [(Paragraph(_esc(school['name'] or 'School'), sch), school['name'] or 'School',
+                   'Helvetica-Bold', 17)]
+    if school.get('address'):
+        head_items.append((Paragraph(_esc(school['address']), muted), school['address'], 'Helvetica', 8.5))
+    line3 = ' · '.join([x for x in [school.get('phone'), school.get('email')] if x])
+    if line3:
+        head_items.append((Paragraph(_esc(line3), muted), line3, 'Helvetica', 8.5))
+    logo = logo_flowable(max_h_mm=16, max_w_mm=26)
+    header = logo_header_flowable(logo, head_items) if logo is not None else None
+    if header is not None:
+        el.append(header)
+    else:
+        for para, *_ in head_items:
+            el.append(para)
+    el.append(Spacer(1, 4))
+    el.append(HRFlowable(width='100%', thickness=1, color=_ACCENT))
+    el.append(Paragraph(label.upper(), title))
+
+    grad_when = (student.graduation_date.strftime('%B %Y') if student.graduation_date
+                 else (rec.get('admission_session') or ''))
+    grad_session = ''
+    try:
+        from models import AcademicSession, db
+        if student.graduation_session_id:
+            gs = db.session.get(AcademicSession, student.graduation_session_id)
+            grad_session = gs.name if gs else ''
+    except Exception:
+        pass
+    S, s_, sp = _pronouns(student.gender)
+
+    # ---- per-type body ----
+    el += _body_for(doc.doc_type, student, rec, school, grad_when, grad_session,
+                    (S, s_, sp), body, small, center)
+
+    # ---- signatures ----
+    el.append(Spacer(1, 18))
+    sig = Table([['_' * 26, '', '_' * 26],
+                 [Paragraph('Principal', small), '', Paragraph('Registrar', small)]],
+                colWidths=[60 * mm, 30 * mm, 60 * mm])
+    sig.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                             ('TOPPADDING', (0, 1), (-1, 1), 2)]))
+    el.append(sig)
+
+    # ---- verification footer (QR + code + number) ----
+    el.append(Spacer(1, 14))
+    el.append(HRFlowable(width='100%', thickness=0.5, color=_MUTED))
+    vlines = [Paragraph(f"<b>Document No.</b> {_esc(doc.document_number)}", small),
+              Paragraph(f"<b>Verification code:</b> {_esc(doc.verification_code)}", small),
+              Paragraph(f"Verify this document at<br/>{_esc(verify_url)}", small)]
+    if doc.reprint_count:
+        vlines.append(Paragraph(f"<i>Reprint #{doc.reprint_count}</i>", small))
+    qr = _qr_flowable(verify_url)
+    if qr is not None:
+        foot = Table([[vlines, qr]], colWidths=[None, 30 * mm])
+        foot.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                                  ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+        el.append(foot)
+    else:
+        el += vlines
+
+    wm = _watermark(school['name'])
+    pdf.build(el, onFirstPage=wm, onLaterPages=wm)
+    buf.seek(0)
+    fname = f"{doc.doc_type}_{(student.student_id or student.id)}.pdf"
+    return buf, fname
+
+
+def _body_for(doc_type, student, rec, school, grad_when, grad_session, pron, body, small, center):
+    S, s_, sp = pron
+    name = student.full_name
+    adm = student.student_id or ''
+    school_name = school.get('name') or 'the school'
+    els = []
+
+    if doc_type == 'slc':
+        els.append(Paragraph(
+            f"This is to certify that <b>{_esc(name)}</b> (Admission No. {_esc(adm)}) "
+            f"was a bona fide student of <b>{_esc(school_name)}</b> and successfully "
+            f"completed the Senior Secondary School (SSS3) programme"
+            + (f" in the {_esc(grad_session)} academic session" if grad_session else "")
+            + (f", graduating in {_esc(grad_when)}" if grad_when else "") + ".", body))
+        els.append(Paragraph(
+            f"During {sp} time in the school, {s_} was of good conduct and character, "
+            f"and left in good standing. This certificate is issued at {sp} request "
+            f"for whatever legitimate purpose it may serve.", body))
+
+    elif doc_type == 'testimonial':
+        els.append(Paragraph(
+            f"This testimonial is issued in respect of <b>{_esc(name)}</b> "
+            f"(Admission No. {_esc(adm)}), a former student of <b>{_esc(school_name)}</b>"
+            + (f" who graduated in {_esc(grad_when)}" if grad_when else "") + ".", body))
+        els.append(Paragraph(
+            f"Throughout {sp} stay, {s_} demonstrated commendable discipline, respect and "
+            f"cooperation, and maintained a good relationship with both staff and peers. "
+            f"{S} was diligent in {sp} studies and conducted {s_}self in a manner worthy "
+            f"of emulation.", body))
+        els.append(Paragraph(
+            f"We therefore recommend {_esc(name)} without reservation and wish {s_} "
+            f"success in {sp} future endeavours.", body))
+
+    elif doc_type == 'statement':
+        els.append(Paragraph(
+            f"This is a statement of the academic record of <b>{_esc(name)}</b> "
+            f"(Admission No. {_esc(adm)}) of <b>{_esc(school_name)}</b>"
+            + (f", who graduated in {_esc(grad_when)}" if grad_when else "") + ".", body))
+        ac = rec.get('academic') or {}
+        if ac.get('cumulative') is not None:
+            els.append(Paragraph(f"<b>Cumulative average:</b> {ac['cumulative']}% "
+                                 f"across {ac.get('terms_count', 0)} assessed term(s).", body))
+        terms = ac.get('terms') or []
+        last = terms[-1] if terms else None
+        if last and last.get('subjects'):
+            els.append(Spacer(1, 4))
+            els.append(Paragraph(f"Most recent results — {_esc(last.get('session'))} "
+                                 f"{_esc(last.get('term'))}:", small))
+            els.append(_subject_table(last['subjects']))
+        if not terms:
+            els.append(Paragraph("No internal academic results are on record for this "
+                                 "student.", body))
+
+    elif doc_type == 'transcript':
+        els.append(Paragraph(
+            f"Academic transcript for <b>{_esc(name)}</b> (Admission No. {_esc(adm)}) — "
+            f"the complete internal academic history held by <b>{_esc(school_name)}</b>.", body))
+        ac = rec.get('academic') or {}
+        if ac.get('cumulative') is not None:
+            els.append(Paragraph(f"<b>Cumulative average:</b> {ac['cumulative']}%", body))
+        for t in (ac.get('terms') or []):
+            els.append(Spacer(1, 6))
+            avg = f" — term average {t['average']}%" if t.get('average') is not None else ''
+            els.append(Paragraph(f"<b>{_esc(t.get('session'))} · {_esc(t.get('term'))}</b>{avg}", small))
+            els.append(_subject_table(t.get('subjects') or []))
+        if not (ac.get('terms')):
+            els.append(Paragraph("No internal academic results are on record.", body))
+
+    return els
+
+
+def _subject_table(subjects):
+    rows = [['Subject', 'Score', 'Grade', 'Position']]
+    for s in subjects:
+        rows.append([s.get('subject', ''), _fmt(s.get('score')), s.get('grade') or '—',
+                     str(s.get('position') or '—')])
+    t = Table(rows, colWidths=[85 * mm, 25 * mm, 25 * mm, 25 * mm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), _PRIMARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    return t
+
+
+def _fmt(v):
+    return '' if v is None else (str(int(v)) if float(v).is_integer() else str(v))

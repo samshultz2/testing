@@ -442,6 +442,26 @@ function GraduateProfile({ d, notify }) {
             <tr key={i}><td>{h.at}</td><td>{h.old} → <strong>{h.new}</strong></td><td>{h.reason || '—'}</td><td>{h.actor || '—'}</td></tr>))}</tbody>
         </table></div></div></div>}
 
+      {/* ---- Documents ---- */}
+      {d.documents && d.documents.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-signature" /> Documents</h3></div>
+        <div className="card-body"><div className="data-cards">
+          {d.documents.map((doc) => (
+            <div className="data-card" key={doc.type}>
+              <div className="data-card-header"><div className="data-card-title">{doc.label}</div>
+                {doc.number ? <span className="badge badge-success">Issued</span> : <span className="badge badge-secondary">Not issued</span>}</div>
+              {doc.number && <div className="data-card-row"><span className="data-card-label">No.</span><span>{doc.number}</span></div>}
+              {doc.reprint_count > 0 && <div className="data-card-row"><span className="data-card-label">Reprints</span><span>{doc.reprint_count}</span></div>}
+              {doc.verify_url && <div className="data-card-row"><span className="data-card-label">Verify</span><span><a href={doc.verify_url} target="_blank" rel="noopener noreferrer">link</a></span></div>}
+              <div className="data-card-actions">
+                <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">
+                  <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> {doc.number ? 'Re-issue / Download' : 'Generate & Download'}</a>
+              </div>
+            </div>))}
+        </div>
+        <p className="text-muted text-sm" style={{ marginTop: '.6rem', marginBottom: 0 }}>
+          <i aria-hidden="true" className="fas fa-qrcode" /> Each PDF carries a QR code + unique number; anyone can confirm it at the public verification page.</p>
+        </div></div>}
+
       {/* ---- Permanent record (read-only) ---- */}
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-card" /> Biodata</h3></div>
         <div className="card-body" style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap' }}>

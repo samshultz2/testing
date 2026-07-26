@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document Verification — {{ school.name or 'School' }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7fb;margin:0;color:#1f2937}
+    .wrap{max-width:520px;margin:2.5rem auto;padding:0 1rem}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:1.6rem 1.5rem;box-shadow:0 8px 30px rgba(0,0,0,.06)}
+    .sch{text-align:center;font-weight:800;font-size:1.15rem;color:#0e3a2f;margin-bottom:.2rem}
+    .sub{text-align:center;color:#6b7280;font-size:.82rem;margin-bottom:1rem}
+    .banner{border-radius:12px;padding:1rem;text-align:center;margin-bottom:1.1rem}
+    .ok{background:rgba(4,120,87,.1);color:#047857;border:1px solid rgba(4,120,87,.25)}
+    .bad{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .banner i{font-size:2rem;display:block;margin-bottom:.3rem}
+    .banner h1{font-size:1.15rem;margin:.2rem 0}
+    .row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid #f1f5f9;font-size:.92rem}
+    .row:last-child{border-bottom:0}
+    .row .k{color:#6b7280}.row .v{font-weight:600;text-align:right}
+    form{display:flex;gap:.5rem;margin-top:1rem}
+    input{flex:1;padding:.6rem .7rem;border:1px solid #d1d5db;border-radius:9px;font-size:.95rem;text-transform:uppercase}
+    button{background:#0e8a64;color:#fff;border:0;padding:.6rem 1rem;border-radius:9px;font-weight:700;cursor:pointer}
+    .foot{text-align:center;color:#9ca3af;font-size:.75rem;margin-top:1rem}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="sch">{{ school.name or 'School' }}</div>
+      <div class="sub">Document Verification Portal</div>
+
+      {% if result and result.ok %}
+      <div class="banner ok"><i class="fas fa-circle-check"></i><h1>Genuine document</h1>
+        <div>This document was issued by {{ school.name or 'the school' }}.</div></div>
+      <div class="row"><span class="k">Graduate</span><span class="v">{{ result.name }}</span></div>
+      <div class="row"><span class="k">Document</span><span class="v">{{ result.doc_label }}</span></div>
+      <div class="row"><span class="k">Document No.</span><span class="v">{{ result.number }}</span></div>
+      {% if result.graduation %}<div class="row"><span class="k">Class of</span><span class="v">{{ result.graduation }}</span></div>{% endif %}
+      {% if result.issued %}<div class="row"><span class="k">Issued</span><span class="v">{{ result.issued }}</span></div>{% endif %}
+      {% if result.reprint %}<div class="row"><span class="k">Copy</span><span class="v">Reprint #{{ result.reprint }}</span></div>{% endif %}
+      {% elif result and result.revoked %}
+      <div class="banner bad"><i class="fas fa-ban"></i><h1>Document revoked</h1>
+        <div>This document has been revoked by the school and is no longer valid.</div></div>
+      {% elif result %}
+      <div class="banner bad"><i class="fas fa-circle-xmark"></i><h1>Could not verify</h1>
+        <div>No document matches the code <strong>{{ code }}</strong>. Check the code and try again.</div></div>
+      {% else %}
+      <p style="color:#6b7280;font-size:.9rem;text-align:center;">Enter the verification code printed on the document (or scan its QR code).</p>
+      {% endif %}
+
+      <form method="get" action="{{ url_for('graduate_verify.verify') }}">
+        <input name="code" value="{{ code or '' }}" placeholder="Verification code" autocomplete="off" required>
+        <button type="submit"><i class="fas fa-magnifying-glass"></i> Verify</button>
+      </form>
+    </div>
+    <p class="foot">Powered by EduSyncra</p>
+  </div>
+</body>
+</html>
