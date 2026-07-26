@@ -149,6 +149,87 @@ def _bg_corners_blue(canvas, doc):
     canvas.restoreState()
 
 
+def _draw_medal(c, cx, cy):
+    gold = colors.HexColor('#b7791f')
+    c.saveState()
+    c.setFillColor(gold)
+    c.rect(cx - 5 * mm, cy - 20 * mm, 3.4 * mm, 13 * mm, fill=1, stroke=0)
+    c.rect(cx + 1.6 * mm, cy - 20 * mm, 3.4 * mm, 13 * mm, fill=1, stroke=0)
+    c.setStrokeColor(colors.HexColor('#7c5210'))
+    c.setLineWidth(1)
+    c.circle(cx, cy, 10 * mm, fill=1, stroke=1)
+    c.setFillColor(colors.HexColor('#eab308'))
+    c.circle(cx, cy, 6.5 * mm, fill=1, stroke=0)
+    c.setStrokeColor(colors.white)
+    c.setLineWidth(0.7)
+    c.circle(cx, cy, 6.5 * mm, fill=0, stroke=1)
+    c.setFillColor(colors.HexColor('#7c5210'))
+    c.setFont('Helvetica-Bold', 8)
+    c.drawCentredString(cx, cy - 3, 'SLC')
+    c.restoreState()
+
+
+def _draw_badge(c, cx, cy):
+    ygold = colors.HexColor('#f59e0b')
+    green = colors.HexColor('#14532d')
+    c.saveState()
+    c.setFillColor(ygold)
+    c.circle(cx, cy, 11 * mm, fill=1, stroke=0)
+    c.setFillColor(green)
+    c.circle(cx, cy, 7.6 * mm, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont('Helvetica-Bold', 6)
+    c.drawCentredString(cx, cy + 1.5, 'BEST')
+    c.drawCentredString(cx, cy - 5, 'AWARD')
+    c.restoreState()
+
+
+def _ribbon_green(canvas, doc):
+    """Dark-green wavy header + left ribbon band with a medal + award badge."""
+    w, h = doc.pagesize
+    green = colors.HexColor('#14532d')
+    gold = colors.HexColor('#b7791f')
+    ygold = colors.HexColor('#f59e0b')
+    canvas.saveState()
+    canvas.setStrokeColor(green)
+    canvas.setLineWidth(1)
+    canvas.rect(6 * mm, 6 * mm, w - 12 * mm, h - 12 * mm, stroke=1, fill=0)
+    band = 44 * mm
+    p = canvas.beginPath()
+    p.moveTo(0, h)
+    p.lineTo(w, h)
+    p.lineTo(w, h - band)
+    p.curveTo(w * 0.72, h - band - 16 * mm, w * 0.46, h - band + 12 * mm, w * 0.26, h - band)
+    p.curveTo(w * 0.16, h - band - 8 * mm, w * 0.07, h - band + 6 * mm, 0, h - band - 8 * mm)
+    p.close()
+    canvas.setFillColor(green)
+    canvas.drawPath(p, fill=1, stroke=0)
+    p2 = canvas.beginPath()
+    p2.moveTo(w, h - band - 2 * mm)
+    p2.lineTo(w, h - band - 12 * mm)
+    p2.curveTo(w * 0.7, h - band - 20 * mm, w * 0.5, h - band - 4 * mm, w * 0.4, h - band - 12 * mm)
+    p2.curveTo(w * 0.52, h - band - 6 * mm, w * 0.76, h - band - 12 * mm, w, h - band - 2 * mm)
+    p2.close()
+    canvas.setFillColor(ygold)
+    canvas.drawPath(p2, fill=1, stroke=0)
+    bx, bw = 40 * mm, 16 * mm
+    canvas.setFillColor(green)
+    canvas.rect(bx, 6 * mm, bw, h - 12 * mm, fill=1, stroke=0)
+    canvas.setStrokeColor(gold)
+    canvas.setLineWidth(1.2)
+    canvas.line(bx, 6 * mm, bx, h - 6 * mm)
+    canvas.line(bx + bw, 6 * mm, bx + bw, h - 6 * mm)
+    canvas.setFillColor(ygold)
+    canvas.setFont('Helvetica-Bold', 28)
+    canvas.drawString(16 * mm, h - 26 * mm, 'Certificate')
+    canvas.setFillColor(colors.white)
+    canvas.setFont('Helvetica-Oblique', 11)
+    canvas.drawString(17 * mm, h - 32 * mm, 'of School Leaving')
+    _draw_medal(canvas, bx + bw / 2, h * 0.46)
+    _draw_badge(canvas, w - 30 * mm, h - 24 * mm)
+    canvas.restoreState()
+
+
 def _poly(canvas, pts):
     p = canvas.beginPath()
     p.moveTo(*pts[0])
@@ -332,6 +413,34 @@ def _t_modern(ctx):
     return el
 
 
+def _t_elegant(ctx):
+    """Landscape green + gold ribbon certificate (content sits right of the band)."""
+    S = _styles()
+    green = colors.HexColor('#14532d')
+    name, _, _ = _header_lines(ctx['school'])
+    rp = ParagraphStyle('rp', parent=S['bodyc'], fontSize=12, leading=17)
+    content = [
+        Spacer(1, 2),
+        Paragraph('This certificate is proudly presented for honourable achievement to', rp),
+        Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
+            'nm', parent=S['center'], fontSize=26, fontName='Times-BoldItalic', textColor=green,
+            spaceBefore=8, spaceAfter=2)),
+        HRFlowable(width='80%', thickness=0.6, color=colors.HexColor('#94a3b8')),
+        Paragraph(f"a graduate of {_esc(name)}", ParagraphStyle(
+            'hl', parent=S['center'], fontSize=12, fontName='Times-Italic', textColor=green,
+            spaceBefore=6, spaceAfter=6)),
+        Paragraph(
+            f"who successfully completed the senior secondary programme {_career_line(ctx)} with good "
+            f"conduct and {_esc((ctx.get('performance') or 'satisfactory')).lower()} academic performance.", rp),
+        Spacer(1, 18),
+        _sig_row(['Principal', 'Registrar'], L_W - 80 * mm, S),
+    ]
+    outer = Table([['', content]], colWidths=[80 * mm, L_W - 80 * mm])
+    outer.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                               ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+    return [Spacer(1, 30 * mm), outer]
+
+
 # ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
@@ -348,6 +457,8 @@ SLC_TEMPLATES = {
                 'description': 'Landscape classic ornamental certificate with a gold double border and seal.'},
     'modern': {'name': 'Modern Geometric (landscape)', 'render': _t_modern, 'decorator': _bg_corners_blue, 'landscape': True,
                'description': 'Landscape blue & gold geometric certificate, “Issued to”, seal and signatures.'},
+    'elegant': {'name': 'Green Ribbon (landscape)', 'render': _t_elegant, 'decorator': _ribbon_green, 'landscape': True,
+                'description': 'Landscape green & gold certificate with a wavy header, a ribbon medal and an award badge.'},
 }
 TEMPLATES = SLC_TEMPLATES
 DEFAULT_TEMPLATE = 'classic'
