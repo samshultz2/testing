@@ -152,14 +152,20 @@ def _bg_corners_blue(canvas, doc):
     canvas.restoreState()
 
 
-def _frame(inner, side=32 * mm, top=16 * mm):
-    """Centre a certificate's content in a column inset from the decorated page
-    edges, so text never overlaps the border or corner art."""
-    t = Table([[inner]], colWidths=[L_W - 2 * side], hAlign='CENTER')
+# Landscape body height (A4 297×210 → 210 tall − 16 top − 18 bottom margins),
+# minus room reserved for the shared verification footer added after the body.
+_BODY_H = 210 * mm - 34 * mm - 26 * mm
+
+
+def _frame(inner, side=32 * mm, avail=_BODY_H):
+    """Centre a certificate's content BOTH ways: inset from the decorated edges so
+    text never overlaps the border/corner art, and vertically centred so it fills
+    the certificate instead of hugging the top."""
+    t = Table([[inner]], colWidths=[L_W - 2 * side], rowHeights=[avail], hAlign='CENTER')
     t.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                           ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
-    return [Spacer(1, top), t]
+                           ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    return [t]
 
 
 def _draw_medal(c, cx, cy):
@@ -387,7 +393,7 @@ def _t_awarded(ctx):
         Spacer(1, 26),
         _sig_row(['Chairman, Board of Governors', 'Principal'], W, S, seal=True),
     ]
-    return _frame(inner, top=18 * mm)
+    return _frame(inner)
 
 
 def _t_vintage(ctx):
@@ -419,7 +425,7 @@ def _t_vintage(ctx):
         Spacer(1, 24),
         _sig_row(['Head Teacher', 'Registrar'], W, S, seal=True),
     ]
-    return _frame(inner, top=16 * mm)
+    return _frame(inner)
 
 
 def _t_modern(ctx):
@@ -448,7 +454,7 @@ def _t_modern(ctx):
         Spacer(1, 26),
         _sig_row(['Principal', 'Registrar'], W, S, seal=True),
     ]
-    return _frame(inner, top=18 * mm)
+    return _frame(inner)
 
 
 def _t_elegant(ctx):
@@ -474,10 +480,11 @@ def _t_elegant(ctx):
         Spacer(1, 22),
         _sig_row(['Principal', 'Registrar'], contentW, S),
     ]
-    outer = Table([['', inner]], colWidths=[left - 18 * mm, contentW], hAlign='LEFT')
+    outer = Table([['', inner]], colWidths=[left - 18 * mm, contentW],
+                  rowHeights=[_BODY_H], hAlign='LEFT')
     outer.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                               ('TOPPADDING', (0, 0), (-1, -1), 0), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
-    return [Spacer(1, 40 * mm), outer]
+                               ('TOPPADDING', (0, 0), (-1, -1), 0), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    return [outer]
 
 
 # ---------------------------------------------------------------------------

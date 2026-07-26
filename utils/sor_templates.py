@@ -153,6 +153,93 @@ def _summary_line(cum, S):
                       f"<b>Overall Remark:</b> {_esc(_remark(cum))}", S['left'])]
 
 
+_WAEC_REMARK = {'A1': 'Distinction', 'B2': 'Very Good', 'B3': 'Good', 'C4': 'Credit',
+                'C5': 'Credit', 'C6': 'Credit', 'D7': 'Pass', 'E8': 'Pass', 'F9': 'Fail'}
+
+
+def _ssce_rows(ctx):
+    """(rows, summary, source) for an SSCE-style statement. Prefers the WAEC
+    result; falls back to internal overall results if no WAEC is on record."""
+    waec = ctx.get('waec') or {}
+    subs = waec.get('subjects') or []
+    if subs:
+        rows = [(s.get('subject'), s.get('grade') or '', _WAEC_REMARK.get((s.get('grade') or '').upper(), ''))
+                for s in subs]
+        credited = sum(1 for _, g, _r in rows if g.upper() in ('A1', 'B2', 'B3', 'C4', 'C5', 'C6'))
+        passed = sum(1 for _, g, _r in rows if g.upper() != 'F9' and g)
+        failed = sum(1 for _, g, _r in rows if g.upper() == 'F9')
+        _yr = waec.get('year')
+        src = 'WAEC/NECO' + (f' — {_yr}' if _yr else '')
+    else:
+        overall, _cum = _overall(ctx['academic'])
+        rmk = {'A': 'Excellent', 'B': 'Very good', 'C': 'Credit', 'D': 'Pass', 'F': 'Fail'}
+        rows = [(subj, g, rmk.get(g, '')) for subj, sc, g in overall]
+        credited = sum(1 for _, g, _r in rows if g in ('A', 'B', 'C'))
+        passed = sum(1 for _, g, _r in rows if g and g != 'F')
+        failed = sum(1 for _, g, _r in rows if g == 'F')
+        src = 'internal records'
+    summary = {'registered': len(rows), 'credited': credited, 'passed': passed, 'failed': failed}
+    return rows, summary, src
+
+
+def _ssce_table(rows, S, accent):
+    data = [['S/N', 'Subject', 'Grade', 'Remark']]
+    for i, (subj, grade, remark) in enumerate(rows, 1):
+        data.append([str(i), Paragraph(_esc(subj), S['cell']), grade, remark])
+    t = Table(data, colWidths=[12 * mm, 95 * mm, 25 * mm, 35 * mm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 9), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, 0), (-1, 0), accent), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5)]))
+    return t
+
+
+def _summary_strip(summary, S):
+    cells = [[Paragraph(f'<b>{summary["registered"]}</b><br/>Registered', S['center']),
+              Paragraph(f'<b>{summary["credited"]}</b><br/>Credits', S['center']),
+              Paragraph(f'<b>{summary["passed"]}</b><br/>Passed', S['center']),
+              Paragraph(f'<b>{summary["failed"]}</b><br/>Failed', S['center'])]]
+    t = Table(cells, colWidths=[P_W / 4] * 4)
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                           ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+                           ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))
+    return t
+
+
+def _border_blue(canvas, doc):
+    _ornate_border(canvas, doc, colors.HexColor('#1d4ed8'))
+
+
+def _border_green(canvas, doc):
+    _ornate_border(canvas, doc, colors.HexColor('#15803d'), dotted=True)
+
+
+def _ornate_border(canvas, doc, color, dotted=False):
+    w, h = doc.pagesize
+    canvas.saveState()
+    canvas.setStrokeColor(color)
+    canvas.setLineWidth(5)
+    canvas.rect(9 * mm, 9 * mm, w - 18 * mm, h - 18 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(1)
+    canvas.rect(12.5 * mm, 12.5 * mm, w - 25 * mm, h - 25 * mm, stroke=1, fill=0)
+    canvas.setFillColor(color)
+    r = 0.9 * mm
+    step = 9 * mm
+    x = 15 * mm
+    while x < w - 15 * mm:
+        canvas.circle(x, 10.5 * mm, r, fill=1, stroke=0)
+        canvas.circle(x, h - 10.5 * mm, r, fill=1, stroke=0)
+        x += step
+    y = 15 * mm
+    while y < h - 15 * mm:
+        canvas.circle(10.5 * mm, y, r, fill=1, stroke=0)
+        canvas.circle(w - 10.5 * mm, y, r, fill=1, stroke=0)
+        y += step
+    canvas.restoreState()
+
+
 # ---------------------------------------------------------------------------
 # templates
 # ---------------------------------------------------------------------------
@@ -263,6 +350,88 @@ def _t_modern(ctx):
     return el
 
 
+def _t_institutional(ctx):
+    """Federal-Polytechnic-style 'Statement of Examination Results' with a dark
+    banner, student-info block, results table, summary strip and registrar line."""
+    S = _styles()
+    dark = colors.HexColor('#111827')
+    el = _letterhead(ctx, dark, S)
+    el += [Spacer(1, 4),
+           Table([[Paragraph('STATEMENT OF EXAMINATION RESULTS', ParagraphStyle(
+               'ti', parent=S['center'], fontSize=14, fontName='Helvetica-Bold', textColor=colors.white))]],
+               colWidths=[P_W], style=TableStyle([('BACKGROUND', (0, 0), (-1, -1), dark),
+                                                  ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)])),
+           Spacer(1, 8)]
+    el += _fields([('Student Name', ctx['student'].full_name),
+                   ('Admission No.', ctx['student'].student_id),
+                   ('Sex', ctx['student'].gender), ('Graduation', ctx.get('grad_when'))], S)
+    el.append(Spacer(1, 6))
+    rows, summary, src = _ssce_rows(ctx)
+    el.append(_ssce_table(rows, S, dark) if rows
+              else Paragraph('No results are on record for this student.', S['body']))
+    el += [Spacer(1, 6), _summary_strip(summary, S)]
+    ov_cum = (ctx.get('academic') or {}).get('cumulative')
+    if ov_cum is not None:
+        el += _summary_line(ov_cum, S)
+    el += [Spacer(1, 8)] + _grade_key(S)
+    el.append(Spacer(1, 4))
+    el.append(Paragraph(f"<i>Result computed from {_esc(src)}. Any alteration renders this "
+                        f"result invalid.</i>", S['small']))
+    el += _sig(S, labels=('Registrar', 'Principal'))
+    return el
+
+
+def _t_waec(ctx):
+    """SSCE 'Statement of Result' inside an ornate blue border (WAEC/NECO look)."""
+    S = _styles()
+    blue = colors.HexColor('#1d4ed8')
+    name, _a, _c = _tt._header_lines(ctx['school'])
+    el = [Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=16, leading=20,
+                                               fontName='Helvetica-Bold', textColor=blue, spaceAfter=3)),
+          Paragraph('Senior School Certificate Examination', S['center']),
+          Paragraph('STATEMENT OF RESULT', ParagraphStyle(
+              'ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', textColor=blue,
+              spaceBefore=4, spaceAfter=8))]
+    el += _fields([('Candidate Name', ctx['student'].full_name),
+                   ('Admission / Centre No.', ctx['student'].student_id),
+                   ('Year', str((ctx.get('waec') or {}).get('year') or ctx.get('grad_when') or '')),
+                   ('Sex', ctx['student'].gender)], S)
+    el.append(Spacer(1, 6))
+    rows, summary, src = _ssce_rows(ctx)
+    el.append(_ssce_table(rows, S, blue) if rows
+              else Paragraph('No results are on record for this student.', S['body']))
+    el += [Spacer(1, 6), _summary_strip(summary, S), Spacer(1, 6)]
+    el.append(Paragraph(f"Result computed from {_esc(src)}. Any alteration on this statement "
+                        f"renders it invalid.", S['small']))
+    el += _sig(S, labels=("Principal's Signature", 'Date'))
+    return el
+
+
+def _t_bordered(ctx):
+    """Community-school-style statement inside a green dotted border."""
+    S = _styles()
+    green = colors.HexColor('#15803d')
+    name, _a, _c = _tt._header_lines(ctx['school'])
+    yr = (ctx.get('waec') or {}).get('year')
+    el = [Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=17, leading=21,
+                                               fontName='Helvetica-Bold', textColor=green, spaceAfter=3)),
+          Paragraph('WASC / SSCE' + (f' — {yr}' if yr else ''), S['center']),
+          Paragraph('STATEMENT OF RESULT', ParagraphStyle(
+              'ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', textColor=colors.HexColor('#b91c1c'),
+              spaceBefore=4, spaceAfter=8))]
+    el += _fields([("Candidate's Name", ctx['student'].full_name),
+                   ('Exam / Admission No.', ctx['student'].student_id)], S)
+    el.append(Spacer(1, 6))
+    rows, summary, src = _ssce_rows(ctx)
+    el.append(_ssce_table(rows, S, green) if rows
+              else Paragraph('No results are on record for this student.', S['body']))
+    el.append(Spacer(1, 6))
+    el.append(Paragraph(f"<b>No. of subjects passed:</b> {summary['passed']} of {summary['registered']} "
+                        f"&nbsp;·&nbsp; <b>Credits:</b> {summary['credited']}", S['left']))
+    el += _sig(S, labels=('Principal', 'Date'))
+    return el
+
+
 # ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
@@ -271,6 +440,12 @@ SOR_TEMPLATES = {
                 'description': 'Clean statement with an aggregated subject/score/grade table and grading key.'},
     'official': {'name': 'Official (boxed)', 'render': _t_official,
                  'description': 'Boxed official statement with a student-info panel and results table.'},
+    'institutional': {'name': 'Examination Results', 'render': _t_institutional,
+                      'description': 'Institutional “Statement of Examination Results”: dark banner, results table, credits/passed summary and registrar line.'},
+    'waec': {'name': 'SSCE (blue border)', 'render': _t_waec, 'decorator': _border_blue,
+             'description': 'WAEC/NECO-style SSCE statement in an ornate blue border, driven by the WAEC result when available.'},
+    'bordered': {'name': 'SSCE (green border)', 'render': _t_bordered, 'decorator': _border_green,
+                 'description': 'Community-school-style statement in a green dotted border with subjects, grades and remarks.'},
     'sessional': {'name': 'Per-session', 'render': _t_sessional,
                   'description': 'Results broken down by senior-secondary session (SS1–SS3).'},
     'modern': {'name': 'Modern Banner', 'render': _t_modern,

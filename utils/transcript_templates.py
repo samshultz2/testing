@@ -694,4 +694,4 @@ def sample_ctx(school):
                               gender='Female', graduation_date=date(2024, 7, 1))
     return {'student': student, 'academic': academic, 'bio': {}, 'school': school,
             'grad_when': 'July 2024', 'grad_session': '2023/2024',
-            'admission_session': '2021/2022', 'doc': None}
+            'admission_session': '2021/2022', 'doc': None, 'waec': waec}

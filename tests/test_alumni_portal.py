@@ -269,6 +269,9 @@ def test_statement_of_result_designs(app):
     assert j['doc_type'] == 'statement'
     keys = [t['key'] for t in j['templates']]
     assert 'classic' in keys and 'sessional' in keys and 'official' in keys
+    assert 'waec' in keys and 'institutional' in keys and 'bordered' in keys  # new SSCE designs
+    assert admin.get('/promotion/doc-templates/statement/waec/preview').data[:4] == b'%PDF'
+    assert admin.get('/promotion/doc-templates/statement/bordered/preview').data[:4] == b'%PDF'
     assert {'transcript', 'slc', 'statement'} <= {dt['key'] for dt in j['doc_types']}
     assert admin.get('/promotion/doc-templates/statement/official/preview').data[:4] == b'%PDF'
     r = admin.post('/promotion/doc-templates/statement/default', json={'template_key': 'sessional'},
