@@ -325,18 +325,32 @@ def _ensure_indexes(engine):
 def _ensure_columns(engine):
     from sqlalchemy import inspect, text
     insp = inspect(engine)
+    last_error = None                       # a real ALTER failure to surface
     for table, cols in _ADDED_COLUMNS.items():
         try:
             existing = {c['name'] for c in insp.get_columns(table)}
         except Exception:
             continue                       # table not present on this DB — skip
         for name, ddl in cols.items():
-            if name not in existing:
+            if name in existing:
+                continue
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
+            except Exception as e:
+                # Could be a benign race (another worker added it) or a real
+                # failure (e.g. permissions). Re-check: if the column is now
+                # present it was a race — ignore; otherwise remember the error so
+                # the caller doesn't mark this DB "healed" and can log the reason.
                 try:
-                    with engine.begin() as conn:
-                        conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
+                    now = {c['name'] for c in inspect(engine).get_columns(table)}
                 except Exception:
-                    pass                   # racy/duplicate add — safe to ignore
+                    now = set()
+                if name not in now:
+                    last_error = RuntimeError(
+                        f'could not add column {table}.{name}: {e}')
+    if last_error is not None:
+        raise last_error
     # Relax NOT NULL where a column became optional (Postgres only; SQLite can't
     # ALTER a constraint but fresh SQLite DBs already match the model).
     if engine.dialect.name == 'postgresql':

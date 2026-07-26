@@ -18,6 +18,7 @@ from flask import g, request, session, abort, current_app
 from utils import tenancy
 
 _engines = {}
+_healed = set()          # URLs whose schema self-heal has actually SUCCEEDED
 _lock = threading.Lock()
 
 
@@ -30,13 +31,18 @@ def _engine_for(url):
                     if url.startswith('postgresql') else {})
             eng = create_engine(url, **opts)
             _engines[url] = eng
-            # Existing tenant DBs predate the finance tables; create them once on
-            # first use (idempotent) so /finance never 500s on a missing table.
+        # Existing tenant DBs predate newer tables/columns (finance ledger,
+        # students.graduate_status, …); self-heal them on first use so no request
+        # 500s on a missing table/column. Idempotent. Crucially we only mark a URL
+        # healed once the heal SUCCEEDS — so a transient failure (or a worker that
+        # predated this code) retries on the next request instead of 500ing forever.
+        if url not in _healed:
             try:
                 from utils.finance_ledger import ensure_tables
                 ensure_tables(bind=eng)
+                _healed.add(url)
             except Exception:
-                current_app.logger.exception('Could not ensure finance tables for tenant engine')
+                current_app.logger.exception('Could not ensure tenant schema; will retry next request')
         return eng
 
 
@@ -49,6 +55,7 @@ def reset_engines():
             except Exception:
                 pass
         _engines.clear()
+        _healed.clear()
 
 
 def subdomain_from_host(host, base_domain=''):

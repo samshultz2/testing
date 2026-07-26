@@ -17,6 +17,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def _has_col(engine, table, column):
+    from sqlalchemy import inspect
+    try:
+        return column in {c['name'] for c in inspect(engine).get_columns(table)}
+    except Exception:
+        return None                           # table/DB not reachable
+
+
 def main():
     from app import create_app
     from utils.finance_ledger import ensure_tables
@@ -28,15 +36,20 @@ def main():
 
         if app.config.get('MULTI_TENANT'):
             from sqlalchemy import create_engine
-            from utils import tenant_admin
-            targets = tenant_admin.active_tenants()
+            from utils import tenancy
+            # Heal EVERY tenant that has a database — not only 'active' ones, so a
+            # school in trial/grace also gets the schema fix.
+            targets = [t for t in tenancy.list_tenants() if t.database_url]
             ok = 0
             for t in targets:
                 eng = create_engine(t.database_url)
                 try:
                     ensure_tables(bind=eng)
+                    # verify the column that has been 500ing dashboards
+                    col = _has_col(eng, 'students', 'graduate_status')
+                    mark = 'graduate_status ✓' if col else ('no students table' if col is None else 'graduate_status STILL MISSING')
                     ok += 1
-                    print(f'  ✓ {t.subdomain}')
+                    print(f'  ✓ {t.subdomain}  ({mark})')
                 except Exception as e:
                     print(f'  ✗ {t.subdomain}: {e}')
                 finally:
