@@ -137,6 +137,20 @@ def _logo():
         return None
 
 
+def _logo_center(max_h=15, max_w=40):
+    """Centred logo for designs that don't use ``_letterhead``. Every document must
+    show the school logo when one has been uploaded."""
+    try:
+        from utils.school import logo_flowable
+        img = logo_flowable(max_h_mm=max_h, max_w_mm=max_w)
+    except Exception:
+        img = None
+    if img is None:
+        return []
+    img.hAlign = 'CENTER'
+    return [img, Spacer(1, 4)]
+
+
 def _letterhead(ctx, accent, centered=True):
     """A logo + school name/address band used by several designs."""
     S = _styles()
@@ -451,7 +465,7 @@ def _t_govsci(ctx):
     accent = colors.HexColor('#1f2937')
     m = _matrix(ctx['academic'])
     hdr = ParagraphStyle('h', parent=S['center'], fontSize=12, fontName='Helvetica-Bold')
-    el = [Table([[Paragraph('OFFICIAL HIGH SCHOOL TRANSCRIPT', hdr)]], colWidths=[USABLE_W],
+    el = _logo_center() + [Table([[Paragraph('OFFICIAL HIGH SCHOOL TRANSCRIPT', hdr)]], colWidths=[USABLE_W],
                 style=TableStyle([('BOX', (0, 0), (-1, -1), 1, accent),
                                   ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))]
     el.append(Spacer(1, 6))
@@ -533,9 +547,18 @@ def _t_modern(ctx):
         bar_inner.append(Paragraph(_esc(addr), bar_sub))
     if contact:
         bar_inner.append(Paragraph(_esc(contact), bar_sub))
-    bar = Table([[bar_inner, Paragraph('ACADEMIC<br/>TRANSCRIPT', ParagraphStyle(
-        'bt', parent=S['left'], fontSize=12, fontName='Helvetica-Bold', textColor=colors.white, alignment=2))]],
-        colWidths=[USABLE_W - 45 * mm, 45 * mm])
+    title_cell = Paragraph('ACADEMIC<br/>TRANSCRIPT', ParagraphStyle(
+        'bt', parent=S['left'], fontSize=12, fontName='Helvetica-Bold', textColor=colors.white, alignment=2))
+    logo = None
+    try:
+        from utils.school import logo_flowable
+        logo = logo_flowable(max_h_mm=14, max_w_mm=20)
+    except Exception:
+        logo = None
+    if logo is not None:
+        bar = Table([[logo, bar_inner, title_cell]], colWidths=[24 * mm, USABLE_W - 69 * mm, 45 * mm])
+    else:
+        bar = Table([[bar_inner, title_cell]], colWidths=[USABLE_W - 45 * mm, 45 * mm])
     bar.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent),
                              ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                              ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),

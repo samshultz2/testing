@@ -42,11 +42,6 @@ def _styles():
 # a safe fallback when a template is built outside the document pipeline.
 _P_BODY_H = 273 * mm - 46 * mm
 
-# Height of a filled/blank result-table row — chosen so a padded table matches the
-# roomy, pre-ruled look of a real WAEC/NECO statement of result.
-_ROW_H = 8 * mm
-
-
 def page_margins(key):
     """Statements fill the page with only a little margin (see reference layouts).
     Ornate-border designs keep enough room to clear their printed frame."""
@@ -55,12 +50,32 @@ def page_margins(key):
     return (12, 12, 14, 14)
 
 
-def _blank_rows(above, below, n_data, avail, width=P_W):
-    """How many empty numbered rows to append to a results table so the table
-    (with everything above and below it) fills the page vertically."""
+def _logo_center(max_h=16, max_w=42):
+    """The school logo, centred, for designs that don't use ``_letterhead``.
+    Every document must show the logo when the school has uploaded one."""
+    try:
+        from utils.school import logo_flowable
+        img = logo_flowable(max_h_mm=max_h, max_w_mm=max_w)
+    except Exception:
+        img = None
+    if img is None:
+        return []
+    img.hAlign = 'CENTER'
+    return [img, Spacer(1, 4)]
+
+
+def _fill_pad(above, below, n_rows, avail, width=P_W, header_h=11 * mm,
+              line_pt=15, lo_pt=4, hi_pt=10):
+    """Vertical cell padding (points) that stretches the real result rows so the
+    table fills the page — instead of padding it out with empty rows. Clamped so a
+    short result stays reasonable and never overshoots the page; any slack left over
+    is taken up by the elastic gap above the signatures."""
+    if n_rows <= 0:
+        return lo_pt
     used = _measure(above, width, avail) + _measure(below, width, avail)
-    space = avail - used - 12 * mm            # reserve for the header row + safety
-    return max(0, int(space / _ROW_H) - n_data)
+    space = avail - used - header_h - 10 * mm         # header row + safety
+    row_h = space / n_rows                            # target height per data row (points)
+    return max(lo_pt, min(hi_pt, (row_h - line_pt) / 2))
 
 
 def _measure(flowables, width, avail):
@@ -143,24 +158,22 @@ def _fields(pairs, S):
     return [t]
 
 
-def _result_table(rows, S, accent, blanks=0):
+def _result_table(rows, S, accent, pad=4):
+    cell = ParagraphStyle('rc', parent=S['cell'], fontSize=10.5, leading=13)
     data = [['S/N', 'Subject', 'Score', 'Grade', 'Remark']]
     remark_by_grade = {'A': 'Excellent', 'B': 'Very good', 'C': 'Credit', 'D': 'Pass', 'F': 'Fail'}
     for i, (subj, score, grade) in enumerate(rows, 1):
-        data.append([str(i), Paragraph(_esc(subj), S['cell']), _tt._fmt(score), grade,
+        data.append([str(i), Paragraph(_esc(subj), cell), _tt._fmt(score), grade,
                      remark_by_grade.get(grade, '')])
-    for j in range(blanks):
-        data.append([str(len(rows) + j + 1), '', '', '', ''])
-    heights = [None] * (1 + len(rows)) + [_ROW_H] * blanks
-    t = Table(data, colWidths=[12 * mm, 73 * mm, 22 * mm, 22 * mm, 36 * mm],
-              rowHeights=heights, repeatRows=1)
+    t = Table(data, colWidths=[12 * mm, 73 * mm, 22 * mm, 22 * mm, 36 * mm], repeatRows=1)
     t.setStyle(TableStyle([
-        ('FONTSIZE', (0, 0), (-1, -1), 8.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BACKGROUND', (0, 0), (-1, 0), accent), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (3, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 1), (-1, -1), pad), ('BOTTOMPADDING', (0, 1), (-1, -1), pad),
+        ('TOPPADDING', (0, 0), (-1, 0), 4), ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])]))
     return t
 
@@ -197,20 +210,25 @@ def _statement_rows(ctx):
     return rows, False, None
 
 
-def _main_table(rows, is_ssce, S, accent, blanks=0):
+def _main_table(rows, is_ssce, S, accent, pad=4):
     if is_ssce:
-        return _ssce_table([(r[0], r[2], r[3]) for r in rows], S, accent, blanks=blanks)
-    return _result_table([(r[0], r[1], r[2]) for r in rows], S, accent, blanks=blanks)
+        return _ssce_table([(r[0], r[2], r[3]) for r in rows], S, accent, pad=pad)
+    return _result_table([(r[0], r[1], r[2]) for r in rows], S, accent, pad=pad)
 
 
 def _stmt_summary(ctx, rows, is_ssce, S):
+    """The little result details, stacked vertically."""
     if is_ssce:
         credited = sum(1 for r in rows if (r[2] or '').upper() in ('A1', 'B2', 'B3', 'C4', 'C5', 'C6'))
         passed = sum(1 for r in rows if r[2] and (r[2] or '').upper() != 'F9')
-        return [Paragraph(f"<b>Subjects:</b> {len(rows)} &nbsp;·&nbsp; "
-                          f"<b>Credits &amp; above:</b> {credited} &nbsp;·&nbsp; "
-                          f"<b>Passed:</b> {passed}", S['left'])]
-    return _summary_line((ctx.get('academic') or {}).get('cumulative'), S)
+        failed = sum(1 for r in rows if (r[2] or '').upper() == 'F9')
+        return [_summary_strip({'registered': len(rows), 'credited': credited,
+                                'passed': passed, 'failed': failed}, S, ssce=True)]
+    cum = (ctx.get('academic') or {}).get('cumulative')
+    if cum is None:
+        return []
+    return [Paragraph(f"<b>Cumulative Average:</b> {cum}%", S['left']),
+            Paragraph(f"<b>Overall Remark:</b> {_esc(_remark(cum))}", S['left'])]
 
 
 def _sig(S, labels=('Principal', 'Registrar')):
@@ -279,33 +297,40 @@ def _ssce_rows(ctx):
     return rows, summary, src
 
 
-def _ssce_table(rows, S, accent, blanks=0, colWidths=(12 * mm, 95 * mm, 25 * mm, 35 * mm)):
+def _ssce_table(rows, S, accent, pad=4, colWidths=(12 * mm, 95 * mm, 25 * mm, 35 * mm)):
+    cell = ParagraphStyle('sc', parent=S['cell'], fontSize=10.5, leading=13)
     data = [['S/N', 'Subject', 'Grade', 'Remark']]
     for i, (subj, grade, remark) in enumerate(rows, 1):
-        data.append([str(i), Paragraph(_esc(subj), S['cell']), grade, remark])
-    for j in range(blanks):
-        data.append([str(len(rows) + j + 1), '', '', ''])
-    heights = [None] * (1 + len(rows)) + [_ROW_H] * blanks
-    t = Table(data, colWidths=list(colWidths), rowHeights=heights, repeatRows=1)
+        data.append([str(i), Paragraph(_esc(subj), cell), grade, remark])
+    t = Table(data, colWidths=list(colWidths), repeatRows=1)
     t.setStyle(TableStyle([
-        ('FONTSIZE', (0, 0), (-1, -1), 9), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BACKGROUND', (0, 0), (-1, 0), accent), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (2, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5)]))
+        ('TOPPADDING', (0, 1), (-1, -1), pad), ('BOTTOMPADDING', (0, 1), (-1, -1), pad),
+        ('TOPPADDING', (0, 0), (-1, 0), 4), ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])]))
     return t
 
 
-def _summary_strip(summary, S):
-    cells = [[Paragraph(f'<b>{summary["registered"]}</b><br/>Registered', S['center']),
-              Paragraph(f'<b>{summary["credited"]}</b><br/>Credits', S['center']),
-              Paragraph(f'<b>{summary["passed"]}</b><br/>Passed', S['center']),
-              Paragraph(f'<b>{summary["failed"]}</b><br/>Failed', S['center'])]]
-    t = Table(cells, colWidths=[P_W / 4] * 4)
-    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                           ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-                           ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))
+def _summary_strip(summary, S, ssce=True):
+    """The result tally, stacked vertically (subjects offered, sittings, credits,
+    passed, failed) rather than in one wide horizontal strip."""
+    credit_label = 'Credits (C6 &amp; above)' if ssce else 'Credits'
+    rows = [('Subjects offered', summary['registered']),
+            ('Sittings', 1),
+            (credit_label, summary['credited']),
+            ('Subjects passed', summary['passed']),
+            ('Subjects failed', summary['failed'])]
+    data = [[Paragraph(f'<b>{lab}</b>', S['left']), Paragraph(str(val), S['left'])] for lab, val in rows]
+    t = Table(data, colWidths=[52 * mm, 20 * mm], hAlign='LEFT')
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#cbd5e1')),
+                           ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#e2e8f0')),
+                           ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                           ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                           ('LEFTPADDING', (0, 0), (-1, -1), 6)]))
     return t
 
 
@@ -362,8 +387,8 @@ def _t_classic(ctx):
     if not rows:
         return _page_fill(above + [Paragraph('No results are on record for this student.',
                                              S['body'])], sig, avail=avail)
-    blanks = _blank_rows(above, mid + sig, len(rows), avail)
-    body = above + [_main_table(rows, is_ssce, S, accent, blanks=blanks)] + mid
+    pad = _fill_pad(above, mid + sig, len(rows), avail)
+    body = above + [_main_table(rows, is_ssce, S, accent, pad=pad)] + mid
     return _page_fill(body, sig, avail=avail)
 
 
@@ -394,8 +419,8 @@ def _t_official(ctx):
                      "record and does not replace the certificate.", S['small'])])
     if not rows:
         return _page_fill(el + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
-    blanks = _blank_rows(el, mid + sig, len(rows), avail)
-    body = el + [_main_table(rows, is_ssce, S, accent, blanks=blanks)] + mid
+    pad = _fill_pad(el, mid + sig, len(rows), avail)
+    body = el + [_main_table(rows, is_ssce, S, accent, pad=pad)] + mid
     return _page_fill(body, sig, avail=avail)
 
 
@@ -439,10 +464,22 @@ def _t_modern(ctx):
     inner = [Paragraph(_esc(name), bar_name)]
     if addr:
         inner.append(Paragraph(_esc(addr), bar_sub))
-    bar = Table([[inner, Paragraph('STATEMENT<br/>OF RESULT', ParagraphStyle(
-        'bt', parent=S['left'], fontSize=12, fontName='Helvetica-Bold', textColor=colors.white, alignment=2))]],
-        colWidths=[P_W - 45 * mm, 45 * mm])
-    bar.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    title_cell = Paragraph('STATEMENT<br/>OF RESULT', ParagraphStyle(
+        'bt', parent=S['left'], fontSize=12, fontName='Helvetica-Bold', textColor=colors.white, alignment=2))
+    logo = None
+    try:
+        from utils.school import logo_flowable
+        logo = logo_flowable(max_h_mm=14, max_w_mm=20)
+    except Exception:
+        logo = None
+    if logo is not None:
+        bar = Table([[logo, inner, title_cell]], colWidths=[24 * mm, P_W - 69 * mm, 45 * mm])
+        bar_style = [('SPAN', (0, 0), (0, 0))]
+    else:
+        bar = Table([[inner, title_cell]], colWidths=[P_W - 45 * mm, 45 * mm])
+        bar_style = []
+    bar.setStyle(TableStyle(bar_style + [('BACKGROUND', (0, 0), (-1, -1), accent),
+                             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                              ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
                              ('LEFTPADDING', (0, 0), (0, 0), 10), ('RIGHTPADDING', (-1, -1), (-1, -1), 10)]))
     el = [bar, Spacer(1, 8)]
@@ -450,12 +487,13 @@ def _t_modern(ctx):
                    ('Graduation', ctx.get('grad_when'))], S)
     el.append(Spacer(1, 6))
     avail = ctx.get('_avail', _P_BODY_H)
-    below = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce) + _sig(S)
+    sig = _sig(S)
+    mid = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce)
     if not rows:
-        return _page_fill(el + [Paragraph('No results are on record.', S['body'])],
-                          _sig(S), avail=avail)
-    blanks = _blank_rows(el, below, len(rows), avail)
-    return el + [_main_table(rows, is_ssce, S, accent, blanks=blanks)] + below
+        return _page_fill(el + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
+    pad = _fill_pad(el, mid + sig, len(rows), avail)
+    body = el + [_main_table(rows, is_ssce, S, accent, pad=pad)] + mid
+    return _page_fill(body, sig, avail=avail)
 
 
 def _t_institutional(ctx):
@@ -487,8 +525,8 @@ def _t_institutional(ctx):
     if not rows:
         return _page_fill(el + [Paragraph('No results are on record for this student.', S['body'])],
                           sig, avail=avail)
-    blanks = _blank_rows(el, mid + sig, len(rows), avail)
-    body = el + [_ssce_table(rows, S, dark, blanks=blanks)] + mid
+    pad = _fill_pad(el, mid + sig, len(rows), avail)
+    body = el + [_ssce_table(rows, S, dark, pad=pad)] + mid
     return _page_fill(body, sig, avail=avail)
 
 
@@ -497,12 +535,13 @@ def _t_waec(ctx):
     S = _styles()
     blue = colors.HexColor('#1d4ed8')
     name, _a, _c = _tt._header_lines(ctx['school'])
-    el = [Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=16, leading=20,
-                                               fontName='Helvetica-Bold', textColor=blue, spaceAfter=3)),
-          Paragraph('Senior School Certificate Examination', S['center']),
-          Paragraph('STATEMENT OF RESULT', ParagraphStyle(
-              'ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', textColor=blue,
-              spaceBefore=4, spaceAfter=8))]
+    el = _logo_center() + [
+        Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=16, leading=20,
+                                             fontName='Helvetica-Bold', textColor=blue, spaceAfter=3)),
+        Paragraph('Senior School Certificate Examination', S['center']),
+        Paragraph('STATEMENT OF RESULT', ParagraphStyle(
+            'ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', textColor=blue,
+            spaceBefore=4, spaceAfter=8))]
     el += _fields([('Candidate Name', ctx['student'].full_name),
                    ('Admission / Centre No.', ctx['student'].student_id),
                    ('Year', str((ctx.get('waec') or {}).get('year') or ctx.get('grad_when') or '')),
@@ -517,8 +556,8 @@ def _t_waec(ctx):
     if not rows:
         return _page_fill(el + [Paragraph('No results are on record for this student.', S['body'])],
                           sig, avail=avail)
-    blanks = _blank_rows(el, mid + sig, len(rows), avail)
-    body = el + [_ssce_table(rows, S, blue, blanks=blanks)] + mid
+    pad = _fill_pad(el, mid + sig, len(rows), avail)
+    body = el + [_ssce_table(rows, S, blue, pad=pad)] + mid
     return _page_fill(body, sig, avail=avail)
 
 
@@ -528,26 +567,25 @@ def _t_bordered(ctx):
     green = colors.HexColor('#15803d')
     name, _a, _c = _tt._header_lines(ctx['school'])
     yr = (ctx.get('waec') or {}).get('year')
-    el = [Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=17, leading=21,
-                                               fontName='Helvetica-Bold', textColor=green, spaceAfter=3)),
-          Paragraph('WASC / SSCE' + (f' — {yr}' if yr else ''), S['center']),
-          Paragraph('STATEMENT OF RESULT', ParagraphStyle(
-              'ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', textColor=colors.HexColor('#b91c1c'),
-              spaceBefore=4, spaceAfter=8))]
+    el = _logo_center() + [
+        Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=17, leading=21,
+                                             fontName='Helvetica-Bold', textColor=green, spaceAfter=3)),
+        Paragraph('WASC / SSCE' + (f' — {yr}' if yr else ''), S['center']),
+        Paragraph('STATEMENT OF RESULT', ParagraphStyle(
+            'ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', textColor=colors.HexColor('#b91c1c'),
+            spaceBefore=4, spaceAfter=8))]
     el += _fields([("Candidate's Name", ctx['student'].full_name),
                    ('Exam / Admission No.', ctx['student'].student_id)], S)
     el.append(Spacer(1, 6))
     avail = ctx.get('_avail', _P_BODY_H)
     rows, summary, src = _ssce_rows(ctx)
     sig = _sig(S, labels=('Principal', 'Date'))
-    mid = [Spacer(1, 6),
-           Paragraph(f"<b>No. of subjects passed:</b> {summary['passed']} of {summary['registered']} "
-                     f"&nbsp;·&nbsp; <b>Credits:</b> {summary['credited']}", S['left'])]
+    mid = [Spacer(1, 6), _summary_strip(summary, S, ssce=True)]
     if not rows:
         return _page_fill(el + [Paragraph('No results are on record for this student.', S['body'])],
                           sig, avail=avail)
-    blanks = _blank_rows(el, mid + sig, len(rows), avail)
-    body = el + [_ssce_table(rows, S, green, blanks=blanks)] + mid
+    pad = _fill_pad(el, mid + sig, len(rows), avail)
+    body = el + [_ssce_table(rows, S, green, pad=pad)] + mid
     return _page_fill(body, sig, avail=avail)
 
 

@@ -45,6 +45,16 @@ def _logo(max_h=18, max_w=26):
         return None
 
 
+def _logo_center(max_h=15, max_w=40):
+    """Centred logo for the landscape certificates (which don't use ``_letterhead``).
+    Every document must show the school logo when one has been uploaded."""
+    img = _logo(max_h=max_h, max_w=max_w)
+    if img is None:
+        return []
+    img.hAlign = 'CENTER'
+    return [img, Spacer(1, 4)]
+
+
 def _header_lines(school):
     contact = ' · '.join([x for x in [school.get('phone'), school.get('email')] if x])
     return school.get('name') or 'School', school.get('address') or '', contact
@@ -402,7 +412,7 @@ def _t_awarded(ctx):
     W = L_W - 64 * mm
     name, _, _ = _header_lines(ctx['school'])
     p = ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)
-    head = [
+    head = _logo_center() + [
         Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12,
                                              fontName='Helvetica-Bold', textColor=gold, spaceAfter=4)),
         Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
@@ -434,7 +444,7 @@ def _t_vintage(ctx):
     W = L_W - 64 * mm
     name, _, _ = _header_lines(ctx['school'])
     p = ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)
-    head = [
+    head = _logo_center() + [
         Paragraph(_esc(name), ParagraphStyle('sn', parent=S['center'], fontSize=12, textColor=gold,
                                              fontName='Helvetica-Bold', spaceAfter=2)),
         Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
@@ -466,7 +476,7 @@ def _t_modern(ctx):
     W = L_W - 64 * mm
     name, _, _ = _header_lines(ctx['school'])
     p = ParagraphStyle('p', parent=S['bodyc'], fontSize=11, leading=17)
-    head = [
+    head = _logo_center() + [
         Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
             'ti', parent=S['center'], fontSize=23, leading=30, fontName='Helvetica-Bold',
             textColor=navy)),
@@ -498,7 +508,7 @@ def _t_elegant(ctx):
     contentW = L_W - left - right
     rp = ParagraphStyle('rp', parent=S['bodyc'], fontSize=11.5, leading=17)
     head = [Spacer(1, 1)]                       # top band is the green wavy header — keep it clear
-    mid = [
+    mid = _logo_center(max_h=13, max_w=32) + [
         Paragraph('This certificate is proudly presented for honourable achievement to', rp),
         Paragraph(_esc(ctx['student'].full_name), ParagraphStyle(
             'nm', parent=S['center'], fontSize=25, leading=31, fontName='Times-BoldItalic', textColor=green,
