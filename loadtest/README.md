@@ -69,3 +69,20 @@ It reports cold-draw vs cached-rebuild vs no-cache cost, the SQLite query plan
 (should show the `ix_mock_jamb_questions_subject_pool` index), and full HTTP
 page-render timings. NOTE: SQLite serialises writes, so its write numbers are
 pessimistic vs Postgres — use the locust run on the VPS for the true ceiling.
+
+## One-command headless run (CI / pre-exam gate)
+
+`run_mock_jamb.sh` seeds (unless `EXAM_ID` is given), runs locust headless for a
+fixed user count + duration, writes CSVs to `loadtest/results/`, prints a
+summary, and **exits non-zero if the failure ratio exceeds `THRESHOLD`** — so it
+can gate CI or a pre-exam smoke check:
+
+```bash
+HOST=https://staging.example.com ./loadtest/run_mock_jamb.sh
+HOST=... USERS=1000 SPAWN=40 RUN_TIME=5m ./loadtest/run_mock_jamb.sh
+HOST=... EXAM_ID=7 USERS=500 RUN_TIME=3m THRESHOLD=0.02 ./loadtest/run_mock_jamb.sh
+```
+
+Env: `HOST` (required, staging only), `USERS` (1000), `SPAWN` (40/s),
+`RUN_TIME` (5m), `THRESHOLD` (0.01), `EXAM_ID` (skip seeding), `N`/`BANK` (seed
+sizes). Results land in `loadtest/results/mockjamb-<timestamp>_stats.csv`.
