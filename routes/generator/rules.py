@@ -43,11 +43,32 @@ def save_rules():
 @generator_bp.route('/settings')
 @login_required
 def generator_settings():
+    from models import AcademicSession, Term
+    # Draw the academic-year and term choices from what the school already has.
+    sessions = [s.name for s in AcademicSession.query
+                .order_by(AcademicSession.is_active.desc(), AcademicSession.name.desc()).all()
+                if s.name]
+    terms = [t[0] for t in db.session.query(Term.name)
+             .filter(Term.name.isnot(None), Term.name != '')
+             .group_by(Term.name).order_by(db.func.min(Term.term_number)).all()]
+
+    # Saved value, else the active session/term as a sensible default.
+    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_term = Term.query.filter_by(is_active=True).first()
+    academic_year = GenSettings.get('academic_year', '') or (active_session.name if active_session else '')
+    term_name = GenSettings.get('term_name', '') or (active_term.name if active_term else '')
+
+    # Never drop a previously-saved custom value that isn't in the current lists.
+    if academic_year and academic_year not in sessions:
+        sessions.insert(0, academic_year)
+    if term_name and term_name not in terms:
+        terms.insert(0, term_name)
+
     return render_template('generator/settings.html',
         school_name=GenSettings.get('school_name', ''),
         school_address=GenSettings.get('school_address', ''),
-        academic_year=GenSettings.get('academic_year', ''),
-        term_name=GenSettings.get('term_name', '')
+        academic_year=academic_year, term_name=term_name,
+        sessions=sessions, terms=terms
     )
 
 
