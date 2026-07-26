@@ -156,6 +156,52 @@ def test_admin_edits_alumni_profile_and_sets_password(app):
         assert db.session.get(Student, sid).check_portal_password('longenough')
 
 
+def test_alumni_analytics_and_search_and_export(app):
+    # a graduate with a rich alumni profile
+    sid = _grad(app, 'ALUAN1')
+    with app.app_context():
+        db.session.add(AlumniProfile(student_id=sid, occupation='Engineer', employer='ZENITHCORP',
+                                     higher_institution='Unilag', city='Lagos', country='Nigeria',
+                                     email='grad@example.com', willing_to_mentor=True))
+        # a second graduate with no profile
+        db.session.add(Student(student_id='ALUAN2', first_name='Bare', surname='Grad',
+                               gender='Female', is_active=True, is_graduated=True,
+                               graduate_status='Graduated'))
+        db.session.commit()
+    admin = _admin(app)
+    # analytics aggregates
+    j = admin.get('/promotion/alumni/analytics', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert j['page'] == 'alumni_analytics'
+    assert j['total'] >= 2 and j['mentors'] >= 1 and j['employed'] >= 1 and j['higher_ed'] >= 1
+    assert any(e['label'] == 'ZENITHCORP' for e in j['top_employers'])
+    # advanced search by employer narrows the directory
+    j = admin.get('/promotion/alumni?employer=ZENITHCORP', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert [r['student_id'] for r in j['alumni']] == ['ALUAN1']
+    # mentor filter
+    j = admin.get('/promotion/alumni?mentor=1', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert all(r['willing_to_mentor'] for r in j['alumni'])
+    # CSV export (filtered) contains the matching row and the header
+    r = admin.get('/promotion/alumni/export?employer=ZENITHCORP')
+    assert r.status_code == 200 and r.mimetype == 'text/csv'
+    text = r.get_data(as_text=True)
+    assert 'Admission No' in text and 'ALUAN1' in text and 'ZENITHCORP' in text
+    assert 'ALUAN2' not in text
+
+
+def test_bulk_email_requires_config_or_recipients(app):
+    sid = _grad(app, 'ALUEM1')
+    with app.app_context():
+        db.session.add(AlumniProfile(student_id=sid, email='mailme@example.com'))
+        db.session.commit()
+    admin = _admin(app)
+    tok = _csrf(admin)
+    # email is not configured in tests -> friendly error, no crash
+    r = admin.post('/promotion/alumni/bulk-email',
+                   json={'subject': 'Hi', 'body': 'Hello alumni'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 400 and 'not configured' in r.get_json()['error'].lower()
+
+
 def test_non_graduate_cannot_use_alumni_portal(app):
     with app.app_context():
         s = Student(student_id='NOTGRAD', first_name='Not', surname='Grad',

@@ -340,36 +340,71 @@ def _alumni_json(prof):
     return prof.to_dict()
 
 
-@promotion_bp.route('/alumni')
-@graduates_access_required
-def alumni_directory():
-    """Admin alumni directory: every graduate with their career/contact profile,
-    plus the pending document-request inbox."""
-    from models import AlumniProfile, DocumentRequest, GRADUATE_DOC_TYPES
-    mentor_only = request.args.get('mentor') == '1'
-    with_career = request.args.get('career') == '1'
-    grads = (scope_query(Student.query.filter_by(is_graduated=True), Student)
-             .order_by(Student.surname, Student.first_name).all())
+def _alumni_filters(args):
+    """The set of advanced-search filters currently applied (echoed back to the
+    UI and reused verbatim for export + bulk email)."""
+    return {
+        'q': (args.get('q') or '').strip(),
+        'session_id': args.get('session_id', type=int) or '',
+        'occupation': (args.get('occupation') or '').strip(),
+        'employer': (args.get('employer') or '').strip(),
+        'institution': (args.get('institution') or '').strip(),
+        'city': (args.get('city') or '').strip(),
+        'country': (args.get('country') or '').strip(),
+        'mentor': args.get('mentor') == '1',
+        'career': args.get('career') == '1',
+        'has_contact': args.get('has_contact') == '1',
+    }
+
+
+def _alumni_rows(f):
+    """Return ``[(Student, AlumniProfile|None), …]`` for graduates matching the
+    advanced-search filters ``f`` (from :func:`_alumni_filters`), branch-scoped."""
+    from models import AlumniProfile
+    q = (scope_query(Student.query.filter_by(is_graduated=True), Student)
+         .outerjoin(AlumniProfile, AlumniProfile.student_id == Student.id))
+    if f['q']:
+        like = f"%{f['q']}%"
+        q = q.filter(db.or_(Student.first_name.ilike(like), Student.surname.ilike(like),
+                            Student.student_id.ilike(like)))
+    if f['session_id']:
+        q = q.filter(Student.graduation_session_id == f['session_id'])
+    for key, col in (('occupation', AlumniProfile.occupation), ('employer', AlumniProfile.employer),
+                     ('institution', AlumniProfile.higher_institution),
+                     ('city', AlumniProfile.city), ('country', AlumniProfile.country)):
+        if f[key]:
+            q = q.filter(col.ilike(f"%{f[key]}%"))
+    if f['mentor']:
+        q = q.filter(AlumniProfile.willing_to_mentor.is_(True))
+    if f['career']:
+        q = q.filter(db.or_(AlumniProfile.occupation.isnot(None),
+                            AlumniProfile.employer.isnot(None),
+                            AlumniProfile.higher_institution.isnot(None)))
+    if f['has_contact']:
+        q = q.filter(db.or_(AlumniProfile.email.isnot(None), AlumniProfile.phone.isnot(None)))
+    grads = q.order_by(Student.surname, Student.first_name).all()
     ids = [g.id for g in grads] or [0]
     profiles = {p.student_id: p for p in
                 AlumniProfile.query.filter(AlumniProfile.student_id.in_(ids)).all()}
-    rows = []
-    for g in grads:
-        p = profiles.get(g.id)
-        if mentor_only and not (p and p.willing_to_mentor):
-            continue
-        if with_career and not (p and (p.occupation or p.employer or p.higher_institution)):
-            continue
-        rows.append({
-            'id': g.id, 'full_name': g.full_name, 'student_id': g.student_id,
-            'profile_url': url_for('promotion.graduate_profile', student_id=g.id),
-            'occupation': p.occupation if p else None,
-            'employer': p.employer if p else None,
-            'higher_institution': p.higher_institution if p else None,
-            'phone': p.phone if p else None, 'email': p.email if p else None,
-            'willing_to_mentor': bool(p.willing_to_mentor) if p else False,
-        })
-    # pending request inbox (branch-scoped by the requesting student)
+    return [(g, profiles.get(g.id)) for g in grads]
+
+
+@promotion_bp.route('/alumni')
+@graduates_access_required
+def alumni_directory():
+    """Admin alumni directory: graduates matching the advanced-search filters,
+    plus the pending document-request inbox."""
+    from models import DocumentRequest
+    f = _alumni_filters(request.args)
+    rows = [{
+        'id': g.id, 'full_name': g.full_name, 'student_id': g.student_id,
+        'profile_url': url_for('promotion.graduate_profile', student_id=g.id),
+        'occupation': p.occupation if p else None,
+        'employer': p.employer if p else None,
+        'higher_institution': p.higher_institution if p else None,
+        'phone': p.phone if p else None, 'email': p.email if p else None,
+        'willing_to_mentor': bool(p.willing_to_mentor) if p else False,
+    } for g, p in _alumni_rows(f)]
     from utils.branch_scope import scope_by_student
     pend = (scope_by_student(DocumentRequest.query.filter_by(status='pending'), DocumentRequest)
             .order_by(DocumentRequest.requested_at.asc()).all())
@@ -383,12 +418,164 @@ def alumni_directory():
         'decline_url': url_for('promotion.decline_request', req_id=r.id),
         'profile_url': url_for('promotion.graduate_profile', student_id=r.student_id),
     } for r in pend]
+    total = scope_query(Student.query.filter_by(is_graduated=True), Student).count()
+    contactable = sum(1 for r in rows if r['email'])
     return _render({
         'page': 'alumni', 'graduates': url_for('promotion.graduates_list'),
-        'alumni': rows, 'requests': requests_json,
-        'mentor': mentor_only, 'career': with_career,
-        'total': len(grads), 'mentors': sum(1 for r in rows if r['willing_to_mentor']),
+        'analytics_url': url_for('promotion.alumni_analytics'),
+        'export_url': url_for('promotion.alumni_export'),
+        'bulk_email_url': url_for('promotion.alumni_bulk_email'),
+        'email_configured': _email_ready(),
+        'sessions': _sessions_json(),
+        'alumni': rows, 'requests': requests_json, 'filters': f,
+        'total': total, 'shown': len(rows),
+        'mentors': sum(1 for r in rows if r['willing_to_mentor']),
+        'contactable': contactable,
     })
+
+
+def _email_ready():
+    try:
+        from utils.mailer import is_configured
+        return bool(is_configured())
+    except Exception:
+        return False
+
+
+@promotion_bp.route('/alumni/analytics')
+@graduates_access_required
+def alumni_analytics():
+    """Aggregate view of the alumni base: destinations, sectors, mentorship,
+    documents and requests."""
+    from models import AlumniProfile, GraduateDocument, DocumentRequest, GRADUATE_STATUSES
+    from utils.branch_scope import scope_by_student
+    grads = scope_query(Student.query.filter_by(is_graduated=True), Student).all()
+    ids = [g.id for g in grads] or [0]
+    profiles = {p.student_id: p for p in
+                AlumniProfile.query.filter(AlumniProfile.student_id.in_(ids)).all()}
+
+    def _top(getter, limit=8):
+        from collections import Counter
+        c = Counter()
+        for g in grads:
+            p = profiles.get(g.id)
+            val = (getter(p) or '').strip() if p else ''
+            if val:
+                c[val] += 1
+        return [{'label': k, 'count': v} for k, v in c.most_common(limit)]
+
+    # status breakdown (NULL == 'Graduated')
+    from collections import Counter
+    status_c = Counter((g.graduate_status or 'Graduated') for g in grads)
+    by_status = [{'label': s, 'count': status_c.get(s, 0)}
+                 for s in GRADUATE_STATUSES if status_c.get(s, 0)]
+    # by graduation session
+    sess_c = Counter()
+    for g in grads:
+        sess_c[g.graduation_session.name if g.graduation_session else 'Unspecified'] += 1
+    by_session = [{'label': k, 'count': v} for k, v in sorted(sess_c.items(), reverse=True)]
+
+    with_profile = sum(1 for g in grads if profiles.get(g.id))
+    mentors = sum(1 for p in profiles.values() if p.willing_to_mentor)
+    employed = sum(1 for p in profiles.values() if (p.occupation or p.employer))
+    higher_ed = sum(1 for p in profiles.values() if p.higher_institution)
+    contactable = sum(1 for p in profiles.values() if (p.email or p.phone))
+
+    docs = scope_by_student(GraduateDocument.query, GraduateDocument).all()
+    doc_c = Counter(d.doc_type for d in docs)
+    from models import GRADUATE_DOC_TYPES
+    docs_by_type = [{'label': GRADUATE_DOC_TYPES.get(k, k), 'count': v}
+                    for k, v in doc_c.most_common()]
+    req_c = Counter(r.status for r in
+                    scope_by_student(DocumentRequest.query, DocumentRequest).all())
+
+    total = len(grads)
+    return _render({
+        'page': 'alumni_analytics',
+        'alumni_dir': url_for('promotion.alumni_directory'),
+        'total': total, 'with_profile': with_profile, 'mentors': mentors,
+        'employed': employed, 'higher_ed': higher_ed, 'contactable': contactable,
+        'by_status': by_status, 'by_session': by_session,
+        'top_employers': _top(lambda p: p.employer),
+        'top_institutions': _top(lambda p: p.higher_institution),
+        'top_occupations': _top(lambda p: p.occupation),
+        'top_locations': _top(lambda p: (p.city or '') + ((', ' + p.country) if p.country else '') if (p.city or p.country) else ''),
+        'docs_by_type': docs_by_type, 'docs_total': len(docs),
+        'requests': {'pending': req_c.get('pending', 0), 'fulfilled': req_c.get('fulfilled', 0),
+                     'declined': req_c.get('declined', 0)},
+    })
+
+
+@promotion_bp.route('/alumni/export')
+@graduates_access_required
+def alumni_export():
+    """CSV export of the filtered alumni set."""
+    import csv, io
+    f = _alumni_filters(request.args)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(['Admission No', 'Name', 'Graduation Session', 'Status', 'Occupation',
+                'Job Title', 'Employer', 'Higher Institution', 'Course', 'Phone', 'Email',
+                'LinkedIn', 'City', 'Country', 'Willing to Mentor'])
+    rows = _alumni_rows(f)
+    for g, p in rows:
+        w.writerow([
+            g.student_id or '', g.full_name,
+            g.graduation_session.name if g.graduation_session else '',
+            g.graduate_status or 'Graduated',
+            (p.occupation if p else '') or '', (p.job_title if p else '') or '',
+            (p.employer if p else '') or '', (p.higher_institution if p else '') or '',
+            (p.course_of_study if p else '') or '', (p.phone if p else '') or '',
+            (p.email if p else '') or '', (p.linkedin_url if p else '') or '',
+            (p.city if p else '') or '', (p.country if p else '') or '',
+            'Yes' if (p and p.willing_to_mentor) else 'No',
+        ])
+    from flask import Response
+    log_action('alumni_export', f'{len(rows)} rows')
+    return Response(buf.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=alumni.csv'})
+
+
+@promotion_bp.route('/alumni/bulk-email', methods=['POST'])
+@admin_required
+@rate_limited('alumni_bulk_email', max_requests=10, window_minutes=60)
+def alumni_bulk_email():
+    """Email every alumnus in the filtered set who has an email address. Sent
+    individually (no shared To: header) in the background."""
+    from utils.mailer import is_configured, send_email, branded_html
+    if not is_configured():
+        return _err('Email is not configured on this server.', url_for('promotion.alumni_directory'))
+    data = request.get_json(silent=True) or request.form
+    subject = (data.get('subject') or '').strip()
+    body = (data.get('body') or '').strip()
+    if not subject or not body:
+        return _err('A subject and message are both required.', url_for('promotion.alumni_directory'))
+    f = _alumni_filters(data)
+    emails = []
+    for g, p in _alumni_rows(f):
+        if p and p.email:
+            emails.append(p.email.strip())
+    emails = sorted(set(e for e in emails if e))
+    if not emails:
+        return _err('No alumni in the current filter have an email address.',
+                    url_for('promotion.alumni_directory'))
+    html = branded_html(subject, [ln for ln in body.split('\n') if ln.strip()])
+
+    def _blast(app, recipients, subject, body, html):
+        with app.app_context():
+            for addr in recipients:
+                try:
+                    send_email(addr, subject, body, html=html)
+                except Exception:
+                    pass
+    import threading
+    from flask import current_app
+    threading.Thread(target=_blast,
+                     args=(current_app._get_current_object(), emails, subject, body, html),
+                     daemon=True, name='alumni-blast').start()
+    log_action('alumni_bulk_email', f'{len(emails)} recipients: {subject[:60]}')
+    return _ok(f'Sending to {len(emails)} alumnus/alumni in the background.',
+               url_for('promotion.alumni_directory'))
 
 
 @promotion_bp.route('/graduates/<int:student_id>/alumni', methods=['POST'])

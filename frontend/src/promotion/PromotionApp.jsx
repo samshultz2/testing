@@ -843,9 +843,26 @@ function GraduateCompare({ d }) {
   );
 }
 
-// ---- Alumni directory + document-request inbox (admin) --------------------
+// ---- Alumni directory + advanced search + export + bulk email (admin) -----
+function _qsFromFilters(f) {
+  const p = {};
+  ['q', 'occupation', 'employer', 'institution', 'city', 'country'].forEach((k) => { if (f[k]) p[k] = f[k]; });
+  if (f.session_id) p.session_id = f.session_id;
+  if (f.mentor) p.mentor = '1';
+  if (f.career) p.career = '1';
+  if (f.has_contact) p.has_contact = '1';
+  return p;
+}
+
 function Alumni({ d, notify }) {
   const nav = useNav();
+  const [f, setF] = useState(d.filters || {});
+  const [mail, setMail] = useState({ open: false, subject: '', body: '', busy: false });
+  const setField = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const applyFilters = () => navParams(nav.go, window.location.pathname, _qsFromFilters(f));
+  const clearFilters = () => { setF({}); navParams(nav.go, window.location.pathname, {}); };
+  const exportUrl = d.export_url + '?' + new URLSearchParams(_qsFromFilters(f)).toString();
+
   const fulfilReq = (r) => { window.open(r.fulfil_url, '_blank'); setTimeout(() => nav.refresh && nav.refresh(), 1500); };
   const declineReq = async (r) => {
     if (!await confirm(`Decline ${r.student_name}'s request for ${r.label}?`)) return;
@@ -853,15 +870,40 @@ function Alumni({ d, notify }) {
     if (res.ok) { notify && notify('success', res.message || 'Declined.'); nav.refresh && nav.refresh(); }
     else notify && notify('error', res.error || 'Could not decline.');
   };
+  const sendMail = async () => {
+    if (!mail.subject.trim() || !mail.body.trim()) { notify && notify('error', 'Subject and message are required.'); return; }
+    if (!await confirm('Send this email to every alumnus in the current filter who has an email address?')) return;
+    setMail((m) => ({ ...m, busy: true }));
+    const r = await submitJson(d.bulk_email_url, { subject: mail.subject, body: mail.body, ..._qsFromFilters(f) });
+    setMail((m) => ({ ...m, busy: false }));
+    if (r.ok) { notify && notify('success', r.message || 'Sending.'); setMail({ open: false, subject: '', body: '', busy: false }); }
+    else notify && notify('error', r.error || 'Could not send.');
+  };
+
   return (
     <>
-      <PageHeader title="Alumni" actions={
-        <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
+      <PageHeader title="Alumni" actions={<>
+        <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Graduates</a>
+        {d.analytics_url && <a href={d.analytics_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
+        <a href={exportUrl} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>
+        <button type="button" className="btn btn-primary" onClick={() => setMail((m) => ({ ...m, open: !m.open }))}><i aria-hidden="true" className="fas fa-envelope" /> Bulk email</button>
+      </>} />
       <div className="stats-grid mb-3">
         <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-user-graduate" /></div><div className="stat-content"><h3>{d.total}</h3><p>Graduates</p></div></div>
+        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-filter" /></div><div className="stat-content"><h3>{d.shown}</h3><p>Matching filter</p></div></div>
         <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-hands-helping" /></div><div className="stat-content"><h3>{d.mentors}</h3><p>Willing to mentor</p></div></div>
         <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-inbox" /></div><div className="stat-content"><h3>{(d.requests || []).length}</h3><p>Pending requests</p></div></div>
       </div>
+
+      {mail.open && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-envelope" /> Bulk Email — {d.contactable} contactable in this filter</h3></div>
+        <div className="card-body">
+          {!d.email_configured && <p className="text-warning"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Email is not configured on this server; sending will fail until SMTP is set up.</p>}
+          <div className="form-group"><label className="form-label">Subject</label>
+            <input className="form-control" value={mail.subject} onChange={(e) => setMail((m) => ({ ...m, subject: e.target.value }))} /></div>
+          <div className="form-group"><label className="form-label">Message</label>
+            <textarea className="form-control" rows={5} value={mail.body} onChange={(e) => setMail((m) => ({ ...m, body: e.target.value }))} /></div>
+          <button type="button" className="btn btn-primary" disabled={mail.busy || !d.email_configured} onClick={sendMail}><i aria-hidden="true" className="fas fa-paper-plane" /> Send to filtered alumni</button>
+        </div></div>}
 
       {d.requests && d.requests.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-inbox" /> Pending Document Requests</h3></div>
         <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ border: 'none' }}><table className="data-table">
@@ -877,12 +919,29 @@ function Alumni({ d, notify }) {
             </tr>))}</tbody>
         </table></div></div></div>}
 
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-          <input type="checkbox" checked={!!d.mentor} onChange={(e) => navParams(nav.go, window.location.pathname, { mentor: e.target.checked ? '1' : '', career: d.career ? '1' : '' })} /> Mentors only</label>
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-          <input type="checkbox" checked={!!d.career} onChange={(e) => navParams(nav.go, window.location.pathname, { mentor: d.mentor ? '1' : '', career: e.target.checked ? '1' : '' })} /> Has career/education info</label>
-      </div></div></div>
+      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-magnifying-glass" /> Search &amp; Filter</h3></div>
+        <div className="card-body">
+          <div className="form-row" style={{ flexWrap: 'wrap', gap: '.6rem' }}>
+            <div className="form-group" style={{ flex: '2 1 220px' }}><label className="form-label">Name or Admission No.</label>
+              <input className="form-control" value={f.q || ''} onChange={(e) => setField('q', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }} /></div>
+            <div className="form-group" style={{ flex: '1 1 160px' }}><label className="form-label">Graduation Session</label>
+              <select className="form-control" value={f.session_id || ''} onChange={(e) => setField('session_id', e.target.value)}>
+                <option value="">All</option>{(d.sessions || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+            {[['occupation', 'Occupation'], ['employer', 'Employer'], ['institution', 'Institution'], ['city', 'City'], ['country', 'Country']].map(([k, lab]) => (
+              <div className="form-group" key={k} style={{ flex: '1 1 150px' }}><label className="form-label">{lab}</label>
+                <input className="form-control" value={f[k] || ''} onChange={(e) => setField(k, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }} /></div>))}
+          </div>
+          <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', margin: '.4rem 0 .8rem' }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+              <input type="checkbox" checked={!!f.mentor} onChange={(e) => setField('mentor', e.target.checked)} /> Mentors only</label>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+              <input type="checkbox" checked={!!f.career} onChange={(e) => setField('career', e.target.checked)} /> Has career/education info</label>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+              <input type="checkbox" checked={!!f.has_contact} onChange={(e) => setField('has_contact', e.target.checked)} /> Has phone/email</label>
+          </div>
+          <button type="button" className="btn btn-primary" onClick={applyFilters}><i aria-hidden="true" className="fas fa-magnifying-glass" /> Search</button>{' '}
+          <button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear</button>
+        </div></div>
 
       <div className="card"><div className="card-header"><h3>Alumni Directory ({(d.alumni || []).length})</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -903,9 +962,56 @@ function Alumni({ d, notify }) {
   );
 }
 
+// ---- Alumni analytics -----------------------------------------------------
+function BreakdownCard({ title, icon, rows }) {
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  if (!rows.length) return null;
+  return (
+    <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className={'fas ' + icon} /> {title}</h3></div>
+      <div className="card-body">{rows.map((r, i) => (
+        <div key={i} style={{ marginBottom: '.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.9rem' }}><span>{r.label}</span><strong>{r.count}</strong></div>
+          <div style={{ height: 8, background: 'var(--border-color,#eee)', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ width: `${(r.count / max) * 100}%`, height: '100%', background: 'var(--primary,#0d6a4e)' }} /></div>
+        </div>))}</div></div>
+  );
+}
+
+function AlumniAnalytics({ d }) {
+  const req = d.requests || {};
+  return (
+    <>
+      <PageHeader title="Alumni Analytics" actions={
+        <a href={d.alumni_dir} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Directory</a>} />
+      <div className="stats-grid mb-3">
+        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-user-graduate" /></div><div className="stat-content"><h3>{d.total}</h3><p>Graduates</p></div></div>
+        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-id-badge" /></div><div className="stat-content"><h3>{d.with_profile}</h3><p>With alumni profile</p></div></div>
+        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-briefcase" /></div><div className="stat-content"><h3>{d.employed}</h3><p>Employed</p></div></div>
+        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{d.higher_ed}</h3><p>In higher education</p></div></div>
+        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-hands-helping" /></div><div className="stat-content"><h3>{d.mentors}</h3><p>Willing to mentor</p></div></div>
+        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-address-card" /></div><div className="stat-content"><h3>{d.contactable}</h3><p>Contactable</p></div></div>
+      </div>
+      <div className="stats-grid mb-3">
+        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-file-signature" /></div><div className="stat-content"><h3>{d.docs_total}</h3><p>Documents issued</p></div></div>
+        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-hourglass-half" /></div><div className="stat-content"><h3>{req.pending || 0}</h3><p>Requests pending</p></div></div>
+        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-check" /></div><div className="stat-content"><h3>{req.fulfilled || 0}</h3><p>Requests fulfilled</p></div></div>
+        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-xmark" /></div><div className="stat-content"><h3>{req.declined || 0}</h3><p>Requests declined</p></div></div>
+      </div>
+      <BreakdownCard title="By graduation session" icon="fa-calendar" rows={d.by_session || []} />
+      <BreakdownCard title="By status" icon="fa-flag" rows={d.by_status || []} />
+      <BreakdownCard title="Top employers" icon="fa-building" rows={d.top_employers || []} />
+      <BreakdownCard title="Top institutions" icon="fa-university" rows={d.top_institutions || []} />
+      <BreakdownCard title="Top occupations" icon="fa-briefcase" rows={d.top_occupations || []} />
+      <BreakdownCard title="Top locations" icon="fa-location-dot" rows={d.top_locations || []} />
+      <BreakdownCard title="Documents by type" icon="fa-file-lines" rows={d.docs_by_type || []} />
+    </>
+  );
+}
+
 const SCREENS = { index: Index, rules: Rules, add_rule: AddRule, process: Process,
   graduates: Graduates, graduate_preview: GraduatePreview, graduate_profile: GraduateProfile,
-  graduate_compare: GraduateCompare, history: History, alumni: Alumni };
+  graduate_compare: GraduateCompare, history: History, alumni: Alumni,
+  alumni_analytics: AlumniAnalytics };
 
 export default function PromotionApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
