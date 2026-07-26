@@ -98,12 +98,13 @@ def _watermark(school_name):
 
 
 # Document types whose layout is chosen from a per-school design catalog.
-DESIGNED_DOCS = ('transcript', 'slc')
+DESIGNED_DOCS = ('transcript', 'slc', 'statement')
 
 
 def _design_module(doc_type):
-    from utils import transcript_templates, slc_templates
-    return {'transcript': transcript_templates, 'slc': slc_templates}.get(doc_type)
+    from utils import transcript_templates, slc_templates, sor_templates
+    return {'transcript': transcript_templates, 'slc': slc_templates,
+            'statement': sor_templates}.get(doc_type)
 
 
 def design_key_for(doc_type):

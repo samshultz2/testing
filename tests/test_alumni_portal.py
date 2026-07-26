@@ -260,6 +260,25 @@ def test_slc_designs_gallery_default_and_issue(app):
     assert r.status_code == 400
 
 
+def test_statement_of_result_designs(app):
+    from models import DocTemplatePref
+    sid = _grad(app, 'ALUSOR')
+    admin = _admin(app)
+    tok = _csrf(admin)
+    j = admin.get('/promotion/doc-templates?doc_type=statement', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert j['doc_type'] == 'statement'
+    keys = [t['key'] for t in j['templates']]
+    assert 'classic' in keys and 'sessional' in keys and 'official' in keys
+    assert {'transcript', 'slc', 'statement'} <= {dt['key'] for dt in j['doc_types']}
+    assert admin.get('/promotion/doc-templates/statement/official/preview').data[:4] == b'%PDF'
+    r = admin.post('/promotion/doc-templates/statement/default', json={'template_key': 'sessional'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 200
+    with app.app_context():
+        assert DocTemplatePref.query.filter_by(doc_type='statement').first().template_key == 'sessional'
+    assert admin.get(f'/promotion/graduates/{sid}/document/statement').data[:4] == b'%PDF'
+
+
 def test_issued_transcript_uses_selected_template(app):
     from models import DocTemplatePref
     sid = _grad(app, 'ALUTS')

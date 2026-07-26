@@ -333,7 +333,8 @@ def bulk_documents():
 # DOCUMENT DESIGNS (Phase 2 — per-school templates)
 # ============================================================================
 
-_DESIGN_DOC_LABELS = {'transcript': 'Transcript', 'slc': 'School Leaving Certificate'}
+_DESIGN_DOC_LABELS = {'transcript': 'Transcript', 'slc': 'School Leaving Certificate',
+                      'statement': 'Statement of Result'}
 
 
 @promotion_bp.route('/doc-templates')
