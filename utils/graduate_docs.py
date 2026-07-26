@@ -15,7 +15,10 @@ from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                TableStyle, Image as RLImage, HRFlowable)
+                                TableStyle, Image as RLImage, HRFlowable, KeepInFrame)
+
+# Room reserved (mm) at the foot of the page for the shared verification block.
+_FOOTER_RESERVE = 46
 
 _PRIMARY = colors.HexColor('#0e3a2f')
 _ACCENT = colors.HexColor('#0e8a64')
@@ -142,8 +145,18 @@ def _apply_layout(mod, key, ctx, pagesize):
     the ctx so designs that fill the page know how much room they have."""
     land = mod.is_landscape(key)
     mt, mb, _ml, _mr = _margins_for(mod, key, land)
-    ctx['_avail'] = (pagesize[1] - (mt + mb) * mm) - 46 * mm
+    ctx['_avail'] = (pagesize[1] - (mt + mb) * mm) - _FOOTER_RESERVE * mm
     return ctx
+
+
+def _fit_body(el, pagesize, margins, reserve=_FOOTER_RESERVE):
+    """Wrap a document body so it can never spill onto a second page: it renders at
+    full size when it fits, and is scaled down only as much as needed otherwise.
+    ``reserve`` mm at the foot is left for the verification footer that follows."""
+    mt, mb, ml, mr = margins
+    frame_w = pagesize[0] - (ml + mr) * mm
+    body_h = pagesize[1] - (mt + mb) * mm - reserve * mm
+    return [KeepInFrame(frame_w, body_h, list(el), mode='shrink', hAlign='CENTER', vAlign='TOP')]
 
 
 def list_designs(doc_type):
@@ -264,7 +277,8 @@ def preview_document(doc_type, template_key):
     ss = getSampleStyleSheet()
     small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
     _apply_layout(mod, template_key, ctx, pagesize)
-    el = mod.build_flowables(template_key, ctx)
+    body = mod.build_flowables(template_key, ctx)
+    el = _fit_body(body, pagesize, (mt, mb, ml, mr))
     el += [Spacer(1, 12), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
            Paragraph('<b>PREVIEW — sample data.</b> A QR code and verification code '
                      'appear here on a real document.', small)]
@@ -302,7 +316,7 @@ def render(student, doc, verify_url):
                                 topMargin=mt * mm, bottomMargin=mb * mm,
                                 title=f'{label} — {student.full_name}')
         ctx = _apply_layout(mod, key, _doc_ctx(student, doc, school, rec), pagesize)
-        el = mod.build_flowables(key, ctx)
+        el = _fit_body(mod.build_flowables(key, ctx), pagesize, (mt, mb, ml, mr))
         el += _verification_footer(doc, verify_url, small)
         on_page = _page_painter(school['name'], mod.page_decorator(key))
         pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
@@ -366,11 +380,12 @@ def render(student, doc, verify_url):
                              ('TOPPADDING', (0, 1), (-1, 1), 2)]))
     el.append(sig)
 
-    # ---- verification footer (QR + code + number) ----
-    el += _verification_footer(doc, verify_url, small)
+    # ---- keep the body on a single page, then the verification footer ----
+    story = _fit_body(el, A4, (16, 20, 20, 20))
+    story += _verification_footer(doc, verify_url, small)
 
     wm = _watermark(school['name'])
-    pdf.build(el, onFirstPage=wm, onLaterPages=wm)
+    pdf.build(story, onFirstPage=wm, onLaterPages=wm)
     buf.seek(0)
     fname = f"{doc.doc_type}_{(student.student_id or student.id)}.pdf"
     return buf, fname
