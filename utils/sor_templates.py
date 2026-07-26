@@ -37,6 +37,40 @@ def _styles():
     }
 
 
+# Portrait body height available before the shared verification footer:
+# A4 297mm − 16mm top − 18mm bottom margins − ~46mm reserved for the footer block.
+_P_BODY_H = 263 * mm - 46 * mm
+
+
+def _measure(flowables, width, avail):
+    """Approximate the natural stacked height of a list of flowables."""
+    total = 0
+    for f in flowables:
+        try:
+            total += f.getSpaceBefore()
+        except Exception:
+            pass
+        try:
+            _w, hh = f.wrap(width, avail)
+            total += hh
+        except Exception:
+            pass
+        try:
+            total += f.getSpaceAfter()
+        except Exception:
+            pass
+    return total
+
+
+def _page_fill(body, sig, avail=_P_BODY_H, width=P_W):
+    """Return body + an elastic gap + signatures so the signature block sits near
+    the page bottom (filling the page) instead of hugging the content. Falls back
+    to a plain concatenation when the content already fills the page."""
+    gap = avail - _measure(body, width, avail) - _measure(sig, width, avail)
+    filler = [Spacer(1, gap)] if gap > 8 * mm else []
+    return list(body) + filler + list(sig)
+
+
 def _overall(academic):
     """[(subject, overall_score, grade)] averaged across the student's career,
     plus the cumulative average."""
@@ -259,8 +293,8 @@ def _t_classic(ctx):
               else Paragraph('No internal results are on record for this student.', S['body']))
     el += _summary_line(cum, S)
     el += _waec_block(ctx, S, accent)
-    el += [Spacer(1, 8)] + _grade_key(S) + _sig(S)
-    return el
+    el += [Spacer(1, 8)] + _grade_key(S)
+    return _page_fill(el, _sig(S))
 
 
 def _t_official(ctx):
@@ -290,8 +324,7 @@ def _t_official(ctx):
     el.append(Spacer(1, 6))
     el.append(Paragraph("This statement is issued as a summary of the candidate's internal academic "
                         "record and does not replace the certificate.", S['small']))
-    el += _sig(S)
-    return el
+    return _page_fill(el, _sig(S))
 
 
 def _t_sessional(ctx):
@@ -306,7 +339,7 @@ def _t_sessional(ctx):
         spaceBefore=8, spaceAfter=6)))
     el += _fields([('Name', ctx['student'].full_name), ('Admission No.', ctx['student'].student_id)], S)
     if not m['subjects']:
-        return el + [Paragraph('No internal results are on record.', S['body'])] + _sig(S)
+        return _page_fill(el + [Paragraph('No internal results are on record.', S['body'])], _sig(S))
     for sess in m['sessions']:
         cap = ParagraphStyle('cap', parent=S['small'], fontName='Helvetica-Bold', textColor=accent)
         el += [Spacer(1, 6), Paragraph(f"{m['ss_labels'].get(sess, sess)} — {_esc(sess)}", cap)]
@@ -319,8 +352,7 @@ def _t_sessional(ctx):
                   else Paragraph('No results recorded for this session.', S['small']))
     el += _summary_line(m['cumulative'], S)
     el += _waec_block(ctx, S, accent)
-    el += _sig(S)
-    return el
+    return _page_fill(el, _sig(S))
 
 
 def _t_modern(ctx):
@@ -346,8 +378,8 @@ def _t_modern(ctx):
     el.append(_result_table(rows, S, accent) if rows
               else Paragraph('No internal results are on record.', S['body']))
     el += _summary_line(cum, S)
-    el += [Spacer(1, 8)] + _grade_key(S) + _sig(S)
-    return el
+    el += [Spacer(1, 8)] + _grade_key(S)
+    return _page_fill(el, _sig(S))
 
 
 def _t_institutional(ctx):
@@ -377,8 +409,7 @@ def _t_institutional(ctx):
     el.append(Spacer(1, 4))
     el.append(Paragraph(f"<i>Result computed from {_esc(src)}. Any alteration renders this "
                         f"result invalid.</i>", S['small']))
-    el += _sig(S, labels=('Registrar', 'Principal'))
-    return el
+    return _page_fill(el, _sig(S, labels=('Registrar', 'Principal')))
 
 
 def _t_waec(ctx):
@@ -403,8 +434,7 @@ def _t_waec(ctx):
     el += [Spacer(1, 6), _summary_strip(summary, S), Spacer(1, 6)]
     el.append(Paragraph(f"Result computed from {_esc(src)}. Any alteration on this statement "
                         f"renders it invalid.", S['small']))
-    el += _sig(S, labels=("Principal's Signature", 'Date'))
-    return el
+    return _page_fill(el, _sig(S, labels=("Principal's Signature", 'Date')))
 
 
 def _t_bordered(ctx):
@@ -428,8 +458,7 @@ def _t_bordered(ctx):
     el.append(Spacer(1, 6))
     el.append(Paragraph(f"<b>No. of subjects passed:</b> {summary['passed']} of {summary['registered']} "
                         f"&nbsp;·&nbsp; <b>Credits:</b> {summary['credited']}", S['left']))
-    el += _sig(S, labels=('Principal', 'Date'))
-    return el
+    return _page_fill(el, _sig(S, labels=('Principal', 'Date')))
 
 
 # ---------------------------------------------------------------------------
