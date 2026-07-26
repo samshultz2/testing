@@ -28,12 +28,19 @@ def _esc(v):
 
 
 def _pronouns(gender):
+    """A full, grammatically-correct pronoun set for document prose.
+
+    Keys: S subject-capitalised, s subject, o object, p possessive,
+    r reflexive, was the past 'be' form (singular they takes 'were')."""
     g = (gender or '').strip().lower()
     if g.startswith('m'):
-        return ('He', 'he', 'his')
+        return {'S': 'He', 's': 'he', 'o': 'him', 'p': 'his',
+                'r': 'himself', 'was': 'was'}
     if g.startswith('f'):
-        return ('She', 'she', 'her')
-    return ('They', 'they', 'their')
+        return {'S': 'She', 's': 'she', 'o': 'her', 'p': 'her',
+                'r': 'herself', 'was': 'was'}
+    return {'S': 'They', 's': 'they', 'o': 'them', 'p': 'their',
+            'r': 'themselves', 'was': 'were'}
 
 
 def issue(student, doc_type, actor=None):
@@ -144,11 +151,11 @@ def render(student, doc, verify_url):
             grad_session = gs.name if gs else ''
     except Exception:
         pass
-    S, s_, sp = _pronouns(student.gender)
+    pron = _pronouns(student.gender)
 
     # ---- per-type body ----
     el += _body_for(doc.doc_type, student, rec, school, grad_when, grad_session,
-                    (S, s_, sp), body, small, center)
+                    pron, body, small, center)
 
     # ---- signatures ----
     el.append(Spacer(1, 18))
@@ -184,7 +191,8 @@ def render(student, doc, verify_url):
 
 
 def _body_for(doc_type, student, rec, school, grad_when, grad_session, pron, body, small, center):
-    S, s_, sp = pron
+    S, s, o, pp, rf, was = (pron['S'], pron['s'], pron['o'],
+                            pron['p'], pron['r'], pron['was'])
     name = student.full_name
     adm = student.student_id or ''
     school_name = school.get('name') or 'the school'
@@ -198,8 +206,8 @@ def _body_for(doc_type, student, rec, school, grad_when, grad_session, pron, bod
             + (f" in the {_esc(grad_session)} academic session" if grad_session else "")
             + (f", graduating in {_esc(grad_when)}" if grad_when else "") + ".", body))
         els.append(Paragraph(
-            f"During {sp} time in the school, {s_} was of good conduct and character, "
-            f"and left in good standing. This certificate is issued at {sp} request "
+            f"During {pp} time in the school, {s} {was} of good conduct and character, "
+            f"and left in good standing. This certificate is issued at {pp} request "
             f"for whatever legitimate purpose it may serve.", body))
 
     elif doc_type == 'testimonial':
@@ -208,13 +216,13 @@ def _body_for(doc_type, student, rec, school, grad_when, grad_session, pron, bod
             f"(Admission No. {_esc(adm)}), a former student of <b>{_esc(school_name)}</b>"
             + (f" who graduated in {_esc(grad_when)}" if grad_when else "") + ".", body))
         els.append(Paragraph(
-            f"Throughout {sp} stay, {s_} demonstrated commendable discipline, respect and "
+            f"Throughout {pp} stay, {s} demonstrated commendable discipline, respect and "
             f"cooperation, and maintained a good relationship with both staff and peers. "
-            f"{S} was diligent in {sp} studies and conducted {s_}self in a manner worthy "
+            f"{S} {was} diligent in {pp} studies and conducted {rf} in a manner worthy "
             f"of emulation.", body))
         els.append(Paragraph(
-            f"We therefore recommend {_esc(name)} without reservation and wish {s_} "
-            f"success in {sp} future endeavours.", body))
+            f"We therefore recommend {_esc(name)} without reservation and wish {o} "
+            f"success in {pp} future endeavours.", body))
 
     elif doc_type == 'statement':
         els.append(Paragraph(
@@ -242,16 +250,16 @@ def _body_for(doc_type, student, rec, school, grad_when, grad_session, pron, bod
             f"I write to recommend <b>{_esc(name)}</b> (Admission No. {_esc(adm)}), "
             f"a graduate of <b>{_esc(school_name)}</b>"
             + (f" ({_esc(grad_when)})" if grad_when else "") + ". "
-            f"Throughout {sp} time with us, {s_} distinguished {s_}self through "
+            f"Throughout {pp} time with us, {s} distinguished {rf} through "
             f"dedication, integrity and a strong work ethic.", body))
         ac = rec.get('academic') or {}
         if ac.get('cumulative') is not None:
             els.append(Paragraph(
                 f"{S} maintained a cumulative average of {ac['cumulative']}%, and "
-                f"consistently applied {s_}self to both academic and co-curricular life.", body))
+                f"consistently applied {rf} to both academic and co-curricular life.", body))
         els.append(Paragraph(
-            f"I am confident {s_} will be a valuable addition to any institution or "
-            f"organisation, and I recommend {s_} without reservation.", body))
+            f"I am confident {s} will be a valuable addition to any institution or "
+            f"organisation, and I recommend {o} without reservation.", body))
 
     elif doc_type == 'conduct':
         els.append(Paragraph(
@@ -262,7 +270,7 @@ def _body_for(doc_type, student, rec, school, grad_when, grad_session, pron, bod
         if not disc:
             els.append(Paragraph(
                 f"The school has <b>no record of any disciplinary infraction</b> against "
-                f"this student. {S} was of good behaviour throughout {sp} stay.", body))
+                f"this student. {S} {was} of good behaviour throughout {pp} stay.", body))
         else:
             els.append(Paragraph(f"The following {len(disc)} conduct record(s) are on file:", body))
             rows = [['Date', 'Category', 'Severity', 'Action taken']]
