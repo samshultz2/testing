@@ -96,3 +96,72 @@ class GraduateDocument(db.Model):
     @staticmethod
     def make_number(doc_type, student, year):
         return f"{_DOC_ABBR.get(doc_type, 'DOC')}/{year}/{(student.student_id or student.id)}"
+
+
+# ============================================================================
+# Phase 3 — Alumni records + graduate self-service portal
+# ============================================================================
+
+class AlumniProfile(db.Model):
+    """Where a graduate is now: career + higher-education + contact details.
+    One row per student, editable by the alumnus (self-service) or an admin."""
+    __tablename__ = 'alumni_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'),
+                           nullable=False, unique=True, index=True)
+    occupation = db.Column(db.String(120))
+    employer = db.Column(db.String(160))
+    job_title = db.Column(db.String(120))
+    higher_institution = db.Column(db.String(160))
+    course_of_study = db.Column(db.String(160))
+    phone = db.Column(db.String(40))
+    email = db.Column(db.String(160))
+    linkedin_url = db.Column(db.String(300))
+    city = db.Column(db.String(80))
+    country = db.Column(db.String(80))
+    willing_to_mentor = db.Column(db.Boolean, default=False)
+    achievements = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+    updated_by = db.Column(db.String(80))            # 'self' or an admin username
+
+    student = db.relationship('Student')
+
+    # Fields an alumnus may set about themselves (drives both the portal form and
+    # the admin editor; keeps a single source of truth for mass-assignment safety).
+    EDITABLE = ('occupation', 'employer', 'job_title', 'higher_institution',
+                'course_of_study', 'phone', 'email', 'linkedin_url', 'city',
+                'country', 'achievements')
+
+    def to_dict(self):
+        return {f: getattr(self, f) for f in self.EDITABLE} | {
+            'willing_to_mentor': bool(self.willing_to_mentor),
+            'updated_at': self.updated_at.strftime('%d %b %Y') if self.updated_at else None,
+            'updated_by': self.updated_by,
+        }
+
+
+DOC_REQUEST_STATUSES = ('pending', 'fulfilled', 'declined')
+
+
+class DocumentRequest(db.Model):
+    """An alumnus's request for the school to issue a document (transcript, etc.).
+    An admin fulfils it (issuing the document) or declines it."""
+    __tablename__ = 'document_requests'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'),
+                           nullable=False, index=True)
+    doc_type = db.Column(db.String(40), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending', index=True)
+    note = db.Column(db.String(500))                 # why the alumnus needs it
+    response_note = db.Column(db.String(500))        # the school's reply
+    requested_at = db.Column(db.DateTime, default=local_now, index=True)
+    handled_at = db.Column(db.DateTime)
+    handled_by = db.Column(db.String(80))
+
+    student = db.relationship('Student')
+
+    @property
+    def label(self):
+        return GRADUATE_DOC_TYPES.get(self.doc_type, self.doc_type)

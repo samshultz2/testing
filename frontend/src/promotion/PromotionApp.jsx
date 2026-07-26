@@ -310,6 +310,7 @@ function Graduates({ d }) {
   return (
     <>
       <PageHeader title="Graduates" actions={<>
+        {d.alumni_url && <a href={d.alumni_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-address-book" /> Alumni{d.pending_requests > 0 ? <span className="badge badge-warning" style={{ marginLeft: '.4rem' }}>{d.pending_requests}</span> : null}</a>}
         {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
         <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>
       </>} />
@@ -392,6 +393,31 @@ function GraduateProfile({ d, notify }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(d.status || 'Graduated');
   const [reason, setReason] = useState('');
+  const [alu, setAlu] = useState(d.alumni || {});
+  const [pw, setPw] = useState('');
+  const setAluField = (k, v) => setAlu((a) => ({ ...a, [k]: v }));
+  const saveAlumni = async () => {
+    setBusy(true);
+    const r = await submitJson(d.alumni_save_url, alu);
+    setBusy(false);
+    if (r.ok) notify && notify('success', r.message || 'Alumni details saved.');
+    else notify && notify('error', r.error || 'Could not save.');
+  };
+  const savePassword = async () => {
+    if (pw.length < 6) { notify && notify('error', 'Password must be at least 6 characters.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.set_password_url, { password: pw });
+    setBusy(false);
+    if (r.ok) { notify && notify('success', r.message || 'Password set.'); setPw(''); }
+    else notify && notify('error', r.error || 'Could not set password.');
+  };
+  const fulfilReq = (req) => { window.open(req.fulfil_url, '_blank'); setTimeout(() => nav.refresh && nav.refresh(), 1500); };
+  const declineReq = async (req) => {
+    if (!await confirm(`Decline the request for ${req.label}?`)) return;
+    const r = await submitJson(req.decline_url, {});
+    if (r.ok) { notify && notify('success', r.message || 'Request declined.'); nav.refresh && nav.refresh(); }
+    else notify && notify('error', r.error || 'Could not decline.');
+  };
   const undoGraduate = async () => {
     if (!await confirm(`Un-graduate ${s.full_name}? They will move back to active students and leave the Graduates list. Their records are kept.`)) return;
     setBusy(true);
@@ -480,6 +506,54 @@ function GraduateProfile({ d, notify }) {
         </div>
         <p className="text-muted text-sm" style={{ marginTop: '.6rem', marginBottom: 0 }}>
           <i aria-hidden="true" className="fas fa-qrcode" /> Each PDF carries a QR code + unique number; anyone can confirm it at the public verification page.</p>
+        </div></div>}
+
+      {/* ---- Document requests (from the alumni portal) ---- */}
+      {d.doc_requests && d.doc_requests.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-inbox" /> Document Requests</h3></div>
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <thead><tr><th>Document</th><th>Requested</th><th>Note</th><th>Status</th><th /></tr></thead>
+          <tbody>{d.doc_requests.map((r) => (
+            <tr key={r.id}>
+              <td>{r.label}</td><td>{r.requested_at}</td><td>{r.note || '—'}</td>
+              <td><span className={'badge ' + (r.status === 'pending' ? 'badge-warning' : r.status === 'fulfilled' ? 'badge-success' : 'badge-secondary')}>{r.status}</span></td>
+              <td style={{ whiteSpace: 'nowrap' }}>{r.status === 'pending' ? <>
+                <button type="button" className="btn btn-success btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> Issue</button>{' '}
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /> Decline</button>
+              </> : (r.response_note || '—')}</td>
+            </tr>))}</tbody>
+        </table></div></div></div>}
+
+      {/* ---- Alumni details ---- */}
+      {d.alumni_save_url && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-badge" /> Alumni Details</h3>
+        {d.alumni && d.alumni.updated_at && <span className="text-muted text-sm">Updated {d.alumni.updated_at}{d.alumni.updated_by ? ` by ${d.alumni.updated_by}` : ''}</span>}</div>
+        <div className="card-body">
+          <div className="form-row" style={{ flexWrap: 'wrap', gap: '.6rem' }}>
+            {[['occupation', 'Occupation'], ['job_title', 'Job title'], ['employer', 'Employer'],
+              ['higher_institution', 'Higher institution'], ['course_of_study', 'Course of study'],
+              ['phone', 'Phone'], ['email', 'Email'], ['linkedin_url', 'LinkedIn URL'],
+              ['city', 'City'], ['country', 'Country']].map(([k, lab]) => (
+              <div className="form-group" key={k} style={{ flex: '1 1 200px' }}>
+                <label className="form-label">{lab}</label>
+                <input className="form-control" value={alu[k] || ''} onChange={(e) => setAluField(k, e.target.value)} />
+              </div>))}
+          </div>
+          <div className="form-group"><label className="form-label">Achievements</label>
+            <textarea className="form-control" rows={2} value={alu.achievements || ''} onChange={(e) => setAluField('achievements', e.target.value)} /></div>
+          <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+            <input type="checkbox" checked={!!alu.willing_to_mentor} onChange={(e) => setAluField('willing_to_mentor', e.target.checked)} /> Willing to mentor current students</label></div>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={saveAlumni}><i aria-hidden="true" className="fas fa-save" /> Save alumni details</button>
+        </div></div>}
+
+      {/* ---- Portal access ---- */}
+      {d.set_password_url && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-key" /> Alumni Portal Access</h3></div>
+        <div className="card-body">
+          <p className="text-muted text-sm" style={{ marginTop: 0 }}>Set a portal password so this graduate can sign in at the alumni portal. They can also log in with a verification code from any document you issued them.</p>
+          <div className="form-row" style={{ alignItems: 'flex-end', gap: '.6rem' }}>
+            <div className="form-group" style={{ flex: 1, minWidth: '200px' }}><label className="form-label">New portal password</label>
+              <input className="form-control" type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 6 characters" /></div>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={savePassword}><i aria-hidden="true" className="fas fa-key" /> Set password</button>
+          </div>
+          {d.alumni_login_url && <p className="text-muted text-sm" style={{ marginBottom: 0 }}>Portal: <a href={d.alumni_login_url} target="_blank" rel="noopener noreferrer">{d.alumni_login_url}</a></p>}
         </div></div>}
 
       {/* ---- Permanent record (read-only) ---- */}
@@ -769,9 +843,69 @@ function GraduateCompare({ d }) {
   );
 }
 
+// ---- Alumni directory + document-request inbox (admin) --------------------
+function Alumni({ d, notify }) {
+  const nav = useNav();
+  const fulfilReq = (r) => { window.open(r.fulfil_url, '_blank'); setTimeout(() => nav.refresh && nav.refresh(), 1500); };
+  const declineReq = async (r) => {
+    if (!await confirm(`Decline ${r.student_name}'s request for ${r.label}?`)) return;
+    const res = await submitJson(r.decline_url, {});
+    if (res.ok) { notify && notify('success', res.message || 'Declined.'); nav.refresh && nav.refresh(); }
+    else notify && notify('error', res.error || 'Could not decline.');
+  };
+  return (
+    <>
+      <PageHeader title="Alumni" actions={
+        <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
+      <div className="stats-grid mb-3">
+        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-user-graduate" /></div><div className="stat-content"><h3>{d.total}</h3><p>Graduates</p></div></div>
+        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-hands-helping" /></div><div className="stat-content"><h3>{d.mentors}</h3><p>Willing to mentor</p></div></div>
+        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-inbox" /></div><div className="stat-content"><h3>{(d.requests || []).length}</h3><p>Pending requests</p></div></div>
+      </div>
+
+      {d.requests && d.requests.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-inbox" /> Pending Document Requests</h3></div>
+        <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <thead><tr><th>Graduate</th><th>Document</th><th>Note</th><th>Requested</th><th /></tr></thead>
+          <tbody>{d.requests.map((r) => (
+            <tr key={r.id}>
+              <td><a href={r.profile_url}>{r.student_name}</a><br /><span className="text-muted text-sm">{r.admission_no}</span></td>
+              <td>{r.label}</td><td>{r.note || '—'}</td><td>{r.requested_at}</td>
+              <td style={{ whiteSpace: 'nowrap' }}>
+                <button type="button" className="btn btn-success btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> Issue</button>{' '}
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /> Decline</button>
+              </td>
+            </tr>))}</tbody>
+        </table></div></div></div>}
+
+      <div className="card mb-3"><div className="card-body"><div className="filter-form">
+        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+          <input type="checkbox" checked={!!d.mentor} onChange={(e) => navParams(nav.go, window.location.pathname, { mentor: e.target.checked ? '1' : '', career: d.career ? '1' : '' })} /> Mentors only</label>
+        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+          <input type="checkbox" checked={!!d.career} onChange={(e) => navParams(nav.go, window.location.pathname, { mentor: d.mentor ? '1' : '', career: e.target.checked ? '1' : '' })} /> Has career/education info</label>
+      </div></div></div>
+
+      <div className="card"><div className="card-header"><h3>Alumni Directory ({(d.alumni || []).length})</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {(d.alumni || []).length ? <div className="table-container" style={{ border: 'none' }}><table className="data-table">
+            <thead><tr><th>Name</th><th>Occupation</th><th>Employer / Institution</th><th>Contact</th><th>Mentor</th><th /></tr></thead>
+            <tbody>{d.alumni.map((a) => (
+              <tr key={a.id}>
+                <td><a href={a.profile_url}>{a.full_name}</a><br /><span className="text-muted text-sm">{a.student_id}</span></td>
+                <td>{a.occupation || '—'}</td>
+                <td>{a.employer || a.higher_institution || '—'}</td>
+                <td>{a.phone || a.email || '—'}</td>
+                <td>{a.willing_to_mentor ? <span className="badge badge-success">Yes</span> : '—'}</td>
+                <td><a href={a.profile_url} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a></td>
+              </tr>))}</tbody>
+          </table></div> : <div style={{ padding: '1rem' }}><Empty icon="fa-address-book" title="No alumni match"><p>No graduates match the current filters.</p></Empty></div>}
+        </div></div>
+    </>
+  );
+}
+
 const SCREENS = { index: Index, rules: Rules, add_rule: AddRule, process: Process,
   graduates: Graduates, graduate_preview: GraduatePreview, graduate_profile: GraduateProfile,
-  graduate_compare: GraduateCompare, history: History };
+  graduate_compare: GraduateCompare, history: History, alumni: Alumni };
 
 export default function PromotionApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

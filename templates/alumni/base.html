@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d6a4e">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Alumni Portal{% endblock %} - {{ app_name }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <style>
+        body{background:linear-gradient(135deg,#0d6a4e,#0a5236);min-height:100vh;margin:0;font-family:'DM Sans',system-ui,sans-serif}
+        .portal-wrap{max-width:900px;margin:0 auto;padding:1rem}
+        .portal-top{display:flex;justify-content:space-between;align-items:center;color:#fff;padding:.8rem .2rem;gap:.5rem;flex-wrap:wrap}
+        .portal-top .brand{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:1.1rem}
+        .portal-top .brand img{width:34px;height:34px;border-radius:8px}
+        .portal-top a{color:#fff;opacity:.92;text-decoration:none;font-size:.85rem}
+        .portal-card{background:var(--bg-card,#fff);border-radius:16px;padding:1.4rem;box-shadow:0 10px 30px rgba(0,0,0,.18);margin-bottom:1rem}
+        .portal-card h1{margin:0 0 .3rem;font-size:1.3rem}
+        .portal-card h2{margin:0 0 .8rem;font-size:1.05rem;display:flex;align-items:center;gap:.5rem}
+        .portal-card h2 i{color:#0d6a4e}
+        .flash-message{margin-bottom:.6rem;padding:.7rem .9rem;border-radius:10px;background:#fff;display:flex;gap:.5rem;align-items:center}
+        .flash-error{background:#fef2f2;color:#b91c1c}
+        .flash-success{background:#ecfdf5;color:#047857}
+        .a-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.6rem}
+        .a-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px solid #f1f5f9;font-size:.92rem}
+        .a-row:last-child{border-bottom:0}
+        .a-row .k{color:#6b7280}.a-row .v{font-weight:600;text-align:right}
+        .doc-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.7rem}
+        .doc-item{border:1px solid #e5e7eb;border-radius:12px;padding:.9rem}
+        .doc-item .t{font-weight:700;margin-bottom:.3rem}
+        .badge{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.72rem;font-weight:700}
+        .badge-pending{background:#fef9c3;color:#854d0e}.badge-fulfilled{background:#dcfce7;color:#166534}
+        .badge-declined{background:#fee2e2;color:#991b1b}
+        .foot{text-align:center;color:rgba(255,255,255,.75);font-size:.75rem;margin:1rem 0 2rem}
+    </style>
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    <div class="portal-wrap">
+        <div class="portal-top">
+            <div class="brand"><i class="fas fa-user-graduate"></i> {{ (school_name or app_name) }} — Alumni</div>
+            {% if session.get('alumni_student_id') %}
+            <div><a href="{{ url_for('alumni.logout') }}"><i class="fas fa-right-from-bracket"></i> Logout</a></div>
+            {% endif %}
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for category, message in messages %}
+        <div class="flash-message flash-{{ category }}"><i class="fas fa-info-circle"></i><span>{{ message }}</span></div>
+        {% endfor %}{% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+        <p class="foot">Powered by EduSyncra</p>
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

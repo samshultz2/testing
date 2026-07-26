@@ -1,0 +1,169 @@
+"""Phase 3 — alumni self-service portal + admin alumni records."""
+import re
+
+from config import Config
+from models import db, Student, GraduateDocument, AlumniProfile, DocumentRequest
+from tests.conftest import login_token
+
+
+def _admin(app):
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    return c
+
+
+def _csrf(c):
+    return re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                     c.get('/students').get_data(as_text=True)).group(1)
+
+
+def _grad(app, sid='ALU1', pw=None):
+    with app.app_context():
+        s = Student(student_id=sid, first_name='Alum', surname='Nus',
+                    gender='Male', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        if pw:
+            s.set_portal_password(pw)
+        db.session.add(s); db.session.commit()
+        return s.id
+
+
+def _portal_csrf(c):
+    html = c.get('/alumni/login').get_data(as_text=True)
+    return re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+
+
+def _meta_csrf(c, path):
+    html = c.get(path).get_data(as_text=True)
+    return re.search(r'name="csrf-token" content="([0-9a-f]+)"', html).group(1)
+
+
+def test_login_with_portal_password_and_home(app):
+    sid = _grad(app, 'ALUPW', pw='secretpw')
+    c = app.test_client()
+    tok = _portal_csrf(c)
+    r = c.post('/alumni/login', data={'student_id': 'ALUPW', 'credential': 'secretpw',
+                                      '_csrf_token': tok}, follow_redirects=True)
+    assert r.status_code == 200 and b'My Documents' in r.data
+    # wrong credential is rejected
+    c2 = app.test_client()
+    tok2 = _portal_csrf(c2)
+    r2 = c2.post('/alumni/login', data={'student_id': 'ALUPW', 'credential': 'nope',
+                                        '_csrf_token': tok2}, follow_redirects=True)
+    assert b'Invalid admission number' in r2.data
+
+
+def test_login_with_verification_code(app):
+    sid = _grad(app, 'ALUVC')
+    admin = _admin(app)
+    # issue a document so a verification code exists
+    admin.get(f'/promotion/graduates/{sid}/document/slc')
+    with app.app_context():
+        code = GraduateDocument.query.filter_by(student_id=sid, doc_type='slc').first().verification_code
+    c = app.test_client()
+    tok = _portal_csrf(c)
+    r = c.post('/alumni/login', data={'student_id': 'ALUVC', 'credential': code,
+                                      '_csrf_token': tok}, follow_redirects=True)
+    assert r.status_code == 200 and b'My Documents' in r.data
+    # the alumnus can download their own issued document
+    assert c.get('/alumni/document/slc').data[:4] == b'%PDF'
+    # but not a document that was never issued
+    assert c.get('/alumni/document/transcript').status_code == 404
+
+
+def test_alumnus_updates_profile_and_requests_document(app):
+    sid = _grad(app, 'ALUPR', pw='secretpw')
+    c = app.test_client()
+    tok = _portal_csrf(c)
+    c.post('/alumni/login', data={'student_id': 'ALUPR', 'credential': 'secretpw',
+                                  '_csrf_token': tok})
+    ptok = _meta_csrf(c, '/alumni/')   # token from home meta (session rotated at login)
+    # update profile
+    r = c.post('/alumni/profile', data={
+        'occupation': 'Engineer', 'employer': 'ACME', 'willing_to_mentor': '1',
+        '_csrf_token': ptok}, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        p = AlumniProfile.query.filter_by(student_id=sid).first()
+        assert p and p.occupation == 'Engineer' and p.willing_to_mentor is True
+        assert p.updated_by == 'self'
+    # request a document
+    r = c.post('/alumni/request', data={'doc_type': 'transcript', 'note': 'For uni',
+                                        '_csrf_token': ptok}, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        req = DocumentRequest.query.filter_by(student_id=sid).first()
+        assert req and req.doc_type == 'transcript' and req.status == 'pending'
+    # a duplicate pending request is refused
+    r = c.post('/alumni/request', data={'doc_type': 'transcript', '_csrf_token': ptok},
+               follow_redirects=True)
+    assert b'already have a pending request' in r.data
+
+
+def test_admin_fulfils_and_declines_requests(app):
+    sid = _grad(app, 'ALUAD', pw='secretpw')
+    with app.app_context():
+        db.session.add(DocumentRequest(student_id=sid, doc_type='transcript', status='pending'))
+        db.session.add(DocumentRequest(student_id=sid, doc_type='testimonial', status='pending'))
+        db.session.commit()
+        rq_fulfil = DocumentRequest.query.filter_by(student_id=sid, doc_type='transcript').first().id
+        rq_decline = DocumentRequest.query.filter_by(student_id=sid, doc_type='testimonial').first().id
+    admin = _admin(app)
+    tok = _csrf(admin)
+    # directory + inbox render
+    j = admin.get('/promotion/alumni', headers={'X-Requested-With': 'fetch'}).get_json()
+    mine = [r for r in j['requests'] if r['student_id'] == sid]
+    assert j['page'] == 'alumni' and len(mine) == 2
+    # fulfil -> PDF + status fulfilled + document created
+    r = admin.get(f'/promotion/alumni/requests/{rq_fulfil}/fulfil')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    with app.app_context():
+        assert db.session.get(DocumentRequest, rq_fulfil).status == 'fulfilled'
+        assert GraduateDocument.query.filter_by(student_id=sid, doc_type='transcript').first()
+    # decline with a note
+    r = admin.post(f'/promotion/alumni/requests/{rq_decline}/decline',
+                   data={'response_note': 'Not eligible', '_csrf_token': tok},
+                   headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        d = db.session.get(DocumentRequest, rq_decline)
+        assert d.status == 'declined' and d.response_note == 'Not eligible'
+
+
+def test_admin_edits_alumni_profile_and_sets_password(app):
+    sid = _grad(app, 'ALUED')
+    admin = _admin(app)
+    tok = _csrf(admin)
+    r = admin.post(f'/promotion/graduates/{sid}/alumni',
+                   json={'occupation': 'Doctor', 'city': 'Lagos', 'willing_to_mentor': True},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        p = AlumniProfile.query.filter_by(student_id=sid).first()
+        assert p.occupation == 'Doctor' and p.city == 'Lagos' and p.willing_to_mentor is True
+        assert p.updated_by and p.updated_by != 'self'
+    # set portal password (too short is rejected)
+    r = admin.post(f'/promotion/graduates/{sid}/portal-password',
+                   json={'password': '123'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 400
+    r = admin.post(f'/promotion/graduates/{sid}/portal-password',
+                   json={'password': 'longenough'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 200
+    with app.app_context():
+        assert db.session.get(Student, sid).check_portal_password('longenough')
+
+
+def test_non_graduate_cannot_use_alumni_portal(app):
+    with app.app_context():
+        s = Student(student_id='NOTGRAD', first_name='Not', surname='Grad',
+                    gender='Female', is_active=True, is_graduated=False)
+        s.set_portal_password('secretpw')
+        db.session.add(s); db.session.commit()
+    c = app.test_client()
+    tok = _portal_csrf(c)
+    r = c.post('/alumni/login', data={'student_id': 'NOTGRAD', 'credential': 'secretpw',
+                                      '_csrf_token': tok}, follow_redirects=True)
+    assert b'Invalid admission number' in r.data

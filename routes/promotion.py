@@ -61,7 +61,7 @@ def _sessions_json():
 @graduates_access_required
 def graduates_list():
     """List all graduated students"""
-    from models import GRADUATE_STATUSES, GRADUATE_DOC_TYPES
+    from models import GRADUATE_STATUSES, GRADUATE_DOC_TYPES, DocumentRequest
     session_id = request.args.get('session_id', type=int)
     status = (request.args.get('status') or '').strip()
 
@@ -85,6 +85,9 @@ def graduates_list():
         'status': status, 'statuses': GRADUATE_STATUSES,
         'doc_types': [{'type': k, 'label': v} for k, v in GRADUATE_DOC_TYPES.items()],
         'bulk_url': url_for('promotion.bulk_documents'),
+        'alumni_url': url_for('promotion.alumni_directory'),
+        'pending_requests': scope_by_student(
+            DocumentRequest.query.filter_by(status='pending'), DocumentRequest).count(),
         'preview_url': url_for('promotion.graduate_sss3_preview'),
         'compare_url': url_for('promotion.graduate_compare'),
         'graduates': [{
@@ -325,6 +328,165 @@ def bulk_documents():
                      download_name=f'{doc_type}_documents.zip')
 
 
+# ============================================================================
+# ALUMNI (Phase 3 — admin side)
+# ============================================================================
+
+def _alumni_json(prof):
+    from models import AlumniProfile
+    if prof is None:
+        return {f: None for f in AlumniProfile.EDITABLE} | {
+            'willing_to_mentor': False, 'updated_at': None, 'updated_by': None}
+    return prof.to_dict()
+
+
+@promotion_bp.route('/alumni')
+@graduates_access_required
+def alumni_directory():
+    """Admin alumni directory: every graduate with their career/contact profile,
+    plus the pending document-request inbox."""
+    from models import AlumniProfile, DocumentRequest, GRADUATE_DOC_TYPES
+    mentor_only = request.args.get('mentor') == '1'
+    with_career = request.args.get('career') == '1'
+    grads = (scope_query(Student.query.filter_by(is_graduated=True), Student)
+             .order_by(Student.surname, Student.first_name).all())
+    ids = [g.id for g in grads] or [0]
+    profiles = {p.student_id: p for p in
+                AlumniProfile.query.filter(AlumniProfile.student_id.in_(ids)).all()}
+    rows = []
+    for g in grads:
+        p = profiles.get(g.id)
+        if mentor_only and not (p and p.willing_to_mentor):
+            continue
+        if with_career and not (p and (p.occupation or p.employer or p.higher_institution)):
+            continue
+        rows.append({
+            'id': g.id, 'full_name': g.full_name, 'student_id': g.student_id,
+            'profile_url': url_for('promotion.graduate_profile', student_id=g.id),
+            'occupation': p.occupation if p else None,
+            'employer': p.employer if p else None,
+            'higher_institution': p.higher_institution if p else None,
+            'phone': p.phone if p else None, 'email': p.email if p else None,
+            'willing_to_mentor': bool(p.willing_to_mentor) if p else False,
+        })
+    # pending request inbox (branch-scoped by the requesting student)
+    from utils.branch_scope import scope_by_student
+    pend = (scope_by_student(DocumentRequest.query.filter_by(status='pending'), DocumentRequest)
+            .order_by(DocumentRequest.requested_at.asc()).all())
+    requests_json = [{
+        'id': r.id, 'student_id': r.student_id,
+        'student_name': r.student.full_name if r.student else '—',
+        'admission_no': r.student.student_id if r.student else '',
+        'doc_type': r.doc_type, 'label': r.label,
+        'note': r.note, 'requested_at': r.requested_at.strftime('%d %b %Y') if r.requested_at else '',
+        'fulfil_url': url_for('promotion.fulfill_request', req_id=r.id),
+        'decline_url': url_for('promotion.decline_request', req_id=r.id),
+        'profile_url': url_for('promotion.graduate_profile', student_id=r.student_id),
+    } for r in pend]
+    return _render({
+        'page': 'alumni', 'graduates': url_for('promotion.graduates_list'),
+        'alumni': rows, 'requests': requests_json,
+        'mentor': mentor_only, 'career': with_career,
+        'total': len(grads), 'mentors': sum(1 for r in rows if r['willing_to_mentor']),
+    })
+
+
+@promotion_bp.route('/graduates/<int:student_id>/alumni', methods=['POST'])
+@admin_required
+def save_alumni_profile(student_id):
+    """Admin edit of a graduate's alumni profile."""
+    from utils.branch_scope import require_branch_access
+    from utils.access_control import get_current_user
+    from models import AlumniProfile
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
+    prof = AlumniProfile.query.filter_by(student_id=student.id).first()
+    if prof is None:
+        prof = AlumniProfile(student_id=student.id)
+        db.session.add(prof)
+    data = request.get_json(silent=True) or request.form
+    for f in AlumniProfile.EDITABLE:
+        setattr(prof, f, (data.get(f) or '').strip() or None)
+    prof.willing_to_mentor = bool(data.get('willing_to_mentor'))
+    me = get_current_user()
+    prof.updated_by = (me.username if me else 'admin')
+    db.session.commit()
+    log_action('alumni_profile_update', student.full_name)
+    return _ok('Alumni details saved.',
+               url_for('promotion.graduate_profile', student_id=student.id))
+
+
+@promotion_bp.route('/graduates/<int:student_id>/portal-password', methods=['POST'])
+@admin_required
+def set_alumni_password(student_id):
+    """Set/reset the graduate's portal password so they can sign in to the
+    alumni portal (they can also use a document verification code)."""
+    from utils.branch_scope import require_branch_access
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
+    prof_url = url_for('promotion.graduate_profile', student_id=student.id)
+    data = request.get_json(silent=True) or request.form
+    pw = (data.get('password') or '').strip()
+    if len(pw) < 6:
+        return _err('Password must be at least 6 characters.', prof_url)
+    student.set_portal_password(pw)
+    db.session.commit()
+    log_action('alumni_portal_password', student.full_name)
+    return _ok('Portal password set. The graduate can now sign in to the alumni portal.', prof_url)
+
+
+@promotion_bp.route('/alumni/requests/<int:req_id>/fulfil')
+@admin_required
+def fulfill_request(req_id):
+    """Fulfil a document request: issue the document and return the PDF."""
+    from flask import send_file
+    from utils.branch_scope import require_branch_access
+    from utils.access_control import get_current_user
+    from utils.production import secure_external_url
+    from utils import graduate_docs
+    from models import DocumentRequest, GraduateAudit
+    from datetime import datetime
+    req = db.get_or_404(DocumentRequest, req_id)
+    student = db.get_or_404(Student, req.student_id)
+    require_branch_access(student.branch_id)
+    me = get_current_user()
+    actor = me.username if me else 'admin'
+    doc = graduate_docs.issue(student, req.doc_type, actor=actor)
+    verify_url = secure_external_url('graduate_verify.verify', code=doc.verification_code)
+    buf, fname = graduate_docs.render(student, doc, verify_url)
+    req.status = 'fulfilled'
+    req.handled_at = datetime.now()
+    req.handled_by = actor
+    req.response_note = (req.response_note or 'Issued.')
+    db.session.add(GraduateAudit(
+        student_id=student.id, field='document', old_value=None,
+        new_value=f'{req.doc_type}:{doc.document_number}', reason='request fulfilled', actor=actor))
+    db.session.commit()
+    log_action('alumni_request_fulfil', f'{student.full_name}: {doc.label}')
+    return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=fname)
+
+
+@promotion_bp.route('/alumni/requests/<int:req_id>/decline', methods=['POST'])
+@admin_required
+def decline_request(req_id):
+    from utils.branch_scope import require_branch_access
+    from utils.access_control import get_current_user
+    from models import DocumentRequest
+    from datetime import datetime
+    req = db.get_or_404(DocumentRequest, req_id)
+    student = db.get_or_404(Student, req.student_id)
+    require_branch_access(student.branch_id)
+    me = get_current_user()
+    data = request.get_json(silent=True) or request.form
+    req.status = 'declined'
+    req.handled_at = datetime.now()
+    req.handled_by = (me.username if me else 'admin')
+    req.response_note = (data.get('response_note') or '').strip()[:500] or 'Declined.'
+    db.session.commit()
+    log_action('alumni_request_decline', student.full_name)
+    return _ok('Request declined.', url_for('promotion.alumni_directory'))
+
+
 @promotion_bp.route('/graduates/<int:student_id>')
 @graduates_access_required
 def graduate_profile(student_id):
@@ -361,7 +523,8 @@ def graduate_profile(student_id):
     if student.graduation_session_id:
         graduation_session = db.session.get(AcademicSession, student.graduation_session_id)
     
-    from models import GraduateAudit, GRADUATE_STATUSES, GRADUATE_DOC_TYPES, GraduateDocument
+    from models import (GraduateAudit, GRADUATE_STATUSES, GRADUATE_DOC_TYPES,
+                        GraduateDocument, AlumniProfile, DocumentRequest)
     from utils.graduate_record import build_record
     from utils.production import secure_external_url
     history = (GraduateAudit.query
@@ -380,8 +543,23 @@ def graduate_profile(student_id):
             'revoked': bool(d.revoked) if d else False,
             'verify_url': secure_external_url('graduate_verify.verify', code=d.verification_code) if d else None,
         })
+    alumni_prof = AlumniProfile.query.filter_by(student_id=student.id).first()
+    doc_requests = (DocumentRequest.query.filter_by(student_id=student.id)
+                    .order_by(DocumentRequest.requested_at.desc()).limit(30).all())
     return _render({
         'page': 'graduate_profile',
+        'alumni': _alumni_json(alumni_prof),
+        'alumni_fields': list(AlumniProfile.EDITABLE),
+        'alumni_save_url': url_for('promotion.save_alumni_profile', student_id=student.id),
+        'set_password_url': url_for('promotion.set_alumni_password', student_id=student.id),
+        'alumni_login_url': secure_external_url('alumni.login'),
+        'doc_requests': [{
+            'id': r.id, 'label': r.label, 'status': r.status, 'note': r.note,
+            'response_note': r.response_note,
+            'requested_at': r.requested_at.strftime('%d %b %Y') if r.requested_at else '',
+            'fulfil_url': url_for('promotion.fulfill_request', req_id=r.id),
+            'decline_url': url_for('promotion.decline_request', req_id=r.id),
+        } for r in doc_requests],
         'student': {'id': student.id, 'full_name': student.full_name,
                     'student_id': student.student_id, 'gender': student.gender},
         'record': build_record(student),

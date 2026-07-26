@@ -1,0 +1,121 @@
+{% extends "alumni/base.html" %}
+{% block title %}My Alumni Home{% endblock %}
+{% block content %}
+
+<div class="portal-card">
+    <h1><i class="fas fa-user-graduate" style="color:#0d6a4e"></i> {{ student.full_name }}</h1>
+    <div class="a-row"><span class="k">Admission No.</span><span class="v">{{ student.student_id }}</span></div>
+    {% if grad_session %}<div class="a-row"><span class="k">Class of</span><span class="v">{{ grad_session }}</span></div>{% endif %}
+    {% if student.graduate_status %}<div class="a-row"><span class="k">Status</span><span class="v">{{ student.graduate_status }}</span></div>{% endif %}
+</div>
+
+{# ---- Documents ---- #}
+<div class="portal-card" id="documents">
+    <h2><i class="fas fa-file-signature"></i> My Documents</h2>
+    {% if docs %}
+    <div class="doc-list">
+        {% for d in docs %}
+        <div class="doc-item">
+            <div class="t">{{ d.label }}</div>
+            <div class="text-muted" style="font-size:.82rem;margin-bottom:.5rem;">No. {{ d.document_number }}</div>
+            <a href="{{ url_for('alumni.document', doc_type=d.doc_type) }}" class="btn btn-primary btn-sm w-100">
+                <i class="fas fa-download"></i> Download</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">The school has not issued any documents to you yet. You can request one below.</p>
+    {% endif %}
+</div>
+
+{# ---- Request a document ---- #}
+<div class="portal-card" id="request">
+    <h2><i class="fas fa-paper-plane"></i> Request a Document</h2>
+    <form method="POST" action="{{ url_for('alumni.request_document') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label class="form-label">Document</label>
+            <select name="doc_type" class="form-control" required>
+                {% for key, label in doc_types.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Note <span class="text-muted">(optional — why you need it)</span></label>
+            <textarea name="note" class="form-control" rows="2" maxlength="500"
+                      placeholder="e.g. Needed for a job application"></textarea>
+        </div>
+        <button type="submit" class="btn btn-success"><i class="fas fa-paper-plane"></i> Send request</button>
+    </form>
+
+    {% if reqs %}
+    <h3 style="font-size:.95rem;margin:1.2rem 0 .5rem;">Your requests</h3>
+    <div class="table-container" style="border:none;">
+        <table class="data-table"><thead><tr><th>Document</th><th>Requested</th><th>Status</th><th>Response</th></tr></thead>
+        <tbody>
+        {% for r in reqs %}
+        <tr>
+            <td>{{ r.label }}</td>
+            <td>{{ r.requested_at.strftime('%d %b %Y') if r.requested_at else '—' }}</td>
+            <td><span class="badge badge-{{ r.status }}">{{ r.status|capitalize }}</span></td>
+            <td>{{ r.response_note or '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody></table>
+    </div>
+    {% endif %}
+</div>
+
+{# ---- My profile ---- #}
+<div class="portal-card" id="profile">
+    <h2><i class="fas fa-id-badge"></i> My Details</h2>
+    <p class="text-muted" style="margin-top:-.4rem;">Keep your career and contact information current so the school can stay in touch.</p>
+    <form method="POST" action="{{ url_for('alumni.save_profile') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="a-grid">
+            <div class="form-group"><label class="form-label">Occupation</label><input name="occupation" class="form-control" value="{{ prof.occupation or '' }}"></div>
+            <div class="form-group"><label class="form-label">Job title</label><input name="job_title" class="form-control" value="{{ prof.job_title or '' }}"></div>
+            <div class="form-group"><label class="form-label">Employer</label><input name="employer" class="form-control" value="{{ prof.employer or '' }}"></div>
+            <div class="form-group"><label class="form-label">Higher institution</label><input name="higher_institution" class="form-control" value="{{ prof.higher_institution or '' }}"></div>
+            <div class="form-group"><label class="form-label">Course of study</label><input name="course_of_study" class="form-control" value="{{ prof.course_of_study or '' }}"></div>
+            <div class="form-group"><label class="form-label">Phone</label><input name="phone" class="form-control" value="{{ prof.phone or '' }}"></div>
+            <div class="form-group"><label class="form-label">Email</label><input name="email" type="email" class="form-control" value="{{ prof.email or '' }}"></div>
+            <div class="form-group"><label class="form-label">LinkedIn URL</label><input name="linkedin_url" class="form-control" value="{{ prof.linkedin_url or '' }}"></div>
+            <div class="form-group"><label class="form-label">City</label><input name="city" class="form-control" value="{{ prof.city or '' }}"></div>
+            <div class="form-group"><label class="form-label">Country</label><input name="country" class="form-control" value="{{ prof.country or '' }}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Achievements</label>
+            <textarea name="achievements" class="form-control" rows="3">{{ prof.achievements or '' }}</textarea></div>
+        <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:.5rem;">
+                <input type="checkbox" name="willing_to_mentor" value="1" {{ 'checked' if prof.willing_to_mentor else '' }}>
+                I'm willing to mentor current students
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save my details</button>
+    </form>
+</div>
+
+{# ---- Academic record ---- #}
+<div class="portal-card" id="record">
+    <h2><i class="fas fa-graduation-cap"></i> My Academic Record</h2>
+    {% set ac = record.academic %}
+    {% if ac and ac.cumulative is not none %}
+    <div class="a-row"><span class="k">Cumulative average</span><span class="v">{{ ac.cumulative }}%</span></div>
+    {% endif %}
+    {% if ac and ac.terms %}
+        {% for t in ac.terms %}
+        <h3 style="font-size:.95rem;margin:1rem 0 .4rem;">{{ t.session }} · {{ t.term }}
+            {% if t.average is not none %}<span class="text-muted">— {{ t.average }}%</span>{% endif %}</h3>
+        <div class="table-container" style="border:none;">
+            <table class="data-table"><thead><tr><th>Subject</th><th>Score</th><th>Grade</th></tr></thead>
+            <tbody>
+            {% for s in t.subjects %}<tr><td>{{ s.subject }}</td><td>{{ s.score if s.score is not none else '—' }}</td><td>{{ s.grade or '—' }}</td></tr>{% endfor %}
+            </tbody></table>
+        </div>
+        {% endfor %}
+    {% else %}
+    <p class="text-muted">No internal academic results are on record.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

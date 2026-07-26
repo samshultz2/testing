@@ -217,6 +217,8 @@ def create_app(config_class=None):
     app.register_blueprint(staff_onb_bp)
     app.register_blueprint(setup_bp)
     app.register_blueprint(graduate_verify_bp)
+    from routes.alumni_portal import alumni_bp
+    app.register_blueprint(alumni_bp)
     app.register_blueprint(finance_bp)
     app.register_blueprint(comms_bp)
     app.register_blueprint(hr_bp)

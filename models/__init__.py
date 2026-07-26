@@ -48,7 +48,8 @@ from .models_sales import (Product, Sale, SaleItem, StockMovement, Supplier,
                            StockAudit, StockAuditItem, FixedAsset, StockBatch)
 from .models_welfare import DisciplineRecord, ClinicVisit
 from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATUSES,
-                              GraduateDocument, GRADUATE_DOC_TYPES)
+                              GraduateDocument, GRADUATE_DOC_TYPES,
+                              AlumniProfile, DocumentRequest, DOC_REQUEST_STATUSES)
 
 __all__ = [
     'db', 'local_now', 'init_db',
@@ -58,6 +59,7 @@ __all__ = [
     'DisciplineRecord', 'ClinicVisit',
     'GraduateAudit', 'GRADUATE_STATUSES', 'RESTRICTED_STATUSES',
     'GraduateDocument', 'GRADUATE_DOC_TYPES',
+    'AlumniProfile', 'DocumentRequest', 'DOC_REQUEST_STATUSES',
     'ScratchCard', 'ResultCheckLog', 'CBTLoginEvent', 'CBTDeviceSession',
     'Student', 'ParentContact',
     'AcademicSession', 'Term', 'SchoolClass', 'ClassArm', 'ClassArmAssignment', 'StudentEnrollment',
