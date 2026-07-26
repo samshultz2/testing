@@ -202,6 +202,48 @@ def test_bulk_email_requires_config_or_recipients(app):
     assert r.status_code == 400 and 'not configured' in r.get_json()['error'].lower()
 
 
+def test_transcript_templates_gallery_default_and_preview(app):
+    from models import DocTemplatePref
+    admin = _admin(app)
+    tok = _csrf(admin)
+    # gallery lists designs, one marked default
+    j = admin.get('/promotion/doc-templates', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert j['page'] == 'doc_templates'
+    keys = [t['key'] for t in j['templates']]
+    assert 'classic' in keys and 'verbins' in keys and 'govsci' in keys
+    assert sum(1 for t in j['templates'] if t['is_default']) == 1
+    # preview renders a sample PDF for a design
+    r = admin.get('/promotion/doc-templates/transcript/verbins/preview')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    # set a new default -> persisted
+    r = admin.post('/promotion/doc-templates/transcript/default',
+                   json={'template_key': 'govsci'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        assert DocTemplatePref.query.filter_by(doc_type='transcript').first().template_key == 'govsci'
+    # unknown template rejected
+    r = admin.post('/promotion/doc-templates/transcript/default',
+                   json={'template_key': 'nope'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 400
+    # unknown preview -> 404
+    assert admin.get('/promotion/doc-templates/transcript/nope/preview').status_code == 404
+
+
+def test_issued_transcript_uses_selected_template(app):
+    from models import DocTemplatePref
+    sid = _grad(app, 'ALUTS')
+    admin = _admin(app)
+    tok = _csrf(admin)
+    admin.post('/promotion/doc-templates/transcript/default',
+               json={'template_key': 'modern'},
+               headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    # issuing the transcript still produces a valid PDF under the chosen design
+    r = admin.get(f'/promotion/graduates/{sid}/document/transcript')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+
+
 def test_non_graduate_cannot_use_alumni_portal(app):
     with app.app_context():
         s = Student(student_id='NOTGRAD', first_name='Not', surname='Grad',

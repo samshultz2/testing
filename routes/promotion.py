@@ -86,6 +86,7 @@ def graduates_list():
         'doc_types': [{'type': k, 'label': v} for k, v in GRADUATE_DOC_TYPES.items()],
         'bulk_url': url_for('promotion.bulk_documents'),
         'alumni_url': url_for('promotion.alumni_directory'),
+        'doc_templates_url': url_for('promotion.doc_templates'),
         'pending_requests': scope_by_student(
             DocumentRequest.query.filter_by(status='pending'), DocumentRequest).count(),
         'preview_url': url_for('promotion.graduate_sss3_preview'),
@@ -326,6 +327,72 @@ def bulk_documents():
     log_action('graduate_documents_bulk', f'{doc_type} x{len(students)}')
     return send_file(memzip, mimetype='application/zip', as_attachment=True,
                      download_name=f'{doc_type}_documents.zip')
+
+
+# ============================================================================
+# DOCUMENT DESIGNS (Phase 2 — per-school templates)
+# ============================================================================
+
+@promotion_bp.route('/doc-templates')
+@graduates_access_required
+def doc_templates():
+    """Gallery of document designs a school can choose from + set a default."""
+    from utils import transcript_templates
+    from models import DocTemplatePref
+    pref = DocTemplatePref.query.filter_by(doc_type='transcript').first()
+    current = (pref.template_key if pref and pref.template_key
+               else transcript_templates.DEFAULT_TEMPLATE)
+    if current not in transcript_templates.TRANSCRIPT_TEMPLATES:
+        current = transcript_templates.DEFAULT_TEMPLATE
+    templates = [{
+        **t,
+        'preview_url': url_for('promotion.doc_template_preview', doc_type='transcript', key=t['key']),
+        'set_url': url_for('promotion.set_doc_template', doc_type='transcript'),
+        'is_default': t['key'] == current,
+    } for t in transcript_templates.list_templates()]
+    return _render({
+        'page': 'doc_templates', 'graduates': url_for('promotion.graduates_list'),
+        'doc_type': 'transcript', 'doc_type_label': 'Transcript',
+        'templates': templates, 'current': current,
+    })
+
+
+@promotion_bp.route('/doc-templates/<doc_type>/default', methods=['POST'])
+@admin_required
+def set_doc_template(doc_type):
+    from utils import transcript_templates
+    from utils.access_control import get_current_user
+    from models import DocTemplatePref
+    if doc_type != 'transcript':
+        abort(404)
+    data = request.get_json(silent=True) or request.form
+    key = (data.get('template_key') or '').strip()
+    if key not in transcript_templates.TRANSCRIPT_TEMPLATES:
+        return _err('Unknown template.', url_for('promotion.doc_templates'))
+    pref = DocTemplatePref.query.filter_by(doc_type=doc_type).first()
+    if pref is None:
+        pref = DocTemplatePref(doc_type=doc_type)
+        db.session.add(pref)
+    pref.template_key = key
+    me = get_current_user()
+    pref.updated_by = me.username if me else 'admin'
+    db.session.commit()
+    log_action('doc_template_default', f'{doc_type} -> {key}')
+    return _ok(f'“{transcript_templates.TRANSCRIPT_TEMPLATES[key]["name"]}” is now the default '
+               f'{doc_type} design.', url_for('promotion.doc_templates'))
+
+
+@promotion_bp.route('/doc-templates/<doc_type>/<key>/preview')
+@graduates_access_required
+def doc_template_preview(doc_type, key):
+    """A sample PDF of a design (dummy data), so admins can compare designs."""
+    from flask import send_file
+    from utils import graduate_docs, transcript_templates
+    if doc_type != 'transcript' or key not in transcript_templates.TRANSCRIPT_TEMPLATES:
+        abort(404)
+    buf = graduate_docs.preview_transcript(key)
+    return send_file(buf, mimetype='application/pdf', as_attachment=False,
+                     download_name=f'transcript_{key}_preview.pdf')
 
 
 # ============================================================================

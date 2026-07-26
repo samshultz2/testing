@@ -141,6 +141,18 @@ class AlumniProfile(db.Model):
         }
 
 
+class DocTemplatePref(db.Model):
+    """The template a school has chosen as its default for a given document type
+    (e.g. which transcript design to use). One row per doc_type per school."""
+    __tablename__ = 'doc_template_prefs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    doc_type = db.Column(db.String(40), nullable=False, unique=True, index=True)
+    template_key = db.Column(db.String(48), nullable=False)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+    updated_by = db.Column(db.String(80))
+
+
 DOC_REQUEST_STATUSES = ('pending', 'fulfilled', 'declined')
 
 

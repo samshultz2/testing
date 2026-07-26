@@ -97,6 +97,73 @@ def _watermark(school_name):
     return draw
 
 
+def transcript_template_key():
+    """The transcript design this school has chosen (falls back to the default)."""
+    try:
+        from models import DocTemplatePref
+        p = DocTemplatePref.query.filter_by(doc_type='transcript').first()
+        if p and p.template_key:
+            return p.template_key
+    except Exception:
+        pass
+    from utils.transcript_templates import DEFAULT_TEMPLATE
+    return DEFAULT_TEMPLATE
+
+
+def _transcript_ctx(student, doc, school, rec):
+    grad_when = (student.graduation_date.strftime('%B %Y') if student.graduation_date
+                 else (rec.get('admission_session') or ''))
+    grad_session = ''
+    try:
+        from models import AcademicSession, db
+        if student.graduation_session_id:
+            gs = db.session.get(AcademicSession, student.graduation_session_id)
+            grad_session = gs.name if gs else ''
+    except Exception:
+        pass
+    return {'student': student, 'academic': rec.get('academic') or {}, 'bio': rec.get('bio') or {},
+            'school': school, 'grad_when': grad_when, 'grad_session': grad_session,
+            'admission_session': rec.get('admission_session') or '', 'doc': doc}
+
+
+def _verification_footer(doc, verify_url, small):
+    els = [Spacer(1, 14), HRFlowable(width='100%', thickness=0.5, color=_MUTED)]
+    vlines = [Paragraph(f"<b>Document No.</b> {_esc(doc.document_number)}", small),
+              Paragraph(f"<b>Verification code:</b> {_esc(doc.verification_code)}", small),
+              Paragraph(f"Verify this document at<br/>{_esc(verify_url)}", small)]
+    if doc.reprint_count:
+        vlines.append(Paragraph(f"<i>Reprint #{doc.reprint_count}</i>", small))
+    qr = _qr_flowable(verify_url)
+    if qr is not None:
+        foot = Table([[vlines, qr]], colWidths=[None, 30 * mm])
+        foot.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                                  ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+        els.append(foot)
+    else:
+        els += vlines
+    return els
+
+
+def preview_transcript(template_key):
+    """Render a sample transcript with the given design (no real student needed)."""
+    from utils.school import school_profile
+    from utils import transcript_templates
+    school = school_profile()
+    ctx = transcript_templates.sample_ctx(school)
+    buf = io.BytesIO()
+    pdf = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
+                            topMargin=16 * mm, bottomMargin=20 * mm, title='Transcript preview')
+    ss = getSampleStyleSheet()
+    small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
+    el = transcript_templates.build_flowables(template_key, ctx)
+    el += [Spacer(1, 14), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
+           Paragraph('<b>PREVIEW — sample data.</b> On a real transcript a QR code and '
+                     'verification code appear here.', small)]
+    pdf.build(el, onFirstPage=_watermark(school['name']), onLaterPages=_watermark(school['name']))
+    buf.seek(0)
+    return buf
+
+
 def render(student, doc, verify_url):
     """Return (BytesIO, filename) for a graduate document PDF."""
     from utils.school import school_profile, logo_flowable, logo_header_flowable
@@ -120,6 +187,16 @@ def render(student, doc, verify_url):
     body = ParagraphStyle('b', parent=ss['Normal'], fontSize=11.5, leading=18,
                           alignment=TA_JUSTIFY, spaceAfter=6)
     small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
+
+    # Transcripts use a school-chosen design; everything else uses the standard body.
+    if doc.doc_type == 'transcript':
+        from utils import transcript_templates
+        el = transcript_templates.build_flowables(
+            transcript_template_key(), _transcript_ctx(student, doc, school, rec))
+        el += _verification_footer(doc, verify_url, small)
+        pdf.build(el, onFirstPage=_watermark(school['name']), onLaterPages=_watermark(school['name']))
+        buf.seek(0)
+        return buf, f"transcript_{(student.student_id or student.id)}.pdf"
 
     el = []
     # ---- letterhead ----
@@ -167,21 +244,7 @@ def render(student, doc, verify_url):
     el.append(sig)
 
     # ---- verification footer (QR + code + number) ----
-    el.append(Spacer(1, 14))
-    el.append(HRFlowable(width='100%', thickness=0.5, color=_MUTED))
-    vlines = [Paragraph(f"<b>Document No.</b> {_esc(doc.document_number)}", small),
-              Paragraph(f"<b>Verification code:</b> {_esc(doc.verification_code)}", small),
-              Paragraph(f"Verify this document at<br/>{_esc(verify_url)}", small)]
-    if doc.reprint_count:
-        vlines.append(Paragraph(f"<i>Reprint #{doc.reprint_count}</i>", small))
-    qr = _qr_flowable(verify_url)
-    if qr is not None:
-        foot = Table([[vlines, qr]], colWidths=[None, 30 * mm])
-        foot.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                                  ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
-        el.append(foot)
-    else:
-        el += vlines
+    el += _verification_footer(doc, verify_url, small)
 
     wm = _watermark(school['name'])
     pdf.build(el, onFirstPage=wm, onLaterPages=wm)

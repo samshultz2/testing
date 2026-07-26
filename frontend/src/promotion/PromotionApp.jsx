@@ -311,6 +311,7 @@ function Graduates({ d }) {
     <>
       <PageHeader title="Graduates" actions={<>
         {d.alumni_url && <a href={d.alumni_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-address-book" /> Alumni{d.pending_requests > 0 ? <span className="badge badge-warning" style={{ marginLeft: '.4rem' }}>{d.pending_requests}</span> : null}</a>}
+        {d.doc_templates_url && <a href={d.doc_templates_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-swatchbook" /> Designs</a>}
         {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
         <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>
       </>} />
@@ -1008,10 +1009,52 @@ function AlumniAnalytics({ d }) {
   );
 }
 
+// ---- Document design templates (admin) ------------------------------------
+function DocTemplates({ d, notify }) {
+  const nav = useNav();
+  const [busy, setBusy] = useState('');
+  const setDefault = async (t) => {
+    setBusy(t.key);
+    const r = await submitJson(t.set_url, { template_key: t.key });
+    setBusy('');
+    if (r.ok) { notify && notify('success', r.message || 'Default set.'); nav.refresh && nav.refresh(); }
+    else notify && notify('error', r.error || 'Could not set default.');
+  };
+  return (
+    <>
+      <PageHeader title={`${d.doc_type_label} Designs`} actions={
+        <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
+      <div className="card mb-3"><div className="card-body">
+        <p className="text-muted" style={{ margin: 0 }}>
+          <i aria-hidden="true" className="fas fa-circle-info" /> Choose the design used when you issue a {d.doc_type_label.toLowerCase()}.
+          Every design shows your school's own results — only the layout changes. Previews use sample data.
+        </p></div></div>
+      <div className="data-cards">
+        {(d.templates || []).map((t) => (
+          <div className="data-card" key={t.key} style={t.is_default ? { borderColor: 'var(--primary,#0e8a64)', borderWidth: 2 } : null}>
+            <div className="data-card-header">
+              <div className="data-card-title">{t.name}</div>
+              {t.is_default ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Default</span>
+                : <span className="badge badge-secondary">Available</span>}
+            </div>
+            <p className="text-sm text-muted" style={{ minHeight: '2.6em' }}>{t.description}</p>
+            <div className="data-card-actions">
+              <a href={t.preview_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm w-100">
+                <i aria-hidden="true" className="fas fa-eye" /> Preview</a>
+              <button type="button" className="btn btn-primary btn-sm w-100" style={{ marginTop: '.4rem' }}
+                disabled={t.is_default || busy === t.key} onClick={() => setDefault(t)}>
+                <i aria-hidden="true" className="fas fa-star" /> {t.is_default ? 'Current default' : 'Set as default'}</button>
+            </div>
+          </div>))}
+      </div>
+    </>
+  );
+}
+
 const SCREENS = { index: Index, rules: Rules, add_rule: AddRule, process: Process,
   graduates: Graduates, graduate_preview: GraduatePreview, graduate_profile: GraduateProfile,
   graduate_compare: GraduateCompare, history: History, alumni: Alumni,
-  alumni_analytics: AlumniAnalytics };
+  alumni_analytics: AlumniAnalytics, doc_templates: DocTemplates };
 
 export default function PromotionApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
