@@ -553,12 +553,17 @@ TRANSCRIPT_TEMPLATES = {
                 'description': 'Ornamental full-page border, centred letterhead, per-term SS1–SS3 grid with year + SS labels.'},
 }
 
+TEMPLATES = TRANSCRIPT_TEMPLATES
 DEFAULT_TEMPLATE = 'classic'
 
 
 def page_decorator(key):
     """Optional per-design canvas decorator (e.g. a printed border)."""
     return resolve(key).get('decorator')
+
+
+def is_landscape(key):
+    return bool(resolve(key).get('landscape'))
 
 
 def list_templates():

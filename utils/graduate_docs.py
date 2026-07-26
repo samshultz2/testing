@@ -97,20 +97,63 @@ def _watermark(school_name):
     return draw
 
 
-def transcript_template_key():
-    """The transcript design this school has chosen (falls back to the default)."""
+# Document types whose layout is chosen from a per-school design catalog.
+DESIGNED_DOCS = ('transcript', 'slc')
+
+
+def _design_module(doc_type):
+    from utils import transcript_templates, slc_templates
+    return {'transcript': transcript_templates, 'slc': slc_templates}.get(doc_type)
+
+
+def design_key_for(doc_type):
+    """The design this school has chosen for ``doc_type`` (falls back to default)."""
+    mod = _design_module(doc_type)
+    if mod is None:
+        return None
     try:
         from models import DocTemplatePref
-        p = DocTemplatePref.query.filter_by(doc_type='transcript').first()
-        if p and p.template_key:
+        p = DocTemplatePref.query.filter_by(doc_type=doc_type).first()
+        if p and p.template_key and p.template_key in mod.TEMPLATES:
             return p.template_key
     except Exception:
         pass
-    from utils.transcript_templates import DEFAULT_TEMPLATE
-    return DEFAULT_TEMPLATE
+    return mod.DEFAULT_TEMPLATE
 
 
-def _transcript_ctx(student, doc, school, rec):
+def list_designs(doc_type):
+    mod = _design_module(doc_type)
+    return mod.list_templates() if mod else []
+
+
+def valid_design(doc_type, key):
+    mod = _design_module(doc_type)
+    return bool(mod and key in mod.TEMPLATES)
+
+
+def _slc_fields(ctx):
+    """Derive School-Leaving-Certificate prose fields from the record."""
+    from datetime import date
+    academic = ctx.get('academic') or {}
+    cum = academic.get('cumulative')
+    perf = ''
+    if cum is not None:
+        perf = ('Excellent' if cum >= 75 else 'Very Good' if cum >= 65 else 'Good'
+                if cum >= 55 else 'Average' if cum >= 45 else 'Fair')
+    subs = sorted({s['subject'] for t in academic.get('terms', []) for s in t.get('subjects', [])})
+    st = ctx['student']
+    from_year = (ctx.get('admission_session') or '').split('/')[0]
+    to_year = (str(st.graduation_date.year) if getattr(st, 'graduation_date', None)
+               else (ctx.get('grad_session') or '').split('/')[-1])
+    doc = ctx.get('doc')
+    issued = (doc.created_at.strftime('%d %B %Y') if doc and getattr(doc, 'created_at', None)
+              else date.today().strftime('%d %B %Y'))
+    ctx.update(performance=perf, subjects_list=', '.join(subs),
+               character='Satisfactory', from_year=from_year, to_year=to_year, issued=issued)
+    return ctx
+
+
+def _doc_ctx(student, doc, school, rec):
     grad_when = (student.graduation_date.strftime('%B %Y') if student.graduation_date
                  else (rec.get('admission_session') or ''))
     grad_session = ''
@@ -121,9 +164,10 @@ def _transcript_ctx(student, doc, school, rec):
             grad_session = gs.name if gs else ''
     except Exception:
         pass
-    return {'student': student, 'academic': rec.get('academic') or {}, 'bio': rec.get('bio') or {},
-            'school': school, 'grad_when': grad_when, 'grad_session': grad_session,
-            'admission_session': rec.get('admission_session') or '', 'doc': doc}
+    ctx = {'student': student, 'academic': rec.get('academic') or {}, 'bio': rec.get('bio') or {},
+           'school': school, 'grad_when': grad_when, 'grad_session': grad_session,
+           'admission_session': rec.get('admission_session') or '', 'doc': doc}
+    return _slc_fields(ctx)
 
 
 def _verification_footer(doc, verify_url, small):
@@ -158,22 +202,29 @@ def _page_painter(school_name, decorator=None):
     return paint
 
 
-def preview_transcript(template_key):
-    """Render a sample transcript with the given design (no real student needed)."""
+def preview_document(doc_type, template_key):
+    """Render a sample document with the given design (no real student needed)."""
+    from reportlab.lib.pagesizes import landscape
     from utils.school import school_profile
-    from utils import transcript_templates
+    mod = _design_module(doc_type)
+    if mod is None:
+        raise ValueError('Unknown document type')
     school = school_profile()
-    ctx = transcript_templates.sample_ctx(school)
+    ctx = mod.sample_ctx(school)
+    _slc_fields(ctx)                      # sample gets SLC prose fields too
+    land = mod.is_landscape(template_key)
+    margin = 18 * mm if land else 20 * mm
     buf = io.BytesIO()
-    pdf = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
-                            topMargin=16 * mm, bottomMargin=20 * mm, title='Transcript preview')
+    pdf = SimpleDocTemplate(buf, pagesize=landscape(A4) if land else A4,
+                            leftMargin=margin, rightMargin=margin,
+                            topMargin=16 * mm, bottomMargin=18 * mm, title='Document preview')
     ss = getSampleStyleSheet()
     small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
-    el = transcript_templates.build_flowables(template_key, ctx)
-    el += [Spacer(1, 14), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
-           Paragraph('<b>PREVIEW — sample data.</b> On a real transcript a QR code and '
-                     'verification code appear here.', small)]
-    on_page = _page_painter(school['name'], transcript_templates.page_decorator(template_key))
+    el = mod.build_flowables(template_key, ctx)
+    el += [Spacer(1, 12), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
+           Paragraph('<b>PREVIEW — sample data.</b> A QR code and verification code '
+                     'appear here on a real document.', small)]
+    on_page = _page_painter(school['name'], mod.page_decorator(template_key))
     pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
     buf.seek(0)
     return buf
@@ -189,11 +240,33 @@ def render(student, doc, verify_url):
     rec = build_record(student)
     label = GRADUATE_DOC_TYPES.get(doc.doc_type, 'Document')
 
+    ss = getSampleStyleSheet()
+    small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
+
+    # Transcripts & School Leaving Certificates use a school-chosen design (which
+    # may be landscape); everything else uses the standard portrait body.
+    if doc.doc_type in DESIGNED_DOCS:
+        from reportlab.lib.pagesizes import landscape
+        mod = _design_module(doc.doc_type)
+        key = design_key_for(doc.doc_type)
+        land = mod.is_landscape(key)
+        margin = 18 * mm if land else 20 * mm
+        buf = io.BytesIO()
+        pdf = SimpleDocTemplate(buf, pagesize=landscape(A4) if land else A4,
+                                leftMargin=margin, rightMargin=margin,
+                                topMargin=16 * mm, bottomMargin=18 * mm,
+                                title=f'{label} — {student.full_name}')
+        el = mod.build_flowables(key, _doc_ctx(student, doc, school, rec))
+        el += _verification_footer(doc, verify_url, small)
+        on_page = _page_painter(school['name'], mod.page_decorator(key))
+        pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
+        buf.seek(0)
+        return buf, f"{doc.doc_type}_{(student.student_id or student.id)}.pdf"
+
     buf = io.BytesIO()
     pdf = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
                             topMargin=16 * mm, bottomMargin=20 * mm,
                             title=f'{label} — {student.full_name}')
-    ss = getSampleStyleSheet()
     center = ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER)
     sch = ParagraphStyle('sch', parent=center, fontSize=17, leading=20, textColor=_PRIMARY)
     muted = ParagraphStyle('m', parent=center, fontSize=8.5, textColor=_MUTED)
@@ -201,18 +274,6 @@ def render(student, doc, verify_url):
                            spaceAfter=8, textColor=_ACCENT, fontName='Helvetica-Bold')
     body = ParagraphStyle('b', parent=ss['Normal'], fontSize=11.5, leading=18,
                           alignment=TA_JUSTIFY, spaceAfter=6)
-    small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
-
-    # Transcripts use a school-chosen design; everything else uses the standard body.
-    if doc.doc_type == 'transcript':
-        from utils import transcript_templates
-        key = transcript_template_key()
-        el = transcript_templates.build_flowables(key, _transcript_ctx(student, doc, school, rec))
-        el += _verification_footer(doc, verify_url, small)
-        on_page = _page_painter(school['name'], transcript_templates.page_decorator(key))
-        pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
-        buf.seek(0)
-        return buf, f"transcript_{(student.student_id or student.id)}.pdf"
 
     el = []
     # ---- letterhead ----

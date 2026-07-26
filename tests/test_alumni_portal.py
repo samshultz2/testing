@@ -231,6 +231,35 @@ def test_transcript_templates_gallery_default_and_preview(app):
     assert admin.get('/promotion/doc-templates/transcript/nope/preview').status_code == 404
 
 
+def test_slc_designs_gallery_default_and_issue(app):
+    from models import DocTemplatePref
+    sid = _grad(app, 'ALUSLC')
+    admin = _admin(app)
+    tok = _csrf(admin)
+    # SLC design gallery lists the landscape + portrait designs
+    j = admin.get('/promotion/doc-templates?doc_type=slc', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert j['page'] == 'doc_templates' and j['doc_type'] == 'slc'
+    keys = [t['key'] for t in j['templates']]
+    assert 'comprehensive' in keys and 'awarded' in keys and 'vintage' in keys
+    # the page offers both document types to switch between
+    assert {'transcript', 'slc'} <= {dt['key'] for dt in j['doc_types']}
+    # preview a landscape design
+    r = admin.get('/promotion/doc-templates/slc/awarded/preview')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    # set default + issue an SLC under it
+    r = admin.post('/promotion/doc-templates/slc/default', json={'template_key': 'comprehensive'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        assert DocTemplatePref.query.filter_by(doc_type='slc').first().template_key == 'comprehensive'
+    r = admin.get(f'/promotion/graduates/{sid}/document/slc')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    # a transcript design key is not valid for slc
+    r = admin.post('/promotion/doc-templates/slc/default', json={'template_key': 'pioneer'},
+                   headers={'X-Requested-With': 'fetch', 'X-CSRFToken': tok})
+    assert r.status_code == 400
+
+
 def test_issued_transcript_uses_selected_template(app):
     from models import DocTemplatePref
     sid = _grad(app, 'ALUTS')

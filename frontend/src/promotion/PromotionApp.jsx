@@ -1022,12 +1022,16 @@ function DocTemplates({ d, notify }) {
   };
   return (
     <>
-      <PageHeader title={`${d.doc_type_label} Designs`} actions={
+      <PageHeader title="Document Designs" actions={
         <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
+      {d.doc_types && d.doc_types.length > 1 && <div className="tabs mb-3" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+        {d.doc_types.map((dt) => (
+          <a key={dt.key} href={dt.url} className={'btn btn-sm ' + (dt.key === d.doc_type ? 'btn-primary' : 'btn-secondary')}>{dt.label}</a>
+        ))}</div>}
       <div className="card mb-3"><div className="card-body">
         <p className="text-muted" style={{ margin: 0 }}>
           <i aria-hidden="true" className="fas fa-circle-info" /> Choose the design used when you issue a {d.doc_type_label.toLowerCase()}.
-          Every design shows your school's own results — only the layout changes. Previews use sample data.
+          Every design shows your school's own details — only the layout changes. Previews use sample data.
         </p></div></div>
       <div className="data-cards">
         {(d.templates || []).map((t) => (

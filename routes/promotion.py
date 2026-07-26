@@ -333,26 +333,30 @@ def bulk_documents():
 # DOCUMENT DESIGNS (Phase 2 — per-school templates)
 # ============================================================================
 
+_DESIGN_DOC_LABELS = {'transcript': 'Transcript', 'slc': 'School Leaving Certificate'}
+
+
 @promotion_bp.route('/doc-templates')
 @graduates_access_required
 def doc_templates():
     """Gallery of document designs a school can choose from + set a default."""
-    from utils import transcript_templates
-    from models import DocTemplatePref
-    pref = DocTemplatePref.query.filter_by(doc_type='transcript').first()
-    current = (pref.template_key if pref and pref.template_key
-               else transcript_templates.DEFAULT_TEMPLATE)
-    if current not in transcript_templates.TRANSCRIPT_TEMPLATES:
-        current = transcript_templates.DEFAULT_TEMPLATE
+    from utils import graduate_docs
+    doc_type = (request.args.get('doc_type') or 'transcript').strip()
+    if doc_type not in _DESIGN_DOC_LABELS:
+        doc_type = 'transcript'
+    current = graduate_docs.design_key_for(doc_type)
     templates = [{
         **t,
-        'preview_url': url_for('promotion.doc_template_preview', doc_type='transcript', key=t['key']),
-        'set_url': url_for('promotion.set_doc_template', doc_type='transcript'),
+        'preview_url': url_for('promotion.doc_template_preview', doc_type=doc_type, key=t['key']),
+        'set_url': url_for('promotion.set_doc_template', doc_type=doc_type),
         'is_default': t['key'] == current,
-    } for t in transcript_templates.list_templates()]
+    } for t in graduate_docs.list_designs(doc_type)]
     return _render({
         'page': 'doc_templates', 'graduates': url_for('promotion.graduates_list'),
-        'doc_type': 'transcript', 'doc_type_label': 'Transcript',
+        'doc_type': doc_type, 'doc_type_label': _DESIGN_DOC_LABELS[doc_type],
+        'doc_types': [{'key': k, 'label': v,
+                       'url': url_for('promotion.doc_templates', doc_type=k)}
+                      for k, v in _DESIGN_DOC_LABELS.items()],
         'templates': templates, 'current': current,
     })
 
@@ -360,15 +364,15 @@ def doc_templates():
 @promotion_bp.route('/doc-templates/<doc_type>/default', methods=['POST'])
 @admin_required
 def set_doc_template(doc_type):
-    from utils import transcript_templates
+    from utils import graduate_docs
     from utils.access_control import get_current_user
     from models import DocTemplatePref
-    if doc_type != 'transcript':
+    if doc_type not in _DESIGN_DOC_LABELS:
         abort(404)
     data = request.get_json(silent=True) or request.form
     key = (data.get('template_key') or '').strip()
-    if key not in transcript_templates.TRANSCRIPT_TEMPLATES:
-        return _err('Unknown template.', url_for('promotion.doc_templates'))
+    if not graduate_docs.valid_design(doc_type, key):
+        return _err('Unknown template.', url_for('promotion.doc_templates', doc_type=doc_type))
     pref = DocTemplatePref.query.filter_by(doc_type=doc_type).first()
     if pref is None:
         pref = DocTemplatePref(doc_type=doc_type)
@@ -377,9 +381,10 @@ def set_doc_template(doc_type):
     me = get_current_user()
     pref.updated_by = me.username if me else 'admin'
     db.session.commit()
+    name = next((t['name'] for t in graduate_docs.list_designs(doc_type) if t['key'] == key), key)
     log_action('doc_template_default', f'{doc_type} -> {key}')
-    return _ok(f'“{transcript_templates.TRANSCRIPT_TEMPLATES[key]["name"]}” is now the default '
-               f'{doc_type} design.', url_for('promotion.doc_templates'))
+    return _ok(f'“{name}” is now the default {_DESIGN_DOC_LABELS[doc_type]} design.',
+               url_for('promotion.doc_templates', doc_type=doc_type))
 
 
 @promotion_bp.route('/doc-templates/<doc_type>/<key>/preview')
@@ -387,12 +392,12 @@ def set_doc_template(doc_type):
 def doc_template_preview(doc_type, key):
     """A sample PDF of a design (dummy data), so admins can compare designs."""
     from flask import send_file
-    from utils import graduate_docs, transcript_templates
-    if doc_type != 'transcript' or key not in transcript_templates.TRANSCRIPT_TEMPLATES:
+    from utils import graduate_docs
+    if doc_type not in _DESIGN_DOC_LABELS or not graduate_docs.valid_design(doc_type, key):
         abort(404)
-    buf = graduate_docs.preview_transcript(key)
+    buf = graduate_docs.preview_document(doc_type, key)
     return send_file(buf, mimetype='application/pdf', as_attachment=False,
-                     download_name=f'transcript_{key}_preview.pdf')
+                     download_name=f'{doc_type}_{key}_preview.pdf')
 
 
 # ============================================================================
