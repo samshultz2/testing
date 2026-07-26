@@ -129,12 +129,22 @@ def build_record(student):
         'jamb_reg_number': student.jamb_reg_number or '',
     }
     history = _safe(lambda: _class_history(sid), [])
+    academic = _safe(lambda: _academic(sid), {'cumulative': None, 'terms_count': 0, 'terms': []})
+    # Tag each academic term with the class the student was in that
+    # session+term (from the class history), so a transcript can show the class
+    # (SSS1/SSS2/SSS3) and scope itself to the senior-secondary years.
+    klass_by = {(h['session'], h['term_number']): h['klass'] for h in history}
+    klass_by_session = {}
+    for h in history:
+        klass_by_session.setdefault(h['session'], h['klass'])
+    for t in academic.get('terms', []):
+        t['klass'] = klass_by.get((t['session'], t['term_number'])) or klass_by_session.get(t['session']) or ''
     return {
         'bio': bio,
         # admission (earliest) + graduation sessions bracket the school career
         'admission_session': (history[0]['session'] if history else ''),
         'class_history': history,
-        'academic': _safe(lambda: _academic(sid), {'cumulative': None, 'terms_count': 0, 'terms': []}),
+        'academic': academic,
         'attendance': _safe(lambda: _attendance(sid), {'present': 0, 'total': 0, 'percent': None}),
         'finance': _safe(lambda: _finance(sid), {'total_paid': 0, 'count': 0, 'recent': []}),
         'discipline': _safe(lambda: _discipline(sid), []),

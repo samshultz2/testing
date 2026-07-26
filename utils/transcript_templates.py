@@ -60,10 +60,28 @@ def _styles():
 # ---------------------------------------------------------------------------
 # data shaping — one pivot shared by every design
 # ---------------------------------------------------------------------------
+def _is_senior(klass):
+    """True for senior-secondary classes (SS1/SSS1…), False for JSS/primary."""
+    n = (klass or '').upper().replace(' ', '')
+    return ('SS' in n) and ('JS' not in n)
+
+
 def _matrix(academic):
     """Pivot per-term results into subject × (session, term) with per-session
-    aggregates. Returns a dict the templates consume."""
+    aggregates. Scoped to the senior-secondary years (SSS1–SSS3) when the class
+    of each term is known, so a transcript shows SSS1, SSS2 and the SSS3 terms
+    (up to the competence exam) rather than the whole JSS+SSS history."""
     terms = (academic or {}).get('terms') or []
+    # class per session (used to pick senior years + label the groups)
+    klass_by_session = {}
+    for t in terms:
+        if t.get('session') and t.get('klass') and t['session'] not in klass_by_session:
+            klass_by_session[t['session']] = t['klass']
+    senior_sessions = {s for s, k in klass_by_session.items() if _is_senior(k)}
+    # If we can identify senior years, restrict to them; otherwise show everything
+    # (schools that don't use SSS class names still get a full transcript).
+    if senior_sessions:
+        terms = [t for t in terms if t.get('session') in senior_sessions]
     sessions = []
     for t in terms:
         if t.get('session') and t['session'] not in sessions:
@@ -87,7 +105,10 @@ def _matrix(academic):
                     if (sess, tn) in grid.get(name, {}) and grid[name][(sess, tn)].get('score') is not None]
             if vals:
                 sess_scores[(name, sess)] = round(sum(vals) / len(vals), 1)
-    ss_labels = {sess: f'SS {i + 1}' for i, sess in enumerate(sessions)}
+    def _norm(k):
+        return (k or '').upper().replace(' ', '')
+    ss_labels = {sess: (_norm(klass_by_session.get(sess)) or f'SS {i + 1}')
+                 for i, sess in enumerate(sessions)}
     return {
         'sessions': sessions, 'ss_labels': ss_labels, 'term_nums': term_nums,
         'subjects': subjects, 'grid': grid, 'sess_scores': sess_scores,
@@ -586,11 +607,13 @@ def sample_ctx(school):
     from datetime import date
     subjects = ['English Language', 'Mathematics', 'Biology', 'Chemistry', 'Physics',
                 'Economics', 'Civic Education']
-    sessions = ['2021/2022', '2022/2023', '2023/2024']
+    # SSS1 & SSS2 have all three terms; SSS3 runs to the 2nd (competence) term.
+    year_plan = [('2021/2022', 'SSS1', (1, 2, 3)), ('2022/2023', 'SSS2', (1, 2, 3)),
+                 ('2023/2024', 'SSS3', (1, 2))]
     terms = []
     base = 62
-    for si, sess in enumerate(sessions):
-        for tn in (1, 2, 3):
+    for si, (sess, klass, tns) in enumerate(year_plan):
+        for tn in tns:
             subs = []
             for i, sub in enumerate(subjects):
                 score = min(98, base + si * 4 + tn + (i % 5) * 3)
@@ -598,7 +621,7 @@ def sample_ctx(school):
                              'position': None, 'remark': None})
             avg = round(sum(s['score'] for s in subs) / len(subs), 1)
             terms.append({'term': f'Term {tn}', 'term_number': tn, 'session': sess,
-                          'average': avg, 'subjects': subs})
+                          'klass': klass, 'average': avg, 'subjects': subs})
     allscores = [s['score'] for t in terms for s in t['subjects']]
     academic = {'cumulative': round(sum(allscores) / len(allscores), 1),
                 'terms_count': len(terms), 'terms': terms}
