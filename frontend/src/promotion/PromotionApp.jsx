@@ -372,8 +372,18 @@ function GraduatePreview({ d, notify }) {
 }
 
 // ---- Graduate profile ------------------------------------------------------
-function GraduateProfile({ d }) {
+function GraduateProfile({ d, notify }) {
   const s = d.student;
+  const nav = useNav();
+  const [busy, setBusy] = useState(false);
+  const undoGraduate = async () => {
+    if (!await confirm(`Un-graduate ${s.full_name}? They will move back to active students and leave the Graduates list. Their records are kept.`)) return;
+    setBusy(true);
+    const r = await submitJson(d.urls.ungraduate, {});
+    setBusy(false);
+    if (r.ok) nav.go(r.redirect);
+    else notify && notify('error', r.error || 'Could not un-graduate this student.');
+  };
   return (
     <>
       <div className="profile-header">
@@ -384,6 +394,8 @@ function GraduateProfile({ d }) {
       <div className="page-header-actions mb-3">
         <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>
         <a href={d.urls.full_profile} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user" /> Full Profile</a>
+        {d.urls.ungraduate && <button type="button" className="btn btn-danger" disabled={busy} onClick={undoGraduate}>
+          <i aria-hidden="true" className="fas fa-rotate-left" /> Un-graduate</button>}
       </div>
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> Graduation Info</h3></div>
         <div className="card-body"><div className="info-grid">

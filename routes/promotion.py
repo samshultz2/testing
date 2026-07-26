@@ -121,11 +121,11 @@ def unmark_graduate(student_id):
         student.graduation_session_id = None
         db.session.commit()
         log_action('ungraduate', student.full_name)
-        flash(f'{student.full_name} is no longer marked as a graduate.', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    return safe_redirect(url_for('main.view_student', student_id=student.id))
+        return _err(f'Error: {str(e)}', url_for('main.view_student', student_id=student.id))
+    return _ok(f'{student.full_name} is no longer marked as a graduate.',
+               url_for('promotion.graduates_list'))
 
 
 @promotion_bp.route('/graduate-sss3/preview')
@@ -224,6 +224,7 @@ def graduate_profile(student_id):
                       'phone': c.phone_number} for c in student.parent_contacts],
         'urls': {'graduates': url_for('promotion.graduates_list'),
                  'full_profile': url_for('main.view_student', student_id=student.id),
+                 'ungraduate': url_for('promotion.unmark_graduate', student_id=student.id),
                  'add_waec': url_for('results.add_waec') + f'?student_id={student.id}',
                  'add_jamb': url_for('results.add_jamb') + f'?student_id={student.id}'},
     })
