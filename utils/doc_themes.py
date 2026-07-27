@@ -331,6 +331,22 @@ def barcode(value):
         return None
 
 
+def qr(value, size=20):
+    """A QR-code image flowable for the verification value (school prefers QR to
+    a barcode). Returns None when the qrcode library is unavailable."""
+    try:
+        import io
+        import qrcode
+        from reportlab.platypus import Image as RLImage
+        img = qrcode.make(str(value or ''))
+        buf = io.BytesIO()
+        img.save(buf, 'PNG')
+        buf.seek(0)
+        return RLImage(buf, width=size * mm, height=size * mm)
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # shared field / section helpers
 # ---------------------------------------------------------------------------

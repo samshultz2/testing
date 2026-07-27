@@ -70,12 +70,10 @@ def _fill_pad(above, below, n_rows, avail, width=P_W, header_h=11 * mm,
     table fills the page — instead of padding it out with empty rows. Clamped so a
     short result stays reasonable and never overshoots the page; any slack left over
     is taken up by the elastic gap above the signatures."""
-    if n_rows <= 0:
-        return lo_pt
-    used = _measure(above, width, avail) + _measure(below, width, avail)
-    space = avail - used - header_h - 10 * mm         # header row + safety
-    row_h = space / n_rows                            # target height per data row (points)
-    return max(lo_pt, min(hi_pt, (row_h - line_pt) / 2))
+    # Rows keep a comfortable, uniform height — the page is filled with real
+    # content blocks (bio, summary, grade key, Principal's Remarks), not by
+    # stretching table rows (which read as sparse and wrong).
+    return 5
 
 
 def _measure(flowables, width, avail):
@@ -126,6 +124,31 @@ def _remark(cum):
         return ''
     return ('Distinction' if cum >= 75 else 'Upper Credit' if cum >= 65 else 'Credit'
             if cum >= 55 else 'Pass' if cum >= 45 else 'Fair')
+
+
+def _pron(gender):
+    g = (gender or '').strip().lower()
+    if g.startswith('m'):
+        return {'S': 'He', 's': 'he', 'p': 'his'}
+    if g.startswith('f'):
+        return {'S': 'She', 's': 'she', 'p': 'her'}
+    return {'S': 'They', 's': 'they', 'p': 'their'}
+
+
+def _remarks(ctx, S):
+    """A data-driven Principal's Remarks block (fills the page with real content,
+    the way the reference statements do — not by stretching table rows)."""
+    st = ctx['student']
+    cum = (ctx.get('academic') or {}).get('cumulative')
+    pr = _pron(getattr(st, 'gender', None))
+    perf = (_remark(cum) or 'satisfactory').lower()
+    name = _esc(getattr(st, 'first_name', None) or (st.full_name or '').split(' ')[0] or 'The candidate')
+    text = (f"{name} demonstrated {perf} academic performance and maintained good conduct "
+            f"and discipline throughout {pr['p']} time in this school. {pr['S']} is of good "
+            f"moral character and is hereby recommended for further academic pursuits and "
+            f"future endeavours.")
+    return [Spacer(1, 8),
+            Paragraph(f"<b>Principal's Remarks:</b> <i>{text}</i>", S['body'])]
 
 
 def _letterhead(ctx, accent, S, centered=True):
@@ -383,7 +406,8 @@ def _t_classic(ctx):
                       ('Sex', ctx['student'].gender), ('Graduation', ctx.get('grad_when'))], S)
     above.append(Spacer(1, 6))
     sig = _sig(S)
-    mid = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce)
+    mid = (_stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce)
+           + _remarks(ctx, S))
     if not rows:
         return _page_fill(above + [Paragraph('No results are on record for this student.',
                                              S['body'])], sig, avail=avail)
@@ -414,7 +438,7 @@ def _t_official(ctx):
     el += [box, Spacer(1, 8)]
     avail = ctx.get('_avail', _P_BODY_H)
     sig = _sig(S)
-    mid = (_stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 6),
+    mid = (_stmt_summary(ctx, rows, is_ssce, S) + _remarks(ctx, S) + [Spacer(1, 6),
            Paragraph("This statement is issued as a summary of the candidate's academic "
                      "record and does not replace the certificate.", S['small'])])
     if not rows:
@@ -488,7 +512,8 @@ def _t_modern(ctx):
     el.append(Spacer(1, 6))
     avail = ctx.get('_avail', _P_BODY_H)
     sig = _sig(S)
-    mid = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce)
+    mid = (_stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce)
+           + _remarks(ctx, S))
     if not rows:
         return _page_fill(el + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
     pad = _fill_pad(el, mid + sig, len(rows), avail)
@@ -519,7 +544,7 @@ def _t_institutional(ctx):
     mid = [Spacer(1, 6), _summary_strip(summary, S)]
     if ov_cum is not None:
         mid += _summary_line(ov_cum, S)
-    mid += ([Spacer(1, 8)] + _grade_key(S, ssce=True) + [Spacer(1, 4),
+    mid += ([Spacer(1, 8)] + _grade_key(S, ssce=True) + _remarks(ctx, S) + [Spacer(1, 4),
             Paragraph(f"<i>Result computed from {_esc(src)}. Any alteration renders this "
                       f"result invalid.</i>", S['small'])])
     if not rows:
@@ -550,7 +575,7 @@ def _t_waec(ctx):
     avail = ctx.get('_avail', _P_BODY_H)
     rows, summary, src = _ssce_rows(ctx)
     sig = _sig(S, labels=("Principal's Signature", 'Date'))
-    mid = [Spacer(1, 6), _summary_strip(summary, S), Spacer(1, 6),
+    mid = [Spacer(1, 6), _summary_strip(summary, S)] + _remarks(ctx, S) + [Spacer(1, 6),
            Paragraph(f"Result computed from {_esc(src)}. Any alteration on this statement "
                      f"renders it invalid.", S['small'])]
     if not rows:
@@ -580,7 +605,7 @@ def _t_bordered(ctx):
     avail = ctx.get('_avail', _P_BODY_H)
     rows, summary, src = _ssce_rows(ctx)
     sig = _sig(S, labels=('Principal', 'Date'))
-    mid = [Spacer(1, 6), _summary_strip(summary, S, ssce=True)]
+    mid = [Spacer(1, 6), _summary_strip(summary, S, ssce=True)] + _remarks(ctx, S)
     if not rows:
         return _page_fill(el + [Paragraph('No results are on record for this student.', S['body'])],
                           sig, avail=avail)
@@ -592,6 +617,124 @@ def _t_bordered(ctx):
 # ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
+def _border_gold(canvas, doc):
+    _ornate_border(canvas, doc, colors.HexColor('#b7791f'))
+
+
+def _thin_frame(canvas, doc):
+    w, h = doc.pagesize
+    canvas.saveState()
+    canvas.setStrokeColor(colors.HexColor('#1f2937'))
+    canvas.setLineWidth(1.2)
+    canvas.rect(10 * mm, 10 * mm, w - 20 * mm, h - 20 * mm, stroke=1, fill=0)
+    canvas.restoreState()
+
+
+def _t_banded(ctx):
+    """Full-width colour masthead with the identity reversed out."""
+    S = _styles()
+    accent = colors.HexColor('#0c4a6e')
+    rows, is_ssce, year = _statement_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    name, addr, contact = _tt._header_lines(ctx['school'])
+    logo = _tt._logo()
+    inner = [Paragraph(_esc(name), ParagraphStyle('bn', parent=S['left'], fontSize=16,
+                       fontName='Helvetica-Bold', textColor=colors.white, leading=19)),
+             Paragraph('STATEMENT OF RESULT', ParagraphStyle('bt', parent=S['left'], fontSize=11,
+                       fontName='Helvetica-Bold', textColor=colors.HexColor('#e0f2fe')))]
+    band = Table([[logo or '', inner]], colWidths=[26 * mm, P_W - 26 * mm]) if logo is not None \
+        else Table([[inner]], colWidths=[P_W])
+    band.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                              ('LEFTPADDING', (0, 0), (0, 0), 8), ('TOPPADDING', (0, 0), (-1, -1), 8),
+                              ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
+    above = [band, Spacer(1, 8)] + _fields([('Name', ctx['student'].full_name),
+             ('Admission No.', ctx['student'].student_id), ('Sex', ctx['student'].gender),
+             ('Graduation', ctx.get('grad_when'))], S) + [Spacer(1, 6)]
+    sig = _sig(S)
+    mid = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce) + _remarks(ctx, S)
+    if not rows:
+        return _page_fill(above + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
+    return _page_fill(above + [_main_table(rows, is_ssce, S, accent, pad=5)] + mid, sig, avail=avail)
+
+
+def _t_executive(ctx):
+    """Minimalist executive statement: large wordmark, boxed two-column bio."""
+    S = _styles()
+    accent = colors.HexColor('#111827')
+    rows, is_ssce, year = _statement_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    name, addr, contact = _tt._header_lines(ctx['school'])
+    above = [Paragraph(_esc(name), ParagraphStyle('wm', parent=S['left'], fontSize=19,
+                       fontName='Helvetica-Bold', textColor=accent, leading=22)),
+             HRFlowable(width='100%', thickness=1.4, color=accent), Spacer(1, 2),
+             Paragraph('STATEMENT OF RESULT', ParagraphStyle('t', parent=S['left'], fontSize=11,
+                       fontName='Helvetica-Bold', textColor=colors.HexColor('#475569'), spaceAfter=6))]
+    info = [Paragraph(f"<b>Name:</b> {_esc(ctx['student'].full_name)}", S['left']),
+            Paragraph(f"<b>Admission No.:</b> {_esc(ctx['student'].student_id)} &nbsp; "
+                      f"<b>Sex:</b> {_esc(ctx['student'].gender)}", S['left']),
+            Paragraph(f"<b>Graduation:</b> {_esc(ctx.get('grad_when'))}", S['left'])]
+    box = Table([[info]], colWidths=[P_W])
+    box.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, accent), ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                             ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+    above += [box, Spacer(1, 8)]
+    sig = _sig(S)
+    mid = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce) + _remarks(ctx, S)
+    if not rows:
+        return _page_fill(above + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
+    return _page_fill(above + [_main_table(rows, is_ssce, S, accent, pad=5)] + mid, sig, avail=avail)
+
+
+def _t_crested(ctx):
+    """Centred crested statement inside a gold ornate border."""
+    S = _styles()
+    accent = colors.HexColor('#713f12')
+    rows, is_ssce, year = _statement_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    name, addr, contact = _tt._header_lines(ctx['school'])
+    above = _logo_center() + [
+        Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=17, leading=20,
+                  fontName='Helvetica-Bold', textColor=accent, spaceAfter=2))]
+    if ctx['school'].get('motto'):
+        above.append(Paragraph(f"<i>{_esc(ctx['school'].get('motto'))}</i>", S['center']))
+    pill = Table([[Paragraph('STATEMENT OF RESULT', ParagraphStyle('p', parent=S['center'],
+                  fontSize=12, fontName='Helvetica-Bold', textColor=colors.white))]], colWidths=[80 * mm])
+    pill.hAlign = 'CENTER'
+    pill.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent), ('TOPPADDING', (0, 0), (-1, -1), 4),
+                              ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+    above += [Spacer(1, 6), pill, Spacer(1, 8)] + _fields([('Name', ctx['student'].full_name),
+             ('Admission No.', ctx['student'].student_id), ('Graduation', ctx.get('grad_when'))], S) + [Spacer(1, 6)]
+    sig = _sig(S)
+    mid = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce) + _remarks(ctx, S)
+    if not rows:
+        return _page_fill(above + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
+    return _page_fill(above + [_main_table(rows, is_ssce, S, accent, pad=5)] + mid, sig, avail=avail)
+
+
+def _t_ledger(ctx):
+    """Ledger style: boxed bio grid + a heavier results table, inside a thin frame."""
+    S = _styles()
+    accent = colors.HexColor('#334155')
+    rows, is_ssce, year = _statement_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    above = _letterhead(ctx, accent, S)
+    above += [Spacer(1, 4), Paragraph('STATEMENT OF RESULT', ParagraphStyle('ti', parent=S['center'],
+              fontSize=14, fontName='Helvetica-Bold', textColor=accent, spaceBefore=4, spaceAfter=8))]
+    bio = [[Paragraph(f"<b>Name:</b> {_esc(ctx['student'].full_name)}", S['left']),
+            Paragraph(f"<b>Admission No.:</b> {_esc(ctx['student'].student_id)}", S['left'])],
+           [Paragraph(f"<b>Sex:</b> {_esc(ctx['student'].gender)}", S['left']),
+            Paragraph(f"<b>Graduation:</b> {_esc(ctx.get('grad_when'))}", S['left'])]]
+    biot = Table(bio, colWidths=[P_W / 2, P_W / 2])
+    biot.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                              ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                              ('LEFTPADDING', (0, 0), (-1, -1), 6)]))
+    above += [biot, Spacer(1, 8)]
+    sig = _sig(S)
+    mid = _stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 8)] + _grade_key(S, ssce=is_ssce) + _remarks(ctx, S)
+    if not rows:
+        return _page_fill(above + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
+    return _page_fill(above + [_main_table(rows, is_ssce, S, accent, pad=5)] + mid, sig, avail=avail)
+
+
 SOR_TEMPLATES = {
     'classic': {'name': 'Classic (default)', 'render': _t_classic,
                 'description': 'Clean statement with an aggregated subject/score/grade table and grading key.'},
@@ -607,6 +750,14 @@ SOR_TEMPLATES = {
                   'description': 'Results broken down by senior-secondary session (SS1–SS3).'},
     'modern': {'name': 'Modern Banner', 'render': _t_modern,
                'description': 'Coloured header bar with an aggregated results table and grading key.'},
+    'banded': {'name': 'Masthead', 'render': _t_banded,
+               'description': 'Full-width colour masthead with the school identity reversed out.'},
+    'executive': {'name': 'Executive', 'render': _t_executive,
+                  'description': 'Minimalist wordmark statement with a boxed bio panel.'},
+    'crested': {'name': 'Crested (gold border)', 'render': _t_crested, 'decorator': _border_gold,
+                'description': 'Centred crested statement inside a gold ornate border.'},
+    'ledger': {'name': 'Ledger', 'render': _t_ledger, 'decorator': _thin_frame,
+               'description': 'Boxed bio grid and a ruled results ledger inside a thin frame.'},
 }
 TEMPLATES = SOR_TEMPLATES
 DEFAULT_TEMPLATE = 'classic'

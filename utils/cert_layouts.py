@@ -3,7 +3,7 @@
 Each layout is a different *composition* (header arrangement, photo/seal/QR
 placement, details-grid shape, signature block), not a recolour of one design.
 Every layout also fills the page: header + certifying text + a student-details
-grid + a full authentication cluster (serial, seal, rubber stamp, barcode,
+grid + a full authentication cluster (serial, seal, rubber stamp, QR code,
 signatures, issue meta) are distributed over the whole body so no vertical
 whitespace is left at the foot.
 
@@ -111,12 +111,11 @@ def _sig_cell(label, theme):
 
 
 def _auth(content, theme, width, layout='row'):
-    """Authentication cluster: rubber stamp · signatures · gold seal · barcode+serial."""
+    """Authentication cluster: rubber stamp · signatures · gold seal · QR + serial."""
     _h, bfont, _n = th.fonts(theme)
     labels = content.get('signatures') or ['Principal', 'Registrar']
     stamp = th.rubber_stamp(theme, top=content.get('seal_text') or 'OFFICIAL', mid='SEAL')
     seal = th.gold_seal(theme)
-    bc = th.barcode(content.get('serial'))
     sigs = labels[:3]
     n = len(sigs)
     sig_tbl = Table([[_sig_cell(s, theme)[0] for s in sigs],
@@ -126,10 +125,11 @@ def _auth(content, theme, width, layout='row'):
     top.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
     out = [top]
     meta = content.get('meta')
-    if bc is not None:
-        strip = Table([[bc, _P((meta or '') + '  ·  S/N: ' + str(content.get('serial') or ''),
-                               bfont, 8, theme['accent'], TA_LEFT)]],
-                      colWidths=[86 * mm, width - 86 * mm])
+    qr = th.qr(content.get('verify') or content.get('serial'), size=18)
+    if qr is not None:
+        info = _P('Scan to verify · ' + (meta or '') + '  ·  S/N: ' + str(content.get('serial') or ''),
+                  bfont, 8, theme['accent'], TA_LEFT)
+        strip = Table([[qr, info]], colWidths=[22 * mm, width - 22 * mm])
         strip.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                                    ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                                    ('LEFTPADDING', (1, 0), (1, 0), 8),
@@ -246,9 +246,9 @@ def _lay_meridian(theme, content, avail=_AVAIL, width=L_W):
     col = [x for x in [lg, Spacer(1, 10), th.gold_seal(theme, dia=30), Spacer(1, 10),
                        th.rubber_stamp(theme, top=content.get('seal_text') or 'OFFICIAL', mid='SEAL', dia=26)]
            if x is not None]
-    bc = th.barcode(content.get('serial'))
-    if bc is not None:
-        col += [Spacer(1, 8), bc]
+    qrf = th.qr(content.get('verify') or content.get('serial'), size=22)
+    if qrf is not None:
+        col += [Spacer(1, 8), qrf]
     outer = Table([[left, col]], colWidths=[lc, cw], rowHeights=[avail])
     outer.setStyle(TableStyle([('VALIGN', (0, 0), (0, 0), 'MIDDLE'), ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
                                ('ALIGN', (1, 0), (1, 0), 'CENTER'),

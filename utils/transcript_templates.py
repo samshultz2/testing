@@ -634,6 +634,106 @@ def _t_pioneer(ctx):
 # ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
+def _gold_frame(canvas, doc):
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    canvas.saveState()
+    canvas.setStrokeColor(colors.HexColor('#b7791f')); canvas.setLineWidth(4)
+    canvas.rect(9 * mm, 9 * mm, w - 18 * mm, h - 18 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(1)
+    canvas.rect(12 * mm, 12 * mm, w - 24 * mm, h - 24 * mm, stroke=1, fill=0)
+    canvas.restoreState()
+
+
+def _kpi_strip(m, S, accent):
+    cells = [(f"{m['cumulative']}%" if m['cumulative'] is not None else '—', 'Cumulative Avg'),
+             (str(len(m['sessions'])), 'Sessions'),
+             (str(len(m['subjects'])), 'Subjects'),
+             (_grade(m['cumulative']) if m['cumulative'] is not None else '—', 'Classification')]
+    row = [Paragraph(f"<b>{v}</b><br/><font size=7>{k}</font>",
+                     ParagraphStyle('k', parent=S['center'], fontSize=11, leading=13)) for v, k in cells]
+    t = Table([row], colWidths=[USABLE_W / 4] * 4)
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, accent),
+                           ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+                           ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+                           ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+    return t
+
+
+def _t_sapphire(ctx):
+    """Sapphire masthead + a KPI strip over the per-year grid."""
+    S = _styles()
+    accent = colors.HexColor('#172554')
+    m = _matrix(ctx['academic'])
+    name, addr, contact = _header_lines(ctx['school'])
+    logo = _logo()
+    inner = [Paragraph(_esc(name), ParagraphStyle('n', parent=S['left'], fontSize=16,
+             fontName='Helvetica-Bold', textColor=colors.white, leading=19)),
+             Paragraph('ACADEMIC TRANSCRIPT', ParagraphStyle('t', parent=S['left'], fontSize=11,
+             fontName='Helvetica-Bold', textColor=colors.HexColor('#c7d2fe')))]
+    band = Table([[logo or '', inner]], colWidths=[26 * mm, USABLE_W - 26 * mm]) if logo is not None \
+        else Table([[inner]], colWidths=[USABLE_W])
+    band.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                              ('LEFTPADDING', (0, 0), (0, 0), 8), ('TOPPADDING', (0, 0), (-1, -1), 8),
+                              ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
+    el = [band, Spacer(1, 8)]
+    el += _header_fields([('Name', ctx['student'].full_name), ('Admission No.', ctx['student'].student_id),
+                          ('Sex', ctx['student'].gender), ('Graduation', ctx['grad_when'])], S)
+    el += [Spacer(1, 6), _kpi_strip(m, S, accent), Spacer(1, 8)]
+    el.append(_year_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el += [Spacer(1, 10)] + _grade_key(S) + _signatures(S)
+    return el
+
+
+def _t_heritage(ctx):
+    """Centred crested transcript inside a gold double border."""
+    S = _styles()
+    accent = colors.HexColor('#713f12')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el += [Spacer(1, 4), HRFlowable(width='60%', thickness=1, color=colors.HexColor('#b7791f')),
+           Paragraph('ACADEMIC TRANSCRIPT', ParagraphStyle('ti', parent=S['center'], fontSize=15,
+                     fontName='Times-Bold', textColor=accent, spaceBefore=6, spaceAfter=8))]
+    el += _header_fields([('Name', ctx['student'].full_name), ('Admission No.', ctx['student'].student_id),
+                          ('Sex', ctx['student'].gender), ('Graduation', ctx['grad_when']),
+                          ('Cumulative Average', f"{m['cumulative']}%" if m['cumulative'] is not None else None)], S)
+    el.append(Spacer(1, 8))
+    el.append(_term_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el += [Spacer(1, 10)] + _grade_key(S) + _signatures(S)
+    return el
+
+
+def _t_chancellor(ctx):
+    """Two boxed panels (student info | performance KPIs) over the record grid."""
+    S = _styles()
+    accent = colors.HexColor('#0f766e')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1.2, color=accent),
+           Paragraph('OFFICIAL ACADEMIC TRANSCRIPT', ParagraphStyle('ti', parent=S['center'], fontSize=14,
+                     fontName='Helvetica-Bold', textColor=accent, spaceBefore=6, spaceAfter=8))]
+    stu = [Paragraph('<b>STUDENT</b>', S['small']),
+           Paragraph(f"<b>Name:</b> {_esc(ctx['student'].full_name)}", S['left']),
+           Paragraph(f"<b>Admission No.:</b> {_esc(ctx['student'].student_id)}", S['left']),
+           Paragraph(f"<b>Sex:</b> {_esc(ctx['student'].gender)}", S['left']),
+           Paragraph(f"<b>Graduation:</b> {_esc(ctx['grad_when'])}", S['left'])]
+    perf = [Paragraph('<b>PERFORMANCE</b>', S['small']),
+            Paragraph(f"<b>Cumulative Average:</b> {m['cumulative']}%" if m['cumulative'] is not None
+                      else '<b>Cumulative Average:</b> —', S['left']),
+            Paragraph(f"<b>Classification:</b> "
+                      f"{_grade(m['cumulative']) if m['cumulative'] is not None else '—'}", S['left']),
+            Paragraph(f"<b>Sessions:</b> {len(m['sessions'])}", S['left']),
+            Paragraph(f"<b>Subjects:</b> {len(m['subjects'])}", S['left'])]
+    panels = Table([[stu, perf]], colWidths=[USABLE_W / 2, USABLE_W / 2])
+    panels.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, accent), ('INNERGRID', (0, 0), (-1, -1), 0.6, accent),
+                                ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                                ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+    el += [panels, Spacer(1, 8)]
+    el.append(_year_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el += [Spacer(1, 10)] + _grade_key(S) + _signatures(S)
+    return el
+
+
 TRANSCRIPT_TEMPLATES = {
     'classic': {'name': 'Classic (default)', 'render': _t_classic,
                 'description': 'Clean modern layout with a per-year score & grade grid and grading key.'},
@@ -649,6 +749,12 @@ TRANSCRIPT_TEMPLATES = {
                'description': 'Contemporary coloured header bar with a per-term results grid.'},
     'pioneer': {'name': 'Bordered Certificate', 'render': _t_pioneer, 'decorator': _pioneer_border,
                 'description': 'Ornamental full-page border, centred letterhead, per-term SS1–SS3 grid with year + SS labels.'},
+    'sapphire': {'name': 'Sapphire Masthead', 'render': _t_sapphire,
+                 'description': 'Sapphire masthead with a KPI strip (average, sessions, subjects) over the per-year grid.'},
+    'heritage': {'name': 'Heritage (gold border)', 'render': _t_heritage, 'decorator': _gold_frame,
+                 'description': 'Centred crested transcript inside a gold double border with a per-term grid.'},
+    'chancellor': {'name': 'Chancellor Panels', 'render': _t_chancellor,
+                   'description': 'Two boxed panels (student & performance) over the academic record grid.'},
 }
 
 TEMPLATES = TRANSCRIPT_TEMPLATES

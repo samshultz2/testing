@@ -100,12 +100,12 @@ def _sig(content, theme, width, seals=True, labels=None, align='spread'):
     t = Table(cells, colWidths=[28 * mm, width - 56 * mm, 28 * mm])
     t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
     out = [t]
-    bc = th.barcode(content.get('serial'))
-    if bc is not None:
-        strip = Table([[bc, _P('Verify at ' + (content.get('verify') or 'the school portal') +
+    qr = th.qr(content.get('verify') or content.get('serial'), size=18)
+    if qr is not None:
+        strip = Table([[qr, _P('Scan to verify · ' + (content.get('verify') or 'school portal') +
                                '   ·   S/N: ' + str(content.get('serial') or ''),
                                bfont, 8, theme['accent'], TA_LEFT)]],
-                      colWidths=[80 * mm, width - 80 * mm])
+                      colWidths=[22 * mm, width - 22 * mm])
         strip.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                                    ('LEFTPADDING', (1, 0), (1, 0), 8), ('TOPPADDING', (0, 0), (-1, -1), 5)]))
         out.append(strip)
