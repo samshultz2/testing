@@ -366,6 +366,8 @@ def doc_templates():
                    'url': url_for('promotion.doc_templates', doc_type=dt)}
                   for dt, lbl, designed in items if designed],
     } for category, items in cat.by_category()]
+    from utils.school import document_branding
+    br = document_branding()
     return _render({
         'page': 'doc_templates', 'graduates': url_for('promotion.graduates_list'),
         'doc_type': doc_type, 'doc_type_label': labels[doc_type],
@@ -374,7 +376,43 @@ def doc_templates():
                       for k, v in labels.items()],
         'doc_types_grouped': [g for g in doc_types_grouped if g['items']],
         'templates': templates, 'current': current,
+        'branding': {'primary_color': br.get('primary_color') or '',
+                     'accent_color': br.get('accent_color') or '',
+                     'secondary_color': br.get('secondary_color') or '',
+                     'motto': br.get('motto') or '',
+                     'verify_enabled': bool(br.get('verify_enabled', True))},
+        'branding_save_url': url_for('promotion.set_doc_branding'),
     })
+
+
+@promotion_bp.route('/doc-templates/branding', methods=['POST'])
+@admin_required
+def set_doc_branding():
+    """Save per-school document branding (colours, motto, verification). Stored in
+    the tenant's SchoolSettings KV, so every design preview updates instantly."""
+    from models import SchoolSettings
+    data = request.get_json(silent=True) or request.form
+
+    def _hex(v):
+        v = (v or '').strip()
+        return v if (v.startswith('#') and len(v) in (4, 7)) else ''
+
+    SchoolSettings.set('doc_primary_color', _hex(data.get('primary_color')), 'string',
+                       'Academic document primary colour')
+    SchoolSettings.set('doc_accent_color', _hex(data.get('accent_color')), 'string',
+                       'Academic document accent colour')
+    SchoolSettings.set('doc_secondary_color', _hex(data.get('secondary_color')), 'string',
+                       'Academic document secondary/gold colour')
+    motto = (data.get('motto') or '').strip()
+    if motto:
+        SchoolSettings.set('school_motto', motto[:160], 'string', 'School motto')
+    verify = data.get('verify_enabled')
+    verify_on = str(verify).lower() not in ('0', 'false', 'no', 'off', 'none', '')
+    SchoolSettings.set('doc_verify_enabled', '1' if verify_on else '0', 'string',
+                       'Show QR/verification block on documents')
+    db.session.commit()
+    log_action('doc_branding', 'updated document branding')
+    return _ok('Document branding saved.', url_for('promotion.doc_templates', doc_type='transcript'))
 
 
 @promotion_bp.route('/doc-templates/<doc_type>/default', methods=['POST'])

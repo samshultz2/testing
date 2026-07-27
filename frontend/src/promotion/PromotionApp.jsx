@@ -1009,6 +1009,71 @@ function AlumniAnalytics({ d }) {
   );
 }
 
+// ---- Document branding studio --------------------------------------------
+function BrandingStudio({ d, notify }) {
+  const nav = useNav();
+  const b = d.branding || {};
+  const [primary, setPrimary] = useState(b.primary_color || '');
+  const [accent, setAccent] = useState(b.accent_color || '');
+  const [secondary, setSecondary] = useState(b.secondary_color || '');
+  const [motto, setMotto] = useState(b.motto || '');
+  const [verify, setVerify] = useState(b.verify_enabled !== false);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    const r = await submitJson(d.branding_save_url, {
+      primary_color: primary, accent_color: accent, secondary_color: secondary,
+      motto, verify_enabled: verify ? '1' : '0',
+    });
+    setBusy(false);
+    if (r.ok) { notify && notify('success', r.message || 'Branding saved.'); nav.refresh && nav.refresh(); }
+    else notify && notify('error', r.error || 'Could not save branding.');
+  };
+  const swatch = (label, val, set) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: '.25rem', fontSize: '.85rem' }}>
+      <span className="text-muted">{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+        <input type="color" value={val || '#0e3a2f'} onChange={(e) => set(e.target.value)}
+          style={{ width: 40, height: 32, padding: 0, border: '1px solid var(--border,#cbd5e1)', borderRadius: 6 }} />
+        <input type="text" value={val} placeholder="default" onChange={(e) => set(e.target.value)}
+          className="form-control" style={{ width: 100 }} />
+        {val && <button type="button" className="btn btn-secondary btn-sm" onClick={() => set('')}>Reset</button>}
+      </span>
+    </label>
+  );
+  return (
+    <div className="card mb-3"><div className="card-body">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+        onClick={() => setOpen((o) => !o)}>
+        <strong><i aria-hidden="true" className="fas fa-palette" /> Branding studio</strong>
+        <span className="text-muted text-sm">Colours &amp; motto override every design · <i className={'fas fa-chevron-' + (open ? 'up' : 'down')} aria-hidden="true" /></span>
+      </div>
+      {open && <div style={{ marginTop: '.9rem' }}>
+        <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {swatch('Primary', primary, setPrimary)}
+          {swatch('Accent', accent, setAccent)}
+          {swatch('Secondary / gold', secondary, setSecondary)}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '.25rem', fontSize: '.85rem', flex: '1 1 220px' }}>
+            <span className="text-muted">Motto</span>
+            <input type="text" value={motto} onChange={(e) => setMotto(e.target.value)}
+              className="form-control" placeholder="e.g. Knowledge, Integrity, Service" maxLength={160} />
+          </label>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginTop: '.8rem', fontSize: '.9rem' }}>
+          <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
+          Show QR verification block on issued documents
+        </label>
+        <div style={{ marginTop: '.9rem' }}>
+          <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>
+            <i aria-hidden="true" className="fas fa-save" /> {busy ? 'Saving…' : 'Save branding'}</button>
+          <span className="text-muted text-sm" style={{ marginLeft: '.6rem' }}>Previews update after saving.</span>
+        </div>
+      </div>}
+    </div></div>
+  );
+}
+
 // ---- Document design templates (admin) ------------------------------------
 function DocTemplates({ d, notify }) {
   const nav = useNav();
@@ -1020,14 +1085,29 @@ function DocTemplates({ d, notify }) {
     if (r.ok) { notify && notify('success', r.message || 'Default set.'); nav.refresh && nav.refresh(); }
     else notify && notify('error', r.error || 'Could not set default.');
   };
+  const groups = d.doc_types_grouped || [];
   return (
     <>
       <PageHeader title="Document Designs" actions={
         <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
-      {d.doc_types && d.doc_types.length > 1 && <div className="tabs mb-3" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+      {d.branding_save_url && <BrandingStudio d={d} notify={notify} />}
+      {groups.length > 0 ? (
+        <div className="mb-3">
+          {groups.map((g) => (
+            <div key={g.category} style={{ marginBottom: '.6rem' }}>
+              <div className="text-muted text-sm" style={{ marginBottom: '.3rem', textTransform: 'uppercase', letterSpacing: '.03em' }}>{g.category}</div>
+              <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+                {g.items.map((dt) => (
+                  <a key={dt.key} href={dt.url} className={'btn btn-sm ' + (dt.key === d.doc_type ? 'btn-primary' : 'btn-secondary')}>{dt.label}</a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (d.doc_types && d.doc_types.length > 1 && <div className="tabs mb-3" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
         {d.doc_types.map((dt) => (
           <a key={dt.key} href={dt.url} className={'btn btn-sm ' + (dt.key === d.doc_type ? 'btn-primary' : 'btn-secondary')}>{dt.label}</a>
-        ))}</div>}
+        ))}</div>)}
       <div className="card mb-3"><div className="card-body">
         <p className="text-muted" style={{ margin: 0 }}>
           <i aria-hidden="true" className="fas fa-circle-info" /> Choose the design used when you issue a {d.doc_type_label.toLowerCase()}.

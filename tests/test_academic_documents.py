@@ -1,11 +1,27 @@
 """Academic Documents & Publishing system — catalogue, collections, certificate
 engine, and the shared render pipeline for the new document types."""
+import re
+
 import fitz
 import pytest
+from config import Config
+from tests.conftest import login_token
 
 from utils import document_catalog as cat
 from utils import (doc_themes, certificate_templates as ce, letter_templates as lt,
                    graduate_docs as gd)
+
+
+def _admin(app):
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    return c
+
+
+def _csrf(c):
+    return re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                     c.get('/students').get_data(as_text=True)).group(1)
 
 
 def _fake_logo(max_h_mm=16, max_w_mm=40):
@@ -153,3 +169,48 @@ def test_clearance_certificates_registered_as_certificate_engine():
     for dt in ('fee_clearance', 'graduation_clearance'):
         assert cat.engine(dt) == cat.ENGINE_CERTIFICATE
         assert cat.category(dt) == 'Administrative'
+
+
+# --- Phase 3: branding studio + grouped gallery (route-level) ---------------
+def test_gallery_payload_groups_types_and_exposes_branding(app):
+    c = _admin(app)
+    r = c.get('/promotion/doc-templates?doc_type=transcript',
+              headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    body = r.get_json()
+    # SPA JSON may wrap the section payload; accept either shape.
+    payload = body.get('data', body) if isinstance(body, dict) else body
+    grouped = payload.get('doc_types_grouped') or []
+    cats = [g['category'] for g in grouped]
+    assert 'Academic Records' in cats and 'Awards & Recognition' in cats
+    assert 'branding' in payload and 'branding_save_url' in payload
+    assert len(payload['templates']) == len(gd.list_designs('transcript')) > 0
+    # a certificate type offers the full collection library
+    r2 = c.get('/promotion/doc-templates?doc_type=graduation',
+               headers={'X-Requested-With': 'fetch'})
+    body2 = r2.get_json()
+    payload2 = body2.get('data', body2) if isinstance(body2, dict) else body2
+    assert len(payload2['templates']) == len(doc_themes.COLLECTIONS)
+
+
+def test_branding_save_roundtrip(app):
+    from utils.school import document_branding
+    c = _admin(app)
+    tok = _csrf(c)
+    r = c.post('/promotion/doc-templates/branding',
+               data={'primary_color': '#123456', 'accent_color': '#abcdef',
+                     'secondary_color': 'not-a-color', 'motto': 'Test Motto',
+                     'verify_enabled': '0', '_csrf_token': tok},
+               headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    with app.app_context():
+        br = document_branding()
+        assert br['primary_color'] == '#123456'
+        assert br['accent_color'] == '#abcdef'
+        assert br['secondary_color'] == ''          # invalid rejected
+        assert br['motto'] == 'Test Motto'
+        assert br['verify_enabled'] is False
+    # the override reaches the theme
+    with app.app_context():
+        theme = doc_themes.resolve('classic', document_branding())
+        assert theme['primary'] == '#123456'
