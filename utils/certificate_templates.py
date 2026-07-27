@@ -48,6 +48,8 @@ _DESC = {
     'oxford': 'Two-column body — certifying text beside a candidate-details panel.',
     'crown': 'Ornate luxury layout led by a gold medallion.',
     'chancellor': 'Executive layout with a right-hand signature & seal stack.',
+    'stmichael': 'Crested landscape diploma with passport, details and triple signatures.',
+    'lagosmerit': 'Crested merit award — “presented to” citation with twin signatures flanking a wax seal.',
 }
 TEMPLATES = {k: {'name': v['name'], 'landscape': True,
                  'description': _DESC.get(k, f"{v['name']} — a distinct certificate layout.")}

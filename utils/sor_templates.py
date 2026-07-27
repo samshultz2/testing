@@ -922,6 +922,125 @@ def _t_federal(ctx):
                       + [Spacer(1, 4), warn], sig, avail=avail)
 
 
+_WASSCE_INTERP = {'A1': 'Excellent', 'B2': 'Very Good', 'B3': 'Good', 'C4': 'Credit',
+                  'C5': 'Credit', 'C6': 'Credit', 'D7': 'Pass', 'E8': 'Pass', 'F9': 'Fail',
+                  'A': 'Excellent', 'B': 'Very Good', 'C': 'Credit', 'D': 'Pass', 'F': 'Fail'}
+_WASSCE_CODE = {
+    'english language': '101', 'english': '101', 'mathematics': '102', 'mathematics (core)': '102',
+    'further mathematics': '104', 'biology': '502', 'physics': '503', 'chemistry': '504',
+    'agricultural science': '505', 'economics': '302', 'government': '301', 'geography': '306',
+    'civic education': '312', 'commerce': '303', 'financial accounting': '304',
+    'literature-in-english': '204', 'literature in english': '204', 'christian religious studies': '201',
+    'crs': '201', 'islamic studies': '202', 'yoruba': '208', 'yoruba language': '208',
+    'data processing': '515', 'computer studies': '451', 'technical drawing': '511', 'marketing': '311',
+}
+
+
+def _wassce_code(subj, i):
+    return _WASSCE_CODE.get((subj or '').strip().lower(), str(301 + i))
+
+
+def _unity_frame(canvas, doc):
+    """A green outer rule with a fine gold inner keyline (Unity Secondary look) —
+    distinct from the dotted green and plain frames used elsewhere."""
+    w, h = doc.pagesize
+    canvas.saveState()
+    canvas.setStrokeColor(colors.HexColor('#15803d'))
+    canvas.setLineWidth(4.5)
+    canvas.rect(9 * mm, 9 * mm, w - 18 * mm, h - 18 * mm, stroke=1, fill=0)
+    canvas.setStrokeColor(colors.HexColor('#b7791f'))
+    canvas.setLineWidth(1)
+    canvas.rect(12 * mm, 12 * mm, w - 24 * mm, h - 24 * mm, stroke=1, fill=0)
+    canvas.restoreState()
+
+
+def _ribbon_banner(text, S, width=92 * mm):
+    """A blue ribbon-style title banner (notched ends approximated with a darker
+    chevron on each side)."""
+    blue = colors.HexColor('#3b5b8c')
+    dark = colors.HexColor('#2c4569')
+    cell = Paragraph(text, ParagraphStyle('rb', parent=S['center'], fontSize=13,
+                     fontName='Helvetica-Bold', textColor=colors.white))
+    t = Table([['', cell, '']], colWidths=[7 * mm, width - 14 * mm, 7 * mm])
+    t.hAlign = 'CENTER'
+    t.setStyle(TableStyle([('BACKGROUND', (1, 0), (1, 0), blue),
+                           ('BACKGROUND', (0, 0), (0, 0), dark), ('BACKGROUND', (2, 0), (2, 0), dark),
+                           ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                           ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))
+    return t
+
+
+def _t_unity(ctx):
+    """Faithful 'Unity Secondary School' WASSCE provisional statement: crested
+    masthead, blue ribbon banner, candidate particulars, a subject-code/grade/
+    interpretation table, subjects total, principal signature + date and a
+    provisional-result disclaimer, inside a green/gold frame."""
+    S = _styles()
+    green, navy = colors.HexColor('#15803d'), colors.HexColor('#1f2937')
+    rows, is_ssce, year = _statement_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    name, addr, contact = _tt._header_lines(ctx['school'])
+    st = ctx['student']
+    exam_year = str((ctx.get('waec') or {}).get('year') or ctx.get('grad_when') or '')
+    # crested masthead (logo left, school name bold right)
+    nm = ParagraphStyle('nm', parent=S['left'], fontSize=18, leading=21,
+                        fontName='Helvetica-Bold', textColor=navy)
+    head_lines = [Paragraph(_esc(name).upper(), nm)]
+    if addr:
+        head_lines.append(Paragraph(_esc(addr), S['small']))
+    logo = _tt._logo()
+    if logo is not None:
+        head = Table([[logo, head_lines]], colWidths=[26 * mm, P_W - 26 * mm])
+        head.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+        above = [head]
+    else:
+        above = head_lines
+    above += [Spacer(1, 8), _ribbon_banner('STATEMENT OF RESULTS', S), Spacer(1, 6),
+              Paragraph('WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION', ParagraphStyle(
+                  'e1', parent=S['center'], fontSize=11, fontName='Helvetica-Bold', textColor=navy)),
+              Paragraph('(WASSCE) — PROVISIONAL RESULTS', ParagraphStyle(
+                  'e2', parent=S['center'], fontSize=10.5, fontName='Helvetica-Bold', textColor=navy,
+                  spaceAfter=8))]
+    above += _fields([("Candidate's Name", st.full_name),
+                      ("Candidate's Number", getattr(st, 'jamb_reg_number', None) or st.student_id),
+                      ('Gender', st.gender),
+                      ('Class', ctx.get('klass') or 'SS3'),
+                      ('Year of Exam', exam_year)], S)
+    above.append(Spacer(1, 6))
+    # subject-code / grade / interpretation table
+    cellst = ParagraphStyle('uc', parent=S['cell'], fontSize=10.5, leading=13)
+    data = [['S/N', 'SUBJECT CODE', 'SUBJECT', 'GRADE', 'INTERPRETATION']]
+    for i, r in enumerate(rows, 1):
+        subj, grade = r[0], r[2]
+        interp = _WASSCE_INTERP.get((grade or '').upper(), '')
+        data.append([str(i), _wassce_code(subj, i), Paragraph(_esc(subj).upper(), cellst),
+                     grade or '—', interp])
+    table = Table(data, colWidths=[12 * mm, 30 * mm, 63 * mm, 22 * mm, 38 * mm], repeatRows=1)
+    table.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 10.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#64748b')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
+        ('ALIGN', (0, 0), (1, -1), 'CENTER'), ('ALIGN', (3, 0), (3, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 1), (-1, -1), 4.5), ('BOTTOMPADDING', (0, 1), (-1, -1), 4.5),
+        ('TOPPADDING', (0, 0), (-1, 0), 4), ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')])]))
+    total = Paragraph(f"<b>TOTAL SUBJECTS:</b> {len(rows)}", S['left'])
+    # signature + date row
+    sigrow = Table([[Paragraph('_' * 26, S['left']), '', Paragraph('_' * 22, S['left'])],
+                    [Paragraph("<b>PRINCIPAL'S SIGNATURE</b>", S['small']), '',
+                     Paragraph('<b>DATE OF ISSUE</b>', S['small'])]],
+                   colWidths=[70 * mm, P_W - 130 * mm, 60 * mm])
+    sigrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'BOTTOM'), ('TOPPADDING', (0, 1), (-1, 1), 2)]))
+    disc = Paragraph("<i>This is a school-issued provisional result, subject to verification by WAEC. "
+                     "It is not the official certificate.</i>", S['small'])
+    if not rows:
+        return _page_fill(above + [Paragraph('No results are on record for this student.', S['body'])],
+                          [Spacer(1, 18), sigrow], avail=avail)
+    body = above + [table, Spacer(1, 6), total] + _grade_key(S, ssce=is_ssce) + _remarks(ctx, S)
+    return _page_fill(body, [Spacer(1, 14), sigrow, Spacer(1, 6), disc], avail=avail)
+
+
 SOR_TEMPLATES = {
     'classic': {'name': 'Classic (default)', 'render': _t_classic,
                 'description': 'Clean statement with an aggregated subject/score/grade table and grading key.'},
@@ -954,6 +1073,10 @@ SOR_TEMPLATES = {
     'federal': {'name': 'Examination Results (GPA)', 'render': _t_federal,
                 'description': 'Polytechnic-style examination results: dark banner, course table with '
                                'units & weighted grade points, GPA summary, grading key and registrar line.'},
+    'unity': {'name': 'WASSCE Provisional (ribbon)', 'render': _t_unity, 'decorator': _unity_frame,
+              'description': 'WASSCE provisional statement with a crested masthead, blue ribbon banner, '
+                             'subject-code/grade/interpretation table and a provisional-result disclaimer, '
+                             'inside a green/gold frame (Unity-Secondary style).'},
 }
 TEMPLATES = SOR_TEMPLATES
 DEFAULT_TEMPLATE = 'classic'

@@ -365,10 +365,48 @@ def _lay_stmichael(theme, content, avail=_AVAIL, width=L_W - 36 * mm):
     return _bands(top, [midtbl], foot, avail, width, ratios=(0.22, 0.48, 0.30))
 
 
+def _lay_lagosmerit(theme, content, avail=_AVAIL, width=L_W - 60 * mm):
+    """Faithful 'Lagos International' Certificate of High Academic Merit: crest
+    masthead, large gold title, 'PRESENTED TO' the recipient, a merit citation,
+    then twin signatures flanking a central wax seal and a confidential stamp."""
+    hfont, bfont, nfont = th.fonts(theme)
+    lg = _logo(h=22, w=40)
+    top = ([lg, Spacer(1, 3)] if lg is not None else []) + [
+        _P(content['kicker'].upper(), hfont, 15, theme['primary'], leading=18, sa=3),
+        _P(content['title'].upper(), hfont, 26, theme['gold'], leading=30)]
+    mid = [_P('PRESENTED TO', bfont, 11, theme['accent'], sa=4),
+           _P(content['recipient'], nfont, 28, theme['primary'], leading=32, sa=5),
+           HRFlowable(width='45%', thickness=0.8, color=_col(theme['gold']))]
+    for p in (content.get('body') or []):
+        mid.append(_P(p, bfont, 12, '#1f2937', leading=17, sb=6))
+    sigs = content.get('signatures') or ['Registrar', 'Principal']
+    left_sig = _sig_cell(sigs[0], theme)
+    right_sig = _sig_cell(sigs[-1], theme)
+    seal_col = [th.gold_seal(theme, dia=24),
+                th.rubber_stamp(theme, top=content.get('seal_text') or 'OFFICIAL',
+                                mid='CONFIDENTIAL', dia=22)]
+    third = width / 3.0
+    footrow = Table([[left_sig, seal_col, right_sig]], colWidths=[third, third, third])
+    footrow.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                                 ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+                                 ('VALIGN', (1, 0), (1, 0), 'MIDDLE')]))
+    qrf = th.qr(content.get('verify') or content.get('serial'), size=16)
+    serial_bits = [_P('S/N: ' + str(content.get('serial') or ''), bfont, 8, theme['accent'], TA_LEFT)]
+    if qrf is not None:
+        serial = Table([[qrf, serial_bits[0]]], colWidths=[18 * mm, width - 18 * mm])
+        serial.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                                    ('LEFTPADDING', (1, 0), (1, 0), 6)]))
+    else:
+        serial = serial_bits[0]
+    bot = [footrow, Spacer(1, 6), serial]
+    return _bands(top, mid, bot, avail, width, ratios=(0.26, 0.42, 0.32))
+
+
 # key -> {name, theme (collection key), fn}.  Every entry is a DIFFERENT layout
 # function bound to a distinct palette — no two templates are alike.
 LAYOUTS = {
     'stmichael':  {'name': 'Diploma',    'theme': 'american',       'fn': _lay_stmichael},
+    'lagosmerit': {'name': 'Merit Award', 'theme': 'prestige',      'fn': _lay_lagosmerit},
     'imperial':   {'name': 'Imperial',   'theme': 'gold',           'fn': _lay_imperial},
     'sovereign':  {'name': 'Sovereign',  'theme': 'royal',          'fn': _lay_sovereign},
     'laureate':   {'name': 'Laureate',   'theme': 'classic',        'fn': _lay_laureate},
