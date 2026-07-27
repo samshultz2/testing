@@ -940,6 +940,25 @@ def _wassce_code(subj, i):
     return _WASSCE_CODE.get((subj or '').strip().lower(), str(301 + i))
 
 
+def _round_stamp(school_name, dia=22, color='#6d28d9'):
+    """A faint round official ink stamp (concentric rings + school name), as seen
+    over the signature line on the reference provisional statement."""
+    from reportlab.graphics.shapes import Drawing, Circle, String
+    c = colors.HexColor(color)
+    d = Drawing(dia * mm, dia * mm)
+    r = dia * mm / 2
+    for rr in (r, r - 1.6 * mm):
+        d.add(Circle(r, r, rr, strokeColor=c, fillColor=None, strokeWidth=0.8))
+    top = (school_name or 'OFFICIAL').split(',')[0][:18].upper()
+    d.add(String(r, r + 2 * mm, top, textAnchor='middle', fontName='Helvetica-Bold',
+                 fontSize=3.4, fillColor=c))
+    d.add(String(r, r - 1 * mm, 'OFFICIAL', textAnchor='middle', fontName='Helvetica-Bold',
+                 fontSize=3.4, fillColor=c))
+    d.add(String(r, r - 4 * mm, 'IBADAN', textAnchor='middle', fontName='Helvetica',
+                 fontSize=3, fillColor=c))
+    return d
+
+
 def _unity_frame(canvas, doc):
     """A green outer rule with a fine gold inner keyline (Unity Secondary look) —
     distinct from the dotted green and plain frames used elsewhere."""
@@ -1026,12 +1045,15 @@ def _t_unity(ctx):
         ('TOPPADDING', (0, 0), (-1, 0), 4), ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')])]))
     total = Paragraph(f"<b>TOTAL SUBJECTS:</b> {len(rows)}", S['left'])
-    # signature + date row
-    sigrow = Table([[Paragraph('_' * 26, S['left']), '', Paragraph('_' * 22, S['left'])],
+    # signature + date row, with a round official stamp between them (as the sample)
+    stamp = _round_stamp(name)
+    sigrow = Table([[Paragraph('_' * 26, S['left']), stamp, Paragraph('_' * 22, S['left'])],
                     [Paragraph("<b>PRINCIPAL'S SIGNATURE</b>", S['small']), '',
                      Paragraph('<b>DATE OF ISSUE</b>', S['small'])]],
                    colWidths=[70 * mm, P_W - 130 * mm, 60 * mm])
-    sigrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'BOTTOM'), ('TOPPADDING', (0, 1), (-1, 1), 2)]))
+    sigrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+                                ('ALIGN', (1, 0), (1, 0), 'CENTER'), ('SPAN', (1, 0), (1, 1)),
+                                ('TOPPADDING', (0, 1), (-1, 1), 2)]))
     disc = Paragraph("<i>This is a school-issued provisional result, subject to verification by WAEC. "
                      "It is not the official certificate.</i>", S['small'])
     if not rows:

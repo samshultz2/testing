@@ -173,13 +173,14 @@ def _letterhead(ctx, accent, centered=True):
     return lines
 
 
-def _header_fields(pairs, S):
+def _header_fields(pairs, S, label_w=42 * mm, total_w=None):
     """A two-column 'Label: value' block."""
     rows = [[Paragraph(f'<b>{_esc(k)}</b>', S['left']), Paragraph(_esc(v), S['left'])]
             for k, v in pairs if v]
     if not rows:
         return []
-    t = Table(rows, colWidths=[42 * mm, USABLE_W - 42 * mm])
+    tw = total_w if total_w is not None else USABLE_W
+    t = Table(rows, colWidths=[label_w, tw - label_w])
     t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
                            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
                            ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
@@ -876,25 +877,44 @@ def _t_bishop(ctx):
     band = Table([[logo or '', hdr]], colWidths=[24 * mm, USABLE_W - 24 * mm]) if logo is not None \
         else Table([[hdr]], colWidths=[USABLE_W])
     band.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+    ss_span = ''
+    if m['sessions']:
+        ss_span = f" ({_esc(m['sessions'][0])} – {_esc(m['sessions'][-1])})"
     el += [band, Spacer(1, 2),
            Paragraph('OFFICIAL ACADEMIC TRANSCRIPT', ParagraphStyle('ti', parent=S['center'], fontSize=13,
-                     fontName='Helvetica-Bold', textColor=navy, spaceBefore=4, spaceAfter=6))]
+                     fontName='Helvetica-Bold', textColor=navy, spaceBefore=4, spaceAfter=1)),
+           Paragraph('SENIOR SECONDARY SCHOOL (SSS) 1 – 3' + ss_span,
+                     ParagraphStyle('ti2', parent=S['center'], fontSize=9, spaceAfter=6))]
+    biod = ctx.get('bio') or {}
+    half = (USABLE_W - 30 * mm) / 2
     bio = _header_fields([('Full Name', st.full_name), ('Admission No.', st.student_id),
-                          ('Gender', st.gender), ('Date of Birth', (ctx.get('bio') or {}).get('date_of_birth')),
-                          ('Session', ctx.get('admission_session')), ('Graduation', ctx.get('grad_when'))], S)
-    idrow = Table([[bio, _photo_box()]], colWidths=[USABLE_W - 30 * mm, 30 * mm])
-    idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
+                          ('Student ID', getattr(st, 'jamb_reg_number', None) or st.student_id),
+                          ('Gender', st.gender), ('Date of Birth', biod.get('date_of_birth')),
+                          ('Nationality', biod.get('nationality') or 'Nigerian')],
+                         S, label_w=26 * mm, total_w=half)
+    bio2 = _header_fields([('Admitted', ctx.get('admission_session')),
+                           ('Graduated', ctx.get('grad_when')), ('Status', 'Graduated'),
+                           ('Class', 'SSS3'), ('State', biod.get('state_of_origin')),
+                           ('Student Type', 'Day Student')],
+                          S, label_w=26 * mm, total_w=half)
+    idrow = Table([[_photo_box(), bio, bio2]], colWidths=[30 * mm, half, half])
+    idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                               ('RIGHTPADDING', (1, 0), (1, 0), 6)]))
     el += [idrow, Spacer(1, 6)]
-    el.append(_year_grid(m, S, navy) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(_term_grid(m, S, navy, two_line_group=True) if m['subjects']
+              else Paragraph('No internal results are on record.', S['body']))
     el.append(Spacer(1, 6))
     cls = _grade(m['cumulative']) if m['cumulative'] is not None else '—'
-    credits = sum(1 for r in ([] if not m['subjects'] else _overall_pairs(m)) if r)
+    gpa = round(m['cumulative'] / 20.0, 2) if m['cumulative'] is not None else None
+    classification = ('First Class' if (gpa or 0) >= 4.5 else 'Second Class Upper' if (gpa or 0) >= 3.5
+                      else 'Second Class Lower' if (gpa or 0) >= 2.5 else 'Pass') if gpa else '—'
     summ_l = _boxed_info('PERFORMANCE SUMMARY', [
-        ('Cumulative Average', f"{m['cumulative']}%" if m['cumulative'] is not None else '—'),
-        ('Classification', cls), ('Sessions', str(len(m['sessions']))),
-        ('Subjects', str(len(m['subjects'])))], S, navy, USABLE_W / 2 - 3 * mm)
+        ('Overall GPA', f"{gpa} / 5.00" if gpa else '—'),
+        ('Overall Average', f"{m['cumulative']}%" if m['cumulative'] is not None else '—'),
+        ('Classification', classification), ('Total Credits', str(len(m['subjects'])))],
+        S, navy, USABLE_W / 2 - 3 * mm)
     summ_r = _boxed_info('STANDING', [
-        ('Class Position', '—'), ('Attendance', '—'), ('Conduct', 'Good'),
+        ('Class Position', '—'), ('Attendance', '—'), ('Conduct Rating', 'Exemplary (A)'),
         ('Graduation Status', 'Graduated')], S, navy, USABLE_W / 2 - 3 * mm)
     panels = Table([[summ_l, summ_r]], colWidths=[USABLE_W / 2, USABLE_W / 2])
     panels.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))

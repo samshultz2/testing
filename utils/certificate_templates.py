@@ -108,10 +108,10 @@ _SPEC = {
                         ['was a student of {school} and, throughout {p} time in the school, maintained '
                          'good conduct, discipline and moral character.'],
                         ('Principal', 'Registrar')),
-    'merit_award':     ('Certificate of Merit', 'This certificate is proudly presented to',
-                        ['in recognition of meritorious performance, diligence and dedication '
+    'merit_award':     ('Certificate of High Academic Merit', 'This certificate is proudly presented to',
+                        ['for outstanding academic achievement and consistent distinction '
                          'demonstrated at {school}.'],
-                        ('Principal', 'Coordinator')),
+                        ('Registrar', 'Principal')),
     'best_graduating': ('Best Graduating Student', 'This award is proudly conferred upon',
                         ['as the Best Graduating Student of {school}{session}, in recognition of '
                          'outstanding overall academic achievement.'],
@@ -162,6 +162,8 @@ def _content(ctx):
               else date.today().strftime('%d %B %Y'))
     serial = (doc.document_number if doc and getattr(doc, 'document_number', None)
               else f"{(school.split()[0][:3].upper() if school else 'DOC')}/CERT/0001")
+    cum = (ctx.get('academic') or {}).get('cumulative')
+    cgpa = round(cum / 20.0, 2) if isinstance(cum, (int, float)) else None   # % → 5-point scale
     bio = ctx.get('bio') or {}
     fields = [('Admission No.', getattr(st, 'student_id', '') or ''),
               ('Gender', getattr(st, 'gender', '') or ''),
@@ -183,6 +185,7 @@ def _content(ctx):
         'signatures': list(sigs),
         'seal_text': (school.split()[0][:12] if school else 'SEAL'),
         'serial': serial,
+        'cgpa': cgpa,
     }
 
 

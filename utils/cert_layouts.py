@@ -365,41 +365,52 @@ def _lay_stmichael(theme, content, avail=_AVAIL, width=L_W - 36 * mm):
     return _bands(top, [midtbl], foot, avail, width, ratios=(0.22, 0.48, 0.30))
 
 
-def _lay_lagosmerit(theme, content, avail=_AVAIL, width=L_W - 60 * mm):
-    """Faithful 'Lagos International' Certificate of High Academic Merit: crest
-    masthead, large gold title, 'PRESENTED TO' the recipient, a merit citation,
-    then twin signatures flanking a central wax seal and a confidential stamp."""
+def _lay_lagosmerit(theme, content, avail=_AVAIL, width=L_W - 56 * mm):
+    """Exact 'Lagos International' Certificate of High Academic Merit replica:
+    centred crest + school name, a large near-black serif title, 'PRESENTED TO:'
+    the recipient, an academic-achievement citation (with CGPA when known), then
+    twin Registrar / Principal signatures flanking a central wax seal, a gold
+    'CONFIDENTIAL' authentication stamp, and a QR + serial at the foot — all set
+    in the prestige gold-guilloché frame."""
     hfont, bfont, nfont = th.fonts(theme)
-    lg = _logo(h=22, w=40)
-    top = ([lg, Spacer(1, 3)] if lg is not None else []) + [
-        _P(content['kicker'].upper(), hfont, 15, theme['primary'], leading=18, sa=3),
-        _P(content['title'].upper(), hfont, 26, theme['gold'], leading=30)]
-    mid = [_P('PRESENTED TO', bfont, 11, theme['accent'], sa=4),
-           _P(content['recipient'], nfont, 28, theme['primary'], leading=32, sa=5),
-           HRFlowable(width='45%', thickness=0.8, color=_col(theme['gold']))]
-    for p in (content.get('body') or []):
-        mid.append(_P(p, bfont, 12, '#1f2937', leading=17, sb=6))
+    ink = theme['primary']          # prestige primary is near-black dark brown
+    lg = _logo(h=22, w=44)
+    top = ([lg, Spacer(1, 4)] if lg is not None else []) + [
+        _P(content['kicker'].upper(), hfont, 15, ink, leading=18, sa=4),
+        _P(content['title'].upper(), hfont, 27, ink, leading=31)]
+    # citation: prefer the reference wording with the CGPA when we have it.
+    cgpa = content.get('cgpa')
+    if cgpa:
+        citation = (f"for outstanding academic achievement at a cumulative grade "
+                    f"point average of {cgpa} / 5.00.")
+    else:
+        citation = ' '.join(content.get('body') or ['for outstanding academic achievement.'])
+    mid = [_P('PRESENTED TO:', bfont, 12, theme['accent'], sa=5),
+           _P(content['recipient'], nfont, 30, ink, leading=34, sa=4),
+           HRFlowable(width='52%', thickness=1.0, color=_col(theme['gold'])),
+           _P(citation, bfont, 12.5, '#1f2937', leading=18, sb=8)]
+    # foot: signature | wax seal | signature, with a confidential stamp above the seal
     sigs = content.get('signatures') or ['Registrar', 'Principal']
-    left_sig = _sig_cell(sigs[0], theme)
-    right_sig = _sig_cell(sigs[-1], theme)
-    seal_col = [th.gold_seal(theme, dia=24),
-                th.rubber_stamp(theme, top=content.get('seal_text') or 'OFFICIAL',
-                                mid='CONFIDENTIAL', dia=22)]
+    left_sig = _sig_cell(sigs[0] + "'s Signature", theme)
+    right_sig = _sig_cell(sigs[-1] + "'s Signature", theme)
+    seal_col = [th.rubber_stamp(theme, top='OFFICIAL', mid='CONFIDENTIAL', dia=20), Spacer(1, 3),
+                th.gold_seal(theme, text='CERTIFIED', dia=26)]
     third = width / 3.0
     footrow = Table([[left_sig, seal_col, right_sig]], colWidths=[third, third, third])
     footrow.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                                  ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
                                  ('VALIGN', (1, 0), (1, 0), 'MIDDLE')]))
-    qrf = th.qr(content.get('verify') or content.get('serial'), size=16)
-    serial_bits = [_P('S/N: ' + str(content.get('serial') or ''), bfont, 8, theme['accent'], TA_LEFT)]
+    qrf = th.qr(content.get('verify') or content.get('serial'), size=15)
+    serialp = _P('S/N: ' + str(content.get('serial') or '') + '  ·  Verify at the school portal',
+                 bfont, 8, theme['accent'], TA_LEFT)
     if qrf is not None:
-        serial = Table([[qrf, serial_bits[0]]], colWidths=[18 * mm, width - 18 * mm])
+        serial = Table([[qrf, serialp]], colWidths=[16 * mm, width - 16 * mm])
         serial.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                                     ('LEFTPADDING', (1, 0), (1, 0), 6)]))
     else:
-        serial = serial_bits[0]
-    bot = [footrow, Spacer(1, 6), serial]
-    return _bands(top, mid, bot, avail, width, ratios=(0.26, 0.42, 0.32))
+        serial = serialp
+    bot = [footrow, Spacer(1, 8), serial]
+    return _bands(top, mid, bot, avail, width, ratios=(0.22, 0.34, 0.44))
 
 
 # key -> {name, theme (collection key), fn}.  Every entry is a DIFFERENT layout
