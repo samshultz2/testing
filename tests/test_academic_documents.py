@@ -63,10 +63,20 @@ def test_catalog_grouping_is_ordered_and_complete():
 
 
 def test_collections_library_is_rich():
-    # A deep collection library so every document type has many templates.
+    # A deep palette library backing the layouts.
     assert len(doc_themes.COLLECTIONS) >= 20
-    assert len(ce.TEMPLATES) == len(doc_themes.COLLECTIONS)
     assert ce.DEFAULT_TEMPLATE in ce.TEMPLATES
+
+
+def test_certificate_templates_are_distinct_layouts():
+    # Each certificate template is a DIFFERENT layout function bound to a DIFFERENT
+    # palette — no two are the same design, and none is a mere recolour.
+    from utils import cert_layouts as cl
+    fns = [v['fn'] for v in cl.LAYOUTS.values()]
+    themes = [v['theme'] for v in cl.LAYOUTS.values()]
+    assert len(set(id(f) for f in fns)) == len(fns), 'a layout function is reused'
+    assert len(set(themes)) == len(themes), 'a palette is reused across layouts'
+    assert set(ce.TEMPLATES) == set(cl.LAYOUTS)
 
 
 def test_every_certificate_type_renders_single_page_all_collections():
@@ -190,7 +200,7 @@ def test_gallery_payload_groups_types_and_exposes_branding(app):
                headers={'X-Requested-With': 'fetch'})
     body2 = r2.get_json()
     payload2 = body2.get('data', body2) if isinstance(body2, dict) else body2
-    assert len(payload2['templates']) == len(doc_themes.COLLECTIONS)
+    assert len(payload2['templates']) == len(ce.TEMPLATES)
 
 
 def test_branding_save_roundtrip(app):

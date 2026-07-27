@@ -15,6 +15,7 @@ statement modules, so it plugs straight into :mod:`utils.graduate_docs`:
 from datetime import date
 
 from utils import doc_themes as _th
+from utils import cert_layouts as _cl
 from utils import transcript_templates as _tt
 
 
@@ -34,12 +35,24 @@ def _school_name():
         return ''
 
 
-# Templates = one per design collection (all landscape certificates).
+# Templates = one per LAYOUT ARCHETYPE (distinct structure + distinct palette).
+_DESC = {
+    'imperial': 'Gold centred crest, hero name and a three-column detail grid.',
+    'sovereign': 'Left navy seal panel with the content set to the right.',
+    'laureate': 'Full-width reversed-out title band over a boxed detail grid.',
+    'regalia': 'Split diploma header (name beside crest) with three signatories.',
+    'meridian': 'Right medallion column of seal, stamp and barcode.',
+    'estate': 'Heritage frame with a large certifying passage and centred detail box.',
+    'platinum': 'Minimalist, wide-spaced platinum layout.',
+    'verdant': 'Award-ribbon header with a starred accent.',
+    'oxford': 'Two-column body — certifying text beside a candidate-details panel.',
+    'crown': 'Ornate luxury layout led by a gold medallion.',
+    'chancellor': 'Executive layout with a right-hand signature & seal stack.',
+}
 TEMPLATES = {k: {'name': v['name'], 'landscape': True,
-                 'description': f"{v['name']} collection — a distinct palette, "
-                                f"typography, border art and seal."}
-             for k, v in _th.COLLECTIONS.items()}
-DEFAULT_TEMPLATE = _th.DEFAULT_COLLECTION
+                 'description': _DESC.get(k, f"{v['name']} — a distinct certificate layout.")}
+             for k, v in _cl.LAYOUTS.items()}
+DEFAULT_TEMPLATE = 'imperial'
 
 
 def list_templates():
@@ -58,7 +71,7 @@ def is_landscape(key):
 def page_decorator(key):
     sn = _school_name()
     micro = (f"{sn}  ·  OFFICIAL DOCUMENT  ·  " if sn else 'OFFICIAL DOCUMENT  ·  ')
-    return _th.page_decorator(key, _branding(), microtext=micro, watermark_text=sn)
+    return _th.page_decorator(_cl.theme_key(key), _branding(), microtext=micro, watermark_text=sn)
 
 
 def _pron(gender):
@@ -145,12 +158,17 @@ def _content(ctx):
     doc = ctx.get('doc')
     issued = (doc.created_at.strftime('%d %B %Y') if doc and getattr(doc, 'created_at', None)
               else date.today().strftime('%d %B %Y'))
-    meta_bits = []
-    if session:
-        meta_bits.append(f"Session: {_esc(session)}")
-    meta_bits.append(f"Issued on {issued}")
     serial = (doc.document_number if doc and getattr(doc, 'document_number', None)
               else f"{(school.split()[0][:3].upper() if school else 'DOC')}/CERT/0001")
+    bio = ctx.get('bio') or {}
+    fields = [('Admission No.', getattr(st, 'student_id', '') or ''),
+              ('Gender', getattr(st, 'gender', '') or ''),
+              ('Date of Birth', bio.get('date_of_birth')),
+              ('Academic Session', session),
+              ('Graduation Year', ctx.get('grad_when') or ''),
+              ('Class / Stream', ctx.get('klass') or ''),
+              ('Certificate No.', serial),
+              ('Date of Issue', issued)]
     return {
         'kicker': school,
         'motto': (ctx.get('school') or {}).get('motto') or '',
@@ -158,7 +176,8 @@ def _content(ctx):
         'lead': lead,
         'recipient': _esc(st.full_name),
         'body': [b.format(**fmt) for b in body_tpls],
-        'meta': '  ·  '.join(meta_bits),
+        'fields': [(k, v) for k, v in fields if v],
+        'meta': f"Issued on {issued}",
         'signatures': list(sigs),
         'seal_text': (school.split()[0][:12] if school else 'SEAL'),
         'serial': serial,
@@ -166,7 +185,9 @@ def _content(ctx):
 
 
 def build_flowables(key, ctx):
-    return _th.render_certificate(key, _content(ctx), branding=_branding())
+    content = _content(ctx)
+    content['_branding'] = _branding()
+    return _cl.render(key, content)
 
 
 def page_margins(key):

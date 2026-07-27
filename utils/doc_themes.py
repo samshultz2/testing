@@ -293,7 +293,7 @@ def rubber_stamp(theme, top='OFFICIAL', mid='SEAL', bottom='', dia=24):
 def barcode(value):
     try:
         from reportlab.graphics.barcode import code128
-        return code128.Code128(str(value or '0'), barHeight=8 * mm, barWidth=0.36 * mm,
+        return code128.Code128(str(value or '0'), barHeight=8 * mm, barWidth=0.3 * mm,
                                humanReadable=False)
     except Exception:
         return None
