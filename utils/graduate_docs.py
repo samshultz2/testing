@@ -304,7 +304,7 @@ def preview_document(doc_type, template_key):
     small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
     _apply_layout(mod, template_key, ctx, pagesize)
     body = mod.build_flowables(template_key, ctx)
-    el = _fit_body(body, pagesize, (mt, mb, ml, mr))
+    el = _fit_body(body, pagesize, (mt, mb, ml, mr), reserve=(34 if land else _FOOTER_RESERVE))
     el += [Spacer(1, 12), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
            Paragraph('<b>PREVIEW — sample data.</b> A QR code and verification code '
                      'appear here on a real document.', small)]
@@ -342,7 +342,8 @@ def render(student, doc, verify_url):
                                 topMargin=mt * mm, bottomMargin=mb * mm,
                                 title=f'{label} — {student.full_name}')
         ctx = _apply_layout(mod, key, _doc_ctx(student, doc, school, rec), pagesize)
-        el = _fit_body(mod.build_flowables(key, ctx), pagesize, (mt, mb, ml, mr))
+        reserve = 34 if land else _FOOTER_RESERVE
+        el = _fit_body(mod.build_flowables(key, ctx), pagesize, (mt, mb, ml, mr), reserve=reserve)
         el += _verification_footer(doc, verify_url, small)
         on_page = _page_painter(school['name'], mod.page_decorator(key))
         pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)

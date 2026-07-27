@@ -26,6 +26,14 @@ def _branding():
         return {}
 
 
+def _school_name():
+    try:
+        from utils.school import school_profile
+        return school_profile().get('name') or ''
+    except Exception:
+        return ''
+
+
 # Templates = one per design collection (all landscape certificates).
 TEMPLATES = {k: {'name': v['name'], 'landscape': True,
                  'description': f"{v['name']} collection — a distinct palette, "
@@ -48,7 +56,9 @@ def is_landscape(key):
 
 
 def page_decorator(key):
-    return _th.page_decorator(key, _branding())
+    sn = _school_name()
+    micro = (f"{sn}  ·  OFFICIAL DOCUMENT  ·  " if sn else 'OFFICIAL DOCUMENT  ·  ')
+    return _th.page_decorator(key, _branding(), microtext=micro, watermark_text=sn)
 
 
 def _pron(gender):
@@ -139,8 +149,11 @@ def _content(ctx):
     if session:
         meta_bits.append(f"Session: {_esc(session)}")
     meta_bits.append(f"Issued on {issued}")
+    serial = (doc.document_number if doc and getattr(doc, 'document_number', None)
+              else f"{(school.split()[0][:3].upper() if school else 'DOC')}/CERT/0001")
     return {
         'kicker': school,
+        'motto': (ctx.get('school') or {}).get('motto') or '',
         'title': title,
         'lead': lead,
         'recipient': _esc(st.full_name),
@@ -148,6 +161,7 @@ def _content(ctx):
         'meta': '  ·  '.join(meta_bits),
         'signatures': list(sigs),
         'seal_text': (school.split()[0][:12] if school else 'SEAL'),
+        'serial': serial,
     }
 
 

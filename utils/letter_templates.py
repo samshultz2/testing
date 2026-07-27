@@ -23,6 +23,14 @@ def _branding():
         return {}
 
 
+def _school_name():
+    try:
+        from utils.school import school_profile
+        return school_profile().get('name') or ''
+    except Exception:
+        return ''
+
+
 TEMPLATES = {k: {'name': v['name'], 'landscape': False,
                  'description': f"{v['name']} collection — themed letterhead, "
                                 f"typography and signature style."}
@@ -44,7 +52,9 @@ def is_landscape(key):
 
 
 def page_decorator(key):
-    return _th.letter_decorator(key, _branding())
+    sn = _school_name()
+    micro = (f"{sn}  ·  OFFICIAL DOCUMENT  ·  " if sn else 'OFFICIAL DOCUMENT  ·  ')
+    return _th.letter_decorator(key, _branding(), microtext=micro, watermark_text=sn)
 
 
 def page_margins(key):
@@ -167,15 +177,24 @@ def _content(ctx):
     }
     ref = (doc.document_number if doc and getattr(doc, 'document_number', None)
            else f"{school_name[:3].upper()}/DOC")
+    # A bio field-table (like the reference letters) — only fields we actually have.
+    fields = [('Student Full Name', st.full_name),
+              ('Admission Number', getattr(st, 'student_id', '') or ''),
+              ('Academic Session', session),
+              ('Graduation Year', ctx.get('grad_when') or ''),
+              ('Class / Stream', klass)]
     return {
         'school': {'name': school_name, 'address': school.get('address'),
                    'phone': school.get('phone'), 'email': school.get('email'),
                    'website': school.get('website')},
+        'motto': school.get('motto') or '',
         'ref': ref, 'date': issued, 'title': title, 'salutation': salutation,
+        'fields': [(k, v) for k, v in fields if v],
         'body': [b.format(**fmt) for b in body_tpls],
         'closing': 'Yours faithfully,',
         'signatures': list(sigs),
         'seal_text': (school_name.split()[0][:12] if school_name else 'SEAL'),
+        'serial': ref,
     }
 
 
