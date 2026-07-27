@@ -155,6 +155,15 @@ def _bio(content, theme, width, cols=1, boxed=True):
     return [ft, Spacer(1, 8)] if ft is not None else []
 
 
+def _photo_box(w=30 * mm, h=36 * mm):
+    t = Table([[Paragraph('PHOTOGRAPH', ParagraphStyle('ph', fontSize=6, alignment=TA_CENTER,
+               textColor=colors.HexColor('#94a3b8')))]], colWidths=[w], rowHeights=[h])
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.8, colors.HexColor('#94a3b8')),
+                           ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#eef2f7')),
+                           ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    return t
+
+
 # ===========================================================================
 # layout archetypes
 # ===========================================================================
@@ -234,27 +243,33 @@ def _lay_reference_card(theme, content):
 
 
 def _lay_panel_left(theme, content):
-    _h, bfont, _n = th.fonts(theme)
-    cw, rc = 46 * mm, P_W - 46 * mm
-    lg = _logo(h=16, w=28)
-    panel = [x for x in [lg, Spacer(1, 10), th.gold_seal(theme), Spacer(1, 10),
-                         _P('REF', bfont, 7, colors.white, TA_CENTER),
-                         _P(content.get('ref') or '', bfont, 7.5, colors.white, TA_CENTER)] if x is not None]
-    school = content.get('school') or {}
-    right_head = [_P(school.get('name') or 'School', th.fonts(theme)[0], 16, theme['primary'], TA_LEFT, leading=19)]
-    if content.get('motto'):
-        right_head.append(_P(f"<i>{content['motto']}</i>", bfont, 8.5, theme['gold'], TA_LEFT))
-    right_head += [Spacer(1, 4), HRFlowable(width='100%', thickness=1, color=_col(theme['gold'])), Spacer(1, 6),
-                   _title(content, theme, TA_LEFT, 14)]
-    right_body = right_head + _bio(content, theme, rc - 16 * mm) + _body(content, theme)
-    right = _anchor(right_body, _sig(content, theme, rc - 16 * mm), avail=_AVAIL, width=rc - 16 * mm)
-    outer = Table([[panel, right]], colWidths=[cw, rc], rowHeights=[_AVAIL])
-    outer.setStyle(TableStyle([('BACKGROUND', (0, 0), (0, 0), _col(theme['primary'])),
-                               ('VALIGN', (0, 0), (0, 0), 'MIDDLE'), ('VALIGN', (1, 0), (1, 0), 'TOP'),
-                               ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-                               ('LEFTPADDING', (1, 0), (1, 0), 12), ('TOPPADDING', (0, 0), (-1, -1), 8),
-                               ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
-    return [outer]
+    """Exact 'Global Legacy' letter-of-recommendation replica: full-width crested
+    letterhead (name left, contact block right, gold rule), centred title, a
+    Date / Reference line, the salutation, a passport photo beside a boxed
+    candidate-details grid, the body, then an office stamp + gold seal +
+    signature with a QR verification strip at the foot."""
+    hfont, bfont, _n = th.fonts(theme)
+    head = _head_left(content, theme)
+    title = [_title(content, theme, TA_LEFT, 16)]
+    meta = [_meta_row(content, theme, P_W), Spacer(1, 8)]
+    sal = ([_P(content['salutation'], bfont, 11, '#111827', TA_LEFT, sa=8)]
+           if content.get('salutation') else [])
+    # passport photo beside the candidate-details grid
+    ft = th.field_table(content.get('fields') or [], theme, P_W - 38 * mm)
+    if ft is not None:
+        biorow = Table([[_photo_box(), ft]], colWidths=[34 * mm, P_W - 34 * mm])
+        biorow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                                    ('LEFTPADDING', (1, 0), (1, 0), 8)]))
+        bio = [biorow, Spacer(1, 10)]
+    else:
+        bio = [_photo_box(), Spacer(1, 10)]
+    paras = []
+    for p in (content.get('body') or []):
+        paras.append(_P(p, bfont, 11, '#1f2937', TA_JUSTIFY, leading=17, sa=8))
+    if content.get('closing'):
+        paras.append(_P(content['closing'], bfont, 11, '#1f2937', TA_LEFT, sb=6))
+    body = head + title + meta + sal + bio + paras
+    return _anchor(body, _sig(content, theme, P_W))
 
 
 def _lay_contact_bar(theme, content):
