@@ -128,10 +128,11 @@ def _is_designed(doc_type):
 def _design_module(doc_type):
     from utils import document_catalog as cat
     from utils import (transcript_templates, slc_templates, sor_templates,
-                       certificate_templates)
+                       certificate_templates, letter_templates)
     return {cat.ENGINE_TRANSCRIPT: transcript_templates, cat.ENGINE_SLC: slc_templates,
             cat.ENGINE_STATEMENT: sor_templates,
-            cat.ENGINE_CERTIFICATE: certificate_templates}.get(cat.engine(doc_type))
+            cat.ENGINE_CERTIFICATE: certificate_templates,
+            cat.ENGINE_LETTER: letter_templates}.get(cat.engine(doc_type))
 
 
 def design_key_for(doc_type):

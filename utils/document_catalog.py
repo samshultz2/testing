@@ -17,7 +17,8 @@ ENGINE_TRANSCRIPT = 'transcript'
 ENGINE_SLC = 'slc'
 ENGINE_STATEMENT = 'statement'
 ENGINE_CERTIFICATE = 'certificate'
-ENGINE_PROSE = 'prose'            # letters / reports handled by graduate_docs._body_for
+ENGINE_LETTER = 'letter'          # themed formal letters / references
+ENGINE_PROSE = 'prose'            # legacy prose docs handled by graduate_docs._body_for
 
 # doc_type -> (label, category, engine)
 # NOTE: labels for the original seven come from GRADUATE_DOC_TYPES for continuity.
@@ -36,7 +37,20 @@ CATALOG = {
     'conduct':         ('Conduct Report',                 'Character & Behaviour', ENGINE_PROSE),
     'character_cert':  ('Character Certificate',          'Character & Behaviour', ENGINE_CERTIFICATE),
     # --- Recommendation & references -------------------------------------
-    'recommendation':  ('Recommendation Letter',          'Recommendation & References', ENGINE_PROSE),
+    'recommendation':             ('Recommendation Letter',            'Recommendation & References', ENGINE_LETTER),
+    'university_recommendation':  ('University Recommendation Letter',  'Recommendation & References', ENGINE_LETTER),
+    'scholarship_recommendation': ('Scholarship Recommendation Letter', 'Recommendation & References', ENGINE_LETTER),
+    'employment_recommendation':  ('Employment Recommendation Letter',  'Recommendation & References', ENGINE_LETTER),
+    'reference':                  ('General Reference Letter',          'Recommendation & References', ENGINE_LETTER),
+    # --- Admissions & enrollment -----------------------------------------
+    'admission':       ('Admission Letter',               'Admissions & Enrollment', ENGINE_LETTER),
+    'acceptance':      ('Acceptance Letter',              'Admissions & Enrollment', ENGINE_LETTER),
+    'transfer':        ('Transfer Certificate',           'Admissions & Enrollment', ENGINE_LETTER),
+    'withdrawal':      ('Withdrawal Certificate',         'Admissions & Enrollment', ENGINE_LETTER),
+    'confirmation':    ('Student Confirmation Letter',    'Admissions & Enrollment', ENGINE_LETTER),
+    # --- Administrative ---------------------------------------------------
+    'fee_clearance':        ('Fee Clearance Certificate',        'Administrative', ENGINE_CERTIFICATE),
+    'graduation_clearance': ('Graduation Clearance Certificate', 'Administrative', ENGINE_CERTIFICATE),
     # --- Awards & recognition --------------------------------------------
     'merit_award':      ('Merit Award Certificate',        'Awards & Recognition', ENGINE_CERTIFICATE),
     'best_graduating':  ('Best Graduating Student',        'Awards & Recognition', ENGINE_CERTIFICATE),
@@ -49,11 +63,13 @@ CATALOG = {
 # Category display order for the UI.
 CATEGORY_ORDER = [
     'Academic Records', 'Graduation & Completion', 'Character & Behaviour',
-    'Recommendation & References', 'Awards & Recognition',
+    'Recommendation & References', 'Admissions & Enrollment', 'Awards & Recognition',
+    'Administrative',
 ]
 
 # Engines whose documents are designed (school-selectable collection + verified).
-_DESIGNED_ENGINES = {ENGINE_TRANSCRIPT, ENGINE_SLC, ENGINE_STATEMENT, ENGINE_CERTIFICATE}
+_DESIGNED_ENGINES = {ENGINE_TRANSCRIPT, ENGINE_SLC, ENGINE_STATEMENT,
+                     ENGINE_CERTIFICATE, ENGINE_LETTER}
 
 
 def label(doc_type):

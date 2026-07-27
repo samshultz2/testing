@@ -105,6 +105,14 @@ _SPEC = {
                          ['in recognition of exceptional academic excellence and consistent '
                           'distinction at {school}.'],
                          ('Principal', 'Registrar')),
+    'fee_clearance':   ('Fee Clearance Certificate', 'This is to certify that',
+                        ['has fully settled all financial obligations to {school}{session} '
+                         'and is hereby granted full fee clearance.'],
+                        ('Bursar', 'Principal')),
+    'graduation_clearance': ('Graduation Clearance Certificate', 'This is to certify that',
+                             ['has met all academic and administrative requirements and is '
+                              'hereby cleared for graduation from {school}{session}.'],
+                             ('Registrar', 'Principal')),
 }
 DEFAULT_SPEC = ('Certificate', 'This is to certify that',
                 ['was a student of {school}.'], ('Principal', 'Registrar'))

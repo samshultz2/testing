@@ -69,13 +69,31 @@ GRADUATE_DOC_TYPES = {
     'leadership_award': 'Leadership Award',
     'sports_award': 'Sports Award',
     'excellence_award': 'Academic Excellence Certificate',
+    # Recommendation & references
+    'university_recommendation': 'University Recommendation Letter',
+    'scholarship_recommendation': 'Scholarship Recommendation Letter',
+    'employment_recommendation': 'Employment Recommendation Letter',
+    'reference': 'General Reference Letter',
+    # Admissions & enrollment
+    'admission': 'Admission Letter',
+    'acceptance': 'Acceptance Letter',
+    'transfer': 'Transfer Certificate',
+    'withdrawal': 'Withdrawal Certificate',
+    'confirmation': 'Student Confirmation Letter',
+    # Administrative
+    'fee_clearance': 'Fee Clearance Certificate',
+    'graduation_clearance': 'Graduation Clearance Certificate',
 }
 _DOC_ABBR = {'slc': 'SLC', 'statement': 'SOR', 'transcript': 'TRN', 'testimonial': 'TST',
              'recommendation': 'REC', 'conduct': 'CDT', 'notification': 'RNS',
              'graduation': 'GRD', 'completion': 'CMP', 'attendance_cert': 'ATT',
              'character_cert': 'CHR', 'merit_award': 'MRT', 'best_graduating': 'BGS',
              'best_subject': 'BIS', 'leadership_award': 'LDR', 'sports_award': 'SPT',
-             'excellence_award': 'AEX'}
+             'excellence_award': 'AEX', 'university_recommendation': 'URL',
+             'scholarship_recommendation': 'SRL', 'employment_recommendation': 'ERL',
+             'reference': 'REF', 'admission': 'ADM', 'acceptance': 'ACC',
+             'transfer': 'TRF', 'withdrawal': 'WDL', 'confirmation': 'CNF',
+             'fee_clearance': 'FCL', 'graduation_clearance': 'GCL'}
 
 
 class GraduateDocument(db.Model):

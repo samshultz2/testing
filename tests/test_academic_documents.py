@@ -4,7 +4,8 @@ import fitz
 import pytest
 
 from utils import document_catalog as cat
-from utils import doc_themes, certificate_templates as ce, graduate_docs as gd
+from utils import (doc_themes, certificate_templates as ce, letter_templates as lt,
+                   graduate_docs as gd)
 
 
 def _fake_logo(max_h_mm=16, max_w_mm=40):
@@ -102,4 +103,53 @@ def test_branding_overrides_collection_palette():
 def test_designed_docs_membership_via_catalog():
     assert 'graduation' in gd.DESIGNED_DOCS
     assert 'merit_award' in gd.DESIGNED_DOCS
+    assert 'admission' in gd.DESIGNED_DOCS
     assert 'nonexistent_type' not in gd.DESIGNED_DOCS
+
+
+def test_letter_family_registered():
+    letters = [dt for dt in cat.designed_types() if cat.engine(dt) == cat.ENGINE_LETTER]
+    for dt in ('admission', 'acceptance', 'transfer', 'withdrawal', 'confirmation',
+               'recommendation', 'university_recommendation', 'scholarship_recommendation',
+               'employment_recommendation', 'reference'):
+        assert dt in letters, dt
+
+
+def test_every_letter_type_renders_single_page():
+    letters = [dt for dt in cat.designed_types() if cat.engine(dt) == cat.ENGINE_LETTER]
+    assert letters
+    for dt in letters:
+        for key in ('classic', 'executive', 'premium'):
+            buf = gd.preview_document(dt, key)
+            doc = fitz.open(stream=buf.read(), filetype='pdf')
+            try:
+                assert doc.page_count == 1, f'{dt}/{key} = {doc.page_count} pages'
+            finally:
+                doc.close()
+
+
+def test_letters_are_portrait_certificates_are_landscape():
+    assert lt.is_landscape('classic') is False
+    assert ce.is_landscape('classic') is True
+
+
+def test_letter_content_data_driven_and_pronoun_aware():
+    ctx = lt.sample_ctx({'name': 'Bright Future Academy'})
+    ctx['doc_type'] = 'employment_recommendation'
+    ctx['academic'] = {'cumulative': 78.5}
+
+    class S:
+        full_name = 'John Doe'
+        gender = 'Male'
+        student_id = 'ADM-1'
+    ctx['student'] = S()
+    c = lt._content(ctx)
+    assert c['title'] == 'Employment Recommendation'
+    body = ' '.join(c['body'])
+    assert '78.5%' in body and ' he ' in f' {body} '
+
+
+def test_clearance_certificates_registered_as_certificate_engine():
+    for dt in ('fee_clearance', 'graduation_clearance'):
+        assert cat.engine(dt) == cat.ENGINE_CERTIFICATE
+        assert cat.category(dt) == 'Administrative'

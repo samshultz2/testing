@@ -21,13 +21,18 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.graphics.shapes import Drawing, Circle, String, Polygon
 
 
 def _c(v):
     return colors.HexColor(v)
+
+
+def _esc(v):
+    from utils.web_exports import pdf_escape
+    return pdf_escape(str(v if v is not None else ''))
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +296,95 @@ def render_certificate(key, content, branding=None, avail=_L_BODY_H, side=30 * m
                            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'), ('VALIGN', (0, 1), (0, 1), 'MIDDLE'),
                            ('VALIGN', (0, 2), (0, 2), 'BOTTOM')]))
     return [t]
+
+
+# ---------------------------------------------------------------------------
+# formal letters (portrait) — a lighter themed letterhead, no ornate border
+# ---------------------------------------------------------------------------
+P_W = 170 * mm                                   # portrait content width (A4 - margins)
+
+
+def letter_decorator(key, branding=None):
+    """A restrained letterhead identity for formal letters: a slim colour band at
+    the top edge and a thin accent rule at the foot (no full certificate border)."""
+    theme = resolve(key, branding)
+    primary, gold = _c(theme['primary']), _c(theme['gold'])
+
+    def draw(canvas, doc):
+        w, h = doc.pagesize
+        canvas.saveState()
+        try:
+            canvas.setFillColor(primary)
+            canvas.rect(0, h - 7 * mm, w, 7 * mm, fill=1, stroke=0)
+            canvas.setFillColor(gold)
+            canvas.rect(0, h - 9 * mm, w, 2 * mm, fill=1, stroke=0)
+            canvas.setStrokeColor(primary)
+            canvas.setLineWidth(1.4)
+            canvas.line(16 * mm, 14 * mm, w - 16 * mm, 14 * mm)
+        finally:
+            canvas.restoreState()
+    return draw
+
+
+def render_letter(key, content, branding=None):
+    """Return portrait flowables for a formal letter. ``content`` keys: school
+    (dict name/address/contact), ref, date, title, salutation, body (list of
+    strings), closing, signatures (list of labels), seal_text."""
+    theme = resolve(key, branding)
+    hfont, bfont, nfont = fonts(theme)
+    primary, accent, gold = _c(theme['primary']), _c(theme['accent']), _c(theme['gold'])
+    school = content.get('school') or {}
+
+    cen = ParagraphStyle('lc', alignment=TA_CENTER, fontName=bfont, fontSize=10)
+    body_st = ParagraphStyle('lb', fontName=bfont, fontSize=11, leading=17,
+                             alignment=TA_JUSTIFY, spaceAfter=8)
+    left = ParagraphStyle('ll', fontName=bfont, fontSize=10, leading=14)
+    right = ParagraphStyle('lr', parent=left, alignment=TA_RIGHT)
+
+    el = []
+    lg = _logo(max_h=16, max_w=30)
+    name_p = Paragraph(_esc(school.get('name') or 'School'), ParagraphStyle(
+        'ln', alignment=TA_CENTER, fontName=hfont, fontSize=17, leading=20, textColor=primary))
+    subs = []
+    if school.get('address'):
+        subs.append(_esc(school['address']))
+    contact = ' · '.join([x for x in [school.get('phone'), school.get('email'),
+                                       school.get('website')] if x])
+    if contact:
+        subs.append(_esc(contact))
+    sub_ps = [Paragraph(s, ParagraphStyle('ls', alignment=TA_CENTER, fontSize=8.5,
+                                          textColor=_c('#475569'))) for s in subs]
+    if lg is not None:
+        head = Table([[lg, [name_p] + sub_ps]], colWidths=[32 * mm, P_W - 32 * mm])
+        head.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                                  ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+        el.append(head)
+    else:
+        el += [name_p] + sub_ps
+    el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1.1, color=gold), Spacer(1, 8)]
+
+    ref = _esc(content.get('ref') or '')
+    dt = _esc(content.get('date') or '')
+    meta = Table([[Paragraph(f"<b>Ref:</b> {ref}" if ref else '', left),
+                   Paragraph(f"<b>Date:</b> {dt}" if dt else '', right)]],
+                 colWidths=[P_W / 2, P_W / 2])
+    meta.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+    el += [meta, Spacer(1, 10)]
+
+    el.append(Paragraph(content['title'].upper(), ParagraphStyle(
+        'lt', alignment=TA_CENTER, fontName=hfont, fontSize=13, textColor=primary,
+        spaceAfter=10, underlineWidth=1)))
+    if content.get('salutation'):
+        el.append(Paragraph(content['salutation'], body_st))
+    for para in (content.get('body') or []):
+        el.append(Paragraph(para, body_st))
+    if content.get('closing'):
+        el += [Spacer(1, 6), Paragraph(content['closing'], body_st)]
+
+    el += [Spacer(1, 18), _signature_row(content.get('signatures') or ['Principal', 'Registrar'],
+                                         bfont, theme, width=P_W - 20 * mm,
+                                         seal_text=content.get('seal_text'))]
+    return el
 
 
 def _signature_row(labels, bfont, theme, width=L_W - 60 * mm, seal_text=None):
