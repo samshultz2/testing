@@ -664,7 +664,7 @@ def _t_eagle(ctx):
     bio = _bio_pairs([('Full Name', st.full_name), ('Admission Number', st.student_id),
                       ('Gender', st.gender), ('Academic Session', ctx.get('grad_session') or ctx.get('admission_session')),
                       ('Graduation Year', ctx.get('grad_when')),
-                      ('Candidate Number', getattr(st, 'jamb_reg_number', None) or st.student_id)],
+                      ('Candidate Number', getattr(st, 'waec_reg_number', None) or getattr(st, 'jamb_reg_number', None) or st.student_id)],
                      S, P_W - 30 * mm)
     idrow = Table([[bio, _photo_box()]], colWidths=[P_W - 30 * mm, 30 * mm])
     idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
@@ -830,7 +830,7 @@ def _t_ohis(ctx):
     part = Table([[Paragraph(f"<b>Surname:</b> {_esc(surname)}", S['left']),
                    Paragraph(f"<b>Other Names:</b> {_esc(others)}", S['left'])],
                   [Paragraph(f"<b>Centre No.:</b> {_esc(st.student_id)}", S['left']),
-                   Paragraph(f"<b>Candidate No.:</b> {_esc(getattr(st, 'jamb_reg_number', None) or st.student_id)}", S['left'])],
+                   Paragraph(f"<b>Candidate No.:</b> {_esc(getattr(st, 'waec_reg_number', None) or getattr(st, 'jamb_reg_number', None) or st.student_id)}", S['left'])],
                   [Paragraph(f"<b>Year:</b> {_esc(year)}", S['left']),
                    Paragraph(f"<b>Sex:</b> {_esc(st.gender)}", S['left'])]], colWidths=[P_W / 2, P_W / 2])
     part.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, blue), ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
@@ -1021,7 +1021,8 @@ def _t_unity(ctx):
                   'e2', parent=S['center'], fontSize=10.5, fontName='Helvetica-Bold', textColor=navy,
                   spaceAfter=8))]
     above += _fields([("Candidate's Name", st.full_name),
-                      ("Candidate's Number", getattr(st, 'jamb_reg_number', None) or st.student_id),
+                      ("Candidate's Number", getattr(st, 'waec_reg_number', None) or getattr(st, 'jamb_reg_number', None) or st.student_id),
+                      ('Serial Number', getattr(st, 'serial_number', None)),
                       ('Gender', st.gender),
                       ('Class', ctx.get('klass') or 'SS3'),
                       ('Year of Exam', exam_year)], S)

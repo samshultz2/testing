@@ -175,6 +175,8 @@ def build_record(student):
         'stream': student.stream or '', 'hobbies': student.hobbies or '',
         'waec_subjects': student.waec_subjects or '', 'jamb_subjects': student.jamb_subjects or '',
         'jamb_reg_number': student.jamb_reg_number or '',
+        'waec_reg_number': getattr(student, 'waec_reg_number', '') or '',
+        'serial_number': getattr(student, 'serial_number', '') or '',
     }
     history = _safe(lambda: _class_history(sid), [])
     academic = _safe(lambda: _academic(sid), {'cumulative': None, 'terms_count': 0, 'terms': []})

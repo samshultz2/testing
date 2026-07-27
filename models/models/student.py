@@ -31,6 +31,10 @@ class Student(db.Model):
     nin = db.Column(db.String(20), index=True)
     jamb_reg_number = db.Column(db.String(30), index=True)
     jamb_profile_code = db.Column(db.String(30))
+    # WAEC/NECO examination registration number + the candidate's serial number,
+    # shown on statements of result, transcripts and testimonials.
+    waec_reg_number = db.Column(db.String(30), index=True)
+    serial_number = db.Column(db.String(30))
 
     # Optional medical record. Structured fields stay plain (shown on ID cards /
     # needed fast in an emergency); the free-text notes are encrypted at rest.
@@ -104,7 +108,8 @@ class Student(db.Model):
 
     @property
     def has_identity(self):
-        return any([self.nin, self.jamb_reg_number, self.jamb_profile_code])
+        return any([self.nin, self.jamb_reg_number, self.jamb_profile_code,
+                    self.waec_reg_number, self.serial_number])
 
     @property
     def age(self):

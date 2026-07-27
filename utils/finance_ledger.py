@@ -267,6 +267,7 @@ _ADDED_COLUMNS = {
     'students': {
         'house': 'VARCHAR(40)', 'boarding_status': 'VARCHAR(10)',
         'nin': 'VARCHAR(20)', 'jamb_reg_number': 'VARCHAR(30)', 'jamb_profile_code': 'VARCHAR(30)',
+        'waec_reg_number': 'VARCHAR(30)', 'serial_number': 'VARCHAR(30)',
         'blood_group': 'VARCHAR(6)', 'genotype': 'VARCHAR(6)', 'allergies': 'TEXT',
         'medical_conditions': 'TEXT', 'disabilities': 'TEXT', 'medications': 'TEXT',
         'medical_notes': 'TEXT', 'emergency_medical': 'TEXT',

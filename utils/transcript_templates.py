@@ -888,15 +888,15 @@ def _t_bishop(ctx):
     biod = ctx.get('bio') or {}
     half = (USABLE_W - 30 * mm) / 2
     bio = _header_fields([('Full Name', st.full_name), ('Admission No.', st.student_id),
-                          ('Student ID', getattr(st, 'jamb_reg_number', None) or st.student_id),
                           ('Gender', st.gender), ('Date of Birth', biod.get('date_of_birth')),
-                          ('Nationality', biod.get('nationality') or 'Nigerian')],
-                         S, label_w=26 * mm, total_w=half)
+                          ('WAEC Reg. No.', biod.get('waec_reg_number')),
+                          ('Serial No.', biod.get('serial_number'))],
+                         S, label_w=28 * mm, total_w=half)
     bio2 = _header_fields([('Admitted', ctx.get('admission_session')),
                            ('Graduated', ctx.get('grad_when')), ('Status', 'Graduated'),
-                           ('Class', 'SSS3'), ('State', biod.get('state_of_origin')),
-                           ('Student Type', 'Day Student')],
-                          S, label_w=26 * mm, total_w=half)
+                           ('Class', 'SSS3'),
+                           ('JAMB Reg. No.', biod.get('jamb_reg_number'))],
+                          S, label_w=28 * mm, total_w=half)
     idrow = Table([[_photo_box(), bio, bio2]], colWidths=[30 * mm, half, half])
     idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                                ('RIGHTPADDING', (1, 0), (1, 0), 6)]))
@@ -1039,7 +1039,13 @@ def sample_ctx(school):
         ('English Language', 'B3'), ('Mathematics', 'C4'), ('Biology', 'B2'),
         ('Chemistry', 'C5'), ('Physics', 'B3'), ('Economics', 'A1'), ('Civic Education', 'B2')]]}
     student = SimpleNamespace(full_name='Adaeze N. Okoro (SAMPLE)', student_id='STU-SAMPLE',
-                              gender='Female', graduation_date=date(2024, 7, 1))
-    return {'student': student, 'academic': academic, 'bio': {}, 'school': school,
+                              gender='Female', graduation_date=date(2024, 7, 1),
+                              jamb_reg_number='202412345AB', waec_reg_number='4250101023',
+                              serial_number='WRN-0489217')
+    return {'student': student, 'academic': academic,
+            'bio': {'date_of_birth': '14 May 2007', 'nationality': 'Nigerian',
+                    'jamb_reg_number': '202412345AB', 'waec_reg_number': '4250101023',
+                    'serial_number': 'WRN-0489217'},
+            'school': school,
             'grad_when': 'July 2024', 'grad_session': '2023/2024',
             'admission_session': '2021/2022', 'doc': None, 'waec': waec}
