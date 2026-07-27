@@ -172,7 +172,7 @@ def _apply_layout(mod, key, ctx, pagesize):
     the ctx so designs that fill the page know how much room they have."""
     land = mod.is_landscape(key)
     mt, mb, _ml, _mr = _margins_for(mod, key, land)
-    reserve = 28 if land else _FOOTER_RESERVE
+    reserve = 34 if land else _FOOTER_RESERVE
     ctx['_avail'] = (pagesize[1] - (mt + mb) * mm) - reserve * mm
     return ctx
 
@@ -185,6 +185,19 @@ def _fit_body(el, pagesize, margins, reserve=_FOOTER_RESERVE):
     frame_w = pagesize[0] - (ml + mr) * mm
     body_h = pagesize[1] - (mt + mb) * mm - reserve * mm
     return [KeepInFrame(frame_w, body_h, list(el), mode='shrink', hAlign='CENTER', vAlign='TOP')]
+
+
+def _fit_page(body, footer, pagesize, margins):
+    """Fit the body AND its footer together inside the full printable area as one
+    shrink-frame, so a document can NEVER spill onto a second page. The body is
+    laid out to leave footer room (via ctx['_avail'] = frame − reserve); wrapping
+    the pair in a frame of the *full* height means any small over-run is scaled
+    down here instead of pushing the footer onto page 2."""
+    mt, mb, ml, mr = margins
+    frame_w = pagesize[0] - (ml + mr) * mm
+    frame_h = pagesize[1] - (mt + mb) * mm
+    return [KeepInFrame(frame_w, frame_h, list(body) + list(footer),
+                        mode='shrink', hAlign='CENTER', vAlign='TOP')]
 
 
 def list_designs(doc_type):
@@ -307,10 +320,10 @@ def preview_document(doc_type, template_key):
     small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
     _apply_layout(mod, template_key, ctx, pagesize)
     body = mod.build_flowables(template_key, ctx)
-    el = _fit_body(body, pagesize, (mt, mb, ml, mr), reserve=(28 if land else _FOOTER_RESERVE))
-    el += [Spacer(1, 12), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
-           Paragraph('<b>PREVIEW — sample data.</b> A QR code and verification code '
-                     'appear here on a real document.', small)]
+    footer = [Spacer(1, 12), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
+              Paragraph('<b>PREVIEW — sample data.</b> A QR code and verification code '
+                        'appear here on a real document.', small)]
+    el = _fit_page(body, footer, pagesize, (mt, mb, ml, mr))
     on_page = _page_painter(school['name'], mod.page_decorator(template_key))
     pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
     buf.seek(0)
@@ -345,9 +358,8 @@ def render(student, doc, verify_url):
                                 topMargin=mt * mm, bottomMargin=mb * mm,
                                 title=f'{label} — {student.full_name}')
         ctx = _apply_layout(mod, key, _doc_ctx(student, doc, school, rec), pagesize)
-        reserve = 28 if land else _FOOTER_RESERVE
-        el = _fit_body(mod.build_flowables(key, ctx), pagesize, (mt, mb, ml, mr), reserve=reserve)
-        el += _verification_footer(doc, verify_url, small)
+        el = _fit_page(mod.build_flowables(key, ctx),
+                       _verification_footer(doc, verify_url, small), pagesize, (mt, mb, ml, mr))
         on_page = _page_painter(school['name'], mod.page_decorator(key))
         pdf.build(el, onFirstPage=on_page, onLaterPages=on_page)
         buf.seek(0)
