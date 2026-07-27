@@ -87,6 +87,7 @@ def graduates_list():
         'bulk_url': url_for('promotion.bulk_documents'),
         'alumni_url': url_for('promotion.alumni_directory'),
         'doc_templates_url': url_for('promotion.doc_templates'),
+        'verifications_url': url_for('promotion.document_verifications'),
         'pending_requests': scope_by_student(
             DocumentRequest.query.filter_by(status='pending'), DocumentRequest).count(),
         'preview_url': url_for('promotion.graduate_sss3_preview'),
@@ -327,6 +328,57 @@ def bulk_documents():
     log_action('graduate_documents_bulk', f'{doc_type} x{len(students)}')
     return send_file(memzip, mimetype='application/zip', as_attachment=True,
                      download_name=f'{doc_type}_documents.zip')
+
+
+@promotion_bp.route('/graduates/documents/verifications')
+@graduates_access_required
+def document_verifications():
+    """Audit trail of public document-verification attempts: who checked which
+    document and the outcome (valid / revoked / unknown code). Branch-scoped —
+    an admin sees only checks of documents belonging to graduates in their
+    branch. Powers the 'Verification activity' panel."""
+    from datetime import timedelta
+    from sqlalchemy import func, false as _false
+    from models import DocumentVerification, GRADUATE_DOC_TYPES
+    # Only verifications tied to a graduate in scope (unknown-code attempts carry
+    # no student, so they surface only in the org-wide totals below).
+    scoped_ids = [s.id for s in scope_query(
+        Student.query.filter_by(is_graduated=True), Student).with_entities(Student.id).all()]
+    days = min(max(request.args.get('days', 90, type=int) or 90, 1), 365)
+    since = date.today() - timedelta(days=days)
+    base = DocumentVerification.query.filter(DocumentVerification.created_at >= since)
+    scoped = base.filter(DocumentVerification.student_id.in_(scoped_ids)) if scoped_ids \
+        else base.filter(_false())
+    # summary tallies (by outcome) over scoped student docs + unknown-code hits
+    by_result = dict(db.session.query(DocumentVerification.result, func.count())
+                     .filter(DocumentVerification.created_at >= since)
+                     .filter((DocumentVerification.student_id.in_(scoped_ids) if scoped_ids
+                              else _false()) | (DocumentVerification.result == 'not_found'))
+                     .group_by(DocumentVerification.result).all())
+    rows = (scoped.order_by(DocumentVerification.created_at.desc()).limit(200).all())
+    unknown = (base.filter(DocumentVerification.result == 'not_found')
+               .order_by(DocumentVerification.created_at.desc()).limit(50).all())
+
+    def _row(v):
+        return {
+            'id': v.id, 'code': v.code, 'result': v.result, 'source': v.source or 'manual',
+            'doc_label': GRADUATE_DOC_TYPES.get(v.doc_type, v.doc_type or '—'),
+            'student': (v.student.full_name if v.student else None),
+            'student_url': (url_for('promotion.graduate_profile', student_id=v.student_id)
+                            if v.student_id else None),
+            'at': v.created_at.strftime('%d %b %Y %H:%M') if v.created_at else '',
+        }
+    return _render({
+        'page': 'doc_verifications',
+        'days': days,
+        'summary': {'valid': int(by_result.get('valid', 0)),
+                    'revoked': int(by_result.get('revoked', 0)),
+                    'not_found': int(by_result.get('not_found', 0)),
+                    'total': int(sum(by_result.values()))},
+        'rows': [_row(v) for v in rows],
+        'unknown': [_row(v) for v in unknown],
+        'urls': {'graduates': url_for('promotion.graduates_list')},
+    })
 
 
 # ============================================================================
@@ -837,13 +889,19 @@ def graduate_profile(student_id):
         graduation_session = db.session.get(AcademicSession, student.graduation_session_id)
     
     from models import (GraduateAudit, GRADUATE_STATUSES, GRADUATE_DOC_TYPES,
-                        GraduateDocument, AlumniProfile, DocumentRequest)
+                        GraduateDocument, AlumniProfile, DocumentRequest, DocumentVerification)
     from utils.graduate_record import build_record
     from utils.production import secure_external_url
     history = (GraduateAudit.query
                .filter_by(student_id=student.id, field='graduate_status')
                .order_by(GraduateAudit.created_at.desc()).limit(50).all())
     issued = {d.doc_type: d for d in GraduateDocument.query.filter_by(student_id=student.id).all()}
+    # How many times each issued document has been publicly verified.
+    from sqlalchemy import func
+    vcounts = dict(db.session.query(DocumentVerification.document_id, func.count())
+                   .filter(DocumentVerification.student_id == student.id,
+                           DocumentVerification.result == 'valid')
+                   .group_by(DocumentVerification.document_id).all())
     documents = []
     for dt, dlabel in GRADUATE_DOC_TYPES.items():
         d = issued.get(dt)
@@ -854,6 +912,7 @@ def graduate_profile(student_id):
             'number': d.document_number if d else None,
             'reprint_count': d.reprint_count if d else 0,
             'revoked': bool(d.revoked) if d else False,
+            'verify_count': int(vcounts.get(d.id, 0)) if d else 0,
             'verify_url': secure_external_url('graduate_verify.verify', code=d.verification_code) if d else None,
         })
     alumni_prof = AlumniProfile.query.filter_by(student_id=student.id).first()

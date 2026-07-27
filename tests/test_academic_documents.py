@@ -222,6 +222,75 @@ def test_gallery_payload_groups_types_and_exposes_branding(app):
     assert len(payload2['templates']) == len(ce.TEMPLATES)
 
 
+# --- Phase 4: document verification audit trail -----------------------------
+def _grad_with_doc(app, sid='VER1'):
+    from models import db, Student
+    with app.app_context():
+        s = Student(student_id=sid, first_name='Ver', surname='Ifiable',
+                    gender='Female', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        db.session.add(s); db.session.commit()
+        sidn = s.id
+    c = _admin(app)
+    c.get(f'/promotion/graduates/{sidn}/document/slc')   # issue → creates code
+    from models import GraduateDocument
+    with app.app_context():
+        d = GraduateDocument.query.filter_by(student_id=sidn, doc_type='slc').first()
+        return sidn, d.verification_code
+
+
+def test_public_verify_logs_valid_and_unknown(app):
+    from models import DocumentVerification
+    sid, code = _grad_with_doc(app, 'VERLOG')
+    pub = app.test_client()
+    # a genuine scan (code in the path) verifies + is logged as 'valid' / 'qr'
+    r = pub.get(f'/verify/{code}')
+    assert r.status_code == 200
+    # an unknown code is logged as 'not_found'
+    pub.get('/verify?code=ZZZ0000000')
+    with app.app_context():
+        rows = DocumentVerification.query.order_by(DocumentVerification.id).all()
+        results = {v.result for v in rows}
+        assert 'valid' in results and 'not_found' in results
+        valid = [v for v in rows if v.result == 'valid'][0]
+        assert valid.source == 'qr' and valid.student_id == sid
+        # privacy: a salted hash is stored, never a raw IP
+        assert valid.visitor_hash and len(valid.visitor_hash) == 64
+
+
+def test_revoked_document_logs_revoked_result(app):
+    from models import db, GraduateDocument, DocumentVerification
+    sid, code = _grad_with_doc(app, 'VERREV')
+    with app.app_context():
+        d = GraduateDocument.query.filter_by(student_id=sid, doc_type='slc').first()
+        d.revoked = True
+        db.session.commit()
+    app.test_client().get(f'/verify/{code}')
+    with app.app_context():
+        assert DocumentVerification.query.filter_by(result='revoked', student_id=sid).count() == 1
+
+
+def test_admin_verifications_log_and_profile_count(app):
+    sid, code = _grad_with_doc(app, 'VERADMIN')
+    pub = app.test_client()
+    pub.get(f'/verify/{code}')
+    pub.get(f'/verify/{code}')
+    c = _admin(app)
+    r = c.get('/promotion/graduates/documents/verifications',
+              headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    body = r.get_json()
+    payload = body.get('data', body) if isinstance(body, dict) else body
+    assert payload['summary']['valid'] >= 2
+    assert any(row['result'] == 'valid' for row in payload['rows'])
+    # the per-document verified count reaches the graduate profile
+    rp = c.get(f'/promotion/graduates/{sid}', headers={'X-Requested-With': 'fetch'})
+    pp = rp.get_json()
+    ppd = pp.get('data', pp) if isinstance(pp, dict) else pp
+    slc = [d for d in ppd['documents'] if d['type'] == 'slc'][0]
+    assert slc['verify_count'] >= 2
+
+
 def test_branding_save_roundtrip(app):
     from utils.school import document_branding
     c = _admin(app)

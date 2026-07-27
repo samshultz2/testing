@@ -312,6 +312,7 @@ function Graduates({ d }) {
       <PageHeader title="Graduates" actions={<>
         {d.alumni_url && <a href={d.alumni_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-address-book" /> Alumni{d.pending_requests > 0 ? <span className="badge badge-warning" style={{ marginLeft: '.4rem' }}>{d.pending_requests}</span> : null}</a>}
         {d.doc_templates_url && <a href={d.doc_templates_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-swatchbook" /> Designs</a>}
+        {d.verifications_url && <a href={d.verifications_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-shield-halved" /> Verifications</a>}
         {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
         <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>
       </>} />
@@ -494,6 +495,7 @@ function GraduateProfile({ d, notify }) {
                   : <span className="badge badge-secondary">Not issued</span>}</div>
               {doc.number && <div className="data-card-row"><span className="data-card-label">No.</span><span>{doc.number}</span></div>}
               {doc.reprint_count > 0 && <div className="data-card-row"><span className="data-card-label">Reprints</span><span>{doc.reprint_count}</span></div>}
+              {doc.number && <div className="data-card-row"><span className="data-card-label">Verified</span><span>{doc.verify_count > 0 ? <span className="badge badge-info">{doc.verify_count}× checked</span> : <span style={{ color: 'var(--text-muted, #94a3b8)' }}>not yet</span>}</span></div>}
               {doc.verify_url && <div className="data-card-row"><span className="data-card-label">Verify</span><span><a href={doc.verify_url} target="_blank" rel="noopener noreferrer">link</a></span></div>}
               <div className="data-card-actions">
                 <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">
@@ -1135,10 +1137,66 @@ function DocTemplates({ d, notify }) {
   );
 }
 
+// ---- Document verification activity (admin) -------------------------------
+const _VBADGE = { valid: 'badge-success', revoked: 'badge-danger', not_found: 'badge-warning' };
+const _VLABEL = { valid: 'Valid', revoked: 'Revoked', not_found: 'Unknown code' };
+
+function VerifyRow({ v }) {
+  return (
+    <tr>
+      <td>{v.at}</td>
+      <td><span className={'badge ' + (_VBADGE[v.result] || 'badge-secondary')}>{_VLABEL[v.result] || v.result}</span></td>
+      <td>{v.doc_label}</td>
+      <td>{v.student_url ? <a href={v.student_url}>{v.student}</a> : (v.student || '—')}</td>
+      <td><code>{v.code}</code></td>
+      <td>{v.source === 'qr' ? <span title="QR link scanned"><i aria-hidden="true" className="fas fa-qrcode" /> Scan</span> : 'Typed'}</td>
+    </tr>
+  );
+}
+
+function DocVerifications({ d }) {
+  const nav = useNav();
+  const s = d.summary || {};
+  const table = (rows) => (
+    <div className="table-responsive"><table className="data-table"><thead><tr>
+      <th>When</th><th>Result</th><th>Document</th><th>Graduate</th><th>Code</th><th>Via</th>
+    </tr></thead><tbody>{rows.map((v) => <VerifyRow key={v.id} v={v} />)}</tbody></table></div>
+  );
+  return (
+    <>
+      <PageHeader title="Verification Activity" actions={
+        <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
+      <div className="card mb-3"><div className="card-body"><div className="filter-form">
+        <div className="form-group"><label className="form-label">Period</label>
+          <select className="form-control" value={d.days} onChange={(e) => navParams(nav.go, window.location.pathname, { days: e.target.value })}>
+            {[30, 90, 180, 365].map((n) => <option key={n} value={n}>Last {n} days</option>)}</select></div>
+      </div></div></div>
+      <div className="stats-grid mb-3">
+        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-magnifying-glass" /></div><div className="stat-content"><h3>{s.total || 0}</h3><p>Total checks</p></div></div>
+        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-circle-check" /></div><div className="stat-content"><h3>{s.valid || 0}</h3><p>Verified genuine</p></div></div>
+        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-ban" /></div><div className="stat-content"><h3>{s.revoked || 0}</h3><p>Revoked-doc checks</p></div></div>
+        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-triangle-exclamation" /></div><div className="stat-content"><h3>{s.not_found || 0}</h3><p>Unknown codes</p></div></div>
+      </div>
+      <div className="card mb-3"><div className="card-body">
+        <p className="text-muted" style={{ margin: 0 }}>
+          <i aria-hidden="true" className="fas fa-shield-halved" /> Every public check of one of your documents is logged here — no personal data about the person checking is stored, only a privacy-safe daily fingerprint.
+        </p></div></div>
+      <div className="card mb-3"><div className="card-header"><h3>Recent checks</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {(d.rows || []).length ? table(d.rows)
+            : <div style={{ padding: '1rem' }}><Empty icon="fa-magnifying-glass" title="No checks yet"><p>Nobody has verified one of your documents in this period.</p></Empty></div>}
+        </div></div>
+      {(d.unknown || []).length > 0 && <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Unknown-code attempts</h3></div>
+        <div className="card-body" style={{ padding: 0 }}>{table(d.unknown)}</div></div>}
+    </>
+  );
+}
+
 const SCREENS = { index: Index, rules: Rules, add_rule: AddRule, process: Process,
   graduates: Graduates, graduate_preview: GraduatePreview, graduate_profile: GraduateProfile,
   graduate_compare: GraduateCompare, history: History, alumni: Alumni,
-  alumni_analytics: AlumniAnalytics, doc_templates: DocTemplates };
+  alumni_analytics: AlumniAnalytics, doc_templates: DocTemplates,
+  doc_verifications: DocVerifications };
 
 export default function PromotionApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

@@ -189,6 +189,33 @@ class DocTemplatePref(db.Model):
     updated_by = db.Column(db.String(80))
 
 
+class DocumentVerification(db.Model):
+    """One public verification attempt against the /verify portal.
+
+    Records who checked a document (privacy-friendly — a salted, daily-rotating
+    visitor hash, never a raw IP) and the outcome, so a school can see genuine
+    third-party checks of its documents and spot suspicious activity (e.g. many
+    lookups of a revoked or unknown code). Append-only; written best-effort so a
+    logging failure never breaks the public portal."""
+    __tablename__ = 'document_verifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(24), index=True)                 # the code entered/scanned
+    document_id = db.Column(db.Integer, db.ForeignKey('graduate_documents.id'), index=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), index=True)
+    doc_type = db.Column(db.String(40))
+    result = db.Column(db.String(16), nullable=False, index=True)  # valid | revoked | not_found
+    source = db.Column(db.String(12))                           # 'qr' (scanned link) | 'manual'
+    visitor_hash = db.Column(db.String(64), index=True)         # salted daily digest of IP+UA
+    referrer = db.Column(db.String(120))
+    created_at = db.Column(db.DateTime, default=local_now, index=True)
+
+    document = db.relationship('GraduateDocument')
+    student = db.relationship('Student')
+
+    RESULTS = ('valid', 'revoked', 'not_found')
+
+
 DOC_REQUEST_STATUSES = ('pending', 'fulfilled', 'declined')
 
 
