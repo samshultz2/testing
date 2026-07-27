@@ -12,6 +12,7 @@ Standard design-module interface, so it plugs into :mod:`utils.graduate_docs`.
 from datetime import date
 
 from utils import doc_themes as _th
+from utils import letter_layouts as _ll
 from utils import transcript_templates as _tt
 
 
@@ -31,11 +32,23 @@ def _school_name():
         return ''
 
 
+# Templates = one per LETTER LAYOUT ARCHETYPE (distinct structure + palette).
+_DESC = {
+    'formal': 'Centred letterhead, boxed candidate details, dual signatures + seal.',
+    'crested': 'Left crest with the contact block set to the right; single signatory.',
+    'banner': 'Full-width colour masthead with the school identity reversed out.',
+    'accent': 'Left colour accent bar with the letter indented beside it.',
+    'memo': 'Minimalist wordmark memo with a contact footer.',
+    'deed': 'Ornate framed deed with a boxed detail block and twin seals.',
+    'reference': 'Premium reference letter with a boxed bio panel and gold seal.',
+    'panel': 'Left colour panel carrying the crest, seal and reference number.',
+    'contactbar': 'Letterhead over a coloured contact bar.',
+    'registry': "Registry style headed 'Office of the Registrar' with twin stamps.",
+}
 TEMPLATES = {k: {'name': v['name'], 'landscape': False,
-                 'description': f"{v['name']} collection — themed letterhead, "
-                                f"typography and signature style."}
-             for k, v in _th.COLLECTIONS.items()}
-DEFAULT_TEMPLATE = _th.DEFAULT_COLLECTION
+                 'description': _DESC.get(k, f"{v['name']} — a distinct letter layout.")}
+             for k, v in _ll.LAYOUTS.items()}
+DEFAULT_TEMPLATE = 'formal'
 
 
 def list_templates():
@@ -54,7 +67,8 @@ def is_landscape(key):
 def page_decorator(key):
     sn = _school_name()
     micro = (f"{sn}  ·  OFFICIAL DOCUMENT  ·  " if sn else 'OFFICIAL DOCUMENT  ·  ')
-    return _th.letter_decorator(key, _branding(), microtext=micro, watermark_text=sn)
+    return _th.letter_decorator(_ll.theme_key(key), _branding(), microtext=micro,
+                                watermark_text=sn, style=_ll.decorator_style(key))
 
 
 def page_margins(key):
@@ -199,7 +213,9 @@ def _content(ctx):
 
 
 def build_flowables(key, ctx):
-    return _th.render_letter(key, _content(ctx), branding=_branding())
+    content = _content(ctx)
+    content['_branding'] = _branding()
+    return _ll.render(key, content)
 
 
 def sample_ctx(school):

@@ -79,6 +79,25 @@ def test_certificate_templates_are_distinct_layouts():
     assert set(ce.TEMPLATES) == set(cl.LAYOUTS)
 
 
+def test_letter_templates_are_distinct_layouts():
+    from utils import letter_layouts as ll
+    fns = [v['fn'] for v in ll.LAYOUTS.values()]
+    themes = [v['theme'] for v in ll.LAYOUTS.values()]
+    assert len(set(id(f) for f in fns)) == len(fns), 'a letter layout function is reused'
+    assert len(set(themes)) == len(themes), 'a palette is reused across letter layouts'
+    assert set(lt.TEMPLATES) == set(ll.LAYOUTS)
+
+
+def test_statement_and_transcript_use_distinct_layouts():
+    # These engines already ship genuinely distinct per-design layouts (not
+    # recolours): each design is its own render function.
+    from utils import sor_templates, transcript_templates
+    for mod in (sor_templates, transcript_templates):
+        fns = [v['render'] for v in mod.TEMPLATES.values()]
+        assert len(set(id(f) for f in fns)) == len(fns)
+        assert len(mod.TEMPLATES) >= 7
+
+
 def test_every_certificate_type_renders_single_page_all_collections():
     types = [dt for dt in cat.designed_types() if cat.engine(dt) == cat.ENGINE_CERTIFICATE]
     assert types

@@ -247,8 +247,40 @@ def page_decorator(key, branding=None, microtext=None, watermark_text=None):
     return _decorator(key, branding, microtext, watermark_text, letter=False)
 
 
-def letter_decorator(key, branding=None, microtext=None, watermark_text=None):
-    return _decorator(key, branding, microtext, watermark_text, letter=True)
+def letter_decorator(key, branding=None, microtext=None, watermark_text=None, style='frame'):
+    """Letterhead page art for a letter. ``style`` distinguishes the layouts:
+    'frame' (thin gold inner frame), 'band' (top colour band + frame), 'sidebar'
+    (left colour bar), 'plain' (microtext + watermark only)."""
+    theme = resolve(key, branding)
+    primary, gold, paper = _c(theme['primary']), _c(theme['gold']), _c(theme['paper'])
+    micro_col = colors.Color(*primary.rgb(), alpha=0.30)
+    wm_col = colors.Color(*primary.rgb(), alpha=0.05)
+
+    def draw(canvas, doc):
+        w, h = doc.pagesize
+        canvas.saveState()
+        try:
+            _paper(canvas, w, h, paper)
+            if watermark_text:
+                _watermark(canvas, w, h, watermark_text, wm_col)
+            if style == 'band':
+                canvas.setFillColor(primary)
+                canvas.rect(0, h - 7 * mm, w, 7 * mm, fill=1, stroke=0)
+                canvas.setFillColor(gold)
+                canvas.rect(0, h - 9 * mm, w, 2 * mm, fill=1, stroke=0)
+            elif style == 'sidebar':
+                canvas.setFillColor(primary)
+                canvas.rect(10 * mm, 10 * mm, 6 * mm, h - 20 * mm, fill=1, stroke=0)
+                canvas.setFillColor(gold)
+                canvas.rect(16 * mm, 10 * mm, 1.4 * mm, h - 20 * mm, fill=1, stroke=0)
+            if style in ('frame', 'band'):
+                canvas.setStrokeColor(gold)
+                canvas.setLineWidth(1.1)
+                canvas.rect(10 * mm, 10 * mm, w - 20 * mm, h - 22 * mm, stroke=1, fill=0)
+            _microtext(canvas, w, h, microtext, micro_col, 6 * mm)
+        finally:
+            canvas.restoreState()
+    return draw
 
 
 # ---------------------------------------------------------------------------
