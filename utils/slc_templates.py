@@ -324,7 +324,7 @@ def _t_classic(ctx):
     head = _letterhead(ctx, accent, S)
     head += [Spacer(1, 6), HRFlowable(width='100%', thickness=1.2, color=colors.HexColor('#0e8a64')),
              Paragraph('SCHOOL LEAVING CERTIFICATE', ParagraphStyle(
-                 'ti', parent=S['center'], fontSize=15, fontName='Helvetica-Bold',
+                 'ti', parent=S['center'], fontSize=15, leading=19, fontName='Helvetica-Bold',
                  textColor=colors.HexColor('#0e8a64'), spaceBefore=10, spaceAfter=4))]
     st = ctx['student']
     mid = [Paragraph(
@@ -349,11 +349,11 @@ def _t_comprehensive(ctx):
     st = ctx['student']
     head = _letterhead(ctx, colors.HexColor('#111827'), S)
     head += [Paragraph('School Leaving Certificate &amp; Testimonial', ParagraphStyle(
-                 'ti', parent=S['center'], fontSize=17, fontName='Helvetica-BoldOblique', textColor=accent,
-                 spaceBefore=8, spaceAfter=6)),
+                 'ti', parent=S['center'], fontSize=17, leading=22, fontName='Helvetica-BoldOblique',
+                 textColor=accent, spaceBefore=8, spaceAfter=8)),
              Paragraph('This is to Certify that', S['bodyc']),
              Paragraph(f"<b>{_esc(st.full_name)}</b>", ParagraphStyle(
-                 'nm', parent=S['center'], fontSize=14, fontName='Helvetica-Bold', spaceAfter=6))]
+                 'nm', parent=S['center'], fontSize=14, leading=18, fontName='Helvetica-Bold', spaceAfter=6))]
     mid = [_fill('Born in', (ctx.get('bio') or {}).get('date_of_birth'), S),
            _fill('Was a Pupil of this School', '', S, w_label=64 * mm),
            _fill('From', ctx.get('from_year'), S), _fill('to', ctx.get('to_year'), S),
@@ -375,7 +375,8 @@ def _t_record(ctx):
     bio = ctx.get('bio') or {}
     head = _letterhead(ctx, colors.HexColor('#111827'), S)
     head += [Paragraph('CERTIFICATE OF SCHOOL LEAVING', ParagraphStyle(
-        'ti', parent=S['center'], fontSize=16, fontName='Helvetica-Bold', spaceBefore=10, spaceAfter=10))]
+        'ti', parent=S['center'], fontSize=16, leading=20, fontName='Helvetica-Bold',
+        spaceBefore=10, spaceAfter=10))]
     rows = [['Date of Admission', 'Class', 'Date of Withdrawal', 'Academic Performance'],
             [_esc(ctx.get('from_year')), 'SS3', _esc(ctx.get('to_year')), _esc(ctx.get('performance') or '—')]]
     t = Table(rows, colWidths=[45 * mm, 25 * mm, 45 * mm, 55 * mm])
