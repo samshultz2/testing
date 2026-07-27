@@ -355,8 +355,8 @@ def field_table(pairs, theme, width, label_w=None, tint=True):
     _h, bfont, _n = fonts(theme)
     primary = _c(theme['primary'])
     soft = colors.Color(*primary.rgb(), alpha=0.07)
-    lab = ParagraphStyle('fl', fontName=_h, fontSize=9.5, leading=12, textColor=primary)
-    val = ParagraphStyle('fv', fontName=bfont, fontSize=9.5, leading=12)
+    lab = ParagraphStyle('fl', fontName=_h, fontSize=11, leading=14, textColor=primary)
+    val = ParagraphStyle('fv', fontName=bfont, fontSize=11, leading=14)
     rows = [[Paragraph(_esc(k), lab), Paragraph(_esc(v), val)] for k, v in pairs if v]
     if not rows:
         return None
@@ -391,7 +391,7 @@ def section_bar(title, theme, width):
 # generic certificate body (landscape, page-filling)
 # ---------------------------------------------------------------------------
 L_W = 261 * mm
-_L_BODY_H = 210 * mm - 30 * mm - 34 * mm         # landscape page - margins - footer reserve
+_L_BODY_H = 210 * mm - 30 * mm - 28 * mm         # landscape page - margins - footer reserve
 P_W = 170 * mm
 
 

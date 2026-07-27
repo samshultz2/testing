@@ -28,12 +28,12 @@ def _esc(v):
 def _styles():
     ss = getSampleStyleSheet()
     return {
-        'body': ParagraphStyle('b', parent=ss['Normal'], fontSize=10.5, leading=16,
+        'body': ParagraphStyle('b', parent=ss['Normal'], fontSize=12, leading=18,
                                alignment=TA_JUSTIFY, spaceAfter=6),
-        'left': ParagraphStyle('l', parent=ss['Normal'], fontSize=10, leading=15),
-        'center': ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER, fontSize=10),
-        'small': ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=colors.HexColor('#64748b')),
-        'cell': ParagraphStyle('cell', parent=ss['Normal'], fontSize=8.5, leading=11),
+        'left': ParagraphStyle('l', parent=ss['Normal'], fontSize=11.5, leading=17),
+        'center': ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER, fontSize=11.5),
+        'small': ParagraphStyle('s', parent=ss['Normal'], fontSize=9, textColor=colors.HexColor('#64748b')),
+        'cell': ParagraphStyle('cell', parent=ss['Normal'], fontSize=10.5, leading=13),
     }
 
 
@@ -182,7 +182,7 @@ def _fields(pairs, S):
 
 
 def _result_table(rows, S, accent, pad=4):
-    cell = ParagraphStyle('rc', parent=S['cell'], fontSize=10.5, leading=13)
+    cell = ParagraphStyle('rc', parent=S['cell'], fontSize=12, leading=15)
     data = [['S/N', 'Subject', 'Score', 'Grade', 'Remark']]
     remark_by_grade = {'A': 'Excellent', 'B': 'Very good', 'C': 'Credit', 'D': 'Pass', 'F': 'Fail'}
     for i, (subj, score, grade) in enumerate(rows, 1):
@@ -190,7 +190,7 @@ def _result_table(rows, S, accent, pad=4):
                      remark_by_grade.get(grade, '')])
     t = Table(data, colWidths=[12 * mm, 73 * mm, 22 * mm, 22 * mm, 36 * mm], repeatRows=1)
     t.setStyle(TableStyle([
-        ('FONTSIZE', (0, 0), (-1, -1), 10.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BACKGROUND', (0, 0), (-1, 0), accent), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (3, -1), 'CENTER'),
@@ -210,7 +210,7 @@ def _grade_key(S, ssce=False):
         data = [['A', '70–100', 'Excellent'], ['B', '60–69', 'Very good'], ['C', '50–59', 'Credit'],
                 ['D', '40–49', 'Pass'], ['F', '0–39', 'Fail']]
         t = Table([['Grade', 'Mark', 'Remark']] + data, colWidths=[18 * mm, 24 * mm, 34 * mm])
-    t.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 7.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    t.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
                            ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
     return [Paragraph('<b>Key to grading</b>', S['small']), Spacer(1, 3), t]
@@ -321,13 +321,13 @@ def _ssce_rows(ctx):
 
 
 def _ssce_table(rows, S, accent, pad=4, colWidths=(12 * mm, 95 * mm, 25 * mm, 35 * mm)):
-    cell = ParagraphStyle('sc', parent=S['cell'], fontSize=10.5, leading=13)
+    cell = ParagraphStyle('sc', parent=S['cell'], fontSize=12, leading=15)
     data = [['S/N', 'Subject', 'Grade', 'Remark']]
     for i, (subj, grade, remark) in enumerate(rows, 1):
         data.append([str(i), Paragraph(_esc(subj), cell), grade, remark])
     t = Table(data, colWidths=list(colWidths), repeatRows=1)
     t.setStyle(TableStyle([
-        ('FONTSIZE', (0, 0), (-1, -1), 10.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BACKGROUND', (0, 0), (-1, 0), accent), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (2, -1), 'CENTER'),
@@ -1036,7 +1036,7 @@ def _t_unity(ctx):
                      grade or '—', interp])
     table = Table(data, colWidths=[12 * mm, 30 * mm, 63 * mm, 22 * mm, 38 * mm], repeatRows=1)
     table.setStyle(TableStyle([
-        ('FONTSIZE', (0, 0), (-1, -1), 10.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#64748b')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
         ('ALIGN', (0, 0), (1, -1), 'CENTER'), ('ALIGN', (3, 0), (3, -1), 'CENTER'),

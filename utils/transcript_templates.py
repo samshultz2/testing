@@ -47,13 +47,13 @@ def _fmt(v):
 def _styles():
     ss = getSampleStyleSheet()
     return {
-        'body': ParagraphStyle('b', parent=ss['Normal'], fontSize=10.5, leading=16,
+        'body': ParagraphStyle('b', parent=ss['Normal'], fontSize=11.5, leading=17,
                                alignment=TA_JUSTIFY, spaceAfter=6),
-        'left': ParagraphStyle('l', parent=ss['Normal'], fontSize=10, leading=15),
-        'center': ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER, fontSize=10),
-        'small': ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=colors.HexColor('#64748b')),
-        'cell': ParagraphStyle('cell', parent=ss['Normal'], fontSize=7.5, leading=9),
-        'cellc': ParagraphStyle('cellc', parent=ss['Normal'], fontSize=7.5, leading=9, alignment=TA_CENTER),
+        'left': ParagraphStyle('l', parent=ss['Normal'], fontSize=11, leading=16),
+        'center': ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER, fontSize=11),
+        'small': ParagraphStyle('s', parent=ss['Normal'], fontSize=8.5, textColor=colors.HexColor('#64748b')),
+        'cell': ParagraphStyle('cell', parent=ss['Normal'], fontSize=8.5, leading=10.5),
+        'cellc': ParagraphStyle('cellc', parent=ss['Normal'], fontSize=8.5, leading=10.5, alignment=TA_CENTER),
     }
 
 
@@ -224,7 +224,7 @@ def _term_grid(m, S, accent, two_line_group=False):
     subj_w = 38 * mm
     col_w = max(9 * mm, (USABLE_W - subj_w) / max(1, total_cols))
     grp = ParagraphStyle('grp', parent=S['cellc'], textColor=colors.white,
-                         fontName='Helvetica-Bold', fontSize=7)
+                         fontName='Helvetica-Bold', fontSize=8)
     comp_col = 1 + ncols                              # index of the competence column
     # header rows
     top = ['SUBJECT']
@@ -264,7 +264,7 @@ def _term_grid(m, S, accent, two_line_group=False):
 
     t = Table(rows, colWidths=[subj_w] + [col_w] * total_cols, repeatRows=2)
     style = [
-        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
         ('FONTNAME', (0, 0), (-1, 1), 'Helvetica-Bold'),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('BACKGROUND', (0, 0), (-1, 1), accent), ('TEXTCOLOR', (0, 0), (-1, 1), colors.white),
@@ -302,7 +302,7 @@ def _year_grid(m, S, accent):
     if has_comp:
         head1.append(Paragraph(_esc(m.get('competence_label') or 'Competence'),
                                ParagraphStyle('ch', parent=S['cellc'], textColor=colors.white,
-                                              fontName='Helvetica-Bold', fontSize=7)))
+                                              fontName='Helvetica-Bold', fontSize=8)))
         head2.append('')
     rows = [head1, head2]
     for i, name in enumerate(m['subjects'], 1):

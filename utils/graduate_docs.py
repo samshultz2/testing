@@ -18,7 +18,9 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                 TableStyle, Image as RLImage, HRFlowable, KeepInFrame)
 
 # Room reserved (mm) at the foot of the page for the shared verification block.
-_FOOTER_RESERVE = 46
+# Kept close to the real footprint of the QR + verification lines (~36mm) so the
+# body extends as far down the page as possible without crowding the footer.
+_FOOTER_RESERVE = 38
 
 _PRIMARY = colors.HexColor('#0e3a2f')
 _ACCENT = colors.HexColor('#0e8a64')
@@ -170,7 +172,8 @@ def _apply_layout(mod, key, ctx, pagesize):
     the ctx so designs that fill the page know how much room they have."""
     land = mod.is_landscape(key)
     mt, mb, _ml, _mr = _margins_for(mod, key, land)
-    ctx['_avail'] = (pagesize[1] - (mt + mb) * mm) - _FOOTER_RESERVE * mm
+    reserve = 28 if land else _FOOTER_RESERVE
+    ctx['_avail'] = (pagesize[1] - (mt + mb) * mm) - reserve * mm
     return ctx
 
 
@@ -304,7 +307,7 @@ def preview_document(doc_type, template_key):
     small = ParagraphStyle('s', parent=ss['Normal'], fontSize=8, textColor=_MUTED)
     _apply_layout(mod, template_key, ctx, pagesize)
     body = mod.build_flowables(template_key, ctx)
-    el = _fit_body(body, pagesize, (mt, mb, ml, mr), reserve=(34 if land else _FOOTER_RESERVE))
+    el = _fit_body(body, pagesize, (mt, mb, ml, mr), reserve=(28 if land else _FOOTER_RESERVE))
     el += [Spacer(1, 12), HRFlowable(width='100%', thickness=0.5, color=_MUTED),
            Paragraph('<b>PREVIEW — sample data.</b> A QR code and verification code '
                      'appear here on a real document.', small)]
@@ -342,7 +345,7 @@ def render(student, doc, verify_url):
                                 topMargin=mt * mm, bottomMargin=mb * mm,
                                 title=f'{label} — {student.full_name}')
         ctx = _apply_layout(mod, key, _doc_ctx(student, doc, school, rec), pagesize)
-        reserve = 34 if land else _FOOTER_RESERVE
+        reserve = 28 if land else _FOOTER_RESERVE
         el = _fit_body(mod.build_flowables(key, ctx), pagesize, (mt, mb, ml, mr), reserve=reserve)
         el += _verification_footer(doc, verify_url, small)
         on_page = _page_painter(school['name'], mod.page_decorator(key))

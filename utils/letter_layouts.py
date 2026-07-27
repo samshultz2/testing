@@ -14,7 +14,7 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, HRFlowable
 from utils import doc_themes as th
 
 P_W = th.P_W
-_AVAIL = 263 * mm - 46 * mm            # portrait frame (margins 16/18) - footer reserve
+_AVAIL = 263 * mm - 38 * mm            # portrait frame (margins 16/18) - footer reserve
 
 
 def _col(v):
@@ -76,11 +76,11 @@ def _body(content, theme):
     _h, bfont, _n = th.fonts(theme)
     els = []
     if content.get('salutation'):
-        els.append(_P(content['salutation'], bfont, 11, '#111827', TA_LEFT, sa=6))
+        els.append(_P(content['salutation'], bfont, 12.5, '#111827', TA_LEFT, sa=6))
     for p in (content.get('body') or []):
-        els.append(_P(p, bfont, 11, '#1f2937', TA_JUSTIFY, leading=17, sa=8))
+        els.append(_P(p, bfont, 12.5, '#1f2937', TA_JUSTIFY, leading=19, sa=9))
     if content.get('closing'):
-        els.append(_P(content['closing'], bfont, 11, '#1f2937', TA_LEFT, sb=6))
+        els.append(_P(content['closing'], bfont, 12.5, '#1f2937', TA_LEFT, sb=6))
     return els
 
 
@@ -252,7 +252,7 @@ def _lay_panel_left(theme, content):
     head = _head_left(content, theme)
     title = [_title(content, theme, TA_LEFT, 16)]
     meta = [_meta_row(content, theme, P_W), Spacer(1, 8)]
-    sal = ([_P(content['salutation'], bfont, 11, '#111827', TA_LEFT, sa=8)]
+    sal = ([_P(content['salutation'], bfont, 12.5, '#111827', TA_LEFT, sa=8)]
            if content.get('salutation') else [])
     # passport photo beside the candidate-details grid
     ft = th.field_table(content.get('fields') or [], theme, P_W - 38 * mm)
@@ -265,9 +265,9 @@ def _lay_panel_left(theme, content):
         bio = [_photo_box(), Spacer(1, 10)]
     paras = []
     for p in (content.get('body') or []):
-        paras.append(_P(p, bfont, 11, '#1f2937', TA_JUSTIFY, leading=17, sa=8))
+        paras.append(_P(p, bfont, 12.5, '#1f2937', TA_JUSTIFY, leading=19, sa=9))
     if content.get('closing'):
-        paras.append(_P(content['closing'], bfont, 11, '#1f2937', TA_LEFT, sb=6))
+        paras.append(_P(content['closing'], bfont, 12.5, '#1f2937', TA_LEFT, sb=6))
     body = head + title + meta + sal + bio + paras
     return _anchor(body, _sig(content, theme, P_W))
 
