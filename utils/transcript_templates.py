@@ -829,6 +829,103 @@ def _t_chancellor(ctx):
     return el
 
 
+def _bishop_frame(canvas, doc):
+    """Microtext-style security double frame (the Bishop-Adelakun look)."""
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    navy = colors.HexColor('#0f2f5f')
+    canvas.saveState()
+    canvas.setStrokeColor(navy); canvas.setLineWidth(2.4)
+    canvas.rect(8 * mm, 8 * mm, w - 16 * mm, h - 16 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(0.6)
+    canvas.rect(10.5 * mm, 10.5 * mm, w - 21 * mm, h - 21 * mm, stroke=1, fill=0)
+    canvas.setFillColor(colors.Color(*navy.rgb(), alpha=0.32))
+    canvas.setFont('Helvetica', 3.1)
+    micro = ('TRANSCRIPT OF ACADEMIC RECORD  ') * 40
+    canvas.drawString(12 * mm, h - 10 * mm, micro[:150])
+    canvas.drawString(12 * mm, 8.6 * mm, micro[:150])
+    canvas.restoreState()
+
+
+def _t_bishop(ctx):
+    """Faithful 'Bishop Adelakun' replica: microtext security frame, red serial,
+    crest + motto masthead, passport + bio, a multi-session grid, a performance
+    summary block, Principal's Remarks and a QR authentication row."""
+    from datetime import date
+    from utils import doc_themes as _dth
+    S = _styles()
+    navy = colors.HexColor('#0f2f5f')
+    m = _matrix(ctx['academic'])
+    name, addr, contact = _header_lines(ctx['school'])
+    st = ctx['student']
+    doc = ctx.get('doc')
+    serial = (doc.document_number if doc and getattr(doc, 'document_number', None) else 'BAMHS/TR/0000')
+    el = [Table([[Paragraph('', S['left']),
+                  Paragraph(f"<b>{_esc(serial)}</b>", ParagraphStyle('sn', parent=S['left'],
+                            fontSize=11, alignment=2, textColor=colors.HexColor('#b91c1c')))]],
+                colWidths=[P_WHALF := USABLE_W - 40 * mm, 40 * mm],
+                style=TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))]
+    logo = _logo()
+    hdr = [Paragraph(_esc(name).upper(), ParagraphStyle('nm', parent=S['center'], fontSize=16, leading=19,
+                     fontName='Helvetica-Bold', textColor=navy))]
+    if ctx['school'].get('motto'):
+        hdr.append(Paragraph(_esc(ctx['school'].get('motto')), ParagraphStyle('mt', parent=S['center'],
+                   fontSize=8, textColor=colors.HexColor('#15803d'))))
+    if addr:
+        hdr.append(Paragraph(_esc(addr), S['small']))
+    band = Table([[logo or '', hdr]], colWidths=[24 * mm, USABLE_W - 24 * mm]) if logo is not None \
+        else Table([[hdr]], colWidths=[USABLE_W])
+    band.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+    el += [band, Spacer(1, 2),
+           Paragraph('OFFICIAL ACADEMIC TRANSCRIPT', ParagraphStyle('ti', parent=S['center'], fontSize=13,
+                     fontName='Helvetica-Bold', textColor=navy, spaceBefore=4, spaceAfter=6))]
+    bio = _header_fields([('Full Name', st.full_name), ('Admission No.', st.student_id),
+                          ('Gender', st.gender), ('Date of Birth', (ctx.get('bio') or {}).get('date_of_birth')),
+                          ('Session', ctx.get('admission_session')), ('Graduation', ctx.get('grad_when'))], S)
+    idrow = Table([[bio, _photo_box()]], colWidths=[USABLE_W - 30 * mm, 30 * mm])
+    idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
+    el += [idrow, Spacer(1, 6)]
+    el.append(_year_grid(m, S, navy) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 6))
+    cls = _grade(m['cumulative']) if m['cumulative'] is not None else '—'
+    credits = sum(1 for r in ([] if not m['subjects'] else _overall_pairs(m)) if r)
+    summ_l = _boxed_info('PERFORMANCE SUMMARY', [
+        ('Cumulative Average', f"{m['cumulative']}%" if m['cumulative'] is not None else '—'),
+        ('Classification', cls), ('Sessions', str(len(m['sessions']))),
+        ('Subjects', str(len(m['subjects'])))], S, navy, USABLE_W / 2 - 3 * mm)
+    summ_r = _boxed_info('STANDING', [
+        ('Class Position', '—'), ('Attendance', '—'), ('Conduct', 'Good'),
+        ('Graduation Status', 'Graduated')], S, navy, USABLE_W / 2 - 3 * mm)
+    panels = Table([[summ_l, summ_r]], colWidths=[USABLE_W / 2, USABLE_W / 2])
+    panels.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    el += [panels, Spacer(1, 6)]
+    pr = 'his' if (st.gender or '').lower().startswith('m') else 'her' if (st.gender or '').lower().startswith('f') else 'their'
+    el.append(Paragraph(f"<b>Principal's Remarks:</b> <i>{_esc((st.full_name or '').split(' ')[0])} is a "
+                        f"diligent student who maintained good conduct throughout {pr} studies and is "
+                        f"recommended for higher education.</i>", S['body']))
+    # authentication row: QR + verification + signatures
+    qr = _dth.qr(serial, size=20)
+    auth_left = [Paragraph(f"<b>Transcript No.:</b> {_esc(serial)}", S['small']),
+                 Paragraph(f"<b>Date Issued:</b> {date.today().strftime('%d %B %Y')}", S['small']),
+                 Paragraph("Verify at the school portal.", S['small'])]
+    authrow = Table([[qr or '', auth_left]], colWidths=[24 * mm, USABLE_W - 24 * mm]) if qr is not None \
+        else Table([[auth_left]], colWidths=[USABLE_W])
+    authrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (0, 0), 0)]))
+    el += [Spacer(1, 6), authrow]
+    el += _signatures(S, labels=('Principal', 'Registrar'))
+    return el
+
+
+def _overall_pairs(m):
+    out = []
+    for subj in m['subjects']:
+        cells = m['grid'].get(subj, {})
+        scores = [c.get('score') for c in cells.values() if c.get('score') is not None]
+        if scores:
+            out.append(subj)
+    return out
+
+
 TRANSCRIPT_TEMPLATES = {
     'classic': {'name': 'Classic (default)', 'render': _t_classic,
                 'description': 'Clean modern layout with a per-year score & grade grid and grading key.'},
@@ -853,6 +950,10 @@ TRANSCRIPT_TEMPLATES = {
     'lagos': {'name': 'Engraved (cream)', 'render': _t_lagos, 'decorator': _lagos_frame,
               'description': 'Cream engraved-frame transcript with boxed information panels, an SS1–SS3 '
                              'record grid, grading key and an official authentication block.'},
+    'bishop': {'name': 'Secured (microtext)', 'render': _t_bishop, 'decorator': _bishop_frame,
+               'description': 'Microtext security frame with a red serial, crest + motto masthead, '
+                              'passport + bio, a multi-session grid, a performance summary and a QR '
+                              'authentication row.'},
 }
 
 TEMPLATES = TRANSCRIPT_TEMPLATES

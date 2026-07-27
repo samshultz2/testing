@@ -333,9 +333,42 @@ def _lay_chancellor(theme, content, avail=_AVAIL, width=L_W):
     return [outer]
 
 
+def _photo_box(w=26 * mm, h=32 * mm):
+    t = Table([[Paragraph('PHOTOGRAPH', ParagraphStyle('ph', fontSize=6, alignment=1,
+               textColor=colors.HexColor('#94a3b8')))]], colWidths=[w], rowHeights=[h])
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.8, colors.HexColor('#94a3b8')),
+                           ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#eef2f7')),
+                           ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    return t
+
+
+def _lay_stmichael(theme, content, avail=_AVAIL, width=L_W - 36 * mm):
+    """Faithful 'St. Michael's' landscape graduation diploma: crest masthead, gold
+    title, certifying passage, passport + candidate details, and Principal /
+    Registrar / Chairman signatures with seal and QR."""
+    hfont, bfont, nfont = th.fonts(theme)
+    lg = _logo(h=20, w=36)
+    top = ([lg, Spacer(1, 2)] if lg is not None else []) + _kicker(content, theme) + [
+        _P(content['title'].upper(), hfont, 20, theme['gold'], leading=24, sb=2)]
+    right = [_P(content.get('lead') or 'This is to certify that', bfont, 11.5, '#111827', sa=2),
+             _P(content['recipient'], nfont, 24, theme['accent'], leading=28, sa=3),
+             HRFlowable(width='70%', thickness=0.6, color=_col(theme['gold']))]
+    for p in (content.get('body') or []):
+        right.append(_P(p, bfont, 10.5, '#1f2937', leading=15, sb=3))
+    right += [Spacer(1, 3), _details(content.get('fields'), theme, width - 46 * mm, cols=2)]
+    midtbl = Table([[_photo_box(), right]], colWidths=[40 * mm, width - 40 * mm])
+    midtbl.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                               ('LEFTPADDING', (1, 0), (1, 0), 10)]))
+    c3 = dict(content)
+    c3['signatures'] = ['Principal', 'Registrar', 'Chairman']
+    foot = _auth(c3, theme, width)
+    return _bands(top, [midtbl], foot, avail, width, ratios=(0.22, 0.48, 0.30))
+
+
 # key -> {name, theme (collection key), fn}.  Every entry is a DIFFERENT layout
 # function bound to a distinct palette — no two templates are alike.
 LAYOUTS = {
+    'stmichael':  {'name': 'Diploma',    'theme': 'american',       'fn': _lay_stmichael},
     'imperial':   {'name': 'Imperial',   'theme': 'gold',           'fn': _lay_imperial},
     'sovereign':  {'name': 'Sovereign',  'theme': 'royal',          'fn': _lay_sovereign},
     'laureate':   {'name': 'Laureate',   'theme': 'classic',        'fn': _lay_laureate},

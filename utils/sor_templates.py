@@ -798,6 +798,130 @@ def _t_ledger(ctx):
     return _page_fill(above + [_main_table(rows, is_ssce, S, accent, pad=5)] + mid, sig, avail=avail)
 
 
+_GP4 = {'A1': 4.0, 'B2': 3.6, 'B3': 3.2, 'C4': 2.8, 'C5': 2.4, 'C6': 2.0, 'D7': 1.6, 'E8': 1.2, 'F9': 0.0,
+        'A': 4.0, 'B': 3.0, 'C': 2.0, 'D': 1.0, 'F': 0.0}
+
+
+def _t_ohis(ctx):
+    """Faithful WAEC/NECO-style SSCE 'Statement of Result' (OHIS look): crest +
+    government-approved masthead, candidate particulars, a pre-ruled 16-row
+    subject grid, subjects tally and a WAEC/NECO computation note, inside an
+    ornate blue border."""
+    S = _styles()
+    blue = colors.HexColor('#1d4ed8')
+    rows, summary, src = _ssce_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    name, addr, contact = _tt._header_lines(ctx['school'])
+    st = ctx['student']
+    parts = (st.full_name or '').split(' ')
+    surname, others = (parts[-1] if parts else ''), ' '.join(parts[:-1])
+    year = str((ctx.get('waec') or {}).get('year') or ctx.get('grad_when') or '')
+    el = _logo_center(max_h=16, max_w=30) + [
+        Paragraph(_esc(name).upper(), ParagraphStyle('nm', parent=S['center'], fontSize=17, leading=20,
+                  fontName='Helvetica-Bold', textColor=blue)),
+        Paragraph('(GOVERNMENT APPROVED)', ParagraphStyle('ga', parent=S['center'], fontSize=8,
+                  fontName='Helvetica-Bold')),
+        Paragraph(_esc(addr or ''), S['center']),
+        Paragraph('SENIOR SCHOOL CERTIFICATE EXAMINATION', ParagraphStyle('e1', parent=S['center'],
+                  fontSize=11, fontName='Helvetica-Bold', spaceBefore=6)),
+        Paragraph('STATEMENT OF RESULT', ParagraphStyle('e2', parent=S['center'], fontSize=13,
+                  fontName='Helvetica-Bold', textColor=blue, spaceAfter=6))]
+    # candidate particulars strip
+    part = Table([[Paragraph(f"<b>Surname:</b> {_esc(surname)}", S['left']),
+                   Paragraph(f"<b>Other Names:</b> {_esc(others)}", S['left'])],
+                  [Paragraph(f"<b>Centre No.:</b> {_esc(st.student_id)}", S['left']),
+                   Paragraph(f"<b>Candidate No.:</b> {_esc(getattr(st, 'jamb_reg_number', None) or st.student_id)}", S['left'])],
+                  [Paragraph(f"<b>Year:</b> {_esc(year)}", S['left']),
+                   Paragraph(f"<b>Sex:</b> {_esc(st.gender)}", S['left'])]], colWidths=[P_W / 2, P_W / 2])
+    part.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, blue), ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+                              ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                              ('LEFTPADDING', (0, 0), (-1, -1), 5)]))
+    el += [part, Spacer(1, 6)]
+    # pre-ruled 16-row subject grid
+    cell = ParagraphStyle('c', parent=S['cell'], fontSize=9.5, leading=12)
+    data = [['S/N', 'SUBJECT', 'GRADE', 'REMARK']]
+    N = max(16, len(rows))
+    for i in range(N):
+        if i < len(rows):
+            subj, grade, remark = rows[i]
+            data.append([str(i + 1), Paragraph(_esc(subj).upper(), cell), grade, remark])
+        else:
+            data.append([str(i + 1), '', '', ''])
+    grid = Table(data, colWidths=[12 * mm, 95 * mm, 25 * mm, 35 * mm],
+                 rowHeights=[None] + [7.4 * mm] * N, repeatRows=1)
+    grid.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9.5), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                              ('BACKGROUND', (0, 0), (-1, 0), blue), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                              ('GRID', (0, 0), (-1, -1), 0.5, blue),
+                              ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+                              ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    tally = Paragraph(f"<b>SUBJECTS:</b> Registered: {summary['registered']} &nbsp; "
+                      f"Credited: {summary['credited']} &nbsp; Passed: {summary['passed']} &nbsp; "
+                      f"Failed: {summary['failed']}", S['left'])
+    note = Paragraph("Result computed from the West African Examinations Council (WAEC) / National "
+                     "Examinations Council (NECO). Any alteration on this statement renders it invalid.", S['small'])
+    sig = _sig(S, labels=("Principal's Signature", 'Date'))
+    return _page_fill(el + [grid, Spacer(1, 6), tally, Spacer(1, 4), note], sig, avail=avail)
+
+
+def _t_federal(ctx):
+    """Faithful polytechnic-style 'Statement of Examination Results': dark banner,
+    student block, a course table (Code / Title / Unit / Grade / WGP), a GPA
+    summary, grading key, warning line and a registrar signature."""
+    S = _styles()
+    dark = colors.HexColor('#111827')
+    rows, is_ssce, year = _statement_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    el = _letterhead(ctx, dark, S)
+    el += [Spacer(1, 3),
+           Table([[Paragraph('STATEMENT OF EXAMINATION RESULTS', ParagraphStyle('ti', parent=S['center'],
+                   fontSize=14, fontName='Helvetica-Bold', textColor=colors.white))]], colWidths=[P_W],
+                 style=TableStyle([('BACKGROUND', (0, 0), (-1, -1), dark),
+                                   ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)])),
+           Spacer(1, 6)]
+    st = ctx['student']
+    info = _bio_pairs([("Student's Name", st.full_name), ('Matric No.', st.student_id),
+                       ('Sex', st.gender), ('Session', ctx.get('grad_session') or ctx.get('admission_session'))],
+                      S, P_W - 30 * mm)
+    idrow = Table([[info, _photo_box()]], colWidths=[P_W - 30 * mm, 30 * mm])
+    idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
+    el += [idrow, Spacer(1, 6)]
+    # course table with unit + WGP
+    data = [['SN', 'CODE', 'COURSE TITLE', 'UNIT', 'GRADE', 'WGP']]
+    tot_u = tot_wgp = 0
+    passed = 0
+    for i, (subj, score, grade, remark) in enumerate(rows, 1):
+        unit = 3
+        gp = _GP4.get((grade or '').upper(), 0.0)
+        wgp = unit * gp
+        tot_u += unit
+        tot_wgp += wgp
+        if gp > 0:
+            passed += unit
+        code = (''.join([c for c in (subj or '') if c.isalpha()])[:3] or 'GNS').upper() + '101'
+        data.append([str(i), code, Paragraph(_esc(subj), S['cell']), str(unit), grade or '—', f"{wgp:.2f}"])
+    gpa = round(tot_wgp / tot_u, 2) if tot_u else 0.0
+    t = Table(data, colWidths=[10 * mm, 24 * mm, 79 * mm, 16 * mm, 18 * mm, 18 * mm], repeatRows=1)
+    t.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                           ('BACKGROUND', (0, 0), (-1, 0), dark), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                           ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
+                           ('ALIGN', (0, 0), (1, -1), 'CENTER'), ('ALIGN', (3, 0), (-1, -1), 'CENTER'),
+                           ('TOPPADDING', (0, 0), (-1, -1), 3.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5),
+                           ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f3f4f6')])]))
+    summ = Table([[Paragraph(f"<b>Units Attempted:</b> {tot_u}", S['left']),
+                   Paragraph(f"<b>Units Passed:</b> {passed}", S['left']),
+                   Paragraph(f"<b>Weighted GP:</b> {tot_wgp:.2f}", S['left']),
+                   Paragraph(f"<b>GPA:</b> {gpa} / 4.00", S['left'])]], colWidths=[P_W / 4] * 4)
+    summ.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.5, dark), ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+                              ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                              ('LEFTPADDING', (0, 0), (-1, -1), 5)]))
+    warn = Paragraph("<i>WARNING: ANY ALTERATION RENDERS THIS RESULT INVALID.</i>", S['small'])
+    sig = _sig(S, labels=('Registrar', 'Principal'))
+    if not rows:
+        return _page_fill(el + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
+    return _page_fill(el + [t, Spacer(1, 6), summ] + _grade_key(S, ssce=is_ssce) + _remarks(ctx, S)
+                      + [Spacer(1, 4), warn], sig, avail=avail)
+
+
 SOR_TEMPLATES = {
     'classic': {'name': 'Classic (default)', 'render': _t_classic,
                 'description': 'Clean statement with an aggregated subject/score/grade table and grading key.'},
@@ -824,6 +948,12 @@ SOR_TEMPLATES = {
     'eagle': {'name': 'Crested SSCE (green border)', 'render': _t_eagle, 'decorator': _eagle_frame,
               'description': 'Crested two-tone masthead with a passport box, bio grid, subject/grade/remark '
                              'table, distinctions summary and a red result number (Eagle’s-Nest style).'},
+    'ohis': {'name': 'SSCE Pre-ruled (blue border)', 'render': _t_ohis, 'decorator': _border_blue,
+             'description': 'Government-approved SSCE statement with candidate particulars, a pre-ruled '
+                            '16-row subject grid and a WAEC/NECO computation note, in an ornate blue border.'},
+    'federal': {'name': 'Examination Results (GPA)', 'render': _t_federal,
+                'description': 'Polytechnic-style examination results: dark banner, course table with '
+                               'units & weighted grade points, GPA summary, grading key and registrar line.'},
 }
 TEMPLATES = SOR_TEMPLATES
 DEFAULT_TEMPLATE = 'classic'
