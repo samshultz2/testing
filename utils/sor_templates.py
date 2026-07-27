@@ -617,6 +617,69 @@ def _t_bordered(ctx):
 # ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
+def _photo_box(w=26 * mm, h=32 * mm):
+    t = Table([[Paragraph('PHOTOGRAPH', ParagraphStyle('ph', fontSize=6, alignment=1,
+               textColor=colors.HexColor('#94a3b8')))]], colWidths=[w], rowHeights=[h])
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.8, colors.HexColor('#94a3b8')),
+                           ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#eef2f7')),
+                           ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    return t
+
+
+def _bio_pairs(pairs, S, width, label_w=38 * mm):
+    rows = [[Paragraph(f'<b>{_esc(k)}:</b>', S['left']), Paragraph(_esc(v), S['left'])]
+            for k, v in pairs if v]
+    t = Table(rows, colWidths=[label_w, width - label_w])
+    t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                           ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5)]))
+    return t
+
+
+def _eagle_frame(canvas, doc):
+    _ornate_border(canvas, doc, colors.HexColor('#15803d'))
+
+
+def _t_eagle(ctx):
+    """Faithful 'Eagle's Nest' replica: crested two-tone masthead, passport box,
+    bio grid, subject/grade/remark table, distinctions summary, remarks and a red
+    Statement-of-Results number."""
+    S = _styles()
+    green, navy = colors.HexColor('#15803d'), colors.HexColor('#1e3a8a')
+    rows, is_ssce, year = _statement_rows(ctx)
+    avail = ctx.get('_avail', _P_BODY_H)
+    name, addr, contact = _tt._header_lines(ctx['school'])
+    above = _logo_center(max_h=18, max_w=34) + [
+        Paragraph(_esc(name), ParagraphStyle('nm', parent=S['center'], fontSize=18, leading=21,
+                  fontName='Helvetica-Bold', textColor=navy))]
+    if ctx['school'].get('motto'):
+        above.append(Paragraph(f"<i>{_esc(ctx['school'].get('motto'))}</i>", ParagraphStyle(
+            'mt', parent=S['center'], fontSize=8, textColor=green)))
+    sub = ' · '.join([x for x in [addr, contact] if x])
+    if sub:
+        above.append(Paragraph(_esc(sub), S['small']))
+    above.append(Paragraph('<font color="#15803d">STATEMENT OF </font><font color="#1e3a8a">RESULTS</font>',
+                 ParagraphStyle('ti', parent=S['center'], fontSize=18, fontName='Helvetica-Bold',
+                                spaceBefore=6, spaceAfter=6)))
+    st = ctx['student']
+    bio = _bio_pairs([('Full Name', st.full_name), ('Admission Number', st.student_id),
+                      ('Gender', st.gender), ('Academic Session', ctx.get('grad_session') or ctx.get('admission_session')),
+                      ('Graduation Year', ctx.get('grad_when')),
+                      ('Candidate Number', getattr(st, 'jamb_reg_number', None) or st.student_id)],
+                     S, P_W - 30 * mm)
+    idrow = Table([[bio, _photo_box()]], colWidths=[P_W - 30 * mm, 30 * mm])
+    idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
+    above += [idrow, Spacer(1, 6)]
+    sor_no = Paragraph(f"<b>Statement of Results Number:</b> "
+                       f"<font color='#b91c1c'>{_esc((ctx.get('doc') or type('x',(),{'document_number':''})()).document_number or 'ENIS-SOR-0000000')}</font>",
+                       S['left'])
+    sig = _sig(S)
+    mid = (_stmt_summary(ctx, rows, is_ssce, S) + [Spacer(1, 6)] + _grade_key(S, ssce=is_ssce)
+           + _remarks(ctx, S) + [Spacer(1, 4), sor_no])
+    if not rows:
+        return _page_fill(above + [Paragraph('No results are on record.', S['body'])], sig, avail=avail)
+    return _page_fill(above + [_main_table(rows, is_ssce, S, green, pad=5)] + mid, sig, avail=avail)
+
+
 def _border_gold(canvas, doc):
     _ornate_border(canvas, doc, colors.HexColor('#b7791f'))
 
@@ -758,6 +821,9 @@ SOR_TEMPLATES = {
                 'description': 'Centred crested statement inside a gold ornate border.'},
     'ledger': {'name': 'Ledger', 'render': _t_ledger, 'decorator': _thin_frame,
                'description': 'Boxed bio grid and a ruled results ledger inside a thin frame.'},
+    'eagle': {'name': 'Crested SSCE (green border)', 'render': _t_eagle, 'decorator': _eagle_frame,
+              'description': 'Crested two-tone masthead with a passport box, bio grid, subject/grade/remark '
+                             'table, distinctions summary and a red result number (Eagle’s-Nest style).'},
 }
 TEMPLATES = SOR_TEMPLATES
 DEFAULT_TEMPLATE = 'classic'

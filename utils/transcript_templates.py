@@ -645,6 +645,101 @@ def _gold_frame(canvas, doc):
     canvas.restoreState()
 
 
+def _lagos_frame(canvas, doc):
+    """Cream paper + engraved double frame (the Lagos International look)."""
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    maroon = colors.HexColor('#7c2d12')
+    canvas.saveState()
+    canvas.setFillColor(colors.HexColor('#f7f1e0')); canvas.rect(0, 0, w, h, fill=1, stroke=0)
+    canvas.setStrokeColor(maroon); canvas.setLineWidth(3.5)
+    canvas.rect(8 * mm, 8 * mm, w - 16 * mm, h - 16 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(0.8)
+    canvas.rect(11 * mm, 11 * mm, w - 22 * mm, h - 22 * mm, stroke=1, fill=0)
+    canvas.restoreState()
+
+
+def _photo_box(w=24 * mm, h=30 * mm):
+    """A labelled passport-photo placeholder (no student photo field yet)."""
+    t = Table([[Paragraph('PHOTOGRAPH', ParagraphStyle('ph', fontSize=6,
+               textColor=colors.HexColor('#94a3b8'), alignment=1))]], colWidths=[w], rowHeights=[h])
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.8, colors.HexColor('#94a3b8')),
+                           ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#eef2f7')),
+                           ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    return t
+
+
+def _boxed_info(title, pairs, S, accent, width):
+    """A titled, tinted, boxed label/value panel (PERSONAL INFORMATION etc.)."""
+    data = [[Paragraph(f'<b>{_esc(title)}</b>', ParagraphStyle('bt', parent=S['left'],
+             fontSize=8.5, textColor=colors.white)), '']]
+    for k, v in pairs:
+        data.append([Paragraph(f'<b>{_esc(k)}:</b>', S['left']), Paragraph(_esc(v), S['left'])])
+    t = Table(data, colWidths=[width * 0.42, width * 0.58])
+    t.setStyle(TableStyle([('SPAN', (0, 0), (1, 0)), ('BACKGROUND', (0, 0), (1, 0), accent),
+                           ('BOX', (0, 0), (-1, -1), 0.6, accent),
+                           ('LINEBELOW', (0, 0), (-1, -2), 0.3, colors.HexColor('#cbd5e1')),
+                           ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+                           ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                           ('LEFTPADDING', (0, 0), (-1, -1), 5)]))
+    return t
+
+
+def _t_lagos(ctx):
+    """Faithful 'Lagos International' replica: cream engraved frame, boxed
+    PERSONAL INFORMATION / ACADEMIC SUMMARY panels, SS1–SS3 term grid, grading
+    key, CGPA and an OFFICIAL AUTHENTICATION block."""
+    from datetime import date
+    S = _styles()
+    accent = colors.HexColor('#7c2d12')
+    m = _matrix(ctx['academic'])
+    name, addr, contact = _header_lines(ctx['school'])
+    logo = _logo()
+    nm = Paragraph(_esc(name), ParagraphStyle('nm', parent=S['left'], fontSize=17, leading=20,
+                   fontName='Times-Bold', textColor=accent))
+    head = Table([[logo or '', nm]], colWidths=[26 * mm, USABLE_W - 26 * mm]) if logo is not None \
+        else Table([[nm]], colWidths=[USABLE_W])
+    head.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+    el = [head, Spacer(1, 4),
+          Paragraph('<u>STUDENT ACADEMIC TRANSCRIPT</u>', ParagraphStyle('ti', parent=S['center'],
+                    fontSize=13, fontName='Helvetica-Bold', spaceBefore=2, spaceAfter=8))]
+    issued = date.today().strftime('%d/%m/%Y')
+    hw = USABLE_W / 2 - 3 * mm
+    left = _boxed_info('PERSONAL INFORMATION', [
+        ('Student Name', ctx['student'].full_name), ('Student ID', ctx['student'].student_id),
+        ('Date of Birth', (ctx.get('bio') or {}).get('date_of_birth')), ('Sex', ctx['student'].gender)],
+        S, accent, hw)
+    right = _boxed_info('ACADEMIC SUMMARY', [
+        ('Date Issued', issued), ('Entrance', ctx.get('admission_session') or '—'),
+        ('Graduation', ctx.get('grad_when') or '—'),
+        ('CGPA', f"{m['cumulative']}%" if m['cumulative'] is not None else '—')], S, accent, hw)
+    panels = Table([[left, right]], colWidths=[hw + 3 * mm, hw + 3 * mm])
+    panels.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (0, 0), 0),
+                               ('RIGHTPADDING', (-1, 0), (-1, 0), 0)]))
+    el += [panels, Spacer(1, 8),
+           Table([[Paragraph('ACADEMIC RECORD: SENIOR SECONDARY (SS1 – SS3)',
+                   ParagraphStyle('rb', parent=S['center'], fontSize=9.5, fontName='Helvetica-Bold'))]],
+                 colWidths=[USABLE_W], style=TableStyle([
+                     ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#efe3cf')),
+                     ('BOX', (0, 0), (-1, -1), 0.5, accent),
+                     ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)])),
+           Spacer(1, 4)]
+    el.append(_term_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 8))
+    key = _grade_key(S)
+    cgpa = [Paragraph(f"<b>CUMULATIVE AVERAGE:</b> {m['cumulative']}%" if m['cumulative'] is not None
+                      else '<b>CUMULATIVE AVERAGE:</b> —', S['left'])]
+    foot = Table([[key, cgpa]], colWidths=[USABLE_W * 0.55, USABLE_W * 0.45])
+    foot.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    el += [foot, Spacer(1, 6),
+           Table([[Paragraph('OFFICIAL AUTHENTICATION', ParagraphStyle('au', parent=S['center'],
+                   fontSize=9, fontName='Helvetica-Bold'))]], colWidths=[USABLE_W],
+                 style=TableStyle([('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#efe3cf')),
+                                   ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))]
+    el += _signatures(S, labels=("Registrar's Signature", 'Date'))
+    return el
+
+
 def _kpi_strip(m, S, accent):
     cells = [(f"{m['cumulative']}%" if m['cumulative'] is not None else '—', 'Cumulative Avg'),
              (str(len(m['sessions'])), 'Sessions'),
@@ -755,6 +850,9 @@ TRANSCRIPT_TEMPLATES = {
                  'description': 'Centred crested transcript inside a gold double border with a per-term grid.'},
     'chancellor': {'name': 'Chancellor Panels', 'render': _t_chancellor,
                    'description': 'Two boxed panels (student & performance) over the academic record grid.'},
+    'lagos': {'name': 'Engraved (cream)', 'render': _t_lagos, 'decorator': _lagos_frame,
+              'description': 'Cream engraved-frame transcript with boxed information panels, an SS1–SS3 '
+                             'record grid, grading key and an official authentication block.'},
 }
 
 TEMPLATES = TRANSCRIPT_TEMPLATES
