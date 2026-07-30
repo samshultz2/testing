@@ -260,6 +260,52 @@ def api_student_view(student_id):
     return jsonify(_student_view_payload(student))
 
 
+@main_bp.route('/students/<int:student_id>/id-card')
+@login_required
+def student_id_card(student_id):
+    """Download a printable student ID card (front + back on one A4 sheet)."""
+    from flask import send_file
+    from utils import id_card
+    from utils.school import school_profile, document_branding
+    student, err = _student_or_redirect(student_id)
+    if err:
+        flash(err[1], 'error')
+        return redirect(url_for('main.students_list'))
+    # current class/arm + session from the most recent enrolment
+    class_label, session_name = '', ''
+    enr = (student.enrollments.join(ClassArmAssignment)
+           .order_by(ClassArmAssignment.term_id.desc()).first())
+    if enr and enr.class_arm_assignment:
+        caa = enr.class_arm_assignment
+        try:
+            class_label = caa.display_name
+        except Exception:
+            class_label = ''
+        try:
+            session_name = caa.term.session.name
+        except Exception:
+            session_name = ''
+    # primary guardian / next of kin
+    guardian, guardian_phone = '', ''
+    gc = (student.parent_contacts.filter_by(is_primary=True).first()
+          or student.parent_contacts.first())
+    if gc:
+        guardian = gc.name or gc.relationship or ''
+        guardian_phone = gc.phone_number or ''
+    dob = student.date_of_birth.strftime('%d %b %Y') if student.date_of_birth else ''
+    try:
+        branding = document_branding()
+    except Exception:
+        branding = {}
+    buf = id_card.render_id_card(
+        student, school=school_profile(), class_label=class_label, session=session_name,
+        dob=dob, guardian=guardian, guardian_phone=guardian_phone,
+        address=student.home_address or '', branding=branding)
+    log_action('student_id_card', student.full_name)
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f"id_card_{student.student_id or student.id}.pdf")
+
+
 @main_bp.route('/students/<int:student_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_student(student_id):

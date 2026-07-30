@@ -65,6 +65,7 @@ export default function ViewApp({ initial }) {
           <a href={urls.exam_report} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-pdf" /> Exam Report</a>
           <a href={urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-chart-line" /> Predictions</a>
           <a href={urls.report_card} className="btn btn-success"><i aria-hidden="true" className="fas fa-file-invoice" /> Report Card</a>
+          {urls.id_card && <a href={urls.id_card} className="btn btn-info"><i aria-hidden="true" className="fas fa-id-card" /> ID Card</a>}
           {canManage && <a href={urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
           <a href={urls.list} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
         </div>

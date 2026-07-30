@@ -1750,6 +1750,7 @@ def _student_view_payload(student):
             'exam_report': url_for('results.student_report', student_id=sid),
             'predictions': url_for('results.student_predictions', student_id=sid),
             'report_card': url_for('subjects.student_report_card', student_id=sid),
+            'id_card': url_for('main.student_id_card', student_id=sid),
             'discipline_add': url_for('welfare.add_discipline', student_id=sid),
             'clinic_add': url_for('welfare.add_clinic', student_id=sid),
         },
