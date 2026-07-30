@@ -298,18 +298,11 @@ def student_photo(student_id):
     return resp
 
 
-@main_bp.route('/students/<int:student_id>/id-card')
-@login_required
-def student_id_card(student_id):
-    """Download a printable student ID card (front + back on one A4 sheet)."""
-    from flask import send_file
-    from utils import id_card
-    from utils.school import school_profile, document_branding
-    student, err = _student_or_redirect(student_id)
-    if err:
-        flash(err[1], 'error')
-        return redirect(url_for('main.students_list'))
-    # current class/arm + session from the most recent enrolment
+def _id_card_fields(student):
+    """Resolve the display fields an ID card needs for one student: current
+    class/arm + session (most recent enrolment), primary guardian, DOB, address
+    and the public verification URL. Kept query-light so a whole class can be
+    rendered in one route."""
     class_label, session_name = '', ''
     enr = (student.enrollments.join(ClassArmAssignment)
            .order_by(ClassArmAssignment.term_id.desc()).first())
@@ -323,7 +316,6 @@ def student_id_card(student_id):
             session_name = caa.term.session.name
         except Exception:
             session_name = ''
-    # primary guardian / next of kin
     guardian, guardian_phone = '', ''
     gc = (student.parent_contacts.filter_by(is_primary=True).first()
           or student.parent_contacts.first())
@@ -331,17 +323,159 @@ def student_id_card(student_id):
         guardian = gc.name or gc.relationship or ''
         guardian_phone = gc.phone_number or ''
     dob = student.date_of_birth.strftime('%d %b %Y') if student.date_of_birth else ''
+    return {
+        'student': student, 'class_label': class_label, 'session': session_name,
+        'dob': dob, 'guardian': guardian, 'guardian_phone': guardian_phone,
+        'address': student.home_address or '', 'verify': None,
+    }
+
+
+@main_bp.route('/students/<int:student_id>/id-card')
+@login_required
+def student_id_card(student_id):
+    """Download a printable student ID card (front + back on one A4 sheet)."""
+    from flask import send_file
+    from utils import id_card
+    from utils.school import school_profile, document_branding
+    student, err = _student_or_redirect(student_id)
+    if err:
+        flash(err[1], 'error')
+        return redirect(url_for('main.students_list'))
     try:
         branding = document_branding()
     except Exception:
         branding = {}
+    f = _id_card_fields(student)
     buf = id_card.render_id_card(
-        student, school=school_profile(), class_label=class_label, session=session_name,
-        dob=dob, guardian=guardian, guardian_phone=guardian_phone,
-        address=student.home_address or '', branding=branding)
+        student, school=school_profile(), class_label=f['class_label'],
+        session=f['session'], dob=f['dob'], guardian=f['guardian'],
+        guardian_phone=f['guardian_phone'], address=f['address'], branding=branding)
     log_action('student_id_card', student.full_name)
     return send_file(buf, mimetype='application/pdf', as_attachment=True,
                      download_name=f"id_card_{student.student_id or student.id}.pdf")
+
+
+@main_bp.route('/students/id-cards', methods=['POST'])
+@login_required
+def bulk_id_cards():
+    """Download a whole selection's ID cards as one printable PDF (6 cards per A4
+    page — fronts, then backs in the same order). Scoped to the caller's
+    students, like every other bulk action."""
+    from flask import send_file
+    from utils import id_card
+    from utils.school import school_profile, document_branding
+    ids = _int_ids(request.form.getlist('student_ids'))
+    if not ids:
+        return _bulk_no_selection()
+    ids = _manageable_student_ids(ids)
+    if not ids:
+        return jsonify({'error': 'No students you can print were selected'}), 403
+    order = {sid: i for i, sid in enumerate(ids)}
+    students = sorted(Student.query.filter(Student.id.in_(ids)).all(),
+                      key=lambda s: order.get(s.id, 0))
+    include_backs = request.form.get('backs', '1') != '0'
+    try:
+        branding = document_branding()
+    except Exception:
+        branding = {}
+    cards = [_id_card_fields(s) for s in students]
+    buf = id_card.render_class_id_cards(
+        cards, school=school_profile(), branding=branding,
+        include_backs=include_backs)
+    log_action('bulk_id_cards', f'{len(cards)} ID card(s)')
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f"id_cards_{len(cards)}.pdf")
+
+
+_PHOTO_EXTS = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp')
+
+
+def _norm_key(s):
+    """Normalise a token for matching: drop spaces and the common separators used
+    in admission numbers, and lower-case, so ``ADM/2024/001`` and ``adm-2024-001``
+    compare equal."""
+    return (''.join((s or '').split())
+            .replace('-', '').replace('/', '').replace('\\', '').replace('_', '')
+            .lower())
+
+
+def _file_key(name):
+    """Match key for a photo file: its base name (directory dropped) without the
+    extension, normalised. A zip entry like ``class/ADM-2024-001.jpg`` keys to
+    ``adm2024001``."""
+    import os
+    base = os.path.basename((name or '').replace('\\', '/'))
+    return _norm_key(os.path.splitext(base)[0])
+
+
+@main_bp.route('/students/import-photos', methods=['POST'])
+@login_required
+def import_photos():
+    """Bulk-import passport photos from an uploaded .zip, matching each image to a
+    student by admission number (the file's base name, e.g. ``STU-001.jpg``).
+    Branch-scoped: only the caller's students are touched. Returns a JSON summary
+    of matched / skipped / unmatched files."""
+    import io as _io
+    import zipfile
+    from utils.branch_scope import scope_query
+    from utils.access_control import teacher_form_student_ids
+    from utils import student_photo as _sp
+
+    up = request.files.get('archive') or request.files.get('file')
+    if up is None or not (up.filename or '').lower().endswith('.zip'):
+        return jsonify({'error': 'Upload a .zip of photos named by admission number.'}), 400
+    raw = up.read()
+    if len(raw) > 60 * 1024 * 1024:
+        return jsonify({'error': 'That archive is too large (max 60 MB).'}), 400
+    try:
+        zf = zipfile.ZipFile(_io.BytesIO(raw))
+    except Exception:
+        return jsonify({'error': 'That file is not a valid .zip archive.'}), 400
+
+    # Build the match index over the caller's scoped students only.
+    q = scope_query(Student.query.filter_by(is_active=True), Student)
+    tids = teacher_form_student_ids()
+    if tids is not None:
+        q = q.filter(Student.id.in_(tids or {-1}))
+    by_key = {}
+    for s in q.all():
+        if s.student_id:
+            by_key.setdefault(_norm_key(s.student_id), s)
+
+    matched, skipped, unmatched, errors = 0, 0, [], []
+    seen = set()
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
+        name = info.filename
+        low = name.lower()
+        if not low.endswith(_PHOTO_EXTS) or '__macosx' in low:
+            continue
+        if info.file_size > _sp.MAX_INPUT_BYTES:
+            errors.append(f'{name}: too large'); continue
+        key = _file_key(name)
+        student = by_key.get(key)
+        if student is None:
+            unmatched.append(name); continue
+        if student.id in seen:
+            skipped += 1; continue          # first image per student wins
+        try:
+            _sp.save_bytes(student, zf.read(info))
+            seen.add(student.id); matched += 1
+        except Exception as exc:
+            errors.append(f'{name}: {exc}')
+    if matched:
+        db.session.commit()
+    else:
+        db.session.rollback()
+    log_action('import_photos', f'{matched} matched, {len(unmatched)} unmatched')
+    msg = f'{matched} photo(s) imported.'
+    if unmatched:
+        msg += f' {len(unmatched)} file(s) matched no admission number.'
+    flash(msg, 'success' if matched else 'error')
+    return jsonify({'ok': True, 'matched': matched, 'skipped': skipped,
+                    'unmatched': unmatched[:50], 'unmatched_count': len(unmatched),
+                    'errors': errors[:20], 'message': msg})
 
 
 @main_bp.route('/students/<int:student_id>/edit', methods=['GET', 'POST'])

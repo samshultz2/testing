@@ -296,3 +296,107 @@ def render_id_card(student, *, school=None, class_label='', session='', dob='',
     c.save()
     buf.seek(0)
     return buf
+
+
+# --- whole-class sheets -----------------------------------------------------
+
+_GRID_COLS = 3
+_GRID_ROWS = 2
+_GRID_GAP_X = 6 * mm
+_GRID_GAP_Y = 9 * mm
+
+
+def _shared_ctx(school, branding):
+    """The per-sheet context (branding, colours, logo) shared by every card."""
+    school = school or {}
+    branding = branding or {}
+    ctx = {
+        'school_name': school.get('name') or 'School',
+        'school_phone': school.get('phone') or '',
+        'motto': school.get('motto') or '',
+        'default_address': school.get('address') or '',
+        'primary': _hex(branding.get('doc_primary_color'), '#0e3a2f'),
+        'accent': _hex(branding.get('doc_accent_color'), '#0e8a64'),
+        'gold': _hex(branding.get('doc_secondary_color'), '#b7791f'),
+        'logo': None,
+    }
+    try:
+        import os
+        from reportlab.lib.utils import ImageReader
+        from utils.school import logo_path
+        p = logo_path()
+        if p and os.path.exists(p):
+            ctx['logo'] = ImageReader(p)
+    except Exception:
+        ctx['logo'] = None
+    return ctx
+
+
+def _card_ctx(base, card):
+    """Merge a per-student ``card`` dict onto the shared ``base`` context."""
+    ctx = dict(base)
+    ctx['student'] = card['student']
+    ctx['class_label'] = card.get('class_label') or ''
+    ctx['session'] = card.get('session') or ''
+    ctx['dob'] = card.get('dob') or ''
+    ctx['guardian'] = card.get('guardian') or ''
+    ctx['guardian_phone'] = card.get('guardian_phone') or ''
+    ctx['address'] = card.get('address') or base.get('default_address') or ''
+    ctx['verify'] = card.get('verify')
+    return ctx
+
+
+def _grid_positions(pw, ph):
+    """Lower-left (x, y) of each of the up-to-6 card slots on an A4 page, in
+    reading order (row-major, top-left first)."""
+    grid_w = _GRID_COLS * CARD_W + (_GRID_COLS - 1) * _GRID_GAP_X
+    x_left = (pw - grid_w) / 2
+    top = ph - 18 * mm                       # first row's top edge (room for caption)
+    pos = []
+    for r in range(_GRID_ROWS):
+        row_top = top - r * (CARD_H + _GRID_GAP_Y)
+        for col in range(_GRID_COLS):
+            pos.append((x_left + col * (CARD_W + _GRID_GAP_X), row_top - CARD_H))
+    return pos
+
+
+def render_class_id_cards(cards, *, school=None, branding=None, include_backs=True,
+                          title=''):
+    """Return a BytesIO PDF laying out a whole class's ID cards, 6 per A4 page.
+
+    ``cards`` is a list of per-student dicts ({'student': s, 'class_label': ...,
+    'session', 'dob', 'guardian', 'guardian_phone', 'address', 'verify'}). Fronts
+    are printed first (all pages), then — if ``include_backs`` — the backs in the
+    **same order and slot positions**, so a school can print both, cut, and mount
+    each back behind its front. Cut outlines are drawn on every card."""
+    base = _shared_ctx(school, branding)
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=A4)
+    pw, ph = A4
+    positions = _grid_positions(pw, ph)
+    per_page = len(positions)
+    ctxs = [_card_ctx(base, card) for card in cards]
+
+    def caption(text):
+        c.setFillColor(colors.HexColor('#94a3b8')); c.setFont('Helvetica', 8)
+        c.drawCentredString(pw / 2, ph - 12 * mm, text)
+
+    def paint(face_fn, label):
+        for start in range(0, len(ctxs), per_page):
+            page = ctxs[start:start + per_page]
+            caption(label)
+            for ctx, (x, y) in zip(page, positions):
+                face_fn(c, x, y, ctx)
+            c.showPage()
+
+    heading = (title + ' — ') if title else ''
+    if ctxs:
+        paint(_front, heading + 'ID cards (fronts). Cut along the outlines.')
+        if include_backs:
+            paint(_back, heading + 'ID cards (backs) — same order as the fronts.')
+    else:
+        caption('No students to print.')
+        c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf

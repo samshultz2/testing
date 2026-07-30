@@ -4,6 +4,7 @@ import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
 import BulkMessageModal from './BulkMessageModal';
+import ImportPhotosModal from './ImportPhotosModal';
 import { confirm, promptDialog, Empty, Pagination } from '../components/ui';
 import { recentSearches, rememberSearch, clearSearches, recentViewed,
          savedFilters, saveFilter, deleteFilter } from '../lib/studprefs';
@@ -69,6 +70,7 @@ export default function App({ initial }) {
   const [msg, setMsg] = useState(null);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showImportPhotos, setShowImportPhotos] = useState(false);
   const [bulkStream, setBulkStream] = useState('');
   const [bulkGender, setBulkGender] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
@@ -185,6 +187,27 @@ export default function App({ initial }) {
 
   const needSel = () => { if (!selectedIds.length) { setMsg({ tone: 'warn', text: 'Select some students first.' }); return false; } return true; };
 
+  // Whole-class ID-card sheet: POST the selection and download the returned PDF.
+  const downloadIdCards = async () => {
+    if (!needSel()) return;
+    setMsg({ tone: 'info', text: `Building ID cards for ${selectedIds.length} student(s)…` });
+    try {
+      const res = await postForm(d.bulk_id_cards_url, { student_ids: selectedIds });
+      if (!res.ok) {
+        let text = 'Could not build ID cards.';
+        try { const j = await res.json(); if (j.error) text = j.error; } catch (_) { /* not json */ }
+        setMsg({ tone: 'error', text }); return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `id_cards_${selectedIds.length}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      setMsg({ tone: 'success', text: `ID cards for ${selectedIds.length} student(s) downloaded.` });
+    } catch (e) { setMsg({ tone: 'error', text: e.message || 'Download failed.' }); }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -192,6 +215,7 @@ export default function App({ initial }) {
         <div className="page-header-actions stu-toolbar">
           {d.can_add && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Student</a>}
           {d.can_add && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import (paste)</button>}
+          {d.import_photos_url && <button type="button" className="btn btn-outline" onClick={() => setShowImportPhotos(true)}><i aria-hidden="true" className="fas fa-images" /> Import photos</button>}
           {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
                                onClick={async () => { if (await confirm("Fill WAEC subjects from stream for students who don't have them set?"))
                                  runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.'); }}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
@@ -356,6 +380,8 @@ export default function App({ initial }) {
                     onClick={() => needSel() && runAction(d.bulk_boarding_url, { boarding: bulkBoarding, student_ids: selectedIds }, 'Boarding status updated.')}>Apply</button>
             {d.bulk_message_url && <button type="button" className="btn btn-info btn-sm" title="Draft a message to the selected students' parents"
                     onClick={() => needSel() && setShowMessage(true)}><i aria-hidden="true" className="fas fa-comment-dots" /> Message parents</button>}
+            {d.bulk_id_cards_url && <button type="button" className="btn btn-secondary btn-sm" title="Download printable ID cards for the selected students (6 per A4 sheet)"
+                    onClick={downloadIdCards}><i aria-hidden="true" className="fas fa-id-card" /> Print ID cards</button>}
             {canSss3 && <>
               <select className="form-control" style={{ width: 'auto' }} value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} aria-label="Bulk WAEC subject">
                 <option value="">Add WAEC subject…</option>
@@ -426,6 +452,12 @@ export default function App({ initial }) {
         <ImportModal importUrl={d.import_url} enrolment={d.enrolment}
                      onClose={() => setShowImport(false)}
                      onDone={(text) => { setShowImport(false); setMsg({ tone: 'success', text }); refresh(); }} />
+      )}
+
+      {showImportPhotos && (
+        <ImportPhotosModal importUrl={d.import_photos_url}
+                     onClose={() => setShowImportPhotos(false)}
+                     onDone={(text) => { setMsg({ tone: 'success', text }); refresh(); }} />
       )}
 
       {showMessage && (

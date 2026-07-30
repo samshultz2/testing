@@ -1522,6 +1522,8 @@ def _students_payload():
         'bulk_house_url': url_for('main.bulk_set_house'),
         'bulk_boarding_url': url_for('main.bulk_set_boarding'),
         'bulk_message_url': url_for('main.bulk_message_students'),
+        'bulk_id_cards_url': url_for('main.bulk_id_cards'),
+        'import_photos_url': url_for('main.import_photos') if can_add else None,
     }
 
 
