@@ -437,6 +437,25 @@ Output only the rows — no headings, totals or extra text, no code block.</pre>
                 </div>
             </details>
 
+            <details class="bulk-box" id="fillDayBox">
+                <summary><i class="fas fa-fill-drip"></i> Fill the rest of a day (e.g. Skill Acquisition)</summary>
+                <p class="sess-hint" style="margin-top:.5rem">
+                    Fills every remaining period of a day — after its last lesson — with one activity, for every Class/Stream.
+                    Those matching cells then merge into a single block on the sheet.
+                </p>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                    <div class="form-group" style="margin:0;flex:1 1 8rem">
+                        <label class="form-label" style="font-size:.8rem">Day</label>
+                        <input id="fillDay" class="form-control" list="dayList" placeholder="e.g. Friday">
+                    </div>
+                    <div class="form-group" style="margin:0;flex:2 1 12rem">
+                        <label class="form-label" style="font-size:.8rem">Activity</label>
+                        <input id="fillAct" class="form-control" list="subjectList" placeholder="e.g. Skill Acquisition" value="Skill Acquisition">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" data-call="fillRestOfDay" style="height:fit-content"><i class="fas fa-fill-drip"></i> Fill rest of day</button>
+                </div>
+            </details>
+
             <details class="bulk-box">
                 <summary><i class="fas fa-list"></i> Quick add (one session per line)</summary>
                 <p class="sess-hint" id="bulkHint" style="margin-top:.5rem"></p>
@@ -824,6 +843,47 @@ function gridPaste(){
     else alert('Nothing added — check the grid format.');
 }
 
+// ---------- fill the remaining periods of a day with one activity ----------
+function fillRestOfDay(){
+    var day = canonDay((el('fillDay').value || '').trim());
+    var act = (el('fillAct').value || '').trim();
+    if(!day){ alert('Choose a day to fill (e.g. Friday).'); return; }
+    if(!act){ alert('Type the activity to fill (e.g. Skill Acquisition).'); return; }
+    function rowDay(r){ return canonDay((r.date ? dayFromDate(r.date) : '') || (r.day || '').trim()); }
+    var dayRows = rows.filter(function(r){ return !isAll(r.group) && r.time && rowDay(r) === day; });
+    if(!dayRows.length){ alert('No sessions found for ' + day + ' yet — add its lessons first.'); return; }
+    // periods across the whole timetable, in time order
+    var pmap = {}, periods = [];
+    rows.forEach(function(r){ if(!r.time || isAll(r.group)) return; var k = periodKey(r);
+        if(!pmap[k]){ pmap[k] = {time: r.time, dur: r.dur || '60', k: k}; periods.push(pmap[k]); } });
+    periods.sort(function(a, b){ return a.time.localeCompare(b.time); });
+    // the streams present that day (else a single unnamed group)
+    var gset = {}, groups = [];
+    dayRows.forEach(function(r){ var g = (r.group || '').trim(); if(!(g in gset)){ gset[g] = 1; groups.push(g); } });
+    if(!groups.length) groups = [''];
+    // the date this day maps to, if the timetable is date-based
+    var date = ''; for(var i = 0; i < dayRows.length; i++){ if(dayRows[i].date){ date = dayRows[i].date; break; } }
+    // last period (in order) that already has any lesson this day → fill only AFTER it
+    var lastFilled = -1;
+    periods.forEach(function(p, idx){
+        if(dayRows.some(function(r){ return r.subject && periodKey(r) === p.k; })) lastFilled = idx; });
+    // which (period,group) already hold a subject this day — never overwrite those
+    var have = {};
+    dayRows.forEach(function(r){ if(r.subject) have[periodKey(r) + '§' + (r.group || '').trim()] = 1; });
+    var added = 0;
+    periods.forEach(function(p, idx){
+        if(idx <= lastFilled) return;                    // keep the lessons; fill the tail
+        groups.forEach(function(g){
+            if(have[p.k + '§' + g]) return;
+            var r = blankRow();
+            r.day = day; r.date = date; r.time = p.time; r.dur = p.dur; r.subject = act; r.group = g;
+            rows.push(r); added++;
+        });
+    });
+    if(added){ renderEditor(); renderSheet(); }
+    else alert('Nothing to fill — every period on ' + day + ' already has an entry.');
+}
+
 // Custom table paste: first line = the column headers, each next line = a row.
 // Fills the auto-numbered grid (the S/N column is added automatically).
 function listPaste(){
@@ -1028,15 +1088,43 @@ function renderGridColumnsSheet(){
     var thead='<tr><th>Time</th>'+dayList.map(function(dk){ var d=dseen[dk];
         var lbl=esc(d.day||'—'); if(d.date) lbl+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>';
         return '<th class="day-col">'+lbl+'</th>'; }).join('')+'</tr>';
+
+    // Per (period, day) inner html, then merge a RUN of consecutive periods that
+    // hold identical content within a day column into one cell (rowspan) — the
+    // "rest of the day is Skill Acquisition" case, mirroring the day-row grid. A
+    // full-width band period (p.allText) breaks any run.
+    var inner={};
+    periods.forEach(function(p,pi){ if(p.allText) return;
+        dayList.forEach(function(dk){
+            var arr=(cells[p.k] && cells[p.k][dk]) || [];
+            inner[pi+'|'+dk] = arr.length ? ('<div class="g-row">'+arr.map(groupBlock).join('')+'</div>') : '';
+        }); });
+    var span={}, skip={};
+    dayList.forEach(function(dk){
+        var pi=0;
+        while(pi<periods.length){
+            if(periods[pi].allText){ pi++; continue; }
+            var html=inner[pi+'|'+dk]||'';
+            if(html){
+                var pj=pi+1;
+                while(pj<periods.length && !periods[pj].allText && (inner[pj+'|'+dk]||'')===html) pj++;
+                if(pj-pi>1){ span[pi+'|'+dk]=pj-pi; for(var k=pi+1;k<pj;k++) skip[k+'|'+dk]=true; }
+                pi=pj;
+            } else pi++;
+        }
+    });
     var body='';
-    periods.forEach(function(p){
+    periods.forEach(function(p,pi){
         body+='<tr><th class="time-cell">'+esc(p.label)+'</th>';
         if(p.allText){
             body+='<td class="cell banner" colspan="'+dayList.length+'">'+p.allText+'</td>';
         } else {
             dayList.forEach(function(dk){
-                var arr=(cells[p.k] && cells[p.k][dk]) || [];
-                body+='<td class="cell day-col">'+(arr.length?('<div class="g-row">'+arr.map(groupBlock).join('')+'</div>'):'')+'</td>';
+                var kk=pi+'|'+dk;
+                if(skip[kk]) return;                       // covered by a rowspan above
+                var rs=span[kk], html=inner[kk]||'';
+                var cls='cell day-col'+(rs?' merged':'')+((rs&&html)?' wide':'');
+                body+='<td class="'+cls+'"'+(rs?(' rowspan="'+rs+'"'):'')+'>'+html+'</td>';
             });
         }
         body+='</tr>';
