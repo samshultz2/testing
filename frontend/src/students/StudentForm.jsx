@@ -52,6 +52,7 @@ export default function StudentForm({ data }) {
     house: stu.house || '', boarding_status: stu.boarding_status || '',
     nin: stu.nin || '', jamb_reg_number: stu.jamb_reg_number || '', jamb_profile_code: stu.jamb_profile_code || '',
     waec_reg_number: stu.waec_reg_number || '', serial_number: stu.serial_number || '',
+    photo: stu.photo_url || '',
     blood_group: stu.blood_group || '', genotype: stu.genotype || '', allergies: stu.allergies || '',
     medical_conditions: stu.medical_conditions || '', disabilities: stu.disabilities || '',
     medications: stu.medications || '', medical_notes: stu.medical_notes || '', emergency_medical: stu.emergency_medical || '',
@@ -134,7 +135,7 @@ export default function StudentForm({ data }) {
       jamb_target: f.jamb_target, home_address: f.home_address, hobbies: f.hobbies,
       house: f.house, boarding_status: f.boarding_status,
       nin: f.nin, jamb_reg_number: f.jamb_reg_number, jamb_profile_code: f.jamb_profile_code,
-      waec_reg_number: f.waec_reg_number, serial_number: f.serial_number,
+      waec_reg_number: f.waec_reg_number, serial_number: f.serial_number, photo: f.photo,
       blood_group: f.blood_group, genotype: f.genotype, allergies: f.allergies,
       medical_conditions: f.medical_conditions, disabilities: f.disabilities,
       medications: f.medications, medical_notes: f.medical_notes, emergency_medical: f.emergency_medical,
@@ -163,6 +164,20 @@ export default function StudentForm({ data }) {
   };
 
   const urls = data.urls || {};
+
+  const onPhotoFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';                       // allow re-picking the same file
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setBanner({ tone: 'error', text: 'That image is too large (max 8 MB).' });
+      return;
+    }
+    const rd = new FileReader();
+    rd.onload = () => set('photo', String(rd.result || ''));
+    rd.onerror = () => setBanner({ tone: 'error', text: 'Could not read that image.' });
+    rd.readAsDataURL(file);
+  };
 
   return (
     <form onSubmit={submit} noValidate>
@@ -249,7 +264,25 @@ export default function StudentForm({ data }) {
       )}
 
       <FormCard icon="fa-id-card" title="Identity &amp; Pastoral" note="(optional)" collapsible
-                defaultOpen={isEdit && !!(stu.nin || stu.jamb_reg_number || stu.house || stu.boarding_status)}>
+                defaultOpen={isEdit && !!(stu.nin || stu.jamb_reg_number || stu.house || stu.boarding_status || stu.photo_url)}>
+        <div className="sf-row" style={{ alignItems: 'flex-start' }}>
+          <div className="form-group" style={{ flex: '1 1 100%' }}>
+            <label className="form-label">Passport photo <span className="text-muted">(optional)</span></label>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              {f.photo
+                ? <img src={f.photo} alt="Student" style={{ width: 64, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#cbd5e1)' }} />
+                : <div style={{ width: 64, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gray-50,#f1f5f9)', border: '1px dashed #cbd5e1', borderRadius: 6, fontSize: '.6rem', color: '#94a3b8', textAlign: 'center' }}>No photo</div>}
+              <div>
+                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
+                  <i aria-hidden="true" className="fas fa-camera" /> {f.photo ? 'Change' : 'Upload'}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onPhotoFile} style={{ display: 'none' }} />
+                </label>
+                {f.photo && <button type="button" className="btn btn-light btn-sm" style={{ marginLeft: '.4rem' }} onClick={() => set('photo', '')}><i aria-hidden="true" className="fas fa-times" /> Remove</button>}
+                <div className="text-muted" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>JPG/PNG, up to 8 MB — auto-cropped to a passport photo and shown on the ID card.</div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="sf-row">
           <TextField label="NIN" value={f.nin} onChange={(v) => set('nin', v)} placeholder="National Identification Number" autoComplete="off" />
           <SelectField label="Boarding status" value={f.boarding_status} onChange={(v) => set('boarding_status', v)}

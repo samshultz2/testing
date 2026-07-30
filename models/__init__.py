@@ -3,7 +3,7 @@ Models package initialization
 """
 from .models import (
     db, local_now, init_db,
-    Student, ParentContact,
+    Student, ParentContact, StudentPhoto,
     AcademicSession, Term, SchoolClass, ClassArm, ClassArmAssignment, StudentEnrollment,
     Week, Holiday, Attendance,
     WAECResult, JAMBResult,
@@ -63,7 +63,7 @@ __all__ = [
     'AlumniProfile', 'DocumentRequest', 'DOC_REQUEST_STATUSES', 'DocTemplatePref',
     'DocumentVerification',
     'ScratchCard', 'ResultCheckLog', 'CBTLoginEvent', 'CBTDeviceSession',
-    'Student', 'ParentContact',
+    'Student', 'ParentContact', 'StudentPhoto',
     'AcademicSession', 'Term', 'SchoolClass', 'ClassArm', 'ClassArmAssignment', 'StudentEnrollment',
     'Week', 'Holiday', 'Attendance',
     'WAECResult', 'JAMBResult',

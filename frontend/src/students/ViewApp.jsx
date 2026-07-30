@@ -51,10 +51,14 @@ export default function ViewApp({ initial }) {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1>{s.full_name}</h1>{' '}
-          <span className="badge badge-primary">{s.student_id}</span>{' '}
-          {s.is_graduated && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.85rem' }}>
+          {s.photo_url && <img src={s.photo_url} alt={s.full_name}
+            style={{ width: 52, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#cbd5e1)', flex: '0 0 auto' }} />}
+          <div>
+            <h1 style={{ margin: 0 }}>{s.full_name}</h1>{' '}
+            <span className="badge badge-primary">{s.student_id}</span>{' '}
+            {s.is_graduated && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</span>}
+          </div>
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
           {canManage && <button type="button" className={'btn ' + (s.is_graduated ? 'btn-warning' : 'btn-success')} disabled={busy}

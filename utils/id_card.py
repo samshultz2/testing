@@ -31,18 +31,27 @@ def _esc(v):
 
 def _photo(student):
     """Return an ImageReader for the student photo, or None to draw a placeholder.
-    Best-effort: a missing/remote/broken image must never break the card."""
+    Prefers the stored passport photo (tenant DB); falls back to a filesystem
+    ``photo_url``. Best-effort: a missing/broken image never breaks the card."""
+    # Primary: the passport photo stored in the tenant DB.
+    try:
+        from utils import student_photo
+        r = student_photo.photo_reader(student)
+        if r is not None:
+            return r
+    except Exception:
+        pass
+    # Fallback: a local filesystem/static path in photo_url (legacy).
     path = getattr(student, 'photo_url', None) or ''
-    if not path:
+    if not path or path.startswith('data:'):
         return None
     try:
+        import os
         from reportlab.lib.utils import ImageReader
-        if path.startswith('/static/') or path.startswith('static/'):
-            import os
+        if 'static/' in path:
             fs = os.path.join('static', path.split('static/', 1)[1])
             return ImageReader(fs) if os.path.exists(fs) else None
         if path.startswith('/') or path.startswith('./'):
-            import os
             return ImageReader(path) if os.path.exists(path) else None
     except Exception:
         return None

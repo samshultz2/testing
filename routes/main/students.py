@@ -4,6 +4,14 @@ from utils.search import like_term
 from utils.security import strip_tags
 
 
+def _sp_has_photo(student):
+    try:
+        from utils.student_photo import has_photo
+        return has_photo(student)
+    except Exception:
+        return False
+
+
 # Fields whose edits are worth an audit trail with their previous value. The
 # three sensitive ones (encrypted at rest) are audited as "changed" only — we
 # never copy their plaintext into the append-only log.
@@ -98,6 +106,14 @@ def add_student():
 
             db.session.add(student)
             db.session.flush()
+
+            # Optional passport photo (data: URL from the form). A bad image must
+            # never block saving the student, so failures are swallowed.
+            try:
+                from utils import student_photo as _sp
+                _sp.apply_from_form(student, request.form.get('photo'))
+            except Exception:
+                pass
 
             # Add parent contacts
             phone_numbers = request.form.getlist('phone_number[]')
@@ -260,6 +276,28 @@ def api_student_view(student_id):
     return jsonify(_student_view_payload(student))
 
 
+@main_bp.route('/students/<int:student_id>/photo')
+@login_required
+def student_photo(student_id):
+    """Serve a student's passport photo from the tenant DB — behind login + branch
+    scope (it is PII), never public. Cached privately + ETag'd."""
+    from flask import Response
+    from models import StudentPhoto
+    student, err = _student_or_redirect(student_id)
+    if err:
+        abort(404)
+    row = StudentPhoto.query.filter_by(student_id=student.id).first()
+    if row is None or not row.data:
+        abort(404)
+    etag = 'sp-%d-%d' % (row.id, row.bytes or 0)
+    if request.headers.get('If-None-Match') == etag:
+        return Response(status=304)
+    resp = Response(bytes(row.data), mimetype=row.mime or 'image/jpeg')
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    resp.headers['ETag'] = etag
+    return resp
+
+
 @main_bp.route('/students/<int:student_id>/id-card')
 @login_required
 def student_id_card(student_id):
@@ -360,6 +398,15 @@ def edit_student(student_id):
                 student.jamb_subjects = ', '.join(form.getlist('jamb_subjects[]')) or None
             _apply_optional_student_fields(student, form, has)
 
+            # Passport photo: data: URL replaces it, '' removes it; absent leaves
+            # it untouched (so a partial POST never wipes it). Never blocks a save.
+            if has('photo'):
+                try:
+                    from utils import student_photo as _sp
+                    _sp.apply_from_form(student, form.get('photo'))
+                except Exception:
+                    pass
+
             # Update contacts only when the contacts section was submitted
             if not (complete or 'phone_number[]' in form):
                 db.session.commit()
@@ -427,6 +474,8 @@ def edit_student(student_id):
             'religion': student.religion or '', 'stream': student.stream or '',
             'jamb_target': student.jamb_target if student.jamb_target is not None else '',
             'home_address': student.home_address or '', 'hobbies': student.hobbies or '',
+            'photo_url': (url_for('main.student_photo', student_id=student.id)
+                          if _sp_has_photo(student) else ''),
             'waec_subjects': student.waec_subject_list or [],
             'jamb_subjects': student.jamb_subject_list or [],
             'house': student.house or '', 'boarding_status': student.boarding_status or '',

@@ -1578,6 +1578,15 @@ def _blank_contact():
 
 
 
+def _sp_has_photo(student):
+    """True if the student has a stored passport photo (best-effort)."""
+    try:
+        from utils.student_photo import has_photo
+        return has_photo(student)
+    except Exception:
+        return False
+
+
 def _student_or_redirect(student_id):
     """Load a student the current user may view, or return (None, response).
     Branch-scoped + a form teacher is limited to their own students."""
@@ -1696,6 +1705,8 @@ def _student_view_payload(student):
         'student': {
             'id': sid, 'student_id': student.student_id, 'full_name': student.full_name,
             'first_name': student.first_name, 'gender': student.gender,
+            'photo_url': (url_for('main.student_photo', student_id=sid)
+                          if _sp_has_photo(student) else ''),
             'date_of_birth': _fmt_date(student.date_of_birth), 'age': student.age,
             'religion': student.religion, 'home_address': student.home_address,
             'hobbies': student.hobbies, 'stream': student.stream,

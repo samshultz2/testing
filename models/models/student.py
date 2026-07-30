@@ -149,6 +149,28 @@ class Student(db.Model):
         return f'<Student {self.full_name}>'
 
 
+class StudentPhoto(db.Model):
+    """A student's passport photo, stored in the school's own tenant DB (durable
+    across restarts) in its own table so the hot ``students`` table stays lean —
+    the blob is loaded only when a photo is actually shown or printed. One row per
+    student; re-uploading replaces the bytes. Served only behind login + branch
+    scope (it is PII), never via the public site-media route."""
+    __tablename__ = 'student_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'),
+                           nullable=False, unique=True, index=True)
+    data = db.Column(db.LargeBinary, nullable=False)
+    mime = db.Column(db.String(40), nullable=False, default='image/jpeg')
+    width = db.Column(db.Integer)
+    height = db.Column(db.Integer)
+    bytes = db.Column(db.Integer)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    student = db.relationship('Student', backref=db.backref('photo', uselist=False,
+                                                            cascade='all, delete-orphan'))
+
+
 class ParentContact(db.Model):
     """Parent/Guardian contact information"""
     __tablename__ = 'parent_contacts'
