@@ -73,7 +73,11 @@
 .tt-sheet .c-sep{border:none;border-top:1px dashed currentColor;opacity:.3;margin:.3rem 0}
 .tt-sheet td.banner{text-align:center;vertical-align:middle;background:rgba(0,0,0,.04)}
 .tt-sheet td.banner .c-subj{font-size:1.5em;letter-spacing:2px;text-transform:uppercase}
-.tt-sheet td.merged{vertical-align:middle}
+.tt-sheet td.merged{vertical-align:middle;text-align:center}
+/* A run that spans multiple periods (e.g. a trailing "Skill Acquisition") reads
+   as a banner block across the remaining columns. */
+.tt-sheet td.merged.wide{background:rgba(0,0,0,.04)}
+.tt-sheet td.merged.wide .c-subj{font-size:1.25em;letter-spacing:1.5px;text-transform:uppercase}
 /* days-as-columns: time on the left, group blocks side by side in a cell */
 .tt-sheet table.grid-tt th.time-cell{vertical-align:middle;font-weight:700;white-space:nowrap;font-size:.95em}
 .tt-sheet .g-row{display:flex;gap:5px;align-items:stretch;justify-content:center}
@@ -904,20 +908,41 @@ function renderGridModeSheet(){
         var dlabel=esc(d.label || d.day || dayFromDate(d.date) || '—');
         if(d.date){ dlabel+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>'; }
         var first=true;
-        // precompute, per period, whether all groups share identical content (→ merge)
-        var mergeOf={};
-        periods.forEach(function(p){
-            var vals=groups.map(function(g){ return cellInner(d.cells[g+'§'+p.k]||[]); });
-            mergeOf[p.k] = (groups.length>1 && vals[0] && vals.every(function(v){ return v===vals[0]; })) ? vals[0] : null;
+        // Merge blocks: a RUN of consecutive periods whose content is identical
+        // across every group becomes ONE rectangular cell — colspan = periods in
+        // the run, rowspan = number of groups. This collapses e.g. a trailing
+        // "Skill Acquisition" that fills the rest of a day for ANY run (periods
+        // 2–4, 3–4, the whole day, …), not only the whole day. Normal periods
+        // still render per group; a single uniform period keeps its vertical
+        // (rowspan) merge as before.
+        var uval = periods.map(function(p){
+            var vals = groups.map(function(g){ return cellInner(d.cells[g+'§'+p.k]||[]); });
+            return (vals[0] && vals.every(function(v){ return v===vals[0]; })) ? vals[0] : null;
         });
+        var runStart=[], runLen=[];
+        for(var pi=0; pi<periods.length;){
+            if(uval[pi]!==null){
+                var pj=pi+1; while(pj<periods.length && uval[pj]===uval[pi]) pj++;
+                for(var pk=pi; pk<pj; pk++){ runStart[pk]=pi; runLen[pk]=pj-pi; }
+                pi=pj;
+            } else { runStart[pi]=-1; runLen[pi]=0; pi++; }
+        }
         groups.forEach(function(g, gi){
             dh+='<tr>';
             if(first){ dh+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
             if(anyGroup) dh+='<td class="grp-cell">'+esc(g||'—')+'</td>';
-            periods.forEach(function(p){
-                if(mergeOf[p.k]!==null){
-                    if(gi===0) dh+='<td class="cell merged" rowspan="'+groups.length+'">'+mergeOf[p.k]+'</td>';
-                    return;   // other group rows skip this column
+            periods.forEach(function(p, pidx){
+                if(uval[pidx]!==null){
+                    // only the top-left cell of each merge rectangle is emitted;
+                    // the cells it covers (other columns/rows) are skipped
+                    if(gi===0 && runStart[pidx]===pidx){
+                        var cs=runLen[pidx], rs=groups.length;
+                        dh+='<td class="cell merged'+(cs>1?' wide':'')+'"'
+                          + (cs>1?(' colspan="'+cs+'"'):'')
+                          + (rs>1?(' rowspan="'+rs+'"'):'')
+                          + '>'+uval[pidx]+'</td>';
+                    }
+                    return;
                 }
                 dh+='<td class="cell">'+cellInner(d.cells[g+'§'+p.k]||[])+'</td>';
             });
