@@ -3641,3 +3641,78 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible,
 .report-signatures .sig { flex: 1; text-align: center; }
 .report-signatures .sig .line { border-top: 1px solid var(--text-primary); margin-bottom: var(--sp-1); }
 .report-signatures .sig .role { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ==========================================================================
+   BOLD DIRECTION — a more assertive, unmistakably-premium pass (Phase 8)
+   Keeps the green/slate identity but turns up depth, contrast and confidence
+   so the lift is obvious at a glance. Layered last so it's easy to dial back.
+   ========================================================================== */
+
+/* Canvas gets a subtle brand aura at the top — depth instead of flat grey. */
+body {
+    background:
+        radial-gradient(1200px 480px at 100% -260px, color-mix(in srgb, var(--primary) 10%, transparent), transparent),
+        var(--bg-body);
+    background-attachment: fixed;
+}
+
+/* Headings: larger, tighter, display type — more editorial confidence. */
+h1, h2, h3, .page-header h1, .welcome-section h1 { font-family: var(--font-display); letter-spacing: -0.02em; }
+.page-header h1 { font-size: var(--text-2xl); font-weight: var(--fw-bold); }
+@media (min-width: 768px) { .page-header h1 { font-size: var(--text-3xl); } }
+
+/* Cards: softer corners + real, layered elevation and a decisive hover lift. */
+.card {
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.12);
+}
+.card:hover {
+    box-shadow: 0 2px 4px rgba(15,23,42,0.05), 0 18px 40px -16px rgba(15,23,42,0.22);
+    border-color: var(--gray-300);
+    transform: translateY(-2px);
+}
+
+/* Primary + key buttons: a confident gradient with a lifted press. */
+.btn-primary {
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--primary) 88%, #fff),
+        var(--primary));
+    box-shadow: 0 1px 2px rgba(15,23,42,0.18),
+                0 6px 16px -6px color-mix(in srgb, var(--primary) 60%, transparent),
+                inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--primary) 94%, #fff),
+        var(--primary-hover));
+    filter: none;
+    box-shadow: 0 2px 4px rgba(15,23,42,0.2),
+                0 12px 24px -8px color-mix(in srgb, var(--primary) 65%, transparent),
+                inset 0 1px 0 rgba(255,255,255,0.22);
+}
+.btn-lg { border-radius: var(--radius-lg); }
+
+/* Sidebar active pill: fuller accent presence. */
+.sidebar-nav .nav-link.active {
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--accent) 26%, transparent),
+        rgba(255,255,255,0.10));
+}
+.sidebar-nav .nav-link.active::before { height: 60%; width: 3px; }
+
+/* KPI + stat cards: deeper elevation to match the bolder cards. */
+.kpi-card, .stat-card {
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 10px 28px -14px rgba(15,23,42,0.16);
+}
+
+/* Graceful fallback where color-mix is unavailable (older engines). */
+@supports not (background: color-mix(in srgb, red, blue)) {
+    body { background: var(--bg-body); }
+    .btn-primary { background: var(--primary); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .sidebar-nav .nav-link.active { background: rgba(255,255,255,0.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .card:hover { transform: none; }
+}
