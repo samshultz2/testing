@@ -171,7 +171,9 @@ export default function ViewApp({ initial }) {
         <div className="card-body" style={{ padding: 0 }}>
           {(d.enrollments || []).length ? (
             <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-              <table className="data-table">
+              {/* no-mobile-scroll: this short 3-column table fills the card on
+                  phones instead of collapsing to content width (display:block). */}
+              <table className="data-table no-mobile-scroll">
                 <thead><tr><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
                 <tbody>{d.enrollments.map((e, i) => <tr key={i}><td>{e.term}</td><td>{e.class}</td><td>{e.arm || '—'}</td></tr>)}</tbody>
               </table>
