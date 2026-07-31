@@ -23,11 +23,40 @@
         html{-webkit-text-size-adjust:100%}
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-            min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;
-            color:var(--ink);padding:1.25rem;
-            background:radial-gradient(1200px 600px at 15% -10%, #12b886 0%, transparent 55%),
-                       linear-gradient(135deg,#0d6a4e 0%,#0b3b2e 55%,#141a20 100%);
+            min-height:100vh;min-height:100dvh;color:var(--ink);
+            background:#eef1f6;
         }
+        /* Split showcase: branded panel + sign-in. Single column on mobile. */
+        .auth-shell{min-height:100dvh;display:grid;grid-template-columns:1fr}
+        @media (min-width:960px){ .auth-shell{grid-template-columns:1.05fr .95fr} }
+
+        .auth-brand{
+            display:none; position:relative; overflow:hidden; color:#fff;
+            padding:3.5rem 3rem; flex-direction:column; justify-content:center; gap:2rem;
+            background:radial-gradient(900px 500px at 12% -10%, #12b886 0%, transparent 55%),
+                       linear-gradient(150deg,#0d6a4e 0%,#0b3b2e 55%,#0a1512 100%);
+        }
+        @media (min-width:960px){ .auth-brand{display:flex} }
+        .auth-brand::before,.auth-brand::after{content:"";position:absolute;border-radius:50%;
+            filter:blur(60px);opacity:.5;pointer-events:none}
+        .auth-brand::before{width:360px;height:360px;background:#12b886;top:-120px;right:-80px}
+        .auth-brand::after{width:300px;height:300px;background:#0e8a64;bottom:-100px;left:-60px}
+        .auth-brand .ab-inner{position:relative;z-index:1;max-width:440px}
+        .auth-brand .ab-logo{width:56px;height:56px;border-radius:15px;background:#fff;padding:6px;
+            object-fit:contain;box-shadow:0 10px 30px rgba(0,0,0,.3);margin-bottom:1.5rem}
+        .auth-brand h2{font-size:2rem;line-height:1.15;letter-spacing:-.02em;font-weight:800;margin-bottom:.75rem}
+        .auth-brand .ab-sub{color:rgba(255,255,255,.82);font-size:1rem;line-height:1.5;margin-bottom:2rem}
+        .auth-brand .ab-feat{display:flex;align-items:flex-start;gap:.85rem;margin-bottom:1.1rem;
+            color:rgba(255,255,255,.92);font-size:.92rem;line-height:1.4}
+        .auth-brand .ab-feat i{flex:none;width:34px;height:34px;border-radius:10px;display:flex;
+            align-items:center;justify-content:center;background:rgba(255,255,255,.14);
+            color:#7ff0cf;font-size:.9rem;backdrop-filter:blur(4px)}
+        .auth-brand .ab-feat b{color:#fff;font-weight:700}
+        .auth-brand .ab-foot{position:relative;z-index:1;margin-top:2.5rem;color:rgba(255,255,255,.6);font-size:.78rem}
+
+        .auth-main{display:flex;align-items:center;justify-content:center;padding:1.5rem;
+            background:radial-gradient(700px 320px at 50% -10%, rgba(17,153,142,.12), transparent 60%), transparent}
+        @media (min-width:960px){ .auth-main{background:transparent} }
         .login-container{width:100%;max-width:412px}
         .login-card{
             background:var(--card);border-radius:18px;padding:2rem 2rem 1.6rem;
@@ -147,7 +176,20 @@
         <a href="{{ url_for('result_portal.check') }}"><i class="fas fa-magnifying-glass-chart"></i> Check Result</a>
     </nav>
 
-    <main class="login-container">
+    <div class="auth-shell">
+    <aside class="auth-brand" aria-hidden="true">
+        <div class="ab-inner">
+            <img class="ab-logo" src="{{ school_brand.logo_url or url_for('static', filename='img/logo-mark.svg') }}" alt="">
+            <h2>Run your whole school from one calm, powerful workspace.</h2>
+            <p class="ab-sub">Admissions, attendance, results, finance, library and more — beautifully unified for {{ school_brand.name or 'your school' }}.</p>
+            <div class="ab-feat"><i class="fas fa-layer-group"></i><span><b>Everything in one place.</b> Students, staff, results and fees, always in sync.</span></div>
+            <div class="ab-feat"><i class="fas fa-bolt"></i><span><b>Fast &amp; installable.</b> Works offline and installs on any phone or laptop.</span></div>
+            <div class="ab-feat"><i class="fas fa-shield-halved"></i><span><b>Secure by design.</b> Encrypted, private, and built for trust.</span></div>
+        </div>
+        <div class="ab-foot">© {{ now_year or 2025 }} EduSyncra · School Management Platform</div>
+    </aside>
+    <main class="auth-main">
+    <div class="login-container">
         <div class="login-card">
             <div class="login-header">
                 <div class="login-logo">
@@ -223,7 +265,9 @@
                 <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms</a>
             </div>
         </div>
+    </div>
     </main>
+    </div>
 
     <script nonce="{{ csp_nonce }}">
     (function(){
