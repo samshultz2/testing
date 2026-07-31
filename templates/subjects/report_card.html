@@ -4,20 +4,43 @@
 
 {% block extra_css %}
 <style>
-@media print {
-    .sidebar, .top-header, .page-header-actions, .card-header .btn, form, .no-print { display: none !important; }
-    .main-content { margin: 0 !important; padding: 0 !important; }
-    .card { border: 1px solid #000 !important; margin-bottom: 1rem !important; }
-    .report-header { text-align: center; margin-bottom: 1rem; }
-    body { font-size: 12px; }
-}
-.report-header { text-align: center; padding: 1rem; border-bottom: 2px solid var(--primary); margin-bottom: 1rem; }
-.report-header h2 { margin: 0; color: var(--primary); }
-.report-header p { margin: 0.25rem 0; }
+/* Screen: a clean centred letterhead. */
+.report-header { text-align: center; padding: 1.25rem 1rem 1rem; border-bottom: 2px solid var(--primary); margin-bottom: 1rem; }
+.report-header img { max-height: 74px; max-width: 130px; margin-bottom: .4rem; }
+.report-header h2 { margin: 0; color: var(--primary); font-family: var(--font-display); letter-spacing: -.01em; }
+.report-header p { margin: 0.2rem 0; color: var(--text-secondary); font-size: .85rem; }
+.report-doc-title { text-align:center; font-family: var(--font-display); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; font-size: .9rem; color: var(--text-muted); margin:.35rem 0 0; }
 .student-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; }
-.student-info-item { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px dotted var(--border-color); }
-.grade-key { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.8rem; }
-.grade-key span { padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: 4px; }
+.student-info-item { display: flex; justify-content: space-between; gap:.75rem; padding: 0.3rem 0; border-bottom: 1px dotted var(--border-color); }
+.student-info-item span { color: var(--text-muted); }
+.grade-key { display: flex; flex-wrap: wrap; gap: .5rem; font-size: 0.8rem; }
+.grade-key span { padding: 0.25rem 0.6rem; background: var(--gray-50); border: 1px solid var(--border-light); border-radius: var(--radius-full); }
+
+/* Signature row for the printed report. */
+.rc-signatures { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; margin: 2.5rem 0 .5rem; }
+.rc-signatures .sig { flex: 1; min-width: 150px; text-align: center; }
+.rc-signatures .sig .line { border-top: 1px solid var(--text-primary); margin-bottom: .3rem; }
+.rc-signatures .sig .role { font-size: .72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+
+/* Print: crisp, typeset, single document — no app chrome, no split rows. */
+@media print {
+    .sidebar, .top-header, .bottom-nav, .page-header, .page-header-actions,
+    .card-header .btn, form, .no-print { display: none !important; }
+    .main-content { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    .page-content { padding: 0 !important; }
+    body { font-size: 11pt; background: #fff; }
+    .card { border: 1px solid #cbd5e1 !important; box-shadow: none !important;
+        border-radius: 6px !important; margin-bottom: .6rem !important;
+        break-inside: avoid; page-break-inside: avoid; }
+    .card-header { background: #f1f5f9 !important; }
+    .data-table th, .data-table td { border: 1px solid #cbd5e1 !important; }
+    .data-table thead { display: table-header-group; }
+    .data-table tr { break-inside: avoid; }
+    .report-header { border-bottom: 2px solid #000; }
+    .report-header h2 { color: #000; }
+    .rc-signatures { break-inside: avoid; }
+}
 </style>
 {% endblock %}
 
@@ -186,6 +209,11 @@
             <div style="border-bottom: 1px solid var(--border-color); min-height: 40px; padding: 0.5rem;">
                 {{ report_data.term_summary.principal_comment if report_data.term_summary else '' }}
             </div>
+        </div>
+        <div class="rc-signatures">
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Class Teacher</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Principal</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Parent / Guardian</div></div>
         </div>
     </div>
 </div>

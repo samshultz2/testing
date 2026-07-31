@@ -3618,16 +3618,18 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible,
 /* A4 page geometry for print (16mm margins is a safe printer default). */
 @page { size: A4; margin: 16mm; }
 
-/* --- Report letterhead / body (usable on screen too, shine on print) ------ */
-.report-header {
+/* --- Report letterhead / body (usable on screen too, shine on print) ------
+   Namespaced .report-letterhead (not .report-header) to avoid colliding with
+   templates that already style their own centred .report-header. */
+.report-letterhead {
     display: flex; align-items: center; gap: var(--sp-4);
     padding-bottom: var(--sp-4); margin-bottom: var(--sp-5);
     border-bottom: 2px solid var(--text-primary);
 }
-.report-header .report-logo { width: 64px; height: 64px; object-fit: contain; flex: none; }
-.report-header .report-titles { flex: 1; min-width: 0; }
-.report-header .report-school { font-family: var(--font-display); font-size: var(--text-xl); font-weight: var(--fw-bold); margin: 0; }
-.report-header .report-sub { font-size: var(--text-sm); color: var(--text-secondary); margin: 2px 0 0; }
+.report-letterhead .report-logo { width: 64px; height: 64px; object-fit: contain; flex: none; }
+.report-letterhead .report-titles { flex: 1; min-width: 0; }
+.report-letterhead .report-school { font-family: var(--font-display); font-size: var(--text-xl); font-weight: var(--fw-bold); margin: 0; }
+.report-letterhead .report-sub { font-size: var(--text-sm); color: var(--text-secondary); margin: 2px 0 0; }
 .report-title {
     text-align: center; margin: var(--sp-4) 0 var(--sp-5);
     font-family: var(--font-display); font-size: var(--text-lg);
