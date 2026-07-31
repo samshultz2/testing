@@ -12,6 +12,38 @@ export function useDebounce(value, ms = 250) {
   return debounced;
 }
 
+// Global Chart.js defaults — resolved, theme-aware colours plus premium
+// touches (rounded bars, soft grid, point-style legends, themed tooltips,
+// smooth entry animation). IMPORTANT: charts draw on <canvas>, which cannot
+// parse CSS variables — passing 'var(--x)' silently falls back to Chart.js's
+// dark-grey default, which is why axis labels were unreadable in dark mode.
+// We resolve every colour to a real value here.
+export function applyChartDefaults() {
+  const C = window.Chart;
+  if (!C || !C.defaults) return;
+  const cs = getComputedStyle(document.documentElement);
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const muted = (cs.getPropertyValue('--text-muted') || (dark ? '#94a0b4' : '#5b6675')).trim();
+  const grid = dark ? 'rgba(255,255,255,.09)' : 'rgba(15,23,42,.07)';
+  C.defaults.color = muted;                 // all tick/label/legend text
+  C.defaults.borderColor = grid;            // grid lines default to this
+  if (C.defaults.font) {
+    C.defaults.font.family = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    C.defaults.font.size = 12;
+  }
+  try { C.defaults.elements.bar.borderRadius = 6; C.defaults.elements.bar.borderSkipped = false; } catch (e) { /* noop */ }
+  try { C.defaults.elements.point.radius = 3; C.defaults.elements.point.hoverRadius = 5; C.defaults.elements.line.tension = 0.35; } catch (e) { /* noop */ }
+  try { C.defaults.animation.duration = 600; C.defaults.animation.easing = 'easeOutQuart'; } catch (e) { /* noop */ }
+  try {
+    const tt = C.defaults.plugins.tooltip;
+    tt.backgroundColor = dark ? '#182031' : '#0f172a';
+    tt.titleColor = '#fff'; tt.bodyColor = dark ? '#dbe2ec' : '#e2e8f0';
+    tt.borderColor = dark ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.08)';
+    tt.borderWidth = 1; tt.padding = 10; tt.cornerRadius = 8; tt.boxPadding = 4; tt.usePointStyle = true;
+  } catch (e) { /* noop */ }
+  try { C.defaults.plugins.legend.labels.usePointStyle = true; C.defaults.plugins.legend.labels.boxWidth = 8; C.defaults.plugins.legend.labels.padding = 14; } catch (e) { /* noop */ }
+}
+
 // Render a Chart.js chart into a <canvas> ref, destroying/recreating it when the
 // config changes and on unmount. Replaces the copy-pasted new window.Chart(...)
 // + cleanup blocks across Dashboard/Finance/Results. `make` returns a Chart
@@ -23,6 +55,7 @@ export function useChart(make, deps) {
     let cfg;
     try { cfg = make(); } catch (e) { cfg = null; }
     if (!cfg) return undefined;
+    applyChartDefaults();
     const chart = new window.Chart(ref.current, cfg);
     return () => { try { chart.destroy(); } catch (e) { /* noop */ } };
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps

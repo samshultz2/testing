@@ -1,11 +1,15 @@
 import React, { useEffect, useRef } from 'react';
+import { applyChartDefaults } from '../lib/hooks';
 
-// Theme-aware axis/grid colours, matching the classic dashboard script.
+// Theme-aware axis/grid colours. NOTE: canvas can't read CSS vars, so `tick`
+// must be a resolved colour — passing 'var(--…)' falls back to Chart.js's dark
+// grey (unreadable in dark mode).
 export const chartTheme = () => {
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const cs = getComputedStyle(document.documentElement);
   return {
     grid: dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)',
-    tick: dark ? 'var(--text-muted)' : 'var(--text-muted)',
+    tick: (cs.getPropertyValue('--text-muted') || (dark ? '#94a0b4' : '#5b6675')).trim(),
   };
 };
 
