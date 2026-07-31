@@ -3833,3 +3833,85 @@ h2 { letter-spacing: -0.02em; }
     .profile-hero .ph-avatar { width: 72px; height: 72px; font-size: 1.6rem; }
     .profile-hero .ph-name { font-size: var(--text-xl); }
 }
+
+/* ==========================================================================
+   SHARED DATA-PANEL SYSTEM — KPI band, glow icon tiles & chart widgets
+   The dashboard's approved premium KPI/widget treatment used to live inline in
+   dashboard.html only; every React module (Finance, Library, HR, Comms, CBT,
+   Results, Admissions…) shipped its own flatter copy in its host template, so
+   those screens rendered a tier below the dashboard. This promotes ONE premium
+   treatment to the global sheet and elevates all of them at once.
+
+   Scoped with a leading `body ` so specificity (0,1,1) wins over each
+   template's own `.kpi`/`.widget` (0,1,0) rules regardless of source order —
+   no per-template edits, no risk of one screen drifting from the rest. Only
+   the *visual treatment* is unified here; per-module layout (grid columns,
+   chart-box height) is deliberately left to each template.
+   ========================================================================== */
+body .kpi {
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 10px 28px -14px rgba(15,23,42,0.16);
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+    overflow: hidden;
+}
+body .kpi:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 2px 4px rgba(15,23,42,0.05), 0 18px 40px -16px rgba(15,23,42,0.22);
+    border-color: var(--gray-300);
+}
+body .kpi > div:last-child { min-width: 0; }
+
+/* Glow icon tile: soft drop + inner top highlight so it reads as a lit chip. */
+body .kpi .ic {
+    width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
+    box-shadow: 0 6px 14px -6px rgba(15,23,42,0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+body .kpi .ic.blue   { background: linear-gradient(135deg, #4e73df, #224abe); }
+body .kpi .ic.green  { background: linear-gradient(135deg, #1cc88a, #13855c); }
+body .kpi .ic.amber  { background: linear-gradient(135deg, #f6c23e, #dda20a); }
+body .kpi .ic.red    { background: linear-gradient(135deg, #e74a3b, #be2617); }
+body .kpi .ic.purple { background: linear-gradient(135deg, #7e6cf0, #5a48c9); }
+body .kpi .ic.teal   { background: linear-gradient(135deg, #11998e, #0b6b63); }
+body .kpi .ic.orange { background: linear-gradient(135deg, #fd7e14, #c75e00); }
+body .kpi .ic.indigo { background: linear-gradient(135deg, #6366f1, #4338ca); }
+body .kpi .ic.rose   { background: linear-gradient(135deg, #f43f5e, #be123c); }
+body .kpi .ic.slate  { background: linear-gradient(135deg, #64748b, #334155); }
+
+/* Value reads big, tight and tabular; label a quiet uppercase caption. */
+body .kpi .v {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: 1.5rem; line-height: 1.05; letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+body .kpi .l {
+    font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem;
+    text-transform: uppercase; letter-spacing: 0.03em;
+}
+body .kpi .kpi-delta {
+    width: fit-content; padding: 2px 8px; margin-top: 0.4rem;
+    border-radius: var(--radius-full); background: var(--gray-100);
+}
+
+/* Chart / list widgets: quiet elevation + crisp header rule. */
+body .widget {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow var(--transition);
+}
+body .widget:hover { box-shadow: var(--shadow-sm); }
+body .widget .wh { border-bottom: 1px solid var(--border-light); }
+body .widget .wh h3 i { color: var(--primary); }
+
+/* Dark mode: swap the light-tuned drop shadows for the deeper dark ramp so the
+   panels still separate from the near-black canvas. */
+[data-theme="dark"] body .kpi { box-shadow: var(--shadow-md); }
+[data-theme="dark"] body .kpi:hover { box-shadow: var(--shadow-lg); }
+[data-theme="dark"] body .widget { box-shadow: var(--shadow-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+    body .kpi:hover { transform: none; }
+}
+/* Print: flatten to clean black-on-white. */
+@media print {
+    body .kpi, body .widget { box-shadow: none !important; transform: none !important; }
+}
