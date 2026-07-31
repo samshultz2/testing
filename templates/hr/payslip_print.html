@@ -12,7 +12,7 @@
 .r .k{color:var(--text-muted)}
 .net{text-align:center;margin:1rem 0;padding:1rem;background:var(--success-light,#e6f7ef);border-radius:var(--radius-md)}
 .net .big{font-size:1.7rem;font-weight:800;font-family:var(--font-display);color:var(--success)}
-@media print{.sidebar,.top-header,.page-header,.breadcrumb,.no-print,.sidebar-overlay{display:none!important}.main-content,.page-content,body{margin:0!important;padding:0!important;background:#fff!important}.slip{border:none;box-shadow:none;max-width:100%}}
+@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.sidebar,.top-header,.bottom-nav,.page-header,.breadcrumb,.no-print,.sidebar-overlay{display:none!important}.main-content,.page-content,body{margin:0!important;padding:0!important;width:100%!important;background:#fff!important}.slip{border:1px solid #cbd5e1;box-shadow:none;max-width:600px;margin:8mm auto;break-inside:avoid}}
 </style>
 {% endblock %}
 {% block content %}
