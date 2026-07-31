@@ -3,6 +3,7 @@ import Chart, { chartTheme } from './charts';
 import { Kpi, Widget, Empty, ChartBox, naira, nairaShort } from './components';
 import Customize from './Customize';
 import { apiGet, apiPost, csrfToken } from '../lib/api';
+import { chartPalette } from '../lib/hooks';
 import { Toast, SetupChecklist } from '../components/ui';
 
 const ICON = { jamb: 'fa-file-contract', waec: 'fa-file-alt', mock: 'fa-clipboard-list' };
@@ -210,19 +211,19 @@ export default function App({ data: initialData }) {
         <Widget icon="fa-venus-mars" title="Gender">
           <ChartBox>
             <Chart type="doughnut" options={doughnut()} ariaLabel={`Gender split: ${d.male_students || 0} male, ${d.female_students || 0} female`} data={{ labels: ['Male', 'Female'],
-              datasets: [{ data: [d.male_students, d.female_students], backgroundColor: ['#4e73df', '#e74a3b'], borderWidth: 0 }] }} />
+              datasets: [{ data: [d.male_students, d.female_students], backgroundColor: [chartPalette().male, chartPalette().female], borderWidth: 0 }] }} />
           </ChartBox>
         </Widget>
         <Widget icon="fa-route" title="Streams">
           <ChartBox>
             <Chart type="doughnut" options={doughnut()} ariaLabel={'Students by stream: ' + (Object.entries(d.stream_dist || {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'no data')} data={{ labels: Object.keys(d.stream_dist || {}),
-              datasets: [{ data: Object.values(d.stream_dist || {}), backgroundColor: ['#11998e', '#667eea', '#f6c23e', '#cbd5e1'], borderWidth: 0 }] }} />
+              datasets: [{ data: Object.values(d.stream_dist || {}), backgroundColor: chartPalette().categorical, borderWidth: 0 }] }} />
           </ChartBox>
         </Widget>
         <Widget icon="fa-birthday-cake" title="Age groups">
           <ChartBox>
             <Chart type="bar" options={barOpts} ariaLabel={'Students by age group: ' + ['0-10', '11-13', '14-16', '17-19', '20+'].map((k) => `${k}: ${(d.age_distribution || {})[k] || 0}`).join(', ')} data={{ labels: ['0-10', '11-13', '14-16', '17-19', '20+'],
-              datasets: [{ data: ['0-10', '11-13', '14-16', '17-19', '20+'].map((k) => (d.age_distribution || {})[k] || 0), backgroundColor: '#4e73df', borderRadius: 6 }] }} />
+              datasets: [{ data: ['0-10', '11-13', '14-16', '17-19', '20+'].map((k) => (d.age_distribution || {})[k] || 0), backgroundColor: chartPalette().indigo, borderRadius: 6 }] }} />
           </ChartBox>
         </Widget>
       </div>
@@ -238,7 +239,7 @@ export default function App({ data: initialData }) {
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
                 scales: { y: { beginAtZero: true, max: 100, grid: { color: t.grid } }, x: { grid: { display: false } } } }}
                 data={{ labels: d.attendance_trend.map((x) => x.label),
-                  datasets: [{ data: d.attendance_trend.map((x) => x.pct), borderColor: '#11998e', backgroundColor: 'rgba(17,153,142,.12)', fill: true, tension: .35, pointRadius: 4, pointBackgroundColor: '#11998e', borderWidth: 3 }] }} />
+                  datasets: [{ data: d.attendance_trend.map((x) => x.pct), borderColor: chartPalette().green, backgroundColor: chartPalette().fill, fill: true, tension: .35, pointRadius: 4, pointBackgroundColor: chartPalette().green, borderWidth: 3 }] }} />
             ) : <Empty icon="fa-chart-line">No attendance recorded yet</Empty>}
           </ChartBox>
         </Widget>
@@ -269,8 +270,8 @@ export default function App({ data: initialData }) {
                 plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
                 scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: t.grid } } } }}
                 data={{ labels: d.class_stats.map((c) => c.name), datasets: [
-                  { label: 'Male', data: d.class_stats.map((c) => c.male), backgroundColor: '#4e73df', borderRadius: 4 },
-                  { label: 'Female', data: d.class_stats.map((c) => c.female), backgroundColor: '#e74a3b', borderRadius: 4 }] }} />
+                  { label: 'Male', data: d.class_stats.map((c) => c.male), backgroundColor: chartPalette().male, borderRadius: 4 },
+                  { label: 'Female', data: d.class_stats.map((c) => c.female), backgroundColor: chartPalette().female, borderRadius: 4 }] }} />
             ) : <Empty icon="fa-school">No class enrollment</Empty>}
           </ChartBox>
         </Widget>
@@ -775,7 +776,7 @@ function FinanceHealth({ f, urls, t }) {
                 ariaLabel={'Weekly fee collection: ' + trend.map((x) => x.label + ' ' + nairaShort(x.amount)).join(', ')}
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
                   scales: { y: { beginAtZero: true, grid: { color: t.grid }, ticks: { callback: (v) => nairaShort(v) } }, x: { grid: { display: false } } } }}
-                data={{ labels: trend.map((x) => x.label), datasets: [{ data: trend.map((x) => x.amount), borderColor: '#11998e', backgroundColor: 'rgba(17,153,142,.12)', fill: true, tension: .35, pointRadius: 3, borderWidth: 3 }] }} />
+                data={{ labels: trend.map((x) => x.label), datasets: [{ data: trend.map((x) => x.amount), borderColor: chartPalette().green, backgroundColor: chartPalette().fill, fill: true, tension: .35, pointRadius: 3, borderWidth: 3 }] }} />
             ) : <Empty icon="fa-chart-line">No payments recorded yet</Empty>}
           </ChartBox>
         </Widget>

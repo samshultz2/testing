@@ -39,6 +39,33 @@ export function chartInk() {
   };
 }
 
+// A sophisticated, harmonious chart palette — muted and presentation-quality,
+// not the loud primary blue/red of a default admin panel. Slightly brighter in
+// dark mode so series stay legible on the deep surface. Use for all chart
+// series so every graph across the app reads as one considered system.
+export function chartPalette() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+    || (getComputedStyle(document.documentElement).getPropertyValue('--bg-body').trim().startsWith('#0'));
+  const light = {
+    green: '#2f9e83', indigo: '#6d74d6', amber: '#e0a63a', rose: '#d47a86',
+    cyan: '#3aa6c2', violet: '#9b7ede', slate: '#94a3b8', teal: '#2f9e83',
+  };
+  const dk = {
+    green: '#43b89c', indigo: '#8b93ef', amber: '#f0bd5a', rose: '#e694a0',
+    cyan: '#5cc0da', violet: '#b49bf0', slate: '#8f9bb0', teal: '#43b89c',
+  };
+  const c = dark ? dk : light;
+  return {
+    ...c,
+    // Gender: a calm indigo / muted rose instead of loud blue / fire red.
+    male: c.indigo, female: c.rose,
+    // Ordered categorical ramp for multi-series / doughnut charts.
+    categorical: [c.green, c.indigo, c.amber, c.rose, c.cyan, c.violet, c.slate],
+    // Soft fill for area/line charts (brand green at low opacity).
+    fill: dark ? 'rgba(67,184,156,.14)' : 'rgba(47,158,131,.12)',
+  };
+}
+
 // Animate a number from 0 up to `target` over `ms`, easing out. Returns the
 // current value; updates via requestAnimationFrame. Honours
 // prefers-reduced-motion (and SSR/no-rAF) by jumping straight to the target.
