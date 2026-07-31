@@ -3716,3 +3716,71 @@ h1, h2, h3, .page-header h1, .welcome-section h1 { font-family: var(--font-displ
 @media (prefers-reduced-motion: reduce) {
     .card:hover { transform: none; }
 }
+
+/* ==========================================================================
+   ART DIRECTION — premium colour & surface system (Phase 9)
+   Layered surfaces, refined hairlines, richer dark mode and luxurious type
+   rhythm. Token-level so every screen inherits the elevation at once; keeps
+   the green identity. Layered last.
+   ========================================================================== */
+
+:root {
+    /* Layered surfaces: sunken canvas → card → raised (menus, popovers). */
+    --bg-body: #f4f6fa;
+    --surface-sunken: #eef1f6;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    /* Hairlines a touch cooler + softer for that fine-lined SaaS look. */
+    --border-color: #e6eaf1;
+    --border-light: #eef1f6;
+    /* Elevation: cleaner, more optically-even shadow ramp. */
+    --shadow-xs: 0 1px 2px rgba(16,24,40,0.04);
+    --shadow-sm: 0 1px 2px rgba(16,24,40,0.05), 0 1px 3px rgba(16,24,40,0.05);
+    --shadow-md: 0 4px 8px -2px rgba(16,24,40,0.06), 0 12px 24px -8px rgba(16,24,40,0.10);
+    --shadow-lg: 0 8px 16px -4px rgba(16,24,40,0.08), 0 24px 48px -12px rgba(16,24,40,0.16);
+    --shadow-xl: 0 32px 64px -16px rgba(16,24,40,0.22);
+}
+
+/* Premium dark mode — deep near-black with a cool cast, layered surfaces and
+   crisper borders (Linear/Vercel/Raycast register). */
+[data-theme="dark"] {
+    --bg-body: #080b12;
+    --surface-sunken: #0c111b;
+    --bg-card: #121826;
+    --surface: #121826;
+    --surface-raised: #182031;
+    --border-color: #232c3e;
+    --border-light: #1a2230;
+    --text-primary: #f3f5f9;
+    --text-secondary: #c4ccda;
+    --text-muted: #94a0b4;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 8px 24px -8px rgba(0,0,0,0.55);
+    --shadow-lg: 0 20px 48px -12px rgba(0,0,0,0.65);
+    --shadow-xl: 0 32px 64px -16px rgba(0,0,0,0.7);
+}
+/* Dark: menus/dropdowns/modals sit on the raised surface so they read above
+   the page instead of blending into it. */
+[data-theme="dark"] .dropdown-menu,
+[data-theme="dark"] .row-menu,
+[data-theme="dark"] .menu-panel,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .cmdk-panel,
+[data-theme="dark"] [role="dialog"][aria-modal="true"] { background: var(--surface-raised); }
+
+/* Luxurious type rhythm: bigger, tighter display headings with airy leading. */
+h1 { letter-spacing: -0.025em; }
+h2 { letter-spacing: -0.02em; }
+@media (min-width: 768px) {
+    h1 { font-size: var(--text-3xl); line-height: 1.15; }
+    h2 { font-size: var(--text-2xl); }
+}
+.page-header { margin-bottom: var(--sp-6); }
+.text-muted, .form-hint { letter-spacing: 0.005em; }
+
+/* Card headers: cleaner, quieter — let content lead. */
+.card-header { background: transparent; border-bottom-color: var(--border-light); }
+.card-header h3 { letter-spacing: -0.01em; }
+
+/* Refined text selection across the app. */
+::selection { background: color-mix(in srgb, var(--primary) 22%, transparent); color: inherit; }
