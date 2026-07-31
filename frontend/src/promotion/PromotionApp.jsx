@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell, SuccessBanner } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 
 // ---- Index -----------------------------------------------------------------
@@ -60,7 +61,7 @@ function Rules({ d, notify }) {
   };
   return (
     <>
-      <PageHeader title="Promotion Rules" actions={<a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a>} />
+      <PageHeader title="Promotion Rules" actions={canWrite(d) ? <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a> : null} />
       {d.rules.length ? (
         <div className="card"><div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
           {d.rules.map((r) => (
@@ -70,16 +71,16 @@ function Rules({ d, notify }) {
               <div className="data-card-row"><span className="data-card-label">Min Average</span><span>{r.min_average}%</span></div>
               <div className="data-card-row"><span className="data-card-label">Priority</span><span>{r.priority}</span></div>
               {r.required_count > 0 && <div className="data-card-row"><span className="data-card-label">Required Subjects</span><span>{r.required_count} subjects</span></div>}
-              <div className="data-card-actions">
+              {canWrite(d) && <div className="data-card-actions">
                 <button type="button" className="btn btn-danger btn-sm w-100" disabled={busy} onClick={() => del(r)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>
-              </div>
+              </div>}
             </div>
           ))}
         </div></div></div>
       ) : (
         <div className="card"><div className="card-body"><Empty icon="fa-list-alt" title="No Rules">
           <p>Add promotion rules to define how students are promoted</p>
-          <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a></Empty></div></div>
+          {canWrite(d) && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a>}</Empty></div></div>
       )}
       <div className="card mt-3"><div className="card-header"><h3>How Rules Work</h3></div>
         <div className="card-body">
@@ -286,9 +287,9 @@ function Process({ d, notify }) {
                 );
               })}</tbody></table>
           </div></div>
-          <div className="card-body"><div className="page-header-actions">
+          {canWrite(d) && <div className="card-body"><div className="page-header-actions">
             <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i aria-hidden="true" className="fas fa-save" /> Save Promotions</button>
-          </div></div>
+          </div></div>}
         </div>
       </>) : (d.from_session_id && d.class_id
         ? <div className="card"><div className="card-body"><Empty icon="fa-users" title="No Students"><p>No students found for this class in the selected session's Third Term</p></Empty></div></div>
@@ -314,7 +315,7 @@ function Graduates({ d }) {
         {d.doc_templates_url && <a href={d.doc_templates_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-swatchbook" /> Designs</a>}
         {d.verifications_url && <a href={d.verifications_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-shield-halved" /> Verifications</a>}
         {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
-        <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>
+        {canWrite(d) && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>}
       </>} />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">Graduation Session</label>
@@ -631,17 +632,17 @@ function GraduateProfile({ d, notify }) {
         </table></div></div></div>}
 
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Results</h3>
-        <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
+        {canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
         <div className="card-body">{d.waec_by_year.length ? d.waec_by_year.map((data, i) => (
           <div className="card" style={{ marginBottom: '1rem' }} key={i}>
             <div className="card-header"><span><strong>{data.exam_year}</strong></span>{data.exam_number && <span className="text-muted">Exam No: {data.exam_number}</span>}</div>
             <div className="card-body"><div className="subjects-grid">{data.subjects.map((r, j) => (
               <div className="subject-item" key={j}><span>{r.subject}</span><span className={'grade-badge grade-' + r.grade}>{r.grade}</span></div>))}</div></div>
           </div>
-        )) : <Empty icon="fa-file-alt" title=""><p>No WAEC results recorded</p><a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add WAEC Result</a></Empty>}</div></div>
+        )) : <Empty icon="fa-file-alt" title=""><p>No WAEC results recorded</p>{canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add WAEC Result</a>}</Empty>}</div></div>
 
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB Results</h3>
-        <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
+        {canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
         <div className="card-body">{d.jamb_results.length ? d.jamb_results.map((j, i) => (
           <div className="card" style={{ marginBottom: '1rem' }} key={i}>
             <div className="card-header"><span><strong>{j.exam_year}</strong></span><span className="badge badge-primary" style={{ fontSize: 'var(--text-md)' }}>{j.total_score}</span></div>
@@ -649,7 +650,7 @@ function GraduateProfile({ d, notify }) {
               <div className="jamb-subjects">{j.subjects.map((sub, k) => (
                 <div className="subject-item" key={k}><span>{sub.name}</span><strong>{sub.score}</strong></div>))}</div></div>
           </div>
-        )) : <Empty icon="fa-file-contract" title=""><p>No JAMB results recorded</p><a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add JAMB Result</a></Empty>}</div></div>
+        )) : <Empty icon="fa-file-contract" title=""><p>No JAMB results recorded</p>{canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add JAMB Result</a>}</Empty>}</div></div>
 
       {d.contacts.length > 0 && (
         <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-phone" /> Contact Information</h3></div>

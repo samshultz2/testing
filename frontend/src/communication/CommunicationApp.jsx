@@ -4,6 +4,7 @@ import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, promptDialog, Banner, SectionShell, SectionTabs, Empty, Autocomplete } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['compose', 'fa-paper-plane', 'Compose'],
@@ -78,9 +79,11 @@ function Dashboard({ d }) {
 
   const s = d.stats || {};
   const quick = [
-    [d.urls.compose_sms || d.nav.compose, 'fa-comment-sms', 'Send SMS', 'btn-primary'],
-    [d.urls.compose_email || d.nav.compose, 'fa-envelope', 'Send Email', 'btn-secondary'],
-    [d.nav.announcements, 'fa-bullhorn', 'Announcement', 'btn-secondary'],
+    ...(canWrite(d) ? [
+      [d.urls.compose_sms || d.nav.compose, 'fa-comment-sms', 'Send SMS', 'btn-primary'],
+      [d.urls.compose_email || d.nav.compose, 'fa-envelope', 'Send Email', 'btn-secondary'],
+      [d.nav.announcements, 'fa-bullhorn', 'Announcement', 'btn-secondary'],
+    ] : []),
     [d.nav.templates, 'fa-file-lines', 'Templates', 'btn-secondary'],
     [d.nav.messages, 'fa-clock-rotate-left', 'History', 'btn-secondary'],
   ];
@@ -98,7 +101,7 @@ function Dashboard({ d }) {
   return (
     <>
       <div className="page-header"><h1>Communication Center</h1>
-        <div className="page-header-actions"><a href={d.nav.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a></div>
+        <div className="page-header-actions">{canWrite(d) && <a href={d.nav.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="cm-quick d-flex gap-2 flex-wrap mb-3">{quick.map(([href, ic, label, cls]) => (
@@ -138,7 +141,7 @@ function Dashboard({ d }) {
                     <td data-label="Status"><span className={statusBadge(m.status)}>{m.status}</span></td>
                     <td data-label="Sent" className="text-right">{m.sent_count}/{m.recipient_count}</td></tr>))}
                 </tbody></table></div>
-            ) : <Empty icon="fa-paper-plane" title="No campaigns yet"><a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a></Empty>}
+            ) : <Empty icon="fa-paper-plane" title="No campaigns yet">{canWrite(d) && <a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a>}</Empty>}
           </div></div>
       </div>
 
@@ -420,7 +423,7 @@ function Messages({ d, notify }) {
         <div className="page-header-actions">
           <a href={d.urls.reports} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-line" /> Reports</a>
           {d.is_admin && <button className="btn btn-secondary" title="Send any scheduled campaigns that are now due" onClick={processDue}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Process due</button>}
-          <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>
+          {canWrite(d) && <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -561,7 +564,7 @@ function MessageDetail({ d, notify }) {
       <div className="page-header"><h1>{m.title}</h1>
         <div className="page-header-actions">
           <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>
-          <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New</a>
+          {canWrite(d) && <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -739,7 +742,7 @@ function Inbox({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Inbox</h1>
-        <div className="page-header-actions"><button className="btn btn-primary" onClick={() => setStarting(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> New conversation</button></div>
+        <div className="page-header-actions">{canWrite(d) && <button className="btn btn-primary" onClick={() => setStarting(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> New conversation</button>}</div>
       </div>
       <Tabs d={d} />
       {starting && (

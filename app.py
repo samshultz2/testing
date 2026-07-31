@@ -468,6 +468,13 @@ def create_app(config_class=None):
             except Exception:
                 return True
 
+        def is_read_only():
+            try:
+                from utils.access_control import is_read_only as _iro
+                return _iro()
+            except Exception:
+                return False
+
         def can_generate_timetable():
             try:
                 from utils.access_control import can_generate_timetable as _f
@@ -601,6 +608,7 @@ def create_app(config_class=None):
             'can_write_module': can_write_module,
             'can_manage_users': can_manage_users(),
             'page_can_write': page_can_write(),
+            'is_read_only': is_read_only(),
             'can_generate_timetable': can_generate_timetable(),
             'can_generate_result_cards': can_generate_result_cards(),
             'can_access_graduates': can_access_graduates(),

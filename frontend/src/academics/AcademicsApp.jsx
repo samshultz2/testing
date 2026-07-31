@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 // ---- Sessions list ---------------------------------------------------------
 function Sessions({ d, notify }) {
@@ -13,7 +14,7 @@ function Sessions({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Academic Sessions</h1>
-        <div className="page-header-actions"><a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
+        <div className="page-header-actions">{canWrite(d) && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
       </div>
       <div className="card"><div className="card-body" style={{ padding: 0 }}>
         {d.sessions.length ? (
@@ -23,10 +24,10 @@ function Sessions({ d, notify }) {
               <div className="data-card-row"><span className="data-card-label">Start</span><span>{s.start_date || '-'}</span></div>
               <div className="data-card-row"><span className="data-card-label">End</span><span>{s.end_date || '-'}</span></div>
               <div className="data-card-row"><span className="data-card-label">Terms</span><span>{s.terms}</span></div>
-              <div className="data-card-actions">
+              {canWrite(d) && <div className="data-card-actions">
                 <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
                 {!s.is_active && <button type="button" className="btn btn-success btn-sm w-100" style={{ flex: 1 }} onClick={() => activate(s.activate_url)}><i aria-hidden="true" className="fas fa-check" /> Activate</button>}
-              </div>
+              </div>}
             </div>))}</div>
         ) : <Empty icon="fa-calendar" title="No Sessions"><p>Create your first academic session</p></Empty>}
       </div></div>
@@ -82,7 +83,7 @@ function Terms({ d, notify }) {
       <div className="page-header"><h1>Terms</h1>
         <div className="page-header-actions">
           <a href={d.urls.setup} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list-check" /> Term setup</a>
-          <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>
+          {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}
         </div>
       </div>
       <div className="card"><div className="card-body" style={{ padding: 0 }}>
@@ -235,7 +236,7 @@ function ViewTerm({ d, notify }) {
     <>
       <div className="page-header">
         <div><h1>{t.full_name}</h1>{t.is_active && <span className="badge badge-success">Active</span>}</div>
-        <div className="page-header-actions"><a href={d.urls.edit} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-edit" /> Edit Dates</a></div>
+        <div className="page-header-actions">{canWrite(d) && <a href={d.urls.edit} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-edit" /> Edit Dates</a>}</div>
       </div>
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
         <div className="form-group"><label className="form-label">Start Date</label><div className="form-control" style={{ background: 'var(--bg-secondary)' }}>{t.start_date || 'Not set'}</div></div>
@@ -244,10 +245,10 @@ function ViewTerm({ d, notify }) {
 
       <div className="card mb-3">
         <div className="card-header"><h3>Weeks ({d.weeks.length})</h3>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {canWrite(d) && <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => act(d.urls.add_week, {})}><i aria-hidden="true" className="fas fa-plus" /> Add Week</button>
             {d.weeks.length === 0 && t.has_start && <button type="button" className="btn btn-secondary btn-sm" onClick={() => act(d.urls.generate_weeks, {})}><i aria-hidden="true" className="fas fa-sync" /> Generate All</button>}
-          </div>
+          </div>}
         </div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.weeks.length ? (
@@ -256,7 +257,7 @@ function ViewTerm({ d, notify }) {
                 <div className="data-card-header"><div className="data-card-title">Week {w.week_number}</div></div>
                 <div className="data-card-row"><span className="data-card-label">Start</span><span>{w.start_date}</span></div>
                 <div className="data-card-row"><span className="data-card-label">End</span><span>{w.end_date}</span></div>
-                {w.is_last && <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => act(w.delete_url, {}, `Delete Week ${w.week_number}? This will also delete attendance records for this week.`)}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>}
+                {canWrite(d) && w.is_last && <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => act(w.delete_url, {}, `Delete Week ${w.week_number}? This will also delete attendance records for this week.`)}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>}
               </div>))}</div>
           ) : <Empty icon="fa-calendar" title=""><p>No weeks added yet. Click "Add Week" to add Week 1.</p></Empty>}
         </div>
@@ -264,7 +265,7 @@ function ViewTerm({ d, notify }) {
 
       <div className="card"><div className="card-header"><h3>Holidays ({d.holidays.length})</h3></div>
         <div className="card-body">
-          <form onSubmit={addHoliday} className="filter-form mb-3">
+          {canWrite(d) && <form onSubmit={addHoliday} className="filter-form mb-3">
             <div className="form-group"><label className="form-label">From</label><input type="date" className="form-control" required value={hf.date} onChange={(e) => setHf((s) => ({ ...s, date: e.target.value }))} /></div>
             <div className="form-group"><label className="form-label">To <span className="text-muted">(optional)</span></label><input type="date" className="form-control" title="Leave blank for a single day" value={hf.end_date} onChange={(e) => setHf((s) => ({ ...s, end_date: e.target.value }))} /></div>
             <div className="form-group"><label className="form-label">Type</label>
@@ -272,14 +273,14 @@ function ViewTerm({ d, notify }) {
                 <option>Public Holiday</option><option>Mid-term Break</option><option>Other</option></select></div>
             <div className="form-group"><label className="form-label">Reason</label><input type="text" className="form-control" placeholder="e.g., Eid el-Kabir" required value={hf.reason} onChange={(e) => setHf((s) => ({ ...s, reason: e.target.value }))} /></div>
             <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
-          </form>
-          <p className="text-muted text-sm" style={{ margin: '-0.5rem 0 1rem' }}>For a multi-day break, set From and To — each weekday in the range is marked at once. Weekends are skipped automatically.</p>
+          </form>}
+          {canWrite(d) && <p className="text-muted text-sm" style={{ margin: '-0.5rem 0 1rem' }}>For a multi-day break, set From and To — each weekday in the range is marked at once. Weekends are skipped automatically.</p>}
           {d.holidays.length > 0 && (
             <div className="data-cards">{d.holidays.map((h) => (
               <div className="data-card" key={h.id}>
                 <div className="data-card-header"><div className="data-card-title">{h.date}</div>{h.holiday_type && <span className="badge badge-info">{h.holiday_type}</span>}</div>
                 <div className="data-card-row"><span className="data-card-label">Reason</span><span>{h.reason}</span></div>
-                <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => act(h.delete_url, {})}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>
+                {canWrite(d) && <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => act(h.delete_url, {})}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>}
               </div>))}</div>
           )}
         </div></div>
@@ -300,13 +301,13 @@ function Classes({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>School Classes</h1></div>
-      <div className="card mb-3"><div className="card-header"><h3>Add New Class</h3></div>
+      {canWrite(d) && <div className="card mb-3"><div className="card-header"><h3>Add New Class</h3></div>
         <div className="card-body"><form onSubmit={add}>
           <div className="form-group"><label className="form-label">Class Name</label><input type="text" className="form-control" placeholder="e.g., JSS1" required value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></div>
           <div className="form-group"><label className="form-label">Level</label><input type="number" className="form-control" min="1" max="20" required placeholder="Order number" value={f.level} onChange={(e) => setF((s) => ({ ...s, level: e.target.value }))} /></div>
           <div className="form-group"><label className="form-label">Description</label><input type="text" className="form-control" placeholder="Optional" value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} /></div>
           <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Class</button>
-        </form></div></div>
+        </form></div></div>}
       <div className="card"><div className="card-header"><h3>Existing Classes</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.classes.length ? (
@@ -334,12 +335,12 @@ function Arms({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Class Arms</h1></div>
-      <div className="card mb-3"><div className="card-header"><h3>Add New Arm</h3></div>
+      {canWrite(d) && <div className="card mb-3"><div className="card-header"><h3>Add New Arm</h3></div>
         <div className="card-body"><form onSubmit={add}>
           <div className="form-group"><label className="form-label">Arm Name</label><input type="text" className="form-control" placeholder="e.g., Rose, Lily" required value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></div>
           <div className="form-group"><label className="form-label">Description</label><input type="text" className="form-control" placeholder="Optional" value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} /></div>
           <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Arm</button>
-        </form></div></div>
+        </form></div></div>}
       <div className="card"><div className="card-header"><h3>Existing Arms</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.arms.length ? (
@@ -391,7 +392,7 @@ function Assignments({ d, notify }) {
       </div></div>
 
       {d.selected_term && (<>
-        <div className="card mb-3"><div className="card-header"><h3>{usesArms ? 'Add Class-Arm' : 'Add Class to Term'}</h3></div>
+        {canWrite(d) && <div className="card mb-3"><div className="card-header"><h3>{usesArms ? 'Add Class-Arm' : 'Add Class to Term'}</h3></div>
           <div className="card-body">
             {!usesArms && (
               <p style={{ marginTop: 0 }}>
@@ -404,7 +405,7 @@ function Assignments({ d, notify }) {
                 <div className="form-group"><label className="form-label">Arm</label><select className="form-control" required value={f.arm_id} onChange={(e) => setF((s) => ({ ...s, arm_id: e.target.value }))}><option value="">Select</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>)}
               <div className="form-group"><label className="form-label">Teacher</label><input type="text" className="form-control" placeholder="Name" value={f.form_teacher} onChange={(e) => setF((s) => ({ ...s, form_teacher: e.target.value }))} /></div>
               <div className="filter-actions"><button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
-            </form></div></div>
+            </form></div></div>}
 
         <div className="card"><div className="card-header"><h3>{d.selected_term.name} Classes</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
@@ -461,12 +462,12 @@ function ViewAssignment({ d, notify }) {
               <div className="data-card" key={e.id}>
                 <div className="data-card-header"><div className="data-card-title">{e.full_name}</div><span className="badge badge-primary">{e.student_id}</span></div>
                 <div className="data-card-row"><span className="data-card-label">Gender</span><span>{e.gender}</span></div>
-                <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => remove(e.remove_url)}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>
+                {canWrite(d) && <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => remove(e.remove_url)}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>}
               </div>))}</div>
           ) : <Empty icon="fa-user-group" title=""><p>No students enrolled</p></Empty>}
         </div></div>
 
-      <div className="card">
+      {canWrite(d) && <div className="card">
         <div className="card-header"><h3>Add Students</h3><span className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Only students not currently in a class for this term are shown.</span></div>
         <div className="card-body">
           {d.available_students.length ? (
@@ -490,7 +491,7 @@ function ViewAssignment({ d, notify }) {
                 <button type="submit" className="btn btn-primary" disabled={busy || !picked.size}><i aria-hidden="true" className="fas fa-plus" /> Enroll selected</button></div>
             </form>
           ) : <Empty icon="fa-user-check" title=""><p>Every active student is already assigned to a class this term. Remove a student from their class to reassign them.</p></Empty>}
-        </div></div>
+        </div></div>}
     </>
   );
 }

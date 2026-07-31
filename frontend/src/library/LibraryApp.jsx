@@ -5,6 +5,7 @@ import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, promptDialog, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table, Modal } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'],
@@ -55,19 +56,21 @@ function Dashboard({ d }) {
     ['amber', 'fa-screwdriver-wrench', d.damaged, 'Damaged', d.urls.loans + '?status=Damaged'],
   ];
   const quick = [
-    [d.urls.add_book, 'fa-plus', 'Register book', 'btn-primary'],
-    [d.urls.issue, 'fa-hand-holding', 'Issue', 'btn-secondary'],
-    [d.urls.loans + '?status=Borrowed', 'fa-rotate-left', 'Return', 'btn-secondary'],
+    ...(canWrite(d) ? [
+      [d.urls.add_book, 'fa-plus', 'Register book', 'btn-primary'],
+      [d.urls.issue, 'fa-hand-holding', 'Issue', 'btn-secondary'],
+      [d.urls.loans + '?status=Borrowed', 'fa-rotate-left', 'Return', 'btn-secondary'],
+    ] : []),
     [d.urls.loans + '?status=Overdue', 'fa-clock', 'Overdue', 'btn-secondary'],
     [d.urls.books, 'fa-magnifying-glass', 'Search books', 'btn-secondary'],
     [d.urls.export, 'fa-file-csv', 'Export', 'btn-secondary', true],
   ];
   return (
     <>
-      <PageHeader title="Library" actions={<>
+      <PageHeader title="Library" actions={canWrite(d) ? <>
         <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>
         <a href={d.urls.add_book} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>
-      </>} />
+      </> : null} />
       <Tabs urls={d.urls} page="dashboard" />
       <div className="d-flex gap-2 flex-wrap mb-3">
         {quick.map(([href, ic, label, cls, native]) => (
@@ -159,10 +162,10 @@ function Books({ d, notify }) {
   return (
     <>
       <PageHeader title="Catalogue" actions={<>
-        <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import CSV</button>
+        {canWrite(d) && <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />}
+        {canWrite(d) && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import CSV</button>}
         <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-        <a href={d.urls.add_book} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>
+        {canWrite(d) && <a href={d.urls.add_book} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>}
       </>} />
       <Tabs urls={d.urls} page="books" />
       {reserving && <ReserveModal d={d} book={reserving} onClose={() => setReserving(null)}
@@ -187,7 +190,7 @@ function Books({ d, notify }) {
         <div className="card-header"><h3>{shown.length} title(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           <Table rowKey={(b) => b.id} rows={shown} pageSize={25} sticky maxHeight="65vh"
-            empty={<Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p><a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a></Empty>}
+            empty={<Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p>{canWrite(d) && <a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a>}</Empty>}
             columns={[
               { key: 'title', label: 'Title', sortable: true, sortValue: (b) => b.title, render: (b) => <><strong>{b.title}</strong>{b.reference_only && <span className="badge badge-warning" style={{ marginLeft: '.3rem' }}>Reference</span>}{b.status === 'Withdrawn' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Withdrawn</span>}{(b.isbn || b.barcode) && <div className="text-muted text-sm">{b.isbn || b.barcode}</div>}</> },
               { key: 'author', label: 'Author', sortable: true, sortValue: (b) => b.author || '', render: (b) => b.author || '—' },
@@ -535,9 +538,9 @@ function Loans({ d, notify }) {
 
   return (
     <>
-      <PageHeader title="Loans" actions={<>
+      <PageHeader title="Loans" actions={canWrite(d) ? <>
         {d.status === 'Overdue' && <button type="button" className="btn btn-secondary" onClick={remind}><i aria-hidden="true" className="fas fa-comment-sms" /> Remind parents</button>}
-        <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a></>} />
+        <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a></> : null} />
       <Tabs urls={d.urls} page="loans" />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Show</label>

@@ -3,6 +3,7 @@ import { chartPalette } from '../lib/hooks';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell, Table } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
 
@@ -27,7 +28,7 @@ function Dashboard({ d }) {
     ['green', 'fa-user-graduate', s.admitted, 'Admitted'], ['red', 'fa-percent', s.conversion + '%', 'Conversion']];
   return (
     <>
-      <PageHeader title="Admissions" actions={<a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>} />
+      <PageHeader title="Admissions" actions={canWrite(d) ? <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a> : null} />
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Session</label>
@@ -85,7 +86,7 @@ function Applicants({ d }) {
     <>
       <PageHeader title="Applicants" actions={<>
         <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-        <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>
+        {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>}
       </>} />
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -218,8 +219,8 @@ function ApplicantDetail({ d, notify }) {
     <>
       <PageHeader title="Application" actions={<>
         {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /></a>}
-        <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
-        {d.is_admin && <button type="button" className="btn btn-danger" disabled={busy}
+        {canWrite(d) && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
+        {canWrite(d) && d.is_admin && <button type="button" className="btn btn-danger" disabled={busy}
           onClick={() => act(d.urls.delete, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
       </>} />
       <Tabs d={d} />
@@ -236,7 +237,7 @@ function ApplicantDetail({ d, notify }) {
         </div>
       </div></div>
 
-      {!a.admitted_student_id && (
+      {canWrite(d) && !a.admitted_student_id && (
         <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-diagram-project" /> Move through pipeline</h3></div>
           <div className="card-body">
@@ -248,7 +249,7 @@ function ApplicantDetail({ d, notify }) {
         </div>
       )}
 
-      {!a.admitted_student_id && d.is_admin && (
+      {canWrite(d) && !a.admitted_student_id && d.is_admin && (
         <div className="card mb-3" style={{ borderColor: 'var(--success)' }}>
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-graduate" /> Admit &amp; convert to student</h3></div>
           <div className="card-body">

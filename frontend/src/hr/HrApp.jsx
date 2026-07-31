@@ -4,6 +4,7 @@ import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, promptDialog, Banner, SectionShell, SectionTabs, Empty, Modal, Autocomplete } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 // Small localStorage helpers for recently-viewed staff + saved directory filters.
 const lsGet = (key, fallback) => {
@@ -86,7 +87,7 @@ function Dashboard({ d }) {
   return (
     <>
       <div className="page-header"><h1>Staff &amp; HR</h1>
-        <div className="page-header-actions"><a href={d.urls.add_staff} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a></div>
+        <div className="page-header-actions">{canWrite(d) && <a href={d.urls.add_staff} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="d-flex gap-2 flex-wrap mb-3">
@@ -127,7 +128,7 @@ function Dashboard({ d }) {
                 <tbody>{d.recent.map((s) => (
                   <tr key={s.id}><td data-label="Name"><a href={s.url}>{s.full_name}</a></td><td data-label="Designation" className="text-muted text-sm">{s.designation}</td><td data-label="Dept">{s.department}</td></tr>))}</tbody>
               </table></div>
-            ) : <Empty icon="fa-user-plus" title="" style={{ padding: '1.4rem' }}><p>No staff yet</p><a href={d.urls.add_staff} className="btn btn-primary btn-sm mt-2">Add staff</a></Empty>}
+            ) : <Empty icon="fa-user-plus" title="" style={{ padding: '1.4rem' }}><p>No staff yet</p>{canWrite(d) && <a href={d.urls.add_staff} className="btn btn-primary btn-sm mt-2">Add staff</a>}</Empty>}
           </div>
         </div>
       </div>
@@ -201,10 +202,10 @@ function Staff({ d, notify }) {
       <div className="page-header"><h1>Staff Directory</h1>
         <div className="page-header-actions">
           <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
-          {d.is_admin !== false && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
+          {canWrite(d) && d.is_admin !== false && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
           <button type="button" className="btn btn-secondary" onClick={() => setNotifyOpen(true)}><i aria-hidden="true" className="fas fa-bullhorn" /> Notify</button>
           <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-          <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>
+          {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -260,7 +261,7 @@ function Staff({ d, notify }) {
                   <td className="actions"><a href={s.url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
                 </tr>))}</tbody>
             </table></div>
-          ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a></Empty>}
+          ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a>}</Empty>}
         </div></div>
     </>
   );
@@ -449,7 +450,7 @@ function StaffDetail({ d, notify }) {
         <div className="ph-actions">
           {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /> Call</a>
             <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /> WhatsApp</a></>}
-          <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
+          {canWrite(d) && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
           {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i aria-hidden="true" className="fas fa-box-archive" /> Archive</button>}
         </div>
       </div>

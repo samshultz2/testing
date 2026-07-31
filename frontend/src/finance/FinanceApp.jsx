@@ -4,6 +4,7 @@ import { submitJson, useForm } from '../lib/forms';
 import { naira, nairaShort } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, SectionTabs, Empty, Table } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['record_payment', 'fa-cash-register', 'Record Payment'],
@@ -74,7 +75,7 @@ function Dashboard({ d }) {
     <>
       <div className="page-header"><h1>Finance &amp; Fees</h1>
         <div className="page-header-actions">
-          <a href={d.urls.record_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>
+          {canWrite(d, 'payments') && <a href={d.urls.record_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>}
           <a href={d.urls.defaulters} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Defaulters</a>
         </div>
       </div>
