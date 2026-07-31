@@ -78,6 +78,20 @@ ROLE_DEFAULT_MODULES = {
 # Optional sub-sections within a module: {module: {sub_key: label}}. A user may
 # be granted access to specific sub-sections instead of the whole module.
 MODULE_SUBSECTIONS = {
+    'students': {
+        'roster': 'Browse & View Students',
+        'manage': 'Add / Edit / Import',
+        'bulk': 'Bulk Actions',
+        'delete': 'Delete / Trash / Restore',
+        'idcards': 'ID Cards & Export',
+        'welfare': 'Discipline & Sick Bay',
+    },
+    'attendance': {
+        'mark': 'Mark Attendance',
+        'reports': 'Summaries & Analytics',
+        'interventions': 'Interventions',
+        'notify': 'Notify Parents',
+    },
     'finance': {
         'payments': 'Payments & Discounts',
         'structure': 'Fee Structure',
@@ -133,8 +147,41 @@ CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
 # 'central' => only a central admin may grant/revoke this capability.
 RESTRICTED_GRANTS = {'results.cards': 'central'}
 
-# Which endpoints belong to each sub-section.
+# Which endpoints belong to each sub-section. Entries are bare endpoint names
+# (prefixed with the module's default blueprint below) OR fully-qualified
+# 'blueprint.endpoint' strings for modules whose endpoints span two blueprints.
 _SUBSECTION_ENDPOINTS = {
+    'students': {
+        'roster': {'students_list', 'api_students', 'view_student',
+                   'api_student_view', 'student_photo', 'api_search_students'},
+        'manage': {'add_student', 'edit_student', 'import_students',
+                   'import_photos', 'apply_stream_waec'},
+        'bulk': {'bulk_set_stream', 'bulk_set_gender', 'bulk_set_house',
+                 'bulk_set_boarding', 'bulk_add_subject', 'bulk_message_students'},
+        'delete': {'delete_student', 'bulk_delete_students', 'students_trash',
+                   'restore_student', 'purge_student', 'bulk_restore_students',
+                   'bulk_purge_students'},
+        'idcards': {'student_id_card', 'bulk_id_cards', 'export_students_data'},
+        'welfare': {'welfare.add_discipline', 'welfare.delete_discipline',
+                    'welfare.add_clinic', 'welfare.delete_clinic'},
+    },
+    'attendance': {
+        'mark': {'index', 'mark_attendance_page', 'save_attendance',
+                 'mark_all_present_route', 'api_mark', 'api_roster',
+                 'api_check_attendance', 'api_context', 'api_copy_previous',
+                 'copy_previous_attendance', 'week_grid', 'week_save', 'api_week',
+                 'api_week_mark', 'api_week_totals', 'api_school_days',
+                 'attendance_app', 'attendance_react_redirect', 'api_student_search'},
+        'reports': {'analytics_export', 'api_analytics', 'daily_summary',
+                    'api_daily_summary', 'weekly_summary', 'termly_summary',
+                    'api_report_daily', 'api_report_weekly', 'api_report_termly',
+                    'api_report_alerts', 'export_weekly', 'export_termly',
+                    'export_alerts', 'attendance_alerts', 'print_register',
+                    'api_student_profile'},
+        'interventions': {'api_interventions', 'api_intervention_open',
+                          'api_intervention_note', 'api_intervention_status'},
+        'notify': {'api_notify_absentees', 'api_notify_low'},
+    },
     'finance': {
         'payments': {'collections', 'collections_export', 'payments_list',
                      'record_payment', 'search_students', 'receipt', 'edit_payment',
@@ -200,15 +247,19 @@ _SUBSECTION_ENDPOINTS = {
 
 # The blueprint each sub-sectioned module's endpoints live under (blueprint name
 # differs from the module key for these two).
-_SUBSECTION_BLUEPRINT = {'external_exams': 'results', 'communication': 'comms'}
+_SUBSECTION_BLUEPRINT = {'external_exams': 'results', 'communication': 'comms',
+                         'students': 'main'}
 
-# Reverse map: 'finance.payments_list' -> ('finance', 'payments')
+# Reverse map: 'finance.payments_list' -> ('finance', 'payments'). Endpoint
+# entries already containing a '.' are treated as fully-qualified (used where a
+# module's endpoints span more than one blueprint, e.g. students + welfare).
 _ENDPOINT_SUBSECTION = {}
 for _mod, _subs in _SUBSECTION_ENDPOINTS.items():
     _bp = _SUBSECTION_BLUEPRINT.get(_mod, _mod)
     for _sub, _eps in _subs.items():
         for _ep in _eps:
-            _ENDPOINT_SUBSECTION[f'{_bp}.{_ep}'] = (_mod, _sub)
+            _key = _ep if '.' in _ep else f'{_bp}.{_ep}'
+            _ENDPOINT_SUBSECTION[_key] = (_mod, _sub)
 
 
 def subsection_for_endpoint(endpoint):
