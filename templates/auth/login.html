@@ -150,18 +150,10 @@
 
         .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 
-        @media (prefers-color-scheme: dark){
-            :root{--ink:#e5e7eb;--muted:#9aa4b2;--line:#374151;--card:#111826;--field:#0d131d;--ring:rgba(45,212,158,.22)}
-            .login-card{border-color:rgba(255,255,255,.06)}
-            .flash-error{background:#2a1414;color:#fca5a5;border-color:#5b2020}
-            .flash-success{background:#0f2419;color:#86efac;border-color:#1e4634}
-            .flash-info,.flash-warning{background:#0f1e33;color:#93c5fd;border-color:#1e3a5f}
-            .student-cta{background:#0f2419;border-color:#1e4634}
-            .student-cta:hover{background:#123020}
-            .menu-panel{background:#111826}
-            .menu-panel a{color:#e5e7eb;border-color:#1f2937}
-            .menu-panel a:hover{background:#0f2419}
-        }
+        /* The sign-in page stays light regardless of the device's system dark
+           mode — a clean white card on the bright green showcase reads more
+           premium and consistent than a dark card. (In-app screens still honour
+           the user's chosen theme via data-theme.) */
         @media (prefers-reduced-motion: reduce){
             *{transition:none!important;animation-duration:.01ms!important}
         }
