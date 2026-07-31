@@ -7,6 +7,14 @@
 {% endblock %}
 {% block extra_css %}
 <style>
+/* Profile info rows: the React <InfoRow> renders a muted label + a bold value;
+   give them a real two-column layout so label and value are clearly separated
+   (they otherwise butt together) with a hairline divider per row. */
+.info-grid{display:flex;flex-direction:column}
+.info-row{display:flex;justify-content:space-between;align-items:baseline;gap:1.5rem;padding:.6rem 0;border-bottom:1px solid var(--border-light)}
+.info-row:last-child{border-bottom:none}
+.info-row>.text-muted{flex:none}
+.info-row>strong{text-align:right;min-width:0;overflow-wrap:anywhere}
 .profile-header{display:flex;align-items:center;gap:1.5rem;padding:1.5rem;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%);color:#fff;border-radius:var(--border-radius);margin-bottom:1.5rem}
 .profile-avatar{width:80px;height:80px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem}
 .profile-info h1{margin:0 0 .25rem;font-size:1.5rem}.profile-info p{margin:0;opacity:.9}

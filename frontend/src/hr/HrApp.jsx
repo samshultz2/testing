@@ -398,7 +398,7 @@ function ProfileHub({ d }) {
             <div className="hub-stat"><div className="v">{lv.pending || 0}</div><div className="l">Pending</div></div>
           </div>
           {(d.leave_balances || []).length > 0
-            ? <table className="data-table" style={{ marginTop: '.5rem' }}><tbody>
+            ? <table className="data-table no-mobile-scroll" style={{ marginTop: '.5rem' }}><tbody>
                 {d.leave_balances.map((b) => (
                   <tr key={b.type}><td>{b.type}</td>
                     <td className="text-right text-muted text-sm">{b.taken}/{b.allowance}</td>
@@ -1289,7 +1289,7 @@ function Settings({ d, notify }) {
             </form>
           )}
           {d.deductions.length ? (
-            <table className="data-table table-stack">
+            <table className="data-table table-stack no-mobile-scroll">
               <thead><tr><th>Name</th><th>Deduction</th><th>Status</th><th /></tr></thead>
               <tbody>{d.deductions.map((dd) => (
                 <tr key={dd.id} style={dd.is_active ? undefined : { opacity: 0.55 }}>

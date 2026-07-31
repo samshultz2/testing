@@ -490,10 +490,10 @@ function GraduateProfile({ d, notify }) {
         </div></div>}
 
       {(d.status_history && d.status_history.length > 0) && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Status History</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
           <thead><tr><th>When</th><th>Change</th><th>Reason</th><th>By</th></tr></thead>
           <tbody>{d.status_history.map((h, i) => (
-            <tr key={i}><td>{h.at}</td><td>{h.old} → <strong>{h.new}</strong></td><td>{h.reason || '—'}</td><td>{h.actor || '—'}</td></tr>))}</tbody>
+            <tr key={i}><td data-label="When">{h.at}</td><td data-label="Change">{h.old} → <strong>{h.new}</strong></td><td data-label="Reason">{h.reason || '—'}</td><td data-label="By">{h.actor || '—'}</td></tr>))}</tbody>
         </table></div></div></div>}
 
       {/* ---- Documents ---- */}
@@ -525,13 +525,13 @@ function GraduateProfile({ d, notify }) {
 
       {/* ---- Document requests (from the alumni portal) ---- */}
       {d.doc_requests && d.doc_requests.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-inbox" /> Document Requests</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
           <thead><tr><th>Document</th><th>Requested</th><th>Note</th><th>Status</th><th /></tr></thead>
           <tbody>{d.doc_requests.map((r) => (
             <tr key={r.id}>
-              <td>{r.label}</td><td>{r.requested_at}</td><td>{r.note || '—'}</td>
-              <td><span className={'badge ' + (r.status === 'pending' ? 'badge-warning' : r.status === 'fulfilled' ? 'badge-success' : 'badge-secondary')}>{r.status}</span></td>
-              <td style={{ whiteSpace: 'nowrap' }}>{r.status === 'pending' ? <>
+              <td data-label="Document">{r.label}</td><td data-label="Requested">{r.requested_at}</td><td data-label="Note">{r.note || '—'}</td>
+              <td data-label="Status"><span className={'badge ' + (r.status === 'pending' ? 'badge-warning' : r.status === 'fulfilled' ? 'badge-success' : 'badge-secondary')}>{r.status}</span></td>
+              <td className="actions" style={{ whiteSpace: 'nowrap' }}>{r.status === 'pending' ? <>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> Issue</button>{' '}
                 <button type="button" className="btn btn-danger btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /> Decline</button>
               </> : (r.response_note || '—')}</td>
@@ -593,9 +593,9 @@ function GraduateProfile({ d, notify }) {
         </div></div>
 
       {rec.class_history && rec.class_history.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-timeline" /> Class &amp; Arm History</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
           <thead><tr><th>Session</th><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
-          <tbody>{rec.class_history.map((h, i) => <tr key={i}><td>{h.session}</td><td>{h.term}</td><td>{h.klass}</td><td>{h.arm}</td></tr>)}</tbody>
+          <tbody>{rec.class_history.map((h, i) => <tr key={i}><td data-label="Session">{h.session}</td><td data-label="Term">{h.term}</td><td data-label="Class">{h.klass}</td><td data-label="Arm">{h.arm}</td></tr>)}</tbody>
         </table></div></div></div>}
 
       {rec.academic && (rec.academic.terms_count > 0) && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Academic History</h3>
@@ -603,9 +603,9 @@ function GraduateProfile({ d, notify }) {
         <div className="card-body">{rec.academic.terms.map((t, i) => (
           <div className="card" style={{ marginBottom: '1rem' }} key={i}>
             <div className="card-header"><span><strong>{t.session}</strong> · {t.term}</span>{t.average != null && <span className="text-muted">Term avg: {t.average}%</span>}</div>
-            <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+            <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
               <thead><tr><th>Subject</th><th>Score</th><th>Grade</th><th>Position</th><th>Remark</th></tr></thead>
-              <tbody>{t.subjects.map((sub, j) => <tr key={j}><td>{sub.subject}</td><td>{sub.score}</td><td>{sub.grade || '—'}</td><td>{sub.position || '—'}</td><td>{sub.remark || sub.comment || '—'}</td></tr>)}</tbody>
+              <tbody>{t.subjects.map((sub, j) => <tr key={j}><td data-label="Subject">{sub.subject}</td><td data-label="Score">{sub.score}</td><td data-label="Grade">{sub.grade || '—'}</td><td data-label="Position">{sub.position || '—'}</td><td data-label="Remark">{sub.remark || sub.comment || '—'}</td></tr>)}</tbody>
             </table></div></div>
           </div>))}</div></div>}
 
@@ -619,15 +619,15 @@ function GraduateProfile({ d, notify }) {
       </div>
 
       {rec.finance && rec.finance.recent && rec.finance.recent.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-receipt" /> Recent Fee Payments</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
           <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead>
-          <tbody>{rec.finance.recent.map((p, i) => <tr key={i}><td>{p.date}</td><td>{NGN(p.amount)}</td><td>{p.method || '—'}</td><td>{p.receipt || '—'}</td></tr>)}</tbody>
+          <tbody>{rec.finance.recent.map((p, i) => <tr key={i}><td data-label="Date">{p.date}</td><td data-label="Amount">{NGN(p.amount)}</td><td data-label="Method">{p.method || '—'}</td><td data-label="Receipt">{p.receipt || '—'}</td></tr>)}</tbody>
         </table></div></div></div>}
 
       {rec.discipline && rec.discipline.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-gavel" /> Discipline Records</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table">
+        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
           <thead><tr><th>Date</th><th>Category</th><th>Severity</th><th>Description</th><th>Action</th></tr></thead>
-          <tbody>{rec.discipline.map((r, i) => <tr key={i}><td>{r.date}</td><td>{r.category}</td><td>{r.severity || '—'}</td><td>{r.description || '—'}</td><td>{r.action || '—'}</td></tr>)}</tbody>
+          <tbody>{rec.discipline.map((r, i) => <tr key={i}><td data-label="Date">{r.date}</td><td data-label="Category">{r.category}</td><td data-label="Severity">{r.severity || '—'}</td><td data-label="Description">{r.description || '—'}</td><td data-label="Action">{r.action || '—'}</td></tr>)}</tbody>
         </table></div></div></div>}
 
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Results</h3>
