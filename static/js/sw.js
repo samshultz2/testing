@@ -5,10 +5,14 @@
      have already visited stay viewable with no connection.
    Note: cached pages live on the device; suitable for a single-user, phone-
    hosted install. Mutations (POST/etc.) always require the network. */
-// Bump CACHE_VERSION whenever static assets (icons/CSS/JS) change so clients
-// pick them up promptly. Static assets also use stale-while-revalidate below,
-// so they self-heal on the next load even without a bump.
-const CACHE_VERSION = 'v172';
+// CACHE_VERSION is stamped automatically by frontend/build.mjs from a content
+// hash of the built bundles + CSS (format 'b-<hash>'), so it changes on every
+// deploy that changes an asset — no manual bump needed. Static assets also use
+// stale-while-revalidate below, so they self-heal on the next load regardless.
+const CACHE_VERSION = 'b-880ca64ae297';
+// Cap the runtime cache (visited pages + section JSON) so it can't grow without
+// bound on a long-lived install; oldest entries are evicted first.
+const RUNTIME_MAX_ENTRIES = 80;
 const STATIC_CACHE = `posyhub-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `posyhub-runtime-${CACHE_VERSION}`;
 const CDN_CACHE = `posyhub-cdn-${CACHE_VERSION}`;
@@ -75,17 +79,41 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(STATIC_CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // Resilient precache: cache each asset independently so a single missing/404
+  // file can't reject the whole install and leave the SW stuck (which would
+  // break offline for everyone). addAll is all-or-nothing; allSettled is not.
+  e.waitUntil(
+    caches.open(STATIC_CACHE)
+      .then((c) => Promise.allSettled(ASSETS.map((u) => c.add(u))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
   const keep = [STATIC_CACHE, RUNTIME_CACHE, CDN_CACHE];
   e.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => !keep.includes(k)).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
+    (async () => {
+      // Faster network-first navigations: let the browser start the request
+      // while the SW is still spinning up.
+      if (self.registration.navigationPreload) {
+        try { await self.registration.navigationPreload.enable(); } catch (_) { /* unsupported */ }
+      }
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => !keep.includes(k)).map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })()
   );
 });
+
+// Keep a cache from growing without bound: trim to the newest `max` entries
+// (cache.keys() preserves insertion order, so the front is the oldest).
+async function trimCache(name, max) {
+  try {
+    const cache = await caches.open(name);
+    const keys = await cache.keys();
+    for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
+  } catch (_) { /* best-effort */ }
+}
 
 self.addEventListener('message', (e) => {
   // Allow the app to clear cached pages (e.g. on logout).
@@ -148,14 +176,17 @@ self.addEventListener('fetch', (e) => {
     || req.headers.get('X-Requested-With') === 'spa-nav';
   if (isPage) {
     e.respondWith(
-      fetch(req).then((res) => {
+      // Prefer the navigation-preload response (started by the browser before the
+      // SW woke up) when present, else a normal fetch.
+      Promise.resolve(e.preloadResponse).then((pre) => pre || fetch(req)).then((res) => {
         // Only cache genuine HTML pages — never files served inline as
         // navigations (PDF previews, downloads), or stale copies get served back.
         const ct = res.headers.get('Content-Type') || '';
         const disp = res.headers.get('Content-Disposition') || '';
         if (res.ok && ct.indexOf('text/html') !== -1 && disp.indexOf('attachment') === -1) {
           const copy = res.clone();
-          caches.open(RUNTIME_CACHE).then((c) => c.put(req.url, copy));
+          caches.open(RUNTIME_CACHE).then((c) =>
+            c.put(req.url, copy).then(() => trimCache(RUNTIME_CACHE, RUNTIME_MAX_ENTRIES)));
         }
         return res;
       }).catch(() =>
@@ -186,7 +217,8 @@ self.addEventListener('fetch', (e) => {
       fetch(req).then((res) => {
         if (res.ok) {
           const copy = res.clone();
-          caches.open(RUNTIME_CACHE).then((c) => c.put(req.url, copy));
+          caches.open(RUNTIME_CACHE).then((c) =>
+            c.put(req.url, copy).then(() => trimCache(RUNTIME_CACHE, RUNTIME_MAX_ENTRIES)));
         }
         return res;
       }).catch(() => caches.match(req.url, { ignoreVary: true }))
