@@ -43,6 +43,13 @@ def wants_json():
 
 
 def render_or_json(template, var, payload):
+    # Every React section payload gets a `perms` block so the client can hide
+    # actions the user isn't allowed to perform (the server still enforces the
+    # write). This is the single choke point every section render passes
+    # through — sections with a bespoke `_render` (library, admissions,
+    # promotion, events, sales, …) get it here without each having to opt in.
+    if isinstance(payload, dict):
+        payload.setdefault('perms', current_section_perms())
     if wants_json():
         return jsonify(payload)
     return render_template(template, **{var: payload})
