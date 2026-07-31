@@ -40,6 +40,12 @@ def _engine_for(url):
             try:
                 from utils.finance_ledger import ensure_tables
                 ensure_tables(bind=eng)
+                # Seed the default permission-group templates into pre-existing
+                # tenant DBs (they never run init_db). Idempotent per name.
+                from sqlalchemy.orm import Session
+                from utils.permission_seed import seed_permission_groups
+                with Session(eng, future=True) as s:
+                    seed_permission_groups(s)
                 _healed.add(url)
             except Exception:
                 current_app.logger.exception('Could not ensure tenant schema; will retry next request')

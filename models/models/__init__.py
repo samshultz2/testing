@@ -703,25 +703,8 @@ def _seed_permission_groups():
     the plain 'teacher' role is seeded from its default module set.
     """
     try:
-        from models import PermissionGroup
-        from utils.role_presets import ROLE_PRESETS
-        from utils.access_control import ROLE_DEFAULT_MODULES, MODULES
-        for key, p in ROLE_PRESETS.items():
-            if p.get('role') == 'admin':
-                continue
-            mods = [m for m in (p.get('modules') or []) if m in MODULES]
-            if not mods and p.get('role') == 'teacher':
-                mods = sorted(ROLE_DEFAULT_MODULES.get('teacher', ()))
-            if not mods:
-                continue
-            name = p.get('label') or key
-            if PermissionGroup.query.filter_by(name=name, branch_id=None).first():
-                continue
-            g = PermissionGroup(name=name, description=p.get('description'),
-                                branch_id=None, is_active=True)
-            g.set_permissions({m: 'edit' for m in mods})
-            db.session.add(g)
-        db.session.commit()
+        from utils.permission_seed import seed_permission_groups
+        seed_permission_groups(db.session)
     except Exception:
         db.session.rollback()
 

@@ -118,9 +118,8 @@ def _create_physical_db(url):
 def _seed(engine, tenant, admin_username, temp_password):
     """Seed a default branch, the school's first central super-admin, and the
     built-in permission-group templates."""
-    from models import Branch, User, PermissionGroup
-    from utils.role_presets import ROLE_PRESETS
-    from utils.access_control import ROLE_DEFAULT_MODULES, MODULES
+    from models import Branch, User
+    from utils.permission_seed import seed_permission_groups
     with Session(engine, future=True) as s:
         if not s.query(Branch).filter_by(is_default=True).first():
             name = os.environ.get('POSYHUB_DEFAULT_BRANCH') or (tenant.name or 'Main')
@@ -131,24 +130,10 @@ def _seed(engine, tenant, admin_username, temp_password):
                      is_active=True, must_change_password=True)
             u.set_password(temp_password)
             s.add(u)
-        # Default permission-group templates (central, idempotent per name), so a
-        # brand-new school opens /users/groups to ready-made access bundles.
-        for key, p in ROLE_PRESETS.items():
-            if p.get('role') == 'admin':
-                continue
-            mods = [m for m in (p.get('modules') or []) if m in MODULES]
-            if not mods and p.get('role') == 'teacher':
-                mods = sorted(ROLE_DEFAULT_MODULES.get('teacher', ()))
-            if not mods:
-                continue
-            gname = p.get('label') or key
-            if s.query(PermissionGroup).filter_by(name=gname, branch_id=None).first():
-                continue
-            g = PermissionGroup(name=gname, description=p.get('description'),
-                                branch_id=None, is_active=True)
-            g.set_permissions({m: 'edit' for m in mods})
-            s.add(g)
         s.commit()
+        # Default permission-group templates, so a brand-new school opens
+        # /users/groups to ready-made access bundles.
+        seed_permission_groups(s)
 
 
 # --- public API -------------------------------------------------------------

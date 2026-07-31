@@ -42,6 +42,20 @@ def test_seeding_is_idempotent(app):
         assert before == after == 1
 
 
+def test_backfill_seeds_existing_tenant_without_groups(app):
+    """Existing tenant DBs never run init_db; they are seeded on first request
+    via the shared helper. Simulate that: wipe the groups, re-run the helper,
+    and confirm the templates come back."""
+    from utils.permission_seed import seed_permission_groups
+    with app.app_context():
+        PermissionGroup.query.delete()
+        db.session.commit()
+        assert PermissionGroup.query.filter_by(branch_id=None).count() == 0
+        created = seed_permission_groups(db.session)
+        assert created >= 7          # every non-admin preset bundle
+        assert PermissionGroup.query.filter_by(name='Bursar', branch_id=None).first()
+
+
 def test_assigning_group_grants_its_modules(app):
     """A user placed in a seeded group inherits that group's module access."""
     with app.app_context():
