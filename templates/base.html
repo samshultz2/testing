@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ bundle_url('css/style.css') }}">
     <meta name="spa-css-marker" content=""><!-- soft-nav swaps page CSS after this -->
     {% block extra_css %}{% endblock %}
 </head>
@@ -1277,14 +1277,14 @@
     <script src="{{ url_for('static', filename='vendor/react.production.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/react-dom.production.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/command-palette.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/offline-queue.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/spa-nav.js') }}"></script>
+    <script src="{{ bundle_url('js/app.js') }}"></script>
+    <script src="{{ bundle_url('js/command-palette.js') }}"></script>
+    <script src="{{ bundle_url('js/offline-queue.js') }}"></script>
+    <script src="{{ bundle_url('js/spa-nav.js') }}"></script>
     <!-- CSP-safe declarative behaviours: replaces inline on* handlers so the
          Content-Security-Policy can drop 'unsafe-inline'. Data-attribute driven,
          event-delegated, so it also covers dynamically-inserted elements. -->
-    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/csp-behaviors.js') }}"></script>
+    <script nonce="{{ csp_nonce }}" src="{{ bundle_url('js/csp-behaviors.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -84,7 +84,10 @@ self.addEventListener('install', (e) => {
   // break offline for everyone). addAll is all-or-nothing; allSettled is not.
   e.waitUntil(
     caches.open(STATIC_CACHE)
-      .then((c) => Promise.allSettled(ASSETS.map((u) => c.add(u))))
+      // cache:'reload' bypasses the browser's HTTP cache so a fresh install
+      // stores truly current bytes, not a stale copy the browser held onto.
+      .then((c) => Promise.allSettled(
+        ASSETS.map((u) => c.add(new Request(u, { cache: 'reload' })))))
       .then(() => self.skipWaiting())
   );
 });
