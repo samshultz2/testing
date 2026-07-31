@@ -3481,3 +3481,79 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible,
 }
 .dash-section-title .count { color: var(--text-muted); font-weight: var(--fw-regular); }
 .dash-section-title .see-all { margin-left: auto; font-size: var(--text-sm); font-weight: var(--fw-medium); }
+
+/* ==========================================================================
+   ELITE POLISH — states: alerts, loaders, callouts (Phase 6)
+   Fills a real gap: the React screens use `.alert`/`.alert-*` inline banners
+   that had NO styling. Adds a proper alert component + loading primitives and
+   inline callouts. Additive; identity-preserving.
+   ========================================================================== */
+
+/* Alert / inline banner — coloured, icon-friendly, tinted surface + edge. */
+.alert {
+    display: flex; align-items: flex-start; gap: var(--sp-2);
+    padding: 0.8rem 1rem; margin-bottom: var(--sp-3);
+    font-size: var(--text-sm); line-height: var(--leading-snug);
+    border: 1px solid transparent; border-left-width: 3px;
+    border-radius: var(--radius-md);
+    background: var(--gray-50); color: var(--text-primary);
+}
+.alert > i:first-child { margin-top: 1px; flex: none; }
+.alert-success { background: var(--success-light); border-left-color: var(--success); color: #0f5132; }
+.alert-danger, .alert-error { background: var(--danger-light); border-left-color: var(--danger); color: #842029; }
+.alert-warning { background: var(--warning-light); border-left-color: var(--warning); color: #664d03; }
+.alert-info { background: var(--info-light); border-left-color: var(--info); color: #055160; }
+.alert-primary { background: var(--primary-light); border-left-color: var(--primary); color: var(--primary-hover); }
+[data-theme="dark"] .alert { background: var(--gray-100); color: var(--text-secondary); }
+[data-theme="dark"] .alert-success { color: #75d99a; }
+[data-theme="dark"] .alert-danger, [data-theme="dark"] .alert-error { color: #fca5a5; }
+[data-theme="dark"] .alert-warning { color: #fcd34d; }
+[data-theme="dark"] .alert-info { color: #67e8f9; }
+[data-theme="dark"] .alert-primary { color: var(--primary); }
+
+/* Inline callout / note box (docs, hints, tips inside content). */
+.callout {
+    display: flex; gap: var(--sp-3); padding: var(--sp-4);
+    background: var(--primary-light); border-radius: var(--radius-md);
+    border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+    font-size: var(--text-sm); color: var(--text-secondary);
+}
+.callout > i:first-child { color: var(--primary); font-size: 1.05rem; margin-top: 1px; }
+.callout strong { color: var(--text-primary); }
+
+/* Spinner primitive — <span class="spinner"></span>, sizes via font-size. */
+.spinner {
+    display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -0.2em;
+    border: 2px solid var(--gray-300); border-top-color: var(--primary);
+    border-radius: 50%; animation: eliteSpin 0.7s linear infinite;
+}
+.spinner.lg { width: 2.2rem; height: 2.2rem; border-width: 3px; }
+.spinner.on-accent { border-color: rgba(255,255,255,0.4); border-top-color: #fff; }
+@keyframes eliteSpin { to { transform: rotate(360deg); } }
+
+/* Centered loading block for a whole card/section while data loads. */
+.loading-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: var(--sp-3); padding: var(--sp-10) var(--sp-4);
+    color: var(--text-muted); font-size: var(--text-sm); text-align: center;
+}
+
+/* Async overlay — dim + spinner over a container being refreshed
+   (position:relative on the parent). Signals work without a layout jump. */
+.is-busy { position: relative; }
+.is-busy[aria-busy="true"]::after {
+    content: ""; position: absolute; inset: 0; z-index: 2;
+    background: color-mix(in srgb, var(--bg-card) 60%, transparent);
+    -webkit-backdrop-filter: blur(1px); backdrop-filter: blur(1px);
+    border-radius: inherit;
+}
+.is-busy[aria-busy="true"]::before {
+    content: ""; position: absolute; z-index: 3; top: 50%; left: 50%;
+    width: 1.6rem; height: 1.6rem; margin: -0.8rem 0 0 -0.8rem;
+    border: 3px solid var(--gray-300); border-top-color: var(--primary);
+    border-radius: 50%; animation: eliteSpin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spinner, .is-busy[aria-busy="true"]::before { animation-duration: 0.001ms; }
+}
