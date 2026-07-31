@@ -813,3 +813,18 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e =
     load();                                  // initial count on page load
     setInterval(load, 120000);               // refresh every 2 min
 })();
+
+/* Frosted top-header: add a hairline shadow once the page is scrolled (Phase 2
+   shell polish). Works whether the window or .main-content is the scroller. */
+(function () {
+    var header = document.querySelector('.top-header');
+    if (!header) return;
+    var scroller = document.querySelector('.main-content') || window;
+    var target = scroller === window ? document.documentElement : scroller;
+    function onScroll() {
+        var y = scroller === window ? (window.scrollY || target.scrollTop) : target.scrollTop;
+        header.classList.toggle('is-scrolled', y > 4);
+    }
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+})();

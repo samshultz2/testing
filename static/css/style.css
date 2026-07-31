@@ -3114,3 +3114,105 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible,
     .dropdown-menu.show, .row-menu, .menu-panel, .cmd-results,
     .skeleton::after { animation: none !important; }
 }
+
+/* ==========================================================================
+   ELITE POLISH — app shell (Phase 2)
+   The chrome every screen sits inside: sidebar, top header, breadcrumbs and
+   the mobile bottom-nav. Keeps the green/slate identity; refines rhythm,
+   depth and interaction feel toward Linear/Notion-grade polish.
+   ========================================================================== */
+
+/* --- Sidebar: inset rounded "pills" instead of full-bleed rows ------------- */
+.sidebar-nav ul { padding: 0 var(--sp-2); }
+.sidebar-nav .nav-link {
+    margin: 2px 0;
+    padding: 0.55rem 0.7rem;
+    border-left: 0;                              /* pill replaces the edge bar */
+    border-radius: var(--radius-md);
+    font-weight: var(--fw-medium);
+    transition: background var(--transition), color var(--transition);
+}
+.sidebar-nav .nav-link:hover {
+    padding-left: 0.7rem;                        /* cancel the old hover text-shift */
+    background: rgba(255, 255, 255, 0.09);
+    color: #fff;
+}
+.sidebar-nav .nav-link.active {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+/* The pill carries the state now — retire the old left accent bar + border. */
+.sidebar-nav .nav-link.active { border-left-color: transparent; }
+.sidebar-nav .nav-link.active::before {
+    left: -2px; top: 50%; height: 45%;
+    width: 3px; border-radius: 3px;
+    background: var(--accent);                   /* keep a small accent tick */
+}
+.sidebar-nav .nav-link i {
+    color: rgba(255, 255, 255, 0.55);
+    transition: color var(--transition);
+}
+.sidebar-nav .nav-link:hover i,
+.sidebar-nav .nav-link.active i { color: #fff; }
+/* Section labels + submenu align to the new inset. */
+.nav-section { padding-left: 0.85rem; padding-right: 0.85rem; }
+.has-submenu .submenu { border-radius: var(--radius-md); margin: 2px var(--sp-1); }
+
+/* --- Top header: frosted, sticky glass ------------------------------------ */
+.top-header {
+    background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+    -webkit-backdrop-filter: saturate(1.6) blur(12px);
+    backdrop-filter: saturate(1.6) blur(12px);
+    transition: box-shadow var(--transition), border-color var(--transition);
+}
+/* A hairline shadow appears once the page is scrolled (JS toggles .is-scrolled;
+   degrades gracefully to the static border if the class is never set). */
+.top-header.is-scrolled { box-shadow: var(--shadow-sm); }
+@supports not (backdrop-filter: blur(1px)) {
+    .top-header { background: var(--bg-card); }  /* opaque fallback */
+}
+
+/* Breadcrumb: quiet trail, clear current page, links reveal on hover. */
+.breadcrumb a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color var(--transition);
+}
+.breadcrumb a:hover { color: var(--primary); }
+.breadcrumb > span:last-child { color: var(--text-primary); }
+
+/* Header controls: uniform, tactile icon buttons + theme toggle. */
+.header-icon-btn, .theme-toggle {
+    transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+.header-icon-btn:active, .theme-toggle:active { transform: scale(0.92); }
+
+/* --- Mobile bottom-nav: active pill + press feedback ----------------------- */
+@media (max-width: 1023px) {
+    .bottom-nav {
+        -webkit-backdrop-filter: saturate(1.5) blur(12px);
+        backdrop-filter: saturate(1.5) blur(12px);
+        background: color-mix(in srgb, var(--bg-card) 85%, transparent);
+    }
+    @supports not (backdrop-filter: blur(1px)) {
+        .bottom-nav { background: var(--bg-card); }
+    }
+    .bottom-nav .bn-item {
+        position: relative;
+        border-radius: var(--radius-md);
+        margin: 0.3rem 0.15rem;
+        transition: color var(--transition), background var(--transition), transform var(--transition);
+    }
+    .bottom-nav .bn-item:active { transform: scale(0.92); }
+    .bottom-nav .bn-item.active {
+        background: var(--primary-alpha);
+    }
+    .bottom-nav .bn-item.active::before {
+        content: "";
+        position: absolute; top: -0.3rem; left: 50%;
+        transform: translateX(-50%);
+        width: 1.6rem; height: 3px; border-radius: 0 0 3px 3px;
+        background: var(--primary);
+    }
+}
