@@ -3302,6 +3302,91 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible,
     font-size: var(--text-sm); color: var(--text-primary); font-family: inherit;
 }
 
+/* ==========================================================================
+   ELITE POLISH — forms (Phase 4)
+   Refines the shared form primitives: clearer required/valid state, tactile
+   inputs, responsive field grids, section grouping, a switch toggle and a
+   multi-step stepper. Additive; identity-preserving.
+   ========================================================================== */
+
+/* Inputs feel responsive to the pointer before you focus them. */
+.form-control:hover:not(:focus):not(:disabled):not([readonly]) {
+    border-color: var(--gray-300);
+}
+
+/* Required + optional cues on labels. */
+.form-label.required::after, label.required::after {
+    content: " *"; color: var(--danger); font-weight: var(--fw-bold);
+}
+.form-label .optional {
+    margin-left: var(--sp-1); font-weight: var(--fw-regular);
+    font-size: var(--text-xs); color: var(--text-muted); text-transform: none; letter-spacing: 0;
+}
+
+/* Valid state (mirror of .is-invalid) for inline confirmation. */
+.form-control.is-valid { border-color: var(--success); }
+.form-control.is-valid:focus { box-shadow: 0 0 0 3px var(--success-light); }
+.field-ok { margin-top: var(--sp-1); font-size: var(--text-xs); color: var(--success); }
+
+/* Responsive field grid — collapses to one column on small screens. */
+.form-grid { display: grid; grid-template-columns: 1fr; gap: var(--sp-4) var(--sp-4); }
+@media (min-width: 640px) { .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .form-grid.cols-3 { grid-template-columns: repeat(3, 1fr); } }
+.form-grid .span-2 { grid-column: 1 / -1; }
+
+/* Grouped section within a long form — heading + description + fields. */
+.form-section { padding: var(--sp-5) 0; border-top: 1px solid var(--border-light); }
+.form-section:first-child { border-top: 0; padding-top: 0; }
+.form-section > .form-section-head { margin-bottom: var(--sp-4); }
+.form-section-head h4 { margin: 0; font-size: var(--text-base); font-weight: var(--fw-semibold); }
+.form-section-head p { margin: var(--sp-1) 0 0; font-size: var(--text-sm); color: var(--text-muted); }
+
+/* Input group — prefix/suffix affix (₦, %, @, units, inline buttons). */
+.input-group { display: flex; align-items: stretch; }
+.input-group .form-control { border-radius: 0; }
+.input-group > :first-child { border-top-left-radius: var(--radius-md); border-bottom-left-radius: var(--radius-md); }
+.input-group > :last-child { border-top-right-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); }
+.input-group .form-control:not(:first-child) { border-left: 0; }
+.input-group .input-affix {
+    display: inline-flex; align-items: center; padding: 0 0.75rem;
+    background: var(--gray-50); border: 1px solid var(--border-color);
+    color: var(--text-muted); font-size: var(--text-sm); white-space: nowrap;
+}
+.input-group:focus-within .form-control { border-color: var(--primary); }
+.input-group:focus-within .input-affix { border-color: var(--primary); }
+
+/* Switch toggle — for boolean settings (nicer than a bare checkbox). */
+.switch { position: relative; display: inline-block; width: 40px; height: 24px; flex: none; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch .track {
+    position: absolute; inset: 0; border-radius: var(--radius-full);
+    background: var(--gray-300); transition: background var(--transition);
+}
+.switch .track::before {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+    background: #fff; border-radius: 50%; box-shadow: var(--shadow-sm);
+    transition: transform var(--transition);
+}
+.switch input:checked + .track { background: var(--primary); }
+.switch input:checked + .track::before { transform: translateX(16px); }
+.switch input:focus-visible + .track { box-shadow: var(--shadow-focus); }
+
+/* Multi-step stepper — progress header for wizards. */
+.stepper { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-5); }
+.stepper .step { display: flex; align-items: center; gap: var(--sp-2); color: var(--text-muted); font-size: var(--text-sm); }
+.stepper .step .dot {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--gray-100); color: var(--text-muted);
+    font-size: var(--text-xs); font-weight: var(--fw-bold); flex: none;
+    border: 1px solid var(--border-color);
+}
+.stepper .step.active { color: var(--text-primary); font-weight: var(--fw-semibold); }
+.stepper .step.active .dot { background: var(--primary); color: #fff; border-color: var(--primary); }
+.stepper .step.done .dot { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+.stepper .step-line { flex: 1; height: 2px; background: var(--border-color); border-radius: 2px; min-width: 12px; }
+.stepper .step.done + .step-line { background: var(--primary); }
+
 /* Empty-state action row (primary + secondary CTA under the message). */
 .empty-state-actions {
     display: flex; flex-wrap: wrap; gap: var(--sp-2);
