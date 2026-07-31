@@ -447,16 +447,28 @@ function GraduateProfile({ d, notify }) {
   };
   return (
     <>
-      <div className="profile-header">
-        <div className="profile-avatar"><i aria-hidden="true" className="fas fa-user-graduate" /></div>
-        <div className="profile-info"><h1>{s.full_name}</h1><p>{s.student_id} • {s.gender}</p>
-          {d.graduation_session && <p><i aria-hidden="true" className="fas fa-graduation-cap" /> Class of {d.graduation_session}</p>}</div>
-      </div>
-      <div className="page-header-actions mb-3">
-        <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>
-        <a href={d.urls.full_profile} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user" /> Full Profile</a>
-        {d.urls.ungraduate && <button type="button" className="btn btn-danger" disabled={busy} onClick={undoGraduate}>
-          <i aria-hidden="true" className="fas fa-rotate-left" /> Un-graduate</button>}
+      <div className="profile-hero">
+        <div className="ph-cover" />
+        <div className="ph-body">
+          <div className="ph-avatar" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">
+            {(s.full_name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'}
+          </div>
+          <div className="ph-id">
+            <h1 className="ph-name">{s.full_name}</h1>
+            <div className="ph-meta">
+              <span className="badge badge-primary">{s.student_id}</span>
+              {s.gender && <span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span>}
+              <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> {d.status || 'Graduated'}</span>
+              {d.graduation_session && <span className="badge badge-secondary">Class of {d.graduation_session}</span>}
+            </div>
+          </div>
+        </div>
+        <div className="ph-actions">
+          <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>
+          <a href={d.urls.full_profile} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user" /> Full Profile</a>
+          {d.urls.ungraduate && <button type="button" className="btn btn-danger" disabled={busy} onClick={undoGraduate}>
+            <i aria-hidden="true" className="fas fa-rotate-left" /> Un-graduate</button>}
+        </div>
       </div>
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> Graduation Info</h3></div>
         <div className="card-body"><div className="info-grid">
