@@ -428,29 +428,31 @@ function StaffDetail({ d, notify }) {
   const Row = ({ k, v }) => <div className="info-row"><span className="k">{k}</span><span className="v">{v || '—'}</span></div>;
   return (
     <>
-      <div className="page-header"><h1>Staff Profile</h1>
-        <div className="page-header-actions">
-          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /></a>
-            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /></a></>}
-          <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
-          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i aria-hidden="true" className="fas fa-box-archive" /></button>}
-        </div>
-      </div>
-
-      <div className="card mb-3"><div className="card-body"><div className="profile-head">
-        {s.photo_url ? <img className="avatar" src={s.photo_url} alt="" /> : <div className="avatar">{s.initials}</div>}
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <h2 style={{ margin: 0 }}>{s.full_name}</h2>
-          <div className="text-muted">{s.designation || '—'}{s.department && ` · ${s.department}`}</div>
-          <div className="mt-1">
-            <span className={typeBadge(s.staff_type)}>{s.staff_type}</span>{' '}
-            <span className="badge badge-secondary">{s.employment_type}</span>{' '}
-            <span className={statusBadge(s.status)}>{s.status}</span>{' '}
-            <span className="badge badge-primary">{s.staff_id}</span>
-            {s.years_of_service > 0 && <> <span className="badge badge-info">{s.years_of_service} yr{s.years_of_service !== 1 ? 's' : ''} service</span></>}
+      <div className="profile-hero">
+        <div className="ph-cover" />
+        <div className="ph-body">
+          {s.photo_url
+            ? <img className="ph-avatar" src={s.photo_url} alt="" />
+            : <div className="ph-avatar" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">{s.initials}</div>}
+          <div className="ph-id">
+            <h1 className="ph-name">{s.full_name}</h1>
+            <div className="text-muted" style={{ marginTop: 2 }}>{s.designation || '—'}{s.department && ` · ${s.department}`}</div>
+            <div className="ph-meta">
+              <span className={typeBadge(s.staff_type)}>{s.staff_type}</span>
+              <span className="badge badge-secondary">{s.employment_type}</span>
+              <span className={statusBadge(s.status)}>{s.status}</span>
+              <span className="badge badge-primary">{s.staff_id}</span>
+              {s.years_of_service > 0 && <span className="badge badge-info">{s.years_of_service} yr{s.years_of_service !== 1 ? 's' : ''} service</span>}
+            </div>
           </div>
         </div>
-      </div></div></div>
+        <div className="ph-actions">
+          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /> Call</a>
+            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /> WhatsApp</a></>}
+          <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
+          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i aria-hidden="true" className="fas fa-box-archive" /> Archive</button>}
+        </div>
+      </div>
 
       {s.contract_expiring && (
         <Banner tone={s.contract_days_left < 0 ? 'error' : 'warning'}>
