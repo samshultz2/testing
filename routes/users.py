@@ -496,15 +496,13 @@ def edit_user(user_id):
         
         # Update teacher permissions if teacher
         if user.role == 'teacher':
-            if not user.teacher_profile:
+            teacher = user.teacher_profile
+            if not teacher:
                 teacher = Teacher(
                     user_id=user.id,
                     employee_id=Teacher.generate_employee_id()
                 )
                 db.session.add(teacher)
-                db.session.flush()
-            
-            teacher = user.teacher_profile
             teacher.can_mark_attendance = request.form.get('can_mark_attendance') == 'on'
             teacher.can_enter_results = request.form.get('can_enter_results') == 'on'
             teacher.can_edit_results = request.form.get('can_edit_results') == 'on'
