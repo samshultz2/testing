@@ -18,19 +18,25 @@
 
 .kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
 @media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
-.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
-    padding:1rem;display:flex;align-items:center;gap:.85rem;overflow:hidden;transition:transform var(--transition),box-shadow var(--transition)}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-xl);
+    padding:1.1rem;display:flex;align-items:center;gap:.85rem;overflow:hidden;
+    box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 28px -14px rgba(15,23,42,.16);
+    transition:transform var(--transition),box-shadow var(--transition),border-color var(--transition)}
 .kpi>div:last-child{min-width:0}
-.kpi:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
-.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
+.kpi:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,.05),0 18px 40px -16px rgba(15,23,42,.22);border-color:var(--gray-300)}
+.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    font-size:1.2rem;color:#fff;flex-shrink:0;
+    box-shadow:0 6px 14px -6px rgba(15,23,42,.35),inset 0 1px 0 rgba(255,255,255,.25)}
 .kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
 .kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
 .kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
 .kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
 .kpi .ic.purple{background:linear-gradient(135deg,#7e6cf0,#5a48c9)}
 .kpi .ic.teal{background:linear-gradient(135deg,#11998e,#38ef7d)}
-.kpi .v{font-size:1.45rem;font-weight:700;line-height:1.05;font-family:var(--font-display);overflow-wrap:anywhere}
+.kpi .v{font-size:1.55rem;font-weight:700;line-height:1.05;letter-spacing:-.01em;font-family:var(--font-display);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+/* Delta reads as a subtle chip (bg/padding aren't set inline, so this applies). */
+.kpi .kpi-delta{width:fit-content;padding:2px 8px;margin-top:.4rem !important;border-radius:var(--radius-full);background:var(--gray-100)}
 
 .dash-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
 @media(min-width:992px){.dash-grid.c3{grid-template-columns:repeat(3,1fr)}.dash-grid.c2{grid-template-columns:repeat(2,1fr)}
