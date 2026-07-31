@@ -32,6 +32,18 @@
     else { bar.style.width = '100%'; setTimeout(function () { bar.style.opacity = '0'; bar.style.width = '0'; }, 200); }
   }
 
+  function activeNonce() {
+    // The current document's CSP nonce, stable for this page's lifetime. Inline
+    // scripts we recreate on a soft-nav must carry it or the nonce-based CSP
+    // (script-src 'self' 'nonce-…', no 'unsafe-inline') blocks them — which is
+    // what left inline-initialised content (e.g. Chart.js pages) blank until a
+    // full reload. Read it from a base script that carries the nonce; after load
+    // the attribute value is hidden (getAttribute → ''), but the .nonce IDL
+    // property retains it.
+    var el = document.querySelector('script[nonce]');
+    return (el && (el.nonce || el.getAttribute('nonce'))) || '';
+  }
+
   function inlineBody(text) {
     // Run re-executed inline scripts in their OWN function scope. A classic inline
     // script runs in global scope, and removing its <script> element does NOT undo
@@ -47,6 +59,7 @@
     // Scripts inserted via innerHTML don't execute; recreate executable ones so
     // the section's bundle runs and mounts. Non-JS scripts (the JSON data block)
     // are left in place.
+    var nonce = activeNonce();
     var scripts = container.querySelectorAll('script');
     for (var i = 0; i < scripts.length; i++) {
       var old = scripts[i];
@@ -57,6 +70,8 @@
       else if (type === 'module') s.textContent = old.textContent;   // module = own scope
       else s.textContent = inlineBody(old.textContent);
       if (old.type) s.type = old.type;
+      // Inline scripts need this document's nonce or the CSP blocks them.
+      if (!old.src && nonce) s.setAttribute('nonce', nonce);
       old.parentNode.replaceChild(s, old);
     }
   }
@@ -99,6 +114,7 @@
     // bindings persist across swaps and throw "already declared" on re-run) —
     // use `var`/`function` at top level, which redeclare harmlessly.
     document.querySelectorAll('script[data-spa-extra]').forEach(function (n) { n.remove(); });
+    var nonce = activeNonce();
     var live = {};
     Array.prototype.forEach.call(document.body.querySelectorAll('script'),
       function (s) { if (!s.closest('.page-content')) live[s.outerHTML] = 1; });
@@ -111,6 +127,8 @@
       else if (type === 'module') s.textContent = node.textContent;   // module = own scope
       else s.textContent = inlineBody(node.textContent);              // scope per re-run
       if (node.type) s.type = node.type;
+      // Inline scripts need this document's nonce or the CSP blocks them.
+      if (!node.src && nonce) s.setAttribute('nonce', nonce);
       s.setAttribute('data-spa-extra', '1');
       document.body.appendChild(s);
     });
