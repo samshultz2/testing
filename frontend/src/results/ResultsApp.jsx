@@ -110,11 +110,23 @@ function SubjectEnrolment({ d }) {
         <a href={d.urls.sss3} className={'scope-tab' + (d.only_sss3 ? ' active' : '')}>SSS3 / Exam candidates</a>
         <a href={d.urls.all} className={'scope-tab' + (d.only_sss3 ? '' : ' active')}>All active students</a>
       </div>
-      <div className="stats-grid mb-3">
-        <div className="stat-card highlight"><div className="stat-value">{d.student_count}</div><div className="stat-label">Students in scope</div></div>
-        <div className="stat-card"><div className="stat-value">{d.waec_enrolled}</div><div className="stat-label">With WAEC subjects</div></div>
-        <div className="stat-card"><div className="stat-value">{d.jamb_enrolled}</div><div className="stat-label">With JAMB subjects</div></div>
-        <div className="stat-card"><div className="stat-value">{d.waec_rows.length}</div><div className="stat-label">Distinct WAEC subjects</div></div>
+      <div className="kpi-grid mb-3">
+        <div className="kpi-card lead">
+          <div className="kpi-head"><span className="kpi-label">Students in scope</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-users" /></span></div>
+          <div className="kpi-value">{d.student_count}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-head"><span className="kpi-label">With WAEC subjects</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-file-alt" /></span></div>
+          <div className="kpi-value">{d.waec_enrolled}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-head"><span className="kpi-label">With JAMB subjects</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-file-contract" /></span></div>
+          <div className="kpi-value">{d.jamb_enrolled}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-head"><span className="kpi-label">Distinct WAEC subjects</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-list" /></span></div>
+          <div className="kpi-value">{d.waec_rows.length}</div>
+        </div>
       </div>
       <div className="enrol-grid">
         <div className="card">
