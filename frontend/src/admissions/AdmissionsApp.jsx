@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell, Table } from '../components/ui';
@@ -14,7 +15,7 @@ function Dashboard({ d }) {
     window.Chart.defaults.color = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
     const chart = new window.Chart(ref.current, {
       type: 'bar',
-      data: { labels: d.class_chart.map((x) => x.name), datasets: [{ data: d.class_chart.map((x) => x.count), backgroundColor: '#4e73df', borderRadius: 5 }] },
+      data: { labels: d.class_chart.map((x) => x.name), datasets: [{ data: d.class_chart.map((x) => x.count), backgroundColor: chartPalette().indigo, borderRadius: 5 }] },
       options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
     });
     return () => chart.destroy();

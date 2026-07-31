@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { submitJson } from '../lib/forms';
-import { useChart } from '../lib/hooks';
+import { useChart, chartPalette } from '../lib/hooks';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 
@@ -87,8 +87,8 @@ function Readiness({ d }) {
 
 // ---- Subject enrolment -----------------------------------------------------
 function SubjectEnrolment({ d }) {
-  const waecRef = useChart(() => (d.waec_rows.length ? enrolBarCfg(d.waec_rows, '#11998e') : null), [d]);
-  const jambRef = useChart(() => (d.jamb_rows.length ? enrolBarCfg(d.jamb_rows, '#667eea') : null), [d]);
+  const waecRef = useChart(() => (d.waec_rows.length ? enrolBarCfg(d.waec_rows, chartPalette().green) : null), [d]);
+  const jambRef = useChart(() => (d.jamb_rows.length ? enrolBarCfg(d.jamb_rows, chartPalette().indigo) : null), [d]);
 
   const Table = ({ rows, enrolled, jamb }) => (
     rows.length ? (

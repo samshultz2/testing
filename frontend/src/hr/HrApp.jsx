@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
@@ -52,10 +53,10 @@ function Dashboard({ d }) {
     const charts = [];
     const cs = getComputedStyle(document.body);
     window.Chart.defaults.color = cs.getPropertyValue('--text-secondary') || '#666';
-    const PALETTE = ['#4e73df', '#1cc88a', '#f6c23e', '#e74a3b', '#7e6cf0', '#11998e', '#fd7e14', '#20c997'];
+    const PALETTE = chartPalette().categorical;
     if (deptRef.current && st.dept_chart.length) {
       charts.push(new window.Chart(deptRef.current, {
-        type: 'bar', data: { labels: st.dept_chart.map((x) => x.name), datasets: [{ data: st.dept_chart.map((x) => x.count), backgroundColor: '#4e73df', borderRadius: 5 }] },
+        type: 'bar', data: { labels: st.dept_chart.map((x) => x.name), datasets: [{ data: st.dept_chart.map((x) => x.count), backgroundColor: chartPalette().indigo, borderRadius: 5 }] },
         options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
       }));
     }

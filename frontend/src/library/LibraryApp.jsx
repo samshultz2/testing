@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { submitJson, postFile } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
@@ -35,7 +36,7 @@ function Dashboard({ d }) {
     const chart = new window.Chart(ref.current, {
       type: 'doughnut',
       data: { labels: d.cat_chart.map((x) => x.name), datasets: [{ data: d.cat_chart.map((x) => x.count),
-        backgroundColor: ['#4e73df', '#1cc88a', '#f6c23e', '#e74a3b', '#7e6cf0', '#11998e', '#fd7e14', '#20c997'], borderWidth: 0 }] },
+        backgroundColor: chartPalette().categorical, borderWidth: 0 }] },
       options: { maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } },
     });
     return () => chart.destroy();

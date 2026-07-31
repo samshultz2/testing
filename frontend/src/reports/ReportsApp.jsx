@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { postFile } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
@@ -40,7 +41,7 @@ function ChartCard({ title, url, type }) {
         chart = new window.Chart(ref.current, {
           type,
           data: { labels: data.labels, datasets: [{
-            data: data.data, backgroundColor: data.backgroundColor || '#4e73df',
+            data: data.data, backgroundColor: data.backgroundColor || chartPalette().indigo,
             borderColor: data.borderColor, fill: type === 'line', tension: 0.3, borderRadius: type === 'bar' ? 5 : 0 }] },
           options: { maintainAspectRatio: false, plugins: { legend: { display: type === 'doughnut', position: 'bottom' } },
             scales: type === 'doughnut' ? {} : { y: { beginAtZero: true, ticks: { precision: 0 } } } },

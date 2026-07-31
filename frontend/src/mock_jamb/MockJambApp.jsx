@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
@@ -16,8 +17,8 @@ function Index({ d }) {
     const chart = new window.Chart(ref.current, {
       type: 'bar',
       data: { labels: d.comparison.map((c) => c.label), datasets: [
-        { label: 'Average Score', data: d.comparison.map((c) => c.average), backgroundColor: '#4e73df', borderRadius: 6 },
-        { label: 'Students ≥250', data: d.comparison.map((c) => c.above_250), backgroundColor: '#1cc88a', borderRadius: 6 }] },
+        { label: 'Average Score', data: d.comparison.map((c) => c.average), backgroundColor: chartPalette().indigo, borderRadius: 6 },
+        { label: 'Students ≥250', data: d.comparison.map((c) => c.above_250), backgroundColor: chartPalette().green, borderRadius: 6 }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
         scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } },
     });
@@ -685,8 +686,8 @@ function StudentProgress({ d }) {
     const chart = new window.Chart(chartRef.current, {
       type: 'line',
       data: { labels: p.progress.map((x) => x.exam),
-        datasets: [{ label: 'Score', data: scores, borderColor: '#11998e', backgroundColor: 'rgba(17,153,142,0.1)',
-          borderWidth: 3, fill: true, tension: 0.3, pointRadius: 6, pointBackgroundColor: '#11998e' }] },
+        datasets: [{ label: 'Score', data: scores, borderColor: chartPalette().green, backgroundColor: chartPalette().fill,
+          borderWidth: 3, fill: true, tension: 0.3, pointRadius: 6, pointBackgroundColor: chartPalette().green }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
         scales: { y: { beginAtZero: false, min: Math.max(0, Math.min(...scores) - 50), max: Math.min(400, Math.max(...scores) + 50), grid: { color: 'rgba(0,0,0,0.05)' } },
           x: { grid: { display: false } } } },

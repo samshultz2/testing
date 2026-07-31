@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { submitJson, useForm } from '../lib/forms';
 import { naira, nairaShort } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
@@ -18,7 +19,7 @@ function Tabs({ d }) {
   return <SectionTabs tabs={TABS} urls={d.nav} active={TAB_FOR[d.page] || d.page} go={nav.go} />;
 }
 
-const PALETTE = ['#4e73df', '#1cc88a', '#f6c23e', '#e74a3b', '#7e6cf0', '#11998e', '#fd7e14', '#20c997', '#6610f2', '#e83e8c'];
+const PALETTE = chartPalette().categorical;
 const chartDefaults = () => {
   if (window.Chart) window.Chart.defaults.color = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
 };
@@ -52,12 +53,12 @@ function Dashboard({ d }) {
         options: { maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: (c) => ' ' + c.label + ': ₦' + c.raw.toLocaleString() } } } } }));
     };
     if (refs.trend.current && d.trend_chart.length) charts.push(new window.Chart(refs.trend.current, { type: 'line',
-      data: { labels: d.trend_chart.map((x) => x.label), datasets: [{ label: 'Collected', data: d.trend_chart.map((x) => x.amount), borderColor: '#1cc88a', backgroundColor: 'rgba(28,200,138,.12)', fill: true, tension: 0.35, pointRadius: 3, borderWidth: 3 }] },
+      data: { labels: d.trend_chart.map((x) => x.label), datasets: [{ label: 'Collected', data: d.trend_chart.map((x) => x.amount), borderColor: chartPalette().green, backgroundColor: chartPalette().fill, fill: true, tension: 0.35, pointRadius: 3, borderWidth: 3 }] },
       options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ' ₦' + c.raw.toLocaleString() } } }, scales: { y: { beginAtZero: true, grid: { color: grid }, ticks: { callback: nairaTick } }, x: { grid: { display: false } } } } }));
     if (refs.cls.current && d.class_chart.length) charts.push(new window.Chart(refs.cls.current, { type: 'bar',
       data: { labels: d.class_chart.map((x) => x.name), datasets: [
         { label: 'Expected', data: d.class_chart.map((x) => x.expected), backgroundColor: '#cbd5e1', borderRadius: 5 },
-        { label: 'Collected', data: d.class_chart.map((x) => x.collected), backgroundColor: '#1cc88a', borderRadius: 5 }] },
+        { label: 'Collected', data: d.class_chart.map((x) => x.collected), backgroundColor: chartPalette().green, borderRadius: 5 }] },
       options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: (c) => ' ' + c.dataset.label + ': ₦' + c.raw.toLocaleString() } } }, scales: { y: { beginAtZero: true, grid: { color: grid }, ticks: { callback: nairaTick } }, x: { grid: { display: false } } } } }));
     doughnut(refs.item, d.item_chart, 'name', 'amount');
     doughnut(refs.method, d.method_chart, 'method', 'amount');
@@ -677,7 +678,7 @@ function Collections({ d }) {
     if (!ref.current || !window.Chart || !d.day_chart.length) return;
     chartDefaults();
     const chart = new window.Chart(ref.current, { type: 'bar',
-      data: { labels: d.day_chart.map((x) => x.label), datasets: [{ label: 'Collected', data: d.day_chart.map((x) => x.amount), backgroundColor: '#1cc88a', borderRadius: 5 }] },
+      data: { labels: d.day_chart.map((x) => x.label), datasets: [{ label: 'Collected', data: d.day_chart.map((x) => x.amount), backgroundColor: chartPalette().green, borderRadius: 5 }] },
       options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ' ₦' + c.raw.toLocaleString() } } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => '₦' + (v >= 1000 ? (v / 1000) + 'k' : v) } }, x: { grid: { display: false } } } } });
     return () => chart.destroy();
   }, [d.day_chart]);

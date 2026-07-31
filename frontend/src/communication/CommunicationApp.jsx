@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
@@ -68,7 +69,7 @@ function Dashboard({ d }) {
       type: 'doughnut',
       data: { labels: d.channel_chart.map((x) => x.channel),
         datasets: [{ data: d.channel_chart.map((x) => x.count),
-          backgroundColor: ['#25D366', '#4e73df', '#f6c23e', '#7e6cf0'], borderWidth: 0 }] },
+          backgroundColor: chartPalette().categorical, borderWidth: 0 }] },
       options: { maintainAspectRatio: false, cutout: '58%',
         plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } },
     });

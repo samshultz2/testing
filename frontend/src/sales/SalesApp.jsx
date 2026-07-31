@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chartPalette } from '../lib/hooks';
 import { submitJson } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
@@ -64,11 +65,11 @@ function Dashboard({ d }) {
           <div className="card"><div className="card-header"><h3>Top products (30d)</h3></div><div className="card-body">
             <BarList rows={d.top_products} labelKey="name" color="#4e73df" sub={(r) => `${r.units} units`} /></div></div>
           <div className="card"><div className="card-header"><h3>By category</h3></div><div className="card-body">
-            <BarList rows={d.by_category || []} color="#11998e" /></div></div>
+            <BarList rows={d.by_category || []} color={chartPalette().green} /></div></div>
           <div className="card"><div className="card-header"><h3>By payment method</h3></div><div className="card-body">
-            <BarList rows={d.by_method || []} color="#f6c23e" /></div></div>
+            <BarList rows={d.by_method || []} color={chartPalette().amber} /></div></div>
           <div className="card"><div className="card-header"><h3>By cashier</h3></div><div className="card-body">
-            <BarList rows={d.by_cashier || []} color="#667eea" /></div></div>
+            <BarList rows={d.by_cashier || []} color={chartPalette().indigo} /></div></div>
         </div>
       )}
 
@@ -932,13 +933,13 @@ function Analytics({ d }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
         <div className="card"><div className="card-header"><h3>Top products</h3></div><div className="card-body">
-          <BarList rows={d.top_products || []} labelKey="name" color="#4e73df" sub={(r) => `${r.units} units`} /></div></div>
+          <BarList rows={d.top_products || []} labelKey="name" color={chartPalette().indigo} sub={(r) => `${r.units} units`} /></div></div>
         <div className="card"><div className="card-header"><h3>By category</h3></div><div className="card-body">
-          <BarList rows={d.by_category || []} color="#11998e" sub={(r) => `${r.units} units`} /></div></div>
+          <BarList rows={d.by_category || []} color={chartPalette().green} sub={(r) => `${r.units} units`} /></div></div>
         <div className="card"><div className="card-header"><h3>By payment method</h3></div><div className="card-body">
-          <BarList rows={d.by_method || []} color="#f6c23e" sub={(r) => `${r.count} sales`} /></div></div>
+          <BarList rows={d.by_method || []} color={chartPalette().amber} sub={(r) => `${r.count} sales`} /></div></div>
         <div className="card"><div className="card-header"><h3>By cashier</h3></div><div className="card-body">
-          <BarList rows={d.by_cashier || []} color="#667eea" sub={(r) => `${r.count} sales`} /></div></div>
+          <BarList rows={d.by_cashier || []} color={chartPalette().indigo} sub={(r) => `${r.count} sales`} /></div></div>
       </div>
 
       <div className="card mb-3">
