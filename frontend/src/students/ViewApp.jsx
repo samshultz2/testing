@@ -232,14 +232,14 @@ export default function ViewApp({ initial }) {
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-comments" /> Communication History ({d.communications.count})</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-              <table className="data-table">
+              <table className="data-table table-stack no-mobile-scroll">
                 <thead><tr><th>Date</th><th>Message</th><th>Channel</th><th>Status</th></tr></thead>
                 <tbody>{d.communications.items.map((m, i) => (
                   <tr key={i}>
-                    <td>{m.date || '—'}</td>
-                    <td><strong>{m.title}</strong>{m.snippet && <div className="text-muted" style={{ fontSize: '.82rem' }}>{m.snippet}</div>}</td>
-                    <td>{m.channel && <span className="badge badge-info">{m.channel}</span>}</td>
-                    <td><span className={'badge ' + (m.status === 'Sent' ? 'badge-success' : m.status === 'Failed' ? 'badge-danger' : 'badge-warning')}>{m.status}</span>
+                    <td data-label="Date">{m.date || '—'}</td>
+                    <td data-label="Message"><strong>{m.title}</strong>{m.snippet && <div className="text-muted" style={{ fontSize: '.82rem' }}>{m.snippet}</div>}</td>
+                    <td data-label="Channel">{m.channel && <span className="badge badge-info">{m.channel}</span>}</td>
+                    <td data-label="Status"><span className={'badge ' + (m.status === 'Sent' ? 'badge-success' : m.status === 'Failed' ? 'badge-danger' : 'badge-warning')}>{m.status}</span>
                       {m.read && <span className="badge badge-secondary" title="Read" style={{ marginLeft: 4 }}><i aria-hidden="true" className="fas fa-check-double" /></span>}</td>
                   </tr>
                 ))}</tbody>
@@ -255,14 +255,14 @@ export default function ViewApp({ initial }) {
         <DisciplineForm categories={d.discipline_categories || []} today={d.today} disabled={busy}
                         onAdd={(f) => run(urls.discipline_add, f, 'Discipline record added.')} />
         {(d.discipline || []).length ? (
-          <div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
             <thead><tr><th>Date</th><th>Category</th><th>Severity</th><th>Incident</th><th>Action</th><th>By</th><th /></tr></thead>
             <tbody>{d.discipline.map((r) => (
               <tr key={r.id}>
-                <td>{r.date}</td><td>{r.category || '—'}</td>
-                <td>{r.severity && <span className={'badge ' + (r.severity === 'Major' ? 'badge-danger' : 'badge-warning')}>{r.severity}</span>}</td>
-                <td>{r.description}</td><td>{r.action_taken || '—'}</td><td className="text-muted">{r.reported_by || ''}</td>
-                <td><button type="button" className="btn btn-danger btn-sm" disabled={busy}
+                <td data-label="Date">{r.date}</td><td data-label="Category">{r.category || '—'}</td>
+                <td data-label="Severity">{r.severity && <span className={'badge ' + (r.severity === 'Major' ? 'badge-danger' : 'badge-warning')}>{r.severity}</span>}</td>
+                <td data-label="Incident">{r.description}</td><td data-label="Action">{r.action_taken || '—'}</td><td data-label="By" className="text-muted">{r.reported_by || ''}</td>
+                <td className="actions"><button type="button" className="btn btn-danger btn-sm" disabled={busy}
                             onClick={async () => { if (await confirm('Remove this record?')) run(r.delete_url, {}, 'Record removed.'); }}><i aria-hidden="true" className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
@@ -274,14 +274,14 @@ export default function ViewApp({ initial }) {
         <ClinicForm today={d.today} disabled={busy}
                     onAdd={(f) => run(urls.clinic_add, f, 'Clinic visit added.')} />
         {(d.clinic || []).length ? (
-          <div className="table-container" style={{ border: 'none' }}><table className="data-table">
+          <div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
             <thead><tr><th>Date</th><th>Complaint</th><th>Treatment</th><th>Parent told</th><th>By</th><th /></tr></thead>
             <tbody>{d.clinic.map((v) => (
               <tr key={v.id}>
-                <td>{v.date}</td><td>{v.complaint}</td><td>{v.treatment || '—'}</td>
-                <td><span className={'badge ' + (v.parent_notified ? 'badge-success' : 'badge-warning')}>{v.parent_notified ? 'Yes' : 'No'}</span></td>
-                <td className="text-muted">{v.attended_by || ''}</td>
-                <td><button type="button" className="btn btn-danger btn-sm" disabled={busy}
+                <td data-label="Date">{v.date}</td><td data-label="Complaint">{v.complaint}</td><td data-label="Treatment">{v.treatment || '—'}</td>
+                <td data-label="Parent told"><span className={'badge ' + (v.parent_notified ? 'badge-success' : 'badge-warning')}>{v.parent_notified ? 'Yes' : 'No'}</span></td>
+                <td data-label="By" className="text-muted">{v.attended_by || ''}</td>
+                <td className="actions"><button type="button" className="btn btn-danger btn-sm" disabled={busy}
                             onClick={async () => { if (await confirm('Remove this visit?')) run(v.delete_url, {}, 'Visit removed.'); }}><i aria-hidden="true" className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
@@ -315,14 +315,14 @@ function ChangeHistory({ rows }) {
       <div className="card-body" style={{ padding: 0 }}>
         {shown.length ? (
           <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-            <table className="data-table">
+            <table className="data-table table-stack no-mobile-scroll">
               <thead><tr><th>When</th><th>Action</th><th>By</th><th>Details</th></tr></thead>
               <tbody>{shown.map((r, i) => (
                 <tr key={i}>
-                  <td style={{ whiteSpace: 'nowrap' }}>{r.when}</td>
-                  <td><span className="badge badge-secondary">{ACTION_LABELS[r.action] || r.action}</span></td>
-                  <td>{r.user}{r.role && <span className="text-muted"> · {r.role}</span>}</td>
-                  <td style={{ fontSize: '.85rem' }}>{r.detail || '—'}</td>
+                  <td data-label="When" style={{ whiteSpace: 'nowrap' }}>{r.when}</td>
+                  <td data-label="Action"><span className="badge badge-secondary">{ACTION_LABELS[r.action] || r.action}</span></td>
+                  <td data-label="By">{r.user}{r.role && <span className="text-muted"> · {r.role}</span>}</td>
+                  <td data-label="Details" style={{ fontSize: '.85rem' }}>{r.detail || '—'}</td>
                 </tr>
               ))}</tbody>
             </table>
