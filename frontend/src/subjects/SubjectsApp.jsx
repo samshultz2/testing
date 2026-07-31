@@ -3,6 +3,7 @@ import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 // Whole numbers print without a trailing .0 (34, not 34.0); genuine decimals to
 // two places (34.3 -> 34.30). Non-numeric / blank values pass through.
@@ -78,8 +79,8 @@ function List({ d, notify }) {
     <>
       <div className="page-header"><h1>Subjects</h1>
         <div className="page-header-actions">
-          <a href={d.urls.bulk_add} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list" /> Bulk Add</a>
-          <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>
+          {canWrite(d) && <a href={d.urls.bulk_add} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list" /> Bulk Add</a>}
+          {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}
         </div>
       </div>
       {d.categories.length ? d.categories.map((cat) => (
@@ -93,16 +94,16 @@ function List({ d, notify }) {
                     <div className="data-card-title">{s.name}</div>
                     <span className="badge badge-secondary">{s.short_name}</span>
                   </div>
-                  <div className="data-card-actions">
+                  {canWrite(d) && <div className="data-card-actions">
                     <a href={s.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
                     <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(s.delete_url, s.name)}><i aria-hidden="true" className="fas fa-trash" /></button>
-                  </div>
+                  </div>}
                 </div>))}
             </div>
           </div>
         </div>
       )) : (
-        <div className="card"><div className="card-body"><Empty icon="fa-book" title="No Subjects"><p>Add your first subject</p><a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Subject</a></Empty></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-book" title="No Subjects"><p>Add your first subject</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Subject</a>}</Empty></div></div>
       )}
     </>
   );
@@ -201,8 +202,8 @@ function ClassSubjects({ d, notify }) {
     <>
       <div className="page-header"><h1>Class Subjects</h1>
         <div className="page-header-actions">
-          {d.term_id && <button type="button" className="btn btn-info btn-sm" onClick={() => setShowCopy((s) => !s)}><i aria-hidden="true" className="fas fa-copy" /> Copy from term</button>}
-          <a href={d.urls.assign} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign</a>
+          {canWrite(d) && d.term_id && <button type="button" className="btn btn-info btn-sm" onClick={() => setShowCopy((s) => !s)}><i aria-hidden="true" className="fas fa-copy" /> Copy from term</button>}
+          {canWrite(d) && <a href={d.urls.assign} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign</a>}
         </div>
       </div>
 
@@ -239,15 +240,15 @@ function ClassSubjects({ d, notify }) {
                   <div className="data-card-header"><div className="data-card-title">{cs.subject}</div><span className="badge badge-info">{cs.class_name}</span></div>
                   <div className="data-card-row"><span className="data-card-label">Teacher</span><span>{cs.teacher_name || '-'}</span></div>
                   {cs.arm && <div className="data-card-row"><span className="data-card-label">Arm</span><span>{cs.arm}</span></div>}
-                  <div className="data-card-actions">
+                  {canWrite(d) && <div className="data-card-actions">
                     <a href={cs.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
                     <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(cs.delete_url, `${cs.subject} from ${cs.class_name}`)}><i aria-hidden="true" className="fas fa-times" /></button>
-                  </div>
+                  </div>}
                 </div>))}
             </div>
           </div></div>
       ) : d.term_id ? (
-        <div className="card"><div className="card-body"><Empty icon="fa-book-open" title="No Subjects Assigned"><p>Assign subjects to classes for this term</p><a href={d.urls.assign} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign Subjects</a></Empty></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-book-open" title="No Subjects Assigned"><p>Assign subjects to classes for this term</p>{canWrite(d) && <a href={d.urls.assign} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Assign Subjects</a>}</Empty></div></div>
       ) : (
         <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select a Term"><p>Choose a term to view class subjects</p></Empty></div></div>
       )}
@@ -433,8 +434,8 @@ function Scores({ d, notify }) {
     <>
       <div className="page-header"><h1>Score Entry</h1>
         <div className="page-header-actions">
-          <a href={d.urls.scan} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan Score Sheet</a>
-          <a href={d.urls.import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Import Excel</a>
+          {canWrite(d) && <a href={d.urls.scan} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan Score Sheet</a>}
+          {canWrite(d) && <a href={d.urls.import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Import Excel</a>}
           {d.urls.blank_sheet && <a href={d.urls.blank_sheet} className="btn btn-secondary" data-native target="_blank" rel="noopener"><i aria-hidden="true" className="fas fa-file-lines" /> Blank sheet</a>}
         </div>
       </div>
@@ -491,10 +492,10 @@ function Scores({ d, notify }) {
                              value={scores[s.id] ?? ''} onKeyDown={onScoreKey} onPaste={onPaste(i)}
                              onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td></tr>))}</tbody>
             </table></div>
-            <div className="page-header-actions mt-3">
+            {canWrite(d) && <div className="page-header-actions mt-3">
               <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Scores</button>
               {nextSubject && <button type="button" className="btn btn-success" disabled={busy} onClick={() => save(null, true)} title={`Save and continue to ${nextSubject.subject_name}`}><i aria-hidden="true" className="fas fa-forward" /> Save &amp; next subject</button>}
-            </div>
+            </div>}
           </form></div>
         </div>
       ) : d.has_selection ? (
@@ -538,7 +539,7 @@ function Workflow({ d, notify }) {
           <Step done={s.behaviour} total={s.students} icon="star-half-stroke" title="Behaviour rated" desc={`${s.behaviour} of ${s.students} have behaviour ratings`} link={d.urls.affective} label="Behaviour" />
         </div></div>
         <div className="card mt-3"><div className="card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" onClick={compute}><i aria-hidden="true" className="fas fa-ranking-star" /> Finalize (compute results &amp; positions)</button>
+          {canWrite(d) && <button type="button" className="btn btn-primary" onClick={compute}><i aria-hidden="true" className="fas fa-ranking-star" /> Finalize (compute results &amp; positions)</button>}
           <a href={d.urls.print_all} className="btn btn-success" data-native><i aria-hidden="true" className="fas fa-print" /> Print all report cards</a>
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '.6rem' }}>
             <span className={'badge ' + (d.published ? 'badge-success' : 'badge-secondary')}><i aria-hidden="true" className={'fas fa-' + (d.published ? 'eye' : 'eye-slash')} /> {d.published ? 'Released to parents/checker' : 'Not released'}</span>
@@ -602,7 +603,7 @@ function BulkEntry({ d, notify }) {
             </table>
           </div></div>
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save all scores</button>
+            {canWrite(d) && <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save all scores</button>}
             <span className="text-muted text-sm">Leave a cell blank to clear it. Positions update automatically.</span>
           </div>
         </form>
@@ -735,8 +736,8 @@ function Broadsheet({ d, notify }) {
         <div className="card">
           <div className="card-header"><h3>{d.selected_assignment}</h3>
             <div className="page-header-actions">
-              <button type="button" className="btn btn-primary btn-sm" onClick={compute}><i aria-hidden="true" className="fas fa-ranking-star" /> Compute results &amp; positions</button>
-              <a href={d.urls.bulk_entry} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-pen-to-square" /> Bulk Entry</a>
+              {canWrite(d) && <button type="button" className="btn btn-primary btn-sm" onClick={compute}><i aria-hidden="true" className="fas fa-ranking-star" /> Compute results &amp; positions</button>}
+              {canWrite(d) && <a href={d.urls.bulk_entry} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-pen-to-square" /> Bulk Entry</a>}
               <a href={d.urls.affective} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-star-half-stroke" /> Behaviour</a>
               <a href={d.urls.comments} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-comment-dots" /> Comments</a>
               {d.urls.analytics && <a href={d.urls.analytics} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-column" /> Analytics</a>}
@@ -772,7 +773,7 @@ function Broadsheet({ d, notify }) {
             {d.class_subjects.map((cs) => <div key={cs.id} style={{ marginRight: '1rem', marginBottom: '0.5rem' }}><strong>{cs.short}</strong> = {cs.name}</div>)}
           </div></div></div>
       </>) : d.has_selection ? (
-        <div className="card"><div className="card-body"><Empty icon="fa-table" title="No Data"><p>No scores entered for this class yet</p><a href={d.urls.scores} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Enter Scores</a></Empty></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-table" title="No Data"><p>No scores entered for this class yet</p>{canWrite(d) && <a href={d.urls.scores} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Enter Scores</a>}</Empty></div></div>
       ) : (
         <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select Options"><p>Select term and class to view broadsheet</p></Empty></div></div>
       )}
@@ -815,7 +816,7 @@ function Affective({ d, notify }) {
             </table>
           </div></div>
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save ratings</button>
+            {canWrite(d) && <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save ratings</button>}
             <span className="text-muted text-sm">Scale: 5 Excellent · 4 Very Good · 3 Good · 2 Fair · 1 Poor</span>
           </div>
         </form>
@@ -860,7 +861,7 @@ function Comments({ d, notify }) {
                 </tr>))}</tbody>
             </table>
           </div></div>
-          <div style={{ marginTop: '1rem' }}><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save comments</button></div>
+          {canWrite(d) && <div style={{ marginTop: '1rem' }}><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save comments</button></div>}
         </form>
       ) : d.selected ? (
         <div className="card"><div className="card-body"><Empty icon="fa-users" title=""><p>No students enrolled in this class for the term.</p></Empty></div></div>

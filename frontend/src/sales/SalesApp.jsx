@@ -5,6 +5,7 @@ import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { Banner, PageHeader, Empty, SectionShell, Table, Modal, Button, confirm, promptDialog } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const EmptyState = ({ icon, title, children }) => <Empty icon={icon} title={title}>{children && <p>{children}</p>}</Empty>;
 
@@ -26,7 +27,7 @@ function Dashboard({ d }) {
   return (
     <>
       <PageHeader icon="fa-cart-shopping" title="Sales & Inventory" actions={<>
-        <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>
+        {canWrite(d) && <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>}
         <a href={u.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
         {u.movements && <a href={u.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
         {u.purchases && <a href={u.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-invoice" /> Purchases</a>}
@@ -428,7 +429,7 @@ function Products({ d, notify }) {
   return (
     <>
       <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={<>
-        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>
+        {canWrite(d) && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>}
         {d.urls.movements && <a href={d.urls.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
         {d.urls.batches && <a href={d.urls.batches} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-layer-group" /> Batches</a>}
         {d.labels_url && <button type="button" className="btn btn-secondary" onClick={openLabels}><i aria-hidden="true" className="fas fa-tags" /> Print labels</button>}
@@ -1015,7 +1016,7 @@ function Suppliers({ d }) {
   return (
     <>
       <PageHeader icon="fa-truck-field" title="Suppliers" actions={<>
-        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add supplier</button>
+        {canWrite(d) && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add supplier</button>}
         <a href={d.urls.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-invoice" /> Purchases</a>
       </>} />
       <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
@@ -1142,7 +1143,7 @@ function Purchases({ d }) {
   return (
     <>
       <PageHeader icon="fa-file-invoice" title="Purchase Orders" actions={<>
-        <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}><i aria-hidden="true" className="fas fa-plus" /> New PO</button>
+        {canWrite(d) && <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}><i aria-hidden="true" className="fas fa-plus" /> New PO</button>}
         <a href={d.urls.suppliers} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-truck-field" /> Suppliers</a>
       </>} />
       {d.awaiting_delivery > 0 && <div className="alert alert-info"><i aria-hidden="true" className="fas fa-truck" /> {d.awaiting_delivery} order(s) awaiting delivery.</div>}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { Banner, SectionShell, SectionTabs, Empty, Table } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['add_exam', 'fa-circle-plus', 'Exams'],
@@ -39,7 +40,7 @@ function Dashboard({ d }) {
         <div className="page-header-actions">
           {d.urls.subject_topics && <a href={d.urls.subject_topics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-diagram-project" /> Subject Topics</a>}
           <a href={d.urls.export_all} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> All Results</a>
-          <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Exam</a>
+          {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Exam</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -55,7 +56,7 @@ function Dashboard({ d }) {
       <div className="card"><div className="card-header"><h3>All Exams</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           <Table rowKey={(e) => e.id} rows={d.exams}
-            empty={<Empty icon="fa-file-pen" title="No exams yet"><p>Create an online test, add questions, set the access password and publish.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Exam</a></Empty>}
+            empty={<Empty icon="fa-file-pen" title="No exams yet"><p>Create an online test, add questions, set the access password and publish.</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary mt-2">New Exam</a>}</Empty>}
             columns={[
               { key: 'title', label: 'Title', render: (e) => <a href={e.detail_url}><strong>{e.title}</strong></a> },
               { key: 'subject', label: 'Subject', render: (e) => e.subject },

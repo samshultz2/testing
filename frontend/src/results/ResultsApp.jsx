@@ -3,6 +3,7 @@ import { submitJson } from '../lib/forms';
 import { useChart, chartPalette } from '../lib/hooks';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 // Horizontal bar config for the subject-enrolment charts (shared by WAEC/JAMB).
 const enrolBarCfg = (rows, color) => ({

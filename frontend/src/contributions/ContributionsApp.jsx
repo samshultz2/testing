@@ -4,6 +4,7 @@ import { useDraft } from '../lib/draft';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const money = (n) => '₦' + Math.round(Number(n) || 0).toLocaleString();
 const armColor = (arm) => (arm === 'Iris' ? 'primary' : arm === 'Rose' ? 'danger' : arm === 'Lily' ? 'warning' : 'info');
@@ -45,9 +46,9 @@ function Dashboard({ d }) {
       <div className="page-header">
         <h1><i aria-hidden="true" className="fas fa-hand-holding-usd" /> SSS3 Contributions</h1>
         <div className="header-actions">
-          <A to={u.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-bolt" /> Quick Entry</A>
-          <A to={u.add_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Payment</A>
-          <A to={u.import} className="btn btn-warning"><i aria-hidden="true" className="fas fa-file-import" /> Import</A>
+          {canWrite(d) && <A to={u.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-bolt" /> Quick Entry</A>}
+          {canWrite(d) && <A to={u.add_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Payment</A>}
+          {canWrite(d) && <A to={u.import} className="btn btn-warning"><i aria-hidden="true" className="fas fa-file-import" /> Import</A>}
           <a href={u.export} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
           <a href={u.logout} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-sign-out-alt" /> Exit</a>
         </div>
@@ -395,7 +396,7 @@ function Expenses({ d, notify }) {
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-receipt" /> Expenses Management</h1>
         <div className="header-actions">
           <A to={u.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
-          <A to={u.add_expense} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>
+          {canWrite(d) && <A to={u.add_expense} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>}
         </div></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_collected)} label="Total Collected" />

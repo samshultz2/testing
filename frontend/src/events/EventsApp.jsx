@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -10,9 +11,9 @@ function Calendar({ d }) {
   return (
     <>
       <PageHeader title="Calendar" actions={<>
-        <a href={d.urls.import} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-import" /> Import</a>
+        {canWrite(d) && <a href={d.urls.import} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-import" /> Import</a>}
         <a href={d.urls.agenda} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list" /> Agenda</a>
-        <a href={d.urls.add_event} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Event</a>
+        {canWrite(d) && <a href={d.urls.add_event} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Event</a>}
       </>} />
       <div className="card"><div className="card-body">
         <div className="cal-head">
@@ -61,7 +62,7 @@ function Agenda({ d, notify }) {
     <>
       <PageHeader title="Events" actions={<>
         <a href={d.urls.calendar} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-calendar" /> Calendar</a>
-        <a href={d.urls.add_event} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Event</a>
+        {canWrite(d) && <a href={d.urls.add_event} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Event</a>}
       </>} />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form">
@@ -87,8 +88,8 @@ function Agenda({ d, notify }) {
                   <td data-label="Audience">{e.audience}</td>
                   <td data-label="Location">{e.location || '—'}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <a href={e.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
-                    <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                    {canWrite(d) && <a href={e.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
+                    {canWrite(d) && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                   </div></td>
                 </tr>
               ))}</tbody></table></div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { submitJson, useSave } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, TableWrap } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const A = ({ to, className, children, title, target }) => {
   const nav = useNav();
@@ -51,7 +52,7 @@ function Index({ d }) {
             <div className="card-header">
               <h3>{sel.display_name}</h3>
               <div className="page-header-actions">
-                <A to={d.urls.edit} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</A>
+                {canWrite(d) && <A to={d.urls.edit} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</A>}
                 <A to={d.urls.pdf} target="_blank" className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</A>
                 <A to={d.urls.pdf_teachers} target="_blank" className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF + teachers</A>
               </div>
@@ -216,8 +217,8 @@ function Backups({ d, notify }) {
                 <tr key={b.id}>
                   <td>{b.when}</td><td>{b.label}</td><td>{b.entry_count}</td>
                   <td className="text-right">
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => restore(b)}><i aria-hidden="true" className="fas fa-rotate-left" /> Restore</button>{' '}
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                    {canWrite(d) && <><button type="button" className="btn btn-primary btn-sm" onClick={() => restore(b)}><i aria-hidden="true" className="fas fa-rotate-left" /> Restore</button>{' '}
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button></>}
                   </td>
                 </tr>
               ))}
