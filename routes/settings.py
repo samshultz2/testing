@@ -13,7 +13,8 @@ from models import (
     Student, AcademicSession, Term, User
 )
 from utils.helpers import login_required
-from utils.access_control import admin_required, central_admin_required, is_admin
+from utils.access_control import (admin_required, central_admin_required, is_admin,
+                                  can_access_module)
 from utils.security import rate_limited
 from utils.audit import log_action
 
@@ -25,13 +26,14 @@ def _settings_admin_only():
     """The whole settings area — school config, grading scale, assessment
     weights, timetable slots, database backup/restore and user management — is
     an administrative surface. Gate every route (GET pages included) behind
-    admin so none of it can be reached by URL by a non-admin staff member, even
-    though the nav already hides the section. Routes that manage user accounts
-    or branches layer a stricter central-admin check on top of this."""
+    administrative surface, gated behind the 'settings' module. Admins always
+    pass; a non-admin needs the module granted. The most sensitive routes (user
+    accounts, branches, database backup/restore) layer a stricter central-admin
+    check on top of this, so a delegated settings user still cannot reach them."""
     if not session.get('logged_in'):
         return redirect(url_for('auth.login'))
-    if not is_admin():
-        flash('That area is for administrators only.', 'error')
+    if not (is_admin() or can_access_module('settings')):
+        flash('You do not have access to that section.', 'error')
         return redirect(url_for('main.dashboard'))
     return None
 

@@ -38,6 +38,9 @@ MODULES = {
     'library': 'Library',
     'reports': 'Reports',
     'sales': 'Sales & Inventory',
+    'contributions': 'Contributions & Levies',
+    'website': 'Website Builder',
+    'settings': 'School Settings',
 }
 
 # Which module a blueprint belongs to (blueprints not listed are never gated).
@@ -49,6 +52,9 @@ BLUEPRINT_MODULE = {
     'finance': 'finance', 'comms': 'communication', 'hr': 'hr',
     'library': 'library', 'reports': 'reports', 'scratchcards': 'results',
     'sales': 'sales', 'welfare': 'students',
+    # Previously ungated staff surfaces — now permission-checked like the rest.
+    'contributions': 'contributions', 'mock_waec': 'external_exams',
+    'settings': 'settings', 'website_admin': 'website',
 }
 
 # Endpoints always reachable by any logged-in user (the shell + own account).

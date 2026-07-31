@@ -13,7 +13,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy.orm.attributes import flag_modified
 
 from models import db, SiteSettings, SitePage, SiteMedia
-from utils.access_control import admin_required, login_required
+from utils.access_control import admin_required, login_required, module_required
 from utils.audit import log_action
 from utils.site_themes import preset_choices, PRESETS
 from utils import site_blocks
@@ -42,7 +42,7 @@ def _seed_if_empty():
 
 @website_admin_bp.route('/')
 @login_required
-@admin_required
+@module_required('website')
 def index():
     settings = _seed_if_empty()
     pages = SitePage.query.order_by(SitePage.nav_order.asc(), SitePage.title.asc()).all()
@@ -70,7 +70,7 @@ def _payments_configured():
 
 @website_admin_bp.route('/admissions', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def admissions_settings():
     site_admissions.save_settings(
         is_open=(request.form.get('web_admissions_open') == 'on'),
@@ -84,7 +84,7 @@ def admissions_settings():
 
 @website_admin_bp.route('/generate', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def generate_site():
     """Build a complete, uniquely-styled site in one click. Replaces existing
     pages, so it's a deliberate action from the overview (with confirmation)."""
@@ -106,7 +106,7 @@ def generate_site():
 
 @website_admin_bp.route('/publish', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def publish():
     settings = SiteSettings.get()
     settings.published = (request.form.get('published') == 'on')
@@ -118,7 +118,7 @@ def publish():
 
 @website_admin_bp.route('/theme', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def theme():
     settings = SiteSettings.get()
     preset = request.form.get('preset')
@@ -143,7 +143,7 @@ def theme():
 
 @website_admin_bp.route('/pages/new', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def new_page():
     title = (request.form.get('title') or '').strip() or 'New page'
     slug = _slugify(request.form.get('slug') or title)
@@ -159,7 +159,7 @@ def new_page():
 
 @website_admin_bp.route('/pages/<int:page_id>')
 @login_required
-@admin_required
+@module_required('website')
 def edit_page(page_id):
     pg = db.get_or_404(SitePage, page_id)
     public_url = (url_for('website.home') if pg.slug == SitePage.HOME_SLUG
@@ -177,7 +177,7 @@ def edit_page(page_id):
 
 @website_admin_bp.route('/pages/<int:page_id>/meta', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def save_page_meta(page_id):
     pg = db.get_or_404(SitePage, page_id)
     pg.title = (request.form.get('title') or pg.title).strip()[:120]
@@ -214,7 +214,7 @@ def _save_blocks(pg, blocks):
 
 @website_admin_bp.route('/pages/<int:page_id>/block/add', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def add_block(page_id):
     pg = db.get_or_404(SitePage, page_id)
     btype = request.form.get('type')
@@ -229,7 +229,7 @@ def add_block(page_id):
 
 @website_admin_bp.route('/pages/<int:page_id>/block/<int:idx>/op', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def block_op(page_id, idx):
     pg = db.get_or_404(SitePage, page_id)
     blocks = _blocks(pg)
@@ -258,7 +258,7 @@ def block_op(page_id, idx):
 
 @website_admin_bp.route('/pages/<int:page_id>/block/<int:idx>/content', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def block_content(page_id, idx):
     pg = db.get_or_404(SitePage, page_id)
     blocks = _blocks(pg)
@@ -316,7 +316,7 @@ def block_content(page_id, idx):
 
 @website_admin_bp.route('/pages/<int:page_id>/block/<int:idx>/ai', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def block_ai(page_id, idx):
     """Draft copy for a section with AI. The generated text is written into the
     block's props but must still be reviewed and saved by the admin (they land in
@@ -355,7 +355,7 @@ def block_ai(page_id, idx):
 
 @website_admin_bp.route('/pages/<int:page_id>/delete', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def delete_page(page_id):
     pg = db.get_or_404(SitePage, page_id)
     if pg.slug == SitePage.HOME_SLUG:
@@ -371,7 +371,7 @@ def delete_page(page_id):
 # --- media library ---------------------------------------------------------
 @website_admin_bp.route('/media')
 @login_required
-@admin_required
+@module_required('website')
 def media_library():
     items = SiteMedia.query.order_by(SiteMedia.created_at.desc()).all()
     total = sum(m.bytes or 0 for m in items)
@@ -383,7 +383,7 @@ def media_library():
 
 @website_admin_bp.route('/media/upload', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def media_upload():
     for up in request.files.getlist('file'):
         if up and up.filename:
@@ -412,7 +412,7 @@ def _class_choices():
 
 @website_admin_bp.route('/assignments')
 @login_required
-@admin_required
+@module_required('website')
 def assignments():
     from models import HolidayAssignment
     items = HolidayAssignment.query.order_by(HolidayAssignment.class_label.asc(),
@@ -423,7 +423,7 @@ def assignments():
 
 @website_admin_bp.route('/assignments/upload', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def assignment_upload():
     from models import HolidayAssignment, SchoolClass
     up = request.files.get('file')
@@ -458,7 +458,7 @@ def assignment_upload():
 
 @website_admin_bp.route('/assignments/<int:aid>/toggle', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def assignment_toggle(aid):
     from models import HolidayAssignment
     a = db.get_or_404(HolidayAssignment, aid)
@@ -470,7 +470,7 @@ def assignment_toggle(aid):
 
 @website_admin_bp.route('/assignments/<int:aid>/delete', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def assignment_delete(aid):
     from models import HolidayAssignment
     a = db.get_or_404(HolidayAssignment, aid)
@@ -494,7 +494,7 @@ def _unique_news_slug(title, exclude_id=None):
 
 @website_admin_bp.route('/news')
 @login_required
-@admin_required
+@module_required('website')
 def news():
     from models import NewsPost
     posts = NewsPost.query.order_by(NewsPost.published_at.desc(), NewsPost.id.desc()).all()
@@ -503,7 +503,7 @@ def news():
 
 @website_admin_bp.route('/news/new', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def news_new():
     from models import NewsPost
     title = (request.form.get('title') or 'Untitled post').strip()[:200]
@@ -516,7 +516,7 @@ def news_new():
 
 @website_admin_bp.route('/news/<int:post_id>')
 @login_required
-@admin_required
+@module_required('website')
 def news_edit(post_id):
     from models import NewsPost
     p = db.get_or_404(NewsPost, post_id)
@@ -526,7 +526,7 @@ def news_edit(post_id):
 
 @website_admin_bp.route('/news/<int:post_id>/save', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def news_save(post_id):
     from models import NewsPost
     from datetime import datetime
@@ -564,7 +564,7 @@ def news_save(post_id):
 
 @website_admin_bp.route('/news/<int:post_id>/delete', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def news_delete(post_id):
     from models import NewsPost
     p = db.get_or_404(NewsPost, post_id)
@@ -578,7 +578,7 @@ def news_delete(post_id):
 # --- analytics -------------------------------------------------------------
 @website_admin_bp.route('/analytics')
 @login_required
-@admin_required
+@module_required('website')
 def analytics():
     from utils import site_analytics
     try:
@@ -592,7 +592,7 @@ def analytics():
 
 @website_admin_bp.route('/analytics/export')
 @login_required
-@admin_required
+@module_required('website')
 def analytics_export():
     import csv
     import io
@@ -622,7 +622,7 @@ def analytics_export():
 
 @website_admin_bp.route('/media/<int:media_id>/delete', methods=['POST'])
 @login_required
-@admin_required
+@module_required('website')
 def media_delete(media_id):
     m = db.get_or_404(SiteMedia, media_id)
     from utils import media_storage
