@@ -3999,3 +3999,62 @@ body .sum-card .v { font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
 [data-theme="dark"] body .sum-card { box-shadow: var(--shadow-sm); }
 @media (prefers-reduced-motion: reduce) { body .sum-card:hover { transform: none; } }
 @media print { body .sum-card { box-shadow: none !important; transform: none !important; } }
+
+/* ==========================================================================
+   STEPPERS · LIST ROWS · BESPOKE TOTALS — final elevation sweep
+   Steppers: only context-specific variants are touched via their own child
+   selectors — Finance's onboarding .step is already premium and left alone.
+   List rows: the label/value chips (.info-item) and definition rows (.info-row)
+   used across profiles/detail views, plus interactive roster/leaderboard rows.
+   Body-scoped so each module's inline copy is refined in place; grays are
+   dark-aware so hover fills are safe in both themes.
+   ========================================================================== */
+
+/* --- Steppers --- */
+/* CBT checklist step badge → gradient chip matching the KPI icon-tile register
+   (Finance uses .step-n, not .step .n, so it is unaffected). */
+body .step .n {
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    box-shadow: 0 4px 10px -4px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+/* Results readiness funnel stages → quiet hover lift + display figures. */
+body .funnel .step {
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+body .funnel .step:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+body .funnel .step .n { font-family: var(--font-display); letter-spacing: -0.01em; }
+
+/* --- List rows --- */
+/* Label/value chips: refined sunken surface + hairline, tabular values. */
+body .info-item {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-light);
+}
+body .info-item .info-value { font-variant-numeric: tabular-nums; }
+/* Definition rows: crisp hairline + tabular value column. */
+body .info-row { border-bottom-color: var(--border-light); }
+body .info-row .v { font-variant-numeric: tabular-nums; }
+
+/* Interactive roster rows (Finance record-payment): lift on hover. */
+body .roster-item {
+    transition: transform var(--transition), box-shadow var(--transition),
+                border-color var(--transition), background var(--transition);
+}
+body .roster-item:hover {
+    border-color: var(--primary);
+    background: var(--gray-50);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-xs);
+}
+/* Leaderboard rows (dashboard): subtle row highlight on hover. */
+body .lead-item { border-radius: var(--radius-sm); transition: background var(--transition); }
+body .lead-item:hover { background: var(--gray-50); }
+
+/* --- Bespoke totals --- */
+/* Money "total" rows read with a touch more authority + tabular figures. */
+body .bill-line.total, body .pl-row.total { color: var(--text-primary); }
+body .bill-line span:last-child, body .pl-row span:last-child { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+    body .funnel .step:hover, body .roster-item:hover { transform: none; }
+}
