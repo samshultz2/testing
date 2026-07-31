@@ -397,8 +397,26 @@ export default function App({ initial }) {
         </span>
       </div>
 
-      {students.length === 0 ? (
-        <Empty icon="fa-users" title="No students found"><p>Try adjusting your filters.</p></Empty>
+      {loading && students.length === 0 ? (
+        <div className="stu-grid" aria-busy="true" aria-label="Loading students">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="stu-card" style={{ display: 'block' }}>
+              <div className="skeleton skeleton-title" style={{ width: '65%' }} />
+              <div className="skeleton skeleton-text" />
+              <div className="skeleton skeleton-text short" />
+            </div>
+          ))}
+        </div>
+      ) : students.length === 0 ? (
+        <Empty icon="fa-users" title="No students found">
+          <p>No students match your filters yet.</p>
+          {d.can_add && (
+            <div className="empty-state-actions">
+              <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add student</a>
+              {d.import_url && <button type="button" className="btn btn-light" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import</button>}
+            </div>
+          )}
+        </Empty>
       ) : (
         <div className="stu-grid">
           {students.map((s) => (
