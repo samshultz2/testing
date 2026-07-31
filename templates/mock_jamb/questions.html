@@ -17,6 +17,7 @@
 </style>
 {% endblock %}
 {% block content %}
+{% set mj_edit = can_write_module('external_exams') %}
 <div class="page-header">
     <div>
         <h1>Questions — {{ exam.display_name }}</h1>
@@ -48,7 +49,7 @@
                 Online sitting: {{ 'OPEN — students can sit it' if exam.is_published else 'Closed' }}</strong>
             <div class="text-muted text-sm">Students sit their registered subjects in one timed session at <code>/exam</code>. Each student gets the questions <strong>and options in a different, shuffled order</strong>{% if exam.questions_per_subject %} — a random {{ exam.questions_per_subject }} per subject{% endif %}.</div>
         </div>
-        <form method="post" action="{{ url_for('mock_jamb.toggle_publish', exam_id=exam.id) }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+        {% if mj_edit %}<form method="post" action="{{ url_for('mock_jamb.toggle_publish', exam_id=exam.id) }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <label class="text-sm mb-0">Duration</label>
             <input type="number" name="duration_minutes" value="{{ exam.duration_minutes or 120 }}" min="5" max="300" style="width:76px;" class="form-control">
@@ -56,7 +57,7 @@
             <label class="text-sm mb-0" title="Draw this many random questions per subject for each student (blank = all)">Q/subject</label>
             <input type="number" name="questions_per_subject" value="{{ exam.questions_per_subject or '' }}" min="1" placeholder="all" style="width:70px;" class="form-control">
             <button class="btn btn-{{ 'danger' if exam.is_published else 'success' }} btn-sm">{{ 'Close sitting' if exam.is_published else 'Publish & open' }}</button>
-        </form>
+        </form>{% endif %}
     </div>
 </div>
 
@@ -99,7 +100,7 @@
             <select name="subtopic" class="form-control mjq-subtopic" disabled><option value="">— Topic first —</option></select></div>
     </div>
     <div class="form-group"><label class="form-label">Diagram / figure (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
-    <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add question</button>
+    {% if can_write_module('external_exams') %}<button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add question</button>{% endif %}
 </form>
 {%- endmacro %}
 
@@ -107,13 +108,13 @@
 <div class="mjq">
     <div style="display:flex;justify-content:space-between;gap:.5rem;">
         <div class="qtxt">{{ n }}. {{ q.question_text | question_html }}</div>
-        <div style="white-space:nowrap;">
+        {% if can_write_module('external_exams') %}<div style="white-space:nowrap;">
             <a href="{{ url_for('mock_jamb.edit_mock_question', question_id=q.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-pen"></i></a>
             <form method="post" action="{{ url_for('mock_jamb.delete_mock_question', question_id=q.id) }}" style="display:inline;" data-confirm="Delete this question?">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-danger btn-sm" title="Delete"><i class="fas fa-trash"></i></button>
             </form>
-        </div>
+        </div>{% endif %}
     </div>
     {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure" style="max-height:130px;margin:.4rem 0;border-radius:var(--radius-sm);">{% endif %}
     {% for opt, val in q.options %}{% if val %}<div class="qopt {{ 'correct' if q.correct_option == opt else '' }}">{{ opt }}. {{ val | question_html }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
@@ -122,6 +123,7 @@
 {%- endmacro %}
 
 {# ---- Add a comprehension / cloze / summary passage ---- #}
+{% if mj_edit %}
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-align-left"></i> Add a passage (comprehension / cloze / summary / oral)</h3></div>
     <div class="card-body">
@@ -144,6 +146,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 {# ---- Existing passages with their questions ---- #}
 {% for grp in passages %}

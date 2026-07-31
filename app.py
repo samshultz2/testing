@@ -619,7 +619,20 @@ def create_app(config_class=None):
             'password_rules': _password_rules(),
             'billing_nav': _billing_nav(),
         }
-    
+
+    # Also expose the write-permission helpers as Jinja *globals* (not just
+    # context variables) so they are callable from inside {% macro %}s — Jinja
+    # macros don't receive the render context, only environment globals. This
+    # lets templates that render write controls in macros (e.g. the Mock JAMB
+    # question bank) hide those controls for read-only users.
+    @app.template_global('can_write_module')
+    def _tg_can_write_module(key):
+        try:
+            from utils.access_control import can_write_module as _cwm
+            return _cwm(key)
+        except Exception:
+            return True
+
     # Custom Jinja filters
     @app.template_filter('format_date')
     def format_date_filter(value, format='%d %b %Y'):
