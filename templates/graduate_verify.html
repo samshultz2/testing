@@ -3,59 +3,144 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
   <title>Document Verification — {{ school.name or 'School' }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7fb;margin:0;color:#1f2937}
-    .wrap{max-width:520px;margin:2.5rem auto;padding:0 1rem}
-    .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:1.6rem 1.5rem;box-shadow:0 8px 30px rgba(0,0,0,.06)}
-    .sch{text-align:center;font-weight:800;font-size:1.15rem;color:#0e3a2f;margin-bottom:.2rem}
-    .sub{text-align:center;color:#6b7280;font-size:.82rem;margin-bottom:1rem}
-    .banner{border-radius:12px;padding:1rem;text-align:center;margin-bottom:1.1rem}
-    .ok{background:rgba(4,120,87,.1);color:#047857;border:1px solid rgba(4,120,87,.25)}
-    .bad{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
-    .banner i{font-size:2rem;display:block;margin-bottom:.3rem}
-    .banner h1{font-size:1.15rem;margin:.2rem 0}
-    .row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid #f1f5f9;font-size:.92rem}
+    :root{
+      --bg:#eef1f7;--card:#fff;--ink:#1f2937;--muted:#6b7280;
+      --line:#eef2f7;--brand:#0e3a2f;--accent:#0e8a64;--ok:#047857;--bad:#b91c1c;
+      --shadow:0 18px 50px rgba(15,42,34,.12);
+    }
+    @media (prefers-color-scheme: dark){
+      :root{--bg:#0b1220;--card:#131c2b;--ink:#e5e7eb;--muted:#9aa6b8;
+            --line:#22304a;--brand:#7fd8bd;--accent:#34d399;--ok:#34d399;--bad:#f87171;
+            --shadow:0 18px 50px rgba(0,0,0,.5);}
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:
+           radial-gradient(1200px 400px at 50% -160px, rgba(14,138,100,.18), transparent),
+           var(--bg);
+         margin:0;color:var(--ink);min-height:100vh;
+         display:flex;flex-direction:column;align-items:center;padding:2.2rem 1rem}
+    .wrap{width:100%;max-width:560px}
+    .brand{display:flex;align-items:center;gap:.7rem;justify-content:center;margin-bottom:1.1rem}
+    .brand img{height:44px;width:44px;object-fit:contain;border-radius:9px;background:#fff;padding:3px}
+    .brand .b-name{font-weight:800;font-size:1.15rem;color:var(--brand);line-height:1.1}
+    .brand .b-sub{color:var(--muted);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:20px;
+          padding:1.7rem 1.5rem;box-shadow:var(--shadow)}
+    .banner{border-radius:14px;padding:1.2rem 1rem;text-align:center;margin-bottom:1.2rem}
+    .banner .ic{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;
+                justify-content:center;margin:0 auto .55rem;font-size:1.7rem}
+    .ok{background:rgba(4,120,87,.1);border:1px solid rgba(4,120,87,.28)}
+    .ok .ic{background:var(--ok);color:#fff}
+    .ok h1{color:var(--ok)}
+    .bad{background:rgba(185,28,28,.08);border:1px solid rgba(185,28,28,.28)}
+    .bad .ic{background:var(--bad);color:#fff}
+    .bad h1{color:var(--bad)}
+    .banner h1{font-size:1.2rem;margin:.1rem 0 .3rem}
+    .banner p{margin:0;color:var(--muted);font-size:.9rem}
+    .rows{margin:.2rem 0 .2rem}
+    .row{display:flex;justify-content:space-between;gap:1rem;padding:.62rem 0;
+         border-bottom:1px solid var(--line);font-size:.93rem}
     .row:last-child{border-bottom:0}
-    .row .k{color:#6b7280}.row .v{font-weight:600;text-align:right}
-    form{display:flex;gap:.5rem;margin-top:1rem}
-    input{flex:1;padding:.6rem .7rem;border:1px solid #d1d5db;border-radius:9px;font-size:.95rem;text-transform:uppercase}
-    button{background:#0e8a64;color:#fff;border:0;padding:.6rem 1rem;border-radius:9px;font-weight:700;cursor:pointer}
-    .foot{text-align:center;color:#9ca3af;font-size:.75rem;margin-top:1rem}
+    .row .k{color:var(--muted)}.row .v{font-weight:700;text-align:right}
+    .trust{display:flex;align-items:center;gap:.5rem;margin-top:.9rem;padding:.7rem .8rem;
+           background:rgba(14,138,100,.08);border:1px dashed rgba(14,138,100,.35);
+           border-radius:11px;color:var(--brand);font-size:.84rem}
+    .trust i{font-size:1rem}
+    .qr{display:flex;gap:1rem;align-items:center;margin-top:1rem;
+        padding-top:1rem;border-top:1px solid var(--line)}
+    .qr img{width:92px;height:92px;border-radius:10px;background:#fff;padding:5px;border:1px solid var(--line)}
+    .qr .qt{font-size:.8rem;color:var(--muted)}
+    .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1.1rem}
+    .btn{border:0;border-radius:11px;padding:.7rem 1rem;font-weight:700;cursor:pointer;
+         font-size:.92rem;text-decoration:none;display:inline-flex;align-items:center;gap:.45rem}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+    form{display:flex;gap:.5rem;margin-top:1.1rem}
+    input{flex:1;padding:.72rem .8rem;border:1px solid var(--line);border-radius:11px;
+          font-size:.95rem;text-transform:uppercase;background:var(--card);color:var(--ink)}
+    input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+    .hint{color:var(--muted);font-size:.9rem;text-align:center;margin:.2rem 0 0}
+    .foot{text-align:center;color:var(--muted);font-size:.74rem;margin-top:1.2rem;opacity:.9}
+    @media print{.actions,form{display:none}}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <div class="sch">{{ school.name or 'School' }}</div>
-      <div class="sub">Document Verification Portal</div>
+    <div class="brand">
+      {% if school.logo_url %}<img src="{{ school.logo_url }}" alt="">{% endif %}
+      <div>
+        <div class="b-name">{{ school.name or 'School' }}</div>
+        <div class="b-sub">Document Verification</div>
+      </div>
+    </div>
 
+    <div class="card">
       {% if result and result.ok %}
-      <div class="banner ok"><i class="fas fa-circle-check"></i><h1>Genuine document</h1>
-        <div>This document was issued by {{ school.name or 'the school' }}.</div></div>
-      <div class="row"><span class="k">Graduate</span><span class="v">{{ result.name }}</span></div>
-      <div class="row"><span class="k">Document</span><span class="v">{{ result.doc_label }}</span></div>
-      <div class="row"><span class="k">Document No.</span><span class="v">{{ result.number }}</span></div>
-      {% if result.graduation %}<div class="row"><span class="k">Class of</span><span class="v">{{ result.graduation }}</span></div>{% endif %}
-      {% if result.issued %}<div class="row"><span class="k">Issued</span><span class="v">{{ result.issued }}</span></div>{% endif %}
-      {% if result.reprint %}<div class="row"><span class="k">Copy</span><span class="v">Reprint #{{ result.reprint }}</span></div>{% endif %}
+      <div class="banner ok">
+        <div class="ic"><i class="fas fa-shield-halved"></i></div>
+        <h1>Genuine document</h1>
+        <p>Confirmed as issued by {{ school.name or 'the school' }}.</p>
+      </div>
+      <div class="rows">
+        <div class="row"><span class="k">Graduate</span><span class="v">{{ result.name }}</span></div>
+        <div class="row"><span class="k">Document</span><span class="v">{{ result.doc_label }}</span></div>
+        <div class="row"><span class="k">Document No.</span><span class="v">{{ result.number }}</span></div>
+        {% if result.graduation %}<div class="row"><span class="k">Class of</span><span class="v">{{ result.graduation }}</span></div>{% endif %}
+        {% if result.issued %}<div class="row"><span class="k">Issued</span><span class="v">{{ result.issued }}</span></div>{% endif %}
+        {% if result.issued_by %}<div class="row"><span class="k">Issued by</span><span class="v">{{ result.issued_by }}</span></div>{% endif %}
+        {% if result.reprint %}<div class="row"><span class="k">Copy</span><span class="v">Reprint #{{ result.reprint }}</span></div>{% endif %}
+        <div class="row"><span class="k">Verification code</span><span class="v">{{ code }}</span></div>
+      </div>
+
+      <div class="trust">
+        <i class="fas fa-fingerprint"></i>
+        <span>Independently verified {{ result.verify_count }} time{{ '' if result.verify_count == 1 else 's' }}{% if result.first_checked %} · first checked {{ result.first_checked }}{% endif %}.</span>
+      </div>
+
+      {% if qr_data_url %}
+      <div class="qr">
+        <img src="{{ qr_data_url }}" alt="Verification QR code">
+        <div class="qt">Scan to re-verify this document at any time. The result updates live if the school revokes it.</div>
+      </div>
+      {% endif %}
+
+      <div class="actions">
+        {% if receipt_url %}<a class="btn btn-primary" href="{{ receipt_url }}"><i class="fas fa-file-arrow-down"></i> Download receipt</a>{% endif %}
+        <button class="btn btn-ghost" type="button" id="printBtn"><i class="fas fa-print"></i> Print</button>
+      </div>
+
       {% elif result and result.revoked %}
-      <div class="banner bad"><i class="fas fa-ban"></i><h1>Document revoked</h1>
-        <div>This document has been revoked by the school and is no longer valid.</div></div>
+      <div class="banner bad">
+        <div class="ic"><i class="fas fa-ban"></i></div>
+        <h1>Document revoked</h1>
+        <p>This document has been revoked by the school and is no longer valid.</p>
+      </div>
       {% elif result %}
-      <div class="banner bad"><i class="fas fa-circle-xmark"></i><h1>Could not verify</h1>
-        <div>No document matches the code <strong>{{ code }}</strong>. Check the code and try again.</div></div>
+      <div class="banner bad">
+        <div class="ic"><i class="fas fa-circle-xmark"></i></div>
+        <h1>Could not verify</h1>
+        <p>No document matches the code <strong>{{ code }}</strong>. Check it and try again.</p>
+      </div>
       {% else %}
-      <p style="color:#6b7280;font-size:.9rem;text-align:center;">Enter the verification code printed on the document (or scan its QR code).</p>
+      <p class="hint">Enter the verification code printed on the document — or scan its QR code — to confirm it is genuine.</p>
       {% endif %}
 
       <form method="get" action="{{ url_for('graduate_verify.verify') }}">
-        <input name="code" value="{{ code or '' }}" placeholder="Verification code" autocomplete="off" required>
-        <button type="submit"><i class="fas fa-magnifying-glass"></i> Verify</button>
+        <input name="code" value="{{ code or '' }}" placeholder="Verification code" autocomplete="off" spellcheck="false" required aria-label="Verification code">
+        <button class="btn btn-primary" type="submit"><i class="fas fa-magnifying-glass"></i> Verify</button>
       </form>
     </div>
-    <p class="foot">Powered by EduSyncra</p>
+
+    <p class="foot">Secured &amp; powered by EduSyncra · Document Verification Portal</p>
   </div>
+  <script nonce="{{ csp_nonce }}">
+    var pb = document.getElementById('printBtn');
+    if (pb) pb.addEventListener('click', function () { window.print(); });
+  </script>
 </body>
 </html>

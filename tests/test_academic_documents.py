@@ -291,6 +291,44 @@ def test_admin_verifications_log_and_profile_count(app):
     assert slc['verify_count'] >= 2
 
 
+def test_public_verify_page_shows_trust_signal_and_receipt_link(app):
+    sid, code = _grad_with_doc(app, 'VERTRUST')
+    pub = app.test_client()
+    html = pub.get(f'/verify/{code}').get_data(as_text=True)
+    assert 'Genuine document' in html
+    assert 'Independently verified' in html          # privacy-safe trust signal
+    assert f'/verify/{code}/receipt' in html          # download-receipt link
+    # a second check increments the aggregate count shown on the page
+    html2 = pub.get(f'/verify/{code}').get_data(as_text=True)
+    assert 'Independently verified 2 times' in html2
+
+
+def test_verification_receipt_pdf(app):
+    from models import DocumentVerification
+    sid, code = _grad_with_doc(app, 'VERRCPT')
+    pub = app.test_client()
+    r = pub.get(f'/verify/{code}/receipt')
+    assert r.status_code == 200
+    assert r.mimetype == 'application/pdf'
+    assert r.get_data()[:4] == b'%PDF'
+    # downloading a receipt is itself recorded as a genuine check, source=receipt
+    with app.app_context():
+        assert DocumentVerification.query.filter_by(
+            student_id=sid, source='receipt').count() == 1
+
+
+def test_receipt_refused_for_unknown_and_revoked(app):
+    from models import db, GraduateDocument
+    sid, code = _grad_with_doc(app, 'VERNOR')
+    pub = app.test_client()
+    assert pub.get('/verify/ZZZ0000000/receipt').status_code == 404
+    with app.app_context():
+        d = GraduateDocument.query.filter_by(student_id=sid, doc_type='slc').first()
+        d.revoked = True
+        db.session.commit()
+    assert pub.get(f'/verify/{code}/receipt').status_code == 404
+
+
 def test_branding_save_roundtrip(app):
     from utils.school import document_branding
     c = _admin(app)
