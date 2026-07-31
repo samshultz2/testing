@@ -3557,3 +3557,87 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible,
 @media (prefers-reduced-motion: reduce) {
     .spinner, .is-busy[aria-busy="true"]::before { animation-duration: 0.001ms; }
 }
+
+/* ==========================================================================
+   ELITE POLISH — print & report layouts (Phase 7)
+   Makes HTML-printed views (report cards, transcripts, broadsheets, receipts)
+   read as professionally typeset on paper. The reportlab PDFs (certificates,
+   ID cards) are a separate pipeline and unaffected.
+   ========================================================================== */
+
+/* Utilities usable in any template. */
+.print-only { display: none; }
+
+@media print {
+    :root { --bg-body: #fff; --bg-card: #fff; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    .print-only { display: block !important; }
+    /* Hide every interactive/chrome element that shouldn't appear on paper. */
+    .sidebar, .sidebar-overlay, .top-header, .mobile-menu-btn, .bottom-nav,
+    .theme-toggle, .no-print, .flash-messages, .toast-stack, .cmdk-overlay,
+    .header-search, #installBtn, .page-header-actions, .pagination,
+    .table-toolbar, .btn:not(.print-keep) {
+        display: none !important;
+    }
+
+    html, body { background: #fff !important; color: #000; font-size: 11pt; }
+    .main-content { margin-left: 0 !important; width: 100% !important; }
+    .page-content { padding: 0 !important; animation: none !important; }
+
+    /* Cards flatten to clean bordered blocks that don't split across pages. */
+    .card, .kpi-card, .stat-card, .data-card {
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+        break-inside: avoid; page-break-inside: avoid;
+        transform: none !important;
+    }
+    .card:hover, .kpi-card:hover, .stat-card:hover { transform: none !important; box-shadow: none !important; }
+    .kpi-card::before { display: none; }
+    .kpi-card.lead { background: #fff !important; color: #000 !important; border: 1px solid #cbd5e1 !important; }
+    .kpi-card.lead .kpi-value, .kpi-card.lead .kpi-label { color: #000 !important; }
+
+    /* Tables: crisp rules, repeated headers, rows that never break mid-way. */
+    .data-table, .table { font-size: 10pt; }
+    .data-table th, .data-table td, .table th, .table td { border: 1px solid #cbd5e1 !important; padding: 0.35rem 0.5rem; }
+    .data-table thead, .table thead { display: table-header-group; }   /* repeat on each page */
+    .data-table tr, .table tr { break-inside: avoid; page-break-inside: avoid; }
+    .data-table th, .table th { background: #f1f5f9 !important; color: #000 !important; }
+    .data-table.zebra tbody tr:nth-child(even) { background: #f8fafc !important; }
+
+    /* Headings hold with their content; no orphan/widow lines. */
+    h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; color: #000; }
+    p, li { orphans: 3; widows: 3; }
+
+    a { color: #000; text-decoration: none; }
+
+    /* A dedicated printable document/report container. */
+    .report, .print-sheet { max-width: none; margin: 0; padding: 0; color: #000; }
+}
+
+/* A4 page geometry for print (16mm margins is a safe printer default). */
+@page { size: A4; margin: 16mm; }
+
+/* --- Report letterhead / body (usable on screen too, shine on print) ------ */
+.report-header {
+    display: flex; align-items: center; gap: var(--sp-4);
+    padding-bottom: var(--sp-4); margin-bottom: var(--sp-5);
+    border-bottom: 2px solid var(--text-primary);
+}
+.report-header .report-logo { width: 64px; height: 64px; object-fit: contain; flex: none; }
+.report-header .report-titles { flex: 1; min-width: 0; }
+.report-header .report-school { font-family: var(--font-display); font-size: var(--text-xl); font-weight: var(--fw-bold); margin: 0; }
+.report-header .report-sub { font-size: var(--text-sm); color: var(--text-secondary); margin: 2px 0 0; }
+.report-title {
+    text-align: center; margin: var(--sp-4) 0 var(--sp-5);
+    font-family: var(--font-display); font-size: var(--text-lg);
+    font-weight: var(--fw-semibold); letter-spacing: 0.04em; text-transform: uppercase;
+}
+/* Signature row for official documents. */
+.report-signatures {
+    display: flex; justify-content: space-between; gap: var(--sp-8);
+    margin-top: var(--sp-10);
+}
+.report-signatures .sig { flex: 1; text-align: center; }
+.report-signatures .sig .line { border-top: 1px solid var(--text-primary); margin-bottom: var(--sp-1); }
+.report-signatures .sig .role { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
