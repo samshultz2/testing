@@ -3004,3 +3004,113 @@ body.cmdk-lock { overflow: hidden; }
 .mjq-table { border-collapse: collapse; font-size: .9em; }
 .mjq-table th, .mjq-table td { border: 1px solid var(--border-color, #cbd5e1); padding: .28rem .6rem; text-align: left; white-space: nowrap; }
 .mjq-table th { background: var(--gray-50, #f1f5f9); font-weight: 700; }
+
+/* ==========================================================================
+   ELITE POLISH — foundation refinement (Phase 1)
+   A cohesive, additive layer that raises the whole app to a premium bar
+   without changing the green/slate identity or any single screen: motion
+   tokens, tactile controls, refined modal/menu entrances, skeleton loaders,
+   and a crisper mobile feel. Later phases build on these primitives.
+   ========================================================================== */
+
+:root {
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);        /* decelerate — entrances */
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);  /* gentle overshoot */
+    --shadow-focus: 0 0 0 3px var(--primary-alpha);
+}
+
+/* Crisper text everywhere — the single cheapest premium upgrade. */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* Premium mobile feel: remove the grey tap-flash; our own :active states
+   provide the feedback instead. */
+a, button, .btn, [role="button"], .nav-link, .bottom-nav a, summary,
+.card, .chip, .tag, .badge, input, select, textarea, label {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Brand-tinted selection + a calm caret. */
+::selection { background: var(--primary-alpha); }
+
+/* One consistent, visible focus ring for keyboard users across every
+   interactive element (buttons/inputs are already covered above; this reaches
+   links, tabs, nav items, menu items, checkboxes, radios, summaries). */
+a:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible,
+.nav-link:focus-visible, .tab:focus-visible, .tab-btn:focus-visible,
+[role="menuitem"]:focus-visible, summary:focus-visible,
+input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible,
+.pagination a:focus-visible, .pagination button:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+    border-radius: var(--radius-sm);
+}
+
+/* Solid buttons get a whisper of depth (tactility, no lift) and a crisp press. */
+.btn-primary, .btn-success, .btn-danger, .btn-info, .btn-warning,
+.btn-secondary, .btn-export {
+    box-shadow: 0 1px 1.5px rgba(15, 23, 42, 0.06),
+                inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+.btn:active:not(:disabled) { transform: translateY(0.5px) scale(0.985); }
+
+/* Refined modal entrance — soft backdrop fade + content springing into place.
+   Covers both the Jinja modals (.modal / .modal-content) and the React modal
+   (role="dialog", which sets no transform of its own inline). */
+.modal.active, .modal.show { animation: eliteBackdropIn 180ms var(--ease-out); }
+.modal.active .modal-content, .modal.show .modal-content,
+[role="dialog"][aria-modal="true"] {
+    animation: elitePopIn 240ms var(--ease-spring);
+}
+@keyframes eliteBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes elitePopIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Dropdown / contextual-menu entrance (the app's row menus + dropdowns). */
+.dropdown-menu.show, .row-menu, .menu-panel, .cmd-results {
+    animation: eliteMenuIn 140ms var(--ease-out);
+    transform-origin: top;
+}
+@keyframes eliteMenuIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Skeleton loader primitive — use in place of a bare spinner for premium
+   loading states: <div class="skeleton skeleton-title"></div>, etc. */
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--gray-100);
+    border-radius: var(--radius-sm);
+}
+.skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    animation: eliteShimmer 1.25s infinite;
+}
+[data-theme="dark"] .skeleton { background: var(--gray-200); }
+[data-theme="dark"] .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+}
+.skeleton-title { height: 1.1rem; width: 40%; margin-bottom: 0.75rem; }
+.skeleton-text  { height: 0.75rem; margin: 0.45rem 0; }
+.skeleton-text.short { width: 60%; }
+.skeleton-avatar { width: 2.5rem; height: 2.5rem; border-radius: var(--radius-full); }
+.skeleton-card { height: 5.5rem; border-radius: var(--radius-lg); }
+@keyframes eliteShimmer { to { transform: translateX(100%); } }
+
+/* Honour reduced-motion for every entrance/shimmer added here. */
+@media (prefers-reduced-motion: reduce) {
+    .modal.active, .modal.show, .modal-content, [role="dialog"][aria-modal="true"],
+    .dropdown-menu.show, .row-menu, .menu-panel, .cmd-results,
+    .skeleton::after { animation: none !important; }
+}
