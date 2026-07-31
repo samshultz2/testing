@@ -6,6 +6,22 @@
 <a href="{{ url_for('main.students_list') }}">Students</a> / <span>{{ student_name }}</span>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+/* Profile info rows: the React <Info> component renders a muted label + a bold
+   value; give them a real two-column layout so the label and value are clearly
+   separated (they otherwise butt together) with a hairline divider per row. */
+.info-grid { display: flex; flex-direction: column; }
+.info-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 1.5rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border-light);
+}
+.info-row:last-child { border-bottom: none; }
+.info-row > .text-muted { flex: none; }
+.info-row > strong { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div id="student-view-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="student-data">{{ student_json|tojson }}</script>
