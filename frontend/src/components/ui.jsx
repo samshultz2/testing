@@ -105,12 +105,25 @@ export function PageHeader({ title, icon, actions }) {
 
 // Classic .empty-state block (icon + heading + optional body), shared by every
 // converted list/section page.
-export function Empty({ icon = 'fa-inbox', title, children, style }) {
+export function Empty({ icon = 'fa-inbox', title, children, actions, style }) {
   return (
     <div className="empty-state" style={style}>
       <i className={'fas ' + icon} aria-hidden="true" /><h3>{title}</h3>{children}
+      {actions && <div className="empty-state-actions">{actions}</div>}
     </div>
   );
+}
+
+// Placeholder rows for a loading table body — pairs with the existing Skeleton
+// (.sk-bar) primitives: <tbody><SkeletonRows rows={5} cols={4} /></tbody>
+export function SkeletonRows({ rows = 6, cols = 4 }) {
+  return Array.from({ length: rows }).map((_, r) => (
+    <tr key={r} aria-hidden="true">
+      {Array.from({ length: cols }).map((_, c) => (
+        <td key={c}><div className={'sk-bar' + (c === 0 ? '' : ' short')} /></td>
+      ))}
+    </tr>
+  ));
 }
 
 // Section sub-navigation (the .fin-tabs row). `tabs` = [[key, icon, label], …];
