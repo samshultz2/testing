@@ -34,10 +34,13 @@ def _assignable_groups():
     q = PermissionGroup.query.filter(PermissionGroup.is_active.isnot(False))
     if _is_central():
         return q.order_by(PermissionGroup.name).all()
+    from utils.access_control import clamp_to_granter
     me = get_current_user()
     bid = me.branch_id if me else None
+    # branch scope + only bundles no larger than the manager's own authority
     return [g for g in q.order_by(PermissionGroup.name).all()
-            if g.branch_id is None or g.branch_id == bid]
+            if (g.branch_id is None or g.branch_id == bid)
+            and clamp_to_granter(g.permission_map, None) == g.permission_map]
 
 
 def _can_grant(role, scope, branch_id):

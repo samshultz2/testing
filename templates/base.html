@@ -606,8 +606,10 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% if session.get('role') in ('super_admin', 'admin') or can_generate_timetable %}
+                    {% set _show_generator = session.get('role') in ('super_admin', 'admin') or can_generate_timetable %}
+                    {% if _show_generator or can_access_module('website') %}
                     <li class="nav-section">Tools</li>
+                    {% if _show_generator %}
                     <li class="nav-item has-submenu">
                         <a href="#" class="nav-link submenu-toggle">
                             <i class="fas fa-magic"></i><span>Timetable Generator</span>
@@ -631,26 +633,15 @@
                         </ul>
                     </li>
                     {% endif %}
-
-                    {# Contributions & Levies — now a permissioned module. Shown to
-                       anyone granted it (admins included). #}
-                    {% if can_access_module('contributions') %}
-                    <li class="nav-item">
-                        <a href="{{ url_for('contributions.dashboard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('contributions.') %}active{% endif %}">
-                            <i class="fas fa-hand-holding-dollar"></i><span>Contributions</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                    {# Settings / Website Builder are now delegable modules. Admins
-                       still see them in the admin section below; these entries
-                       surface them for non-admins who were granted the module. #}
-                    {% if session.get('role') not in ('super_admin', 'admin') and can_access_module('website') %}
+                    {% if can_access_module('website') %}
                     <li class="nav-item">
                         <a href="{{ url_for('website_admin.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('website_admin.') %}active{% endif %}">
                             <i class="fas fa-globe"></i><span>Website Builder</span>
                         </a>
                     </li>
                     {% endif %}
+                    {% endif %}
+
                     {% if session.get('role') not in ('super_admin', 'admin') and can_access_module('settings') %}
                     <li class="nav-item">
                         <a href="{{ url_for('settings.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') %}active{% endif %}">
@@ -703,11 +694,6 @@
                         </a>
                     </li>
                     {% endif %}
-                    <li class="nav-item">
-                        <a href="{{ url_for('website_admin.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('website_admin.') %}active{% endif %}">
-                            <i class="fas fa-globe"></i><span>Website Builder</span>
-                        </a>
-                    </li>
                     <li class="nav-item">
                         <a href="{{ url_for('settings.index') }}" class="nav-link">
                             <i class="fas fa-cog"></i><span>Settings</span>

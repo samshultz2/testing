@@ -564,10 +564,58 @@ def can_sign_off_count():
     return has_capability('sales.signoff_count')
 
 
+def granter_level(key, perms):
+    """The granter's own level for a permission key: an explicit key wins, else
+    the whole-module grant covers its sub-sections. None => not held."""
+    if key in perms:
+        return perms[key]
+    return perms.get(key.split('.', 1)[0])
+
+
+def can_grant_key(key):
+    """May the current manager delegate the permission ``key`` at all?
+
+    Central admins may grant anything; everyone else may only delegate access
+    they themselves hold. Capabilities work the same (a manager can only pass on
+    a capability they hold).
+    """
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return True
+    return granter_level(key, effective_perms()) is not None
+
+
+def clamp_to_granter(new_perms, target_user):
+    """Non-central managers may only delegate access they themselves hold, at a
+    level no higher than their own — you cannot hand out a bundle larger than
+    yours. Keys beyond the granter's authority keep the target's EXISTING value
+    (so a lower manager can neither add nor strip a superior-granted permission).
+    """
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return dict(new_perms)                 # central: unfettered
+    granter = effective_perms()
+    existing = dict(target_user.permission_map) if target_user else {}
+    out = {}
+    for key, lvl in new_perms.items():
+        mine = granter_level(key, granter)
+        if mine is None:
+            if key in existing:                # can't touch it -> preserve
+                out[key] = existing[key]
+            continue                           # else drop (never had it)
+        out[key] = 'view' if (mine == 'view' and lvl == 'edit') else lvl
+    # keep any existing out-of-authority grant the form omitted
+    for key, lvl in existing.items():
+        if key not in out and granter_level(key, granter) is None:
+            out[key] = lvl
+    return out
+
+
 def restrict_grant_perms(new_perms, target_user):
     """Drop capability grants the current user isn't allowed to set, preserving
     the target's existing value so a non-privileged manager can't add/remove
-    them. Used wherever permissions are saved."""
+    them, then clamp everything to what the granter themselves holds. Used
+    wherever permissions are saved."""
     from utils.branch_scope import is_central
     central = is_admin() and is_central()
     existing = dict(target_user.permission_map) if target_user else {}
@@ -578,6 +626,8 @@ def restrict_grant_perms(new_perms, target_user):
                 out[key] = existing[key]
             else:
                 out.pop(key, None)
+    # A manager may not delegate access larger than their own.
+    out = clamp_to_granter(out, target_user)
     return out
 
 

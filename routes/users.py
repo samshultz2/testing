@@ -42,15 +42,28 @@ def _my_branch_id():
     return me.branch_id if me else None
 
 
+def _group_within_authority(g):
+    """A branch manager may only assign a bundle no larger than their own — a
+    group that grants access they lack is not assignable. Central managers are
+    unfettered."""
+    from utils.access_control import clamp_to_granter
+    if current_manage_scope() == 'central':
+        return True
+    pm = g.permission_map
+    return clamp_to_granter(pm, None) == pm
+
+
 def _groups_in_scope():
     """Active groups the current manager may ASSIGN: central templates (no branch)
-    plus, for a branch manager, their own branch's groups."""
+    plus, for a branch manager, their own branch's groups — and, for a branch
+    manager, only bundles within their own authority."""
     q = PermissionGroup.query.filter_by(is_active=True)
     if current_manage_scope() == 'central':
         return q.order_by(PermissionGroup.name).all()
     bid = _my_branch_id()
-    return (q.filter((PermissionGroup.branch_id.is_(None)) | (PermissionGroup.branch_id == bid))
+    rows = (q.filter((PermissionGroup.branch_id.is_(None)) | (PermissionGroup.branch_id == bid))
              .order_by(PermissionGroup.name).all())
+    return [g for g in rows if _group_within_authority(g)]
 
 
 def _group_assignable(g):
@@ -59,7 +72,8 @@ def _group_assignable(g):
         return True
     if current_manage_scope() == 'central':
         return True
-    return g.branch_id is None or g.branch_id == _my_branch_id()
+    return ((g.branch_id is None or g.branch_id == _my_branch_id())
+            and _group_within_authority(g))
 
 
 def _group_manageable(g):
