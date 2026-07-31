@@ -37,9 +37,12 @@
     // scripts we recreate on a soft-nav must carry it or the nonce-based CSP
     // (script-src 'self' 'nonce-…', no 'unsafe-inline') blocks them — which is
     // what left inline-initialised content (e.g. Chart.js pages) blank until a
-    // full reload. Read it from a base script that carries the nonce; after load
-    // the attribute value is hidden (getAttribute → ''), but the .nonce IDL
-    // property retains it.
+    // full reload. Prefer the <meta name="csp-nonce"> value: a <meta> is not
+    // subject to the nonce-hiding that blanks a <script>'s nonce after load
+    // (some mobile WebViews then return '' from the .nonce IDL too). Fall back
+    // to a nonce-bearing script for older pages that predate the meta tag.
+    var m = document.querySelector('meta[name="csp-nonce"]');
+    if (m && m.content) return m.content;
     var el = document.querySelector('script[nonce]');
     return (el && (el.nonce || el.getAttribute('nonce'))) || '';
   }
