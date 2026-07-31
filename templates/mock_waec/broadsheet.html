@@ -22,8 +22,9 @@
 .bs-note { font-size: .78rem; color: var(--text-muted); margin-top: .5rem; }
 
 @media print {
-  .sidebar, .topbar, .page-header-actions, .breadcrumb, .btn, .no-print { display: none !important; }
-  .page-content { margin: 0 !important; padding: 0 !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sidebar, .top-header, .bottom-nav, .page-header-actions, .breadcrumb, .btn, .no-print, .sidebar-overlay { display: none !important; }
+  .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
   .card { box-shadow: none !important; border: none !important; }
   .bs-table { font-size: 8.5px; }
   .bs-table th, .bs-table td { padding: 1px 3px; }

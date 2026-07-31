@@ -5,7 +5,12 @@
 {% block extra_css %}
 <style>
 @media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sidebar, .top-header, .bottom-nav, .no-print, .sidebar-overlay { display: none !important; }
+    .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    .card { box-shadow: none !important; border: none !important; }
     body { font-size: 10pt; }
+    .register-container { overflow: visible !important; }
     .register-table { width: 100%; border-collapse: collapse; }
     .register-table th, .register-table td { 
         border: 1px solid #000; 

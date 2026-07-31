@@ -5,10 +5,11 @@
 {% block extra_css %}
 <style>
 @media print {
-    .sidebar, .topbar, .page-header-actions, .btn, .breadcrumb { display: none !important; }
-    .page-content { margin: 0 !important; padding: 0 !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sidebar, .top-header, .bottom-nav, .page-header-actions, .btn, .breadcrumb, .no-print, .sidebar-overlay { display: none !important; }
+    .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     .card { box-shadow: none !important; border: 1px solid #000 !important; margin-bottom: 20px !important; page-break-inside: avoid; }
-    .timetable-print { page-break-after: always; }
+    .timetable-print { page-break-after: always; page-break-inside: avoid; }
     .timetable-print:last-child { page-break-after: avoid; }
 }
 .timetable-print { margin-bottom: 2rem; }

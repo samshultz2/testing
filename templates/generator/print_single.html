@@ -5,9 +5,10 @@
 {% block extra_css %}
 <style>
 @media print {
-    .sidebar, .topbar, .page-header-actions, .btn, .breadcrumb { display: none !important; }
-    .page-content { margin: 0 !important; padding: 0 !important; }
-    .card { box-shadow: none !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sidebar, .top-header, .bottom-nav, .page-header-actions, .btn, .breadcrumb, .no-print, .sidebar-overlay { display: none !important; }
+    .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    .card { box-shadow: none !important; border: 1px solid #000 !important; page-break-inside: avoid; }
 }
 .timetable-header { text-align: center; padding: 1.5rem; border-bottom: 3px solid #333; margin-bottom: 1rem; }
 .timetable-header h1 { margin: 0; font-size: 2rem; }
