@@ -3915,3 +3915,47 @@ body .widget .wh h3 i { color: var(--primary); }
 @media print {
     body .kpi, body .widget { box-shadow: none !important; transform: none !important; }
 }
+
+/* ==========================================================================
+   MODULE TAB STRIPS — unified premium treatment
+   In-module navigation the user sees constantly. Two families are kept
+   deliberately distinct: underline tabs for primary section nav
+   (.fin-tab shared by Finance/HR/Comms/CBT, .att-tab) and pill tabs for
+   scoped sub-filters (.scope-tab in Results, .os-tab in CBT). Each module
+   ships its own flatter inline copy; this refines them in place via the same
+   `body `-scoped override so every strip animates and reads the same.
+   ========================================================================== */
+
+/* Underline family — crisper active state + smooth hover. */
+body .fin-tab, body .att-tab {
+    transition: color var(--transition), background var(--transition), border-color var(--transition);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+body .fin-tab:hover, body .att-tab:hover { background: var(--gray-50); color: var(--primary); }
+body .fin-tab.active, body .att-tab.is-active {
+    font-weight: 700;
+    border-bottom-width: 2.5px;
+}
+
+/* Pill family — inactive reads as a quiet bordered chip; active lifts into a
+   gradient pill with a soft primary glow. */
+body .scope-tab, body .os-tab {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    transition: color var(--transition), background var(--transition),
+                border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+body .scope-tab:hover, body .os-tab:hover {
+    background: var(--gray-50); color: var(--text-primary); border-color: var(--gray-300);
+}
+body .scope-tab.active, body .os-tab.active {
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    border-color: transparent; color: #fff;
+    box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+body .scope-tab.active:hover, body .os-tab.active:hover {
+    color: #fff; transform: translateY(-1px);
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+}
+@media (prefers-reduced-motion: reduce) {
+    body .scope-tab.active:hover, body .os-tab.active:hover { transform: none; }
+}
