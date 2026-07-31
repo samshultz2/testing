@@ -21,6 +21,8 @@ export default function ViewApp({ initial }) {
   const s = d.student || {};
   const urls = d.urls || {};
   const canManage = !!d.can_manage;
+  const initials = (s.full_name || '?').split(' ').filter(Boolean).slice(0, 2)
+    .map((w) => w[0]).join('').toUpperCase() || '?';
 
   // Record this profile in the "recently viewed" list the students list offers
   // as quick links. Keyed by id so re-opening just bumps it to the top.
@@ -50,17 +52,25 @@ export default function ViewApp({ initial }) {
 
   return (
     <div>
-      <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '.85rem' }}>
-          {s.photo_url && <img src={s.photo_url} alt={s.full_name}
-            style={{ width: 52, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#cbd5e1)', flex: '0 0 auto' }} />}
-          <div>
-            <h1 style={{ margin: 0 }}>{s.full_name}</h1>{' '}
-            <span className="badge badge-primary">{s.student_id}</span>{' '}
-            {s.is_graduated && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</span>}
+      <div className="profile-hero">
+        <div className="ph-cover" />
+        <div className="ph-body">
+          {s.photo_url
+            ? <img className="ph-avatar" src={s.photo_url} alt={s.full_name} />
+            : <div className="ph-avatar" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">{initials}</div>}
+          <div className="ph-id">
+            <h1 className="ph-name">{s.full_name}</h1>
+            <div className="ph-meta">
+              <span className="badge badge-primary">{s.student_id}</span>
+              {s.current_class && <span className="badge badge-secondary">{s.current_class}</span>}
+              {s.gender && <span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span>}
+              {s.age != null && <span className="badge badge-secondary">Age {s.age}</span>}
+              {s.stream && <span className="badge badge-info">{s.stream}</span>}
+              {s.is_graduated && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</span>}
+            </div>
           </div>
         </div>
-        <div className="page-header-actions" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+        <div className="ph-actions">
           {canManage && <button type="button" className={'btn ' + (s.is_graduated ? 'btn-warning' : 'btn-success')} disabled={busy}
             onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.full_name}?`))
               run(urls.graduate, {}, 'Updated graduation status.'); }}>

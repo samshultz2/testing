@@ -3784,3 +3784,50 @@ h2 { letter-spacing: -0.02em; }
 
 /* Refined text selection across the app. */
 ::selection { background: color-mix(in srgb, var(--primary) 22%, transparent); color: inherit; }
+
+/* ==========================================================================
+   ART DIRECTION — profile hero (student/staff record header)
+   A premium record header: gradient cover, large avatar (photo or monogram),
+   name, meta chips and grouped actions. Additive; identity-preserving.
+   ========================================================================== */
+.profile-hero {
+    position: relative; overflow: hidden;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--sp-4);
+}
+.profile-hero .ph-cover {
+    height: 88px;
+    background: radial-gradient(600px 220px at 12% -40%, color-mix(in srgb, var(--accent) 32%, transparent), transparent),
+                linear-gradient(135deg, var(--primary), var(--primary-hover));
+}
+.profile-hero .ph-body {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-4);
+    padding: 0 var(--sp-5) var(--sp-4); margin-top: -44px;
+}
+.profile-hero .ph-avatar {
+    width: 92px; height: 92px; flex: none;
+    border-radius: 22px; object-fit: cover;
+    border: 4px solid var(--bg-card);
+    box-shadow: var(--shadow-md);
+    background: var(--gray-100);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 800; font-size: 2rem; color: #fff;
+}
+.profile-hero .ph-id { flex: 1; min-width: 0; padding-bottom: 4px; }
+.profile-hero .ph-name {
+    margin: 0; font-size: var(--text-2xl); font-family: var(--font-display);
+    letter-spacing: -0.02em; line-height: 1.15;
+}
+.profile-hero .ph-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+.profile-hero .ph-actions {
+    display: flex; flex-wrap: wrap; gap: 0.4rem;
+    padding: 0 var(--sp-5) var(--sp-5);
+}
+@media (max-width: 560px) {
+    .profile-hero .ph-body { margin-top: -36px; }
+    .profile-hero .ph-avatar { width: 72px; height: 72px; font-size: 1.6rem; }
+    .profile-hero .ph-name { font-size: var(--text-xl); }
+}
