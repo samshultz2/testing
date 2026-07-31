@@ -692,6 +692,40 @@ def _seed_branches():
         db.session.rollback()
 
 
+def _seed_permission_groups():
+    """Seed the built-in role presets as central permission-group templates so a
+    school starts with ready-made access bundles it can assign or tweak on
+    /users/groups.
+
+    Central (branch_id NULL) templates. Idempotent per name — a group an admin
+    has already created/edited under the same name is left untouched. Admin
+    presets are skipped (admins bypass module gates, so a bundle is meaningless);
+    the plain 'teacher' role is seeded from its default module set.
+    """
+    try:
+        from models import PermissionGroup
+        from utils.role_presets import ROLE_PRESETS
+        from utils.access_control import ROLE_DEFAULT_MODULES, MODULES
+        for key, p in ROLE_PRESETS.items():
+            if p.get('role') == 'admin':
+                continue
+            mods = [m for m in (p.get('modules') or []) if m in MODULES]
+            if not mods and p.get('role') == 'teacher':
+                mods = sorted(ROLE_DEFAULT_MODULES.get('teacher', ()))
+            if not mods:
+                continue
+            name = p.get('label') or key
+            if PermissionGroup.query.filter_by(name=name, branch_id=None).first():
+                continue
+            g = PermissionGroup(name=name, description=p.get('description'),
+                                branch_id=None, is_active=True)
+            g.set_permissions({m: 'edit' for m in mods})
+            db.session.add(g)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def init_db(app):
     """Initialize database with default data"""
     # Pure-Alembic deployments (and the Alembic baseline-generation step) set
@@ -703,6 +737,7 @@ def init_db(app):
         db.create_all()
         _ensure_student_exam_columns()
         _seed_branches()
+        _seed_permission_groups()
 
         # Seed the default behavioural traits (idempotent).
         try:
