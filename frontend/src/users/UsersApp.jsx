@@ -763,10 +763,17 @@ function Groups({ d, notify }) {
       save(g.delete_url, {}, () => nav.refresh());
     }
   };
+  const labelFor = (k) => {
+    const mod = d.modules.find((m) => m.key === k);
+    if (mod) return mod.label;
+    const [mk, sk] = k.split('.');
+    const sub = ((d.subsections || {})[mk] || []).find((s) => s.sub === sk);
+    return sub ? sub.label : k;
+  };
   const summary = (perms) => {
     const keys = Object.keys(perms);
     if (!keys.length) return <span className="text-muted">No modules</span>;
-    return keys.map((k) => <span key={k} className="badge badge-secondary" style={{ marginRight: 4 }}>{(d.modules.find((m) => m.key === k) || {}).label || k}: {perms[k]}</span>);
+    return keys.map((k) => <span key={k} className="badge badge-secondary" style={{ marginRight: 4 }}>{labelFor(k)}: {perms[k]}</span>);
   };
   return (
     <>
@@ -796,14 +803,36 @@ function Groups({ d, notify }) {
                 </select></div>
             )}
             <label className="form-label mt-2">Module permissions</label>
+            <p className="text-muted text-sm">Set each module, and — under its expander — individual parts and special capabilities (including self-service "own record" grants). A part's level overrides the whole-module level. Everyone in this group inherits these.</p>
             <div className="permission-grid">
-              {d.modules.map((m) => (
-                <label className="permission-item perm-row" key={m.key}><span>{m.label}</span>
-                  <select className="form-control perm-select" value={editing.permissions[m.key] || ''} onChange={(e) => setPerm(m.key, e.target.value)}>
+              {d.modules.map((m) => {
+                const subs = (d.subsections || {})[m.key];
+                const isCap = (d.cap_modules || []).includes(m.key);
+                const sel = (pkey) => (
+                  <select className="form-control perm-select" value={editing.permissions[pkey] || ''} onChange={(e) => setPerm(pkey, e.target.value)}>
                     <option value="">No access</option><option value="view">View only</option><option value="edit">View &amp; edit</option>
                   </select>
-                </label>
-              ))}
+                );
+                return (
+                  <div className="perm-block" key={m.key}>
+                    <label className="permission-item perm-row"><span>{m.label}</span>{sel(m.key)}</label>
+                    {subs && (
+                      <details className="perm-subs" open={isCap}>
+                        <summary>{isCap ? <><i aria-hidden="true" className="fas fa-key" /> Special capabilities</> : `Detailed access (${subs.length} parts)`}</summary>
+                        {subs.map((s) => {
+                          const sk = `${m.key}.${s.sub}`;
+                          const cap = (d.capabilities || []).includes(sk);
+                          return (
+                            <label key={sk} className={`permission-item perm-row perm-sub ${cap ? 'perm-cap' : ''}`}>
+                              <span>{cap ? <><i aria-hidden="true" className="fas fa-key" /> </> : '↳ '}{s.label}</span>{sel(sk)}
+                            </label>
+                          );
+                        })}
+                      </details>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <div className="d-flex gap-2 mt-3">
               <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> {editing.id ? 'Save Group' : 'Create Group'}</button>

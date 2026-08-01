@@ -75,3 +75,37 @@ def test_group_crud_and_assignment_http(app):
         pm = u.permission_map
         assert pm.get('library') == 'edit'   # inherited from group
         assert 'students' not in pm          # per-user revoke won
+
+
+def test_group_can_carry_subsections_and_self_scope_capabilities(app):
+    """A group is granular: it can grant a sub-section and a self-scope
+    capability, and members inherit them — not just whole modules."""
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD,
+                           '_csrf_token': login_token(c)})
+    tok = auth_csrf(c)
+    c.post('/users/groups/add', data={
+        '_csrf_token': tok, 'name': 'Self-service teachers',
+        'perm_attendance.mark': 'edit',      # a sub-section grant
+        'perm_hr.self_payroll': 'view',      # a self-scope capability
+        'perm_library.self_loans': 'view',
+    }, follow_redirects=True)
+    with app.app_context():
+        g = PermissionGroup.query.filter_by(name='Self-service teachers').first()
+        assert g is not None
+        pm = g.permission_map
+        assert pm.get('attendance.mark') == 'edit'
+        assert pm.get('hr.self_payroll') == 'view'
+        assert pm.get('library.self_loans') == 'view'
+        gid = g.id
+    # A member with no own permissions inherits the group's granular grants.
+    c.post('/users/add', data={
+        '_csrf_token': tok, 'username': 'ss_member', 'full_name': 'SS Member',
+        'password': 'StrongPass1!x', 'confirm_password': 'StrongPass1!x',
+        'role': 'staff', 'permission_group_id': str(gid),
+    }, follow_redirects=True)
+    with app.app_context():
+        u = User.query.filter_by(username='ss_member').first()
+        pm = u.permission_map
+        assert pm.get('hr.self_payroll') == 'view'      # from the group
+        assert pm.get('attendance.mark') == 'edit'

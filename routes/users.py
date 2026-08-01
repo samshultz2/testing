@@ -592,11 +592,18 @@ def delete_user(user_id):
 def groups():
     """Manage permission-group templates the current manager may see."""
     from models import Branch
+    from utils.access_control import MODULE_SUBSECTIONS, CAPABILITY_SUBSECTIONS as CAPS
     return _render({
         'page': 'groups',
         'add_url': url_for('users.add_group'),
         'back_url': url_for('users.index'),
         'modules': [{'key': k, 'label': v} for k, v in MODULES.items()],
+        # Same granular catalogue the user editor gets, so a group can grant
+        # sub-sections and capabilities (incl. self-scope) — not just modules.
+        'subsections': {k: [{'sub': s, 'label': l} for s, l in subs.items()]
+                        for k, subs in MODULE_SUBSECTIONS.items()},
+        'capabilities': sorted(CAPS),
+        'cap_modules': sorted({c.split('.')[0] for c in CAPS}),
         'can_pick_branch': current_manage_scope() == 'central',
         'branches': [{'id': b.id, 'name': b.name}
                      for b in Branch.query.order_by(Branch.name).all()],
