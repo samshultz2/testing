@@ -124,6 +124,26 @@ def test_self_leave_shows_own_balances_and_records(app):
         assert d['payslips'] is None and d['attendance'] is None   # only leave granted
 
 
+def test_self_loans_shows_own_balance_not_module(app):
+    from models import StaffLoan
+    from datetime import date
+    uid, sid = _linked_staff_user(app, 'ss_loans', {'hr.self_loans': 'view'})
+    with app.app_context():
+        if not StaffLoan.query.filter_by(staff_id=sid).first():
+            db.session.add(StaffLoan(staff_id=sid, principal=50000, total_repayable=55000,
+                                     monthly_amount=5000, amount_repaid=15000, months=11,
+                                     status='active', date_taken=date.today()))
+            db.session.commit()
+    with app.test_request_context('/'):
+        session.update(logged_in=True, user_id=uid, role='staff')
+        from utils.access_control import can_access_module
+        from utils.hr import hr_self_service
+        assert can_access_module('hr') is False
+        d = hr_self_service(db.session.get(User, uid))
+        assert d['loans'] and d['loans'][0]['outstanding'] == 40000   # 55000 - 15000
+        assert d['payslips'] is None and d['leave'] is None           # only loans granted
+
+
 def test_clock_toggles_in_then_out(app):
     uid, sid = _linked_staff_user(app, 'ss_toggle', {'hr.self_attendance': 'edit'})
     with app.app_context():

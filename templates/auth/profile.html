@@ -212,6 +212,35 @@
     </div>
   </div>
   {% endif %}
+
+  {% if hr_self.loans is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-hand-holding-dollar"></i> My staff loans</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">Your loan balances and repayment progress. View only — contact HR about any query.</p>
+      {% if hr_self.loans %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:640px">
+          <thead><tr><th>Taken</th><th>Status</th><th style="text-align:right">Principal</th><th style="text-align:right">Repayable</th><th style="text-align:right">Repaid</th><th style="text-align:right">Outstanding</th><th style="text-align:right">Monthly</th><th>Deadline</th></tr></thead>
+          <tbody>
+            {% for l in hr_self.loans %}
+            <tr>
+              <td>{{ l.taken }}</td><td>{{ l.status }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.principal) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.repayable) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.repaid) }}</td>
+              <td style="text-align:right"><strong>₦{{ '{:,.2f}'.format(l.outstanding) }}</strong></td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.monthly) }}</td>
+              <td>{{ l.deadline }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">You have no staff loans on record.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 

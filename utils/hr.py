@@ -162,12 +162,13 @@ def hr_self_service(user):
     pay_lvl = self_scope_level('hr.self_payroll')
     ded_lvl = self_scope_level('hr.self_deductions')
     leave_lv = self_scope_level('hr.self_leave')
-    if not (att_lvl or pay_lvl or ded_lvl or leave_lv):
+    loans_lv = self_scope_level('hr.self_loans')
+    if not (att_lvl or pay_lvl or ded_lvl or leave_lv or loans_lv):
         return None
     out = {'staff_name': staff.full_name, 'can_clock': att_lvl == 'edit',
            'attendance': None, 'today': None, 'clock_action': None,
            'payslips': None, 'deductions': None,
-           'leave': None, 'leave_balances': None}
+           'leave': None, 'leave_balances': None, 'loans': None}
     today = _dt.date.today()
     if att_lvl:
         rows = (StaffAttendance.query.filter_by(staff_id=staff.id)
@@ -218,6 +219,20 @@ def hr_self_service(user):
                          'end': r.end_date.strftime('%d %b %Y') if r.end_date else '—',
                          'days': r.days or 0, 'status': r.status} for r in recs]
         out['leave_balances'] = leave_balances(staff.id, today.year)
+    if loans_lv:
+        from models import StaffLoan
+        loans = (StaffLoan.query.filter(StaffLoan.staff_id == staff.id,
+                 StaffLoan.status.in_(['active', 'paid', 'pending']))
+                 .order_by(StaffLoan.date_taken.desc()).all())
+        out['loans'] = [{'taken': l.date_taken.strftime('%d %b %Y') if l.date_taken else '—',
+                         'status': (l.status or '').title(),
+                         'principal': round(l.principal or 0, 2),
+                         'repayable': round(l.total_repayable or 0, 2),
+                         'repaid': round(l.amount_repaid or 0, 2),
+                         'outstanding': l.outstanding,
+                         'monthly': round(l.monthly_amount or 0, 2),
+                         'deadline': l.deadline.strftime('%d %b %Y') if l.deadline else '—'}
+                        for l in loans]
     return out
 
 
