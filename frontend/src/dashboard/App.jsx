@@ -663,6 +663,54 @@ function RecoList({ items }) {
   );
 }
 
+// Historically-challenging subjects: those below a healthy pass rate averaged
+// across the session's terms — a chronic weakness (e.g. Maths/Physics) worth
+// steering before external exams, not a one-term dip. A tiny sparkline of
+// per-term pass rates shows the trajectory at a glance.
+function ChronicSubjects({ rows, urls }) {
+  if (!rows || !rows.length) return null;
+  return (
+    <div style={{ marginTop: '.8rem', borderTop: '1px dashed var(--border-color)', paddingTop: '.6rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '.45rem' }}>
+        <i aria-hidden="true" className="fas fa-clock-rotate-left text-muted" />
+        <strong style={{ fontSize: '.82rem' }}>Historically challenging</strong>
+        <span className="text-muted" style={{ fontSize: '.72rem' }}>avg pass across the session</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '.35rem' }}>
+        {rows.map((x) => (
+          <div key={x.name} style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+            <span style={{ flex: 1, fontSize: '.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.name}</span>
+            <Sparkline values={x.spark} />
+            <span style={{ fontSize: '.72rem' }} className="text-muted">{x.terms} terms</span>
+            <span style={{ minWidth: 42, textAlign: 'right', fontWeight: 700, color: rateColor(x.mean_pass) }}>{x.mean_pass}%</span>
+          </div>
+        ))}
+      </div>
+      {urls && urls.institution_analytics && (
+        <a href={urls.institution_analytics} className="text-muted"
+           style={{ display: 'inline-block', marginTop: '.4rem', fontSize: '.74rem' }}>
+          Full subject analytics →
+        </a>
+      )}
+    </div>
+  );
+}
+
+// A minimal inline bar sparkline (no chart library) for per-term pass rates.
+function Sparkline({ values }) {
+  const vals = (values || []).map((v) => Math.max(0, Math.min(100, Number(v) || 0)));
+  if (!vals.length) return null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 2, height: 18 }}
+          aria-label={'Per-term pass rate: ' + vals.map((v) => v + '%').join(', ')}>
+      {vals.map((v, i) => (
+        <span key={i} title={v + '%'} style={{ width: 5, height: Math.max(2, Math.round(v / 100 * 18)),
+                    background: rateColor(v), borderRadius: 1, display: 'inline-block' }} />
+      ))}
+    </span>
+  );
+}
+
 // School-at-a-glance: a permission-filtered executive KPI band across students,
 // attendance, academics, finance and exams. Tiles are already gated server-side
 // (a user only receives tiles for modules they may access), so this just lays
@@ -749,6 +797,7 @@ function AcademicPerformance({ a, urls, t }) {
               </table>
             </div>
           ) : <Empty icon="fa-circle-check">Every subject is passing</Empty>}
+          <ChronicSubjects rows={a.chronic_subjects} urls={urls} />
           <RecoList items={a.recommendations} />
         </Widget>
       </div>

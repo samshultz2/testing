@@ -86,6 +86,21 @@ def test_insight_items_carry_action_key(app):
         assert 'action' in it
 
 
+def test_chronic_subjects_helper_is_safe(app):
+    """The historically-challenging-subjects helper returns a list and never
+    raises, even with no results data (empty school / no session terms)."""
+    from routes.main import _dash_chronic_subjects
+    from utils.helpers import get_active_term
+    with app.test_request_context('/'):
+        session['logged_in'] = True
+        session['role'] = 'super_admin'
+        term = get_active_term()
+        out = _dash_chronic_subjects(term) if term else []
+        assert isinstance(out, list)
+        for x in out:
+            assert {'name', 'mean_pass', 'terms', 'spark'} <= set(x)
+
+
 def test_defaulters_summary_edges(app):
     from utils.finance import defaulters_summary
     with app.app_context():

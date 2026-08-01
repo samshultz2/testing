@@ -455,9 +455,52 @@ def _dash_academic(active_term, tscope=None):
             'recommendations': [{'tone': r.get('tone'), 'title': r.get('title'),
                                  'text': r.get('text')}
                                 for r in (data.get('recommendations') or [])[:3]],
+            # Cross-term view: subjects that are challenging over the whole
+            # session, not just this term. Whole-school only (teacher scope maps
+            # to term-specific assignment ids that don't carry across terms), and
+            # cached since it fans out across every term of the session.
+            'chronic_subjects': (
+                _dash_cached(f'chronic:t{active_term.id}', 600,
+                             lambda: _dash_chronic_subjects(active_term))
+                if allowed_ids is None else []),
         }
     except Exception:
         return None
+
+
+def _dash_chronic_subjects(active_term):
+    """Subjects that are *historically* challenging — below a healthy pass rate
+    averaged across the session's terms, not just a single bad term. Surfacing
+    these lets leadership steer academic health (e.g. a perennially weak
+    Mathematics or Physics) before external exams, rather than reacting to one
+    term's dip. Whole-school scope; org_analytics is cached per term so the
+    fan-out is cheap after the first load."""
+    try:
+        from models import db, Term
+        from utils.results_analytics_org import org_analytics
+        term = db.session.get(Term, active_term.id)
+        if not term or not term.session_id:
+            return []
+        terms = Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all()
+        agg = {}   # subject name -> per-term pass rates (only terms with entries)
+        for t in terms:
+            data = org_analytics(t.id, 'school', None, None)
+            for s in (data or {}).get('subjects') or []:
+                if not s.get('entries'):
+                    continue
+                agg.setdefault(s['name'], []).append(round(s.get('pass_rate') or 0, 1))
+        out = []
+        for name, rates in agg.items():
+            if len(rates) < 2:            # need history to call it "historical"
+                continue
+            mean = round(sum(rates) / len(rates), 1)
+            if mean < 60:                 # persistently sub-60% pass rate
+                out.append({'name': name, 'mean_pass': mean,
+                            'terms': len(rates), 'spark': rates})
+        out.sort(key=lambda x: x['mean_pass'])
+        return out[:5]
+    except Exception:
+        return []
 
 
 def _dash_finance_health(active_term):
