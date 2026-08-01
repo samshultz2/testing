@@ -324,8 +324,16 @@ def reset_password(uid, token):
     """Set a new password via a single-use, time-limited token from the email."""
     if session.get('logged_in'):
         return redirect(url_for('main.dashboard'))
+    # Throttle per IP so the reset token can't be brute-forced (and the form
+    # can't be hammered). A legitimate reset is one GET + one POST, so a modest
+    # cap never trips real users; bad-token probing locks the IP out for a while.
+    rkey = 'pwreset:' + (request.remote_addr or 'unknown')
+    if login_limiter.is_rate_limited(rkey, max_attempts=10, window_minutes=15):
+        flash('Too many attempts. Please wait a few minutes and try again.', 'error')
+        return redirect(url_for('auth.forgot_password'))
     user = User.query.get(uid)
     if not user or not user.is_active or not user.check_reset_token(token):
+        login_limiter.record_attempt(rkey)     # count only the bad-token hits
         flash('This reset link is invalid or has expired. Please request a new one.', 'error')
         return redirect(url_for('auth.forgot_password'))
     if request.method == 'POST':
@@ -395,11 +403,20 @@ def change_password():
         current_password = request.form.get('current_password', '')
         new_password = request.form.get('new_password', '')
         confirm_password = request.form.get('confirm_password', '')
-        
+
+        # Throttle current-password guessing (defends a hijacked/shared session):
+        # too many wrong "current password" tries locks the change form briefly.
+        ckey = f'pwchange:{user.id}:' + (request.remote_addr or 'unknown')
+        if login_limiter.is_rate_limited(ckey, max_attempts=8, window_minutes=15):
+            flash('Too many attempts. Please wait a few minutes and try again.', 'error')
+            return redirect(url_for('auth.change_password'))
+
         if not user.check_password(current_password):
+            login_limiter.record_attempt(ckey)
+            log_action('auth.change_password_failed', detail=f'user={user.id}')
             flash('Current password is incorrect.', 'error')
             return redirect(url_for('auth.change_password'))
-        
+
         if new_password != confirm_password:
             flash('New passwords do not match.', 'error')
             return redirect(url_for('auth.change_password'))
@@ -411,6 +428,7 @@ def change_password():
         
         user.set_password(new_password)   # bumps token_version (revokes sessions)
         user.must_change_password = False
+        login_limiter.clear_attempts(ckey)
         db.session.commit()
         session.pop('must_change_password', None)
         # Keep THIS device signed in; only other sessions are revoked.
