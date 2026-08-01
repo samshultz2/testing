@@ -22,11 +22,16 @@ def _seed_year(app, yr):
 
 
 def test_refresh_stamps_time_and_warms_cache(app):
-    yr = 2077
+    # Use a sentinel year far above any other test's data so it is guaranteed to
+    # be the newest year in the shared session DB — warming primes the *latest*
+    # year's cache, so this test must own that year to assert on it. (Other tests
+    # seed years up to 2099; nothing seeds 22xx.)
+    yr = 2277
     _seed_year(app, yr)
     with app.app_context():
         out = er.run_exam_analytics_refresh(app, warm=True)
         assert out['at'] and yr in out['years']
+        assert out['years'][0] == yr        # newest year → the one warmed
         # the refresh timestamp is stored and readable back
         assert er.refreshed_at() == out['at']
         # warming primed the hub stat cache (all-branches key for the latest year)

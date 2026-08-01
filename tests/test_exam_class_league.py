@@ -4,9 +4,15 @@ from models import (db, Branch, AcademicSession, Term, SchoolClass, ClassArm,
 
 _SEQ = [0]
 
+# exam_class_league(year) aggregates every SSS3 student with results in that year
+# across the whole (session-scoped) DB, so this test must own a year no other
+# test seeds — otherwise their year-2025 results inflate `matched`/`arms`.
+_LEAGUE_YEAR = 2266
+
 
 def _seed(app):
-    """Two SSS3 arms (A stronger, B weaker) with WAEC + JAMB results in 2025."""
+    """Two SSS3 arms (A stronger, B weaker) with WAEC + JAMB results in a
+    sentinel year owned solely by this test."""
     with app.app_context():
         _SEQ[0] += 1
         tag = f'ECL{_SEQ[0]}'
@@ -30,9 +36,9 @@ def _seed(app):
                          gender='Male', is_active=True, branch_id=bid)
             db.session.add(st); db.session.flush()
             db.session.add(StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id, is_active=True))
-            db.session.add(JAMBResult(student_id=st.id, exam_year=2025, total_score=jamb))
+            db.session.add(JAMBResult(student_id=st.id, exam_year=_LEAGUE_YEAR, total_score=jamb))
             for subj, g in waec_grades.items():
-                db.session.add(WAECResult(student_id=st.id, exam_year=2025, subject=subj, grade=g))
+                db.session.add(WAECResult(student_id=st.id, exam_year=_LEAGUE_YEAR, subject=subj, grade=g))
 
         strong = {'English Language': 'B2', 'Mathematics': 'B3', 'Physics': 'C4',
                   'Chemistry': 'C5', 'Biology': 'C6'}
@@ -50,7 +56,7 @@ def test_class_league_ranks_arms(app):
     from utils.exam_class_league import exam_class_league
     _seed(app)
     with app.app_context():
-        d = exam_class_league(2025)
+        d = exam_class_league(_LEAGUE_YEAR)
         assert d['summary']['arms'] == 2
         assert d['meta']['matched'] == 6
         arms = d['units']
@@ -82,8 +88,8 @@ def _admin(app):
 def test_class_league_route_and_export(app):
     _seed(app)
     c = _admin(app)
-    r = c.get('/results/analytics/by-class?year=2025')
+    r = c.get(f'/results/analytics/by-class?year={_LEAGUE_YEAR}')
     assert r.status_code == 200 and b'Class Arm' in r.data
-    r = c.get('/results/analytics/by-class/export?year=2025')
+    r = c.get(f'/results/analytics/by-class/export?year={_LEAGUE_YEAR}')
     assert r.status_code == 200 and 'spreadsheetml' in r.headers['Content-Type']
     assert r.get_data()[:2] == b'PK'

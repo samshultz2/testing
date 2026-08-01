@@ -77,14 +77,17 @@ def test_sale_consumes_fefo(app):
 def test_batches_view_hides_empty_by_default(app):
     c = _admin(app)
     pid = _product(app, 'VIEW')
-    _post(c, f'/sales/products/{pid}/restock', qty=3, batch_no='V1', expiry_date='2027-05-01')
+    # Distinctive lot label so the substring check can't collide with unrelated
+    # page text (e.g. an academic session named "...V1-Sess" in a nav dropdown).
+    lot = 'ZZVIEWLOT1'
+    _post(c, f'/sales/products/{pid}/restock', qty=3, batch_no=lot, expiry_date='2027-05-01')
     # drain it
     c.post('/sales/new', headers={'X-Requested-With': 'fetch'},
            data={'_csrf_token': 'a' * 64, 'product_id': pid, 'quantity': 3, 'payment_method': 'Cash'})
     body = c.get('/sales/batches?product_id=%d' % pid).get_data(as_text=True)
-    assert 'V1' not in body                   # emptied lot hidden
+    assert lot not in body                     # emptied lot hidden
     body2 = c.get('/sales/batches?product_id=%d&empty=1' % pid).get_data(as_text=True)
-    assert 'V1' in body2                       # shown when asked
+    assert lot in body2                        # shown when asked
 
 
 def test_batch_serial_capture(app):
