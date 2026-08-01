@@ -543,7 +543,7 @@ def profile():
     ss = profile_self_service(user)   # own data per module, each gated by its self-scope capability
     return render_template('auth/profile.html', user=user, staff=staff,
                            themes=[(t['key'], t['label']) for t in _T],
-                           hr_self=ss['hr'], lib_self=ss['library'],
+                           hr_self=ss['hr'], lib_self=ss['library'], sales_self=ss['sales'],
                            clock_url=url_for('hr.clock'))
 
 

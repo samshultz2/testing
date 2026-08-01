@@ -295,4 +295,30 @@
   </div>
 </div>
 {% endif %}
+
+{% if sales_self %}
+<div class="selfservice">
+  <div class="card mb-3">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <h3><i class="fas fa-cash-register"></i> My sales</h3>
+      <span class="badge badge-success">Today: {{ sales_self.today_count }} · ₦{{ '{:,.2f}'.format(sales_self.today_total) }}</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">Sales you recorded. View only.</p>
+      {% if sales_self.recent %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>When</th><th>Method</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>
+            {% for s in sales_self.recent %}
+            <tr><td>{{ s.when }}</td><td>{{ s.method }}</td><td style="text-align:right">₦{{ '{:,.2f}'.format(s.total) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">You haven't recorded any sales yet.</p>{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

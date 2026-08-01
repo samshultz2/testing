@@ -52,6 +52,7 @@ Registry lives in `utils/access_control.py`:
 | `hr.self_loans` | view own staff-loan balance + repayment progress | /account → My staff loans |
 | `hr.self_documents` | view + download own HR documents | /account → My documents (→ `hr.my_document`) |
 | `library.self_loans` | view own borrowed books | /account → My library loans |
+| `sales.self_sales` | view own recorded sales + today's takings | /account → My sales |
 
 ## Adding a self-scope capability to another module
 

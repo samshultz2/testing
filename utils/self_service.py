@@ -40,8 +40,39 @@ def library_self_loans(user):
     return {'loans': rows, 'overdue': sum(1 for r in rows if r['overdue'])}
 
 
+def sales_self_sales(user):
+    """A cashier's own sales — the transactions THEY recorded (matched on the
+    seller name stamped at sale time), never anyone else's. Populated only if
+    the user holds 'sales.self_sales'. Branch-scoped. None otherwise."""
+    import datetime as _dt
+    from models import Sale
+    from utils.access_control import self_scope_level
+    from utils.branch_scope import scope_query
+    if not user or not self_scope_level('sales.self_sales'):
+        return None
+    names = [n for n in {user.full_name, user.username} if n]
+    if not names:
+        return None
+    base = scope_query(Sale.query.filter(Sale.sold_by.in_(names)), Sale)
+    recent = base.order_by(Sale.created_at.desc()).limit(30).all()
+    today = _dt.date.today()
+    start = _dt.datetime.combine(today, _dt.time.min)
+    end = start + _dt.timedelta(days=1)
+    today_rows = scope_query(
+        Sale.query.filter(Sale.sold_by.in_(names),
+                          Sale.created_at >= start, Sale.created_at < end), Sale).all()
+    return {
+        'today_count': len(today_rows),
+        'today_total': round(sum(s.total or 0 for s in today_rows), 2),
+        'recent': [{'when': s.created_at.strftime('%d %b %Y %H:%M') if s.created_at else '—',
+                    'method': s.payment_method or 'Cash',
+                    'total': round(s.total or 0, 2)} for s in recent],
+    }
+
+
 def profile_self_service(user):
     """All self-service blocks for the /account page, keyed by module. Each value
     is that module's assembler output (or None when not entitled/applicable)."""
     from utils.hr import hr_self_service
-    return {'hr': hr_self_service(user), 'library': library_self_loans(user)}
+    return {'hr': hr_self_service(user), 'library': library_self_loans(user),
+            'sales': sales_self_sales(user)}

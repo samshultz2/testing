@@ -217,6 +217,8 @@ MODULE_SUBSECTIONS = {
         # Sensitive actions granted explicitly (see CAPABILITY_SUBSECTIONS).
         'approve_po': 'Approve purchase orders',
         'signoff_count': 'Sign off stock counts',
+        # Self-scope: a cashier views only the sales THEY recorded, no Sales access.
+        'self_sales': 'My sales — view own takings (self)',
     },
 }
 
@@ -226,7 +228,8 @@ MODULE_SUBSECTIONS = {
 CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
                           'sales.approve_po', 'sales.signoff_count',
                           'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
-                          'hr.self_leave', 'hr.self_loans', 'hr.self_documents', 'library.self_loans'}
+                          'hr.self_leave', 'hr.self_loans', 'hr.self_documents',
+                          'library.self_loans', 'sales.self_sales'}
 
 # Self-scope capabilities: an explicit grant that lets a user act on their OWN
 # record only (never other people's) — the finest permission tier. They ride on
@@ -234,7 +237,8 @@ CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
 # route implementation is what enforces the "own record" boundary. Registered
 # here so the UI can label them distinctly and so callers can reason about them.
 SELF_SCOPE_SUBSECTIONS = {'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
-                          'hr.self_leave', 'hr.self_loans', 'hr.self_documents', 'library.self_loans'}
+                          'hr.self_leave', 'hr.self_loans', 'hr.self_documents',
+                          'library.self_loans', 'sales.self_sales'}
 
 
 def self_scope_level(key):
