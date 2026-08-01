@@ -121,8 +121,25 @@
   .nav-signin .sfx{color:var(--ink-2);font-size:12.5px;padding-right:8px;white-space:nowrap}
   .nav-signin button{border:0;background:var(--surface-3);color:var(--ink);font:inherit;font-weight:650;font-size:13px;padding:0 14px;height:100%;cursor:pointer;border-left:1px solid var(--line-2)}
   .nav-signin button:hover{background:var(--accent);color:#fff}
-  @media(max-width:1000px){.nav-links{display:none}}
-  @media(max-width:720px){.nav-signin{display:none}}
+  .nav-toggle{display:none}
+  .mobile-menu{display:none}
+  @media(max-width:1000px){.nav-links{display:none}.nav-toggle{display:grid}}
+  @media(max-width:720px){.nav-right .nav-signin{display:none}}
+  @media(max-width:440px){.nav-cta{display:none}}
+  /* mobile drawer */
+  .mobile-menu{border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(18px) saturate(1.4);overflow:hidden}
+  header.nav.menu-open .mobile-menu{display:block}
+  .mm-in{max-width:var(--maxw);margin:0 auto;padding:12px 22px 20px;display:flex;flex-direction:column;gap:4px}
+  .mm-link{padding:13px 10px;border-radius:11px;color:var(--ink-1);font-family:var(--display);font-weight:650;font-size:16px;border-bottom:1px solid var(--line)}
+  .mm-link:last-of-type{border-bottom:0}
+  .mm-link:hover,.mm-link:focus-visible{color:var(--ink);background:color-mix(in srgb,var(--surface) 70%,transparent)}
+  .mm-signin{display:flex !important;height:46px;margin-top:12px;width:100%}
+  .mm-signin input{flex:1;width:auto}
+  .mm-in .btn{margin-top:10px}
+  @media(min-width:1001px){.mobile-menu,header.nav.menu-open .mobile-menu{display:none}}
+  .nav-toggle .fa-xmark{display:none}
+  header.nav.menu-open .nav-toggle .fa-bars{display:none}
+  header.nav.menu-open .nav-toggle .fa-xmark{display:inline-block}
 
   .hero{padding:74px 0 26px;position:relative}
   .hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center}
@@ -381,14 +398,32 @@
   </nav>
   <div class="nav-right">
     <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle colour theme"><i class="fas fa-moon"></i></button>
-    <form class="nav-signin" id="schoolForm" title="Go to your school">
-      <input id="sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
+    <form class="nav-signin js-school" title="Go to your school">
+      <input class="js-sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
       <span class="sfx">.{{ base_domain }}</span>
       <button type="submit">Sign in</button>
     </form>
-    <a class="btn btn-primary" href="{{ register_url }}">{{ content.hero_cta }}</a>
+    <a class="btn btn-primary nav-cta" href="{{ register_url }}">{{ content.hero_cta }}</a>
+    <button class="icon-btn nav-toggle" id="navToggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="mobileMenu"><i class="fas fa-bars"></i><i class="fas fa-xmark"></i></button>
   </div>
-</div></header>
+</div>
+  <!-- Mobile drawer -->
+  <div class="mobile-menu" id="mobileMenu">
+    <div class="mm-in">
+      <a class="mm-link" href="#features">Product</a>
+      <a class="mm-link" href="#benefits">Why us</a>
+      <a class="mm-link" href="#pricing">Pricing</a>
+      <a class="mm-link" href="#faq">FAQ</a>
+      <a class="mm-link" href="#contact">Contact</a>
+      <form class="nav-signin mm-signin js-school" title="Go to your school">
+        <input class="js-sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
+        <span class="sfx">.{{ base_domain }}</span>
+        <button type="submit">Sign in</button>
+      </form>
+      <a class="btn btn-primary btn-block" href="{{ register_url }}">{{ content.hero_cta }} <i class="fas fa-arrow-right"></i></a>
+    </div>
+  </div>
+</header>
 
 <main id="top">
   <!-- HERO -->
@@ -665,12 +700,28 @@
   // sticky-nav shadow
   var nav = document.getElementById('nav');
   addEventListener('scroll', function(){ nav.classList.toggle('scrolled', scrollY > 8); }, {passive:true});
-  // sign-in -> school subdomain
-  document.getElementById('schoolForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    var s = (document.getElementById('sub').value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g,'');
-    if (s) location.href = 'https://' + s + '.' + BASE_DOMAIN + '/';
+  // sign-in -> school subdomain (works for the bar form and the drawer form)
+  document.querySelectorAll('.js-school').forEach(function(form){
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var inp = form.querySelector('.js-sub');
+      var s = (inp && inp.value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g,'');
+      if (s) location.href = 'https://' + s + '.' + BASE_DOMAIN + '/';
+    });
   });
+  // mobile hamburger drawer
+  var navToggle = document.getElementById('navToggle');
+  function closeMenu(){ nav.classList.remove('menu-open'); navToggle.setAttribute('aria-expanded','false'); }
+  navToggle.addEventListener('click', function(){
+    var open = nav.classList.toggle('menu-open');
+    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.querySelectorAll('#mobileMenu .mm-link').forEach(function(a){ a.addEventListener('click', closeMenu); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
+  document.addEventListener('click', function(e){
+    if (nav.classList.contains('menu-open') && !nav.contains(e.target)) closeMenu();
+  });
+  addEventListener('resize', function(){ if (innerWidth > 1000) closeMenu(); });
   // scroll reveal + count-up (skipped when the visitor prefers reduced motion)
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var els = document.querySelectorAll('.reveal');
