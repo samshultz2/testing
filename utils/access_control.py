@@ -123,6 +123,8 @@ MODULE_SUBSECTIONS = {
         'reservations': 'Reservations & Lists',
         'reports': 'Reports',
         'settings': 'Library Settings',
+        # Self-scope: view only the holder's OWN borrowed books, no library access.
+        'self_loans': 'My library loans — view own (self)',
     },
     'reports': {
         'dashboards': 'Dashboards',
@@ -217,14 +219,16 @@ MODULE_SUBSECTIONS = {
 # capability is required explicitly (broad module access does not imply it).
 CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
                           'sales.approve_po', 'sales.signoff_count',
-                          'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions'}
+                          'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
+                          'library.self_loans'}
 
 # Self-scope capabilities: an explicit grant that lets a user act on their OWN
 # record only (never other people's) — the finest permission tier. They ride on
 # the normal view/edit machinery (view = read own, edit = act on own) but the
 # route implementation is what enforces the "own record" boundary. Registered
 # here so the UI can label them distinctly and so callers can reason about them.
-SELF_SCOPE_SUBSECTIONS = {'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions'}
+SELF_SCOPE_SUBSECTIONS = {'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
+                          'library.self_loans'}
 
 
 def self_scope_level(key):

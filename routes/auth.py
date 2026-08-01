@@ -539,11 +539,12 @@ def profile():
         return redirect(url_for('auth.profile'))
 
     from utils.themes import THEMES as _T
-    from utils.hr import hr_self_service
-    hr_self = hr_self_service(user)   # own attendance / payslips / deductions, per capability
+    from utils.self_service import profile_self_service
+    ss = profile_self_service(user)   # own data per module, each gated by its self-scope capability
     return render_template('auth/profile.html', user=user, staff=staff,
                            themes=[(t['key'], t['label']) for t in _T],
-                           hr_self=hr_self, clock_url=url_for('hr.clock'))
+                           hr_self=ss['hr'], lib_self=ss['library'],
+                           clock_url=url_for('hr.clock'))
 
 
 @auth_bp.route('/account/sessions')
