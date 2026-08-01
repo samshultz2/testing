@@ -87,7 +87,12 @@ export default function TermlyReport() {
 
             <SectionTitle icon="fa-venus-mars">Gender</SectionTitle>
             <div className="att-grid-wrap">
-              <table className="att-grid att-grid--summary" aria-label="Attendance by gender">
+              {/* Fixed layout + colgroup keeps this narrow table filling the card
+                  even on Android Chrome (a sticky cell in an auto-layout width:100%
+                  table collapses to content width there). Inline so it ships with
+                  the JS bundle, not only the cached page shell. */}
+              <table className="att-grid att-grid--summary" style={{ tableLayout: 'fixed' }} aria-label="Attendance by gender">
+                <colgroup><col style={{ width: '38%' }} /><col /><col /><col /></colgroup>
                 <thead>
                   <tr><th scope="col" className="att-grid-name">Gender</th><th scope="col">Count</th><th scope="col">Attendance</th><th scope="col">Avg</th></tr>
                 </thead>
@@ -118,7 +123,8 @@ export default function TermlyReport() {
 
             <SectionTitle icon="fa-clock">Session</SectionTitle>
             <div className="att-grid-wrap">
-              <table className="att-grid att-grid--summary" aria-label="Attendance by session">
+              <table className="att-grid att-grid--summary" style={{ tableLayout: 'fixed' }} aria-label="Attendance by session">
+                <colgroup><col style={{ width: '38%' }} /><col /><col /><col /></colgroup>
                 <thead>
                   <tr><th scope="col" className="att-grid-name">Session</th><th scope="col">Total</th><th scope="col">Max</th><th scope="col">%</th></tr>
                 </thead>
