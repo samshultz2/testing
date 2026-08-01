@@ -1204,6 +1204,13 @@ def checkin_self():
                         url_for('hr.checkin'))
         if not inside:
             return _err('You appear to be outside the school premises.', url_for('hr.checkin'))
+    elif method == 'manual':
+        # Plain one-tap clock-in with the server clock. Only offered where the
+        # school hasn't enabled the GPS geofence — if it has, on-site GPS (or a
+        # QR scan) is required, so we don't let a manual tap bypass it.
+        if hr.get_settings().get('geo_enabled'):
+            return _err('Check in with your location — GPS is required here.',
+                        url_for('hr.checkin'))
     else:
         return _err('Unknown check-in method.', url_for('hr.checkin'))
     rec, status = hr.mark_attendance_now(staff.id, method=method)

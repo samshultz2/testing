@@ -72,6 +72,39 @@ def test_qr_self_checkin(app):
         assert StaffAttendance.query.filter_by(staff_id=sid, date=date.today()).count() == 1
 
 
+def test_manual_checkin_when_no_geofence(app):
+    """A plain one-tap clock-in works when GPS isn't enforced."""
+    from models import SchoolSettings
+    with app.app_context():
+        # Ensure no geofence is configured.
+        for k in ('hr_geo_lat', 'hr_geo_lng'):
+            SchoolSettings.set(k, '', 'string', 'x')
+        db.session.commit()
+    client, sid = _staff_user_client(app, 'MAN1')
+    tok = _sess_csrf(client)
+    r = client.post('/hr/checkin/self', headers={'X-Requested-With': 'fetch'},
+                    data={'method': 'manual', '_csrf_token': tok}).get_json()
+    assert r['ok']
+    with app.app_context():
+        rec = StaffAttendance.query.filter_by(staff_id=sid, date=date.today()).first()
+        assert rec is not None and rec.clock_in
+
+
+def test_manual_checkin_blocked_when_geofence_on(app):
+    """With a geofence configured, a manual tap is refused (GPS required)."""
+    from models import SchoolSettings
+    with app.app_context():
+        SchoolSettings.set('hr_geo_lat', '6.5', 'string', 'x')
+        SchoolSettings.set('hr_geo_lng', '3.3', 'string', 'x')
+        SchoolSettings.set('hr_geo_radius', '150', 'string', 'x')
+        db.session.commit()
+    client, sid = _staff_user_client(app, 'MAN2')
+    tok = _sess_csrf(client)
+    r = client.post('/hr/checkin/self', headers={'X-Requested-With': 'fetch'},
+                    data={'method': 'manual', '_csrf_token': tok})
+    assert r.status_code == 400
+
+
 def test_qr_rejects_bad_code(app):
     client, sid = _staff_user_client(app, 'QR2')
     tok = _sess_csrf(client)

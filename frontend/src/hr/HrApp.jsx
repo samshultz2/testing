@@ -1486,11 +1486,14 @@ function CheckIn({ d, notify }) {
             <p className="text-muted">Resumption time is {d.settings.late_time}. Check in below.</p>
           )}
           <div className="d-flex gap-2 justify-center flex-wrap">
+            {/* Plain one-tap clock-in with the current time — the default when the
+                school hasn't enabled GPS. Hidden once already checked in today. */}
+            {!d.geo.enabled && !d.today && <button className="btn btn-primary" disabled={busy} onClick={() => post({ method: 'manual' })}><i aria-hidden="true" className="fas fa-fingerprint" /> Clock in now</button>}
             {d.geo.enabled && <button className="btn btn-primary" disabled={busy} onClick={gpsCheckin}><i aria-hidden="true" className="fas fa-location-crosshairs" /> Check in with location</button>}
             <a href={d.urls.qr} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-qrcode" /> Scan QR instead</a>
           </div>
           {d.prefill_code && !d.today && <button className="btn btn-primary mt-2" disabled={busy} onClick={() => post({ method: 'qr', code: d.prefill_code })}><i aria-hidden="true" className="fas fa-check" /> Confirm QR check-in</button>}
-          {!d.geo.enabled && <p className="form-hint mt-2">GPS check-in isn’t configured — an administrator can enable it in HR Settings.</p>}
+          {!d.geo.enabled && <p className="form-hint mt-2">Tip: an administrator can require on-site GPS check-in in HR Settings.</p>}
         </div></div>
       )}
     </>
