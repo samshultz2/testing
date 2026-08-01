@@ -64,6 +64,7 @@
   }}
 
   *{box-sizing:border-box}
+  html,body{max-width:100%;overflow-x:hidden}
   html{scroll-behavior:smooth}
   body{margin:0;color:var(--ink);font-family:var(--body);line-height:1.55;
     -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
@@ -125,6 +126,7 @@
 
   .hero{padding:74px 0 26px;position:relative}
   .hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center}
+  .hero-grid>*{min-width:0}   /* let tracks shrink instead of forcing overflow */
   @media(max-width:1000px){.hero-grid{grid-template-columns:1fr;gap:44px}}
   .flag{display:inline-flex;align-items:center;gap:9px;padding:6px 6px 6px 7px;border-radius:999px;
     border:1px solid var(--line-2);background:color-mix(in srgb,var(--surface) 60%,transparent);
@@ -292,6 +294,36 @@
   .foot-col a{display:block;color:var(--ink-1);font-size:14px;padding:5px 0}
   .foot-col a:hover{color:var(--ink)}
   .foot-bottom{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:40px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink-2);font-size:13px}
+
+  /* ---- Mobile: flatten the 3D dashboard so nothing overflows the viewport ---- */
+  @media(max-width:600px){
+    .wrap{padding:0 18px}
+    .hero{padding:52px 0 20px}
+    .stage{perspective:none;margin-top:6px;min-width:0}
+    .deck{transform:none !important;display:flex;flex-direction:column;gap:10px;width:100%;min-width:0}
+    .app{width:100%;min-width:0}
+    .app>*{min-width:0}
+    .app-body{padding:12px;min-width:0}
+    .kpis{gap:7px;grid-template-columns:repeat(3,minmax(0,1fr))}
+    .kpi{padding:10px;min-width:0}
+    .kpi .v{font-size:19px}
+    .kpi .spark{display:none}
+    .grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .chart svg{max-width:100%}
+    .deck-glow{display:none}
+    .float{position:static;transform:none;backdrop-filter:none;box-shadow:var(--sh-1);display:flex;align-items:center;gap:11px}
+    .float.a,.float.b{inset:auto}
+    section{padding:56px 0}
+    .sec-head{margin-bottom:34px}
+    .nav-in{gap:10px;height:64px}
+    .nav-right{gap:8px}
+    .nav-right .btn-primary{padding:11px 15px;font-size:14px}
+  }
+  @media(max-width:400px){
+    .brand{font-size:17px}
+    .mark{width:30px;height:30px}
+    .nav-right .btn-primary{padding:10px 13px}
+  }
 
   .reveal{opacity:0;transform:translateY(16px)}
   .reveal.in{opacity:1;transform:none;transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
