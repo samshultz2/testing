@@ -151,8 +151,13 @@ def _user_view(u):
     d = _user_core(u)
     d['last_login'] = u.last_login.strftime('%d %b %Y %H:%M') if u.last_login else 'Never'
     d['created'] = u.created_at.strftime('%d %b %Y') if u.created_at else ''
-    t = u.teacher_profile if u.is_teacher else None
+    # Show class/subject assignment for anyone who already has a teaching profile
+    # — not only accounts whose role is exactly 'teacher' (granular-permission
+    # staff can teach too). Non-admin accounts without one can enable it.
+    t = u.teacher_profile
     d['teacher'] = _teacher_perms(t)
+    d['can_enable_teaching'] = (t is None and u.role not in ('super_admin', 'admin'))
+    d['enable_teaching_url'] = url_for('users.enable_teaching', user_id=u.id)
     granted = u.permission_map
     d['module_access'] = (None if u.is_admin else
                           [{'key': k, 'label': v, 'level': granted.get(k)}
@@ -699,6 +704,40 @@ def delete_group(group_id):
     return _ok(f'Group "{name}" deleted.', url_for('users.groups'))
 
 
+def _teaching_profile(user):
+    """The user's Teacher profile, creating one on demand so any staff member can
+    be assigned classes/subjects — not only accounts whose role is exactly
+    'teacher'. Admin accounts never teach. Returns (teacher, error|None)."""
+    from models import Teacher
+    if user.role in ('super_admin', 'admin'):
+        return None, 'Administrator accounts are not assigned to classes.'
+    teacher = user.teacher_profile
+    if not teacher:
+        teacher = Teacher(user_id=user.id, employee_id=Teacher.generate_employee_id(),
+                          branch_id=user.branch_id)
+        db.session.add(teacher)
+        db.session.flush()
+    return teacher, None
+
+
+@users_bp.route('/<int:user_id>/enable-teaching', methods=['POST'])
+@admin_required
+def enable_teaching(user_id):
+    """Turn on class/subject assignment for a staff member who isn't the plain
+    'teacher' role (e.g. a staff account with granular permissions)."""
+    user = db.get_or_404(User, user_id)
+    blocked = _guard(user)
+    if blocked:
+        return blocked
+    teacher, err = _teaching_profile(user)
+    if err:
+        return _err(err, url_for('users.view_user', user_id=user_id))
+    db.session.commit()
+    log_action('user.enable_teaching', f'{user.username}')
+    return _ok('Class & subject assignment enabled for this staff member.',
+               url_for('users.view_user', user_id=user_id))
+
+
 @users_bp.route('/<int:user_id>/assign-class', methods=['GET', 'POST'])
 @admin_required
 def assign_class(user_id):
@@ -708,11 +747,9 @@ def assign_class(user_id):
     if blocked:
         return blocked
 
-    if not user.is_teacher or not user.teacher_profile:
-        return _err('User must be a teacher to assign classes.',
-                    url_for('users.view_user', user_id=user_id))
-
-    teacher = user.teacher_profile
+    teacher, err = _teaching_profile(user)
+    if err:
+        return _err(err, url_for('users.view_user', user_id=user_id))
     active_term = get_active_term()
 
     if request.method == 'POST':
@@ -781,11 +818,9 @@ def assign_subject(user_id):
     if blocked:
         return blocked
 
-    if not user.is_teacher or not user.teacher_profile:
-        return _err('User must be a teacher to assign subjects.',
-                    url_for('users.view_user', user_id=user_id))
-
-    teacher = user.teacher_profile
+    teacher, err = _teaching_profile(user)
+    if err:
+        return _err(err, url_for('users.view_user', user_id=user_id))
     active_term = get_active_term()
 
     if request.method == 'POST':

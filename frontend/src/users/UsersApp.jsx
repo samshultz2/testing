@@ -584,6 +584,16 @@ function View({ d, notify }) {
         </div>
       )}
 
+      {!u.teacher && u.can_enable_teaching && (
+        <div className="card mb-3">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> Class &amp; subject assignment</h3></div>
+          <div className="card-body">
+            <p className="text-muted mb-2">This staff account isn't set up for teaching yet. Enable it to assign classes (as form teacher) and subjects.</p>
+            <button type="button" className="btn btn-primary" onClick={() => save(u.enable_teaching_url, {}, () => nav.refresh())}><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> Enable class &amp; subject assignment</button>
+          </div>
+        </div>
+      )}
+
       {u.teacher && (
         <>
           <div className="card mb-3">
