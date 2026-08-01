@@ -47,6 +47,7 @@ DASHBOARD_WIDGETS = [
     ('class_religion', 'Class enrolment & Religion', 'Students', True),
     ('people', 'Birthdays, Recent students, Activity', 'Students', True),
     ('academic', 'Academic performance — pass rates & weak subjects', 'Academics', True),
+    ('timetable', "Today's schedule — live periods", 'Academics', True),
     ('attendance_trend', 'Attendance trend', 'Academics', True),
     ('exams', 'WAEC / JAMB / Mock snapshots', 'Academics', True),
     ('finance', 'Finance — fees this term', 'Finance', True),
@@ -65,6 +66,7 @@ DASHBOARD_DEFAULTS = [k for k, _, _, d in DASHBOARD_WIDGETS if d]
 WIDGET_MODULE = {
     'kpi': 'students', 'charts': 'students', 'class_religion': 'students',
     'people': 'students', 'attendance_trend': 'attendance', 'academic': 'results',
+    'timetable': 'timetable',
     'exams': 'external_exams', 'finance': 'finance', 'finance_health': 'finance',
     'sales': 'sales', 'hr': 'hr', 'cbt': 'cbt', 'library': 'library',
 }
@@ -85,6 +87,7 @@ DASHBOARD_BLOCKS = [
     ('branches', ('branches',)),
     ('kpi', ('kpi',)),
     ('academic', ('academic',)),
+    ('timetable', ('timetable',)),
     ('finance_health', ('finance_health',)),
     ('crossmodule', ('finance', 'sales', 'hr', 'cbt', 'library')),
     ('exams', ('exams',)),
@@ -202,6 +205,8 @@ def _dashboard_urls():
         'institution_analytics': url_for('subjects.institution_analytics'),
         'new_sale': url_for('sales.new_sale'),
         'send_message': url_for('comms.compose'),
+        'timetable_view': url_for('timetable.index'),
+        'timetable_mine': url_for('timetable.my_timetable'),
     }
 
 
@@ -347,6 +352,7 @@ def dashboard_payload():
         # Decision blocks (computed only when enabled + permitted).
         exec_summary=_dash_exec_summary(active_term, tscope) if 'exec_summary' in enabled else [],
         academic=_dash_academic(active_term, tscope) if 'academic' in enabled else None,
+        timetable_today=_dash_timetable_today(active_term, tscope) if 'timetable' in enabled else None,
         finance_health=_dash_finance_health(active_term) if 'finance_health' in enabled else None,
         # Cross-module widgets (computed only when enabled).
         finance_stat=_floats(_dash_finance(active_term)) if 'finance' in enabled else None,
@@ -675,6 +681,67 @@ def _dash_hr():
         return None
 
 
+def _dash_timetable_today(active_term, tscope):
+    """A glance at today's live schedule: which period is in session now, how
+    many classes are in it, what's next, and the day's period ladder. Branch-
+    and teacher-scoped (a teacher sees their own lessons). Returns None when the
+    timetable is empty so the block simply doesn't render."""
+    try:
+        from models.models.timetable import TimetableSlot, ClassTimetable
+        from models import ClassArmAssignment, local_now
+        from utils.branch_scope import scope_query
+        from collections import Counter
+        dow = date.today().weekday()          # Mon=0 .. Sun=6
+        slots = TimetableSlot.query.filter_by(is_active=True).order_by(
+            TimetableSlot.start_time).all()
+        if not slots:
+            return None
+        q = (ClassTimetable.query
+             .join(ClassArmAssignment,
+                   ClassTimetable.class_arm_assignment_id == ClassArmAssignment.id)
+             .filter(ClassTimetable.is_active.is_(True),
+                     ClassTimetable.day_of_week == dow))
+        if active_term:
+            q = q.filter(ClassArmAssignment.term_id == active_term.id)
+        q = scope_query(q, ClassArmAssignment)
+        if tscope is not None:
+            aidset = set(tscope[0])
+            entries = (q.filter(ClassTimetable.class_arm_assignment_id.in_(aidset)).all()
+                       if aidset else [])
+        else:
+            entries = q.all()
+        # Lessons per slot (breaks have no subject, so they don't count as classes).
+        per_slot = Counter(e.slot_id for e in entries if e.subject_id)
+        now_t = local_now().time()
+        ladder, current_id, next_id = [], None, None
+        for s in slots:
+            state = 'past'
+            if s.start_time <= now_t < s.end_time:
+                state, current_id = 'now', s.id
+            elif now_t < s.start_time:
+                state = 'upcoming'
+                if next_id is None:
+                    next_id = s.id
+            ladder.append({'id': s.id, 'name': s.name or f'Period {s.slot_number}',
+                           'start': s.start_time.strftime('%H:%M'),
+                           'end': s.end_time.strftime('%H:%M'),
+                           'is_break': bool(s.is_break),
+                           'classes': per_slot.get(s.id, 0), 'state': state})
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        by_id = {l['id']: l for l in ladder}
+        return {
+            'day': days[dow] if 0 <= dow < 7 else '',
+            'in_session': per_slot.get(current_id, 0) if current_id else 0,
+            'current_slot': by_id.get(current_id),
+            'next_slot': by_id.get(next_id),
+            'total_today': int(sum(per_slot.values())),
+            'slots': ladder,
+            'has_data': bool(entries),
+        }
+    except Exception:
+        return None
+
+
 def _dash_cbt():
     """CBT exam + attempt counts (branch-scoped on the attempt's student)."""
     try:
@@ -985,6 +1052,8 @@ def _dash_widget_slice(block_id):
         return {'exec_summary': _dash_exec_summary(active_term, tscope)}
     if block_id == 'academic':
         return {'academic': _dash_academic(active_term, tscope)}
+    if block_id == 'timetable':
+        return {'timetable_today': _dash_timetable_today(active_term, tscope)}
     if block_id == 'finance_health':
         return {'finance_health': _dash_finance_health(active_term)}
     if block_id == 'exams':

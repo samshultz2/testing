@@ -15,6 +15,7 @@ const BLOCK_META = {
   branches: { label: 'Branch performance', icon: 'fa-code-branch' },
   kpi: { label: 'Student KPIs', icon: 'fa-users' },
   academic: { label: 'Academic performance', icon: 'fa-graduation-cap' },
+  timetable: { label: "Today's schedule", icon: 'fa-calendar-day' },
   finance_health: { label: 'Finance health', icon: 'fa-coins' },
   crossmodule: { label: 'Module KPIs', icon: 'fa-layer-group' },
   exams: { label: 'Exam snapshots', icon: 'fa-file-contract' },
@@ -24,7 +25,7 @@ const BLOCK_META = {
   people: { label: 'People', icon: 'fa-user-clock' },
 };
 const FALLBACK_ORDER = ['exec_summary', 'insights', 'branches', 'kpi', 'academic',
-  'finance_health', 'crossmodule', 'exams', 'charts', 'attendance_trend', 'class_religion', 'people'];
+  'timetable', 'finance_health', 'crossmodule', 'exams', 'charts', 'attendance_trend', 'class_religion', 'people'];
 
 // Today's attendance vs the term average → a trend chip. Only shown once there's
 // a term baseline and today has been marked, so it never reads a misleading 0.
@@ -167,6 +168,7 @@ export default function App({ data: initialData }) {
       case 'branches': return has('branches') && (d.branch_comparison || []).length > 1;
       case 'kpi': return has('kpi') && !emptySchool;
       case 'academic': return has('academic') && !!d.academic && !emptySchool;
+      case 'timetable': return has('timetable') && !!d.timetable_today && d.timetable_today.total_today > 0 && !emptySchool;
       case 'finance_health': return has('finance_health') && !!d.finance_health && !emptySchool;
       case 'crossmodule': return !!crossModule;
       case 'exams': return has('exams') && !emptySchool;
@@ -194,6 +196,7 @@ export default function App({ data: initialData }) {
       </div>
     ),
     academic: <AcademicPerformance a={d.academic} urls={urls} t={t} />,
+    timetable: <TodaySchedule data={d.timetable_today} urls={urls} teacher={!!d.teacher_classes} />,
     finance_health: <FinanceHealth f={d.finance_health} urls={urls} t={t} />,
     crossmodule: (
       <div className="kpi-row">
@@ -708,6 +711,65 @@ function Sparkline({ values }) {
                     background: rateColor(v), borderRadius: 1, display: 'inline-block' }} />
       ))}
     </span>
+  );
+}
+
+// Today's schedule glance: the period in session right now (with how many
+// classes are running), what's up next, and the full day's period ladder with
+// the live period highlighted. Teacher-scoped users see their own lessons.
+function TodaySchedule({ data, urls, teacher }) {
+  if (!data) return null;
+  const slots = data.slots || [];
+  const cur = data.current_slot;
+  const nxt = data.next_slot;
+  const link = teacher ? urls.timetable_mine : urls.timetable_view;
+  const plural = (n) => (n === 1 ? 'class' : 'classes');
+  return (
+    <Widget icon="fa-calendar-day" title={`Today's schedule · ${data.day}`}
+            action={link && <a href={link} className="btn btn-secondary btn-sm">Open timetable</a>}>
+      <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', marginBottom: '.7rem' }}>
+        <div style={{ flex: '1 1 160px', border: '1px solid var(--border-color)', borderRadius: 10, padding: '.55rem .7rem',
+                      background: cur ? 'rgba(28,200,138,.08)' : 'transparent' }}>
+          <div className="text-muted" style={{ fontSize: '.68rem', textTransform: 'uppercase', letterSpacing: '.03em' }}>In session now</div>
+          {cur ? (
+            <>
+              <div style={{ fontWeight: 700 }}>{cur.name} <span className="text-muted" style={{ fontWeight: 400, fontSize: '.75rem' }}>{cur.start}–{cur.end}</span></div>
+              <div style={{ fontSize: '.8rem' }}>{data.in_session} {plural(data.in_session)} running</div>
+            </>
+          ) : <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginTop: 2 }}>No period in session</div>}
+        </div>
+        <div style={{ flex: '1 1 160px', border: '1px solid var(--border-color)', borderRadius: 10, padding: '.55rem .7rem' }}>
+          <div className="text-muted" style={{ fontSize: '.68rem', textTransform: 'uppercase', letterSpacing: '.03em' }}>Up next</div>
+          {nxt ? (
+            <>
+              <div style={{ fontWeight: 700 }}>{nxt.name} <span className="text-muted" style={{ fontWeight: 400, fontSize: '.75rem' }}>{nxt.start}</span></div>
+              <div style={{ fontSize: '.8rem' }}>{nxt.classes} {plural(nxt.classes)} scheduled</div>
+            </>
+          ) : <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginTop: 2 }}>Day complete</div>}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {slots.map((s) => {
+          const isNow = s.state === 'now';
+          return (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '.6rem', padding: '.4rem .5rem',
+                        borderLeft: '3px solid ' + (isNow ? 'var(--success)' : 'transparent'),
+                        background: isNow ? 'rgba(28,200,138,.07)' : 'transparent',
+                        opacity: s.state === 'past' ? .5 : 1, borderRadius: 6 }}>
+              <span className="text-muted" style={{ width: 92, fontSize: '.75rem', fontVariantNumeric: 'tabular-nums' }}>{s.start}–{s.end}</span>
+              <span style={{ flex: 1, fontSize: '.83rem', fontWeight: s.is_break ? 400 : 600, fontStyle: s.is_break ? 'italic' : 'normal' }}>
+                {s.name}{isNow && <span className="badge badge-success" style={{ marginLeft: 6 }}>Now</span>}
+              </span>
+              {!s.is_break && (
+                <span className="badge" style={{ background: 'var(--border-color)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  {s.classes} {plural(s.classes)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Widget>
   );
 }
 
