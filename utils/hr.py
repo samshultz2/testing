@@ -131,6 +131,19 @@ def mark_attendance_now(staff_id, method='self', when=None, note=None):
     return rec, st
 
 
+def clock_out_now(staff_id, when=None):
+    """Stamp today's clock-out time for a staff member. Returns (rec, 'HH:MM')
+    or (None, None) when there's no open clock-in to close today."""
+    import datetime as _dt
+    from models import StaffAttendance
+    now = when or _dt.datetime.now()
+    rec = StaffAttendance.query.filter_by(staff_id=staff_id, date=now.date()).first()
+    if not rec or not rec.clock_in:
+        return None, None
+    rec.clock_out = now.strftime('%H:%M')
+    return rec, rec.clock_out
+
+
 def hr_self_service(user):
     """Assemble the self-scope HR data a signed-in user may see on their own
     account page. Each section is populated ONLY if the user holds the matching
@@ -140,6 +153,8 @@ def hr_self_service(user):
     import datetime as _dt
     from models import StaffMember, StaffAttendance, Payslip, PayrollRun
     from utils.access_control import self_scope_level
+    from utils.hr_schema import ensure_hr_schema
+    ensure_hr_schema()   # make sure the clock_out column exists on this tenant DB
     staff = StaffMember.query.filter_by(user_id=user.id).first() if user else None
     if not staff:
         return None
@@ -149,16 +164,26 @@ def hr_self_service(user):
     if not (att_lvl or pay_lvl or ded_lvl):
         return None
     out = {'staff_name': staff.full_name, 'can_clock': att_lvl == 'edit',
-           'attendance': None, 'today': None, 'payslips': None, 'deductions': None}
+           'attendance': None, 'today': None, 'clock_action': None,
+           'payslips': None, 'deductions': None}
     today = _dt.date.today()
     if att_lvl:
         rows = (StaffAttendance.query.filter_by(staff_id=staff.id)
                 .order_by(StaffAttendance.date.desc()).limit(30).all())
         out['attendance'] = [{'date': r.date.strftime('%a %d %b %Y'), 'status': r.status,
-                              'clock_in': r.clock_in or '—', 'minutes_late': r.minutes_late or 0,
+                              'clock_in': r.clock_in or '—', 'clock_out': r.clock_out or '—',
+                              'minutes_late': r.minutes_late or 0,
                               'deduction': round(r.deduction or 0, 2)} for r in rows]
         trec = next((r for r in rows if r.date == today), None)
-        out['today'] = ({'status': trec.status, 'clock_in': trec.clock_in} if trec else None)
+        out['today'] = ({'status': trec.status, 'clock_in': trec.clock_in,
+                         'clock_out': trec.clock_out} if trec else None)
+        # Next self-service action for today's toggle button.
+        if not trec or not trec.clock_in:
+            out['clock_action'] = 'in'
+        elif not trec.clock_out:
+            out['clock_action'] = 'out'
+        else:
+            out['clock_action'] = 'done'
     if pay_lvl or ded_lvl:
         slips = (Payslip.query.join(PayrollRun, Payslip.run_id == PayrollRun.id)
                  .filter(Payslip.staff_id == staff.id,

@@ -104,6 +104,21 @@ def test_clock_endpoint_enforces_edit_and_marks_own(app):
         assert rec is not None and rec.clock_in       # own attendance was recorded
 
 
+def test_clock_toggles_in_then_out(app):
+    uid, sid = _linked_staff_user(app, 'ss_toggle', {'hr.self_attendance': 'edit'})
+    with app.app_context():
+        StaffAttendance.query.filter_by(staff_id=sid, date=date.today()).delete()
+        db.session.commit()
+    c = app.test_client()
+    c.post('/login', data={'username': 'ss_toggle', 'password': 'CorrectHorse9',
+                           '_csrf_token': login_token(c)})
+    c.post('/hr/clock', data={'_csrf_token': auth_csrf(c)}, follow_redirects=True)   # in
+    c.post('/hr/clock', data={'_csrf_token': auth_csrf(c)}, follow_redirects=True)   # out
+    with app.app_context():
+        rec = StaffAttendance.query.filter_by(staff_id=sid, date=date.today()).first()
+        assert rec is not None and rec.clock_in and rec.clock_out   # both stamped
+
+
 def test_clock_refused_without_edit_capability(app):
     uid, sid = _linked_staff_user(app, 'ss_noclock', {'hr.self_attendance': 'view'})
     c = app.test_client()

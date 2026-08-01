@@ -102,27 +102,29 @@
       {% if hr_self.can_clock %}
       <form method="post" action="{{ clock_url }}" style="margin:0">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-success btn-sm"
-                {% if hr_self.today %}disabled title="Already clocked in today"{% endif %}>
-          <i class="fas fa-fingerprint"></i>
-          {% if hr_self.today %}Clocked in {{ hr_self.today.clock_in }}{% else %}Clock in now{% endif %}
-        </button>
+        {% if hr_self.clock_action == 'out' %}
+          <button type="submit" class="btn btn-warning btn-sm"><i class="fas fa-right-from-bracket"></i> Clock out now</button>
+        {% elif hr_self.clock_action == 'done' %}
+          <button type="button" class="btn btn-secondary btn-sm" disabled><i class="fas fa-check"></i> Clocked out {{ hr_self.today.clock_out }}</button>
+        {% else %}
+          <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-fingerprint"></i> Clock in now</button>
+        {% endif %}
       </form>
       {% endif %}
     </div>
     <div class="card-body">
       {% if hr_self.today %}
-        <p class="text-muted text-sm" style="margin-top:0">Today: <strong>{{ hr_self.today.status }}</strong>{% if hr_self.today.clock_in %} · in at {{ hr_self.today.clock_in }}{% endif %}.</p>
+        <p class="text-muted text-sm" style="margin-top:0">Today: <strong>{{ hr_self.today.status }}</strong>{% if hr_self.today.clock_in %} · in {{ hr_self.today.clock_in }}{% endif %}{% if hr_self.today.clock_out %} · out {{ hr_self.today.clock_out }}{% endif %}.</p>
       {% elif hr_self.can_clock %}
         <p class="text-muted text-sm" style="margin-top:0">You haven't clocked in today.</p>
       {% endif %}
       {% if hr_self.attendance %}
       <div style="overflow-x:auto">
-        <table class="data-table" style="margin:0;min-width:420px">
-          <thead><tr><th>Date</th><th>Status</th><th>Clock-in</th><th style="text-align:right">Late (min)</th></tr></thead>
+        <table class="data-table" style="margin:0;min-width:460px">
+          <thead><tr><th>Date</th><th>Status</th><th>In</th><th>Out</th><th style="text-align:right">Late (min)</th></tr></thead>
           <tbody>
             {% for r in hr_self.attendance %}
-            <tr><td>{{ r.date }}</td><td>{{ r.status }}</td><td>{{ r.clock_in }}</td><td style="text-align:right">{{ r.minutes_late }}</td></tr>
+            <tr><td>{{ r.date }}</td><td>{{ r.status }}</td><td>{{ r.clock_in }}</td><td>{{ r.clock_out }}</td><td style="text-align:right">{{ r.minutes_late }}</td></tr>
             {% endfor %}
           </tbody>
         </table>

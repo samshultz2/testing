@@ -403,6 +403,7 @@ class StaffAttendance(db.Model):
     date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(15), default='Present')  # Present/Late/Absent/Excused
     clock_in = db.Column(db.String(5))                    # 'HH:MM'
+    clock_out = db.Column(db.String(5))                   # 'HH:MM' (self clock-out)
     minutes_late = db.Column(db.Integer, default=0)
     deduction = db.Column(db.Float, default=0)
     note = db.Column(db.String(200))

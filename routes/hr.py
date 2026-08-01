@@ -1188,12 +1188,15 @@ def checkin_self():
 @hr_bp.route('/clock', methods=['POST'])
 @login_required
 def clock():
-    """One-tap self clock-in for staff granted the 'hr.self_attendance'
-    capability at edit level. Records the caller's OWN attendance for today with
-    the current time — never anyone else's. Read-only holders (view level) and
-    users without the capability are refused; the button isn't shown to them.
-    Distinct from the QR/GPS checkin flow: no code needed, just the server clock."""
+    """One-tap self clock-in / clock-out for staff granted the
+    'hr.self_attendance' capability at edit level. Toggles the caller's OWN
+    attendance for today with the current server time — never anyone else's:
+    the first tap clocks in (deriving Present/Late), the next clocks out.
+    Read-only holders and users without the capability are refused server-side.
+    Distinct from the QR/GPS checkin flow: no code needed, just the clock."""
     from utils.access_control import self_scope_level
+    from utils.hr_schema import ensure_hr_schema
+    ensure_hr_schema()
     staff = _current_staff()
     if not staff:
         return _err('Your login is not linked to a staff record. Ask an administrator.',
@@ -1205,6 +1208,15 @@ def clock():
         return _err('You can view your attendance but not clock in. Ask an administrator.',
                     url_for('auth.profile'))
     require_branch_access(staff.branch_id)
+    today = StaffAttendance.query.filter_by(staff_id=staff.id, date=date.today()).first()
+    if today and today.clock_in and not today.clock_out:
+        rec, out = hr.clock_out_now(staff.id)
+        db.session.commit()
+        log_action('hr.clock', detail='self · out', target=staff)
+        return _ok(f'Clocked out at {out}. Have a good evening!', url_for('auth.profile'))
+    if today and today.clock_in and today.clock_out:
+        return _ok(f"You've already clocked out today (in {today.clock_in}, out {today.clock_out}).",
+                   url_for('auth.profile'))
     rec, status = hr.mark_attendance_now(staff.id, method='self')
     db.session.commit()
     log_action('hr.clock', detail=f'self · {status}', target=staff)
