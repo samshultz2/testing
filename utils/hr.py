@@ -131,6 +131,60 @@ def mark_attendance_now(staff_id, method='self', when=None, note=None):
     return rec, st
 
 
+def hr_self_service(user):
+    """Assemble the self-scope HR data a signed-in user may see on their own
+    account page. Each section is populated ONLY if the user holds the matching
+    self-scope capability, and every query is limited to their own linked staff
+    record — never anyone else's. Returns None when the user isn't linked to a
+    staff record or holds no self-scope capability."""
+    import datetime as _dt
+    from models import StaffMember, StaffAttendance, Payslip, PayrollRun
+    from utils.access_control import self_scope_level
+    staff = StaffMember.query.filter_by(user_id=user.id).first() if user else None
+    if not staff:
+        return None
+    att_lvl = self_scope_level('hr.self_attendance')
+    pay_lvl = self_scope_level('hr.self_payroll')
+    ded_lvl = self_scope_level('hr.self_deductions')
+    if not (att_lvl or pay_lvl or ded_lvl):
+        return None
+    out = {'staff_name': staff.full_name, 'can_clock': att_lvl == 'edit',
+           'attendance': None, 'today': None, 'payslips': None, 'deductions': None}
+    today = _dt.date.today()
+    if att_lvl:
+        rows = (StaffAttendance.query.filter_by(staff_id=staff.id)
+                .order_by(StaffAttendance.date.desc()).limit(30).all())
+        out['attendance'] = [{'date': r.date.strftime('%a %d %b %Y'), 'status': r.status,
+                              'clock_in': r.clock_in or '—', 'minutes_late': r.minutes_late or 0,
+                              'deduction': round(r.deduction or 0, 2)} for r in rows]
+        trec = next((r for r in rows if r.date == today), None)
+        out['today'] = ({'status': trec.status, 'clock_in': trec.clock_in} if trec else None)
+    if pay_lvl or ded_lvl:
+        slips = (Payslip.query.join(PayrollRun, Payslip.run_id == PayrollRun.id)
+                 .filter(Payslip.staff_id == staff.id,
+                         PayrollRun.status.in_(['Finalized', 'Paid']))
+                 .order_by(PayrollRun.year.desc(), PayrollRun.month.desc()).all())
+        if pay_lvl:
+            out['payslips'] = [{'period': s.run.period_label, 'status': s.run.status,
+                                'basic': round(s.basic or 0, 2), 'allowances': round(s.allowances or 0, 2),
+                                'deductions': round(s.total_deductions, 2),
+                                'net': round(s.net or 0, 2)} for s in slips]
+        if ded_lvl:
+            ded = []
+            for s in slips:
+                for it in s.items:                       # recurring lines (pension, welfare…)
+                    ded.append({'period': s.run.period_label, 'name': it.name or 'Deduction',
+                                'amount': round(it.amount or 0, 2)})
+                if s.attendance_deduction:
+                    ded.append({'period': s.run.period_label, 'name': 'Lateness / absence',
+                                'amount': round(s.attendance_deduction, 2)})
+                if s.deductions:
+                    ded.append({'period': s.run.period_label, 'name': 'Other (loans / PAYE)',
+                                'amount': round(s.deductions, 2)})
+            out['deductions'] = ded
+    return out
+
+
 # ---- Leave allowances + balances -------------------------------------------
 
 # Sensible Nigerian-school defaults; overridable per school in HR settings.

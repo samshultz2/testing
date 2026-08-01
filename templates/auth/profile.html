@@ -92,4 +92,92 @@
     </div>
   </div>
 </form>
+
+{% if hr_self %}
+<div class="selfservice" style="margin-top:.4rem">
+  {% if hr_self.attendance is not none %}
+  <div class="card mb-3">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <h3><i class="fas fa-user-clock"></i> My attendance</h3>
+      {% if hr_self.can_clock %}
+      <form method="post" action="{{ clock_url }}" style="margin:0">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success btn-sm"
+                {% if hr_self.today %}disabled title="Already clocked in today"{% endif %}>
+          <i class="fas fa-fingerprint"></i>
+          {% if hr_self.today %}Clocked in {{ hr_self.today.clock_in }}{% else %}Clock in now{% endif %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      {% if hr_self.today %}
+        <p class="text-muted text-sm" style="margin-top:0">Today: <strong>{{ hr_self.today.status }}</strong>{% if hr_self.today.clock_in %} · in at {{ hr_self.today.clock_in }}{% endif %}.</p>
+      {% elif hr_self.can_clock %}
+        <p class="text-muted text-sm" style="margin-top:0">You haven't clocked in today.</p>
+      {% endif %}
+      {% if hr_self.attendance %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>Date</th><th>Status</th><th>Clock-in</th><th style="text-align:right">Late (min)</th></tr></thead>
+          <tbody>
+            {% for r in hr_self.attendance %}
+            <tr><td>{{ r.date }}</td><td>{{ r.status }}</td><td>{{ r.clock_in }}</td><td style="text-align:right">{{ r.minutes_late }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No attendance recorded yet.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.payslips is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-money-check-dollar"></i> My payslips</h3></div>
+    <div class="card-body">
+      {% if hr_self.payslips %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:520px">
+          <thead><tr><th>Period</th><th>Status</th><th style="text-align:right">Basic</th><th style="text-align:right">Allowances</th><th style="text-align:right">Deductions</th><th style="text-align:right">Net</th></tr></thead>
+          <tbody>
+            {% for s in hr_self.payslips %}
+            <tr>
+              <td>{{ s.period }}</td><td>{{ s.status }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(s.basic) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(s.allowances) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(s.deductions) }}</td>
+              <td style="text-align:right"><strong>₦{{ '{:,.2f}'.format(s.net) }}</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No finalized payslips yet.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.deductions is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-scissors"></i> My deductions</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">Deductions applied to your salary. View only — contact HR about any query.</p>
+      {% if hr_self.deductions %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>Period</th><th>Deduction</th><th style="text-align:right">Amount</th></tr></thead>
+          <tbody>
+            {% for d in hr_self.deductions %}
+            <tr><td>{{ d.period }}</td><td>{{ d.name }}</td><td style="text-align:right">₦{{ '{:,.2f}'.format(d.amount) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No deductions on record.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

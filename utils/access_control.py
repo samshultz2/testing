@@ -64,6 +64,11 @@ _ALWAYS_ALLOWED_ENDPOINTS = {
     # Self-service staff attendance: any staff member may check themselves in,
     # even without HR-module access (they only touch their own record).
     'hr.checkin', 'hr.checkin_self',
+    # Self clock-in: reachable without HR-module access, but the view itself
+    # requires the 'hr.self_attendance' capability at edit level and only ever
+    # writes the caller's own attendance row. Its read-side (own attendance,
+    # payslips, deductions) lives on the /account self-service page.
+    'hr.clock',
 }
 
 # Default module set when a non-admin user has no explicit allowed_modules.
@@ -162,6 +167,13 @@ MODULE_SUBSECTIONS = {
         'payroll': 'Payroll',
         'attendance': 'Staff Attendance',
         'settings': 'HR Settings',
+        # Self-scope grants: the holder sees ONLY their own record, never other
+        # staff's. Granting these does not unlock the HR module (they're
+        # capabilities). View = read own; Edit on 'self_attendance' also lets
+        # them clock themselves in.
+        'self_attendance': 'My attendance — view own / clock in (self)',
+        'self_payroll': 'My payslips — view own (self)',
+        'self_deductions': 'My deductions — view own (self)',
     },
     'external_exams': {
         'waec': 'WAEC Results',
@@ -204,7 +216,23 @@ MODULE_SUBSECTIONS = {
 # slices of a module: granting one must NOT unlock the whole module, and the
 # capability is required explicitly (broad module access does not imply it).
 CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
-                          'sales.approve_po', 'sales.signoff_count'}
+                          'sales.approve_po', 'sales.signoff_count',
+                          'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions'}
+
+# Self-scope capabilities: an explicit grant that lets a user act on their OWN
+# record only (never other people's) — the finest permission tier. They ride on
+# the normal view/edit machinery (view = read own, edit = act on own) but the
+# route implementation is what enforces the "own record" boundary. Registered
+# here so the UI can label them distinctly and so callers can reason about them.
+SELF_SCOPE_SUBSECTIONS = {'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions'}
+
+
+def self_scope_level(key):
+    """The current user's level ('view'|'edit') for a self-scope capability, or
+    None. Admins and full-module holders pass too (they may act on their own
+    record like anyone else); the route still limits data to the caller."""
+    module, _, sub = key.partition('.')
+    return subsection_level(module, sub)
 
 # Capabilities only certain managers may grant. key -> who may set it.
 # 'central' => only a central admin may grant/revoke this capability.

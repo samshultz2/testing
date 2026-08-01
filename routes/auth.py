@@ -539,8 +539,11 @@ def profile():
         return redirect(url_for('auth.profile'))
 
     from utils.themes import THEMES as _T
+    from utils.hr import hr_self_service
+    hr_self = hr_self_service(user)   # own attendance / payslips / deductions, per capability
     return render_template('auth/profile.html', user=user, staff=staff,
-                           themes=[(t['key'], t['label']) for t in _T])
+                           themes=[(t['key'], t['label']) for t in _T],
+                           hr_self=hr_self, clock_url=url_for('hr.clock'))
 
 
 @auth_bp.route('/account/sessions')

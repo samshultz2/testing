@@ -1185,6 +1185,35 @@ def checkin_self():
     return _ok(msg, url_for('hr.checkin'))
 
 
+@hr_bp.route('/clock', methods=['POST'])
+@login_required
+def clock():
+    """One-tap self clock-in for staff granted the 'hr.self_attendance'
+    capability at edit level. Records the caller's OWN attendance for today with
+    the current time — never anyone else's. Read-only holders (view level) and
+    users without the capability are refused; the button isn't shown to them.
+    Distinct from the QR/GPS checkin flow: no code needed, just the server clock."""
+    from utils.access_control import self_scope_level
+    staff = _current_staff()
+    if not staff:
+        return _err('Your login is not linked to a staff record. Ask an administrator.',
+                    url_for('auth.profile'))
+    if self_scope_level('hr.self_attendance') != 'edit':
+        # View-only self-attendance (or none): may see their record, not mark it.
+        if _wants_json():
+            abort(403)
+        return _err('You can view your attendance but not clock in. Ask an administrator.',
+                    url_for('auth.profile'))
+    require_branch_access(staff.branch_id)
+    rec, status = hr.mark_attendance_now(staff.id, method='self')
+    db.session.commit()
+    log_action('hr.clock', detail=f'self · {status}', target=staff)
+    msg = f'Clocked in at {rec.clock_in} — marked {status}.'
+    if status == 'Late' and rec.minutes_late:
+        msg += f' ({rec.minutes_late} min late)'
+    return _ok(msg, url_for('auth.profile'))
+
+
 @hr_bp.route('/attendance/qr')
 @admin_required
 def checkin_qr():
