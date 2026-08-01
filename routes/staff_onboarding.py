@@ -195,4 +195,19 @@ def join_submit(token):
         return render_template('staff_onboarding/join.html', invite=inv, branches=branches,
                                form=request.form, departments=_active_departments(),
                                school=(session.get('school_name') or 'the school')), 400
+    # Alert admins that someone joined via an invite and needs approval — the
+    # header bell + the pending list on the invites page.
+    try:
+        from utils.notify import notify_admins
+        role_label = (inv.role or 'staff').replace('_', ' ')
+        pos = getattr(signup, 'position', None)
+        notify_admins(
+            'New staff signup awaiting approval',
+            f'{signup.full_name} signed up via a staff invite as {role_label}'
+            + (f' ({pos})' if pos else '') + '. Review and approve to activate the account.',
+            url=url_for('staff_onboarding.invites'), category='info')
+        log_action('staff_invite.signup',
+                   f'signup {signup.id} ({signup.full_name}) via invite {inv.id}')
+    except Exception:
+        pass
     return render_template('staff_onboarding/join_done.html', signup=signup)

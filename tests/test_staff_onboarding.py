@@ -120,6 +120,11 @@ def test_join_page_public_and_submit(app):
     assert 'awaiting approval' in r2.get_data(as_text=True).lower() or 'submitted' in r2.get_data(as_text=True).lower()
     with app.app_context():
         assert StaffSignup.query.filter_by(username='sam', status='pending').first() is not None
+        # Admins are alerted via the header bell that a signup awaits approval.
+        from models import Notification
+        n = (Notification.query.filter_by(role='admin')
+             .order_by(Notification.id.desc()).first())
+        assert n is not None and 'Sam Okoro' in n.body and 'awaiting approval' in n.title.lower()
 
 
 def test_bad_token_shows_closed(app):
