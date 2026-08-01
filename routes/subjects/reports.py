@@ -137,7 +137,166 @@ def broadsheet():
                  'export_image': url_for('subjects.export_broadsheet', term_id=term_id or '', assignment_id=assignment_id or '', format='image'),
                  'blank_sheet': url_for('subjects.blank_score_sheet', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
-                 'analytics': url_for('subjects.analytics_dashboard', term_id=term_id or '', assignment_id=assignment_id or '')},
+                 'analytics': url_for('subjects.analytics_dashboard', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'explore': url_for('subjects.broadsheet_explore', term_id=term_id or '', scopes=assignment_id or '')},
+    })
+
+
+@subjects_bp.route('/broadsheet/explore')
+@login_required
+def broadsheet_explore():
+    """Cross-class / cross-arm results explorer.
+
+    Unlike the single-arm broadsheet, this pulls every enrolled student across a
+    chosen set of class-arms (within one term) into one dataset keyed by the
+    underlying Subject (so a subject like Mathematics lines up across classes).
+    The client then filters ("who scored X and below / above" by a subject, the
+    average or the total) and compares the selected scopes side by side.
+
+    Query params:
+      term_id  — the term.
+      scopes   — comma-separated ClassArmAssignment ids to include. Access is
+                 re-checked per scope, so a teacher only ever sees their classes.
+    """
+    from collections import OrderedDict
+    from sqlalchemy.orm import joinedload
+
+    term_id = request.args.get('term_id', type=int)
+    scopes_raw = request.args.get('scopes', '') or ''
+    scope_ids = [int(x) for x in scopes_raw.replace(' ', '').split(',') if x.isdigit()]
+
+    terms = Term.query.order_by(Term.id.desc()).all()
+    if not term_id:
+        active_term = get_active_term()
+        if active_term:
+            term_id = active_term.id
+
+    # Scope options: every class-arm the user may see this term, grouped by class.
+    scope_options = []
+    assignments_by_id = {}
+    allowed_ids = set()
+    if term_id:
+        all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
+        allowed = filter_classes_for_user(all_assignments)
+        allowed_ids = {a.id for a in allowed}
+        by_class = OrderedDict()
+        for a in sorted(allowed, key=lambda x: (
+                (x.school_class.level if x.school_class else 0),
+                (x.school_class.name if x.school_class else ''),
+                (x.arm.name if x.arm else ''))):
+            assignments_by_id[a.id] = a
+            if a.class_id not in by_class:
+                by_class[a.class_id] = {
+                    'class_id': a.class_id,
+                    'class_name': a.school_class.name if a.school_class else '',
+                    'arms': []}
+            by_class[a.class_id]['arms'].append(
+                {'assignment_id': a.id,
+                 'arm_name': (a.arm.name if a.arm else ''),
+                 'label': a.display_name})
+        scope_options = list(by_class.values())
+    # Keep only scopes the user is actually allowed to open.
+    scope_ids = [i for i in scope_ids if i in allowed_ids]
+    selected = [assignments_by_id[i] for i in scope_ids]
+
+    pass_mark = SchoolSettings.get('pass_mark', 50)
+    assessment_types = AssessmentType.query.filter_by(is_active=True).all()
+    at_ids = [at.id for at in assessment_types]
+
+    subjects_union = {}
+    scope_meta = []
+    rows = []
+
+    if selected:
+        class_ids = list({a.class_id for a in selected})
+        cs_rows = (ClassSubject.query
+                   .filter(ClassSubject.term_id == term_id,
+                           ClassSubject.class_id.in_(class_ids),
+                           ClassSubject.is_active == True)  # noqa: E712
+                   .join(Subject).all())
+        cs_by_class = {}
+        cs_subject = {}
+        for cs in cs_rows:
+            cs_by_class.setdefault(cs.class_id, []).append(cs)
+            cs_subject[cs.id] = cs.subject
+
+        def subjects_for(asg):
+            """ClassSubjects that apply to a given assignment (class-wide rows +
+            rows pinned to this assignment's arm)."""
+            return [cs for cs in cs_by_class.get(asg.class_id, [])
+                    if cs.arm_id is None or cs.arm_id == asg.arm_id]
+
+        asg_ids = [a.id for a in selected]
+        enrollments = (StudentEnrollment.query
+                       .options(joinedload(StudentEnrollment.student))
+                       .filter(StudentEnrollment.class_arm_assignment_id.in_(asg_ids),
+                               StudentEnrollment.is_active == True)  # noqa: E712
+                       .join(Student).order_by(Student.surname, Student.first_name).all())
+        student_ids = [e.student_id for e in enrollments]
+
+        # Subject total = sum of that student's ACTIVE-assessment scores for the
+        # class-subject, in one query for the whole selection.
+        all_cs_ids = [cs.id for cs in cs_rows]
+        score_map = {}
+        if student_ids and all_cs_ids and at_ids:
+            for s in StudentScore.query.filter(
+                    StudentScore.student_id.in_(student_ids),
+                    StudentScore.class_subject_id.in_(all_cs_ids),
+                    StudentScore.assessment_type_id.in_(at_ids)).all():
+                key = (s.student_id, s.class_subject_id)
+                score_map[key] = score_map.get(key, 0) + (s.score or 0)
+
+        for a in selected:
+            for cs in subjects_for(a):
+                subj = cs_subject[cs.id]
+                subjects_union.setdefault(subj.id, {
+                    'id': subj.id, 'name': subj.name,
+                    'short': subj.short_name or subj.name[:3]})
+            scope_meta.append({
+                'assignment_id': a.id, 'class_id': a.class_id,
+                'class_name': a.school_class.name if a.school_class else '',
+                'arm_name': a.arm.name if a.arm else '',
+                'label': a.display_name})
+
+        for e in enrollments:
+            a = assignments_by_id[e.class_arm_assignment_id]
+            asg_cs = subjects_for(a)
+            subj_totals = {}
+            total = 0.0
+            passed = failed = 0
+            for cs in asg_cs:
+                st = score_map.get((e.student_id, cs.id))
+                if st is None:
+                    continue
+                subj_totals[str(cs_subject[cs.id].id)] = round(st, 1)
+                total += st
+                if st >= pass_mark:
+                    passed += 1
+                elif st > 0:
+                    failed += 1
+            avg = round(total / len(asg_cs), 2) if asg_cs else 0
+            rows.append({
+                'student': e.student.full_name,
+                'assignment_id': a.id,
+                'class_name': a.school_class.name if a.school_class else '',
+                'arm_name': a.arm.name if a.arm else '',
+                'scope_label': a.display_name,
+                'subjects': subj_totals,
+                'total': round(total, 1), 'average': avg,
+                'passed': passed, 'failed': failed})
+        rows.sort(key=lambda r: r['average'], reverse=True)
+
+    subjects_list = sorted(subjects_union.values(), key=lambda s: s['name'])
+    return _render({
+        'page': 'explore', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'scopes': scope_ids,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'scope_options': scope_options,
+        'scope_meta': scope_meta,
+        'subjects_union': subjects_list,
+        'rows': rows, 'pass_mark': pass_mark,
+        'self_url': url_for('subjects.broadsheet_explore'),
+        'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or '')},
     })
 
 
