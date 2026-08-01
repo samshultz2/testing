@@ -36,6 +36,28 @@ def test_new_students_month_counts_recent_only(app):
     assert j['new_students_month'] <= j['total_students']
 
 
+def test_hr_widget_reports_todays_absences(app):
+    """The staff widget surfaces today's attendance: once anyone is marked, the
+    absent count is exposed so the dashboard can show 'N absent today'."""
+    from datetime import date
+    from flask import session
+    from routes.main import _dash_hr
+    from models.models_hr import StaffMember, StaffAttendance
+    with app.app_context():
+        bid = Branch.get_default().id
+        s = StaffMember(first_name='Ab', surname='ZzHrAbsent', is_active=True,
+                        status='Active', staff_type='Teaching', branch_id=bid)
+        db.session.add(s); db.session.flush()
+        db.session.add(StaffAttendance(staff_id=s.id, date=date.today(), status='Absent'))
+        db.session.commit()
+    with app.test_request_context('/'):
+        session['logged_in'] = True
+        session['role'] = 'super_admin'   # central scope: sees all branches' staff
+        hr = _dash_hr()
+        assert hr and hr['att']['marked'] >= 1
+        assert hr['att']['absent'] >= 1
+
+
 def test_finance_stat_exposes_collected_today(app):
     """When finance is enabled, the term stat carries today's collection so the
     KPI can show a 'x today' chip."""

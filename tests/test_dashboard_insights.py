@@ -77,6 +77,15 @@ def test_open_intervention_surfaces_high(app):
     assert order == sorted(order, key=lambda s: {'high': 0, 'medium': 1, 'low': 2}[s])
 
 
+def test_insight_items_carry_action_key(app):
+    """Every insight item exposes an `action` field (None unless it has a CTA),
+    so the React panel can render the optional button without a key error."""
+    c = _admin(app)
+    j = c.get('/api/dashboard/data').get_json()
+    for it in j['insights']:
+        assert 'action' in it
+
+
 def test_defaulters_summary_edges(app):
     from utils.finance import defaulters_summary
     with app.app_context():

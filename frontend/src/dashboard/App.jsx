@@ -38,6 +38,16 @@ function attendanceDelta(stats) {
   return { dir: diff > 0 ? 'up' : 'down', text: `${diff > 0 ? '+' : ''}${diff} pp vs term` };
 }
 
+// Staff-attendance chip for the HR widget: only once someone's marked today, so
+// an unmarked morning stays quiet instead of falsely reading "all present".
+function hrAttendanceDelta(hr) {
+  const att = (hr && hr.att) || {};
+  if (!att.marked) return undefined;
+  return att.absent
+    ? { dir: 'down', text: `${att.absent} absent today` }
+    : { dir: 'up', text: 'all present today' };
+}
+
 export default function App({ data: initialData }) {
   const [data, setData] = useState(initialData);
   const [toast, setToast] = useState(null);   // surface a refresh failure instead of silently keeping stale data
@@ -194,7 +204,8 @@ export default function App({ data: initialData }) {
                delta={{ dir: d.finance_stat.net >= 0 ? 'up' : 'down', text: d.finance_stat.net >= 0 ? 'in surplus' : 'in deficit' }} />
         </>}
         {d.sales_stat && <Kpi tone="blue" icon="fa-cash-register" value={nairaShort(d.sales_stat.today)} title={naira(d.sales_stat.today)} label={`Sales today (${d.sales_stat.count_today})`} />}
-        {d.hr_stat && <Kpi tone="purple" icon="fa-id-badge" value={d.hr_stat.total} label={`Staff (${d.hr_stat.teaching} teaching)`} />}
+        {d.hr_stat && <Kpi tone="purple" icon="fa-id-badge" value={d.hr_stat.total} label={`Staff (${d.hr_stat.teaching} teaching)`}
+             delta={hrAttendanceDelta(d.hr_stat)} />}
         {d.cbt_stat && <Kpi tone="blue" icon="fa-laptop-code" value={d.cbt_stat.published} label={`CBT exams · ${d.cbt_stat.attempts} attempts`} />}
         {d.library_stat && <Kpi tone="teal" icon="fa-book" value={d.library_stat.books} label={`Books · ${d.library_stat.on_loan} on loan`} />}
       </div>
@@ -546,20 +557,32 @@ function Insights({ items }) {
       <ul className="card-body" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' }}>
         {items.map((it) => {
           const sev = SEV[it.severity] || SEV.low;
+          // The whole row deep-links to the resolving module. An optional action
+          // (e.g. "Send reminder") is a sibling button — not nested in the row's
+          // <a> — so it can navigate somewhere else without invalid nested links.
           return (
-            <li key={it.key}>
-              <a href={it.url} className="insight-row"
-                 style={{ display: 'flex', alignItems: 'center', gap: '.7rem', padding: '.65rem .9rem',
-                          borderLeft: '4px solid ' + sev.color, textDecoration: 'none', color: 'inherit',
-                          borderBottom: '1px solid var(--border-color)' }}>
+            <li key={it.key} className="insight-row"
+                style={{ display: 'flex', alignItems: 'center', gap: '.7rem', padding: '.65rem .9rem',
+                         borderLeft: '4px solid ' + sev.color,
+                         borderBottom: '1px solid var(--border-color)' }}>
+              <a href={it.url}
+                 style={{ display: 'flex', alignItems: 'center', gap: '.7rem', flex: 1,
+                          textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
                 <i aria-hidden="true" className={'fas ' + it.icon} style={{ color: sev.color, width: 18, textAlign: 'center' }} />
-                <span style={{ flex: 1 }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
                   <strong>{it.title}</strong>
                   {it.detail && <div className="text-muted text-sm">{it.detail}</div>}
                 </span>
                 <span className="badge" style={{ background: sev.color + '22', color: sev.color, fontWeight: 600 }}>{sev.label}</span>
-                <i aria-hidden="true" className="fas fa-chevron-right text-muted" />
               </a>
+              {it.action ? (
+                <a href={it.action.url} className="btn btn-sm btn-outline"
+                   style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {it.action.icon && <i aria-hidden="true" className={'fas ' + it.action.icon} />} {it.action.label}
+                </a>
+              ) : (
+                <i aria-hidden="true" className="fas fa-chevron-right text-muted" />
+              )}
             </li>
           );
         })}

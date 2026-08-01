@@ -570,8 +570,19 @@ def _dash_exec_summary(active_term, tscope=None):
     if can_access_module('hr'):
         hr = _dash_hr()
         if hr:
+            # Once staff have started marking attendance today, lead with it —
+            # who's absent is more actionable than a static headcount. Absences
+            # show as a red trend chip; a fully-present day shows green.
+            att = hr.get('att') or {}
+            if att.get('marked'):
+                absent = att.get('absent', 0)
+                sub = f"{att.get('present', 0)} present · {att.get('late', 0)} late today"
+                delta = ({'dir': 'down', 'text': f"{absent} absent today"} if absent
+                         else {'dir': 'up', 'text': 'all present today'})
+            else:
+                sub, delta = f"{hr['teaching']} teaching", None
             add('hr', key='staff', icon='fa-id-badge', label='Staff',
-                value=hr['total'], tone='teal', sub=f"{hr['teaching']} teaching")
+                value=hr['total'], tone='teal', sub=sub, delta=delta)
 
     return tiles
 
@@ -592,13 +603,31 @@ def _dash_sales(active_term):
 
 
 def _dash_hr():
-    """Active staff headcount."""
+    """Active staff headcount + today's attendance snapshot (present/late/absent),
+    scoped to the staff the viewer can see. `att['marked']` is how many of them
+    have a record today, so the widget can tell "nobody's clocked in yet" apart
+    from "everyone present"."""
     try:
         from utils.branch_scope import scope_query
         from models import StaffMember
         rows = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).all()
-        return {'total': len(rows),
-                'teaching': sum(1 for s in rows if (getattr(s, 'staff_type', '') or '').lower().startswith('teach'))}
+        total = len(rows)
+        teaching = sum(1 for s in rows if (getattr(s, 'staff_type', '') or '').lower().startswith('teach'))
+        att = {'present': 0, 'late': 0, 'absent': 0, 'marked': 0}
+        try:
+            from models.models_hr import StaffAttendance
+            ids = {s.id for s in rows}
+            if ids:
+                todays = StaffAttendance.query.filter(
+                    StaffAttendance.date == date.today(),
+                    StaffAttendance.staff_id.in_(ids)).all()
+                att['marked'] = len(todays)
+                att['present'] = sum(1 for a in todays if a.status == 'Present')
+                att['late'] = sum(1 for a in todays if a.status == 'Late')
+                att['absent'] = sum(1 for a in todays if a.status == 'Absent')
+        except Exception:
+            pass
+        return {'total': total, 'teaching': teaching, 'att': att}
     except Exception:
         return None
 
@@ -662,9 +691,13 @@ def _dash_insights(active_term, tscope):
     from utils.access_control import can_access_module
     items = []
 
-    def add(key, severity, icon, title, detail, url):
+    def add(key, severity, icon, title, detail, url, action=None):
+        # `action` is an optional secondary CTA rendered as a button beside the
+        # row's deep-link (e.g. "Send reminder" on the fee-defaulters item), so
+        # an admin can act on the problem without first navigating away.
         items.append({'key': key, 'severity': severity, 'icon': icon,
-                      'title': title, 'detail': detail, 'url': url})
+                      'title': title, 'detail': detail, 'url': url,
+                      'action': action})
 
     # Attendance — open interventions needing follow-up.
     if can_access_module('attendance'):
@@ -701,10 +734,18 @@ def _dash_insights(active_term, tscope):
         try:
             if summ and summ.get('count'):
                 bal = summ.get('balance') or 0
+                # Offer a one-click bulk reminder when the user can send comms —
+                # the composer opens pre-scoped to fee defaulters (Fee Reminder
+                # template auto-selected), turning "see the problem" into "act".
+                action = None
+                if can_access_module('communication'):
+                    action = {'label': 'Send reminder', 'icon': 'fa-paper-plane',
+                              'url': url_for('comms.compose', audience='defaulters')}
                 add('defaulters', 'high', 'fa-coins',
                     f'{summ["count"]} student{"s" if summ["count"] != 1 else ""} owe fees',
                     f'₦{bal:,.0f} outstanding this term.',
-                    url_for('finance.defaulters', term_id=active_term.id))
+                    url_for('finance.defaulters', term_id=active_term.id),
+                    action=action)
         except Exception:
             pass
 
