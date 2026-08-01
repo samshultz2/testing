@@ -161,11 +161,13 @@ def hr_self_service(user):
     att_lvl = self_scope_level('hr.self_attendance')
     pay_lvl = self_scope_level('hr.self_payroll')
     ded_lvl = self_scope_level('hr.self_deductions')
-    if not (att_lvl or pay_lvl or ded_lvl):
+    leave_lv = self_scope_level('hr.self_leave')
+    if not (att_lvl or pay_lvl or ded_lvl or leave_lv):
         return None
     out = {'staff_name': staff.full_name, 'can_clock': att_lvl == 'edit',
            'attendance': None, 'today': None, 'clock_action': None,
-           'payslips': None, 'deductions': None}
+           'payslips': None, 'deductions': None,
+           'leave': None, 'leave_balances': None}
     today = _dt.date.today()
     if att_lvl:
         rows = (StaffAttendance.query.filter_by(staff_id=staff.id)
@@ -207,6 +209,15 @@ def hr_self_service(user):
                     ded.append({'period': s.run.period_label, 'name': 'Other (loans / PAYE)',
                                 'amount': round(s.deductions, 2)})
             out['deductions'] = ded
+    if leave_lv:
+        from models import LeaveRecord
+        recs = (LeaveRecord.query.filter_by(staff_id=staff.id)
+                .order_by(LeaveRecord.start_date.desc()).limit(20).all())
+        out['leave'] = [{'type': r.leave_type or 'Other',
+                         'start': r.start_date.strftime('%d %b %Y') if r.start_date else '—',
+                         'end': r.end_date.strftime('%d %b %Y') if r.end_date else '—',
+                         'days': r.days or 0, 'status': r.status} for r in recs]
+        out['leave_balances'] = leave_balances(staff.id, today.year)
     return out
 
 

@@ -104,6 +104,26 @@ def test_clock_endpoint_enforces_edit_and_marks_own(app):
         assert rec is not None and rec.clock_in       # own attendance was recorded
 
 
+def test_self_leave_shows_own_balances_and_records(app):
+    from models import LeaveRecord
+    from datetime import date, timedelta
+    uid, sid = _linked_staff_user(app, 'ss_leave', {'hr.self_leave': 'view'})
+    with app.app_context():
+        if not LeaveRecord.query.filter_by(staff_id=sid).first():
+            db.session.add(LeaveRecord(staff_id=sid, leave_type='Annual',
+                                       start_date=date.today(), end_date=date.today() + timedelta(days=2),
+                                       days=3, status='Approved'))
+            db.session.commit()
+    with app.test_request_context('/'):
+        session.update(logged_in=True, user_id=uid, role='staff')
+        from utils.access_control import can_access_module
+        from utils.hr import hr_self_service
+        assert can_access_module('hr') is False
+        d = hr_self_service(db.session.get(User, uid))
+        assert d['leave'] is not None and d['leave_balances'] is not None
+        assert d['payslips'] is None and d['attendance'] is None   # only leave granted
+
+
 def test_clock_toggles_in_then_out(app):
     uid, sid = _linked_staff_user(app, 'ss_toggle', {'hr.self_attendance': 'edit'})
     with app.app_context():
