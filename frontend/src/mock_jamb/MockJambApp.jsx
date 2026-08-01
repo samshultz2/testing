@@ -35,6 +35,7 @@ function Index({ d }) {
     <>
       <div className="mb-4"><div className="d-flex justify-between align-center flex-wrap gap-2">
         <div><h1>Mock JAMB Examinations</h1><p className="text-muted text-sm mt-1">Track and analyze mock JAMB performance</p></div>
+        {!d.derived && (
         <div className="d-flex gap-2">
           <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>
           {d.urls.bank && <a href={d.urls.bank} className="btn btn-outline" data-native><i aria-hidden="true" className="fas fa-database" /> Question Bank</a>}
@@ -42,7 +43,7 @@ function Index({ d }) {
           {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Progress Trends</a>}
           {d.urls.validation && <a href={d.urls.validation} className="btn btn-outline"><i aria-hidden="true" className="fas fa-bullseye" /> Validation</a>}
           <a href={d.urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-crystal-ball" /> Predictions</a>
-        </div>
+        </div>)}
       </div></div>
 
       <div className="card mb-4"><div className="card-body">
@@ -80,10 +81,10 @@ function Index({ d }) {
                       <div className="font-bold">{v}</div><div className="text-xs text-muted">{l}</div></div>))}
                 </div>
                 <div className="d-flex gap-2 flex-wrap">
-                  <a href={e.view_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View</a>
-                  <a href={e.add_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-plus" /> Add Results</a>
-                  <a href={e.bulk_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-list" /> Bulk Entry</a>
-                  {e.deep_url && <a href={e.deep_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-brain" /> Deep</a>}
+                  {!d.derived && <a href={e.view_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View</a>}
+                  <a href={e.add_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-plus" /> {d.derived ? 'Enter results' : 'Add Results'}</a>
+                  {!d.derived && <a href={e.bulk_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-list" /> Bulk Entry</a>}
+                  {!d.derived && e.deep_url && <a href={e.deep_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-brain" /> Deep</a>}
                 </div>
               </div></div>
             ))}</div>

@@ -122,3 +122,25 @@ def test_derived_teacher_blocked_from_analytics(app):
     c = _login(app, 'NOAN')
     # School-wide analytics stays admin/full-module only.
     assert c.get('/results/waec/analytics').status_code in (302, 403)
+
+
+def test_sss3_teacher_reaches_mock_dashboards(app):
+    _seed(app, 'MOCK', assign='class')
+    c = _login(app, 'MOCK')
+    assert c.get('/mock-jamb/').status_code == 200
+    assert c.get('/mock-waec/').status_code == 200
+
+
+def test_derived_teacher_blocked_from_mock_bank_and_analytics(app):
+    _seed(app, 'MOCKX', assign='class')
+    c = _login(app, 'MOCKX')
+    # Shared question bank and cohort analytics stay admin/full-module only.
+    assert c.get('/mock-jamb/bank').status_code in (302, 403)
+    assert c.get('/mock-jamb/analytics').status_code in (302, 403)
+
+
+def test_mock_jamb_student_progress_arm_scoped(app):
+    ids = _seed(app, 'MOCKPS', assign='class')
+    c = _login(app, 'MOCKPS')
+    assert c.get(f"/mock-jamb/student/{ids['s_mine']}").status_code == 200
+    assert c.get(f"/mock-jamb/student/{ids['s_other']}").status_code == 403

@@ -44,15 +44,27 @@ def index():
     if not session_id and active_session:
         session_id = active_session.id
 
-    exams, comparison = [], []
+    # A derived SSS3-arm teacher sees the exams for entry, but only their arm's
+    # counts and none of the cohort comparison.
+    from utils.access_control import has_sss3_exam_access, exam_student_scope
+    derived = has_sss3_exam_access()
+    scope = exam_student_scope()
+
+    exams, comparison, arm_counts = [], [], {}
     if session_id:
         exams = scope_query(MockWAECExam.query.filter_by(session_id=session_id),
                             MockWAECExam).order_by(MockWAECExam.exam_number).all()
-        comparison = MockWAECAnalytics.compare_mock_exams(session_id)
+        if scope is None:
+            comparison = MockWAECAnalytics.compare_mock_exams(session_id)
+        else:
+            for e in exams:
+                arm_counts[e.id] = len({r.student_id for r in e.results
+                                        if r.student_id in scope})
 
     return render_template('mock_waec/index.html',
         sessions=sessions, selected_session_id=session_id,
-        exams=exams, comparison=comparison)
+        exams=exams, comparison=comparison,
+        derived_exam=derived, arm_counts=arm_counts)
 
 
 # =============================================================================
@@ -506,6 +518,8 @@ def add_result(exam_id):
         if not student_id:
             flash('Please select a student.', 'error')
             return redirect(url_for('mock_waec.add_result', exam_id=exam_id))
+        from utils.access_control import assert_exam_student
+        assert_exam_student(student_id)          # own-arm only for SSS3 teachers
         subjects = request.form.getlist('subject[]')
         scores = request.form.getlist('score[]')
         grades = request.form.getlist('grade[]')
@@ -527,6 +541,11 @@ def add_result(exam_id):
         db.session.commit()
         recompute_student_safe(student_id)
         flash(f'{saved} subject result(s) saved.', 'success')
+        # SSS3 arm teachers can't open the cohort exam view — send them to the
+        # student's own progress page instead.
+        from utils.access_control import has_sss3_exam_access
+        if has_sss3_exam_access():
+            return redirect(url_for('mock_waec.student_progress', student_id=student_id))
         return redirect(url_for('mock_waec.view_exam', exam_id=exam_id))
 
     return render_template('mock_waec/add_result.html',
@@ -737,6 +756,8 @@ def edit_student_results(exam_id, student_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     student = db.get_or_404(Student, student_id)
+    from utils.access_control import assert_exam_student
+    assert_exam_student(student_id)          # own-arm only for SSS3 teachers
 
     def _clean_score(raw):
         return max(0, min(100, int(round(float(raw)))))
@@ -857,6 +878,8 @@ _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School 
 def result_slip(exam_id, student_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
+    from utils.access_control import assert_exam_student
+    assert_exam_student(student_id)          # own-arm only for SSS3 teachers
     student = db.get_or_404(Student, student_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
         show_signers=True, title=f'Result — {student.full_name}', options=_OPTS_SLIP,
@@ -881,6 +904,8 @@ def result_slips_all(exam_id):
 def result_slip_pdf(exam_id, student_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
+    from utils.access_control import assert_exam_student
+    assert_exam_student(student_id)          # own-arm only for SSS3 teachers
     from utils.mock_waec_pdf import result_slips_pdf
     buf = result_slips_pdf(_slips_for(exam_id, student_id), exam,
                            _school_profile(), opts=_pdf_opts(), signers=_signers())
@@ -913,6 +938,8 @@ def result_slips_pdf_view(exam_id):
 def student_progress(student_id):
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
+    from utils.access_control import assert_exam_student
+    assert_exam_student(student_id)          # own-arm only for SSS3 teachers
     progress = MockWAECAnalytics.get_student_progress(student_id)
     prediction = MockWAECAnalytics.predict_waec(student_id)
     return render_template('mock_waec/student_progress.html',

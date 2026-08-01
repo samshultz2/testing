@@ -100,28 +100,37 @@ def index():
                             MockJAMBExam).order_by(MockJAMBExam.exam_number).all()
         comparison_data = MockJAMBAnalytics.compare_mock_exams(session_id)
     
+    # A derived SSS3-arm teacher sees only their own arm's figures on each exam.
+    from utils.access_control import exam_student_scope
+    _scope = exam_student_scope()
+
     def exam_row(e):
-        above_200 = sum(1 for r in e.results if r.total_score and r.total_score >= 200)
+        rows = [r for r in e.results if _scope is None or r.student_id in _scope]
+        scored = [r.total_score for r in rows if r.total_score is not None]
+        above_200 = sum(1 for v in scored if v >= 200)
         return {
             'id': e.id, 'display_name': e.display_name, 'is_completed': bool(e.is_completed),
             'exam_date': e.exam_date.strftime('%d %B %Y') if e.exam_date else '',
-            'student_count': e.student_count,
-            'average_score': round(e.average_score, 1) if e.student_count > 0 else None,
+            'student_count': len(rows),
+            'average_score': round(sum(scored) / len(scored), 1) if scored else None,
             'above_200': above_200,
             'view_url': url_for('mock_jamb.view_exam', exam_id=e.id),
             'add_url': url_for('mock_jamb.add_result', exam_id=e.id),
             'bulk_url': url_for('mock_jamb.bulk_entry', exam_id=e.id),
             'deep_url': url_for('mock_jamb.deep', exam_id=e.id),
         }
-    avg_scores = [e.average_score for e in exams if e.student_count > 0]
+    _rows = [exam_row(e) for e in exams]
+    avg_scores = [r['average_score'] for r in _rows if r['average_score'] is not None]
     return _render({
-        'page': 'index', 'selected_session_id': session_id or '',
+        'page': 'index', 'selected_session_id': session_id or '', 'derived': bool(_scope is not None),
         'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
-        'exams': [exam_row(e) for e in exams],
-        'stats': {'count': len(exams), 'total_results': sum(e.student_count for e in exams),
+        'exams': _rows,
+        'stats': {'count': len(exams), 'total_results': sum(r['student_count'] for r in _rows),
                   'avg_score': round(sum(avg_scores) / len(avg_scores), 1) if avg_scores else None,
                   'remaining': 4 - len(exams)},
-        'comparison': [{'label': c['exam'].display_name, 'average': round(c['average'], 1),
+        # No cohort comparison for a derived (arm-only) teacher.
+        'comparison': [] if _scope is not None else
+                      [{'label': c['exam'].display_name, 'average': round(c['average'], 1),
                         'above_250': round((c.get('above_250_pct') or 0) * c['student_count'] / 100)}
                        for c in (comparison_data or [])],
         'urls': {'create': url_for('mock_jamb.create_exam'), 'analytics': url_for('mock_jamb.analytics'),
@@ -393,6 +402,8 @@ def add_result(exam_id):
 
             if not student_id:
                 return _err('Please select a student.', url_for('mock_jamb.add_result', exam_id=exam_id))
+            from utils.access_control import assert_exam_student
+            assert_exam_student(student_id)          # own-arm only for SSS3 teachers
 
             # Check if result already exists
             existing = MockJAMBResult.query.filter_by(student_id=student_id, mock_exam_id=exam_id).first()
@@ -423,8 +434,13 @@ def add_result(exam_id):
 
             db.session.add(result)
             db.session.commit()
-            dest = (url_for('mock_jamb.add_result', exam_id=exam_id) if request.form.get('add_another')
-                    else url_for('mock_jamb.view_exam', exam_id=exam_id))
+            from utils.access_control import has_sss3_exam_access
+            if request.form.get('add_another'):
+                dest = url_for('mock_jamb.add_result', exam_id=exam_id)
+            elif has_sss3_exam_access():   # can't open the cohort exam view
+                dest = url_for('mock_jamb.student_progress', student_id=student_id)
+            else:
+                dest = url_for('mock_jamb.view_exam', exam_id=exam_id)
             return _ok('Result added successfully!', dest)
 
         except Exception as e:
@@ -565,6 +581,8 @@ def edit_result(result_id):
     from utils.branch_scope import require_branch_access
     result = db.get_or_404(MockJAMBResult, result_id)
     require_branch_access(result.student.branch_id)   # scope by the result's student
+    from utils.access_control import assert_exam_student
+    assert_exam_student(result.student_id)            # own-arm only for SSS3 teachers
 
     if request.method == 'POST':
         try:
@@ -643,8 +661,9 @@ def delete_result(result_id):
 def student_progress(student_id):
     """View a student's progress across all mock exams"""
     student = db.get_or_404(Student, student_id)
-    from utils.access_control import assert_student_access
+    from utils.access_control import assert_student_access, assert_exam_student
     assert_student_access(student)   # branch + form-teacher scope
+    assert_exam_student(student_id)  # own-arm only for derived SSS3 exam teachers
 
     session_id = request.args.get('session_id', type=int)
     active_session = get_active_session()
@@ -919,6 +938,8 @@ def student_mastery_view(student_id):
     from models import Student
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
+    from utils.access_control import assert_exam_student
+    assert_exam_student(student_id)   # own-arm only for derived SSS3 exam teachers
     data = student_mastery(student_id)
     return render_template('mock_jamb/student_mastery.html', data=data, student=student,
                            urls={'index': url_for('mock_jamb.index'),

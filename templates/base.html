@@ -581,6 +581,16 @@
                             <i class="fas fa-file-contract"></i><span>JAMB</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('mock_jamb.index') }}" class="nav-link {% if 'mock_jamb' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-clipboard-list"></i><span>Mock JAMB</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('mock_waec.index') }}" class="nav-link {% if 'mock_waec' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-clipboard-check"></i><span>Mock WAEC</span>
+                        </a>
+                    </li>
                     {% endif %}
                     {% if can_access_module('reports') %}
                     <li class="nav-section">Reports</li>

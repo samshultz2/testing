@@ -1264,16 +1264,33 @@ def exam_student_scope():
     return {e.student_id for e in rows}
 
 
-# WAEC/JAMB endpoints a derived SSS3-arm teacher may reach. Deliberately excludes
-# school-wide analytics, exports, the aggregate APIs and the Mock modules — those
-# stay admin / full-module only, so no cross-arm data can leak.
+# WAEC/JAMB + Mock endpoints a derived SSS3-arm teacher may reach. Deliberately
+# excludes school-wide analytics, exports, cohort grids/broadsheets, the aggregate
+# APIs and the shared question bank — those stay admin / full-module only, so no
+# cross-arm data can leak. Everything here is either arm-scoped in the view or
+# guarded per student.
 _SSS3_EXAM_ENDPOINTS = {
     'results.index',
     'results.waec_list', 'results.add_waec', 'results.scan_waec', 'results.paste_waec',
     'results.view_waec_student', 'results.edit_waec', 'results.waec_student_analysis',
     'results.jamb_list', 'results.add_jamb', 'results.scan_jamb', 'results.paste_jamb',
     'results.scan_batch', 'results.view_jamb_student', 'results.edit_jamb',
+    # Mock JAMB — dashboard, single-student entry, per-student views.
+    'mock_jamb.index', 'mock_jamb.add_result', 'mock_jamb.edit_result',
+    'mock_jamb.student_progress', 'mock_jamb.student_mastery_view',
+    # Mock WAEC — dashboard, single-student entry, per-student views/slips.
+    'mock_waec.index', 'mock_waec.add_result', 'mock_waec.edit_student_results',
+    'mock_waec.student_progress', 'mock_waec.result_slip', 'mock_waec.result_slip_pdf',
 }
+
+
+def assert_exam_student(student_id):
+    """Abort 403 unless the current user may touch THIS student's exam data. A
+    no-op for admins and full-module holders; for a derived SSS3-arm teacher it
+    enforces their own-arm scope. Use on every per-student WAEC/JAMB/Mock route."""
+    scope = exam_student_scope()
+    if scope is not None and int(student_id) not in scope:
+        abort(403)
 
 
 def graduates_access_required(f):
