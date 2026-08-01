@@ -34,6 +34,40 @@ def test_delete_user_hard_removes(app):
         assert db.session.get(User, uid) is None
 
 
+def test_delete_user_with_session_still_hard_deletes(app):
+    from models import UserSession
+    with app.app_context():
+        u = User(username='del_sess', full_name='Del Sess', role='staff')
+        u.set_password('CorrectHorse9'); db.session.add(u); db.session.flush()
+        db.session.add(UserSession(user_id=u.id, sid='sess-del-1'))
+        db.session.commit()
+        uid = u.id
+    c = _admin(app)
+    c.post(f'/users/{uid}/delete', data={'_csrf_token': auth_csrf(c)}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(User, uid) is None                     # the session no longer blocks it
+        assert UserSession.query.filter_by(user_id=uid).count() == 0
+
+
+def test_delete_user_with_teacher_profile_succeeds(app):
+    # A teacher-linked user still deletes: SQLAlchemy cascades the teacher
+    # profile, and the transient blockers (sessions) are cleared first. (The
+    # Postgres-only deactivate fallback for records with no ORM cascade — e.g.
+    # chat messages — can't be exercised under SQLite, which doesn't enforce FKs.)
+    from models import Teacher
+    with app.app_context():
+        u = User(username='del_teacher', full_name='Del Teacher', role='teacher')
+        u.set_password('CorrectHorse9'); db.session.add(u); db.session.flush()
+        db.session.add(Teacher(user_id=u.id))
+        db.session.commit()
+        uid = u.id
+    c = _admin(app)
+    r = c.post(f'/users/{uid}/delete', data={'_csrf_token': auth_csrf(c)}, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        assert db.session.get(User, uid) is None
+
+
 def test_delete_staff_hard_when_clean(app):
     with app.app_context():
         bid = Branch.get_default().id

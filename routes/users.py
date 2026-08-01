@@ -569,24 +569,49 @@ def delete_user(user_id):
     if user.id == session.get('user_id'):
         return _err('You cannot delete your own account.', url_for('users.index'))
 
-    # Prevent deleting super_admin if not super_admin
-    current_user = db.session.get(User, session.get('user_id'))
-    if user.is_super_admin and not current_user.is_super_admin:
+    # Prevent deleting super_admin if not super_admin. The legacy password admin
+    # has no user row (current_user is None) and is treated as super.
+    _me = session.get('user_id')
+    current_user = db.session.get(User, _me) if _me else None
+    actor_super = current_user.is_super_admin if current_user else True
+    if user.is_super_admin and not actor_super:
         return _err('Only super admins can delete other super admins.', url_for('users.index'))
 
     username = user.username
+    uid = user.id
     # Audit BEFORE the delete so the actor + who was removed is recorded even if
     # the row (and its label) is gone afterwards.
     log_action('user.delete',
                detail=f'{username} (role={user.role}, scope={user.scope}, branch={user.branch_id})',
-               target_type='user', target_id=user.id, target_label=username)
+               target_type='user', target_id=uid, target_label=username)
+    # Clear the cheap/transient references that would block a clean delete but
+    # carry no value once the account is gone, and unlink (don't delete) their
+    # staff record so its history survives.
     try:
+        from models import UserSession, Notification, StaffMember
+        UserSession.query.filter_by(user_id=uid).delete(synchronize_session=False)
+        Notification.query.filter_by(user_id=uid).delete(synchronize_session=False)
+        StaffMember.query.filter_by(user_id=uid).update({'user_id': None},
+                                                        synchronize_session=False)
+        db.session.flush()
         db.session.delete(user)
         db.session.commit()
-    except Exception as e:
+        return _ok(f'User "{username}" deleted successfully!', url_for('users.index'))
+    except Exception:
+        # Still referenced elsewhere (teacher profile, chat messages, created-by
+        # trails, …). Keep the row but fully disable it, and end any live session.
         db.session.rollback()
-        return _err(f'Error deleting user: {str(e)}', url_for('users.index'))
-    return _ok(f'User "{username}" deleted successfully!', url_for('users.index'))
+        u2 = db.session.get(User, uid)
+        if u2 is None:
+            return _ok(f'User "{username}" deleted successfully!', url_for('users.index'))
+        u2.is_active = False
+        try:
+            u2.token_version = (u2.token_version or 0) + 1   # invalidate live logins
+        except Exception:
+            pass
+        db.session.commit()
+        return _ok(f'"{username}" has linked records, so it was deactivated (sign-in '
+                   f'blocked) instead of being permanently deleted.', url_for('users.index'))
 
 
 # ============================================================================
