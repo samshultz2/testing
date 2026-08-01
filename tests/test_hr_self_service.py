@@ -144,6 +144,42 @@ def test_self_loans_shows_own_balance_not_module(app):
         assert d['payslips'] is None and d['leave'] is None           # only loans granted
 
 
+def test_self_documents_own_only_and_download_boundary(app):
+    """A holder lists + downloads only their OWN documents; another staff's
+    document id 404s, and no capability is a hard 403."""
+    from models import StaffDocument
+    uid, sid = _linked_staff_user(app, 'ss_docs', {'hr.self_documents': 'view'})
+    other_uid, other_sid = _linked_staff_user(app, 'ss_docs_other', {'hr.self_documents': 'view'})
+    with app.app_context():
+        mine = StaffDocument(staff_id=sid, title='My Contract', doc_type='Employment contract',
+                             is_current=True)
+        theirs = StaffDocument(staff_id=other_sid, title='Their Contract', is_current=True)
+        db.session.add_all([mine, theirs]); db.session.commit()
+        my_doc_id, their_doc_id = mine.id, theirs.id
+    # Assembler lists only the caller's own document.
+    with app.test_request_context('/'):
+        session.update(logged_in=True, user_id=uid, role='staff')
+        from utils.hr import hr_self_service
+        d = hr_self_service(db.session.get(User, uid))
+        titles = {x['title'] for x in d['documents']}
+        assert 'My Contract' in titles and 'Their Contract' not in titles
+    # HTTP download authorization.
+    c = app.test_client()
+    c.post('/login', data={'username': 'ss_docs', 'password': 'CorrectHorse9',
+                           '_csrf_token': login_token(c)})
+    own = c.get(f'/hr/me/documents/{my_doc_id}')
+    other = c.get(f'/hr/me/documents/{their_doc_id}')
+    assert own.status_code == 404 and b'File not found' in own.data     # passed cap+ownership
+    assert other.status_code == 404 and b'File not found' not in other.data  # blocked at ownership
+
+    # A user without the capability is refused outright.
+    nocap_uid, _ = _linked_staff_user(app, 'ss_docs_nocap', {'students': 'view'})
+    c2 = app.test_client()
+    c2.post('/login', data={'username': 'ss_docs_nocap', 'password': 'CorrectHorse9',
+                            '_csrf_token': login_token(c2)})
+    assert c2.get(f'/hr/me/documents/{my_doc_id}').status_code == 403
+
+
 def test_clock_toggles_in_then_out(app):
     uid, sid = _linked_staff_user(app, 'ss_toggle', {'hr.self_attendance': 'edit'})
     with app.app_context():

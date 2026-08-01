@@ -1226,6 +1226,34 @@ def clock():
     return _ok(msg, url_for('auth.profile'))
 
 
+@hr_bp.route('/me/documents/<int:doc_id>')
+@login_required
+def my_document(doc_id):
+    """Self-service download of ONE of the caller's own HR documents. Requires
+    the 'hr.self_documents' capability and verifies the document belongs to the
+    logged-in user's own staff record — a staff member can never fetch another
+    person's file by guessing an id."""
+    from flask import send_file
+    from utils.access_control import self_scope_level
+    from utils import comm_attachments as CA
+    from models import StaffDocument, CommAttachment
+    if not self_scope_level('hr.self_documents'):
+        abort(403)
+    staff = _current_staff()
+    if not staff:
+        abort(403)
+    doc = db.session.get(StaffDocument, doc_id)
+    if not doc or doc.staff_id != staff.id:      # ownership boundary
+        abort(404)
+    att = db.session.get(CommAttachment, doc.attachment_id) if doc.attachment_id else None
+    path = CA.fs_path(att) if att else None
+    if not path:
+        return ('File not found.', 404)
+    return send_file(path, as_attachment=True,
+                     download_name=att.original_name or f'{doc.title}',
+                     mimetype=att.content_type or 'application/octet-stream')
+
+
 @hr_bp.route('/attendance/qr')
 @admin_required
 def checkin_qr():

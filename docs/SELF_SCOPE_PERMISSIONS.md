@@ -50,6 +50,7 @@ Registry lives in `utils/access_control.py`:
 | `hr.self_deductions` | view own salary deductions (read-only) | /account → My deductions |
 | `hr.self_leave` | view own leave records + balances | /account → My leave |
 | `hr.self_loans` | view own staff-loan balance + repayment progress | /account → My staff loans |
+| `hr.self_documents` | view + download own HR documents | /account → My documents (→ `hr.my_document`) |
 | `library.self_loans` | view own borrowed books | /account → My library loans |
 
 ## Adding a self-scope capability to another module

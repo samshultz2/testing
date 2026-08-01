@@ -69,6 +69,9 @@ _ALWAYS_ALLOWED_ENDPOINTS = {
     # writes the caller's own attendance row. Its read-side (own attendance,
     # payslips, deductions) lives on the /account self-service page.
     'hr.clock',
+    # Self document download: requires 'hr.self_documents' and only serves a
+    # file that belongs to the caller's own staff record (checked in-view).
+    'hr.my_document',
 }
 
 # Default module set when a non-admin user has no explicit allowed_modules.
@@ -178,6 +181,7 @@ MODULE_SUBSECTIONS = {
         'self_deductions': 'My deductions — view own (self)',
         'self_leave': 'My leave — view own & balances (self)',
         'self_loans': 'My staff loans — view own balance (self)',
+        'self_documents': 'My documents — view/download own (self)',
     },
     'external_exams': {
         'waec': 'WAEC Results',
@@ -222,7 +226,7 @@ MODULE_SUBSECTIONS = {
 CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
                           'sales.approve_po', 'sales.signoff_count',
                           'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
-                          'hr.self_leave', 'hr.self_loans', 'library.self_loans'}
+                          'hr.self_leave', 'hr.self_loans', 'hr.self_documents', 'library.self_loans'}
 
 # Self-scope capabilities: an explicit grant that lets a user act on their OWN
 # record only (never other people's) — the finest permission tier. They ride on
@@ -230,7 +234,7 @@ CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
 # route implementation is what enforces the "own record" boundary. Registered
 # here so the UI can label them distinctly and so callers can reason about them.
 SELF_SCOPE_SUBSECTIONS = {'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
-                          'hr.self_leave', 'hr.self_loans', 'library.self_loans'}
+                          'hr.self_leave', 'hr.self_loans', 'hr.self_documents', 'library.self_loans'}
 
 
 def self_scope_level(key):

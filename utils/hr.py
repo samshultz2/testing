@@ -163,12 +163,13 @@ def hr_self_service(user):
     ded_lvl = self_scope_level('hr.self_deductions')
     leave_lv = self_scope_level('hr.self_leave')
     loans_lv = self_scope_level('hr.self_loans')
-    if not (att_lvl or pay_lvl or ded_lvl or leave_lv or loans_lv):
+    docs_lv = self_scope_level('hr.self_documents')
+    if not (att_lvl or pay_lvl or ded_lvl or leave_lv or loans_lv or docs_lv):
         return None
     out = {'staff_name': staff.full_name, 'can_clock': att_lvl == 'edit',
            'attendance': None, 'today': None, 'clock_action': None,
            'payslips': None, 'deductions': None,
-           'leave': None, 'leave_balances': None, 'loans': None}
+           'leave': None, 'leave_balances': None, 'loans': None, 'documents': None}
     today = _dt.date.today()
     if att_lvl:
         rows = (StaffAttendance.query.filter_by(staff_id=staff.id)
@@ -233,6 +234,18 @@ def hr_self_service(user):
                          'monthly': round(l.monthly_amount or 0, 2),
                          'deadline': l.deadline.strftime('%d %b %Y') if l.deadline else '—'}
                         for l in loans]
+    if docs_lv:
+        from models import StaffDocument
+        from flask import url_for
+        docs = (StaffDocument.query.filter_by(staff_id=staff.id, is_current=True)
+                .order_by(StaffDocument.created_at.desc()).all())
+        out['documents'] = [{'id': dcm.id, 'title': dcm.title,
+                             'type': dcm.doc_type or 'Other', 'version': dcm.version or 1,
+                             'expires': dcm.expires_on.strftime('%d %b %Y') if dcm.expires_on else '',
+                             'expired': dcm.is_expired,
+                             'has_file': bool(dcm.attachment_id),
+                             'url': url_for('hr.my_document', doc_id=dcm.id)}
+                            for dcm in docs]
     return out
 
 
