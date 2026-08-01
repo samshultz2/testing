@@ -22,6 +22,19 @@ from utils import hr
 hr_bp = Blueprint('hr', __name__, url_prefix='/hr')
 
 
+@hr_bp.before_request
+def _ensure_hr_schema():
+    """Self-heal the tenant DB's post-baseline HR columns (once per engine) so a
+    database behind on migrations doesn't 500 on any HR page that loads a
+    StaffAttendance row (e.g. the staff detail's attendance summary). Runs after
+    the tenant DB is bound; cached per engine so it's a no-op after the first hit."""
+    try:
+        from utils.hr_schema import ensure_hr_schema
+        ensure_hr_schema()
+    except Exception:
+        pass
+
+
 def _d(value, default=None):
     try:
         return datetime.strptime(value, '%Y-%m-%d').date()

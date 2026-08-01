@@ -269,6 +269,14 @@ def create_app(config_class=None):
             ensure_tables()
     except Exception:
         app.logger.exception('Could not ensure finance tables on the main database')
+    # Post-baseline HR columns (e.g. staff_attendance.clock_out) on the bound DB.
+    # Multi-tenant DBs also self-heal per-request via the HR blueprint hook.
+    try:
+        from utils.hr_schema import ensure_hr_schema
+        with app.app_context():
+            ensure_hr_schema()
+    except Exception:
+        app.logger.exception('Could not ensure HR columns on the main database')
 
     # Enable CSRF protection for all state-changing requests
     from utils.csrf import init_csrf

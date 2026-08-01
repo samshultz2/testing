@@ -659,6 +659,11 @@ def _dash_hr():
     try:
         from utils.branch_scope import scope_query
         from models import StaffMember
+        try:
+            from utils.hr_schema import ensure_hr_schema
+            ensure_hr_schema()   # StaffAttendance query below selects clock_out
+        except Exception:
+            pass
         rows = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).all()
         total = len(rows)
         teaching = sum(1 for s in rows if (getattr(s, 'staff_type', '') or '').lower().startswith('teach'))
