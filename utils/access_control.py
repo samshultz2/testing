@@ -722,6 +722,50 @@ _READONLY_WRITE_OK = {'auth.login', 'auth.logout', 'auth.change_password',
 _SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS'}
 
 
+# --- Write-form endpoints ---------------------------------------------------
+# An endpoint whose GET renders a *create / edit / import form* (as opposed to a
+# read-only list or dashboard). A user who can only VIEW a module has no reason
+# to sit on such a page — the write always fails — so the access gates redirect
+# them out on arrival (GET), not merely on submit (POST). This is what makes a
+# pasted URL like /students/add bounce a view-only user to their dashboard.
+#
+# We detect these by the view-function name (the part after the blueprint dot).
+# The app names its form endpoints consistently (add_*, edit_*, create_*,
+# import_*, …); pages that double as a *view* with an inline action (score
+# broadsheets, comment/behaviour sheets, settings screens) are deliberately NOT
+# matched here so a viewer keeps read access to them.
+_WRITE_ENDPOINT_PREFIXES = (
+    'add_', 'edit_', 'create_', 'new_', 'update_', 'delete_', 'remove_',
+    'import_', 'record_', 'assign_',
+)
+_WRITE_ENDPOINT_SUFFIXES = ('_new', '_add', '_edit', '_create', '_import', '_delete')
+_WRITE_ENDPOINT_EXACT = {
+    'new_sale', 'compose', 'issue', 'quick_entry', 'loan_new',
+    'bank_import', 'bank_edit_question', 'edit_mock_question',
+}
+
+
+def is_write_form_endpoint(endpoint):
+    """True when ``endpoint``'s GET renders a create/edit/import form, so a
+    view-only user should be redirected out rather than shown the form."""
+    if not endpoint:
+        return False
+    name = endpoint.split('.')[-1]
+    if name in _WRITE_ENDPOINT_EXACT:
+        return True
+    if name.startswith(_WRITE_ENDPOINT_PREFIXES):
+        return True
+    if name.endswith(_WRITE_ENDPOINT_SUFFIXES):
+        return True
+    return False
+
+
+def _is_write_request(endpoint):
+    """A request that requires edit-level: any unsafe HTTP method, OR a GET that
+    lands on a create/edit/import form page."""
+    return request.method not in _SAFE_METHODS or is_write_form_endpoint(endpoint)
+
+
 def is_read_only():
     """True if the current user may browse but not change anything."""
     if is_admin():
@@ -733,12 +777,19 @@ def is_read_only():
 
 
 def enforce_read_only():
-    """before_request gate: block create/edit/delete for view-only users."""
-    if not session.get('logged_in') or request.method in _SAFE_METHODS:
+    """before_request gate: block create/edit/delete for view-only users.
+
+    Blocks both unsafe methods and GETs that land on a create/edit/import form
+    page, so a view-only account is redirected out of e.g. /students/add rather
+    than shown a form it can never submit."""
+    if not session.get('logged_in'):
+        return None
+    endpoint = request.endpoint or ''
+    if not _is_write_request(endpoint):
         return None
     if not is_read_only():
         return None
-    if (request.endpoint or '') in _READONLY_WRITE_OK:
+    if endpoint in _READONLY_WRITE_OK:
         return None
     if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
         abort(403)
@@ -760,12 +811,18 @@ def _deny_access(view_only=False):
 
 
 def enforce_write_level():
-    """before_request gate: block writes to a module the user can only view."""
-    if not session.get('logged_in') or request.method in _SAFE_METHODS:
+    """before_request gate: block writes to a module the user can only view.
+
+    "Writes" here means any unsafe method AND any GET that renders a
+    create/edit/import form page — so a view-only user who pastes the URL of a
+    form (e.g. /hr/staff/add) is redirected out, not just blocked on submit."""
+    if not session.get('logged_in'):
+        return None
+    endpoint = request.endpoint or ''
+    if not _is_write_request(endpoint):
         return None
     if is_admin():
         return None   # admins may write (global view-only handled by enforce_read_only)
-    endpoint = request.endpoint or ''
     if endpoint in _ALWAYS_ALLOWED_ENDPOINTS or endpoint in _READONLY_WRITE_OK:
         return None
     if subsection_for_endpoint(endpoint):
@@ -861,7 +918,7 @@ def enforce_subsection_access():
     lvl = subsection_level(module, sub)
     if lvl is None:
         return _deny_access()                              # no access to this part
-    if request.method not in _SAFE_METHODS and lvl != 'edit':
+    if _is_write_request(request.endpoint) and lvl != 'edit':
         return _deny_access(view_only=True)                # view-only part
     return None
 
