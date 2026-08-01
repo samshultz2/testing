@@ -47,6 +47,12 @@
 .att-grid .att-grid-name { text-align: left; white-space: nowrap; position: sticky; left: 0;
   background: var(--bg-card); z-index: 1; font-weight: 600; }
 .att-grid input[type=checkbox] { width: 18px; height: 18px; }
+/* Narrow summary tables (gender / session) never scroll horizontally, so the
+   sticky first column is unneeded — and on Android Chrome a sticky cell in a
+   width:100% table collapses it to content width, leaving a blank strip on the
+   right. Fixed layout + a static first column makes them fill the card. */
+.att-grid--summary { table-layout: fixed; }
+.att-grid--summary .att-grid-name { position: static; background: transparent; width: 38%; }
 .att-ampm { display: inline-flex; gap: 8px; }
 .att-ampm label { display: inline-flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--text-muted, #6b7280); gap: 2px; cursor: pointer; }
 

@@ -87,7 +87,7 @@ export default function TermlyReport() {
 
             <SectionTitle icon="fa-venus-mars">Gender</SectionTitle>
             <div className="att-grid-wrap">
-              <table className="att-grid" aria-label="Attendance by gender">
+              <table className="att-grid att-grid--summary" aria-label="Attendance by gender">
                 <thead>
                   <tr><th scope="col" className="att-grid-name">Gender</th><th scope="col">Count</th><th scope="col">Attendance</th><th scope="col">Avg</th></tr>
                 </thead>
@@ -110,13 +110,15 @@ export default function TermlyReport() {
                       not the term-wide daily average (ct.termly_average) which reads
                       as a nonsense "30.59" next to the 83/87 rows. */}
                   <tr><td className="att-grid-name">Total</td><td>{d.total_students}</td><td>{ct.total_attendance}</td><td>{d.total_students > 0 ? round1(ct.total_attendance / d.total_students) : 0}</td></tr>
+                  {/* Average number of students present on a typical day. */}
+                  <tr><td className="att-grid-name" colSpan={3}>Avg students present / day</td><td>{ct.termly_average}</td></tr>
                 </tfoot>
               </table>
             </div>
 
             <SectionTitle icon="fa-clock">Session</SectionTitle>
             <div className="att-grid-wrap">
-              <table className="att-grid" aria-label="Attendance by session">
+              <table className="att-grid att-grid--summary" aria-label="Attendance by session">
                 <thead>
                   <tr><th scope="col" className="att-grid-name">Session</th><th scope="col">Total</th><th scope="col">Max</th><th scope="col">%</th></tr>
                 </thead>
