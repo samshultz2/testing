@@ -748,6 +748,9 @@ def enforce_module_access():
         return None
     if endpoint in _GRADUATE_ENDPOINTS and can_access_graduates():
         return None
+    # SSS3 arm teachers reach the arm-scoped WAEC/JAMB pages without the module.
+    if endpoint in _SSS3_EXAM_ENDPOINTS and has_sss3_exam_access():
+        return None
     blueprint = endpoint.split('.')[0]
     module = BLUEPRINT_MODULE.get(blueprint)
     if module and module not in user_modules():
@@ -952,6 +955,10 @@ def enforce_password_change():
 def enforce_subsection_access():
     """before_request gate: per-sub-section access/write for granular users."""
     if not session.get('logged_in') or is_admin():
+        return None
+    # SSS3 arm teachers reach the whitelisted WAEC/JAMB pages via derived access,
+    # so don't hold them to the external_exams sub-section grants.
+    if request.endpoint in _SSS3_EXAM_ENDPOINTS and has_sss3_exam_access():
         return None
     res = subsection_for_endpoint(request.endpoint)
     if not res:
@@ -1193,6 +1200,80 @@ def can_access_graduates():
     data and the cross-cohort analysis are sensitive and SSS3-specific, so plain
     teachers / other staff are excluded even though they can log in."""
     return is_admin() or is_sss3_form_teacher()
+
+
+# --- External Exams: automatic, arm-scoped access for SSS3 teachers ----------
+# A teacher assigned to an SSS3 arm (as form teacher OR subject teacher) gets
+# automatic access to the External Exams (WAEC/JAMB) surfaces for THAT arm only,
+# even without holding the external_exams module. It is derived from live
+# assignments, so removing the assignment revokes the access. Branch-scoped
+# throughout; per-tenant DBs give the school scoping for free.
+
+def teacher_sss3_arm_ids():
+    """Active class_arm_assignment_ids of SSS3 arms the current teacher is
+    assigned to (form or subject teacher), within the caller's branch scope.
+    Empty for admins/non-teachers. Looks up the teaching profile directly (not
+    via get_teacher_profile) so staff-role accounts that teach still qualify."""
+    user = get_current_user()
+    teacher = user.teacher_profile if user else None
+    if not teacher:
+        return set()
+    from utils.branch_scope import can_access_branch
+    caa_ids = {a.class_arm_assignment_id for a in
+               teacher.class_assignments.filter_by(is_active=True).all()}
+    caa_ids |= {a.class_arm_assignment_id for a in
+                teacher.subject_assignments.filter_by(is_active=True).all()}
+    out = set()
+    for cid in caa_ids:
+        caa = db.session.get(ClassArmAssignment, cid)
+        if (caa and caa.school_class and caa.school_class.name == 'SSS3'
+                and can_access_branch(caa.branch_id)):
+            out.add(cid)
+    return out
+
+
+def has_sss3_exam_access():
+    """True when a non-admin who does NOT already hold the External Exams module
+    is assigned to at least one SSS3 arm — the trigger for automatic, arm-scoped
+    WAEC/JAMB access. Admins and full module-holders return False (they don't
+    need the derived grant)."""
+    if is_admin():
+        return False
+    if module_level('external_exams') is not None:
+        return False
+    return bool(teacher_sss3_arm_ids())
+
+
+def exam_student_scope():
+    """Student ids an External-Exams user may see, or None for no extra limit.
+
+    * Admins and anyone holding the external_exams module in full -> None
+      (their normal branch/school scope applies).
+    * A teacher whose access is *derived* from an SSS3 arm assignment -> the set
+      of active enrollees of their SSS3 arm(s) only. An empty set means a derived
+      teacher whose arm currently has no enrolled students (sees nothing).
+    """
+    if is_admin() or module_level('external_exams') is not None:
+        return None
+    arm_ids = teacher_sss3_arm_ids()
+    if not arm_ids:
+        return None
+    rows = StudentEnrollment.query.filter(
+        StudentEnrollment.class_arm_assignment_id.in_(arm_ids),
+        StudentEnrollment.is_active == True).all()
+    return {e.student_id for e in rows}
+
+
+# WAEC/JAMB endpoints a derived SSS3-arm teacher may reach. Deliberately excludes
+# school-wide analytics, exports, the aggregate APIs and the Mock modules — those
+# stay admin / full-module only, so no cross-arm data can leak.
+_SSS3_EXAM_ENDPOINTS = {
+    'results.index',
+    'results.waec_list', 'results.add_waec', 'results.scan_waec', 'results.paste_waec',
+    'results.view_waec_student', 'results.edit_waec', 'results.waec_student_analysis',
+    'results.jamb_list', 'results.add_jamb', 'results.scan_jamb', 'results.paste_jamb',
+    'results.scan_batch', 'results.view_jamb_student', 'results.edit_jamb',
+}
 
 
 def graduates_access_required(f):

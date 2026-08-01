@@ -355,6 +355,16 @@ def get_sss3_students():
         for g in graduates:
             students.setdefault(g.id, g)
 
+    # An SSS3 arm teacher with only derived External-Exams access sees just their
+    # own arm's students, never the whole SSS3 cohort.
+    try:
+        from utils.access_control import exam_student_scope
+        scope = exam_student_scope()
+    except Exception:
+        scope = None
+    if scope is not None:
+        students = {sid: s for sid, s in students.items() if sid in scope}
+
     if students:
         return sorted(students.values(), key=lambda s: (s.surname or '', s.first_name or ''))
 

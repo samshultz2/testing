@@ -29,20 +29,26 @@ def waec_list():
     grade_distribution = {g: 0 for g in WAEC_GRADES}
     top_by_grade = {g: [] for g in WAEC_GRADES}
     subjects_by_grade = []
-    
+
+    # An SSS3 arm teacher with only derived access sees their own arm's students;
+    # school-wide aggregates are suppressed so no cross-arm numbers leak.
+    from utils.access_control import exam_student_scope
+    scope_ids = exam_student_scope()
+
     if exam_year:
         from utils.branch_scope import viewing_branch_id
-        school_stats = AcademicAnalytics.get_waec_school_statistics(exam_year, viewing_branch_id())
+        if scope_ids is None:
+            school_stats = AcademicAnalytics.get_waec_school_statistics(exam_year, viewing_branch_id())
 
         if school_stats:
             grade_distribution = school_stats['grade_distribution']
             subject_stats = school_stats['subject_analysis']
-        
+
         # Get all results for the year for detailed analysis (branch-scoped)
         from utils.branch_scope import scope_by_student
-        all_results = scope_by_student(
+        all_results = [] if scope_ids is not None else scope_by_student(
             WAECResult.query.filter_by(exam_year=exam_year), WAECResult).all()
-        
+
         # Build subject-grade matrix
         subject_grade_counts = defaultdict(lambda: {g: 0 for g in WAEC_GRADES})
         for r in all_results:
@@ -80,6 +86,8 @@ def waec_list():
             db.session.query(Student).join(WAECResult).filter(
                 WAECResult.exam_year == exam_year),
             Student)
+        if scope_ids is not None:
+            base_query = base_query.filter(Student.id.in_(scope_ids or [-1]))
 
         if search:
             term = like_term(search)
@@ -170,8 +178,17 @@ def waec_list():
             students_data.sort(key=lambda x: x['name'], reverse=(sort_order == 'desc'))
     
     from utils.branch_scope import viewing_branch_id
-    yoy_data = AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
-    
+    if scope_ids is not None:
+        # Arm-only view: derive the grade spread from this arm's students and skip
+        # the branch-wide year-over-year comparison.
+        grade_distribution = {g: 0 for g in WAEC_GRADES}
+        for sd in students_data:
+            for g in WAEC_GRADES:
+                grade_distribution[g] += sd['grade_counts'].get(g, 0)
+        yoy_data = []
+    else:
+        yoy_data = AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
+
     return render_template('results/waec_dashboard.html',
         students=students_data,
         years=years,
@@ -368,6 +385,7 @@ def view_waec_student(student_id):
     """View comprehensive WAEC profile for a student"""
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
+    _assert_exam_student(student_id)
     waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
     risk_assessment = AcademicAnalytics.calculate_student_risk_score(student_id)
     jamb_prediction = AcademicAnalytics.predict_jamb_score(student_id)
@@ -389,7 +407,8 @@ def edit_waec(student_id, year):
     """Edit WAEC results for a student/year"""
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
-    
+    _assert_exam_student(student_id)
+
     if request.method == 'POST':
         try:
             WAECResult.query.filter_by(student_id=student_id, exam_year=year).delete()
@@ -612,8 +631,9 @@ def waec_student_analysis(student_id):
     
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
+    _assert_exam_student(student_id)
     year = request.args.get('year', type=int)
-    
+
     waec_analysis = WAECAnalytics.get_student_waec_analysis(student_id, year)
     jamb_prediction = WAECJAMBCorrelation.predict_jamb_from_waec(student_id, year)
     

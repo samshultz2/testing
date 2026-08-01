@@ -504,6 +504,13 @@ def create_app(config_class=None):
             except Exception:
                 return False
 
+        def _sss3_exam_access():
+            try:
+                from utils.access_control import has_sss3_exam_access as _f
+                return _f()
+            except Exception:
+                return False
+
         def branch_context():
             """Header branch switcher state."""
             try:
@@ -620,6 +627,7 @@ def create_app(config_class=None):
             'can_generate_timetable': can_generate_timetable(),
             'can_generate_result_cards': can_generate_result_cards(),
             'can_access_graduates': can_access_graduates(),
+            'has_sss3_exam_access': _sss3_exam_access(),
             'branch_ctx': branch_context(),
             'school_brand': school_brand(),
             'current_theme': current_theme(),

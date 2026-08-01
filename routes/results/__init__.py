@@ -41,12 +41,26 @@ def _student_in_scope(student_id):
     """Load a student by id and confirm the current user's branch may touch it —
     used to guard the result-entry write paths where the student_id comes from
     the form (not a scoped roster). Returns the Student, or None when it doesn't
-    exist or belongs to another branch."""
+    exist, belongs to another branch, or falls outside an SSS3-arm teacher's
+    own-arm exam scope."""
     from utils.branch_scope import can_access_branch
+    from utils.access_control import exam_student_scope
     s = db.session.get(Student, student_id) if student_id else None
     if not s or not can_access_branch(s.branch_id):
         return None
+    scope = exam_student_scope()
+    if scope is not None and s.id not in scope:
+        return None
     return s
+
+
+def _assert_exam_student(student_id):
+    """Abort 403 if a derived SSS3-arm teacher tries to open/edit a student
+    outside their own arm(s). No-op for admins and full-module holders."""
+    from utils.access_control import exam_student_scope
+    scope = exam_student_scope()
+    if scope is not None and int(student_id) not in scope:
+        abort(403)
 
 
 

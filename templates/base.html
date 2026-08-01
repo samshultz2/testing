@@ -567,7 +567,20 @@
                             <i class="fas fa-crystal-ball"></i><span>Predictions</span>
                         </a>
                     </li>
-                    
+
+                    {% elif has_sss3_exam_access %}
+                    {# SSS3 arm teacher: WAEC/JAMB for their own arm only. #}
+                    <li class="nav-section">External Exams (my class)</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('results.waec_list') }}" class="nav-link {% if request.endpoint == 'results.waec_list' %}active{% endif %}">
+                            <i class="fas fa-file-alt"></i><span>WAEC</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('results.jamb_list') }}" class="nav-link {% if request.endpoint == 'results.jamb_list' %}active{% endif %}">
+                            <i class="fas fa-file-contract"></i><span>JAMB</span>
+                        </a>
+                    </li>
                     {% endif %}
                     {% if can_access_module('reports') %}
                     <li class="nav-section">Reports</li>

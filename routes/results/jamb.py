@@ -25,15 +25,21 @@ def jamb_list():
     school_stats = None
     correlation = None
     subject_performance = []
-    
+
+    # SSS3 arm teacher (derived access) — own arm only, branch-wide aggregates off.
+    from utils.access_control import exam_student_scope
+    scope_ids = exam_student_scope()
+
     if exam_year:
         from utils.branch_scope import viewing_branch_id
         _bid = viewing_branch_id()
-        school_stats = AcademicAnalytics.get_jamb_school_statistics(exam_year, _bid)
-        correlation = AcademicAnalytics.calculate_waec_jamb_correlation(exam_year, _bid)
-        
+        if scope_ids is None:
+            school_stats = AcademicAnalytics.get_jamb_school_statistics(exam_year, _bid)
+            correlation = AcademicAnalytics.calculate_waec_jamb_correlation(exam_year, _bid)
+
         # Get all results for subject analysis
-        all_results = scope_by_student(JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult).all()
+        all_results = [] if scope_ids is not None else scope_by_student(
+            JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult).all()
         
         # Build subject performance data
         subject_scores = defaultdict(list)
@@ -79,6 +85,8 @@ def jamb_list():
         # WAEC list) so a branch user never sees other branches' JAMB results.
         query = (scope_by_student(JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult)
                  .options(joinedload(JAMBResult.student)).join(Student))
+        if scope_ids is not None:
+            query = query.filter(JAMBResult.student_id.in_(scope_ids or [-1]))
 
         if search:
             term = like_term(search)
@@ -130,8 +138,8 @@ def jamb_list():
             })
     
     from utils.branch_scope import viewing_branch_id
-    yoy_data = AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
-    
+    yoy_data = [] if scope_ids is not None else AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
+
     return render_template('results/jamb_dashboard.html',
         students=students_data,
         years=years,
@@ -429,6 +437,7 @@ def view_jamb_student(student_id):
     """View JAMB results for a student"""
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
+    _assert_exam_student(student_id)
     jamb_summary = AcademicAnalytics.get_student_jamb_summary(student_id)
     waec_summary = AcademicAnalytics.get_student_waec_summary(student_id)
     
@@ -445,6 +454,7 @@ def edit_jamb(student_id, year):
     """Edit JAMB results for a student/year"""
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
+    _assert_exam_student(student_id)
     result = JAMBResult.query.filter_by(student_id=student_id, exam_year=year).first_or_404()
     
     if request.method == 'POST':
