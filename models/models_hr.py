@@ -292,6 +292,37 @@ class PayslipDeduction(db.Model):
         return f'<Payslip run{self.run_id} staff{self.staff_id} net{self.net}>'
 
 
+class StaffDeduction(db.Model):
+    """A per-staff amount for a recurring deduction type.
+
+    The type (``PayrollDeductionType``) defines the item — Welfare, Cooperative,
+    Union dues — but different staff often contribute different amounts. When a
+    staff member has an assignment here, this fixed ``amount`` replaces the
+    type's own value on their payslip; without one, the type's default applies.
+    """
+    __tablename__ = 'staff_deductions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff_members.id'), nullable=False)
+    deduction_type_id = db.Column(db.Integer, db.ForeignKey('payroll_deduction_types.id'),
+                                  nullable=False)
+    amount = db.Column(db.Float, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    staff = db.relationship('StaffMember', backref=db.backref(
+        'deduction_assignments', lazy='dynamic', cascade='all, delete-orphan'))
+    deduction_type = db.relationship('PayrollDeductionType')
+
+    # One amount per (staff, deduction type) — the assignment is an override.
+    __table_args__ = (db.UniqueConstraint('staff_id', 'deduction_type_id',
+                                          name='uq_staff_deduction'),)
+
+    def __repr__(self):
+        return f'<StaffDeduction staff{self.staff_id} type{self.deduction_type_id} {self.amount}>'
+
+
 class SalaryHistory(db.Model):
     """Audit trail of salary changes (increments / adjustments)."""
     __tablename__ = 'salary_history'

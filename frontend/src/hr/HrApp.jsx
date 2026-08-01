@@ -507,7 +507,65 @@ function StaffDetail({ d, notify }) {
                 <td className="actions"><a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i aria-hidden="true" className="fas fa-print" /></a></td></tr>))}</tbody>
           </table></div></div></div>
       )}
+      <DeductionsSection d={d} notify={notify} />
     </>
+  );
+}
+
+// ---- Per-staff recurring deductions + contributions ------------------------
+// Welfare, cooperative, union dues — set this person's own monthly amount and
+// see how much they've contributed to each so far (from finalized payslips).
+function DeductionsSection({ d, notify }) {
+  const nav = useNav();
+  const dd = d.deductions || { items: [], total_monthly: 0, total_contributed: 0 };
+  const editable = dd.items.filter((i) => i.type_id);   // active types can be assigned
+  const [draft, setDraft] = useState({});
+  const [busy, setBusy] = useState(null);
+  const val = (i) => (draft[i.type_id] !== undefined ? draft[i.type_id] : (i.monthly ? String(i.monthly) : ''));
+  const save = async (i) => {
+    setBusy(i.type_id);
+    const r = await submitJson(d.urls.save_deduction, { type_id: i.type_id, amount: val(i) });
+    setBusy(null);
+    if (r.ok) { notify('success', r.message); nav.refresh(); }
+    else notify('error', r.error || 'Could not save.');
+  };
+  if (!dd.items.length) {
+    return (
+      <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-hand-holding-dollar" /> Recurring deductions &amp; contributions</h3></div>
+        <div className="card-body"><Empty icon="fa-hand-holding-dollar" title="No recurring deductions">
+          <p>Add deduction items (Welfare, Cooperative…) in HR Settings, then set each staff member's amount here.</p></Empty></div></div>
+    );
+  }
+  return (
+    <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-hand-holding-dollar" /> Recurring deductions &amp; contributions</h3></div>
+      <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
+        <thead><tr><th>Item</th><th className="text-right">Monthly</th><th className="text-right">Contributed so far</th><th>Since / last</th>{d.is_admin && <th />}</tr></thead>
+        <tbody>{dd.items.map((i, k) => (
+          <tr key={k}>
+            <td data-label="Item">{i.name}{i.assigned && <span className="badge badge-info ml-1" title="A per-staff amount is set for this person">custom</span>}{!i.type_id && <span className="badge badge-secondary ml-1" title="This deduction item is no longer active">archived</span>}</td>
+            <td data-label="Monthly" className="text-right">
+              {d.is_admin && i.type_id
+                ? <span className="d-inline-flex gap-1" style={{ justifyContent: 'flex-end' }}>
+                    <input type="number" min="0" step="100" inputMode="decimal" className="form-control form-control-sm text-right" style={{ maxWidth: 120 }}
+                      value={val(i)} placeholder="0" aria-label={`${i.name} monthly amount`}
+                      onChange={(e) => setDraft((x) => ({ ...x, [i.type_id]: e.target.value }))} />
+                    <button className="btn btn-primary btn-sm" disabled={busy === i.type_id} onClick={() => save(i)} title="Save amount"><i aria-hidden="true" className="fas fa-check" /></button>
+                  </span>
+                : <>{i.monthly ? naira(i.monthly) : '—'}</>}
+            </td>
+            <td data-label="Contributed so far" className="text-right"><strong>{naira(i.contributed)}</strong>{i.months ? <span className="text-muted text-sm"> · {i.months} mo</span> : null}</td>
+            <td data-label="Since / last">{i.last || '—'}</td>
+            {d.is_admin && <td />}
+          </tr>))}</tbody>
+        <tfoot><tr>
+          <th>Total</th>
+          <th className="text-right">{naira(dd.total_monthly)}<span className="text-muted text-sm">/mo</span></th>
+          <th className="text-right">{naira(dd.total_contributed)}</th>
+          <th />{d.is_admin && <th />}
+        </tr></tfoot>
+      </table></div></div>
+      {d.is_admin && <div className="card-footer text-muted text-sm"><i aria-hidden="true" className="fas fa-circle-info" /> Set a per-staff monthly amount (e.g. Welfare ₦10,000). Leave blank to use the item's default. Changes apply to payroll generated from now on. “Contributed so far” counts finalized &amp; paid payslips.</div>}
+    </div>
   );
 }
 

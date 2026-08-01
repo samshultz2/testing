@@ -44,6 +44,24 @@ def ensure_hr_schema():
     if sa is not None and 'clock_out' not in sa:
         stmts.append('ALTER TABLE staff_attendance ADD COLUMN clock_out VARCHAR(5)')
 
+    # Per-staff recurring-deduction amounts (Welfare ₦5k for one, ₦15k for another).
+    # Created lazily on tenant DBs that predate the feature.
+    try:
+        has_staff_deductions = insp.has_table('staff_deductions')
+    except Exception:
+        has_staff_deductions = True   # don't attempt a create we can't verify
+    if not has_staff_deductions:
+        stmts.append(
+            'CREATE TABLE IF NOT EXISTS staff_deductions ('
+            ' id SERIAL PRIMARY KEY,'
+            ' staff_id INTEGER NOT NULL REFERENCES staff_members(id),'
+            ' deduction_type_id INTEGER NOT NULL REFERENCES payroll_deduction_types(id),'
+            ' amount DOUBLE PRECISION NOT NULL DEFAULT 0,'
+            ' is_active BOOLEAN DEFAULT TRUE,'
+            ' created_at TIMESTAMP,'
+            ' updated_at TIMESTAMP,'
+            ' CONSTRAINT uq_staff_deduction UNIQUE (staff_id, deduction_type_id))')
+
     if stmts:
         try:
             with engine.begin() as conn:

@@ -356,7 +356,9 @@ def staff_detail(staff_id):
                       'net': ps.net or 0,
                       'print_url': url_for('hr.print_payslip', run_id=ps.run_id, slip_id=ps.id)}
                      for ps in payslips],
+        'deductions': hr.staff_deduction_overview(s.id, s.salary or 0),
         'urls': {'edit': url_for('hr.edit_staff', staff_id=s.id),
+                 'save_deduction': url_for('hr.set_staff_deduction', staff_id=s.id),
                  'delete': url_for('hr.delete_staff', staff_id=s.id),
                  'adjust_salary': url_for('hr.adjust_salary', staff_id=s.id),
                  'promote': url_for('hr.promote_staff', staff_id=s.id),
@@ -712,6 +714,44 @@ def delete_staff(staff_id):
     db.session.delete(s)
     db.session.commit()
     return _ok(f'{name} deleted.', url_for('hr.staff_list'))
+
+
+@hr_bp.route('/staff/<int:staff_id>/deductions', methods=['POST'])
+@admin_required
+def set_staff_deduction(staff_id):
+    """Set (or clear) a staff member's per-staff amount for a recurring
+    deduction type — e.g. this person's Welfare is ₦10,000/month. A blank or
+    zero amount removes the assignment, so the type's default applies again."""
+    from models import StaffDeduction, PayrollDeductionType
+    from utils.branch_scope import require_branch_access
+    from utils.audit import log_action
+    s = db.get_or_404(StaffMember, staff_id)
+    require_branch_access(s.branch_id)
+    type_id = request.form.get('type_id', type=int)
+    amount = request.form.get('amount', type=float)
+    t = db.session.get(PayrollDeductionType, type_id) if type_id else None
+    if not t:
+        return _err('Unknown deduction item.', url_for('hr.staff_detail', staff_id=s.id))
+    if amount is not None and amount < 0:
+        return _err('Amount cannot be negative.', url_for('hr.staff_detail', staff_id=s.id))
+    sd = StaffDeduction.query.filter_by(staff_id=s.id, deduction_type_id=t.id).first()
+    if not amount:                       # blank / zero → clear the override
+        if sd:
+            db.session.delete(sd)
+            db.session.commit()
+            log_action('hr.staff_deduction_clear', target=s, detail=t.name)
+        return _ok(f'{t.name} amount for {s.full_name} cleared — the default now applies.',
+                   url_for('hr.staff_detail', staff_id=s.id))
+    if sd:
+        sd.amount = amount
+        sd.is_active = True
+    else:
+        db.session.add(StaffDeduction(staff_id=s.id, deduction_type_id=t.id,
+                                      amount=amount, is_active=True))
+    db.session.commit()
+    log_action('hr.staff_deduction_set', target=s, detail=f'{t.name} = {amount:g}')
+    return _ok(f'{t.name} set to ₦{amount:,.0f}/month for {s.full_name}. It applies to '
+               f'payroll generated from now on.', url_for('hr.staff_detail', staff_id=s.id))
 
 
 @hr_bp.route('/staff/search')

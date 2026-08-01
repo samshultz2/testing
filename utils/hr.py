@@ -168,7 +168,7 @@ def hr_self_service(user):
         return None
     out = {'staff_name': staff.full_name, 'can_clock': att_lvl == 'edit',
            'attendance': None, 'today': None, 'clock_action': None,
-           'payslips': None, 'deductions': None,
+           'payslips': None, 'deductions': None, 'contributions': None,
            'leave': None, 'leave_balances': None, 'loans': None, 'documents': None}
     today = _dt.date.today()
     if att_lvl:
@@ -211,6 +211,15 @@ def hr_self_service(user):
                     ded.append({'period': s.run.period_label, 'name': 'Other (loans / PAYE)',
                                 'amount': round(s.deductions, 2)})
             out['deductions'] = ded
+            # Running totals per item (e.g. how much Welfare paid so far).
+            ov = staff_deduction_overview(staff.id, staff.salary or 0)
+            out['contributions'] = {
+                'items': [{'name': i['name'], 'monthly': i['monthly'],
+                           'contributed': i['contributed'], 'months': i['months'],
+                           'last': i['last']} for i in ov['items']
+                          if i['monthly'] or i['contributed']],
+                'total_monthly': ov['total_monthly'],
+                'total_contributed': ov['total_contributed']}
     if leave_lv:
         from models import LeaveRecord
         recs = (LeaveRecord.query.filter_by(staff_id=staff.id)
@@ -463,17 +472,35 @@ def active_deduction_types():
             .order_by(PayrollDeductionType.name).all())
 
 
-def apply_recurring_deductions(ps, types=None):
+def staff_deduction_overrides(staff_id):
+    """Map of {deduction_type_id: amount} for a staff member's active per-staff
+    deduction assignments (Welfare, Cooperative, …). Empty when none set."""
+    from models import StaffDeduction
+    return {sd.deduction_type_id: (sd.amount or 0)
+            for sd in StaffDeduction.query.filter_by(staff_id=staff_id, is_active=True).all()}
+
+
+def apply_recurring_deductions(ps, types=None, overrides=None):
     """(Re)build a payslip's recurring-deduction line items from the active
     definitions, based on its current basic pay. Replaces any existing lines.
-    Also appends the staff member's monthly staff-loan repayment, if any."""
+
+    A staff member with a per-staff amount for a type (``overrides``) uses that
+    fixed amount instead of the type's default — so Welfare can be ₦5,000 for
+    one person and ₦15,000 for another. Also appends the staff member's monthly
+    staff-loan repayment, if any."""
     from models import PayslipDeduction
     types = active_deduction_types() if types is None else types
+    overrides = staff_deduction_overrides(ps.staff_id) if overrides is None else overrides
     ps.items[:] = []
     for t in types:
-        amt = t.amount_for(ps.basic or 0)
+        if t.id in overrides:
+            amt = round(overrides[t.id] or 0, 2)
+            name = t.name                       # plain name — the amount is explicit
+        else:
+            amt = t.amount_for(ps.basic or 0)
+            name = t.label
         if amt:
-            ps.items.append(PayslipDeduction(name=t.label, amount=amt))
+            ps.items.append(PayslipDeduction(name=name, amount=amt))
     try:
         from utils.staff_loans import payslip_loan_deduction
         loan_amt = payslip_loan_deduction(ps.staff_id)
@@ -525,6 +552,73 @@ def sync_attendance_deductions(run):
         ps.recompute()
         n += 1
     return n
+
+
+def deduction_contributions(staff_id):
+    """How much a staff member has actually had deducted per item, to date.
+
+    Sums the recurring-deduction lines on their finalized/paid payslips, grouped
+    by item name — so 'Welfare' shows the running total contributed. Draft runs
+    (not yet money out) are excluded. Returns {name: {'total','months','last'}}.
+    """
+    from models import PayslipDeduction, PayrollRun
+    rows = (db.session.query(PayslipDeduction.name,
+                             func.coalesce(func.sum(PayslipDeduction.amount), 0.0),
+                             func.count(PayslipDeduction.id),
+                             func.max(PayrollRun.year), func.max(PayrollRun.month))
+            .join(Payslip, PayslipDeduction.payslip_id == Payslip.id)
+            .join(PayrollRun, Payslip.run_id == PayrollRun.id)
+            .filter(Payslip.staff_id == staff_id,
+                    PayrollRun.status.in_(['Finalized', 'Paid']))
+            .group_by(PayslipDeduction.name).all())
+    out = {}
+    for name, total, months, yr, mo in rows:
+        last = f'{PayrollRun.MONTHS[mo]} {yr}' if yr and mo else ''
+        out[name or 'Deduction'] = {'total': round(total or 0, 2),
+                                    'months': int(months or 0), 'last': last}
+    return out
+
+
+def staff_deduction_overview(staff_id, basic=None):
+    """A unified per-item view for one staff member: for each active recurring
+    deduction, the amount they pay *now* (their per-staff assignment or the
+    type's default) and the total they've contributed *so far*. Also folds in
+    any historical items whose type is no longer active. Used on the admin staff
+    page and the staff member's own account page.
+
+    Shape: {'items': [{'name','kind','monthly','assigned','contributed',
+                       'months','last','type_id'}], 'total_monthly','total_contributed'}
+    """
+    from models import StaffMember
+    if basic is None:
+        s = db.session.get(StaffMember, staff_id)
+        basic = (s.salary or 0) if s else 0
+    types = active_deduction_types()
+    overrides = staff_deduction_overrides(staff_id)
+    contrib = deduction_contributions(staff_id)
+    items, total_monthly = [], 0.0
+    seen = set()
+    for t in types:
+        assigned = t.id in overrides
+        monthly = round(overrides[t.id] or 0, 2) if assigned else round(t.amount_for(basic or 0), 2)
+        # Contributions were recorded under the plain name for overrides, else the label.
+        c = contrib.get(t.name) or contrib.get(t.label) or {}
+        seen.add(t.name); seen.add(t.label)
+        items.append({'type_id': t.id, 'name': t.name, 'kind': t.kind,
+                      'monthly': monthly, 'assigned': assigned,
+                      'contributed': c.get('total', 0), 'months': c.get('months', 0),
+                      'last': c.get('last', '')})
+        total_monthly += monthly
+    # Historical items whose deduction type is no longer active/defined.
+    for name, c in contrib.items():
+        if name in seen:
+            continue
+        items.append({'type_id': None, 'name': name, 'kind': 'fixed',
+                      'monthly': 0, 'assigned': False,
+                      'contributed': c['total'], 'months': c['months'], 'last': c['last']})
+    total_contributed = round(sum(i['contributed'] for i in items), 2)
+    return {'items': items, 'total_monthly': round(total_monthly, 2),
+            'total_contributed': total_contributed}
 
 
 def run_total(run):

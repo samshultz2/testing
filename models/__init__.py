@@ -28,8 +28,8 @@ from .models_comms import MessageTemplate, Message, MessageRecipient, Announceme
 from .models_chat import Conversation, ConversationMember, ChatMessage
 from .models_hr import (Department, StaffMember, StaffEvent, LeaveRecord, PayrollRun, Payslip,
                         SalaryHistory, StaffAttendance, PayrollDeductionType,
-                        PayslipDeduction, StaffDocument, TrainingRecord, PerformanceReview,
-                        StaffLoan, LoanGuarantor, LoanRepayment)
+                        PayslipDeduction, StaffDeduction, StaffDocument, TrainingRecord,
+                        PerformanceReview, StaffLoan, LoanGuarantor, LoanRepayment)
 from .models_admissions import Applicant
 from .models_recruitment import JobVacancy, JobApplication, Interview
 from .models_attendance_intervention import AttendanceIntervention, InterventionNote
@@ -86,7 +86,7 @@ __all__ = [
     'Conversation', 'ConversationMember', 'ChatMessage',
     'Department', 'StaffMember', 'StaffEvent', 'LeaveRecord', 'PayrollRun', 'Payslip',
     'SalaryHistory', 'StaffAttendance', 'PayrollDeductionType', 'PayslipDeduction',
-    'StaffLoan', 'LoanGuarantor', 'LoanRepayment',
+    'StaffDeduction', 'StaffLoan', 'LoanGuarantor', 'LoanRepayment',
     'StaffDocument', 'TrainingRecord', 'PerformanceReview',
     'Applicant',
     'JobVacancy', 'JobApplication', 'Interview',

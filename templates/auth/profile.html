@@ -181,6 +181,38 @@
   </div>
   {% endif %}
 
+  {% if hr_self.contributions and hr_self.contributions.items %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-hand-holding-dollar"></i> My contributions</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">What you contribute each month and how much has been deducted so far — e.g. your Welfare total to date.</p>
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>Item</th><th style="text-align:right">Monthly</th><th style="text-align:right">Total so far</th><th>Last</th></tr></thead>
+          <tbody>
+            {% for c in hr_self.contributions.items %}
+            <tr>
+              <td>{{ c.name }}</td>
+              <td style="text-align:right">{% if c.monthly %}₦{{ '{:,.2f}'.format(c.monthly) }}{% else %}—{% endif %}</td>
+              <td style="text-align:right"><strong>₦{{ '{:,.2f}'.format(c.contributed) }}</strong>{% if c.months %} <span class="text-muted text-sm">· {{ c.months }} mo</span>{% endif %}</td>
+              <td>{{ c.last or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>Total</th>
+              <th style="text-align:right">₦{{ '{:,.2f}'.format(hr_self.contributions.total_monthly) }}<span class="text-muted text-sm">/mo</span></th>
+              <th style="text-align:right">₦{{ '{:,.2f}'.format(hr_self.contributions.total_contributed) }}</th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {% if hr_self.leave is not none %}
   <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-plane-departure"></i> My leave</h3></div>
