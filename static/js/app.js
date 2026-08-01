@@ -617,14 +617,23 @@ document.addEventListener('DOMContentLoaded', function() {
                                             : (btn.getAttribute('data-more') || 'Show all');
     });
 
-    // Close sidebar on nav link click (mobile)
-    document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-        link.addEventListener('click', function() {
-            if (window.innerWidth < 1024 && !this.closest('.has-submenu')) {
-                closeSidebar();
-            }
+    // Close the sidebar (mobile) when any real navigation link is clicked.
+    // Delegated so it also covers links inside an expanded submenu — those are
+    // plain <a> elements (not .nav-link), which the old per-element binding
+    // missed, so the drawer stayed open on a submenu pick (e.g. the Timetable
+    // Generator menu). The submenu PARENT toggle (href="#"/.submenu-toggle) only
+    // opens the submenu, so it must NOT close the drawer.
+    const sidebarEl = document.querySelector('.sidebar');
+    if (sidebarEl) {
+        sidebarEl.addEventListener('click', function(e) {
+            if (window.innerWidth >= 1024) return;
+            const link = e.target.closest('a[href]');
+            if (!link || !sidebarEl.contains(link)) return;
+            const href = link.getAttribute('href');
+            if (!href || href.charAt(0) === '#' || link.classList.contains('submenu-toggle')) return;
+            closeSidebar();
         });
-    });
+    }
     
     // Submenus
     initSubmenus();
