@@ -106,7 +106,10 @@ export default function TermlyReport() {
                   </tr>
                 </tbody>
                 <tfoot>
-                  <tr><td className="att-grid-name">Total</td><td>{d.total_students}</td><td>{ct.total_attendance}</td><td>{ct.termly_average}</td></tr>
+                  {/* Avg total must match the per-row metric (attendance ÷ students),
+                      not the term-wide daily average (ct.termly_average) which reads
+                      as a nonsense "30.59" next to the 83/87 rows. */}
+                  <tr><td className="att-grid-name">Total</td><td>{d.total_students}</td><td>{ct.total_attendance}</td><td>{d.total_students > 0 ? round1(ct.total_attendance / d.total_students) : 0}</td></tr>
                 </tfoot>
               </table>
             </div>
