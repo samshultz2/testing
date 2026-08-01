@@ -63,6 +63,7 @@
         </div>{% endif %}
       </div>
       {% endfor %}
+      {% if not loan.guarantors %}<p class="text-muted text-sm" style="margin:0"><i class="fas fa-circle-info"></i> No guarantors — this is an existing loan carried over from before go-live.</p>{% endif %}
       {% if loan.status == 'pending' %}<p class="text-muted text-sm" style="margin-top:.6rem">Loan disburses once all guarantors approve.</p>{% endif %}
     </div></div>
 

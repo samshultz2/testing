@@ -2,8 +2,10 @@
 and automatic payroll-deduction repayment."""
 from datetime import date
 
+from config import Config
 from models import db, StaffMember, StaffLoan, LoanRepayment, PayrollRun
 from utils import staff_loans, hr
+from tests.conftest import login_token, auth_csrf
 
 
 def _tables(app):
@@ -115,6 +117,87 @@ def test_payroll_finalize_deducts_and_is_idempotent(app):
         # re-running the same finalized run must not double-charge this loan
         staff_loans.post_run_repayments(run)
         assert LoanRepayment.query.filter_by(loan_id=loan.id).count() == 1
+
+
+# --- opening (pre-platform / migrated) loans -------------------------------
+def test_opening_loan_is_active_without_guarantors(app):
+    _tables(app)
+    with app.app_context():
+        staff_loans.save_settings(enabled=True, method='flat', rate=5, guarantors_required=3)
+        b = _staff('Legacy'); db.session.commit()
+        loan, err = staff_loans.create_opening_loan(
+            staff_id=b.id, branch_id=None, principal=120000, months=12,
+            monthly_amount=10500, taken=date(2025, 1, 10), months_paid=4)
+        assert err is None
+        assert loan.status == 'active'                 # already disbursed, no approval
+        assert loan.guarantors == []                   # no guarantors required
+
+
+def test_opening_loan_seeds_amount_repaid_from_months_paid(app):
+    _tables(app)
+    with app.app_context():
+        staff_loans.save_settings(enabled=True, method='flat', rate=5, guarantors_required=3)
+        b = _staff('Carry'); db.session.commit()
+        loan, err = staff_loans.create_opening_loan(
+            staff_id=b.id, branch_id=None, principal=100000, months=10,
+            monthly_amount=11000, total_repayable=110000, taken=date(2025, 2, 1),
+            months_paid=3)
+        assert err is None
+        # 3 months × 11,000 already paid; 110,000 − 33,000 outstanding
+        assert loan.amount_repaid == 33000.0
+        assert loan.outstanding == 77000.0
+        # the paid history is captured as one 'opening' ledger entry
+        rp = LoanRepayment.query.filter_by(loan_id=loan.id, source='opening').all()
+        assert len(rp) == 1 and rp[0].amount == 33000.0
+
+
+def test_opening_loan_continues_via_payroll(app):
+    _tables(app)
+    with app.app_context():
+        staff_loans.save_settings(enabled=True, method='flat', rate=5, guarantors_required=3)
+        b = _staff('Runon', salary=300000); db.session.commit()
+        loan, _ = staff_loans.create_opening_loan(
+            staff_id=b.id, branch_id=None, principal=120000, months=12,
+            monthly_amount=10000, total_repayable=120000, taken=date(2025, 1, 1),
+            months_paid=2)
+        before = loan.amount_repaid                     # 20,000
+        run = PayrollRun(year=2025, month=6, status='Draft', branch_id=None)
+        db.session.add(run); db.session.commit()
+        hr.generate_payslips(run); db.session.commit()
+        staff_loans.post_run_repayments(run)
+        assert loan.amount_repaid == before + 10000     # payroll picked it up
+
+
+def test_opening_loan_rejects_months_paid_over_term(app):
+    _tables(app)
+    with app.app_context():
+        staff_loans.save_settings(enabled=True, method='flat', rate=5, guarantors_required=3)
+        b = _staff('TooMany'); db.session.commit()
+        loan, err = staff_loans.create_opening_loan(
+            staff_id=b.id, branch_id=None, principal=50000, months=6,
+            monthly_amount=9000, taken=date(2025, 1, 1), months_paid=8)
+        assert loan is None and 'exceed' in err.lower()
+
+
+def test_opening_loan_route_creates_active_loan(app):
+    _tables(app)
+    with app.app_context():
+        staff_loans.save_settings(enabled=True, method='flat', rate=5, guarantors_required=3)
+        b = _staff('RouteLegacy'); db.session.commit()
+        sid = b.id
+    client = app.test_client()
+    tok = login_token(client)
+    client.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    tok = auth_csrf(client)
+    r = client.post('/hr/loans/new', data={
+        'opening': 'on', 'staff_id': sid, 'principal': '90000', 'months': '9',
+        'monthly_amount': '10000', 'total_repayable': '90000', 'date_taken': '2025-01-15',
+        'months_paid': '3', 'purpose': 'Migrated', '_csrf_token': tok})
+    assert r.status_code in (302, 303)                  # redirects to loan detail
+    with app.app_context():
+        loan = StaffLoan.query.filter_by(staff_id=sid).order_by(StaffLoan.id.desc()).first()
+        assert loan is not None and loan.status == 'active'
+        assert loan.amount_repaid == 30000.0 and loan.outstanding == 60000.0
 
 
 def test_repayment_caps_at_outstanding_and_marks_paid(app):

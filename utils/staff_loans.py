@@ -140,6 +140,85 @@ def create_loan(*, staff_id, branch_id, principal, guarantor_ids, taken=None,
     return loan, None
 
 
+def _add_months(d, n):
+    """Date ``n`` whole months after ``d`` (clamped to the month's last day)."""
+    from calendar import monthrange
+    m = d.month - 1 + int(n)
+    y = d.year + m // 12
+    m = m % 12 + 1
+    return date(y, m, min(d.day, monthrange(y, m)[1]))
+
+
+def create_opening_loan(*, staff_id, branch_id, principal, months, monthly_amount,
+                        taken, months_paid=0, total_repayable=None, rate=None,
+                        method=None, purpose='', created_by=''):
+    """Record a loan that was already running *before* the school adopted the
+    platform (an opening balance).
+
+    Unlike a fresh loan, this needs no guarantor approval — it is already
+    disbursed — so it is created **active** immediately. The admin says how many
+    monthly deductions have already been made (``months_paid``); that seeds the
+    amount repaid so the outstanding balance and remaining schedule are correct,
+    and it is logged as an 'opening balance' entry in the repayment ledger.
+    Payroll then continues the monthly deduction from here. Returns (loan, err)."""
+    cfg = settings()
+    if not cfg['enabled']:
+        return None, 'Staff loans are turned off for this school.'
+    try:
+        principal = float(principal)
+    except (TypeError, ValueError):
+        principal = 0
+    if principal <= 0:
+        return None, 'Enter the original loan amount.'
+    try:
+        months = int(months)
+    except (TypeError, ValueError):
+        months = 0
+    if months < 1:
+        return None, 'Enter the total number of months for the loan.'
+    try:
+        monthly_amount = float(monthly_amount)
+    except (TypeError, ValueError):
+        monthly_amount = 0
+    if monthly_amount <= 0:
+        return None, 'Enter the monthly repayment amount.'
+    if not taken:
+        return None, 'Enter the date the loan was originally taken.'
+    try:
+        months_paid = max(0, int(months_paid))
+    except (TypeError, ValueError):
+        months_paid = 0
+    if months_paid > months:
+        return None, 'Months already paid cannot exceed the total number of months.'
+
+    method = method or cfg['method']
+    rate = cfg['rate'] if rate is None else rate
+    # Prefer an explicit agreed total; otherwise derive it from the interest terms.
+    if total_repayable:
+        try:
+            total = round(float(total_repayable), 2)
+        except (TypeError, ValueError):
+            total, _ = compute(principal, rate, method, months)
+    else:
+        total, _ = compute(principal, rate, method, months)
+    total = max(total, round(principal, 2))
+
+    loan = StaffLoan(
+        staff_id=staff_id, branch_id=branch_id, principal=round(principal, 2),
+        interest_method=method, interest_rate=rate,
+        total_repayable=total, monthly_amount=round(monthly_amount, 2), months=months,
+        amount_repaid=0.0, date_taken=taken, deadline=_add_months(taken, months - 1),
+        status='active', purpose=(purpose or '')[:200], created_by=(created_by or '')[:80])
+    db.session.add(loan)
+    db.session.flush()
+    already = round(min(months_paid * monthly_amount, total), 2)
+    if already > 0:
+        record_repayment(loan, already, source='opening', when=taken,
+                         note=f'Opening balance — {months_paid} month(s) paid before go-live')
+    db.session.commit()
+    return loan, None
+
+
 def act_on_guarantor(loan, guarantor_staff_id, *, approve, by=''):
     """Record a guarantor's approval/decline. Activates the loan once all
     guarantors have approved; a single decline rejects it."""

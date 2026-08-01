@@ -2008,6 +2008,30 @@ def loan_new():
             flash('Choose the staff member taking the loan.', 'error')
             return render_template('hr/loan_new.html', staff=staff, cfg=cfg)
         require_branch_access(st.branch_id)
+        if request.form.get('opening') == 'on':
+            # An existing loan carried over from before go-live: no guarantors,
+            # already active, with however many months already paid.
+            from datetime import datetime
+            taken_raw = request.form.get('date_taken')
+            try:
+                taken = datetime.strptime(taken_raw, '%Y-%m-%d').date() if taken_raw else None
+            except ValueError:
+                taken = None
+            loan, err = staff_loans.create_opening_loan(
+                staff_id=st.id, branch_id=st.branch_id or branch_for_new(),
+                principal=request.form.get('principal'),
+                months=request.form.get('months'),
+                monthly_amount=request.form.get('monthly_amount'),
+                total_repayable=request.form.get('total_repayable'),
+                taken=taken, months_paid=request.form.get('months_paid'),
+                purpose=request.form.get('purpose'), created_by=_current_user())
+            if err:
+                flash(err, 'error')
+                return render_template('hr/loan_new.html', staff=staff, cfg=cfg)
+            log_action('hr.loan_opening', target=loan)
+            flash('Existing loan recorded as active — remaining balance will be '
+                  'deducted from payroll going forward.', 'success')
+            return redirect(url_for('hr.loan_detail', loan_id=loan.id))
         loan, err = staff_loans.create_loan(
             staff_id=st.id, branch_id=st.branch_id or branch_for_new(),
             principal=request.form.get('principal'),
