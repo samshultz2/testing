@@ -77,7 +77,9 @@
             <script type="application/json" id="topic-tree-data">{{ topic_tree|tojson }}</script>
             <script nonce="{{ csp_nonce }}">
             (function(){
-                var tree = JSON.parse(document.getElementById('topic-tree-data').textContent);
+                var treeEl = document.getElementById('topic-tree-data');
+                if(!treeEl) return;   // node absent after an SPA swap to another page
+                var tree = JSON.parse(treeEl.textContent);
                 var byTitle = {}; tree.forEach(function(t){ byTitle[t.title] = t.subtopics || []; });
                 var topic = document.getElementById('qtopic'), sub = document.getElementById('qsubtopic');
                 if(!topic || !sub) return;

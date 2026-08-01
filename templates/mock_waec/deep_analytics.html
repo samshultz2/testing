@@ -201,7 +201,9 @@
 (function(){
     function draw(){
         if(!window.Chart){return;}
-        var payload=JSON.parse(document.getElementById('da-data').textContent);
+        var dataEl=document.getElementById('da-data');
+        if(!dataEl){return;}   // node absent after an SPA swap to another page
+        var payload=JSON.parse(dataEl.textContent);
         var cs=getComputedStyle(document.documentElement);
         var grid=cs.getPropertyValue('--border-color')||'rgba(140,140,140,.2)';
         try{Chart.defaults.color=cs.getPropertyValue('--text-secondary')||'#667';}catch(e){}
