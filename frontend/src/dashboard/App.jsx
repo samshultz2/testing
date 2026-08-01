@@ -168,7 +168,7 @@ export default function App({ data: initialData }) {
       case 'branches': return has('branches') && (d.branch_comparison || []).length > 1;
       case 'kpi': return has('kpi') && !emptySchool;
       case 'academic': return has('academic') && !!d.academic && !emptySchool;
-      case 'timetable': return has('timetable') && !!d.timetable_today && d.timetable_today.total_today > 0 && !emptySchool;
+      case 'timetable': return has('timetable') && !!d.timetable_today && (d.timetable_today.slots || []).length > 0 && !emptySchool;
       case 'finance_health': return has('finance_health') && !!d.finance_health && !emptySchool;
       case 'crossmodule': return !!crossModule;
       case 'exams': return has('exams') && !emptySchool;
@@ -724,6 +724,17 @@ function TodaySchedule({ data, urls, teacher }) {
   const nxt = data.next_slot;
   const link = teacher ? urls.timetable_mine : urls.timetable_view;
   const plural = (n) => (n === 1 ? 'class' : 'classes');
+  // A period schedule exists but nothing is timetabled for today (e.g. a
+  // weekend, or the term's grid isn't built yet) — say so plainly instead of
+  // showing a ladder of empty periods or vanishing after the user enabled it.
+  if (!data.total_today) {
+    return (
+      <Widget icon="fa-calendar-day" title={`Today's schedule · ${data.day}`}
+              action={link && <a href={link} className="btn btn-secondary btn-sm">Open timetable</a>}>
+        <Empty icon="fa-mug-hot">No classes scheduled for {data.day}.</Empty>
+      </Widget>
+    );
+  }
   return (
     <Widget icon="fa-calendar-day" title={`Today's schedule · ${data.day}`}
             action={link && <a href={link} className="btn btn-secondary btn-sm">Open timetable</a>}>
