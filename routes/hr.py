@@ -1908,6 +1908,7 @@ def settings():
         'deductions': [{'id': d.id, 'name': d.name, 'kind': d.kind, 'value': d.value or 0,
                         'is_active': bool(d.is_active),
                         'toggle_url': url_for('hr.toggle_deduction_type', type_id=d.id),
+                        'amounts_url': url_for('hr.deduction_amounts', type_id=d.id),
                         'delete_url': url_for('hr.delete_deduction_type', type_id=d.id)} for d in deductions],
         'urls': {'save': url_for('hr.save_hr_settings'), 'add_deduction': url_for('hr.add_deduction_type')},
     })
@@ -1930,6 +1931,59 @@ def add_deduction_type():
     db.session.commit()
     return _ok(f'Deduction "{name}" added. It applies to payroll generated from now on.',
                url_for('hr.settings'))
+
+
+@hr_bp.route('/settings/deductions/<int:type_id>/amounts', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def deduction_amounts(type_id):
+    """Set every staff member's own monthly amount for one deduction item in a
+    single screen — e.g. Welfare: ₦5,000 for one person, ₦15,000 for another.
+    A blank amount means 'use the item's default'."""
+    from models import PayrollDeductionType, StaffDeduction
+    from utils.audit import log_action
+    t = db.get_or_404(PayrollDeductionType, type_id)
+    staff = _loan_staff()   # active staff in the current branch scope
+    if request.method == 'POST':
+        existing = {sd.staff_id: sd for sd in
+                    StaffDeduction.query.filter_by(deduction_type_id=t.id).all()}
+        changed = 0
+        for s in staff:
+            raw = request.form.get(f'amount_{s.id}')
+            if raw is None:
+                continue
+            raw = raw.strip()
+            amount = None
+            if raw != '':
+                try:
+                    amount = float(raw)
+                except ValueError:
+                    continue
+            sd = existing.get(s.id)
+            if not amount:                       # blank / 0 → clear the override
+                if sd:
+                    db.session.delete(sd); changed += 1
+            elif amount < 0:
+                continue
+            elif sd:
+                if sd.amount != amount or not sd.is_active:
+                    sd.amount = amount; sd.is_active = True; changed += 1
+            else:
+                db.session.add(StaffDeduction(staff_id=s.id, deduction_type_id=t.id,
+                                              amount=amount, is_active=True))
+                changed += 1
+        db.session.commit()
+        log_action('hr.deduction_amounts', detail=f'{t.name}: {changed} updated')
+        return _ok(f'Saved. {changed} staff amount(s) updated for {t.name}.',
+                   url_for('hr.deduction_amounts', type_id=t.id))
+    assigned = {sd.staff_id: sd.amount for sd in
+                StaffDeduction.query.filter_by(deduction_type_id=t.id, is_active=True).all()}
+    default_label = (f'{t.value:g}% of basic' if t.kind == 'percent'
+                     else f'₦{t.value:,.0f}')
+    rows = [{'id': s.id, 'name': s.full_name, 'staff_id': s.staff_id,
+             'amount': assigned.get(s.id)} for s in staff]
+    return render_template('hr/deduction_amounts.html', t=t, rows=rows,
+                           default_label=default_label)
 
 
 @hr_bp.route('/settings/deductions/<int:type_id>/toggle', methods=['POST'])

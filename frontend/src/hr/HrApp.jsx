@@ -1341,7 +1341,7 @@ function Settings({ d, notify }) {
 
       <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-bill-trend-up" /> Recurring Deductions</h3></div>
         <div className="card-body">
-          <p className="text-muted text-sm" style={{ marginTop: 0 }}>Deductions applied to <strong>every</strong> staff member's payslip each month — e.g. pension (a % of basic) or welfare (a fixed amount).</p>
+          <p className="text-muted text-sm" style={{ marginTop: 0 }}>Deductions applied to staff payslips each month — e.g. pension (a % of basic) or welfare (a fixed amount). The value below is the <strong>default</strong> for everyone; use <strong>Per-staff amounts</strong> to set a different amount per person (Welfare ₦5,000 for one, ₦15,000 for another).</p>
           {d.is_admin && (
             <form onSubmit={addDed} className="d-flex gap-2 align-end flex-wrap mb-3">
               <div className="form-group mb-0" style={{ flex: 2, minWidth: 160 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g. Pension, Welfare, Union dues" required value={ded.name} onChange={(e) => setDed((x) => ({ ...x, name: e.target.value }))} /></div>
@@ -1359,6 +1359,7 @@ function Settings({ d, notify }) {
                   <td data-label="Deduction">{dd.kind === 'percent' ? `${Math.round(dd.value * 100) / 100}% of basic` : `${naira(dd.value)} fixed`}</td>
                   <td data-label="Status">{dd.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-warning">Inactive</span>}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
+                    <a className="btn btn-secondary btn-sm" title="Set each staff member's amount" href={dd.amounts_url} data-native><i aria-hidden="true" className="fas fa-user-pen" /> Per-staff amounts</a>
                     <button className="btn btn-secondary btn-sm" title="Toggle active" onClick={() => act(dd.toggle_url, {})}><i aria-hidden="true" className="fas fa-power-off" /></button>
                     <button className="btn btn-danger btn-sm" title="Delete" onClick={() => act(dd.delete_url, {}, 'Remove this deduction?')}><i aria-hidden="true" className="fas fa-trash" /></button>
                   </div></td>

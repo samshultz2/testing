@@ -141,6 +141,31 @@ def test_admin_set_and_clear_route(app):
         assert StaffDeduction.query.filter_by(staff_id=sid, deduction_type_id=tid).first() is None
 
 
+def test_bulk_amounts_screen_sets_and_clears(app):
+    """The central 'per-staff amounts' screen upserts many staff at once."""
+    s1, bid = _staff(app, 'Bulk1')
+    s2, _ = _staff(app, 'Bulk2')
+    tid = _welfare_type(app, 'Welfare', 2000, branch_id=bid)
+    client = _admin(app)
+    tok = auth_csrf(client)
+    r = client.post(f'/hr/settings/deductions/{tid}/amounts',
+                    data={f'amount_{s1}': '5000', f'amount_{s2}': '15000', '_csrf_token': tok},
+                    headers={'X-Requested-With': 'fetch'}).get_json()
+    assert r['ok']
+    with app.app_context():
+        amounts = {sd.staff_id: sd.amount for sd in
+                   StaffDeduction.query.filter_by(deduction_type_id=tid).all()}
+        assert amounts.get(s1) == 5000 and amounts.get(s2) == 15000
+    # Blanking s1 clears just that override.
+    r = client.post(f'/hr/settings/deductions/{tid}/amounts',
+                    data={f'amount_{s1}': '', f'amount_{s2}': '15000', '_csrf_token': tok},
+                    headers={'X-Requested-With': 'fetch'}).get_json()
+    assert r['ok']
+    with app.app_context():
+        assert StaffDeduction.query.filter_by(deduction_type_id=tid, staff_id=s1).first() is None
+        assert StaffDeduction.query.filter_by(deduction_type_id=tid, staff_id=s2).first() is not None
+
+
 def test_self_service_exposes_contributions(app):
     from utils import hr as hr_utils
     with app.app_context():
