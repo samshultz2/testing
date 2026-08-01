@@ -295,6 +295,7 @@ def _read_perms(form, prefix='perm_'):
 def index():
     """List the users the current manager may manage."""
     me = session.get('user_id')
+    my_super = bool(db.session.get(User, me).is_super_admin) if me else False
     users = [u for u in User.query.order_by(User.created_at.desc()).all()
              if can_manage(u)]
     return _render({
@@ -310,6 +311,10 @@ def index():
             'view_url': url_for('users.view_user', user_id=u.id),
             'edit_url': url_for('users.edit_user', user_id=u.id),
             'toggle_url': url_for('users.toggle_status', user_id=u.id),
+            'delete_url': url_for('users.delete_user', user_id=u.id),
+            # Deletable = not yourself, and a super-admin only by a super-admin —
+            # mirrors the delete_user route guards.
+            'can_delete': (u.id != me and not (u.is_super_admin and not my_super)),
         } for u in users],
     })
 

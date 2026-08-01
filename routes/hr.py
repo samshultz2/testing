@@ -689,11 +689,29 @@ def delete_staff(staff_id):
     s = db.get_or_404(StaffMember, staff_id)
     from utils.branch_scope import require_branch_access
     require_branch_access(s.branch_id)   # no cross-branch staff deletion
-    s.is_active = False
-    db.session.commit()
     from utils.audit import log_action
-    log_action('hr.staff_delete', target=s)
-    return _ok(f'{s.full_name} archived.', url_for('hr.staff_list'))
+    from models import StaffDocument, User
+    # A staff member with history (payroll, attendance, leave, documents, loans)
+    # or a linked login is deactivated — not hard-deleted — so nothing is
+    # orphaned. A clean record (e.g. added by mistake) is genuinely removed.
+    has_history = bool(
+        db.session.query(Payslip.id).filter_by(staff_id=s.id).first()
+        or db.session.query(LeaveRecord.id).filter_by(staff_id=s.id).first()
+        or db.session.query(StaffAttendance.id).filter_by(staff_id=s.id).first()
+        or db.session.query(StaffDocument.id).filter_by(staff_id=s.id).first()
+        or db.session.query(StaffLoan.id).filter_by(staff_id=s.id).first()
+        or (s.user_id and db.session.get(User, s.user_id)))
+    if has_history:
+        s.is_active = False
+        db.session.commit()
+        log_action('hr.staff_deactivate', target=s)
+        return _ok(f'{s.full_name} has records or a linked login — deactivated instead of '
+                   f'deleted (their history is kept).', url_for('hr.staff_list'))
+    name = s.full_name
+    log_action('hr.staff_delete', detail=f'{name} (id={s.id})')
+    db.session.delete(s)
+    db.session.commit()
+    return _ok(f'{name} deleted.', url_for('hr.staff_list'))
 
 
 @hr_bp.route('/staff/search')

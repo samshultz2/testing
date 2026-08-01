@@ -454,7 +454,7 @@ function StaffDetail({ d, notify }) {
           {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /> Call</a>
             <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /> WhatsApp</a></>}
           {canWrite(d) && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
-          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Archive ${s.full_name}?`, true)}><i aria-hidden="true" className="fas fa-box-archive" /> Archive</button>}
+          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Delete ${s.full_name}? If they have payroll/attendance/leave history or a login, they'll be deactivated (hidden everywhere) instead of removed.`, true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
         </div>
       </div>
 

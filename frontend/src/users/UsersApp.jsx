@@ -35,6 +35,12 @@ function Index({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
   const toggle = (u) => save(u.toggle_url, {}, () => nav.refresh());
+  const del = async (u) => {
+    if (await confirm({ title: 'Delete user', tone: 'danger', confirmText: 'Delete',
+      message: `Permanently delete "${u.username}"? This removes the login account and cannot be undone. (To keep the account but block sign-in, use Deactivate instead.)` })) {
+      save(u.delete_url, {}, () => nav.refresh());
+    }
+  };
   return (
     <>
       <div className="page-header">
@@ -67,6 +73,11 @@ function Index({ d, notify }) {
                           className={`btn btn-sm btn-${u.is_active ? 'secondary' : 'success'}`}
                           title={u.is_active ? 'Deactivate' : 'Activate'}>
                           <i aria-hidden="true" className={`fas fa-${u.is_active ? 'ban' : 'check'}`} />
+                        </button>
+                      )}
+                      {u.can_delete && (
+                        <button type="button" onClick={() => del(u)} className="btn btn-sm btn-danger" title="Delete">
+                          <i aria-hidden="true" className="fas fa-trash" />
                         </button>
                       )}
                     </div></td>
