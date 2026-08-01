@@ -149,8 +149,11 @@ function ApplicantForm({ d, notify }) {
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
+  // Render fields via a function call, NOT as <F/>: a component defined inside
+  // render gets a fresh identity each keystroke, remounting the input and
+  // dropping the mobile keyboard after every character.
   const F = ({ label, k, type = 'text', req, ...rest }) => (
-    <div className="form-group"><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
+    <div className="form-group" key={k}><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
       <input type={type} className="form-control" required={req} value={f[k]} onChange={(e) => set(k, e.target.value)} {...rest} /></div>
   );
   return (
@@ -158,12 +161,12 @@ function ApplicantForm({ d, notify }) {
       <PageHeader title={editing ? 'Edit Application' : 'New Application'} />
       <form onSubmit={submit}>
         <div className="card mb-3"><div className="card-header"><h3>Applicant</h3></div><div className="card-body">
-          <div className="form-row"><F label="First name" k="first_name" req /><F label="Surname" k="surname" req /></div>
-          <div className="form-row"><F label="Middle name" k="middle_name" />
+          <div className="form-row">{F({ label: 'First name', k: 'first_name', req: true })}{F({ label: 'Surname', k: 'surname', req: true })}</div>
+          <div className="form-row">{F({ label: 'Middle name', k: 'middle_name' })}
             <div className="form-group"><label className="form-label">Gender</label>
               <select className="form-control" value={f.gender} onChange={(e) => set('gender', e.target.value)}><option value="">—</option><option>Male</option><option>Female</option></select></div>
-            <F label="Date of birth" k="date_of_birth" type="date" /></div>
-          <div className="form-row"><F label="Previous school" k="previous_school" />
+            {F({ label: 'Date of birth', k: 'date_of_birth', type: 'date' })}</div>
+          <div className="form-row">{F({ label: 'Previous school', k: 'previous_school' })}
             <div className="form-group"><label className="form-label">How did they hear?</label>
               <select className="form-control" value={f.source} onChange={(e) => set('source', e.target.value)}><option value="">—</option>{d.sources.map((s) => <option key={s}>{s}</option>)}</select></div>
           </div>
@@ -179,14 +182,14 @@ function ApplicantForm({ d, notify }) {
           <div className="form-row">
             {!editing && <div className="form-group"><label className="form-label">Initial status</label>
               <select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.map((s) => <option key={s}>{s}</option>)}</select></div>}
-            <F label="Entrance score" k="entrance_score" type="number" step="0.5" />
+            {F({ label: 'Entrance score', k: 'entrance_score', type: 'number', step: '0.5' })}
           </div>
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Parent / Guardian</h3></div><div className="card-body">
-          <div className="form-row"><F label="Name" k="parent_name" /><F label="Relationship" k="relationship" placeholder="Father/Mother/Guardian" /></div>
-          <div className="form-row"><F label="Phone" k="parent_phone" /><F label="Email" k="parent_email" type="email" /></div>
-          <F label="Address" k="address" />
+          <div className="form-row">{F({ label: 'Name', k: 'parent_name' })}{F({ label: 'Relationship', k: 'relationship', placeholder: 'Father/Mother/Guardian' })}</div>
+          <div className="form-row">{F({ label: 'Phone', k: 'parent_phone' })}{F({ label: 'Email', k: 'parent_email', type: 'email' })}</div>
+          {F({ label: 'Address', k: 'address' })}
           <div className="form-group mb-0"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         </div></div>
 

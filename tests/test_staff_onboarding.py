@@ -99,10 +99,25 @@ def test_reject_signup(app):
 
 
 def test_join_page_public_and_submit(app):
-    from models import StaffSignup
+    from models import StaffSignup, User, Branch, db
     from utils import staff_invite as svc
     with app.app_context():
         bid, gid = _branch_and_group(app)
+        # An admin of this branch, a central admin, and an admin of ANOTHER
+        # branch — only the first two should be pinged about a signup here.
+        other = Branch(name='ZZ Other Branch'); db.session.add(other); db.session.flush()
+
+        def _mk(uname, role, scope, branch):
+            u = User.query.filter_by(username=uname).first()
+            if not u:
+                u = User(username=uname, full_name=uname, role=role, scope=scope, branch_id=branch)
+                u.set_password('CorrectHorse9'); db.session.add(u); db.session.flush()
+            u.is_active = True; u.role = role; u.scope = scope; u.branch_id = branch
+            return u.id
+        branch_admin = _mk('inv_badmin', 'admin', 'branch', bid)
+        central_admin = _mk('inv_cadmin', 'admin', 'central', None)
+        other_admin = _mk('inv_oadmin', 'admin', 'branch', other.id)
+        db.session.commit()
         inv = svc.create_invite(label='P', role='admin', permission_group_id=gid,
                                 branch_id=bid, scope='branch', max_uses=None, expires_days=None,
                                 created_by='root')
@@ -120,11 +135,14 @@ def test_join_page_public_and_submit(app):
     assert 'awaiting approval' in r2.get_data(as_text=True).lower() or 'submitted' in r2.get_data(as_text=True).lower()
     with app.app_context():
         assert StaffSignup.query.filter_by(username='sam', status='pending').first() is not None
-        # Admins are alerted via the header bell that a signup awaits approval.
+        # The branch's admin + the central admin are pinged; the other branch's
+        # admin is not — the notification is scoped to the relevant branch.
         from models import Notification
-        n = (Notification.query.filter_by(role='admin')
-             .order_by(Notification.id.desc()).first())
-        assert n is not None and 'Sam Okoro' in n.body and 'awaiting approval' in n.title.lower()
+        def _got(uid):
+            return (Notification.query.filter_by(user_id=uid)
+                    .filter(Notification.body.contains('Sam Okoro')).first() is not None)
+        assert _got(branch_admin) and _got(central_admin)
+        assert not _got(other_admin)
 
 
 def test_bad_token_shows_closed(app):

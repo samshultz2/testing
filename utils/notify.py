@@ -33,6 +33,28 @@ def notify_admins(title, body='', url=None, category='info'):
     return notify(title, body, url, role='admin', category=category)
 
 
+def notify_branch_admins(title, body='', url=None, *, branch_id=None, category='info'):
+    """Notify the admins responsible for one branch: admins scoped to that branch
+    plus every central/super admin (who oversee all branches). Falls back to a
+    role broadcast when no branch is given. Creates one row per recipient admin
+    (so it can be branch-targeted, unlike the role broadcast). Best-effort."""
+    if not branch_id:
+        return notify_admins(title, body, url, category=category)
+    try:
+        from models import User
+        admins = User.query.filter(
+            User.role.in_(['admin', 'super_admin']), User.is_active.is_(True),
+            or_(User.role == 'super_admin', User.scope == 'central',
+                User.branch_id == branch_id)).all()
+        last = None
+        for u in admins:
+            last = notify(title, body, url, user_id=u.id, category=category)
+        return last
+    except Exception:
+        db.session.rollback()
+        return None
+
+
 _STUDENT_CHANGE_TITLES = {
     'create': 'Student added',
     'update': 'Student updated',

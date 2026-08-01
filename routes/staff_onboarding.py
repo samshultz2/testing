@@ -198,14 +198,17 @@ def join_submit(token):
     # Alert admins that someone joined via an invite and needs approval — the
     # header bell + the pending list on the invites page.
     try:
-        from utils.notify import notify_admins
+        from utils.notify import notify_branch_admins
         role_label = (inv.role or 'staff').replace('_', ' ')
         pos = getattr(signup, 'position', None)
-        notify_admins(
+        # Scope to the admins of the branch this signup belongs to (plus central
+        # admins), not every admin in the org.
+        branch_id = getattr(signup, 'branch_id', None) or inv.branch_id
+        notify_branch_admins(
             'New staff signup awaiting approval',
             f'{signup.full_name} signed up via a staff invite as {role_label}'
             + (f' ({pos})' if pos else '') + '. Review and approve to activate the account.',
-            url=url_for('staff_onboarding.invites'), category='info')
+            url=url_for('staff_onboarding.invites'), branch_id=branch_id, category='info')
         log_action('staff_invite.signup',
                    f'signup {signup.id} ({signup.full_name}) via invite {inv.id}')
     except Exception:

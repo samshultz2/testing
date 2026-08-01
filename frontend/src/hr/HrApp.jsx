@@ -281,8 +281,11 @@ function StaffForm({ d, notify }) {
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
+  // Render a field via a plain function call — NOT as <T/>. Defining a component
+  // inside render gives it a new identity every keystroke, so React would remount
+  // each <input> and the mobile keyboard would drop after every character.
   const T = ({ k, label, type = 'text', req, ...rest }) => (
-    <div className="form-group"><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
+    <div className="form-group" key={k}><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
       <input type={type} className="form-control" required={req} value={f[k]} onChange={(e) => set(k, e.target.value)} {...rest} /></div>
   );
   return (
@@ -290,20 +293,20 @@ function StaffForm({ d, notify }) {
       <div className="page-header"><h1>{d.mode === 'edit' ? 'Edit Staff' : 'Add Staff'}</h1></div>
       <form onSubmit={submit}>
         <div className="card mb-3"><div className="card-header"><h3>Personal</h3></div><div className="card-body">
-          <div className="form-row"><T k="first_name" label="First name" req /><T k="surname" label="Surname" req /></div>
-          <div className="form-row"><T k="middle_name" label="Middle name" />
+          <div className="form-row">{T({ k: 'first_name', label: 'First name', req: true })}{T({ k: 'surname', label: 'Surname', req: true })}</div>
+          <div className="form-row">{T({ k: 'middle_name', label: 'Middle name' })}
             <div className="form-group"><label className="form-label">Gender</label>
               <select className="form-control" value={f.gender} onChange={(e) => set('gender', e.target.value)}><option value="">—</option><option>Male</option><option>Female</option></select></div>
-            <T k="date_of_birth" label="Date of birth" type="date" /></div>
-          <div className="form-row"><T k="phone" label="Phone" /><T k="email" label="Email" type="email" /></div>
-          <T k="address" label="Address" />
+            {T({ k: 'date_of_birth', label: 'Date of birth', type: 'date' })}</div>
+          <div className="form-row">{T({ k: 'phone', label: 'Phone' })}{T({ k: 'email', label: 'Email', type: 'email' })}</div>
+          {T({ k: 'address', label: 'Address' })}
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Employment</h3></div><div className="card-body">
           <div className="form-row">
             <div className="form-group"><label className="form-label">Department</label>
               <select className="form-control" value={f.department_id} onChange={(e) => set('department_id', e.target.value)}><option value="">—</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
-            <T k="designation" label="Designation" placeholder="e.g., Mathematics Teacher" /></div>
+            {T({ k: 'designation', label: 'Designation', placeholder: 'e.g., Mathematics Teacher' })}</div>
           <div className="form-row">
             <div className="form-group"><label className="form-label">Staff type</label>
               <select className="form-control" value={f.staff_type} onChange={(e) => set('staff_type', e.target.value)}>{d.staff_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
@@ -312,22 +315,22 @@ function StaffForm({ d, notify }) {
             <div className="form-group"><label className="form-label">Status</label>
               <select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
           </div>
-          <div className="form-row"><T k="date_employed" label="Date employed" type="date" /><T k="salary" label="Monthly salary (₦)" type="number" min="0" step="500" /></div>
-          <div className="form-row"><T k="confirmation_date" label="Confirmation date" type="date" />
-            <T k="contract_start" label="Contract start" type="date" /><T k="contract_end" label="Contract end / expiry" type="date" /></div>
-          <div className="form-row"><T k="qualification" label="Qualification" placeholder="e.g., B.Sc Mathematics, PGDE" />
-            <T k="prior_experience_years" label="Prior experience (yrs)" type="number" min="0" /></div>
-          <T k="certifications" label="Professional certifications" placeholder="e.g., TRCN, ICAN" />
+          <div className="form-row">{T({ k: 'date_employed', label: 'Date employed', type: 'date' })}{T({ k: 'salary', label: 'Monthly salary (₦)', type: 'number', min: '0', step: '500' })}</div>
+          <div className="form-row">{T({ k: 'confirmation_date', label: 'Confirmation date', type: 'date' })}
+            {T({ k: 'contract_start', label: 'Contract start', type: 'date' })}{T({ k: 'contract_end', label: 'Contract end / expiry', type: 'date' })}</div>
+          <div className="form-row">{T({ k: 'qualification', label: 'Qualification', placeholder: 'e.g., B.Sc Mathematics, PGDE' })}
+            {T({ k: 'prior_experience_years', label: 'Prior experience (yrs)', type: 'number', min: '0' })}</div>
+          {T({ k: 'certifications', label: 'Professional certifications', placeholder: 'e.g., TRCN, ICAN' })}
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Next of kin &amp; emergency</h3></div><div className="card-body">
-          <div className="form-row"><T k="nok_name" label="Next of kin" /><T k="nok_phone" label="NOK phone" /><T k="nok_relationship" label="Relationship" /></div>
-          <div className="form-row"><T k="emergency_name" label="Emergency contact" /><T k="emergency_phone" label="Emergency phone" /></div>
+          <div className="form-row">{T({ k: 'nok_name', label: 'Next of kin' })}{T({ k: 'nok_phone', label: 'NOK phone' })}{T({ k: 'nok_relationship', label: 'Relationship' })}</div>
+          <div className="form-row">{T({ k: 'emergency_name', label: 'Emergency contact' })}{T({ k: 'emergency_phone', label: 'Emergency phone' })}</div>
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Bank, statutory &amp; medical</h3></div><div className="card-body">
-          <div className="form-row"><T k="bank_name" label="Bank" /><T k="account_number" label="Account number" /><T k="account_name" label="Account name" /></div>
-          <div className="form-row"><T k="tax_id" label="Tax ID (TIN)" /><T k="pension_pin" label="Pension PIN" /><T k="pension_provider" label="Pension provider (PFA)" /></div>
+          <div className="form-row">{T({ k: 'bank_name', label: 'Bank' })}{T({ k: 'account_number', label: 'Account number' })}{T({ k: 'account_name', label: 'Account name' })}</div>
+          <div className="form-row">{T({ k: 'tax_id', label: 'Tax ID (TIN)' })}{T({ k: 'pension_pin', label: 'Pension PIN' })}{T({ k: 'pension_provider', label: 'Pension provider (PFA)' })}</div>
           <div className="form-row">
             <div className="form-group"><label className="form-label">Blood group</label>
               <select className="form-control" value={f.blood_group} onChange={(e) => set('blood_group', e.target.value)}><option value="">—</option>{(d.blood_groups || []).map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
