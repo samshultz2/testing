@@ -1634,6 +1634,17 @@ function Explore({ d }) {
     : (subjects.find((s) => String(s.id) === String(field)) || {}).name || 'Subject';
   const opText = { gte: '≥', lte: '≤', eq: '=', between: 'between' }[op];
 
+  // Server export/print URL carries the current scope + filter so the file
+  // matches the on-screen view (a combined, filtered cross-class document).
+  const exportUrl = (fmt) => {
+    const p = new URLSearchParams();
+    p.set('term_id', d.term_id || '');
+    p.set('scopes', (d.scopes || []).join(','));
+    p.set('format', fmt);
+    if (active) { p.set('field', field); p.set('op', op); p.set('v1', v1); if (op === 'between') p.set('v2', v2); }
+    return `${d.urls.export}?${p.toString()}`;
+  };
+
   // ---- Sorting -------------------------------------------------------------
   const [sortKey, setSortKey] = useState('average');   // 'average'|'total'|subjectId
   const [sortDir, setSortDir] = useState('desc');
@@ -1746,7 +1757,12 @@ function Explore({ d }) {
             {op === 'between' && <div className="form-group"><label className="form-label">To</label>
               <input type="number" className="form-control" style={{ maxWidth: 110 }} value={v2} step="0.1" placeholder="e.g. 70" onChange={(e) => setV2(e.target.value)} /></div>}
             {active && <div className="form-group"><button type="button" className="btn btn-secondary" onClick={() => { setV1(''); setV2(''); }}><i aria-hidden="true" className="fas fa-times" /> Clear</button></div>}
-            <div className="form-group"><button type="button" className="btn btn-success" onClick={exportCsv}><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</button></div>
+            <div className="form-group" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+              <a href={exportUrl('excel')} data-native download className="btn btn-success"><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+              <a href={exportUrl('pdf')} data-native download className="btn btn-success"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
+              <a href={exportUrl('pdf')} data-native target="_blank" rel="noopener" className="btn btn-secondary" title="Open a print-ready PDF in a new tab"><i aria-hidden="true" className="fas fa-print" /> Print</a>
+              <button type="button" className="btn btn-secondary" onClick={exportCsv}><i aria-hidden="true" className="fas fa-file-csv" /> CSV</button>
+            </div>
           </form>
           <p className="text-muted text-sm" style={{ margin: '.3rem 0 0' }}>
             {active ? <><strong>{shown.length}</strong> of {rows.length} student(s) with {fieldName} {opText} {op === 'between' ? `${Math.min(n1, n2)}–${Math.max(n1, n2)}` : n1}</> : <><strong>{rows.length}</strong> student(s) across {scopes.length} scope(s)</>}

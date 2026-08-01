@@ -6059,6 +6059,13 @@
 ]
 ],
 [
+"subjects.export_explore",
+"/subjects/broadsheet/explore/export",
+[
+"GET"
+]
+],
+[
 "subjects.import_scores",
 "/subjects/scores/import",
 [

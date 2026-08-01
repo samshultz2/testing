@@ -142,36 +142,17 @@ def broadsheet():
     })
 
 
-@subjects_bp.route('/broadsheet/explore')
-@login_required
-def broadsheet_explore():
-    """Cross-class / cross-arm results explorer.
+def _explore_dataset(term_id, scope_ids):
+    """Shared cross-class / cross-arm dataset for the Results Explorer.
 
-    Unlike the single-arm broadsheet, this pulls every enrolled student across a
-    chosen set of class-arms (within one term) into one dataset keyed by the
-    underlying Subject (so a subject like Mathematics lines up across classes).
-    The client then filters ("who scored X and below / above" by a subject, the
-    average or the total) and compares the selected scopes side by side.
-
-    Query params:
-      term_id  — the term.
-      scopes   — comma-separated ClassArmAssignment ids to include. Access is
-                 re-checked per scope, so a teacher only ever sees their classes.
+    Returns everything the view *and* the exports need, keyed by the underlying
+    Subject so the same subject lines up across classes. Access is re-checked per
+    scope (``filter_classes_for_user``), so a teacher only ever pulls their own
+    classes even if they hand-craft the ``scopes`` query string.
     """
     from collections import OrderedDict
     from sqlalchemy.orm import joinedload
 
-    term_id = request.args.get('term_id', type=int)
-    scopes_raw = request.args.get('scopes', '') or ''
-    scope_ids = [int(x) for x in scopes_raw.replace(' ', '').split(',') if x.isdigit()]
-
-    terms = Term.query.order_by(Term.id.desc()).all()
-    if not term_id:
-        active_term = get_active_term()
-        if active_term:
-            term_id = active_term.id
-
-    # Scope options: every class-arm the user may see this term, grouped by class.
     scope_options = []
     assignments_by_id = {}
     allowed_ids = set()
@@ -195,13 +176,12 @@ def broadsheet_explore():
                  'arm_name': (a.arm.name if a.arm else ''),
                  'label': a.display_name})
         scope_options = list(by_class.values())
-    # Keep only scopes the user is actually allowed to open.
+
     scope_ids = [i for i in scope_ids if i in allowed_ids]
     selected = [assignments_by_id[i] for i in scope_ids]
 
     pass_mark = SchoolSettings.get('pass_mark', 50)
-    assessment_types = AssessmentType.query.filter_by(is_active=True).all()
-    at_ids = [at.id for at in assessment_types]
+    at_ids = [at.id for at in AssessmentType.query.filter_by(is_active=True).all()]
 
     subjects_union = {}
     scope_meta = []
@@ -221,8 +201,6 @@ def broadsheet_explore():
             cs_subject[cs.id] = cs.subject
 
         def subjects_for(asg):
-            """ClassSubjects that apply to a given assignment (class-wide rows +
-            rows pinned to this assignment's arm)."""
             return [cs for cs in cs_by_class.get(asg.class_id, [])
                     if cs.arm_id is None or cs.arm_id == asg.arm_id]
 
@@ -234,8 +212,6 @@ def broadsheet_explore():
                        .join(Student).order_by(Student.surname, Student.first_name).all())
         student_ids = [e.student_id for e in enrollments]
 
-        # Subject total = sum of that student's ACTIVE-assessment scores for the
-        # class-subject, in one query for the whole selection.
         all_cs_ids = [cs.id for cs in cs_rows]
         score_map = {}
         if student_ids and all_cs_ids and at_ids:
@@ -286,18 +262,126 @@ def broadsheet_explore():
                 'passed': passed, 'failed': failed})
         rows.sort(key=lambda r: r['average'], reverse=True)
 
-    subjects_list = sorted(subjects_union.values(), key=lambda s: s['name'])
+    return {
+        'scope_options': scope_options,
+        'selected_ids': scope_ids,
+        'scope_meta': scope_meta,
+        'subjects': sorted(subjects_union.values(), key=lambda s: s['name']),
+        'rows': rows,
+        'pass_mark': pass_mark,
+    }
+
+
+def _explore_filter(rows, field, op, v1, v2):
+    """Apply the Explorer's field × condition × value(s) filter server-side, so an
+    export mirrors exactly what the user sees. ``field`` is 'average', 'total' or
+    a subject id; ``op`` is gte|lte|eq|between. Returns (filtered_rows, active,
+    label)."""
+    def val(r):
+        if field == 'average':
+            return r['average']
+        if field == 'total':
+            return r['total']
+        return r['subjects'].get(str(field))
+
+    active = ((op == 'between' and v1 is not None and v2 is not None)
+              or (op != 'between' and v1 is not None))
+    if not active:
+        return rows, False, ''
+
+    def ok(r):
+        x = val(r)
+        if x is None:
+            return False
+        if op == 'gte':
+            return x >= v1
+        if op == 'lte':
+            return x <= v1
+        if op == 'eq':
+            return x == v1
+        if op == 'between':
+            return min(v1, v2) <= x <= max(v1, v2)
+        return True
+
+    op_text = {'gte': '≥', 'lte': '≤', 'eq': '=', 'between': 'between'}.get(op, '')
+    rng = f'{min(v1, v2):g}–{max(v1, v2):g}' if op == 'between' else f'{v1:g}'
+    return [r for r in rows if ok(r)], True, f'{op_text} {rng}'
+
+
+def _explore_scope_ids():
+    raw = request.args.get('scopes', '') or ''
+    return [int(x) for x in raw.replace(' ', '').split(',') if x.isdigit()]
+
+
+@subjects_bp.route('/broadsheet/explore')
+@login_required
+def broadsheet_explore():
+    """Cross-class / cross-arm results explorer (the interactive screen).
+
+    Query params:
+      term_id  — the term.
+      scopes   — comma-separated ClassArmAssignment ids to include.
+    """
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        active_term = get_active_term()
+        if active_term:
+            term_id = active_term.id
+    ds = _explore_dataset(term_id, _explore_scope_ids())
+    terms = Term.query.order_by(Term.id.desc()).all()
     return _render({
         'page': 'explore', 'nav': _nav_urls(),
-        'term_id': term_id or '', 'scopes': scope_ids,
+        'term_id': term_id or '', 'scopes': ds['selected_ids'],
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
-        'scope_options': scope_options,
-        'scope_meta': scope_meta,
-        'subjects_union': subjects_list,
-        'rows': rows, 'pass_mark': pass_mark,
+        'scope_options': ds['scope_options'],
+        'scope_meta': ds['scope_meta'],
+        'subjects_union': ds['subjects'],
+        'rows': ds['rows'], 'pass_mark': ds['pass_mark'],
         'self_url': url_for('subjects.broadsheet_explore'),
-        'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or '')},
+        'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or ''),
+                 'export': url_for('subjects.export_explore')},
     })
+
+
+@subjects_bp.route('/broadsheet/explore/export')
+@login_required
+def export_explore():
+    """Export the filtered cross-class Explorer view — Excel or a combined,
+    print-ready PDF (``format`` = excel (default) | pdf). Filter params
+    (field/op/v1/v2) mirror the on-screen condition so the file matches the view.
+    """
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        active_term = get_active_term()
+        if active_term:
+            term_id = active_term.id
+    ds = _explore_dataset(term_id, _explore_scope_ids())
+    if not ds['rows']:
+        flash('Select a term and at least one class arm with scores to export.', 'error')
+        return redirect(url_for('subjects.broadsheet_explore', term_id=term_id or ''))
+
+    field = request.args.get('field', 'average')
+    op = request.args.get('op', 'gte')
+    v1 = request.args.get('v1', type=float)
+    v2 = request.args.get('v2', type=float)
+    rows, active, cond = _explore_filter(ds['rows'], field, op, v1, v2)
+    field_label = ('Average (%)' if field == 'average' else 'Total' if field == 'total'
+                   else next((s['name'] for s in ds['subjects'] if str(s['id']) == str(field)), 'Subject'))
+    filter_label = f'{field_label} {cond}' if active else ''
+
+    term = db.session.get(Term, term_id) if term_id else None
+    term_name = term.full_name if term else ''
+    fmt = (request.args.get('format') or 'excel').lower()
+    from utils import broadsheet_export as bx
+    if fmt == 'pdf':
+        data = bx.explore_pdf(ds['subjects'], ds['scope_meta'], rows, term_name,
+                              pass_mark=ds['pass_mark'], filter_label=filter_label)
+        from flask import Response
+        return Response(data, mimetype='application/pdf', headers={
+            'Content-Disposition': 'attachment; filename="results_explorer.pdf"'})
+    wb = bx.explore_xlsx(ds['subjects'], ds['scope_meta'], rows, term_name,
+                         pass_mark=ds['pass_mark'], filter_label=filter_label)
+    return xlsx_response(wb, 'results_explorer.xlsx')
 
 
 @subjects_bp.route('/broadsheet/compute', methods=['POST'])

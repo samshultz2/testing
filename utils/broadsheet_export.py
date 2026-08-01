@@ -584,3 +584,166 @@ def analytics_pdf(term_id, assignment_id):
 def analytics_filename(assignment, term):
     base = (assignment.display_name or 'class').replace(' ', '_')
     return f"analytics_{base}_{term.name.replace(' ', '_')}.pdf"
+
+
+# --------------------------------------------------------------------------- #
+# Results Explorer — combined cross-class / cross-arm exports
+# --------------------------------------------------------------------------- #
+# These take the already-built Explorer dataset (subjects union, per-scope meta
+# and the filtered rows) rather than a single assignment, so a filtered view
+# spanning several classes/arms exports as one Excel workbook or one print-ready
+# PDF — matching what the user sees on screen.
+
+def _explore_scope_stats(rows, scope_meta, field=None, pass_mark=50):
+    """Per-scope summary over ``rows`` (already filtered): count, mean average,
+    pass rate. Grouped by assignment; ordered to match ``scope_meta``."""
+    order = [m['assignment_id'] for m in scope_meta]
+    label = {m['assignment_id']: m['label'] for m in scope_meta}
+    buckets = {aid: [] for aid in order}
+    for r in rows:
+        buckets.setdefault(r['assignment_id'], []).append(r)
+    out = []
+    for aid in order:
+        rs = buckets.get(aid, [])
+        n = len(rs)
+        mean_avg = round(sum(r['average'] for r in rs) / n, 2) if n else None
+        passed = sum(1 for r in rs if r['average'] >= pass_mark)
+        out.append({'label': label.get(aid, ''), 'n': n,
+                    'mean_avg': mean_avg,
+                    'pass_rate': round(passed / n * 100) if n else None})
+    return out
+
+
+def explore_xlsx(subjects, scope_meta, rows, term_name, pass_mark=50, filter_label=''):
+    """Filtered cross-class Explorer view as a two-sheet Excel workbook
+    (Students + Comparison)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+
+    wb = Workbook()
+    head_font = Font(bold=True, color='FFFFFF')
+    head_fill = PatternFill('solid', fgColor='0D6A4E')
+    centre = Alignment(horizontal='center')
+
+    ws = wb.active
+    ws.title = 'Students'
+    if filter_label:
+        ws.append([f'Filter: {filter_label}'])
+        ws.append([])
+    header = ['Position', 'Student', 'Class', 'Arm'] + [s['name'] for s in subjects] \
+        + ['Total', 'Average', 'Grade', 'Passed', 'Failed']
+    ws.append(header)
+    hrow = ws.max_row
+    for c in range(1, len(header) + 1):
+        cell = ws.cell(row=hrow, column=c)
+        cell.font = head_font; cell.fill = head_fill; cell.alignment = centre
+    for i, r in enumerate(rows, 1):
+        grade = GradeScale.get_grade(r['average']) if r['average'] else '-'
+        line = [i, r['student'], r['class_name'], r['arm_name']]
+        line += [r['subjects'].get(str(s['id']), '') for s in subjects]
+        line += [r['total'], r['average'], grade, r['passed'], r['failed']]
+        ws.append(line)
+    ws.freeze_panes = ws.cell(row=hrow + 1, column=3)
+
+    cmp = wb.create_sheet('Comparison')
+    cmp.append(['Class arm', 'Students', 'Mean average', 'Pass rate %'])
+    for c in range(1, 5):
+        cell = cmp.cell(row=1, column=c)
+        cell.font = head_font; cell.fill = head_fill; cell.alignment = centre
+    for st in _explore_scope_stats(rows, scope_meta, pass_mark=pass_mark):
+        cmp.append([st['label'], st['n'],
+                    '' if st['mean_avg'] is None else st['mean_avg'],
+                    '' if st['pass_rate'] is None else st['pass_rate']])
+    # crude column sizing
+    for sheet in (ws, cmp):
+        for col in sheet.columns:
+            width = max((len(str(c.value)) for c in col if c.value is not None), default=8)
+            sheet.column_dimensions[col[0].column_letter].width = min(max(width + 2, 8), 32)
+    return wb
+
+
+def explore_pdf(subjects, scope_meta, rows, term_name, pass_mark=50, filter_label=''):
+    """Filtered cross-class Explorer view as one print-ready PDF (landscape A4):
+    a scope-comparison table followed by the unified student table."""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer)
+    from utils.web_exports import pdf_escape
+
+    primary, accent, light, ink = _theme()
+    styles = getSampleStyleSheet()
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=primary, spaceAfter=2)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#6B7A74'))
+    cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=7.5, leading=9)
+    h3 = ParagraphStyle('h3', parent=styles['Heading3'], fontSize=10.5, textColor=ink, spaceBefore=6, spaceAfter=3)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=10 * mm, bottomMargin=10 * mm,
+                            leftMargin=8 * mm, rightMargin=8 * mm, title='Results Explorer')
+    avail = landscape(A4)[0] - 16 * mm
+
+    scope_names = ', '.join(m['label'] for m in scope_meta) or '—'
+    meta_bits = [pdf_escape(scope_names)]
+    if term_name:
+        meta_bits.append(pdf_escape(term_name))
+    if filter_label:
+        meta_bits.append('Filter: ' + pdf_escape(filter_label))
+    elems = [Paragraph(pdf_escape(_school_name()), h),
+             Paragraph('Results Explorer · ' + ' · '.join(meta_bits), sub), Spacer(1, 4)]
+
+    # --- Comparison table ---
+    stats = _explore_scope_stats(rows, scope_meta, pass_mark=pass_mark)
+    cdata = [['Class arm', 'Students', 'Mean avg', 'Pass rate']]
+    for st in stats:
+        cdata.append([Paragraph(pdf_escape(st['label']), cell), str(st['n']),
+                      '–' if st['mean_avg'] is None else _n(st['mean_avg']),
+                      '–' if st['pass_rate'] is None else f"{st['pass_rate']}%"])
+    if len(stats) > 1:
+        n = len(rows)
+        mean_all = round(sum(r['average'] for r in rows) / n, 2) if n else None
+        pass_all = sum(1 for r in rows if r['average'] >= pass_mark)
+        cdata.append([Paragraph('<b>All selected</b>', cell), str(n),
+                      '–' if mean_all is None else _n(mean_all),
+                      '–' if not n else f'{round(pass_all / n * 100)}%'])
+    ct = Table(cdata, colWidths=[avail * 0.4, avail * 0.2, avail * 0.2, avail * 0.2], repeatRows=1)
+    ct.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+    elems += [Paragraph('Compare scopes', h3), ct, Spacer(1, 6)]
+
+    # --- Student table ---
+    head = ['#', 'Student', 'Class', 'Arm'] + [(s['short'] or s['name'][:6]) for s in subjects] \
+        + ['Total', 'Avg', 'Grade']
+    data = [head]
+    for i, r in enumerate(rows, 1):
+        line = [str(i), Paragraph(pdf_escape(r['student']), cell),
+                Paragraph(pdf_escape(r['class_name']), cell), Paragraph(pdf_escape(r['arm_name']), cell)]
+        for s in subjects:
+            v = r['subjects'].get(str(s['id']))
+            line.append(_n(v) if v else '–')
+        line += [_n(r['total']), _n(r['average']),
+                 GradeScale.get_grade(r['average']) if r['average'] else '–']
+        data.append(line)
+
+    pos_w, name_w, cls_w, arm_w, tail_w = 8 * mm, 40 * mm, 20 * mm, 16 * mm, 12 * mm
+    fixed = pos_w + name_w + cls_w + arm_w + 3 * tail_w
+    subj_w = max(8 * mm, (avail - fixed) / max(len(subjects), 1))
+    widths = [pos_w, name_w, cls_w, arm_w] + [subj_w] * len(subjects) + [tail_w, tail_w, tail_w]
+    st = Table(data, colWidths=widths, repeatRows=1)
+    st.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 7.5),
+        ('ALIGN', (4, 0), (-1, -1), 'CENTER'), ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('FONTNAME', (-3, 1), (-1, -1), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+    elems += [Paragraph(f'Students ({len(rows)})', h3), st]
+    doc.build(elems)
+    return buf.getvalue()
