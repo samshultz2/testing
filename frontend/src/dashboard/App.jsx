@@ -857,30 +857,99 @@ function FinanceHealth({ f, urls, t }) {
   );
 }
 
-function ExamCard({ kind, snap, url }) {
+// Exam snapshot card — a more premium redesign of the flat gradient blocks:
+// a frosted icon tile + title, a large headline metric with unit, an optional
+// progress meter (share ≥200 for JAMB, credit pass rate for WAEC), and a clean
+// footer of stat pills. Styles are inline so the refreshed look ships with the
+// hash-busted JS bundle rather than the (possibly SW-cached) page shell.
+const EXAM_GRADIENT = {
+  jamb: 'linear-gradient(135deg,#667eea,#764ba2)',
+  waec: 'linear-gradient(135deg,#0891b2,#0e7490)',
+  mock: 'linear-gradient(135deg,#0f9b7d,#22c55e)',
+};
+
+function ExamStatPill({ k, v }) {
   return (
-    <div className={'exam-card ' + kind}>
-      <div className="top">
-        <span><i aria-hidden="true" className={'fas ' + ICON[kind]} /> {kind === 'jamb' ? 'JAMB' : kind === 'waec' ? 'WAEC' : 'Latest Mock'} {snap && kind !== 'mock' ? snap.year : ''}</span>
-        {(snap || kind === 'mock') && <a href={url} style={{ color: '#fff', opacity: .85 }} aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a>}
+    <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.15,
+                   background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '.3rem .55rem' }}>
+      <span style={{ fontSize: '.62rem', textTransform: 'uppercase', letterSpacing: '.04em', opacity: .8 }}>{k}</span>
+      <span style={{ fontSize: '.9rem', fontWeight: 700 }}>{v}</span>
+    </span>
+  );
+}
+
+function ExamMeter({ pct, label }) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  return (
+    <div style={{ marginTop: '.15rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.68rem', opacity: .9, marginBottom: 3 }}>
+        <span>{label}</span><span>{p}%</span>
       </div>
-      {!snap ? (
-        <><div className="big">—</div><div className="sub">{kind === 'jamb' ? 'No JAMB results yet' : kind === 'waec' ? 'No WAEC results yet' : 'No mock exams yet'}</div></>
-      ) : kind === 'jamb' ? (
-        <>
-          <div><div className="big">{snap.mean}</div><div className="sub">mean across {snap.count} candidates</div></div>
-          <div className="chips"><span className="chip">Top {snap.max}</span><span className="chip">≥200: {snap.above_200} ({snap.above_200_pct}%)</span></div>
-        </>
-      ) : kind === 'waec' ? (
-        <>
-          <div><div className="big">{snap.pass_rate}%</div><div className="sub">credit pass rate</div></div>
-          <div className="chips"><span className="chip">{snap.students} students</span><span className="chip">{snap.entries} entries</span></div>
-        </>
-      ) : (
-        <>
-          <div><div className="big">{snap.mean}</div><div className="sub">{snap.name} · {snap.count} sat</div></div>
-          <div className="chips"><span className="chip">Top {snap.max}</span></div>
-        </>
+      <div style={{ height: 6, borderRadius: 4, background: 'rgba(255,255,255,.22)', overflow: 'hidden' }}>
+        <div style={{ width: p + '%', height: '100%', borderRadius: 4, background: 'rgba(255,255,255,.92)' }} />
+      </div>
+    </div>
+  );
+}
+
+function ExamCard({ kind, snap, url }) {
+  const title = kind === 'jamb' ? 'JAMB' : kind === 'waec' ? 'WAEC' : 'Latest Mock';
+  const year = snap && kind !== 'mock' ? snap.year : '';
+
+  let big = '—', unit = '', caption, meter = null, stats = [];
+  if (!snap) {
+    caption = kind === 'jamb' ? 'No JAMB results yet' : kind === 'waec' ? 'No WAEC results yet' : 'No mock exams yet';
+  } else if (kind === 'jamb') {
+    big = snap.mean; unit = 'avg'; caption = `mean across ${snap.count} candidates`;
+    meter = { pct: snap.above_200_pct, label: 'Scoring ≥200' };
+    stats = [{ k: 'Top score', v: snap.max }, { k: '≥200', v: snap.above_200 }];
+  } else if (kind === 'waec') {
+    big = snap.pass_rate; unit = '%'; caption = 'credit pass rate';
+    meter = { pct: snap.pass_rate, label: 'Credit passes' };
+    stats = [{ k: 'Students', v: snap.students }, { k: 'Entries', v: snap.entries }];
+  } else {
+    big = snap.mean; unit = 'avg'; caption = `${snap.name} · ${snap.count} sat`;
+    stats = [{ k: 'Top score', v: snap.max }];
+  }
+
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', color: '#fff', borderRadius: 16,
+                  padding: '1.15rem', minHeight: 172, display: 'flex', flexDirection: 'column',
+                  gap: '.7rem', background: EXAM_GRADIENT[kind],
+                  boxShadow: '0 6px 18px -8px rgba(0,0,0,.45)' }}>
+      {/* soft decorative highlight */}
+      <span aria-hidden="true" style={{ position: 'absolute', top: -60, right: -40, width: 160, height: 160,
+              borderRadius: '50%', background: 'rgba(255,255,255,.12)', pointerEvents: 'none' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem', position: 'relative' }}>
+        <span style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,.2)',
+                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <i aria-hidden="true" className={'fas ' + ICON[kind]} />
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+          <strong style={{ fontSize: '.9rem' }}>{title}</strong>
+          {year && <span style={{ fontSize: '.68rem', opacity: .82 }}>{year}</span>}
+        </div>
+        {(snap || kind === 'mock') && (
+          <a href={url} aria-label={'Open ' + title} style={{ marginLeft: 'auto', color: '#fff', opacity: .9 }}>
+            <i aria-hidden="true" className="fas fa-arrow-right" />
+          </a>
+        )}
+      </div>
+
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '.3rem' }}>
+          <span style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1, fontFamily: 'var(--font-display)' }}>{big}</span>
+          {unit && <span style={{ fontSize: '.8rem', opacity: .85 }}>{unit}</span>}
+        </div>
+        <div style={{ fontSize: '.76rem', opacity: .88, marginTop: 2 }}>{caption}</div>
+      </div>
+
+      {meter && <ExamMeter pct={meter.pct} label={meter.label} />}
+
+      {stats.length > 0 && (
+        <div style={{ display: 'flex', gap: '.45rem', marginTop: 'auto', flexWrap: 'wrap', position: 'relative' }}>
+          {stats.map((s) => <ExamStatPill key={s.k} k={s.k} v={s.v} />)}
+        </div>
       )}
     </div>
   );
