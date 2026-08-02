@@ -394,6 +394,59 @@ def pricing():
         updated_at=stored.get('updated_at'), updated_by=stored.get('updated_by'))
 
 
+@platform_bp.route('/features', methods=['GET', 'POST'])
+@platform_requires('manage_plans')
+def features():
+    """Edit the entitlement matrix: which features and numeric limits each tier
+    (Free/Basic/Premium/Enterprise) grants. Stored in the control plane, live."""
+    from utils import entitlements as ent
+    if request.method == 'POST':
+        tiers = {}
+        for tid in ent.TIER_IDS:
+            feats = {fk: (request.form.get(f'{tid}__f__{fk}') == 'on')
+                     for fk, _ in ent.FEATURES}
+            lims = {}
+            for lk, _label, _unit in ent.LIMITS:
+                v = request.form.get(f'{tid}__l__{lk}', type=int)
+                lims[lk] = v if v is not None else 0
+            tiers[tid] = {'features': feats, 'limits': lims}
+        ent.save_tiers(tiers)
+        _audit('features', detail='entitlement matrix updated')
+        flash('Plan features & limits updated — live everywhere.', 'success')
+        return redirect(url_for('platform.features'))
+    return render_template('platform/features.html', active='features',
+                           tiers=ent.get_tiers(), tier_ids=ent.TIER_IDS,
+                           tier_labels=ent.TIER_LABELS,
+                           feature_defs=ent.FEATURES, limit_defs=ent.LIMITS)
+
+
+@platform_bp.route('/tenant/<subdomain>/tier', methods=['POST'])
+@platform_requires('manage_tenants')
+def set_tier(subdomain):
+    """Change a tenant's entitlement tier and per-tenant feature overrides."""
+    from utils import entitlements as ent
+    t = tenancy.get_tenant(subdomain)
+    if t is None:
+        abort(404)
+    tier = (request.form.get('tier') or '').strip().lower()
+    if tier not in ent.TIER_IDS:
+        tier = ent.DEFAULT_TIER
+    # Per-tenant feature overrides: only store the ones that differ from the tier.
+    tiers = ent.get_tiers()
+    base_feats = (tiers.get(tier) or tiers[ent.DEFAULT_TIER])['features']
+    ov_feats = {}
+    for fk, _ in ent.FEATURES:
+        checked = request.form.get(f'ov__{fk}') == 'on'
+        if checked != base_feats.get(fk, False):
+            ov_feats[fk] = checked
+    overrides = {'features': ov_feats} if ov_feats else {}
+    tenancy.set_entitlement(subdomain, tier=tier, overrides=overrides)
+    _audit('tier', subdomain=subdomain,
+           detail=f'tier={tier}' + (f', overrides={list(ov_feats)}' if ov_feats else ''))
+    flash(f'Plan set to {ent.TIER_LABELS.get(tier, tier)}.', 'success')
+    return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
+
+
 @platform_bp.route('/tenant/<subdomain>')
 @platform_admin_required
 def tenant_profile(subdomain):
@@ -408,9 +461,15 @@ def tenant_profile(subdomain):
     payments = tenancy.recent_payments(subdomain)
     tag_list = [x.strip() for x in (t.tags or '').split(',') if x.strip()]
     timeline = tenancy.tenant_timeline(subdomain)
+    from utils import entitlements as ent
+    resolved = ent.resolve(t)
+    usage_limits = ent.usage_vs_limits(t, usage)
     return render_template('platform/tenant.html', active='schools', t=t, st=st,
                            row=_row(t), usage=usage, payments=payments, tags=tag_list,
                            timeline=timeline, portal_url=_portal_url(t),
+                           ent=resolved, usage_limits=usage_limits,
+                           feature_defs=ent.FEATURES, tier_ids=ent.TIER_IDS,
+                           tier_labels=ent.TIER_LABELS,
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 

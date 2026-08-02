@@ -43,6 +43,20 @@
   .tl .tl-w{font-size:11.5px;color:var(--faint);float:right}
   .crm-form label{display:block;font-size:12px;color:var(--faint);margin:10px 0 4px}
   .crm-form select.field{width:100%}
+  /* entitlements */
+  .feat-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+  .fchip{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:5px}
+  .fchip.on{color:var(--ok);background:var(--ok-soft)} .fchip.off{color:var(--faint);background:var(--line)}
+  .fchip.ovr{outline:2px dotted var(--warn);outline-offset:1px}
+  .lim{margin:9px 0}
+  .lim .top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px}
+  .lim .top .u{font-variant-numeric:tabular-nums;font-weight:600}
+  .lim .bar{height:7px;border-radius:99px;background:var(--line-2);overflow:hidden}
+  .lim .bar > span{display:block;height:100%;background:var(--accent)}
+  .lim.over .bar > span{background:var(--bad)} .lim.over .top .u{color:var(--bad)}
+  .ovr-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin:8px 0 4px;font-size:12.5px}
+  .ovr-grid label{display:flex;align-items:center;gap:7px;color:var(--soft);margin:0}
+  .ovr-grid input{accent-color:var(--accent)}
 </style>
 {% endblock %}
 
@@ -162,6 +176,47 @@
       <div class="info-row"><span class="k">Days left</span><span class="v">{{ row.days_left if row.days_left is not none else '—' }}</span></div>
       <div class="info-row"><span class="k">Auto-renew</span><span class="v">{{ 'On' if t.auto_renew else 'Off' }}</span></div>
       {% if t.card_last4 %}<div class="info-row"><span class="k">Card</span><span class="v">{{ t.card_brand }} ···· {{ t.card_last4 }}</span></div>{% endif %}
+    </div>
+
+    <!-- Plan & entitlements -->
+    <div class="panel" style="padding:16px 18px;margin-bottom:16px">
+      <h3 style="font-size:15px;margin:0 0 4px">Plan &amp; entitlements</h3>
+      <p class="muted" style="font-size:12px;margin:0 0 8px">Current plan: <b style="color:var(--ink)">{{ ent.tier_label }}</b></p>
+      <div class="feat-chips">
+        {% for fk, flabel in feature_defs %}
+        <span class="fchip {{ 'on' if ent.features.get(fk) else 'off' }} {{ 'ovr' if fk in ent.overridden.features }}"
+              title="{{ flabel }}{{ ' · per-tenant override' if fk in ent.overridden.features }}">
+          <i class="fas {{ 'fa-check' if ent.features.get(fk) else 'fa-lock' }}"></i> {{ flabel }}</span>
+        {% endfor %}
+      </div>
+      {% if usage_limits %}
+      {% for l in usage_limits %}
+      <div class="lim {{ 'over' if l.over }}">
+        <div class="top"><span>{{ l.label }}</span>
+          <span class="u">{% if l.used is not none %}{{ l.used }}{% else %}—{% endif %} / {{ 'Unlimited' if l.unlimited else l.cap }}{{ ' ' ~ l.unit if l.unit and not l.unlimited }}</span></div>
+        {% if not l.unlimited %}<div class="bar"><span style="width:{{ l.pct or 0 }}%"></span></div>{% endif %}
+      </div>
+      {% endfor %}
+      {% else %}<p class="muted" style="font-size:12.5px">Usage limits appear once the school is active.</p>{% endif %}
+
+      {% if not row.owner %}
+      <form method="post" action="{{ url_for('platform.set_tier', subdomain=t.subdomain) }}" style="margin-top:12px">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label style="font-size:12px;color:var(--faint);display:block;margin-bottom:4px">Change plan</label>
+        <div style="display:flex;gap:8px">
+          <select class="field" name="tier" style="flex:1">
+            {% for tid in tier_ids %}<option value="{{ tid }}" {{ 'selected' if ent.tier == tid }}>{{ tier_labels[tid] }}</option>{% endfor %}
+          </select>
+          <button class="btn sm primary"><i class="fas fa-arrow-rotate-right"></i> Apply</button>
+        </div>
+        <div class="muted" style="font-size:12px;margin:10px 0 4px">Per-tenant overrides <span style="font-size:11px">(differ from plan)</span></div>
+        <div class="ovr-grid">
+          {% for fk, flabel in feature_defs %}
+          <label><input type="checkbox" name="ov__{{ fk }}" {{ 'checked' if ent.features.get(fk) }}> {{ flabel }}</label>
+          {% endfor %}
+        </div>
+      </form>
+      {% endif %}
     </div>
 
     <!-- Actions -->

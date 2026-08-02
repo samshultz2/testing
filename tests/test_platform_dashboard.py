@@ -259,6 +259,42 @@ def test_archive_and_restore(mt):
     assert tenancy.get_tenant('owner').status == 'active'
 
 
+def test_features_editor_loads_and_saves(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    r = c.get('/platform/features', headers=H)
+    assert r.status_code == 200
+    assert 'Plans &amp; features' in r.get_data(as_text=True) or 'Plans & features' in r.get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', r.get_data(as_text=True)).group(1)
+    # turn OFF mock exams for premium and cap premium students at 999
+    data = {'_csrf_token': tok, 'premium__l__students': '999'}
+    # (omitting premium__f__mock_exams unchecks it)
+    c.post('/platform/features', headers=H, data=data)
+    from utils import entitlements as ent
+    tiers = ent.get_tiers()
+    assert tiers['premium']['features']['mock_exams'] is False
+    assert tiers['premium']['limits']['students'] == 999
+
+
+def test_tenant_tier_and_overrides(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    r = c.get('/platform/tenant/alpha', headers=H)
+    assert 'Plan &amp; entitlements' in r.get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', r.get_data(as_text=True)).group(1)
+    # set Free tier but override mock_exams ON for this one school
+    c.post('/platform/tenant/alpha/tier', headers=H,
+           data={'_csrf_token': tok, 'tier': 'free', 'ov__mock_exams': 'on'})
+    t = tenancy.get_tenant('alpha')
+    assert t.tier == 'free'
+    from utils import entitlements as ent
+    res = ent.resolve(t)
+    assert res['features']['mock_exams'] is True          # override beats the Free tier
+    assert 'mock_exams' in res['overridden']['features']
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)

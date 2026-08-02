@@ -68,6 +68,8 @@ class Tenant(_ControlBase):
     account_manager = Column(String(120))          # assigned CSM/owner (username or name)
     priority = Column(String(20))                  # normal | high | vip
     risk = Column(String(20))                      # none | watch | high (churn risk)
+    tier = Column(String(20))                      # entitlement tier: free|basic|premium|enterprise
+    entitlements_json = Column(Text)               # per-tenant override overlay (JSON)
 
     def __repr__(self):
         return f'<Tenant {self.subdomain} {self.status}>'
@@ -182,6 +184,8 @@ _ADDED_COLUMNS = {
     'account_manager': 'VARCHAR(120)',
     'priority': 'VARCHAR(20)',
     'risk': 'VARCHAR(20)',
+    'tier': 'VARCHAR(20)',
+    'entitlements_json': 'TEXT',
 }
 
 
@@ -274,6 +278,25 @@ def set_meta(subdomain, *, notes=None, tags=None, account_manager=None,
         if risk is not None:
             r = risk.strip().lower()
             t.risk = r if r in _VALID_RISK else None
+        s.commit()
+        s.expunge(t)
+        return t
+
+
+def set_entitlement(subdomain, *, tier=None, overrides=None):
+    """Set a tenant's entitlement tier and/or per-tenant override overlay.
+    ``overrides`` is a JSON-serialisable dict ({'features':{}, 'limits':{}}) or
+    None to leave unchanged; pass {} to clear it."""
+    import json as _json
+    init_control_plane()
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            raise ValueError(f'No such tenant: {subdomain}')
+        if tier is not None:
+            t.tier = (tier.strip().lower() or None)
+        if overrides is not None:
+            t.entitlements_json = _json.dumps(overrides) if overrides else None
         s.commit()
         s.expunge(t)
         return t

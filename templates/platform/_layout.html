@@ -165,6 +165,7 @@
         <a href="{{ url_for('platform.schools') }}" class="{{ 'on' if active=='schools' }}"><i class="fas fa-school"></i> Schools</a>
         {% if platform_can('view_revenue') %}<a href="{{ url_for('platform.subscriptions') }}" class="{{ 'on' if active=='subscriptions' }}"><i class="fas fa-credit-card"></i> Subscriptions</a>{% endif %}
         {% if platform_can('manage_plans') %}<a href="{{ url_for('platform.pricing') }}" class="{{ 'on' if active=='pricing' }}"><i class="fas fa-tags"></i> Pricing</a>{% endif %}
+        {% if platform_can('manage_plans') %}<a href="{{ url_for('platform.features') }}" class="{{ 'on' if active=='features' }}"><i class="fas fa-toggle-on"></i> Plans &amp; features</a>{% endif %}
         {% if platform_can('view_analytics') %}<a href="{{ url_for('platform.analytics') }}" class="{{ 'on' if active=='analytics' }}"><i class="fas fa-chart-line"></i> Analytics</a>{% endif %}
         <a href="{{ url_for('platform.audit') }}" class="{{ 'on' if active=='audit' }}"><i class="fas fa-clock-rotate-left"></i> Audit log</a>
         <a href="{{ url_for('platform.health') }}" class="{{ 'on' if active=='health' }}"><i class="fas fa-heart-pulse"></i> Health</a>
