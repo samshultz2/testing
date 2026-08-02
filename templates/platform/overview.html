@@ -1,54 +1,164 @@
 {% extends "platform/_layout.html" %}
 {% block title %}Overview{% endblock %}
-{% block heading %}Overview{% endblock %}
-{% block subheading %}Revenue, subscriptions and what needs your attention.{% endblock %}
+{% block heading %}Command center{% endblock %}
+{% block subheading %}Revenue, portfolio and everything that needs your attention — at a glance.{% endblock %}
 
 {% block head %}
 <style>
-  .kpis{grid-template-columns:1.3fr 1fr 1fr 1fr 1fr}
-  @media (max-width:960px){ .kpis{grid-template-columns:repeat(2,1fr)} }
-  @media (max-width:520px){ .kpis{grid-template-columns:1fr} }
-  .two{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start}
+  .hero-band{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:14px;margin-bottom:14px}
+  @media (max-width:900px){ .hero-band{grid-template-columns:1fr} }
+  .hero-rev{position:relative;overflow:hidden}
+  .hero-rev .spark{position:absolute;right:0;bottom:0;width:60%;height:56px;opacity:.9}
+  .delta{font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:4px;
+    padding:2px 8px;border-radius:99px;margin-top:8px}
+  .delta.up{color:var(--ok);background:var(--ok-soft)} .delta.dn{color:var(--bad);background:var(--bad-soft)}
+  .delta.flat{color:var(--faint);background:var(--line)}
+  .hero .delta.up,.hero .delta.dn,.hero .delta.flat{background:rgba(255,255,255,.16);color:#fff}
+
+  .grid-lab{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);
+    font-weight:700;margin:20px 2px 10px;display:flex;align-items:center;gap:9px}
+  .grid-lab::after{content:"";flex:1;height:1px;background:var(--line-2)}
+  .mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 15px;
+    box-shadow:var(--shadow);display:block;transition:.12s}
+  a.stat:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .stat .k{font-size:11.5px;color:var(--faint);font-weight:600;display:flex;align-items:center;gap:6px}
+  .stat .k i{width:14px;text-align:center}
+  .stat .v{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-top:5px;font-variant-numeric:tabular-nums}
+  .stat .v small{font-size:12px;font-weight:600;color:var(--faint);margin-left:2px}
+  .stat.warn .v{color:var(--warn)} .stat.bad .v{color:var(--bad)} .stat.ok .v{color:var(--ok)}
+
+  .two{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start;margin-top:20px}
   @media (max-width:900px){ .two{grid-template-columns:1fr} }
   .att{display:flex;align-items:center;gap:12px;padding:12px 18px}
   .att + .att{border-top:1px solid var(--line-2)}
   .att .spacer{margin-left:auto}
   .rec{display:flex;align-items:center;gap:12px;padding:11px 18px}
   .rec + .rec{border-top:1px solid var(--line-2)}
-  .quick{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+  .quick{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
+
+  /* distribution bar */
+  .distbar{display:flex;height:14px;border-radius:99px;overflow:hidden;margin:2px 18px 12px;
+    background:var(--line-2)}
+  .distbar a{display:block;height:100%}
+  .seg-paying{background:var(--ok)} .seg-trial{background:var(--warn)}
+  .seg-unpaid{background:var(--bad)} .seg-suspended{background:var(--faint)}
+  .seg-pending{background:var(--accent-2)}
+  .distleg{display:flex;flex-wrap:wrap;gap:6px 16px;padding:0 18px 16px;font-size:12px}
+  .distleg span{display:inline-flex;align-items:center;gap:7px;color:var(--soft)}
+  .distleg .sw{width:9px;height:9px;border-radius:3px;display:inline-block}
+
+  /* growth mini chart */
+  .growth{padding:6px 18px 16px}
+  .bars{display:flex;align-items:flex-end;gap:4px;height:70px;margin-top:6px}
+  .bars .b{flex:1;background:var(--accent-soft);border-radius:4px 4px 0 0;min-height:3px;position:relative}
+  .bars .b:last-child{background:var(--accent)}
+  .bars .b span{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:10px;
+    color:var(--faint);opacity:0;transition:.1s;white-space:nowrap;font-weight:700}
+  .bars .b:hover span{opacity:1;margin-bottom:2px}
+  .axis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint);margin-top:6px}
 </style>
 {% endblock %}
 
 {% block content %}
-  <div class="cards kpis">
-    <div class="kpi hero">
-      <div class="lab"><i class="fas fa-sack-dollar"></i> Estimated monthly revenue (MRR)</div>
-      <div class="num">₦{{ '{:,.0f}'.format(summary.mrr) }}</div>
-      <div class="sub" style="color:var(--faint);font-size:12.5px;margin-top:2px">ARR ₦{{ '{:,.0f}'.format(summary.arr) }}</div>
+  {% set p = m.portfolio %}{% set rev = m.revenue %}{% set g = m.growth %}{% set ret = m.retention %}
+
+  <!-- ============ hero band ============ -->
+  <div class="hero-band">
+    <div class="kpi hero hero-rev">
+      <div class="lab"><i class="fas fa-sack-dollar"></i> Monthly recurring revenue</div>
+      <div class="num">₦{{ '{:,.0f}'.format(rev.mrr) }}</div>
+      <div class="sub" style="color:rgba(255,255,255,.85);font-size:12.5px;margin-top:2px">
+        ARR ₦{{ '{:,.0f}'.format(rev.arr) }} · ARPA ₦{{ '{:,.0f}'.format(rev.arpa) }}</div>
+      {% if g.mom_pct is not none %}
+        <span class="delta {{ 'up' if g.mom_pct > 0 else 'dn' if g.mom_pct < 0 else 'flat' }}">
+          <i class="fas fa-arrow-{{ 'up' if g.mom_pct >= 0 else 'down' }}"></i>{{ g.mom_pct|abs }}% signups MoM</span>
+      {% endif %}
+      {% if growth_line %}
+      <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
+        <polyline fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.6" points="{{ growth_line }}"/>
+        {% if growth_end %}<circle cx="{{ growth_end.split(',')[0] }}" cy="{{ growth_end.split(',')[1] }}" r="2" fill="#fff"/>{% endif %}
+      </svg>{% endif %}
     </div>
-    <a class="kpi" href="{{ url_for('platform.schools', filter='paying') }}"><div class="lab"><i class="fas fa-circle-check"></i> Paying</div><div class="num">{{ summary.paying }}</div></a>
-    <a class="kpi" href="{{ url_for('platform.schools', filter='trial') }}"><div class="lab"><i class="fas fa-hourglass-half"></i> On trial</div><div class="num">{{ summary.trial }}</div></a>
-    <a class="kpi" href="{{ url_for('platform.schools', filter='unpaid') }}"><div class="lab"><i class="fas fa-triangle-exclamation"></i> Unpaid / locked</div><div class="num">{{ summary.blocked }}</div></a>
-    <a class="kpi" href="{{ url_for('platform.schools', filter='customers') }}"><div class="lab"><i class="fas fa-school"></i> Customer schools</div><div class="num">{{ summary.customers }}</div></a>
+    <a class="stat ok" href="{{ url_for('platform.schools', filter='paying') }}" style="padding:16px 18px">
+      <div class="k"><i class="fas fa-circle-check"></i> Paying schools</div>
+      <div class="v">{{ p.paying }}<small>/ {{ p.customers }} customers</small></div>
+      <div class="delta up" style="background:var(--ok-soft);color:var(--ok)"><i class="fas fa-id-card"></i> {{ p.card_on_file }} cards on file</div>
+    </a>
+    <a class="stat warn" href="{{ url_for('platform.schools', filter='trial') }}" style="padding:16px 18px">
+      <div class="k"><i class="fas fa-hourglass-half"></i> On trial</div>
+      <div class="v">{{ p.trial }}</div>
+      <div class="delta {{ 'dn' if p.ending_soon else 'flat' }}"><i class="fas fa-clock"></i> {{ p.ending_soon }} ending ≤3d</div>
+    </a>
   </div>
 
-  <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:14px">
-    <div class="kpi"><div class="lab"><i class="fas fa-calendar-plus"></i> New this month</div><div class="num">{{ summary.new_month }}</div></div>
-    <div class="kpi"><div class="lab"><i class="fas fa-bolt"></i> Registered today</div><div class="num">{{ summary.today }}</div></div>
-    <a class="kpi" href="{{ url_for('platform.schools', filter='ending_soon') }}"><div class="lab"><i class="fas fa-clock"></i> Ending soon</div><div class="num">{{ summary.ending_soon }}</div></a>
-    <div class="kpi"><div class="lab"><i class="fas fa-user-graduate"></i> Students (platform)</div><div class="num">{{ '{:,}'.format(totals.students) if totals else '—' }}</div></div>
-    <div class="kpi"><div class="lab"><i class="fas fa-chalkboard-user"></i> Staff (platform)</div><div class="num">{{ '{:,}'.format(totals.staff) if totals else '—' }}</div></div>
-    <div class="kpi"><div class="lab"><i class="fas fa-code-branch"></i> Branches (platform)</div><div class="num">{{ '{:,}'.format(totals.branches) if totals else '—' }}</div></div>
+  <!-- ============ portfolio ============ -->
+  <div class="grid-lab"><i class="fas fa-layer-group"></i> Portfolio</div>
+  <div class="mini">
+    <a class="stat" href="{{ url_for('platform.schools', filter='customers') }}"><div class="k"><i class="fas fa-school"></i> Total schools</div><div class="v">{{ p.total }}</div></a>
+    <a class="stat" href="{{ url_for('platform.schools') }}"><div class="k"><i class="fas fa-bolt"></i> Active</div><div class="v">{{ p.active }}</div></a>
+    <a class="stat {{ 'bad' if p.unpaid }}" href="{{ url_for('platform.schools', filter='unpaid') }}"><div class="k"><i class="fas fa-triangle-exclamation"></i> Unpaid / locked</div><div class="v">{{ p.unpaid }}</div></a>
+    <a class="stat {{ 'warn' if p.suspended }}" href="{{ url_for('platform.schools', filter='suspended') }}"><div class="k"><i class="fas fa-ban"></i> Suspended</div><div class="v">{{ p.suspended }}</div></a>
+    <div class="stat"><div class="k"><i class="fas fa-hourglass-start"></i> Pending</div><div class="v">{{ p.pending }}</div></div>
+    <a class="stat {{ 'warn' if p.ending_soon }}" href="{{ url_for('platform.schools', filter='ending_soon') }}"><div class="k"><i class="fas fa-clock"></i> Ending soon</div><div class="v">{{ p.ending_soon }}</div></a>
   </div>
 
+  <!-- ============ growth & revenue ============ -->
+  <div class="grid-lab"><i class="fas fa-arrow-trend-up"></i> Growth &amp; retention</div>
+  <div class="mini">
+    <div class="stat"><div class="k"><i class="fas fa-calendar-day"></i> New today</div><div class="v">{{ g.today }}</div></div>
+    <div class="stat"><div class="k"><i class="fas fa-calendar-week"></i> This week</div><div class="v">{{ g.week }}</div></div>
+    <div class="stat"><div class="k"><i class="fas fa-calendar-plus"></i> New this month</div><div class="v">{{ g.month }}<small>vs {{ g.prev_month }} prev</small></div></div>
+    <div class="stat {{ 'ok' if ret.renewal_rate and ret.renewal_rate >= 80 else 'warn' if ret.renewal_rate is not none }}"><div class="k"><i class="fas fa-rotate"></i> Renewal health</div><div class="v">{% if ret.renewal_rate is not none %}{{ ret.renewal_rate }}<small>%</small>{% else %}—{% endif %}</div></div>
+    <div class="stat {{ 'bad' if ret.churn_month }}"><div class="k"><i class="fas fa-user-slash"></i> Churn events (30d)</div><div class="v">{{ ret.churn_month }}</div></div>
+    <div class="stat {{ 'bad' if rev.failing }}"><div class="k"><i class="fas fa-credit-card"></i> Failing renewals</div><div class="v">{{ rev.failing }}</div></div>
+  </div>
+
+  <!-- ============ distribution + growth chart ============ -->
+  <div class="two">
+    <div class="panel">
+      <h2><i class="fas fa-chart-column"></i> New schools — last 12 months
+        <span class="tag">{{ trend.totals.signups if trend.totals else 0 }} total</span></h2>
+      <div class="growth">
+        {% if signup_bars %}
+        <div class="bars">
+          {% for v in signup_bars %}
+          <div class="b" style="height:{{ (100 * v / signup_max)|round(0,'ceil') if signup_max else 0 }}%"><span>{{ v }}</span></div>
+          {% endfor %}
+        </div>
+        <div class="axis"><span>{{ trend.labels[0] if trend.labels }}</span><span>{{ trend.labels[-1] if trend.labels }}</span></div>
+        {% else %}<div class="empty"><i class="fas fa-chart-column"></i>No signup history yet.</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><i class="fas fa-chart-pie"></i> Customer mix</h2>
+      {% if m.distribution %}
+      <div class="distbar">
+        {% for d in m.distribution %}
+        <a class="seg-{{ d.key }}" style="width:{{ d.pct }}%" title="{{ d.label }}: {{ d.count }}"
+           href="{{ url_for('platform.schools', filter=d.filter) if d.filter else url_for('platform.schools') }}"></a>
+        {% endfor %}
+      </div>
+      <div class="distleg">
+        {% for d in m.distribution %}
+        <span><span class="sw seg-{{ d.key }}"></span> {{ d.label }} · <b>{{ d.count }}</b> ({{ d.pct }}%)</span>
+        {% endfor %}
+      </div>
+      {% else %}<div class="empty"><i class="fas fa-chart-pie"></i>No customer schools yet.</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- ============ attention + recent ============ -->
   <div class="two">
     <div class="panel">
       <h2><i class="fas fa-bell"></i> Needs attention <span class="tag">{{ attention|length }} item(s)</span></h2>
       {% if attention %}
         {% for r in attention %}
         <div class="att">
-          <span class="school"><span class="ic">{{ r.name[0]|upper }}</span>
-            <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></span>
+          <a class="school" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}">
+            <span class="ic">{{ r.name[0]|upper }}</span>
+            <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></a>
           <span class="spacer"></span>
           {% if r.bucket == 'unpaid' %}<span class="pill p-unpaid">Unpaid</span>
           {% else %}<span class="pill p-trial">{{ r.days_left }}d left</span>{% endif %}
@@ -68,7 +178,7 @@
       <h2><i class="fas fa-clock-rotate-left"></i> Recent signups</h2>
       {% if recent %}
         {% for r in recent %}
-        <a class="rec" href="{{ url_for('platform.schools') }}">
+        <a class="rec" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}">
           <span class="school"><span class="ic">{{ r.name[0]|upper }}</span>
             <span><b>{{ r.name }}</b><br><span class="sub">{{ r.created }}</span></span></span>
           <span class="spacer" style="margin-left:auto"></span>
@@ -81,9 +191,20 @@
     </div>
   </div>
 
+  <!-- ============ platform footprint ============ -->
+  {% if totals %}
+  <div class="grid-lab"><i class="fas fa-database"></i> Platform footprint <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500;font-size:11px">· across active tenants</span></div>
+  <div class="mini">
+    <div class="stat"><div class="k"><i class="fas fa-user-graduate"></i> Students</div><div class="v">{{ '{:,}'.format(totals.students) }}</div></div>
+    <div class="stat"><div class="k"><i class="fas fa-chalkboard-user"></i> Staff</div><div class="v">{{ '{:,}'.format(totals.staff) }}</div></div>
+    <div class="stat"><div class="k"><i class="fas fa-code-branch"></i> Branches</div><div class="v">{{ '{:,}'.format(totals.branches) }}</div></div>
+  </div>
+  {% endif %}
+
   <div class="quick">
     <a class="btn" href="{{ url_for('platform.schools') }}"><i class="fas fa-school"></i> Manage schools</a>
     <a class="btn" href="{{ url_for('platform.subscriptions') }}"><i class="fas fa-credit-card"></i> Subscriptions</a>
-    <a class="btn" href="{{ url_for('platform.homepage') }}"><i class="fas fa-pen-ruler"></i> Edit homepage</a>
+    <a class="btn" href="{{ url_for('platform.analytics') }}"><i class="fas fa-chart-line"></i> Analytics</a>
+    <a class="btn" href="{{ url_for('platform.schools_export') }}"><i class="fas fa-file-arrow-down"></i> Export directory</a>
   </div>
 {% endblock %}

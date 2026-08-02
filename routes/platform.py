@@ -140,18 +140,67 @@ def _rows_and_summary():
 @platform_bp.route('/')
 @platform_admin_required
 def dashboard():
-    """Overview: headline numbers, what needs attention, and recent signups."""
+    """Executive command center: the full KPI set, growth trend, distribution,
+    what needs attention, and recent signups."""
     rows, summary, price = _rows_and_summary()
     attention = [r for r in rows if r['bucket'] == 'unpaid' or r['ending_soon']]
     attention.sort(key=lambda r: (r['bucket'] != 'unpaid', r['days_left'] if r['days_left'] is not None else 999))
     recent = sorted([r for r in rows if not r['owner']],
                     key=lambda r: r['created_at'] or _dt_min(), reverse=True)[:6]
     from utils.platform_stats import platform_totals
+    from utils import platform_metrics
     totals = platform_totals(tenancy.list_tenants())
+    m = platform_metrics.executive_summary()
+    trend = m['trend']
+    growth_line, growth_end, _ = platform_metrics.sparkline_points(trend.get('cumulative'))
+    signup_bars = trend.get('signups') or []
+    signup_max = max(signup_bars) if signup_bars else 0
     return render_template('platform/overview.html', active='overview',
-                           summary=summary, price=price, totals=totals,
+                           summary=summary, price=price, totals=totals, m=m,
+                           trend=trend, growth_line=growth_line, growth_end=growth_end,
+                           signup_bars=signup_bars, signup_max=signup_max,
                            attention=attention[:8], recent=recent,
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+
+
+@platform_bp.route('/search')
+@platform_admin_required
+def search():
+    """Global command-palette search: schools by name / subdomain / admin email,
+    plus static console destinations. Returns JSON for the ⌘K overlay."""
+    from flask import jsonify
+    q = (request.args.get('q') or '').strip().lower()
+    results = []
+    # Console destinations (always available; filtered by the query).
+    nav = [
+        ('Overview', 'fa-gauge-high', url_for('platform.dashboard')),
+        ('Schools', 'fa-school', url_for('platform.schools')),
+        ('Subscriptions', 'fa-credit-card', url_for('platform.subscriptions')),
+        ('Pricing', 'fa-tags', url_for('platform.pricing')),
+        ('Analytics', 'fa-chart-line', url_for('platform.analytics')),
+        ('Audit log', 'fa-clock-rotate-left', url_for('platform.audit')),
+        ('Health', 'fa-heart-pulse', url_for('platform.health')),
+        ('Edit homepage', 'fa-pen-ruler', url_for('platform.homepage')),
+    ]
+    for label, icon, href in nav:
+        if not q or q in label.lower():
+            results.append({'type': 'page', 'label': label, 'sub': 'Console',
+                            'icon': icon, 'href': href})
+    # Schools (cap the payload; rank exact/startswith first).
+    if q:
+        hits = []
+        for t in tenancy.list_tenants():
+            hay = f'{t.name or ""} {t.subdomain or ""} {t.admin_email or ""}'.lower()
+            if q in hay:
+                rank = (0 if (t.subdomain or '').lower().startswith(q)
+                        or (t.name or '').lower().startswith(q) else 1)
+                hits.append((rank, t))
+        hits.sort(key=lambda x: (x[0], (x[1].name or '').lower()))
+        for _rank, t in hits[:12]:
+            results.append({'type': 'school', 'label': t.name or t.subdomain,
+                            'sub': f'{t.subdomain} · {t.status}', 'icon': 'fa-school',
+                            'href': url_for('platform.tenant_profile', subdomain=t.subdomain)})
+    return jsonify({'results': results[:20]})
 
 
 @platform_bp.route('/schools')

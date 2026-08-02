@@ -64,7 +64,22 @@ def test_overview_loads_for_owner_admin(mt):
     r = c.get('/platform/', headers={'Host': 'edusyncra.test'})
     assert r.status_code == 200
     body = r.get_data(as_text=True)
-    assert 'Overview' in body and 'monthly revenue' in body.lower()
+    assert 'Command center' in body and 'recurring revenue' in body.lower()
+    # command palette + global search shell is present on every console page
+    assert 'cmdTrigger' in body and '/platform/search' in body
+
+
+def test_global_search_finds_school(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    r = c.get('/platform/search?q=alph', headers={'Host': 'edusyncra.test'})
+    assert r.status_code == 200
+    data = r.get_json()
+    labels = [x['label'] for x in data['results']]
+    assert any('Alpha' == l for l in labels), labels
+    # a page destination is always searchable
+    r2 = c.get('/platform/search?q=analytics', headers={'Host': 'edusyncra.test'})
+    assert any(x['type'] == 'page' for x in r2.get_json()['results'])
 
 
 def test_schools_page_lists_all_schools_for_owner_admin(mt):
@@ -228,7 +243,7 @@ def test_overview_kpis_and_totals(mt):
     H = {'Host': 'edusyncra.test'}
     body = c.get('/platform/', headers={'Host': 'edusyncra.test'}).get_data(as_text=True)
     assert 'ARR' in body and 'New this month' in body
-    assert 'Students (platform)' in body        # cross-tenant totals strip
+    assert 'Platform footprint' in body and 'Students' in body   # cross-tenant totals strip
     # KPI cards drill down into the filtered schools list
     assert "filter=trial" in body or "filter=paying" in body
 
