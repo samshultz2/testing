@@ -250,6 +250,11 @@ def homepage():
             'phone': (request.form.get('contact_phone') or '').strip(),
             'whatsapp': _wa,
         }
+        # Legal-document fields (company name, effective date, DPO, sub-processors).
+        for k in ('legal_entity', 'legal_effective', 'dpo_email'):
+            content[k] = (request.form.get(k) or '').strip()
+        content['subprocessors'] = site_content.parse_pairs(
+            request.form.get('subprocessors'), ('name', 'purpose'))
         site_content.save_homepage(content)
         _audit('homepage', detail='homepage content updated')
         flash('Homepage updated — changes are live.', 'success')
@@ -263,7 +268,8 @@ def homepage():
         features_text=site_content.format_pairs(content.get('features'), ('title', 'body')),
         steps_text=site_content.format_pairs(content.get('steps'), ('title', 'body')),
         faqs_text=site_content.format_pairs(content.get('faqs'), ('q', 'a')),
-        testimonials_text=site_content.format_pairs(content.get('testimonials'), ('name', 'quote')))
+        testimonials_text=site_content.format_pairs(content.get('testimonials'), ('name', 'quote')),
+        subprocessors_text=site_content.format_pairs(content.get('subprocessors'), ('name', 'purpose')))
 
 
 @platform_bp.route('/pricing', methods=['GET', 'POST'])

@@ -439,19 +439,51 @@ _LEGAL = {
 
 @marketing_bp.route('/legal/<slug>')
 def legal(slug):
-    """A full legal document page (privacy / terms / cookies)."""
+    """A full legal document page (privacy / terms / cookies). The company name,
+    effective date, DPO contact and sub-processor list are pulled from the
+    editable homepage content (/platform/homepage → Legal), with sensible
+    fallbacks. Section numbers are applied by the template, so dynamic sections
+    (e.g. sub-processors) slot in without renumbering by hand."""
+    import re as _re
+    import datetime as _dt
     from utils.site_content import get_homepage
     entry = _LEGAL.get(slug)
     if not entry:
         return redirect(url_for('marketing.home'))
-    import datetime as _dt
-    return render_template('marketing/legal.html',
-                           title=entry['title'], intro=entry.get('intro'),
-                           sections=entry['sections'],
-                           content=get_homepage(), base_domain=_base_domain(),
-                           updated=_dt.date.today().strftime('%d %B %Y'),
-                           now_year=_dt.date.today().year,
-                           register_url=url_for('onboarding.register'))
+    content = get_homepage()
+
+    # Copy sections and strip any hand-written "N. " prefix (the template numbers).
+    sections = []
+    for s in entry['sections']:
+        sections.append({'h': _re.sub(r'^\d+\.\s*', '', s['h']),
+                         'p': list(s.get('p', [])), 'list': list(s.get('list', []))})
+
+    # Privacy: insert a live "Sub-processors" section after the disclosure one.
+    subs = content.get('subprocessors') or []
+    if slug == 'privacy' and subs:
+        sub_section = {'h': 'Sub-processors', 'p': [
+            'We engage carefully selected third parties (“sub-processors”) to '
+            'help us deliver the Services. Each is bound by contract to protect '
+            'personal data and to process it only on our instructions. Our '
+            'current sub-processors are:'],
+            'list': [f"{(x.get('name') or '').strip()} — {(x.get('purpose') or '').strip()}"
+                     for x in subs if (x.get('name') or '').strip()]}
+        idx = next((i for i, s in enumerate(sections)
+                    if s['h'].lower().startswith('disclosure')), len(sections) - 1)
+        sections.insert(idx + 1, sub_section)
+
+    ct = content.get('contact') or {}
+    dpo_email = (content.get('dpo_email') or '').strip() or (ct.get('email') or '').strip()
+    return render_template(
+        'marketing/legal.html',
+        title=entry['title'], intro=entry.get('intro'), sections=sections,
+        content=content, base_domain=_base_domain(),
+        legal_entity=(content.get('legal_entity') or '').strip(),
+        dpo_email=dpo_email,
+        updated=((content.get('legal_effective') or '').strip()
+                 or _dt.date.today().strftime('%d %B %Y')),
+        now_year=_dt.date.today().year,
+        register_url=url_for('onboarding.register'))
 
 
 def serve_marketing_home():

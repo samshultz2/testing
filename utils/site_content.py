@@ -76,6 +76,18 @@ DEFAULTS = {
         'phone': '+234 800 000 0000',
         'whatsapp': '2348000000000',      # digits only, for wa.me links
     },
+    # Legal-document fields (editable from /platform/homepage → Legal). Blank
+    # values fall back to sensible defaults at render time: legal_entity → brand,
+    # legal_effective → today's date, dpo_email → contact.email.
+    'legal_entity': '',       # registered company name, e.g. "EduSyncra Technologies Ltd"
+    'legal_effective': '',    # effective date shown on the legal pages, e.g. "1 August 2026"
+    'dpo_email': '',          # data-protection / privacy contact address
+    'subprocessors': [        # third parties that process data to run the service
+        {'name': 'Cloud hosting provider', 'purpose': 'Secure hosting, storage and backups of the platform and its databases'},
+        {'name': 'Paystack', 'purpose': 'Processing of subscription card and bank payments'},
+        {'name': 'Email delivery provider', 'purpose': 'Sending transactional and notification emails'},
+        {'name': 'SMS / WhatsApp messaging provider', 'purpose': 'Delivering SMS and WhatsApp messages to parents and staff'},
+    ],
     'faqs': [
         {'q': 'Is there a free trial?',
          'a': 'Yes — every new school gets 3 days free, no card required. After '

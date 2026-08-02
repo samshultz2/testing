@@ -90,6 +90,25 @@
     </div>
 
     <div class="sect">
+      <h3>Legal</h3>
+      <p class="hint">Used across the Privacy Policy, Terms of Service and Cookie Policy pages. Leave a field blank to fall back to a sensible default.</p>
+      <div class="row2">
+        <div><label>Registered company name</label>
+          <input type="text" name="legal_entity" value="{{ content.legal_entity or '' }}" placeholder="e.g. EduSyncra Technologies Ltd">
+          <div class="hint">Shown as “Issued by …”. Blank uses the brand name.</div></div>
+        <div><label>Effective date</label>
+          <input type="text" name="legal_effective" value="{{ content.legal_effective or '' }}" placeholder="e.g. 1 August 2026">
+          <div class="hint">Blank uses today’s date.</div></div>
+      </div>
+      <label>Data Protection Officer / privacy contact email</label>
+      <input type="email" name="dpo_email" value="{{ content.dpo_email or '' }}" placeholder="dpo@edusyncra.site">
+      <div class="hint">Shown in the Privacy Policy contact block. Blank uses your main contact email.</div>
+      <label style="margin-top:12px">Sub-processors — one per line, <code>Name | What they process</code></label>
+      <textarea name="subprocessors" style="min-height:110px">{{ subprocessors_text }}</textarea>
+      <div class="hint">The third parties that process data to run the service (hosting, payments, messaging). Listed in the Privacy Policy.</div>
+    </div>
+
+    <div class="sect">
       <h3>Footer</h3>
       <label>Footer text</label>
       <input type="text" name="footer" value="{{ content.footer }}">

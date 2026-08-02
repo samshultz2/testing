@@ -36,11 +36,11 @@
 <main id="main"><div class="legal">
   <a href="{{ url_for('marketing.home') }}" style="color:var(--primary);font-size:14px"><i class="fas fa-arrow-left"></i> Back to home</a>
   <h1>{{ title }}</h1>
-  <p class="muted">{{ content.brand }} · Effective {{ updated }}</p>
+  <p class="muted">{{ content.brand }} · Effective {{ updated }}{% if legal_entity %} · Issued by {{ legal_entity }}{% endif %}</p>
   {% if intro %}<p class="legal-intro">{{ intro }}</p>{% endif %}
   {% for s in sections %}
   <section>
-    <h2>{{ s.h }}</h2>
+    <h2>{{ loop.index }}. {{ s.h }}</h2>
     {% for para in s.get('p', []) %}<p>{{ para }}</p>{% endfor %}
     {% if s.get('list') %}<ul>{% for it in s['list'] %}<li>{{ it }}</li>{% endfor %}</ul>{% endif %}
   </section>
@@ -52,6 +52,7 @@
       {% set _ct = content.contact or {} %}
       <li><strong>{{ content.brand }}</strong></li>
       <li>Email: <a href="mailto:{{ _ct.email or 'hello@' ~ base_domain }}">{{ _ct.email or 'hello@' ~ base_domain }}</a></li>
+      {% if dpo_email %}<li>Data Protection Officer: <a href="mailto:{{ dpo_email }}">{{ dpo_email }}</a></li>{% endif %}
       {% if _ct.phone %}<li>Telephone: <a href="tel:{{ _ct.phone | replace(' ', '') }}">{{ _ct.phone }}</a></li>{% endif %}
       {% if _ct.whatsapp %}<li>WhatsApp: <a href="https://wa.me/{{ _ct.whatsapp }}" rel="noopener" target="_blank">Message us</a></li>{% endif %}
     </ul>
