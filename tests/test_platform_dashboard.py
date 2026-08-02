@@ -295,6 +295,69 @@ def test_tenant_tier_and_overrides(mt):
     assert 'mock_exams' in res['overridden']['features']
 
 
+def test_impersonation_requires_reason(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)).group(1)
+    r = c.post('/platform/tenant/alpha/impersonate', headers=H,
+               data={'reason': '', '_csrf_token': tok})
+    # bounced back to the profile, no grant minted
+    assert r.status_code in (302, 303)
+    assert tenancy.list_impersonations() == []
+
+
+def test_impersonation_full_flow(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)).group(1)
+    r = c.post('/platform/tenant/alpha/impersonate', headers=H,
+               data={'reason': 'ticket #42', 'minutes': '30', '_csrf_token': tok})
+    assert r.status_code == 302
+    loc = r.headers['Location']
+    assert 'alpha.edusyncra.test/impersonate/' in loc
+    token = loc.rstrip('/').rsplit('/', 1)[1]
+
+    # exchange the token on the school's own host (fresh client)
+    tc = app.test_client()
+    TH = {'Host': 'alpha.edusyncra.test'}
+    r2 = tc.get('/impersonate/' + token, headers=TH)
+    assert r2.status_code == 302                       # session established
+    # the read-only support banner appears on the school's pages
+    body = tc.get('/', headers=TH, follow_redirects=True).get_data(as_text=True)
+    assert 'Support view' in body and 'read-only' in body
+    # read-only: any write is refused
+    assert tc.post('/', headers=TH).status_code == 403
+    # start + a real audit trail entry exist
+    assert any(a.action == 'impersonate_start' for a in tenancy.list_platform_audit())
+    # operator ends the session
+    tc.get('/impersonate/stop', headers=TH)
+    assert tc.get('/', headers=TH, follow_redirects=True).status_code == 200
+    body2 = tc.get('/', headers=TH, follow_redirects=True).get_data(as_text=True)
+    assert 'Support view' not in body2                 # banner gone
+
+
+def test_impersonation_kill_switch(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    g = tenancy.create_impersonation('boss', 'alpha', 'audit check', ttl_minutes=30)
+    tc = app.test_client()
+    TH = {'Host': 'alpha.edusyncra.test'}
+    tc.get('/impersonate/' + g.token, headers=TH)      # live session
+    # kill it from the console
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/impersonation', headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/impersonation/%d/end' % g.id, headers=H, data={'_csrf_token': tok})
+    # the next tenant request tears the session down (redirect to login)
+    r = tc.get('/', headers=TH)
+    assert r.status_code in (301, 302)
+    assert 'login' in r.headers.get('Location', '')
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)

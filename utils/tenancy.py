@@ -127,6 +127,24 @@ class PlatformAudit(_ControlBase):
     detail = Column(String(300))
 
 
+class ImpersonationGrant(_ControlBase):
+    """A time-boxed, audited authorization for a platform operator to view a
+    tenant's portal as its admin (read-only support session). The token is
+    exchanged once, on the tenant's own host, to establish the session; the
+    grant can be ended early (kill switch) and auto-expires."""
+    __tablename__ = 'impersonation_grants'
+
+    id = Column(Integer, primary_key=True)
+    token = Column(String(64), nullable=False, unique=True)
+    actor = Column(String(120), nullable=False)    # the platform operator
+    subdomain = Column(String(63), nullable=False, index=True)
+    reason = Column(String(300))                    # justification (ticket ref etc.)
+    created_at = Column(DateTime, default=_dt.datetime.utcnow, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime)                      # first exchanged on the tenant host
+    ended_at = Column(DateTime)                     # revoked / stopped
+
+
 # --- control-plane engine (lazy, cached) ------------------------------------
 _engine = None
 _Session = None
@@ -360,6 +378,84 @@ def list_payments(limit=500):
                 .order_by(ProcessedPayment.at.desc()).limit(limit).all())
         return [{'at': r.at, 'reference': r.reference, 'subdomain': r.subdomain,
                  'name': names.get(r.subdomain, r.subdomain)} for r in rows]
+
+
+def create_impersonation(actor, subdomain, reason, *, ttl_minutes=30):
+    """Mint a time-boxed impersonation grant and return it (detached).
+    The token is a cryptographically-random URL-safe string."""
+    import secrets
+    init_control_plane()
+    now = _dt.datetime.utcnow()
+    g = ImpersonationGrant(
+        token=secrets.token_urlsafe(32), actor=actor, subdomain=subdomain,
+        reason=(reason or '').strip()[:300] or None,
+        created_at=now, expires_at=now + _dt.timedelta(minutes=ttl_minutes))
+    with _session() as s:
+        s.add(g)
+        s.commit()
+        s.refresh(g)
+        s.expunge(g)
+        return g
+
+
+def get_impersonation(token=None, *, grant_id=None):
+    init_control_plane()
+    with _session() as s:
+        q = s.query(ImpersonationGrant)
+        g = (q.filter_by(token=token).first() if token
+             else q.filter_by(id=grant_id).first() if grant_id else None)
+        if g is not None:
+            s.expunge(g)
+        return g
+
+
+def validate_impersonation(token, subdomain):
+    """Return the grant if it is a live authorization for ``subdomain`` (exists,
+    right school, not ended, not expired); mark it used on first exchange.
+    Returns None otherwise."""
+    init_control_plane()
+    now = _dt.datetime.utcnow()
+    with _session() as s:
+        g = s.query(ImpersonationGrant).filter_by(token=token).first()
+        if (g is None or g.subdomain != subdomain or g.ended_at is not None
+                or g.expires_at is None or g.expires_at <= now):
+            return None
+        if g.used_at is None:
+            g.used_at = now
+            s.commit()
+        s.expunge(g)
+        return g
+
+
+def end_impersonation(*, token=None, grant_id=None):
+    """End (revoke) an impersonation grant. Idempotent."""
+    init_control_plane()
+    with _session() as s:
+        q = s.query(ImpersonationGrant)
+        g = (q.filter_by(token=token).first() if token
+             else q.filter_by(id=grant_id).first() if grant_id else None)
+        if g is not None and g.ended_at is None:
+            g.ended_at = _dt.datetime.utcnow()
+            s.commit()
+        return g is not None
+
+
+def list_impersonations(*, limit=100, active_only=False):
+    """Impersonation grants, newest first, as detached rows."""
+    init_control_plane()
+    now = _dt.datetime.utcnow()
+    with _session() as s:
+        q = s.query(ImpersonationGrant).order_by(ImpersonationGrant.created_at.desc())
+        rows = q.limit(limit).all()
+        out = []
+        for g in rows:
+            active = (g.ended_at is None and g.expires_at and g.expires_at > now)
+            if active_only and not active:
+                continue
+            s.expunge(g)
+            g_active = active
+            out.append((g, g_active))
+        return out
 
 
 def log_platform(action, *, subdomain=None, detail=None, actor=None):

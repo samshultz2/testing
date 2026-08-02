@@ -239,6 +239,17 @@
             <i class="fas fa-box-archive"></i> {{ 'Restore' if t.status == 'archived' else 'Archive' }}</button>
         </form>
       </div>
+      {% if t.status == 'active' %}
+      <form method="post" action="{{ url_for('platform.impersonate', subdomain=t.subdomain) }}" style="margin-top:12px" target="_blank">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label style="font-size:12px;color:var(--faint);display:block;margin-bottom:4px">Support view (read-only, audited)</label>
+        <div style="display:flex;gap:6px">
+          <input class="field" name="reason" placeholder="Reason / ticket ref (required)" style="flex:1" required>
+          <input class="field" name="minutes" type="number" value="30" min="5" max="120" style="width:64px" title="minutes">
+          <button class="btn sm"><i class="fas fa-user-secret"></i> View as</button>
+        </div>
+      </form>
+      {% endif %}
       <form method="post" action="{{ url_for('platform.delete', subdomain=t.subdomain) }}" style="display:flex;gap:6px;align-items:flex-end;margin-top:12px">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input class="field" name="confirm" placeholder="type {{ t.subdomain }} to delete" style="flex:1">

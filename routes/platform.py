@@ -447,6 +447,56 @@ def set_tier(subdomain):
     return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
 
 
+@platform_bp.route('/tenant/<subdomain>/impersonate', methods=['POST'])
+@platform_requires('manage_tenants')
+def impersonate(subdomain):
+    """Mint a time-boxed, read-only support session for a school and hand the
+    operator a one-time link on the school's own host."""
+    t = tenancy.get_tenant(subdomain)
+    if t is None:
+        abort(404)
+    if billing.is_owner(t):
+        flash('You are already the owner — no need to impersonate.', 'info')
+        return _back()
+    if t.status != 'active':
+        flash('Only an active school can be viewed — its portal is offline.', 'error')
+        return _back()
+    reason = (request.form.get('reason') or '').strip()
+    if not reason:
+        flash('A reason is required to start a support session.', 'error')
+        return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
+    ttl = request.form.get('minutes', type=int) or 30
+    ttl = max(5, min(ttl, 120))
+    g = tenancy.create_impersonation(session.get('username') or 'admin', subdomain, reason,
+                                     ttl_minutes=ttl)
+    _audit('impersonate_grant', subdomain=subdomain, detail=f'{ttl}m · {reason[:120]}')
+    base = current_app.config.get('TENANT_BASE_DOMAIN', '')
+    link = f'https://{t.subdomain}.{base}/impersonate/{g.token}' if base \
+        else url_for('impersonation.establish', token=g.token)
+    return redirect(link)
+
+
+@platform_bp.route('/impersonation')
+@platform_admin_required
+def impersonation_log():
+    """Active and recent support sessions, with a kill switch for live ones."""
+    rows = tenancy.list_impersonations(limit=100)
+    return render_template('platform/impersonation.html', active='impersonation', rows=rows)
+
+
+@platform_bp.route('/impersonation/<int:grant_id>/end', methods=['POST'])
+@platform_requires('manage_tenants')
+def impersonation_end(grant_id):
+    """Kill switch: end a live support session immediately."""
+    g = tenancy.get_impersonation(grant_id=grant_id)
+    if g is None:
+        abort(404)
+    tenancy.end_impersonation(grant_id=grant_id)
+    _audit('impersonate_kill', subdomain=g.subdomain, detail=f'ended grant #{grant_id}')
+    flash('Support session ended.', 'success')
+    return redirect(url_for('platform.impersonation_log'))
+
+
 @platform_bp.route('/tenant/<subdomain>')
 @platform_admin_required
 def tenant_profile(subdomain):

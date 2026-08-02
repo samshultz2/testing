@@ -240,6 +240,9 @@ def create_app(config_class=None):
     app.register_blueprint(billing_bp)
     from routes.platform import platform_bp
     app.register_blueprint(platform_bp)
+
+    from routes.impersonation import impersonation_bp
+    app.register_blueprint(impersonation_bp)
     from routes.marketing import marketing_bp
     app.register_blueprint(marketing_bp)
     from routes.website_public import website_bp

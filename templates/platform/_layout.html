@@ -168,6 +168,7 @@
         {% if platform_can('manage_plans') %}<a href="{{ url_for('platform.features') }}" class="{{ 'on' if active=='features' }}"><i class="fas fa-toggle-on"></i> Plans &amp; features</a>{% endif %}
         {% if platform_can('view_analytics') %}<a href="{{ url_for('platform.analytics') }}" class="{{ 'on' if active=='analytics' }}"><i class="fas fa-chart-line"></i> Analytics</a>{% endif %}
         <a href="{{ url_for('platform.audit') }}" class="{{ 'on' if active=='audit' }}"><i class="fas fa-clock-rotate-left"></i> Audit log</a>
+        {% if platform_can('manage_tenants') %}<a href="{{ url_for('platform.impersonation_log') }}" class="{{ 'on' if active=='impersonation' }}"><i class="fas fa-user-secret"></i> Support sessions</a>{% endif %}
         <a href="{{ url_for('platform.health') }}" class="{{ 'on' if active=='health' }}"><i class="fas fa-heart-pulse"></i> Health</a>
         {% if session.get('role') == 'super_admin' %}<a href="{{ url_for('platform.team') }}" class="{{ 'on' if active=='team' }}"><i class="fas fa-user-shield"></i> Team &amp; roles</a>{% endif %}
       </nav>
