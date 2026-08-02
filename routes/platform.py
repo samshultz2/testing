@@ -242,6 +242,14 @@ def homepage():
             request.form.get('faqs'), ('q', 'a'))
         content['testimonials'] = site_content.parse_pairs(
             request.form.get('testimonials'), ('name', 'quote'))
+        # Contact block — shown on the homepage (contact cards + footer icons).
+        import re as _re
+        _wa = _re.sub(r'\D', '', request.form.get('contact_whatsapp') or '')  # wa.me wants digits only
+        content['contact'] = {
+            'email': (request.form.get('contact_email') or '').strip(),
+            'phone': (request.form.get('contact_phone') or '').strip(),
+            'whatsapp': _wa,
+        }
         site_content.save_homepage(content)
         _audit('homepage', detail='homepage content updated')
         flash('Homepage updated — changes are live.', 'success')

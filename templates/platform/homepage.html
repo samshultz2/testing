@@ -76,6 +76,20 @@
     </div>
 
     <div class="sect">
+      <h3>Contact</h3>
+      <p class="hint">Shown in the homepage “Talk to us” cards and the footer. Leave a field blank to hide that option.</p>
+      <div class="row2">
+        <div><label>Email</label>
+          <input type="email" name="contact_email" value="{{ content.contact.email if content.contact else '' }}" placeholder="hello@edusyncra.site"></div>
+        <div><label>Phone</label>
+          <input type="tel" name="contact_phone" value="{{ content.contact.phone if content.contact else '' }}" placeholder="+234 800 000 0000"></div>
+      </div>
+      <label>WhatsApp number</label>
+      <input type="tel" name="contact_whatsapp" value="{{ content.contact.whatsapp if content.contact else '' }}" placeholder="2348000000000">
+      <p class="hint">Include the country code (e.g. 234…). Spaces and “+” are fine — we clean it for the WhatsApp link.</p>
+    </div>
+
+    <div class="sect">
       <h3>Footer</h3>
       <label>Footer text</label>
       <input type="text" name="footer" value="{{ content.footer }}">
