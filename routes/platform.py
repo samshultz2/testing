@@ -512,11 +512,15 @@ def tenant_profile(subdomain):
     tag_list = [x.strip() for x in (t.tags or '').split(',') if x.strip()]
     timeline = tenancy.tenant_timeline(subdomain)
     from utils import entitlements as ent
+    from utils import platform_customer_success as cs
     resolved = ent.resolve(t)
     usage_limits = ent.usage_vs_limits(t, usage)
+    health = cs.health_score(t)
+    onboarding = cs.onboarding_progress(usage) if t.status == 'active' else None
     return render_template('platform/tenant.html', active='schools', t=t, st=st,
                            row=_row(t), usage=usage, payments=payments, tags=tag_list,
                            timeline=timeline, portal_url=_portal_url(t),
+                           health=health, onboarding=onboarding,
                            ent=resolved, usage_limits=usage_limits,
                            feature_defs=ent.FEATURES, tier_ids=ent.TIER_IDS,
                            tier_labels=ent.TIER_LABELS,
@@ -578,17 +582,22 @@ def team():
     if request.method == 'POST':
         team_map = {}
         for u in admins:
-            # A ticked "full access" (or no restriction saved) leaves them off the map.
-            if request.form.get(f'restrict_{u.username}') == 'on':
-                caps = [c for c, _ in platform_roles.CAPS
-                        if request.form.get(f'cap_{u.username}_{c}') == 'on']
-                team_map[u.username] = caps
+            preset = (request.form.get(f'preset_{u.username}') or 'full').strip()
+            if preset == 'full':
+                continue                       # unrestricted → leave off the map
+            if preset in platform_roles.ROLE_PRESETS:
+                team_map[u.username] = platform_roles.preset_caps(preset)
+            elif preset == 'custom':
+                team_map[u.username] = [c for c, _ in platform_roles.CAPS
+                                        if request.form.get(f'cap_{u.username}_{c}') == 'on']
         platform_roles.save_team(team_map)
         _audit('team', detail=f'{len(team_map)} restricted admin(s)')
         flash('Platform roles saved.', 'success')
         return redirect(url_for('platform.team'))
     current = platform_roles.get_team()
     return render_template('platform/team.html', active='team',
+                           presets=platform_roles.ROLE_PRESETS,
+                           role_of=platform_roles.role_of,
                            admins=admins, caps=platform_roles.CAPS, current=current)
 
 
@@ -621,8 +630,9 @@ def audit():
     sub = (request.args.get('subdomain') or '').strip() or None
     q = (request.args.get('q') or '').strip() or None
     rows = tenancy.list_platform_audit(action=action, subdomain=sub, q=q)
+    chain = tenancy.verify_audit_chain()
     return render_template('platform/audit.html', active='audit',
-                           rows=rows, actions=tenancy.audit_actions(),
+                           rows=rows, actions=tenancy.audit_actions(), chain=chain,
                            f={'action': action or '', 'subdomain': sub or '', 'q': q or ''})
 
 

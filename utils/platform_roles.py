@@ -28,6 +28,32 @@ CAPS = [
 ]
 CAP_KEYS = [k for k, _ in CAPS]
 
+# Named role presets — one-click capability bundles for common internal jobs.
+# 'full' (no restriction) and 'custom' (hand-picked caps) are handled specially.
+ROLE_PRESETS = {
+    'support': {'label': 'Support',
+                'caps': ['manage_tenants', 'view_revenue', 'view_analytics']},
+    'billing': {'label': 'Billing Ops',
+                'caps': ['manage_billing', 'view_revenue', 'export_reports']},
+    'analyst': {'label': 'Analyst (read-only)',
+                'caps': ['view_revenue', 'view_analytics', 'export_reports']},
+}
+
+
+def preset_caps(preset):
+    """The capability list for a named preset, or [] for unknown."""
+    p = ROLE_PRESETS.get(preset or '')
+    return [c for c in (p['caps'] if p else []) if c in CAP_KEYS]
+
+
+def role_of(caps):
+    """Label a capability set: a matching preset key, else 'custom'."""
+    s = set(caps or [])
+    for key, p in ROLE_PRESETS.items():
+        if s == set(p['caps']):
+            return key
+    return 'custom'
+
 
 def get_team():
     from utils import tenancy

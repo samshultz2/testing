@@ -125,6 +125,10 @@ class PlatformAudit(_ControlBase):
     action = Column(String(60), nullable=False)    # e.g. 'grant', 'suspend', 'delete'
     subdomain = Column(String(63))                 # affected school, if any
     detail = Column(String(300))
+    # Tamper-evident hash chain: each row seals the previous row's hash, so any
+    # edit or deletion downstream breaks the chain and is detectable.
+    prev_hash = Column(String(64))
+    row_hash = Column(String(64))
 
 
 class ImpersonationGrant(_ControlBase):
@@ -183,6 +187,7 @@ def init_control_plane():
     engine, _ = _engine_and_session()
     _ControlBase.metadata.create_all(engine)
     _ensure_columns(engine)
+    _ensure_audit_columns(engine)
 
 
 # Columns added after the first release; ``create_all`` won't add columns to an
@@ -217,6 +222,33 @@ def _ensure_columns(engine):
         if name not in existing:
             with engine.begin() as conn:
                 conn.execute(text(f'ALTER TABLE tenants ADD COLUMN {name} {ddl}'))
+
+
+_AUDIT_ADDED_COLUMNS = {'prev_hash': 'VARCHAR(64)', 'row_hash': 'VARCHAR(64)'}
+
+
+def _ensure_audit_columns(engine):
+    """Bring older control planes' platform_audit table up to date (hash chain)."""
+    from sqlalchemy import inspect, text
+    try:
+        existing = {c['name'] for c in inspect(engine).get_columns('platform_audit')}
+    except Exception:
+        return
+    for name, ddl in _AUDIT_ADDED_COLUMNS.items():
+        if name not in existing:
+            with engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE platform_audit ADD COLUMN {name} {ddl}'))
+
+
+def _audit_row_hash(prev_hash, at, actor, action, subdomain, detail):
+    """Deterministic hash of an audit row, sealing the previous row's hash."""
+    import hashlib
+    payload = '|'.join([
+        prev_hash or '',
+        (at.isoformat() if at else ''),
+        actor or '', action or '', subdomain or '', detail or '',
+    ])
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
 
 def _session():
@@ -459,16 +491,43 @@ def list_impersonations(*, limit=100, active_only=False):
 
 
 def log_platform(action, *, subdomain=None, detail=None, actor=None):
-    """Append a platform-admin action to the control-plane audit trail.
-    Best-effort — auditing must never break the action it records."""
+    """Append a platform-admin action to the control-plane audit trail, sealed
+    into a tamper-evident hash chain. Best-effort — auditing must never break the
+    action it records."""
     try:
         init_control_plane()
         with _session() as s:
-            s.add(PlatformAudit(action=action, subdomain=subdomain,
-                                detail=(detail or None), actor=(actor or None)))
+            last = (s.query(PlatformAudit)
+                    .order_by(PlatformAudit.id.desc()).first())
+            prev_hash = last.row_hash if last else ''
+            at = _dt.datetime.utcnow()
+            row = PlatformAudit(at=at, action=action, subdomain=subdomain,
+                                detail=(detail or None), actor=(actor or None),
+                                prev_hash=prev_hash)
+            row.row_hash = _audit_row_hash(prev_hash, at, actor, action, subdomain,
+                                           detail)
+            s.add(row)
             s.commit()
     except Exception:
         pass
+
+
+def verify_audit_chain():
+    """Recompute the audit hash chain and report integrity.
+    Returns {'ok': bool, 'checked': int, 'broken_at': id-or-None}."""
+    init_control_plane()
+    with _session() as s:
+        rows = s.query(PlatformAudit).order_by(PlatformAudit.id.asc()).all()
+        prev = ''
+        for r in rows:
+            expect = _audit_row_hash(prev, r.at, r.actor, r.action, r.subdomain, r.detail)
+            # A row written before the chain existed has no hash — skip, don't fail.
+            if r.row_hash and (r.prev_hash or '') != prev:
+                return {'ok': False, 'checked': len(rows), 'broken_at': r.id}
+            if r.row_hash and r.row_hash != expect:
+                return {'ok': False, 'checked': len(rows), 'broken_at': r.id}
+            prev = r.row_hash or prev
+        return {'ok': True, 'checked': len(rows), 'broken_at': None}
 
 
 def list_platform_audit(*, limit=300, action=None, subdomain=None, q=None):

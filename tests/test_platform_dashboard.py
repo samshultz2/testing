@@ -358,6 +358,59 @@ def test_impersonation_kill_switch(mt):
     assert 'login' in r.headers.get('Location', '')
 
 
+def test_audit_hash_chain_detects_tampering(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/alpha/grant', headers=H, data={'days': '30', '_csrf_token': tok})
+    c.post('/platform/beta/suspend', headers=H, data={'_csrf_token': tok})
+    # a sealed, verifiable chain
+    v = tenancy.verify_audit_chain()
+    assert v['ok'] is True and v['checked'] >= 2
+    # the audit page shows the integrity badge
+    body = c.get('/platform/audit', headers=H).get_data(as_text=True)
+    assert 'Tamper-evident chain verified' in body
+    # tamper with a row directly in the control plane → chain must break
+    with tenancy._session() as s:
+        row = s.query(tenancy.PlatformAudit).order_by(tenancy.PlatformAudit.id.asc()).first()
+        row.detail = 'silently altered'
+        s.commit()
+    v2 = tenancy.verify_audit_chain()
+    assert v2['ok'] is False and v2['broken_at'] is not None
+
+
+def test_role_presets():
+    from utils import platform_roles as pr
+    assert pr.preset_caps('support') == ['manage_tenants', 'view_revenue', 'view_analytics']
+    assert pr.role_of(pr.preset_caps('billing')) == 'billing'
+    assert pr.role_of(['manage_tenants']) == 'custom'
+
+
+def test_health_score_and_onboarding():
+    from utils import platform_customer_success as cs
+    import types
+    import datetime as dt
+    # a lapsed, high-risk school scores low and lands at-risk
+    bad = types.SimpleNamespace(status='active', plan='standard', trial_ends_at=None,
+                                paid_until=dt.datetime.utcnow() - dt.timedelta(days=5),
+                                auto_renew=0, paystack_auth_code=None,
+                                auto_renew_last_error='card declined', risk='high',
+                                created_at=dt.datetime.utcnow() - dt.timedelta(days=200))
+    h = cs.health_score(bad)
+    assert h['band'] == 'at_risk' and h['score'] < 40
+    ob = cs.onboarding_progress({'branches': 1, 'users': 1, 'staff': 0, 'students': 0})
+    assert ob['done'] == 2 and ob['total'] == 4 and ob['pct'] == 50
+
+
+def test_tenant_profile_shows_customer_success(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    body = c.get('/platform/tenant/alpha', headers={'Host': 'edusyncra.test'}).get_data(as_text=True)
+    assert 'Customer health' in body and 'Onboarding progress' in body
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)

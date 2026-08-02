@@ -57,6 +57,23 @@
   .ovr-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin:8px 0 4px;font-size:12.5px}
   .ovr-grid label{display:flex;align-items:center;gap:7px;color:var(--soft);margin:0}
   .ovr-grid input{accent-color:var(--accent)}
+  /* customer success */
+  .cs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  @media (max-width:860px){ .cs-grid{grid-template-columns:1fr} }
+  .hs{display:flex;align-items:center;gap:16px;padding:16px 18px}
+  .gauge{--v:0;--c:var(--ok);width:66px;height:66px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:conic-gradient(var(--c) calc(var(--v)*1%), var(--line-2) 0)}
+  .gauge b{width:50px;height:50px;border-radius:50%;background:var(--surface);display:grid;place-items:center;
+    font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+  .hs .band{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+  .band.healthy{color:var(--ok)} .band.watch{color:var(--warn)} .band.at_risk{color:var(--bad)}
+  .hs .reasons{font-size:12.5px;color:var(--faint);margin-top:3px;line-height:1.5}
+  .ob .top{display:flex;justify-content:space-between;font-size:13px;margin:0 0 8px}
+  .ob-bar{height:7px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-bottom:10px}
+  .ob-bar > span{display:block;height:100%;background:var(--accent)}
+  .ob-step{display:flex;align-items:center;gap:9px;font-size:13px;padding:3px 0;color:var(--soft)}
+  .ob-step i{width:16px;text-align:center}
+  .ob-step .done{color:var(--ok)} .ob-step .todo{color:var(--faint)}
 </style>
 {% endblock %}
 
@@ -84,6 +101,32 @@
     {% if t.account_manager %}<span class="badge b-am"><i class="fas fa-user-tie"></i> {{ t.account_manager }}</span>{% endif %}
   </div>
   {% endif %}
+</div>
+
+<!-- Customer success: health score + onboarding -->
+<div class="cs-grid">
+  <div class="panel">
+    <h3 style="font-size:15px;margin:0;padding:14px 18px 0">Customer health</h3>
+    {% set bandcol = {'healthy':'var(--ok)','watch':'var(--warn)','at_risk':'var(--bad)'} %}
+    <div class="hs">
+      <div class="gauge" style="--v:{{ health.score }};--c:{{ bandcol[health.band] }}"><b>{{ health.score }}</b></div>
+      <div>
+        <div class="band {{ health.band }}">{{ health.band|replace('_',' ')|title }}</div>
+        <div class="reasons">{{ health.reasons | join(' · ') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel ob" style="padding:16px 18px">
+    <h3 style="font-size:15px;margin:0 0 8px">Onboarding progress</h3>
+    {% if onboarding %}
+    <div class="top"><span class="muted">{{ onboarding.done }} of {{ onboarding.total }} steps</span><b>{{ onboarding.pct }}%</b></div>
+    <div class="ob-bar"><span style="width:{{ onboarding.pct }}%"></span></div>
+    {% for s in onboarding.steps %}
+    <div class="ob-step"><i class="fas {{ 'fa-circle-check done' if s.done else 'fa-circle todo' }}"></i>
+      <span>{{ s.label }}</span>{% if s.count %}<span class="muted" style="margin-left:auto">{{ s.count }}</span>{% endif %}</div>
+    {% endfor %}
+    {% else %}<p class="muted" style="font-size:13px">Onboarding progress appears once the school is active.</p>{% endif %}
+  </div>
 </div>
 
 <div class="profile-grid">

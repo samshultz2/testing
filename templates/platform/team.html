@@ -21,16 +21,22 @@
   <div class="panel">
     {% for u in admins %}
     {% set restricted = u.username in current %}
+    {% set role = role_of(current.get(u.username, [])) if restricted else 'full' %}
     <div class="adminrow">
       <div class="adminhead">
         <span class="school"><span class="ic">{{ (u.full_name or u.username)[0]|upper }}</span>
           <span><b>{{ u.full_name or u.username }}</b><br><span class="sub">{{ u.username }}</span></span></span>
-        <label class="toggle" style="margin-left:auto">
-          <input type="checkbox" name="restrict_{{ u.username }}" data-user="{{ u.username }}" {{ 'checked' if restricted }}>
-          Limit this admin
+        <label class="toggle" style="margin-left:auto">Role
+          <select class="field" name="preset_{{ u.username }}" data-user="{{ u.username }}">
+            <option value="full" {{ 'selected' if not restricted }}>Full access</option>
+            {% for key, p in presets.items() %}
+            <option value="{{ key }}" {{ 'selected' if role == key }}>{{ p.label }}</option>
+            {% endfor %}
+            <option value="custom" {{ 'selected' if role == 'custom' }}>Custom…</option>
+          </select>
         </label>
       </div>
-      <div class="caps {{ '' if restricted else 'off' }}" id="caps-{{ u.username }}">
+      <div class="caps {{ '' if role == 'custom' else 'off' }}" id="caps-{{ u.username }}">
         {% for key, label in caps %}
         <label><input type="checkbox" name="cap_{{ u.username }}_{{ key }}" {{ 'checked' if key in current.get(u.username, []) }}> {{ label }}</label>
         {% endfor %}
@@ -47,10 +53,10 @@
 
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
-  document.querySelectorAll('input[data-user]').forEach(function(cb){
-    cb.addEventListener('change', function(){
-      var box=document.getElementById('caps-'+cb.getAttribute('data-user'));
-      if(box) box.classList.toggle('off', !cb.checked);
+  document.querySelectorAll('select[data-user]').forEach(function(sel){
+    sel.addEventListener('change', function(){
+      var box=document.getElementById('caps-'+sel.getAttribute('data-user'));
+      if(box) box.classList.toggle('off', sel.value!=='custom');
     });
   });
 </script>

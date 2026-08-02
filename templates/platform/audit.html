@@ -4,6 +4,13 @@
 {% block subheading %}Every platform-admin action against the control plane.{% endblock %}
 
 {% block content %}
+  {% if chain %}
+  <div style="display:inline-flex;align-items:center;gap:9px;margin-bottom:14px;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;
+    {% if chain.ok %}background:var(--ok-soft);color:var(--ok){% else %}background:var(--bad-soft);color:var(--bad){% endif %}">
+    <i class="fas {{ 'fa-shield-halved' if chain.ok else 'fa-triangle-exclamation' }}"></i>
+    {% if chain.ok %}Tamper-evident chain verified · {{ chain.checked }} entries sealed{% else %}Integrity check FAILED — chain broken at entry #{{ chain.broken_at }}{% endif %}
+  </div>
+  {% endif %}
   <form method="get" class="toolbar" style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
     <label class="search" style="flex:1;min-width:200px;display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 13px;box-shadow:var(--shadow)">
       <i class="fas fa-magnifying-glass" style="color:var(--faint)"></i>
