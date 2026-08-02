@@ -201,6 +201,51 @@ def test_tenant_notes_and_tags_persist(mt):
     assert 'Priority customer' in body and 'multi-branch' in body
 
 
+def test_tenant_crm_fields_persist_and_render(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/tenant/alpha/notes', headers=H,
+           data={'notes': 'Key account.', 'tags': 'multi-branch',
+                 'account_manager': 'Grace O.', 'priority': 'vip', 'risk': 'watch',
+                 '_csrf_token': tok})
+    t = tenancy.get_tenant('alpha')
+    assert t.priority == 'vip' and t.risk == 'watch' and t.account_manager == 'Grace O.'
+    body = c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)
+    assert 'VIP' in body and 'Grace O.' in body and 'Watch' in body
+
+
+def test_tenant_timeline_shows_events(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    body = c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)
+    assert 'Activity timeline' in body
+    assert 'Registered' in body and 'Provisioned' in body   # real lifecycle events
+
+
+def test_archive_and_restore(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)).group(1)
+    # archive: keeps the registry row (unlike delete) but takes it offline
+    c.post('/platform/alpha/archive', headers=H, data={'_csrf_token': tok})
+    assert tenancy.get_tenant('alpha').status == 'archived'
+    # archived tenant is unreachable on its own host (tenant_runtime only serves active)
+    assert c.get('/', headers={'Host': 'alpha.edusyncra.test'}).status_code in (404, 302, 503)
+    # restore: back online
+    c.post('/platform/alpha/archive', headers=H, data={'_csrf_token': tok})
+    assert tenancy.get_tenant('alpha').status == 'active'
+    # the owner can never be archived
+    r = c.post('/platform/owner/archive', headers=H, data={'_csrf_token': tok})
+    assert r.status_code == 404
+    assert tenancy.get_tenant('owner').status == 'active'
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)

@@ -26,6 +26,8 @@ def _bucket(t, st):
         return 'owner'
     if t.status == 'pending':
         return 'pending'
+    if t.status == 'archived':
+        return 'archived'
     if t.status == 'suspended':
         return 'suspended'
     if st['on_trial']:
@@ -46,7 +48,7 @@ def executive_summary():
     prev_month = prev_month_end.replace(day=1)
     price = _price_naira()
 
-    counts = {k: 0 for k in ('owner', 'pending', 'suspended', 'trial',
+    counts = {k: 0 for k in ('owner', 'pending', 'suspended', 'archived', 'trial',
                              'paying', 'unpaid')}
     customers = ending_soon = new_today = new_week = new_month = new_prev = 0
     failing = 0            # subscribers with a stored auto-renew error
@@ -105,6 +107,7 @@ def executive_summary():
         ('trial', 'Trial', counts['trial'], 'trial'),
         ('unpaid', 'Unpaid', counts['unpaid'], 'unpaid'),
         ('suspended', 'Suspended', counts['suspended'], 'suspended'),
+        ('archived', 'Archived', counts['archived'], 'archived'),
         ('pending', 'Pending', counts['pending'], ''),
     ]
     dist = [{'key': k, 'label': lb, 'count': n, 'filter': f,
@@ -121,6 +124,7 @@ def executive_summary():
             'trial': counts['trial'],
             'unpaid': counts['unpaid'],
             'suspended': counts['suspended'],
+            'archived': counts['archived'],
             'pending': counts['pending'],
             'ending_soon': ending_soon,
             'card_on_file': card_on_file,

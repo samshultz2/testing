@@ -30,7 +30,7 @@ _ControlBase = declarative_base()
 # not starting/ending with a hyphen.
 VALID_SUBDOMAIN = re.compile(r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$')
 
-STATUSES = ('pending', 'provisioning', 'active', 'failed', 'suspended')
+STATUSES = ('pending', 'provisioning', 'active', 'failed', 'suspended', 'archived')
 
 
 class Tenant(_ControlBase):
@@ -65,6 +65,9 @@ class Tenant(_ControlBase):
     # Platform-admin annotations (internal, never shown to the school).
     notes = Column(Text)                           # free-text operator notes
     tags = Column(String(200))                     # comma-separated labels
+    account_manager = Column(String(120))          # assigned CSM/owner (username or name)
+    priority = Column(String(20))                  # normal | high | vip
+    risk = Column(String(20))                      # none | watch | high (churn risk)
 
     def __repr__(self):
         return f'<Tenant {self.subdomain} {self.status}>'
@@ -176,6 +179,9 @@ _ADDED_COLUMNS = {
     'auto_renew_last_error': 'VARCHAR(300)',
     'notes': 'TEXT',
     'tags': 'VARCHAR(200)',
+    'account_manager': 'VARCHAR(120)',
+    'priority': 'VARCHAR(20)',
+    'risk': 'VARCHAR(20)',
 }
 
 
@@ -243,9 +249,13 @@ def list_tenants():
         return rows
 
 
-def set_meta(subdomain, *, notes=None, tags=None):
-    """Store platform-admin annotations (internal notes / tags) on a tenant."""
+def set_meta(subdomain, *, notes=None, tags=None, account_manager=None,
+             priority=None, risk=None):
+    """Store platform-admin annotations (internal notes / tags / CRM fields) on a
+    tenant. Only the fields passed (non-None) are changed."""
     init_control_plane()
+    _VALID_PRIORITY = {'normal', 'high', 'vip'}
+    _VALID_RISK = {'none', 'watch', 'high'}
     with _session() as s:
         t = s.query(Tenant).filter_by(subdomain=subdomain).first()
         if t is None:
@@ -256,9 +266,52 @@ def set_meta(subdomain, *, notes=None, tags=None):
             # normalise "a, b ,c" -> "a, b, c"
             parts = [p.strip() for p in tags.split(',') if p.strip()]
             t.tags = ', '.join(parts) or None
+        if account_manager is not None:
+            t.account_manager = account_manager.strip() or None
+        if priority is not None:
+            p = priority.strip().lower()
+            t.priority = p if p in _VALID_PRIORITY else None
+        if risk is not None:
+            r = risk.strip().lower()
+            t.risk = r if r in _VALID_RISK else None
         s.commit()
         s.expunge(t)
         return t
+
+
+def tenant_timeline(subdomain, *, limit=60):
+    """A merged, newest-first activity timeline for one tenant, assembled from
+    real control-plane history: lifecycle dates, credited payments and every
+    platform-admin action recorded against the school. Each entry is a dict
+    {when, kind, label, detail}."""
+    init_control_plane()
+    events = []
+    with _session() as s:
+        t = s.query(Tenant).filter_by(subdomain=subdomain).first()
+        if t is None:
+            return []
+        if t.created_at:
+            events.append({'when': t.created_at, 'kind': 'signup',
+                           'label': 'Registered', 'detail': t.admin_email or ''})
+        if t.verified_at:
+            events.append({'when': t.verified_at, 'kind': 'verify',
+                           'label': 'Email verified', 'detail': ''})
+        if t.activated_at:
+            events.append({'when': t.activated_at, 'kind': 'activate',
+                           'label': 'Provisioned & activated', 'detail': ''})
+        for p in (s.query(ProcessedPayment)
+                  .filter_by(subdomain=subdomain)
+                  .order_by(ProcessedPayment.at.desc()).limit(limit).all()):
+            events.append({'when': p.at, 'kind': 'payment',
+                           'label': 'Payment credited', 'detail': (p.reference or '')[:24]})
+        for a in (s.query(PlatformAudit)
+                  .filter_by(subdomain=subdomain)
+                  .order_by(PlatformAudit.at.desc()).limit(limit).all()):
+            events.append({'when': a.at, 'kind': 'admin',
+                           'label': (a.action or 'action').replace('_', ' ').title(),
+                           'detail': f'{a.detail or ""}{" · " + a.actor if a.actor else ""}'.strip(' ·')})
+    events.sort(key=lambda e: e['when'] or _dt.datetime.min, reverse=True)
+    return events[:limit]
 
 
 def recent_payments(subdomain, limit=10):

@@ -98,6 +98,7 @@ def _row(t):
                         and st['days_left'] is not None and st['days_left'] <= 3),
         # customer state bucket for filtering/segments
         'bucket': ('owner' if st['owner']
+                   else 'archived' if t.status == 'archived'
                    else 'suspended' if t.status == 'suspended'
                    else 'trial' if st['on_trial']
                    else 'paying' if (st['active'] and t.status == 'active')
@@ -215,6 +216,7 @@ def schools():
         'trial': lambda r: r['bucket'] == 'trial',
         'unpaid': lambda r: r['bucket'] == 'unpaid',
         'suspended': lambda r: r['status'] == 'suspended',
+        'archived': lambda r: r['status'] == 'archived',
         'ending_soon': lambda r: r['ending_soon'],
         'customers': lambda r: not r['owner'],
     }
@@ -238,6 +240,7 @@ def schools_export():
     _SEGMENTS = {
         'paying': lambda r: r['bucket'] == 'paying', 'trial': lambda r: r['bucket'] == 'trial',
         'unpaid': lambda r: r['bucket'] == 'unpaid', 'suspended': lambda r: r['status'] == 'suspended',
+        'archived': lambda r: r['status'] == 'archived',
         'ending_soon': lambda r: r['ending_soon'], 'customers': lambda r: not r['owner'],
     }
     if seg in _SEGMENTS:
@@ -382,9 +385,10 @@ def tenant_profile(subdomain):
     usage = tenant_usage(t.database_url) if t.status == 'active' else {}
     payments = tenancy.recent_payments(subdomain)
     tag_list = [x.strip() for x in (t.tags or '').split(',') if x.strip()]
+    timeline = tenancy.tenant_timeline(subdomain)
     return render_template('platform/tenant.html', active='schools', t=t, st=st,
                            row=_row(t), usage=usage, payments=payments, tags=tag_list,
-                           portal_url=_portal_url(t),
+                           timeline=timeline, portal_url=_portal_url(t),
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 
@@ -400,10 +404,33 @@ def save_notes(subdomain):
     if t is None:
         abort(404)
     tenancy.set_meta(subdomain, notes=request.form.get('notes', ''),
-                     tags=request.form.get('tags', ''))
-    _audit('notes', subdomain=subdomain, detail='notes/tags updated')
-    flash('Notes and tags saved.', 'success')
+                     tags=request.form.get('tags', ''),
+                     account_manager=request.form.get('account_manager', ''),
+                     priority=request.form.get('priority', ''),
+                     risk=request.form.get('risk', ''))
+    _audit('notes', subdomain=subdomain, detail='notes/tags/CRM updated')
+    flash('Tenant details saved.', 'success')
     return redirect(url_for('platform.tenant_profile', subdomain=subdomain))
+
+
+@platform_bp.route('/<subdomain>/archive', methods=['POST'])
+@platform_requires('manage_tenants')
+def archive(subdomain):
+    """Soft-delete: take a school offline without dropping its database, so it
+    can be restored. Archived tenants are unreachable (tenant_runtime only serves
+    'active') but keep all data, unlike delete which drops the database."""
+    t = tenancy.get_tenant(subdomain)
+    if t is None or billing.is_owner(t):
+        abort(404)
+    if t.status == 'archived':
+        tenancy.set_status(subdomain, 'active')
+        _audit('restore', subdomain=subdomain, detail=t.name)
+        flash(f'{t.name} restored — its portal is reachable again.', 'success')
+    else:
+        tenancy.set_status(subdomain, 'archived', error='archived by platform admin')
+        _audit('archive', subdomain=subdomain, detail=t.name)
+        flash(f'{t.name} archived — data kept, portal offline. Restore anytime.', 'success')
+    return _back()
 
 
 @platform_bp.route('/team', methods=['GET', 'POST'])

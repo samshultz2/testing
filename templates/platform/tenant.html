@@ -22,6 +22,27 @@
   .paylist li:first-child{border-top:0}
   .backlink{display:inline-flex;align-items:center;gap:7px;color:var(--accent-ink);font-size:13.5px;margin-bottom:10px}
   @media (max-width:860px){ .profile-grid{grid-template-columns:1fr} }
+  .p-archived{color:var(--faint);background:var(--line)}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;display:inline-flex;align-items:center;gap:5px}
+  .b-vip{color:#8a5a00;background:#fdeecb} .b-high{color:var(--accent-ink);background:var(--accent-soft)}
+  .b-risk-high{color:var(--bad);background:var(--bad-soft)} .b-risk-watch{color:var(--warn);background:var(--warn-soft)}
+  .b-am{color:var(--soft);background:var(--surface-2);border:1px solid var(--line)}
+  [data-theme="dark"] .b-vip{color:#f0c064;background:#2c2210}
+  .hdr-badges{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:2px}
+  /* timeline */
+  .tl{list-style:none;margin:0;padding:4px 4px 4px 6px;position:relative}
+  .tl li{position:relative;padding:0 0 16px 30px}
+  .tl li::before{content:"";position:absolute;left:9px;top:20px;bottom:-2px;width:2px;background:var(--line)}
+  .tl li:last-child{padding-bottom:2px} .tl li:last-child::before{display:none}
+  .tl .dot{position:absolute;left:0;top:2px;width:20px;height:20px;border-radius:50%;display:grid;
+    place-items:center;font-size:9px;color:#fff}
+  .tl .dot.signup{background:var(--accent-2)} .tl .dot.verify{background:var(--ok)}
+  .tl .dot.activate{background:var(--accent)} .tl .dot.payment{background:#2e7d32}
+  .tl .dot.admin{background:var(--warn)}
+  .tl .tl-l{font-size:13.5px;font-weight:600} .tl .tl-d{font-size:12px;color:var(--faint);word-break:break-word}
+  .tl .tl-w{font-size:11.5px;color:var(--faint);float:right}
+  .crm-form label{display:block;font-size:12px;color:var(--faint);margin:10px 0 4px}
+  .crm-form select.field{width:100%}
 </style>
 {% endblock %}
 
@@ -34,11 +55,21 @@
       <a class="sub" href="{{ portal_url }}" target="_blank" rel="noopener">{{ t.subdomain }} <i class="fas fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span></span>
   <span style="margin-left:auto">
     {% if row.owner %}<span class="pill p-owner"><i class="fas fa-crown"></i> Owner · free</span>
+    {% elif t.status == 'archived' %}<span class="pill p-archived"><i class="fas fa-box-archive"></i> Archived</span>
     {% elif t.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
     {% elif row.on_trial %}<span class="pill p-trial">Trial · {{ row.days_left }}d left</span>
     {% elif row.active %}<span class="pill p-active">Active · {{ row.days_left }}d left</span>
     {% else %}<span class="pill p-unpaid">Unpaid</span>{% endif %}
   </span>
+  {% if t.priority in ('vip','high') or t.risk in ('watch','high') or t.account_manager %}
+  <div class="hdr-badges">
+    {% if t.priority == 'vip' %}<span class="badge b-vip"><i class="fas fa-star"></i> VIP</span>
+    {% elif t.priority == 'high' %}<span class="badge b-high"><i class="fas fa-arrow-up"></i> High priority</span>{% endif %}
+    {% if t.risk == 'high' %}<span class="badge b-risk-high"><i class="fas fa-triangle-exclamation"></i> High churn risk</span>
+    {% elif t.risk == 'watch' %}<span class="badge b-risk-watch"><i class="fas fa-eye"></i> Watch</span>{% endif %}
+    {% if t.account_manager %}<span class="badge b-am"><i class="fas fa-user-tie"></i> {{ t.account_manager }}</span>{% endif %}
+  </div>
+  {% endif %}
 </div>
 
 <div class="profile-grid">
@@ -69,18 +100,55 @@
       {% else %}<p class="muted" style="font-size:13px">Usage is available once the school is active.</p>{% endif %}
     </div>
 
-    <!-- Notes & tags -->
-    <div class="panel" style="padding:16px 18px">
-      <h3 style="font-size:15px;margin:0 0 8px">Internal notes &amp; tags</h3>
+    <!-- CRM: account manager, priority, risk, notes & tags -->
+    <div class="panel crm-form" style="padding:16px 18px">
+      <h3 style="font-size:15px;margin:0 0 8px">Account management</h3>
       {% if tags %}<div class="tagrow">{% for tg in tags %}<span class="tag">{{ tg }}</span>{% endfor %}</div>{% endif %}
       <form method="post" action="{{ url_for('platform.save_notes', subdomain=t.subdomain) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <label style="font-size:12px;color:var(--faint)">Tags (comma-separated)</label>
-        <input class="field" style="width:100%;margin:4px 0 10px" name="tags" value="{{ t.tags or '' }}" placeholder="e.g. priority, multi-branch, needs-follow-up">
-        <label style="font-size:12px;color:var(--faint)">Notes</label>
-        <textarea class="field" style="width:100%;min-height:90px;margin:4px 0 10px" name="notes" placeholder="Internal notes about this school…">{{ t.notes or '' }}</textarea>
-        <button class="btn sm"><i class="fas fa-floppy-disk"></i> Save notes</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label>Priority</label>
+            <select class="field" name="priority">
+              <option value="normal" {{ 'selected' if (t.priority or 'normal')=='normal' }}>Normal</option>
+              <option value="high" {{ 'selected' if t.priority=='high' }}>High</option>
+              <option value="vip" {{ 'selected' if t.priority=='vip' }}>VIP</option>
+            </select>
+          </div>
+          <div>
+            <label>Churn risk</label>
+            <select class="field" name="risk">
+              <option value="none" {{ 'selected' if (t.risk or 'none')=='none' }}>None</option>
+              <option value="watch" {{ 'selected' if t.risk=='watch' }}>Watch</option>
+              <option value="high" {{ 'selected' if t.risk=='high' }}>High</option>
+            </select>
+          </div>
+        </div>
+        <label>Account manager</label>
+        <input class="field" name="account_manager" value="{{ t.account_manager or '' }}" placeholder="Assigned success manager">
+        <label>Tags (comma-separated)</label>
+        <input class="field" name="tags" value="{{ t.tags or '' }}" placeholder="e.g. multi-branch, needs-follow-up">
+        <label>Notes</label>
+        <textarea class="field" style="min-height:90px" name="notes" placeholder="Internal notes about this school…">{{ t.notes or '' }}</textarea>
+        <button class="btn sm" style="margin-top:10px"><i class="fas fa-floppy-disk"></i> Save details</button>
       </form>
+    </div>
+
+    <!-- Timeline -->
+    <div class="panel" style="padding:16px 18px;margin-top:16px">
+      <h3 style="font-size:15px;margin:0 0 10px">Activity timeline</h3>
+      {% if timeline %}
+      <ul class="tl">
+        {% for e in timeline %}
+        <li>
+          <span class="dot {{ e.kind }}"><i class="fas {{ {'signup':'fa-user-plus','verify':'fa-envelope-circle-check','activate':'fa-rocket','payment':'fa-naira-sign','admin':'fa-user-shield'}[e.kind] }}"></i></span>
+          <span class="tl-w">{{ e.when.strftime('%d %b %Y') if e.when else '' }}</span>
+          <div class="tl-l">{{ e.label }}</div>
+          {% if e.detail %}<div class="tl-d">{{ e.detail }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted" style="font-size:13px">No recorded activity yet.</p>{% endif %}
     </div>
   </div>
 
@@ -109,6 +177,11 @@
         <form method="post" action="{{ url_for('platform.suspend', subdomain=t.subdomain) }}">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <button class="btn sm">{{ 'Reactivate' if t.status == 'suspended' else 'Suspend' }}</button>
+        </form>
+        <form method="post" action="{{ url_for('platform.archive', subdomain=t.subdomain) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn sm" title="{{ 'Bring the portal back online' if t.status == 'archived' else 'Take offline but keep all data — restorable' }}">
+            <i class="fas fa-box-archive"></i> {{ 'Restore' if t.status == 'archived' else 'Archive' }}</button>
         </form>
       </div>
       <form method="post" action="{{ url_for('platform.delete', subdomain=t.subdomain) }}" style="display:flex;gap:6px;align-items:flex-end;margin-top:12px">
