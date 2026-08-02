@@ -47,9 +47,18 @@ def _require_mt():
 
 
 def _render_register(**kw):
-    """Render the signup form with the current subscription tiers available."""
+    """Render the signup form with the current subscription tiers available.
+
+    The plan the visitor clicked on the homepage/pricing page arrives as a
+    ?plan=<id> query param (and is echoed back via a hidden field on POST so a
+    validation-error re-render keeps it). We surface that exact tier in the
+    "Your plan" card instead of always showing the Monthly tier."""
     from utils.plans import tenant_plans
-    return render_template('onboarding/register.html', plans=tenant_plans(), **kw)
+    plans = tenant_plans()
+    plan_id = (request.values.get('plan') or '').strip().lower()
+    selected = next((p for p in plans if p['id'] == plan_id), None)
+    return render_template('onboarding/register.html', plans=plans,
+                           selected_plan=selected, **kw)
 
 
 def _registration_blocked(ip):

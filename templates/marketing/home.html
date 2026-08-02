@@ -607,7 +607,7 @@
           <li><i class="fas fa-check"></i> {{ p.days }} days of access</li>
           <li><i class="fas fa-check"></i> Daily backups &amp; encryption</li>
         </ul>
-        <a class="btn btn-block {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }}" href="{{ register_url }}">{{ content.hero_cta }}</a>
+        <a class="btn btn-block {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }}" href="{{ register_url }}?plan={{ p.id }}">{{ content.hero_cta }}</a>
       </div>
       {% endfor %}
     </div>

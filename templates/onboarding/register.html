@@ -74,10 +74,16 @@
           <label>Your plan</label>
           {% set monthly = plans[0] if plans else None %}
           {% set best = (plans|map(attribute='savings')|max) if plans else 0 %}
+          <input type="hidden" name="plan" value="{{ selected_plan.id if selected_plan else '' }}">
           <div class="plan-card">
             <div>
+              {% if selected_plan %}
+              <div class="p-amt">{{ selected_plan.label }}: ₦{{ '{:,.0f}'.format(selected_plan.price_naira) }}<span style="font-size:13px;font-weight:500;color:var(--text-secondary)"> / {{ selected_plan.per }}</span></div>
+              <div class="p-meta">Unlimited students &amp; staff{% if selected_plan.savings > 0 %} · save {{ selected_plan.savings }}% vs monthly{% endif %} · start free, billed after your trial</div>
+              {% else %}
               <div class="p-amt">From ₦{{ '{:,.0f}'.format(monthly.price_naira if monthly else 0) }}<span style="font-size:13px;font-weight:500;color:var(--text-secondary)"> / month</span></div>
               <div class="p-meta">Unlimited students &amp; staff{% if best > 0 %} · termly &amp; annual save up to {{ best }}%{% endif %} · choose after your trial</div>
+              {% endif %}
             </div>
             <span class="p-badge">{{ config.TENANT_TRIAL_DAYS or 3 }} days free</span>
           </div>
