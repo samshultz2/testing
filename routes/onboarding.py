@@ -9,6 +9,8 @@ pipeline in utils/onboarding.py.
 These live on the apex/marketing host (no tenant). They only work when
 MULTI_TENANT is on — a single-school deployment does not expose registration.
 """
+import random
+
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, current_app, abort, jsonify)
 
@@ -17,6 +19,21 @@ from utils import onboarding
 from utils.security import login_limiter
 
 onboarding_bp = Blueprint('onboarding', __name__)
+
+# Placeholder examples on the signup form are randomised each load so no single
+# (fictional) school is ever singled out. Names are generic and clearly made-up.
+_EX_PREFIX = ('Riverside', 'Summit', 'Greenfield', 'Brightstar', 'Oakwood',
+              'Crescent', 'Hillcrest', 'Silverstone', 'Unity', 'Cornerstone',
+              'Northgate', 'Meadowview', 'Pinnacle', 'Evergreen', 'Harmony',
+              'Kingsway', 'Lakeside', 'Highland', 'Fairview', 'Westbrook')
+_EX_KIND = ('Academy', 'High School', 'College', 'Schools', 'International School')
+
+
+def _example_school():
+    """A random, obviously-fictional school name + matching subdomain for the
+    form placeholders — so the page never shows the same example twice."""
+    prefix = random.choice(_EX_PREFIX)
+    return f'{prefix} {random.choice(_EX_KIND)}', prefix.lower()
 
 
 @onboarding_bp.route('/register/check')
@@ -57,8 +74,10 @@ def _render_register(**kw):
     plans = tenant_plans()
     plan_id = (request.values.get('plan') or '').strip().lower()
     selected = next((p for p in plans if p['id'] == plan_id), None)
+    example_name, example_sub = _example_school()
     return render_template('onboarding/register.html', plans=plans,
-                           selected_plan=selected, **kw)
+                           selected_plan=selected, example_name=example_name,
+                           example_sub=example_sub, **kw)
 
 
 def _registration_blocked(ip):

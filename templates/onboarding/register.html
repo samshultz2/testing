@@ -45,7 +45,7 @@
         <div class="fg">
           <label for="name">School name</label>
           <div class="ctrl"><i class="fas fa-school"></i>
-            <input id="name" name="name" value="{{ name or '' }}" required autofocus placeholder="Pioneer High School"></div>
+            <input id="name" name="name" value="{{ name or '' }}" required autofocus placeholder="{{ example_name or 'Riverside Academy' }}"></div>
         </div>
 
         <div class="fg">
@@ -53,13 +53,13 @@
           <div class="sub-row">
             <div class="ctrl"><i class="fas fa-globe"></i>
               <input id="subdomain" name="subdomain" value="{{ subdomain or '' }}" required
-                     pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?" placeholder="pioneer"
+                     pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?" placeholder="{{ example_sub or 'riverside' }}"
                      autocomplete="off" autocapitalize="none" spellcheck="false"
                      aria-describedby="avail"></div>
             <span class="sfx">.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</span>
           </div>
           <div class="avail" id="avail" aria-live="polite">
-            Your portal will live at <b id="preview-url" style="margin-left:4px">pioneer.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b>
+            Your portal will live at <b id="preview-url" style="margin-left:4px">{{ example_sub or 'riverside' }}.{{ config.TENANT_BASE_DOMAIN or 'edusyncra.site' }}</b>
           </div>
         </div>
 
