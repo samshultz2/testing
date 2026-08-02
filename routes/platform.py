@@ -91,6 +91,7 @@ def _row(t):
         'access_until': au.strftime('%d %b %Y') if au else '—',
         'paid_until': t.paid_until.strftime('%d %b %Y') if t.paid_until else '—',
         'admin_email': t.admin_email or '—',
+        'auto_renew': bool(getattr(t, 'auto_renew', 0)),
         'created': t.created_at.strftime('%d %b %Y') if t.created_at else '—',
         'created_at': t.created_at,
         # A subscriber whose access lapses within 3 days needs attention.
@@ -269,10 +270,31 @@ def subscriptions():
     customers = [r for r in rows if not r['owner']]
     customers.sort(key=lambda r: ({'unpaid': 0, 'trial': 1, 'paying': 2, 'suspended': 3}.get(r['bucket'], 9),
                                   r['days_left'] if r['days_left'] is not None else 999))
+    from utils import platform_billing
+    overview = platform_billing.billing_overview()
+    payments = tenancy.list_payments(limit=40)
     return render_template('platform/subscriptions.html', active='subscriptions',
-                           rows=customers, summary=summary, price=price,
+                           rows=customers, summary=summary, price=price, ov=overview,
+                           payments=payments,
                            period=current_app.config.get('TENANT_PLAN_DAYS'),
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
+
+
+@platform_bp.route('/subscriptions/payments.csv')
+@platform_requires('export_reports')
+def payments_export():
+    """Download the full payments ledger (every credited payment) as CSV."""
+    import csv
+    import io
+    rows = tenancy.list_payments(limit=100000)
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(['Date', 'School', 'Subdomain', 'Reference'])
+    for p in rows:
+        w.writerow([p['at'].strftime('%Y-%m-%d %H:%M') if p['at'] else '',
+                    p['name'], p['subdomain'], p['reference']])
+    _audit('export', detail=f'payments ledger ({len(rows)} rows)')
+    return csv_response(out.getvalue(), 'payments.csv')
 
 
 @platform_bp.route('/homepage', methods=['GET', 'POST'])

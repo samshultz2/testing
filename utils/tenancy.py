@@ -327,6 +327,18 @@ def recent_payments(subdomain, limit=10):
         return rows
 
 
+def list_payments(limit=500):
+    """All credited payments across every tenant, newest first, as dicts
+    {at, reference, subdomain, name}. For the platform payments ledger."""
+    init_control_plane()
+    with _session() as s:
+        names = {t.subdomain: t.name for t in s.query(Tenant.subdomain, Tenant.name).all()}
+        rows = (s.query(ProcessedPayment)
+                .order_by(ProcessedPayment.at.desc()).limit(limit).all())
+        return [{'at': r.at, 'reference': r.reference, 'subdomain': r.subdomain,
+                 'name': names.get(r.subdomain, r.subdomain)} for r in rows]
+
+
 def log_platform(action, *, subdomain=None, detail=None, actor=None):
     """Append a platform-admin action to the control-plane audit trail.
     Best-effort — auditing must never break the action it records."""

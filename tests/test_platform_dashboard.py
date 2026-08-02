@@ -98,7 +98,20 @@ def test_subscriptions_page_loads(mt):
     c = _login_owner(app)
     r = c.get('/platform/subscriptions', headers={'Host': 'edusyncra.test'})
     assert r.status_code == 200
-    assert 'Subscriptions' in r.get_data(as_text=True)
+    body = r.get_data(as_text=True)
+    # billing console: forecast, auto-renew coverage and the payments ledger
+    assert 'Renewal forecast' in body
+    assert 'Auto-renew coverage' in body
+    assert 'Payments ledger' in body
+
+
+def test_payments_ledger_csv_export(mt):
+    app, _ = mt
+    c = _login_owner(app)
+    r = c.get('/platform/subscriptions/payments.csv', headers={'Host': 'edusyncra.test'})
+    assert r.status_code == 200
+    assert 'text/csv' in r.headers.get('Content-Type', '')
+    assert 'Date,School,Subdomain,Reference' in r.get_data(as_text=True)
 
 
 def test_dashboard_is_404_from_a_customer_host(mt):
