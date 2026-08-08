@@ -34,6 +34,18 @@
   </div>
 
   <div class="panel" style="padding:18px 20px;margin-bottom:20px">
+    <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-layer-group"></i> Plans</h2>
+    <div class="fld"><label>Default plan for paying schools</label>
+      <select name="default_paid_tier" style="width:100%;max-width:520px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--ink);font-size:14px">
+        {% for tid in ['free','basic','premium','enterprise'] %}
+        <option value="{{ tid }}" {{ 'selected' if s.default_paid_tier == tid }}>{{ tid|capitalize }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Assigned automatically the first time a school pays (untiered schools stay grandfathered until then). <strong>Premium</strong> keeps every feature on — pick a stricter plan to enforce paywalls on new paying customers.</div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding:18px 20px;margin-bottom:20px">
     <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-triangle-exclamation"></i> Maintenance mode</h2>
     <label class="switch"><input type="checkbox" name="maintenance_mode" {{ 'checked' if s.maintenance_mode }}>
       Show a maintenance banner on every school's portal</label>

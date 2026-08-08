@@ -647,6 +647,11 @@
                             <i class="fas fa-user-plus"></i><span>Staff invites</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('support.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('support.') %}active{% endif %}">
+                            <i class="fas fa-life-ring"></i><span>Support</span>
+                        </a>
+                    </li>
                     {% endif %}
                     {% set _show_generator = session.get('role') in ('super_admin', 'admin') or can_generate_timetable %}
                     {% if _show_generator or can_access_module('website') %}

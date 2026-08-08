@@ -156,6 +156,19 @@ FEATURE_BLUEPRINTS = {
     'library': ('library',),
 }
 
+# Some features live inside a shared blueprint (results), so gate the specific
+# endpoints rather than the whole blueprint (which is core).
+FEATURE_ENDPOINTS = {
+    'predictive_analytics': {
+        'results.readiness', 'results.readiness_funnel', 'results.predictions_dashboard',
+        'results.focus_areas', 'results.student_predictions', 'results.api_predict_jamb',
+        'results.api_student_predictions', 'results.waec_model_config',
+    },
+    'bulk_import': {
+        'results.import_results', 'results.import_template', 'results.import_results_run',
+    },
+}
+
 
 def enforce_entitlements():
     """before_request gate: block a tenant portal blueprint whose feature the
@@ -176,8 +189,11 @@ def enforce_entitlements():
         tier = (getattr(t, 'tier', None) or '').strip()
         if not tier:
             return None                                  # grandfathered
-        bp = (request.endpoint or '').split('.')[0]
+        ep = request.endpoint or ''
+        bp = ep.split('.')[0]
         feat = next((f for f, bps in FEATURE_BLUEPRINTS.items() if bp in bps), None)
+        if not feat:
+            feat = next((f for f, eps in FEATURE_ENDPOINTS.items() if ep in eps), None)
         if not feat:
             return None
         if not resolve(t)['features'].get(feat, True):

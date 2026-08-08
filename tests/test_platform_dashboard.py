@@ -511,6 +511,45 @@ def test_platform_settings_and_maintenance_banner(mt):
     assert 'help@edusyncra.site' in c.get('/support/', headers=H).get_data(as_text=True)
 
 
+def test_auto_tier_on_payment(mt):
+    app, tenancy = mt
+    from utils import billing
+    assert not (tenancy.get_tenant('alpha').tier or '')      # untiered to start
+    billing.record_payment('alpha', days=30)
+    # paying schools are auto-tiered (default 'premium' — all features on)
+    assert tenancy.get_tenant('alpha').tier == 'premium'
+
+
+def test_predictive_analytics_paywall(mt):
+    app, tenancy = mt
+    tenancy.set_entitlement('alpha', tier='basic', overrides={})   # basic excludes predictive
+    g = tenancy.create_impersonation('boss', 'alpha', 'test', ttl_minutes=30)
+    tc = app.test_client()
+    TH = {'Host': 'alpha.edusyncra.test'}
+    tc.get('/impersonate/' + g.token, headers=TH)
+    # a predictive-analytics endpoint is gated even though it lives in the core
+    # results blueprint (endpoint-level mapping)
+    assert tc.get('/results/readiness', headers=TH).status_code == 402
+
+
+def test_two_person_delete(mt, monkeypatch):
+    app, tenancy = mt
+    import routes.platform as pf
+    monkeypatch.setattr(pf, '_platform_admin_count', lambda: 2)   # simulate a team
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
+    # first request (by admin) → pending, NOT deleted
+    c.post('/platform/beta/delete', headers=H, data={'confirm': 'beta', '_csrf_token': tok})
+    assert tenancy.get_tenant('beta') is not None
+    assert 'beta' in (tenancy.get_content('pending_deletes') or {})
+    # a *different* admin approving → executes the delete
+    tenancy.save_content('pending_deletes', {'beta': {'actor': 'someone_else', 'at': 'x'}})
+    c.post('/platform/beta/delete', headers=H, data={'confirm': 'beta', '_csrf_token': tok})
+    assert tenancy.get_tenant('beta') is None
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)

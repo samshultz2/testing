@@ -568,6 +568,7 @@ def settings_page():
             'support_phone': request.form.get('support_phone'),
             'maintenance_mode': request.form.get('maintenance_mode') == 'on',
             'maintenance_message': request.form.get('maintenance_message'),
+            'default_paid_tier': request.form.get('default_paid_tier'),
         })
         _audit('settings', detail='maintenance=%s' % saved['maintenance_mode'])
         flash('Platform settings saved.', 'success')
@@ -834,6 +835,16 @@ def bulk():
     return _back()
 
 
+def _platform_admin_count():
+    """How many active platform admins (admin/super_admin on the owner host)."""
+    try:
+        from models import User
+        return (User.query.filter(User.role.in_(('admin', 'super_admin')),
+                                  User.is_active == True).count())
+    except Exception:
+        return 1
+
+
 @platform_bp.route('/<subdomain>/delete', methods=['POST'])
 @platform_requires('manage_tenants')
 def delete(subdomain):
@@ -843,6 +854,22 @@ def delete(subdomain):
     if (request.form.get('confirm') or '').strip().lower() != t.subdomain:
         flash('Type the subdomain to confirm deletion.', 'error')
         return _back()
+    actor = session.get('username') or 'admin'
+    # Two-person rule: when more than one platform admin exists, deleting a school
+    # needs a second, different admin to approve. A solo operator is unaffected.
+    if _platform_admin_count() > 1:
+        pending = tenancy.get_content('pending_deletes') or {}
+        req = pending.get(subdomain)
+        if not (req and req.get('actor') and req['actor'] != actor):
+            pending[subdomain] = {'actor': actor, 'at': _dt.datetime.utcnow().isoformat()}
+            tenancy.save_content('pending_deletes', pending)
+            _audit('delete_request', subdomain=subdomain, detail=t.name)
+            flash(f'Deletion of {t.name} requested — a second platform admin must '
+                  f'approve it (open this school and confirm delete).', 'info')
+            return _back()
+        pending.pop(subdomain, None)          # second distinct admin → approved
+        tenancy.save_content('pending_deletes', pending)
+        _audit('delete_approved', subdomain=subdomain, detail=f'{t.name} (by {req["actor"]} + {actor})')
     provisioning.drop_tenant(subdomain, forget=True)   # drop DB + remove registry row
     _audit('delete', subdomain=subdomain, detail=t.name)
     flash(f'{t.name} and its database were deleted.', 'success')

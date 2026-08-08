@@ -120,6 +120,19 @@ def record_payment(subdomain, days=None):
     res = tenancy.set_billing(subdomain, plan='standard',
                               paid_until=base + _dt.timedelta(days=days))
     tenancy.clear_notice(subdomain)      # new paid cycle -> reminders reset
+    # Auto-assign an entitlement tier the first time a school pays, so paying
+    # customers are always on a plan. The default (Settings → default paid plan)
+    # ships as 'premium' — every feature on — so this never removes access; the
+    # operator can downgrade a specific school from its profile.
+    try:
+        if not (getattr(t, 'tier', None) or '').strip() and not is_owner(t):
+            from utils import platform_settings, entitlements
+            tier = (platform_settings.get_settings().get('default_paid_tier')
+                    or 'premium')
+            if tier in entitlements.TIER_IDS:
+                tenancy.set_entitlement(subdomain, tier=tier)
+    except Exception:
+        pass
     return res
 
 
